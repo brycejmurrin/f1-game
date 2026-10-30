@@ -220,7 +220,7 @@ const InputHoldButtons = (function () {
     const remember = e => { consumed = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp }; };
     const enabled = () => !el.disabled && !el.hidden && el.isConnected !== false && el.getAttribute("aria-disabled") !== "true" && (!el.checkVisibility || el.checkVisibility({ checkVisibilityCSS: true }));
     const inside = e => { const r = el.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
-    window.addEventListener("pointerdown", () => { consumed = null; }, true);
+    window.addEventListener("pointerdown", e => { consumed = null; if (down && down.id === e.pointerId) { clear(); down = null; } }, true);
     el.addEventListener("pointerdown", e => {
       clear(); down = null;
       if (e.pointerType !== "touch" || e.isPrimary !== false || !enabled()) return;

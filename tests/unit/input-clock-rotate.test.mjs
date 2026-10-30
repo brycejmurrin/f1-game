@@ -165,3 +165,15 @@ test("cancelled secondary contacts suppress their eventual native click even aft
     click({}); assert.equal(stopped, 1, "a new intentional contact still passes after " + ending);
   }
 });
+
+
+test("a reused canceled pointer ID does not swallow a new contact elsewhere", () => {
+  const h = secondaryRig(); h.emit("pointerdown"); h.emit("pointercancel");
+  const target = { id: "another-control" };
+  h.fire("pointerdown", h.event({ target }));
+  h.fire("pointerup", h.event({ target, timeStamp: 5000 }));
+  let stopped = 0;
+  h.fire("click", h.event({ target, timeStamp: 5020, detail: 1,
+    preventDefault() { stopped++; }, stopImmediatePropagation() {} }));
+  assert.equal(stopped, 0, "fresh contact remains native after pointer ID reuse");
+});
