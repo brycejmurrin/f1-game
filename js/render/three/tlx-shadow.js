@@ -34,6 +34,13 @@
     return Math.max(n | 0, cap);
   }
 
+  // Sun map edge: phone 1024, software GL 512, desktop 2048. ctx.sunSize > 0 overrides it
+  // (TLX's B8 lab tier, ?lab=tlxLite on three's WebGL2 leg of a phone, passes 512).
+  function sunMapSize(ctx) {
+    if (ctx.sunSize > 0) return ctx.sunSize | 0;
+    return (ctx.isMobile || ctx.mobileTier) ? 1024 : (ctx.softwareGL ? 512 : 2048);
+  }
+
   function shadowSys(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
     // Keyed on the DEVICE, not the memory tier — js/render/glx/shadow.js's rule,
@@ -62,7 +69,7 @@
     // color path. SUN_SIZE/BLOCKER_SIZE staying 1:1 here is fine.
     const softwareGL = !!ctx.softwareGL;
 
-    const SUN_SIZE = isMobile ? 1024 : (softwareGL ? 512 : 2048);   // 1024² saves 12 MB on every phone (GLX parity)
+    const SUN_SIZE = sunMapSize(ctx);   // 1024² saves 12 MB on every phone (GLX parity)
     const CAR_SIZE = softwareGL ? 256 : 1024;                      // dynamic car-only map (true desktop only)
     const LAMP_SIZE = softwareGL ? 256 : 512;                      // nearest-floodlight spot map (true desktop only)
 
@@ -1073,5 +1080,5 @@
     };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { shadowSys, uboInstCap, sunMapSize });
 })();

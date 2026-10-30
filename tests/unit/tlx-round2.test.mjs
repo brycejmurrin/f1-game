@@ -163,7 +163,8 @@ test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () =>
 });
 
 test("TLX-03: the DPR cap follows mobileTier, so GRAPHICS: HIGH on a phone gets full DPR", () => {
-  assert.match(TLX, /let DPR_CAP = mobileTier \? 1\.5 : 2;/);
+  // The B8 lab (?lab=tlxLite) takes its own cap first; without it this is the shipped rule (tlx-lite-lab.test.mjs runs it).
+  assert.match(TLX, /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/);
 });
 
 test("TLX-09: the pack DataArrayTexture drops its CPU copy after the first upload", () => {
