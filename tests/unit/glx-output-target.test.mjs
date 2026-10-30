@@ -146,3 +146,22 @@ test("a half-float-only device keeps bloom/godray targets on RGBA16F; R11F_G11F_
   const full = run(["EXT_color_buffer_float"]);
   assert.ok(full.r11 > 0, "with the float extension the slim format is still used");
 });
+
+test("WebKit never invalidates the DEFAULT framebuffer; FBO targets keep theirs (iPhone GLX black-screen lead)", () => {
+  // WebKit 280799 (Safari 18: one frame, then a black canvas) is triggered by invalidating the
+  // default framebuffer, the one GLX path TLX never takes. Count, per UA, the invalidations
+  // whose attachments are the default framebuffer's gl.COLOR / gl.DEPTH.
+  const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+  const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+  const count = (userAgent) => {
+    const h = bootGlx({ userAgent, extensions: ["EXT_color_buffer_float"] });
+    h.GLX.begin(h.frame()); h.GLX.present({}); h.reset();
+    h.GLX.begin(h.frame()); h.GLX.present({});
+    const inv = h.calls.filter((c) => c[0] === "invalidateFramebuffer");
+    return { all: inv.length, def: inv.filter((c) => c[1][1].some((a) => a === h.gl.COLOR || a === h.gl.DEPTH)).length };
+  };
+  const safari = count(IPHONE), chrome = count(CHROME);
+  assert.equal(safari.def, 0, "Safari/WebKit: no default-framebuffer invalidation");
+  assert.ok(safari.all > 0, "Safari keeps the FBO-target DontCare hints (the tile-GPU win)");
+  assert.ok(chrome.def > 0, "Chromium keeps the default-framebuffer hints");
+});

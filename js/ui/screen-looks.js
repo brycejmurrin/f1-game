@@ -67,90 +67,8 @@ const ScreenLooks = (function () {
   const ROWS3 = [["tight", "TIGHT"], ["shipped", "SHIPPED"], ["roomy", "ROOMY"]];
   const VPOS = [["top", "TOP"], ["middle", "MIDDLE"], ["bottom", "BOTTOM"]];
 
-  // ── stand-ins: what an EMPTY screen shows while it is peeked ───────────
-  function mk(tag, cls, text) {
-    const e = doc.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
-  }
-  function standInto(host, nodes) {
-    const made = [];
-    for (const n of nodes) {
-      n.setAttribute("aria-hidden", "true");
-      n.setAttribute("data-look-standin", "");
-      host.appendChild(n);
-      made.push(n);
-    }
-    return () => { for (const n of made) if (n.parentNode) n.parentNode.removeChild(n); };
-  }
-  const isEmpty = (el) => !el || !el.children || el.children.length === 0;
-  const SAMPLE_ROWS = ["VERSTAPPEN", "NORRIS", "LECLERC", "PIASTRI", "HAMILTON", "RUSSELL", "SAINZ", "ALONSO", "GASLY", "ALBON"];
-  function sampleRows(n) {
-    const out = [];
-    for (let i = 0; i < n; i++) out.push(mk("div", "res-row", `P${i + 1}  ${SAMPLE_ROWS[i % SAMPLE_ROWS.length]}`));
-    return out;
-  }
-
-  function datahubStandIn(el) {
-    if (!el || el.querySelector(".dh-card")) return null;
-    const added = !el.classList.contains("dh-overlay");
-    if (added) el.classList.add("dh-overlay");
-    const card = mk("div", "dh-card");
-    const head = mk("div", "sheet-head");
-    head.appendChild(mk("h2", "", "F1 DATA HUB"));
-    const tabs = mk("div", "dh-tabs");
-    ["SCHEDULE", "STANDINGS", "LAST RACE", "LIVE"].forEach((t, i) => tabs.appendChild(mk("span", "dh-tab" + (i === 1 ? " active" : ""), t)));
-    const body = mk("div", "dh-content");
-    SAMPLE_ROWS.slice(0, 8).forEach((n, i) => body.appendChild(mk("div", "dh-row", `${i + 1}  ${n}`)));
-    card.append(head, tabs, body);
-    const undo = standInto(el, [card]);
-    return () => { undo(); if (added) el.classList.remove("dh-overlay"); };
-  }
-  function selectStandIn() {
-    const strip = byId("sel-tracks");
-    if (!strip || !isEmpty(strip)) return null;
-    const list = (typeof Tracks !== "undefined" && Tracks.LIST) || [];
-    const tiles = [];
-    for (let i = 0; i < Math.max(6, Math.min(list.length, 12)); i++) {
-      const t = list[i] || {};
-      const tile = mk("span", "track-row");
-      tile.appendChild(mk("span", "track-row-meta", String(i + 1)));
-      tile.appendChild(mk("span", "track-row-name", String(t.name || t.id || "CIRCUIT").toUpperCase()));
-      tiles.push(tile);
-    }
-    return standInto(strip, tiles);
-  }
-  function careerStandIn() {
-    const l = byId("cr-left"), r = byId("cr-right");
-    const undo = [];
-    if (l && isEmpty(l)) undo.push(standInto(l, [1, 2, 3].map((n) => mk("div", "cr-slot", `SLOT ${n}`))));
-    if (r && isEmpty(r)) undo.push(standInto(r, sampleRows(8)));
-    return undo.length ? () => undo.forEach((f) => f()) : null;
-  }
-  function garageStandIn() {
-    const tabs = byId("cs-tabs"), opts = byId("cs-options");
-    const undo = [];
-    if (tabs && isEmpty(tabs))
-      undo.push(standInto(tabs, ["ENGINE", "AERO", "CHASSIS", "BRAKES", "TYRES", "LIVERY"].map((t, i) => mk("span", "cs-tab" + (i ? "" : " active"), t))));
-    if (opts && isEmpty(opts))
-      undo.push(standInto(opts, ["STANDARD", "UPGRADED", "WORKS"].map((t) => mk("span", "cs-opt", t))));
-    return undo.length ? () => undo.forEach((f) => f()) : null;
-  }
-  function designerStandIn() {
-    const dlg = byId("trackdesigner");
-    if (!dlg || dlg.querySelector(".td-body")) return null;   // a built designer is its own preview
-    const head = mk("div", "sheet-head"); head.appendChild(mk("h2", "", "TRACK DESIGNER"));
-    const stage = mk("div", "td-stage"); stage.appendChild(mk("div", "td-hint", "MAP"));
-    const rail = mk("div", "td-rail");
-    for (const t of ["1 DRAW", "2 EDIT", "3 ELEVATION", "4 SCENERY", "5 TEST"]) rail.appendChild(mk("span", "sel-chip", t));
-    const body = mk("div", "td-body"); body.append(stage, rail);
-    return standInto(dlg, [head, body]);
-  }
-  function popupsStandIn() {
-    const body = byId("standings-body");
-    return body && isEmpty(body) ? standInto(body, sampleRows(10)) : null;
-  }
+  // Stand-ins (what an EMPTY screen shows while it is peeked) and the
+  // availability lines live in js/ui/look-avail.js (LAZY_UI_PRESETS).
 
   // ── the registry ────────────────────────────────────────────────────────
   const SCREENS = Object.freeze([
@@ -173,7 +91,7 @@ const ScreenLooks = (function () {
     Object.freeze({
       id: "datahub", key: "lookDatahub", title: "DATA HUB",
       help: "The F1 DATA HUB card: its width, row height and tab style. ROW STRIPES shades every other row of a table.",
-      target: () => byId("datahub"), standIn: datahubStandIn,
+      target: () => byId("datahub"),
       knobs: Object.freeze([
         ...core(["w", "btn", "corners", "dim", "head"]),
         cyc("rows", "ROW HEIGHT", ROWS3, "shipped"),
@@ -184,7 +102,7 @@ const ScreenLooks = (function () {
     Object.freeze({
       id: "select", key: "lookSelect", title: "TRACK SELECTOR",
       help: "The circuit picker: card width and density, the size of the circuit tiles, how many rows the strip uses, and whether it sits above or below the circuit.",
-      target: () => byId("select"), standIn: selectStandIn,
+      target: () => byId("select"),
       knobs: Object.freeze([
         ...core(["w", "density", "btn", "corners", "dim", "head"]),
         rng("tile", "TILE SIZE", 70, 160, 5, 100),
@@ -205,22 +123,23 @@ const ScreenLooks = (function () {
     }),
     Object.freeze({
       id: "career", key: "lookCareer", title: "CAREER",
-      help: "DRIVER CAREER and MY TEAM: width, density, whether the two columns sit side by side or stacked, how wide the left one is, and which side each goes.",
-      target: () => byId("career"), standIn: careerStandIn,
+      help: "DRIVER CAREER and MY TEAM: width, density, whether the two columns sit side by side or stacked, how wide the left one is, and which side the calendar and championship sit on.",
+      target: () => byId("career"),
       knobs: Object.freeze([
         ...core(["w", "density", "btn", "corners", "dim", "head"]),
         cyc("layout", "COLUMNS", [["auto", "AUTO"], ["split", "SPLIT"], ["stacked", "STACKED"]], "auto", { reflow: true }),
         rng("split", "LEFT COLUMN", 30, 70, 1, 49, { token: "pct" }),
-        cyc("side", "COLUMN ORDER", [["shipped", "SHIPPED"], ["swapped", "SWAPPED"]], "shipped"),
+        // SIDE knobs read LEFT / CENTRE / RIGHT everywhere (G8); the stored ids stay shipped / swapped.
+        cyc("side", "CALENDAR SIDE", [["swapped", "LEFT"], ["shipped", "RIGHT"]], "shipped"),
       ]),
     }),
     Object.freeze({
       id: "garage", key: "lookGarage", title: "GARAGE",
       help: "The garage panel: which side it docks on (the car moves over to the other side), its width, how see-through it is, and the stat bars.",
-      target: () => byId("carsetup"), standIn: garageStandIn,
+      target: () => byId("carsetup"),
       knobs: Object.freeze([
         ...core(["density", "btn", "corners", "head"]),
-        cyc("side", "PANEL SIDE", [["right", "RIGHT"], ["left", "LEFT"]], "right"),
+        cyc("side", "PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "right"),
         rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
         cyc("stats", "STAT BARS", SHOWHIDE, "show"),
@@ -229,7 +148,7 @@ const ScreenLooks = (function () {
     Object.freeze({
       id: "designer", key: "lookDesigner", title: "TRACK DESIGNER",
       help: "The in-game circuit designer. DESIGNER SIZE scales the whole screen; MAP WIDTH is how much of the width the map gets against the controls panel (side-by-side layouts); TEXT SIZE and PROFILE HEIGHT (the elevation strip) tune the rest. Tap targets never drop below their floor.",
-      target: () => byId("trackdesigner"), standIn: designerStandIn,
+      target: () => byId("trackdesigner"),
       knobs: Object.freeze([
         rng("size", "DESIGNER SIZE", 70, 200, 5, 100),
         rng("split", "MAP WIDTH", 40, 70, 1, 55, { token: "pct" }),
@@ -240,11 +159,11 @@ const ScreenLooks = (function () {
     Object.freeze({
       id: "popups", key: "lookPopups", title: "POPUPS",
       help: "Every pop-up sheet — standings, results, qualifying, the team and duel pickers, season setup, VS FRIEND, customise, HOW TO PLAY, music, the career offers / guide / history and circuit details. WIDTH scales each one's own size.",
-      target: () => byId("standings"), standIn: popupsStandIn,
+      target: () => byId("standings"),
       knobs: Object.freeze([
         ...core(["w", "density", "btn", "corners", "dim", "head"]),
         cyc("vpos", "POSITION", VPOS, "middle"),
-        cyc("rows", "TABLE ROWS", ROWS3, "shipped"),
+        cyc("rows", "ROW HEIGHT", ROWS3, "shipped"),   // G8: the same words as DATA HUB; SELECT keeps STRIP ROWS (a count)
       ]),
     }),
   ]);
@@ -377,8 +296,9 @@ const ScreenLooks = (function () {
       endPeek();
       pk.id = id;
       root.dataset.appearancePeek = id;
-      if (s.standIn) {
-        try { const undo = s.standIn(s.target ? s.target() : null); if (undo) pk.cleanups.push(undo); }
+      const standIn = typeof LookAvail !== "undefined" ? LookAvail.STAND_INS[id] : null;
+      if (standIn) {
+        try { const undo = standIn(s.target ? s.target() : null); if (undo) pk.cleanups.push(undo); }
         catch (e) { Log.warn("ui", "ScreenLooks stand-in", e); }
       }
     }
@@ -508,8 +428,19 @@ const ScreenLooks = (function () {
     return btn;
   }
 
+  /* The availability line under a knob, and the painter that keeps it (and
+     the disabled options / row) in step with the look and the screen size. */
+  function whyPainter(s, n, id, ctl, row, disableRow) {
+    const note = el("p", { id: id + "-why", className: "adv-help", hidden: true, attrs: { "data-help": "keep", "data-look-why": n.k } });
+    if (ctl && ctl.setAttribute) ctl.setAttribute("aria-describedby", note.id);
+    const paint = () => {
+      if (typeof LookAvail !== "undefined") LookAvail.paintWhy(s.id, n, row, note, disableRow, read(s.id));
+    };
+    return { note, paint };
+  }
+
   function buildRows(s, body, paintSum) {
-    const painters = [];
+    const painters = [], avail = [];
     for (const n of s.knobs) {
       const id = "pm-look-" + s.id + "-" + n.k;
       if (n.kind === "cycle") {
@@ -521,6 +452,9 @@ const ScreenLooks = (function () {
           write: (v) => { const out = set(s.id, n.k, v); paintSum(); peek(s.id, PEEK_MS); return out; },
         });
         body.appendChild(r.row);
+        const w = whyPainter(s, n, id, r.sel, r.row, (off) => SettingRow.disable(r.row, off));
+        body.appendChild(w.note);
+        avail.push(w.paint);
         painters.push(() => SettingRow.paint(r.row, read(s.id)[n.k]));
       } else {
         const out = el("b");
@@ -542,10 +476,14 @@ const ScreenLooks = (function () {
         inp.addEventListener("pointercancel", () => endPeek());
         body.appendChild(el("label", { className: "tune-row" }, [
           el("span", { className: "tune-label" }, [el("span", { textContent: n.label + " " }), out]), inp]));
+        const w = whyPainter(s, n, id, inp, null, (off) => { inp.disabled = off; });
+        body.appendChild(w.note);
+        avail.push(w.paint);
         painters.push(paint);
       }
     }
-    return () => { for (const p of painters) p(); };
+    const paintAvail = () => { for (const p of avail) p(); };
+    return { paintRows: () => { for (const p of painters) p(); paintAvail(); }, paintAvail };
   }
 
   const built = {};
@@ -571,7 +509,8 @@ const ScreenLooks = (function () {
       body.appendChild(el("p", { className: "adv-help", textContent: s.help + " Change anything to see the real screen behind this page." }));
       paintSumFns.push(() => { sum.textContent = s.title + " · " + (isShipped(s.id) ? "SHIPPED" : "CUSTOM"); });
     }
-    const paintRows = buildRows(s, body, paintSum);
+    const { paintRows, paintAvail } = buildRows(s, body, paintSum);
+    paintSumFns.push(paintAvail);   // every write and onChange: a knob can moot another (CAREER COLUMNS)
     const resetBtn = el("button", { type: "button", textContent: "RESET " + s.title });
     resetBtn.addEventListener("click", () => {
       reset(s.id);
@@ -588,7 +527,7 @@ const ScreenLooks = (function () {
     if (peekUi[s.id].status) body.appendChild(peekUi[s.id].status);
     paintSum();
     onChange(s.id, paintSum);
-    built[s.id] = { fold, paintRows, paintSum };
+    built[s.id] = { fold, paintRows, paintSum, paintAvail };
     if (!s.host && fold) {
       if (after && after.parentNode) after.parentNode.insertBefore(fold, after.nextSibling);
       else { const panel = byId("pm-panel-appearance"); if (panel) panel.appendChild(fold); }
@@ -625,6 +564,19 @@ const ScreenLooks = (function () {
     wirePeekEnds();
   }
 
+  /* The screen size moved: re-read every availability line (LookAvail wires
+     the resize / SheetShape / UI SIZE hooks when it loads). */
+  let lastEnv = "";
+  function refreshAvail(force) {
+    // The <html> style observer also sees every token write (apply(), the HUD's
+    // fitHud), so repaint only when the answer's inputs actually moved; `force`
+    // is LookAvail arriving (js/ui/settings-tabs.js).
+    const e = typeof LookAvail !== "undefined" ? LookAvail.liveEnv() : null;
+    const key = e ? Math.round(e.w) + "x" + Math.round(e.h) + (e.shortLandscape ? "s" : "") : "";
+    if (!force && key === lastEnv) return;
+    lastEnv = key;
+    for (const id in built) if (id !== "_done") built[id].paintAvail();
+  }
   function refresh() { for (const id in built) if (id !== "_done") { built[id].paintRows(); built[id].paintSum(); } }
 
   apply();
@@ -637,7 +589,7 @@ const ScreenLooks = (function () {
   }
 
   return {
-    SCREENS, PEEK_ONLY, CORE, PEEK_MS,
+    SCREENS, PEEK_ONLY, CORE, PEEK_MS, refreshAvail,
     read, set, reset, apply, normalize, isShipped, onChange,
     peek, endPeek, holdPeek, build, refresh, mountPeekButton,
     dataKey: (id, k) => { const s = screen(id); const n = s && knobOf(s, k); return n ? dataKey(s, n) : null; },

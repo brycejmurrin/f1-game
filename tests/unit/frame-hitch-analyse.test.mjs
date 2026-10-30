@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -325,6 +325,27 @@ test("analysePassOps tallies each attachment's load>store and the median submits
   assert.equal(o.storedPerFrame, 2.5);                // the scene colour + 1.5 FXAA
   assert.equal(o.discardedPerFrame, 2);               // the scene tag + depth
   assert.match(analysePassOps([], []).note, /no per-frame store inventory/);
+});
+
+test("analyseUploads ranks the sampled upload sites by KB a frame and classes them by three's function names (perf hunt 6)", () => {
+  const ups = [
+    { site: "writeBuffer :: #256B :: updateBinding<updateBindings :: car.js:10 <- tlx.js:5", n: 800, kb: 200 },
+    { site: "writeBuffer :: #4096B :: updateAttribute<_update :: track.js:3", n: 100, kb: 400 },
+    { site: "writeBuffer :: #64B :: createIndexAttribute :: road.js:9", n: 80, kb: 5 },
+    { site: "createBuffer :: lights#1024B ::  :: (three only)", n: 20, kb: 20 },
+    { site: "writeBuffer :: #0B :: x :: y", n: 0, kb: 0 },           // a zero-count row is dropped
+  ];
+  const u = analyseUploads(ups, 100, 2);
+  assert.equal(u.frames, 100);
+  assert.equal(u.callsPerFrame, 10);                    // 1000 calls / 100 frames
+  assert.equal(u.kbPerFrame, 6.25);                     // 625 KB / 100 frames
+  assert.equal(u.rows.length, 2);
+  assert.equal(u.rows[0].site, ups[1].site); assert.equal(u.rows[0].kbPerFrame, 4); assert.equal(u.rows[0].nPerFrame, 1);
+  assert.equal(u.rows[0].share, 0.64);
+  assert.deepEqual(u.groups.map((c) => c.cls), ["attribute", "uniform", "other", "index"]);
+  assert.equal(u.groups[1].nPerFrame, 8); assert.equal(u.groups[1].share, 0.32);
+  assert.equal(analyseUploads([], 100).note, "no upload sites recorded");
+  assert.equal(analyseUploads(ups, 0).note, "no upload sites recorded");
 });
 
 test("analyseWindow reads the driven window in GAME frames, not callbacks or the end-of-run ring (hunt 4 I4)", () => {

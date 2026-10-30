@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": -4,
+      "lines": 2,
+      "topLets": -1
+    },
+    "js/net/lobby.js": {
+      "lines": 9
+    }
+  }
+}

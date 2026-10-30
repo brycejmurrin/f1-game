@@ -269,7 +269,7 @@ export function zeroRefModulesReport(corpus) {
   for (const list of [manifest.FULL, ...Object.values(manifest.DEFERRED), manifest.LAZY_AGENT,
     manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET, manifest.LAZY_EDITOR || [],
     manifest.LAZY_XR || [], manifest.LAZY_CAM_EDITOR || [],
-    manifest.LAZY_CAREER_UI || []])
+    manifest.LAZY_CAREER_UI || [], manifest.LAZY_UI_PRESETS || []])
     for (const f of list) if (typeof f === "string" && f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
   if (corpus === undefined) {
     const files = [];

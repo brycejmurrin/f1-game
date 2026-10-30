@@ -1,0 +1,1 @@
+Improved: the race HUD's POS / LAP / TIME / BEST read as one timing strip with POS as the light hero cell, and on a phone the gear, speed, energy and OT / AERO chips sit on one instrument plate with speed as the big figure (#4238).

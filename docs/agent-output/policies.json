@@ -1001,6 +1001,16 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/gen/blender/garage-camera-rigs.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-light-cues.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/blender/garage-previz.py": {
       "action": "keep-native",
       "presentation": "native",
@@ -2571,10 +2581,35 @@
       "presentation": "shared-levels",
       "preserve": "@c5"
     },
+    "tools/ui/flows.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
+    "tools/ui/flows/core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/flows/probes.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/ui/look-diff.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c5"
+    },
+    "tools/ui/look-diff/core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/ui/menu-capture.mjs": {
       "action": "no-direct-output",
@@ -2597,6 +2632,21 @@
       "preserve": "@c2"
     },
     "tools/ui/menu-screens.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/tap-floor.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/theme-axis.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/ui-reset.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
@@ -2665,6 +2715,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Exact local capture metadata, automated findings and incomplete checks, computed-token coverage, containment and comparison controls."
+    },
+    "tools/ui/reach-score.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One summary line (screens scored / not good / partial -> reach.md), the --json report bytes, and exit status (2 bad argument or unreadable input); no browser, offline over existing DOM/inspection artifacts."
     },
     "tools/ui/review-captures.mjs": {
       "action": "keep-native",

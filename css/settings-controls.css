@@ -295,6 +295,20 @@
 @container sheet (min-width: 52rem) {
   #pm-settings-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+/* SHORT AND WIDE (a phone on its side, design pass 2b): the search block was a
+   label, a field, a hint and a rule, and left 2 of 10 doors on the first
+   screen. The field keeps its own aria-label, so the visible label goes; the
+   hint shows only once a query is typed (it then counts the matches); the doors
+   go three-up. 844x390: 6 of 10 doors on screen. */
+@container sheet (min-width: 40rem) {
+  #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] {
+  gap: 0; padding: 0 0 calc(var(--gap) * 0.5); border-bottom: 0;
+}
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label { font-size: 0; gap: 0; }
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label > input { font-size: var(--fs-3); }
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search]:has(input:placeholder-shown) > p { display: none; }
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.
    Each option button shrinks from full-sheet width (~717px) to half-width

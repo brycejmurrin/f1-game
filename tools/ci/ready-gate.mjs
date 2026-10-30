@@ -24,6 +24,7 @@
 // Exit: 0 green, 1 red / pending / no evidence / Plan open / not a draft, 3 no token / API error (unless --local).
 // Prints one `= ready-gate <state>` line.
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -331,13 +332,30 @@ const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] 
   A --pr run writes artifacts/ready-gate/<n>.json (pass or refuse), which the hooks require before the flip.
   Exit 1 refused, 3 no token / API error.`;
 
+/** sha256 of the PR body's `## Plan` section, the half of the ready receipt's key that is not the head (the receipt
+ *  stays valid while head and this hash are unchanged). Normalised so a CRLF body, trailing blanks or an edit outside
+ *  the Plan hash alike: LF line ends, trailing spaces/tabs and blank lines dropped. No Plan section hashes "".
+ *  Python twin: merge_policy.plan_hash (tests/unit/merge-gate.test.mjs keeps them equal). */
+export function planHash(body) {
+  const text = planBodySource(String(body || "").replace(/\r\n?/g, "\n")).replace(/\r\n?/g, "\n");
+  const head = /^##[ \t]+Plan\b.*$/m.exec(text);
+  let section = "";
+  if (head) {
+    const rest = text.slice(head.index + head[0].length);
+    const next = /^##[ \t]/m.exec(rest);
+    section = next ? rest.slice(0, next.index) : rest;
+  }
+  const lines = section.split("\n").map((l) => l.replace(/[ \t]+$/, "")).filter(Boolean);
+  return crypto.createHash("sha256").update(lines.join("\n")).digest("hex");
+}
+
 /** The CLI, with every side effect injectable: request (GitHub), resolve (git/PR), judge (the tip), receipt, sleep, now, log. */
 export function main(argv, { request = api, resolve = resolveSha, judge = evaluate, receipt = (d) => writeReceipt(ROOT, "ready", d), sleep = (s) => spawnSync("sleep", [String(s)]), now = Date.now, log = console.log } = {}) {
   exitIfHelp(argv, USAGE);
   const say = (...a) => log("[ready-gate]", ...a);
   // The receipt github-mcp-guard.sh / bash-guard.sh require before a draft→ready flip: written for a --pr run only,
   // pass or refuse, so the hook can say WHY the last gate run refused.
-  const record = (pr, head, ok, evidence) => { try { receipt({ pr, head, ok, evidence }); } catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); } };
+  const record = (pr, head, ok, evidence) => { try { receipt({ pr, head, ok, evidence, planHash: planHash(resolved.body) }); } catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); } };
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const localOnly = argv.includes("--local");
   const asJson = argv.includes("--json");

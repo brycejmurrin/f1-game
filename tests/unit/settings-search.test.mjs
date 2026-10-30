@@ -86,6 +86,21 @@ test("a fresh settings session cancels search-return ownership and clears the qu
   const result = h.result("manual gears"); result.onclick(); h.nav.invalidate(); h.nav.returnToSearch();
   assert.equal(h.search.value, "manual gears", "a result page's return (Race Settings) keeps the query");
 });
+test("Escape in a non-empty search clears the query and keeps the sheet; an empty field lets Escape through", () => {
+  const h = boot();
+  h.result("manual gears");
+  const key = (target) => ({ key: "Escape", target, isComposing: false, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } });
+  const first = key(h.search); h.ctx.Search.onEscape(first);
+  assert.equal(h.search.value, ""); assert.equal(first.defaultPrevented, true); assert.equal(first.stopped, true);
+  assert.equal([...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult).length, 0, "results repainted");
+  const second = key(h.search); h.ctx.Search.onEscape(second);
+  assert.equal(second.defaultPrevented, false, "empty field: TopModal's Escape closes the sheet as before");
+  // A pad's B arrives at the dialog as `cancel`; the focused field is the target.
+  h.result("manual gears"); h.search.focus();
+  const b = { type: "cancel", target: h.dom.document.querySelector("#pmsettings"), preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+  h.ctx.Search.onEscape(b);
+  assert.equal(h.search.value, ""); assert.equal(b.defaultPrevented, true, "pad B clears the query instead of closing the sheet");
+});
 test("successful lazy search still owns BACK and opens ancestor disclosures", async () => {
   const h = boot({ lazy: true }), fold = h.el("details", "audio-fold", h.dom.document.querySelector("#audioset")), target = h.el("input", "as-mvol", fold); target.value = "42";
   const result = h.result("music volume"); result.onclick(); h.ctx.GameAudio._stub = false; h.complete(); await tick(); await tick();

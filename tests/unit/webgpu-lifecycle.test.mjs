@@ -2989,7 +2989,61 @@ test("WGX mirror frame records its mip ladder into the mirror's own submit", asy
   gfx.mirrorEnd();
   const passes = h.passCalls.filter(([n]) => n === "beginRenderPass").length - passes0;
   assert.equal(h.submitCount - submits0, 1, "one submit for the mirror pass AND its mips");
-  assert.ok(passes >= 1 + 6, `the mirror pass plus the 6-level mip ladder still record (${passes} passes)`);
+  assert.equal(passes, gfx.mirrorState().mips, `the mirror pass plus its (mips - 1)-pass ladder (${passes} passes)`);
+});
+
+test("perf hunt 6: WGX sizes the mirror chain to the levels its taps read (inset lod, bounded glass, full when unbounded)", async () => {
+  // Hunt 5 F1's TLX rule on WGX: the inset's textureSampleLevel at lod reads floor(lod)..floor(lod)+1, the glass's
+  // implicit LOD (PostCommon.mipFootprintLod, session max) up to ceil(lod + 0.25) + 1; two unbounded frames in a
+  // row latch the full chain. The old code built all 9 levels of a 256x64 target (8 ladder passes) every frame.
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const opens = () => h.passCalls.filter(([n]) => n === "beginRenderPass").length;
+  const mirrorFrame = () => {
+    const p0 = opens();
+    assert.equal(gfx.mirrorBegin({}, 256, 64), true);
+    gfx.mirrorEnd();
+    return opens() - p0 - 1;   // ladder passes: all but the mirror's own
+  };
+  const mesh = gfx.createTexMesh({ pos: [-1, -1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1], nrm: Array(12).fill(0),
+    uv: [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78], idx: [0, 1, 2, 0, 2, 3] });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const glassFrame = (viewProj) => {
+    assert.equal(gfx.begin({ viewProj }), true);
+    assert.equal(gfx.drawMirrorGlass(mesh, model, null), true);
+    gfx.present({});
+  };
+  gfx.mirrorRect([0.4, 0.1, 0.2, 0.06]);
+  assert.equal(gfx.mirrorState().mips || 0, 0, "nothing allocated yet");
+  const first = mirrorFrame();
+  const lod = Math.max(256 / Math.round(0.2 * 320), 64 / Math.round(0.06 * 180));
+  const inset = Math.floor(Math.log2(lod)) + 2;
+  assert.ok(inset < 9, `the bounded inset count (${inset})`);
+  assert.equal(first, inset - 1, "the ladder is the bounded count, sized from the rect on the first frame");
+  assert.equal(gfx.mirrorState().mips, inset, `inset only: levels 0..floor(lod)+1 (lod ${Math.log2(lod).toFixed(2)})`);
+  assert.equal(mirrorFrame(), inset - 1, "and stays there");
+  // A small, distant glass (x/y scaled 0.05, flat w = 1): a bounded LOD above the inset's.
+  const far = new Float32Array([0.05, 0, 0, 0, 0, 0.05, 0, 0, 0, 0, 0.1, 0, 0, 0, 0, 1]);
+  glassFrame(far);
+  const gl = gfx.mirrorState().glassLod;
+  assert.ok(Number.isFinite(gl), `a bounded glass LOD (${gl})`);
+  const glass = Math.min(9, Math.ceil(gl + 0.25) + 1);
+  assert.ok(glass > inset && glass < 9, `the glass needs more than the inset and less than the full chain (${glass})`);
+  assert.equal(mirrorFrame(), glass - 1, "grown to the glass's count on the next mirrorBegin");
+  assert.equal(gfx.mirrorState().mips, glass);
+  // A zero viewProj (no frame camera yet) is no bound: nothing changes.
+  glassFrame(new Float32Array(16));
+  assert.equal(gfx.mirrorState().glassLod, gl, "a zero viewProj is skipped");
+  // w = z: the quad straddles the eye plane, so the bound is unbounded. One frame does not latch; two in a row do.
+  const straddle = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0]);
+  glassFrame(straddle);
+  assert.equal(mirrorFrame(), glass - 1, "one unbounded frame does not latch");
+  glassFrame(far);
+  glassFrame(straddle);
+  glassFrame(straddle);
+  assert.equal(gfx.mirrorState().glassLod, Infinity, "two unbounded frames in a row latch");
+  assert.equal(mirrorFrame(), 8, "the full 9-level chain (8 ladder passes) from then on");
 });
 
 test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 36) inside the face-5 submit", async () => {
