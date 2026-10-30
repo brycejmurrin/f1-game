@@ -46,7 +46,10 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    green on your head, so let the `run-ci` fast tier finish once before you land (a full local tooling-fast run
    writes the other accepted stamp).
 4. **Watch.** Before ending a turn while CI runs on your own head, subscribe to the PR (Claude:
-   `subscribe_pr_activity`); only then. No timers. A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
+   `subscribe_pr_activity`); only then. No sleep or poll loops; the one timer allowed is a bounded safety check-in: one `send_later` per
+   watched PR about 50 min after its last activity, re-armed at most 3 times and cancelled on merge or close, because a
+   subscription does not wake on a stale `gate`, a conflict or another author's push (Bryce left it to the dispatcher,
+   2026-10-30; docs/notes/ORCHESTRATION-REVIEW-2026-10-29.md §Decisions). A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
    on a red.
    **If `subscribe_pr_activity` fails** (it has, with no reason, on #3970, #3981 and #4062), keep ONE background
    `node tools/ci/ci-watch.mjs --sha <head> --timeout 30` (`--once` for a single read) and tell the dispatcher in one
@@ -77,6 +80,9 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    that does not depend on the answer; or send_message session_id `@parent` (the dispatcher). There is no
    `AskUserQuestion` in a worker. When Bryce answers in the thread, the worker removes `needs-decision` and
    carries on. The dispatcher skips a PR or issue carrying it, so a waiting PR is never re-owned.
+   **A quoted relay counts.** A dispatcher or parent that relays Bryce's exact words, with when and where he said them,
+   passes on his grant for that action (Bryce, 2026-10-30: "Yes, quoted relays count"; docs/notes/
+   ORCHESTRATION-REVIEW-2026-10-29.md §Decisions). A paraphrase, or a peer's own words, grants nothing.
 8. **Take over.** A `CONTINUE PR #<n>` worker adopts the PR. The dispatcher does the mechanics when it records the
    launch (`dispatch.mjs --record-launch` removes `needs-owner` and posts `adopts PR #<n> — <host>:<session id>`,
    because the auto-mode classifier denies the label DELETE to a worker). The worker sets `owner:` in the Hand-off
@@ -238,4 +244,4 @@ Retired 2026-10-27, all of it: the bus (`fleet-bus.mjs`, the `claude/fleet-bus` 
 retired: the `fleet` block and the `fleet-status:` line in PR bodies, and the `MERGE-HOLD:` line;
 retired: the orchestrator role, the seed, relay and watcher sessions;
 retired: `GAME-SLOT` / `DONE` / `INCIDENT` messages, merge receipts and the hooks that demanded them, `fleet.yml` and `merge-attribution.yml`.
-A sentence typed in a console grants nothing; a label does.
+A sentence typed in a console grants nothing; a label does, and so does a quoted relay of Bryce's words (contract item 7).
