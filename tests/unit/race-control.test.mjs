@@ -1064,7 +1064,8 @@ test("the private caution machine cannot reach G or unrelated ambient capabiliti
 test("the compatibility adapter exposes frozen live scalars and retains effect receivers", () => {
   const G = makeCtx({ ranked: [{ lap: 1 }], raceT: 2, state: "race" });
   const originalStore = G.store;
-  const port = vm.runInNewContext(fnSource(CONTROL_SRC, "function create(G)") + ";create(G)", { G, createControl: (p) => p });
+  const port = vm.runInNewContext(fnSource(CONTROL_SRC, "function create(G)") + ";create(G)", { G, createControl: (p) => p },
+    { filename: absSrc("js/race/race-control.js") });
   assert.ok(Object.isFrozen(port));
   assert.throws(() => { port.state = "menu"; }, TypeError);
   for (const key of ["ranked", "player", "cars", "netPlay", "store"]) assert.equal(key in port, false, key);
