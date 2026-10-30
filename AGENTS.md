@@ -56,8 +56,8 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
    code push is `tooling-fast --changed --jobs=3 --quiet` plus the ONE spec `pick-tests`/`select-specs` names, run in
    the background as `test-bg.mjs --spec <file>` (`verify-track` for a circuit; prose: the docs-only fast path). The
    full `test:tooling-fast` runs as `Structural guards` A–D on the train and on a PR touching tools/, tests/, .github/
-   or package.json (other PRs: `--changed`), beside the other tiers and the landing gate (`ci.yml`, `browser-group.yml`,
-   `land.yml`); `--gate-only` is optional, to reproduce a gate-only red. Never run either in the foreground to prove what CI will prove.
+   or package.json (other PRs: `--changed`; generated files select `gen:check`, not the suite), beside the other tiers and the landing gate (`ci.yml`, `browser-group.yml`,
+   `land.yml`); `--gate-only` is optional, to reproduce a gate-only red; `preflip-probe.mjs --pr <n>` runs the merge-ref-only checks before the flip. Never run either in the foreground to prove what CI will prove.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards`, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: ~20 min for a full `tooling-fast` (`gen-ladder-figures.mjs --table` sizes it; `--changed` is the edit loop), `deploy.mjs --gate-only`, and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.

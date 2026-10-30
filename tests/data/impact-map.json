@@ -3611,6 +3611,7 @@
         "tests/unit/parts-visual-distinctness.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
+        "tests/unit/prepush-floor.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/tyre-model.test.mjs",
@@ -15964,6 +15965,7 @@
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/prepush-floor.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/three-inspector.test.mjs"
@@ -17720,6 +17722,7 @@
       "*": [
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/prepush-floor.test.mjs",
         "tests/unit/source-integrity.test.mjs"
       ]
     },
@@ -17808,7 +17811,8 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
-        "tests/unit/photo-kit.test.mjs"
+        "tests/unit/photo-kit.test.mjs",
+        "tests/unit/prepush-floor.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
