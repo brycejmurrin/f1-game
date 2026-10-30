@@ -31,7 +31,7 @@ from pathlib import Path
 args = argparse.ArgumentParser()
 args.add_argument('--output-dir', required=True)
 args.add_argument('--poses', help='arrival-poses.mjs JSON (--dir all --angle left); default: run it with node')
-args.add_argument('--samples', type=int, default=65)
+args.add_argument('--samples', type=int, default=49)   # 65 put the eager shell over its byte budget
 args.add_argument('--write-runtime', action='store_true')
 opts = args.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
 root = Path(__file__).resolve().parents[3]

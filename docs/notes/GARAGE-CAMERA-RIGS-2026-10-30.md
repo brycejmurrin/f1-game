@@ -40,8 +40,10 @@ is not the script's.
 
 ## Measured (2026-10-30, bpy 5.2.3 LTS module, Python 3.13)
 
-- 65 samples per rig per sequence (u step 1/64: 0.14 s on "in" 8.7 s, 0.20 s on
-  "home" 12.5 s); 4 rigs × 3 sequences × 65 × 7 integers (cm, 0.1°).
+- 49 samples per rig per sequence (u step 1/48: 0.18 s on "in" 8.7 s, 0.26 s on
+  "home" 12.5 s); 4 rigs × 3 sequences × 49 × 7 integers (cm, 0.1°). It was 65 until
+  the eager shell went 1,295 bytes over `MAX_EAGER_BYTES` (`boot-load-budget.test.mjs`);
+  49 keeps the generator's own check (worst eye step 0.85 m < 1.0; 41 samples gives 1.02).
 - Largest eye step between samples: 0.64 m (rear, out, t 4.45 s).
 - Car framing (off-axis angle / half fov while the car is inside the bay):
   ≤ 0.42 on in/home, ≤ 0.81 on out after the shutter (crane, at the doorway).
