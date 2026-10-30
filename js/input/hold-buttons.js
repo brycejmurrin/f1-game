@@ -216,12 +216,13 @@ const InputHoldButtons = (function () {
   function secondaryTap(el, { activate = (_e) => el.click(), cancel = () => {}, beforeActivate = (_e) => true } = {}) {
     if (!el || !el.addEventListener) return;
     let down = null, consumed = null;
-    const clear = () => { if (down) cancel(); down = null; };
+    const clear = () => { if (down && !down.cancelled) cancel(); if (down) down.cancelled = true; };
+    const remember = e => { consumed = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp }; };
     const enabled = () => !el.disabled && !el.hidden && el.isConnected !== false && el.getAttribute("aria-disabled") !== "true" && (!el.checkVisibility || el.checkVisibility({ checkVisibilityCSS: true }));
     const inside = e => { const r = el.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
     window.addEventListener("pointerdown", () => { consumed = null; }, true);
     el.addEventListener("pointerdown", e => {
-      clear();
+      clear(); down = null;
       if (e.pointerType !== "touch" || e.isPrimary !== false || !enabled()) return;
       down = { id: e.pointerId, x: e.clientX, y: e.clientY };
       try { el.setPointerCapture(e.pointerId); } catch (_) { /* implicit touch capture remains */ }
@@ -229,12 +230,12 @@ const InputHoldButtons = (function () {
     el.addEventListener("pointermove", e => { if (down && e.pointerId === down.id && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) clear(); });
     el.addEventListener("pointerup", e => {
       if (!down || e.pointerId !== down.id) return;
-      down = null;
-      if (!enabled() || !inside(e)) { cancel(); return; }
+      const cancelled = down.cancelled; down = null; remember(e);
+      if (cancelled || !enabled() || !inside(e)) { if (!cancelled) cancel(); return; }
       // Keep this contact's native click from reaching a newly opened modal.
-      consumed = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp };
       if (beforeActivate(e) !== false) activate(e);
     });
+    window.addEventListener("pointerup", e => { if (down && e.pointerId === down.id && (down.cancelled || !enabled())) { clear(); remember(e); down = null; } }, true);
     for (const type of ["pointercancel", "lostpointercapture"]) el.addEventListener(type, e => { if (down && e.pointerId === down.id) clear(); });
     if (typeof MutationObserver !== "undefined") new MutationObserver(() => { if (!enabled()) clear(); }).observe(el, { attributes: true, attributeFilter: ["hidden", "style", "class"] });
     window.addEventListener("blur", clear);

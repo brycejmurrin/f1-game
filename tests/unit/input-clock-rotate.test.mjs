@@ -93,7 +93,7 @@ function secondaryRig() {
   helper.secondaryTap(el, { activate: () => actions++, cancel: () => cancelled++, beforeActivate: e => { before = e; return allowed; } });
   const event = extra => ({ pointerType: "touch", pointerId: 2, isPrimary: false, isTrusted: true,
     clientX: 20, clientY: 20, timeStamp: 100, target: el, ...extra });
-  const emit = (type, extra) => { const e = event(extra); if (type === "pointerdown") fire(type, e); for (const fn of events.get(type) || []) fn(e); return e; };
+  const emit = (type, extra) => { const e = event(extra); if (type === "pointerdown" || type === "pointerup") fire(type, e); for (const fn of events.get(type) || []) fn(e); return e; };
   return { sb, fire, el, emit, event, actions: () => actions, cancelled: () => cancelled, before: () => before, block: () => { allowed = false; } };
 }
 
@@ -142,4 +142,26 @@ test("secondary actions preserve an independent held pedal and its matching rele
   assert.equal(h.actions(), 1); assert.equal(held, true, "secondary activation and release leave the primary pedal held");
   holds.holdReleasePointer(1);
   assert.equal(held, false, "the primary's own lift still releases reliably");
+});
+
+
+test("cancelled secondary contacts suppress their eventual native click even after retargeting", () => {
+  for (const ending of ["move", "resize", "hidden", "lostpointercapture"]) {
+    const h = secondaryRig(); h.emit("pointerdown");
+    if (ending === "move") h.emit("pointermove", { clientX: 33 });
+    else if (ending === "resize") h.fire("resize");
+    else if (ending === "hidden") h.el.hidden = true;
+    else h.emit("lostpointercapture");
+    const target = ending === "move" ? h.el : { id: "retargeted-layer" };
+    if (ending === "hidden") h.emit("pointerup", { clientX: 33, timeStamp: 200, target });
+    else h.fire("pointerup", h.event({ clientX: 33, timeStamp: 200, target }));
+    assert.equal(h.actions(), 0, ending + " never activates the bridge");
+    let stopped = 0;
+    const click = extra => h.fire("click", h.event({ clientX: 33, timeStamp: 220, target, detail: 1,
+      preventDefault() { stopped++; }, stopImmediatePropagation() {}, ...extra }));
+    click({ detail: 0 }); assert.equal(stopped, 0, "keyboard/AT still pass after " + ending);
+    click({}); assert.equal(stopped, 1, "cancelled native compatibility click is blocked after " + ending);
+    h.fire("pointerdown", h.event({ isPrimary: true, pointerId: 3 }));
+    click({}); assert.equal(stopped, 1, "a new intentional contact still passes after " + ending);
+  }
 });
