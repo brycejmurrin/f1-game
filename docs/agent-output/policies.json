@@ -2566,6 +2566,16 @@
       "presentation": "shared-levels",
       "preserve": "@c5"
     },
+    "tools/ui/look-diff.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c5"
+    },
+    "tools/ui/look-diff/core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/menu-capture.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

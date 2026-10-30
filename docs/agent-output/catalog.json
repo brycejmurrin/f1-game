@@ -4110,6 +4110,23 @@
       ]
     },
     {
+      "path": "tools/ui/look-diff.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/ui/look-diff/core.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ui/menu-capture.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output",

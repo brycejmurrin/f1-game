@@ -498,6 +498,8 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/transitions.mjs** | Bounded adaptive classification histories and forward/reverse viewport path comparisons. | — |
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
+| **ui/look-diff.mjs** | Pixel-diff each ScreenLooks/PauseOpts/TitleLayout knob value vs the default: DEAD/SUBTLE/VISIBLE + contact sheet. | css-play |
+| **ui/look-diff/core.mjs** | Library for look-diff: knob catalog read in a vm, args, pixel/geometry diff, DEAD/SUBTLE/VISIBLE classes. | css-play |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
 | **ui/menu-fit.mjs** | DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport. | survey-ui-matrix |
 | **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
