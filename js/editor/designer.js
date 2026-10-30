@@ -1741,11 +1741,30 @@ const TrackDesigner = (function () {
     const I = insight();
     const def = Tracks.LIST.find((t) => t.id === id && !t.custom);
     if (!I || !def) { message("That circuit is not available", true); return false; }
+    const generation = ++replacementGeneration;
+    // Picker entries may still be metadata only. Hydrate just the chosen circuit;
+    // edits, another pick or closing the screen revoke this pending replacement.
+    if (def._metaOnly) {
+      if (!G || typeof G.ensureCircuit !== "function") { message("Could not load " + def.name, true); return false; }
+      message("Loading " + def.name + "…");
+      return Promise.resolve().then(() => G.ensureCircuit(Tracks.LIST.indexOf(def))).then(() => {
+        if (generation !== replacementGeneration) return false;
+        if (def._metaOnly) { message("Could not load " + def.name, true); return false; }
+        return traceCircuit(I, def);
+      }).catch((e) => {
+        if (generation === replacementGeneration) message("Could not load " + def.name + " — try again", true);
+        Log.warn("track", "start from " + id + " failed: " + (e && e.message || e));
+        return false;
+      });
+    }
+    return traceCircuit(I, def);
+  }
+  function traceCircuit(I, def) {
     let f = null;
-    try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + id + " failed: " + (e && e.message || e)); f = null; }
+    try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + def.id + " failed: " + (e && e.message || e)); f = null; }
     if (!f || f.pts.length < CustomTracks.LIMITS.ptsMin) { message("Could not trace " + def.name, true); return false; }
     sel = -1; span = -1;
-    commit(Object.assign(freshLoop(design, f.pts, (Date.now() % 4294967296) >>> 0), { baseHW: f.baseHW, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + id);
+    commit(Object.assign(freshLoop(design, f.pts, (Date.now() % 4294967296) >>> 0), { baseHW: f.baseHW, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + def.id);
     if (ui.name) ui.name.value = design.name;
     if (cv) cv.fit();
     if (ui.from) { ui.from.hidden = true; ui.fromBtn.setAttribute("aria-expanded", "false"); }

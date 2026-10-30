@@ -1346,6 +1346,35 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.startFrom("custom-nope"), false);
 });
 
+test("START FROM hydrates a metadata-only pick and revokes stale replacements", async () => {
+  const b = bootScreen(); openGreen(b);
+  const idx = b.Tracks.LIST.findIndex((d) => d.id === "monza"), full = b.Tracks.LIST[idx];
+  const stub = () => ({ id: full.id, name: full.name, _metaOnly: true });
+  const reset = () => { b.Tracks.LIST[idx] = stub(); };
+  reset();
+  assert.throws(() => b.ctx.TrackInsight.fromCircuit(b.Tracks.LIST[idx]), "metadata cannot be traced before hydration");
+  let release, calls = 0;
+  b.G.ensureCircuit = (i) => { assert.equal(i, idx); calls++; return new Promise((resolve) => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; }); };
+  const before = plain(b.D.state().design), order = b.Tracks.LIST.map((d) => d.id);
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  assert.deepEqual(plain(b.D.state().design), before, "waiting does not replace the working circuit");
+  release(); assert.equal(await pending, true);
+  assert.equal(b.D.state().design.name, "MONZA REMIX");
+  assert.deepEqual(b.Tracks.LIST.map((d) => d.id), order, "hydration preserves saved order");
+  assert.equal(b.D.undo(), true); assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  for (const change of [() => b.D.setName("EDIT WHILE LOADING"), () => b.D.close(), () => b.D.startFrom("spa")]) {
+    b.D.open(); reset(); const next = b.D.startFrom("monza"); await Promise.resolve();
+    change(); const retained = plain(b.D.state().design); release();
+    assert.equal(await next, false); assert.deepEqual(plain(b.D.state().design), retained);
+  }
+  b.D.open(); reset(); const retained = plain(b.D.state().design);
+  b.G.ensureCircuit = () => Promise.reject(new Error("offline"));
+  assert.equal(await b.D.startFrom("monza"), false);
+  assert.deepEqual(plain(b.D.state().design), retained, "load failure preserves unsaved edits");
+  assert.equal(calls, 4);
+  b.D.close();
+});
+
 // START FROM pinned every shipped circuit's whole centreline (~4 MB) for the page
 // once the panel opened; a card strokes a 160×110 outline, so only that is kept.
 test("START FROM… memoises a small outline per circuit, not its whole centreline", async () => {

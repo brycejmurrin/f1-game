@@ -236,6 +236,27 @@ async function randomiseGreen(page, seed) {
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("START FROM hydrates an unvisited circuit and saves a reloadable remix", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page);
+    const before = await page.evaluate(() => ({ ids: Tracks.LIST.map((d) => d.id), stub: !!Tracks.LIST.find((d) => d.id === "monza")._metaOnly }));
+    expect(before.stub, "Monza has not been selected or raced").toBe(true);
+    expect(await page.evaluate(() => TrackDesigner.startFrom("monza"))).toBe(true);
+    const saved = await page.evaluate(() => {
+      const verdict = TrackDesigner.preview(), result = TrackDesigner.save();
+      return { ok: verdict.ok, result, ids: Tracks.LIST.filter((d) => !d.custom).map((d) => d.id), design: TrackDesigner.state().design };
+    });
+    expect(saved.ok).toBe(true); expect(saved.result.ok).toBe(true);
+    expect(saved.ids).toEqual(before.ids);
+    expect(saved.design.name).toBe("MONZA REMIX");
+    await page.screenshot({ path: testInfo.outputPath("hydrated-monza-remix.png") });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
+    await openDesigner(page);
+    expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(saved.result.id);
+    const reloaded = await page.evaluate(() => { TrackDesigner.preview(); return TrackDesigner.state(); });
+    expect(reloaded.ok).toBe(true); expect(reloaded.design.pts).toEqual(saved.design.pts);
+  });
+
   for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
     test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);

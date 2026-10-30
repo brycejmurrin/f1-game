@@ -6511,6 +6511,7 @@
         "tests/unit/track-insight.test.mjs"
       ],
       "fromCircuit": [
+        "tests/unit/track-designer-dom.test.mjs",
         "tests/unit/track-insight.test.mjs"
       ],
       "memoryCards": [
