@@ -239,7 +239,7 @@ test("W6: the draw warm compiles the canvas passes on both sides of the upscale 
   const h = await postRig(t, { up: true });
   const opts = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };
   h.post.drawWarm(opts, h.frame);
-  await settle();
+  await h.post.warmSettled();       // the canvas compiles themselves, not a wall-clock wait (flaked under load)
   const built = pipelineBuilds(h.renderer);
   h.present(opts);                  // SGSR -> canvas
   h.setUpscale(false);
