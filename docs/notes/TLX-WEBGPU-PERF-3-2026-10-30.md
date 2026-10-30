@@ -104,6 +104,42 @@ The drop in stored attachments includes the depth-only shadow maps (§1); the ce
 **Device evidence is still owed.** After the deploy, Bryce runs PHONE TEST › GPU TEST (`PHONE-GPU-TEST-2026-10-21.md`).
 Nothing in rounds 1–3 has run on WebKit.
 
+## 6. Bryce's report: the first BOOST still stalls about a second (2026-10-30)
+
+Bryce, after round 3's census ("anytime I hit the boost the first time the game stalls for a second", THREE PATH:
+WEBGPU on the phone). What this session checked:
+
+- **Every boost-only draw is in the entry warm.** That covers the cockpit ERS bar pulse and the OT lamp (`_rigFxA`, in
+  `_LATE_LIT`), and the rear ERS strip and lift flame (`_LATE_FX`). Their meshes are pinned (#3677).
+- **Ruled out:**
+  - the exhaust heat-haze, which is off on `mobileTier`;
+  - the mirror, which skips the player's own car;
+  - the ERS sound, whose nodes are built once at `attach()`.
+- **`tools/archive/perf/ers-deploy-census.mjs --backend tlx-gl --cam helmet --mirror on --track montreal --presses 2`**
+  (three's WebGL2 path, SwiftShader) reads `deployed=true pre=25 lazy=0 misses=0`. So at the three.js level, the first
+  deploy builds no pipeline and mints no material.
+- **Not checked:** a WebGPU-only key difference. This container cannot run three's WebGPU leg, and the macOS census never
+  presses BOOST.
+- **Device evidence points elsewhere.** Ledger row 26 (`DEVICE-FARM-LEDGER-2026-10-23.md`, 18 Pro Max, after #3677)
+  still had one 722 ms frame on the first press. It landed at the same instant as `GameAudio.resume` ×6. In that run the
+  first BOOST tap was also the session's first gesture, so it unlocked audio.
+- **A touch player holds GAS through the race,** so the first `touchend` / `pointerup` of a race is usually the first
+  BOOST tap. That tap runs the audio gesture unlock (`lazy-bundles.js audioGestureUnlock`, `engine.js resumeIfNeeded`)
+  whenever iOS has suspended or interrupted the AudioContext.
+
+**Instrument.** GPU TEST gained a `boost` phase (`js/perf/gpu-test-run.js`). It sets BOOST on directly, with no tap, as
+the session's first deploy, and records `gpuTest.firstBoost`:
+- `deployed`;
+- the worst frame in the first 2 s (`firstMaxMs`);
+- the programs and pipelines built in that window.
+
+How to read it:
+- **A stall with `pipes > 0`** is the renderer, and the census tool names the draw.
+- **A clean row** while a real BOOST tap still stalls puts the cost on the touch or audio-unlock path.
+
+The count test is `tests/unit/gpu-test-run.test.mjs` "GPU TEST boost phase"; it fails on the base tree. The answer is
+owed by Bryce's next PHONE TEST › GPU TEST.
+
 ## Gates run
 
 - `node --test` over tlx-*, webgpu-*, gfx-backend-canary, backend-surface-parity, three-shared-binding-update,

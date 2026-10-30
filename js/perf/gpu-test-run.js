@@ -8,6 +8,10 @@
      default  the player's own settings (the reference)
      s50/s75/s100  RESOLUTION pinned at 0.5 / 0.75 / 1.0 (governor off): frame time against pixel count
                    gives the FILL SLOPE on this GPU, no timer needed
+     boost         BOOST on at the start of the measure window (the session's FIRST deploy: the soak never
+                   boosts): the first deploy's worst frame and the programs / pipelines built in its first
+                   BOOST_WINDOW_MS. Set directly, not tapped, so a stall here is the render side; none here
+                   with a stall on a real tap points at the touch / audio-unlock path instead.
      mirrorOff     HUD > MIRROR OFF at the player's scale: what the mirror pass costs here
      again         the default once more: drift (heat, throttling) between the first and last phase
 
@@ -21,11 +25,12 @@
 const GpuTestRun = (function () {
   "use strict";
 
-  const SETTLE_MS = 5000, MEASURE_MS = 20000;
+  const SETTLE_MS = 5000, MEASURE_MS = 20000, BOOST_WINDOW_MS = 2000;
   const PHASES = [
-    { id: "default" }, { id: "s50", scale: 0.5 }, { id: "s75", scale: 0.75 }, { id: "s100", scale: 1.0 },
+    { id: "default" }, { id: "boost", boost: true }, { id: "s50", scale: 0.5 }, { id: "s75", scale: 0.75 }, { id: "s100", scale: 1.0 },
     { id: "mirrorOff", mirror: "off" }, { id: "again" },
   ];
+  const soakBoost = (on) => { try { return typeof SoakRun !== "undefined" && SoakRun.boost ? SoakRun.boost(on) : false; } catch (_) { return false; } };
   const TOTAL_MIN = Math.ceil(PHASES.length * (SETTLE_MS + MEASURE_MS) / 60000 * 10) / 10 + 0.2;
 
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
@@ -125,9 +130,19 @@ const GpuTestRun = (function () {
         // even when a previous phase or an enclosing capture kept timing on.
         r.measuring = true; r.measureAt = now; r.gpuSeen = sample.key;
         r.c0 = { links: r.counts.links, pipes: r.counts.pipes };
+        if (ph.boost) { soakBoost(true); r.boost = { at: now, maxMs: 0, deployed: false, links: null, pipes: null }; }
       } else if (sample.key && sample.key !== r.gpuSeen) {
         r.gpuSeen = sample.key;
         if (sample.sampleAt >= r.measureAt) r.gpu.push(sample.ms);
+      }
+    }
+    if (r.boost && r.boost.links === null && r.measuring) {
+      const b = r.boost;
+      if (now - b.at <= BOOST_WINDOW_MS) {
+        if (r.deltas.length > 1) b.maxMs = Math.max(b.maxMs, r.deltas[r.deltas.length - 1]);
+        if (!b.deployed) b.deployed = soakBoost();
+      } else {
+        b.links = r.counts.links - r.c0.links; b.pipes = r.counts.pipes - r.c0.pipes;
       }
     }
     r.prev = ts;
@@ -137,6 +152,10 @@ const GpuTestRun = (function () {
         mirror: ph.mirror || r.saved.mirror, tier: (() => { try { return PerfGov.tier(); } catch (_) { return null; } })(),
         gpuSampling: { state: r.gpu.length ? "fresh" : r.gpuState || "no fresh sample", basis: "resolved-during-window" } },
       phaseStats(r.deltas, r.gpu, { links: r.counts.links - (r.c0 ? r.c0.links : 0), pipes: r.counts.pipes - (r.c0 ? r.c0.pipes : 0) }));
+      if (r.boost) {
+        row.boost = { deployed: r.boost.deployed, firstMaxMs: r2(r.boost.maxMs), windowMs: BOOST_WINDOW_MS, links: r.boost.links, pipes: r.boost.pipes };
+        r.boost = null; soakBoost(false);
+      }
       r.rows.push(row);
       r.deltas = []; r.gpu = []; r.measuring = false; r.c0 = null;
       r.i++;
@@ -152,6 +171,7 @@ const GpuTestRun = (function () {
     _run = null;
     if (r.raf) cancelAnimationFrame(r.raf);
     apply({}, r.saved);
+    if (r.boost) soakBoost(false);
     r.unhook();
     const B = backend();
     try { if (B && B.gpuTimer) B.gpuTimer(r.saved.gpuOn); } catch (_) { /* no timer */ }
@@ -161,7 +181,8 @@ const GpuTestRun = (function () {
       mirrorMs: (() => { const a = r.rows.find((x) => x.id === "default"), b = r.rows.find((x) => x.id === "mirrorOff");
         return a && b && a.p50 != null && b.p50 != null ? r2(a.p50 - b.p50) : null; })(),
       driftMs: (() => { const a = r.rows.find((x) => x.id === "default"), b = r.rows.find((x) => x.id === "again");
-        return a && b && a.p50 != null && b.p50 != null ? r2(b.p50 - a.p50) : null; })() };
+        return a && b && a.p50 != null && b.p50 != null ? r2(b.p50 - a.p50) : null; })(),
+      firstBoost: (() => { const b = r.rows.find((x) => x.id === "boost"); return b && b.boost ? b.boost : null; })() };
     try { if (typeof PhoneRecorder !== "undefined" && PhoneRecorder.attach) PhoneRecorder.attach("gpuTest", result); } catch (_) { /* recorder gone */ }
     try { if (typeof SoakRun !== "undefined" && SoakRun.active()) SoakRun.stop("gpu-test-" + reason); } catch (_) { /* soak gone */ }
     _last = { state: "done", reason, phases: r.rows.length };
@@ -197,7 +218,7 @@ const GpuTestRun = (function () {
   }
 
   return {
-    PHASES, SETTLE_MS, MEASURE_MS, TOTAL_MIN, phaseStats, fillSlope, hookCounts,
+    PHASES, SETTLE_MS, MEASURE_MS, BOOST_WINDOW_MS, TOTAL_MIN, phaseStats, fillSlope, hookCounts,
     start, stop: () => finish("stopped"), active: () => !!_run,
     status: () => Object.assign({}, _last, _run ? { state: _run.i < 0 ? "starting" : "phase " + (_run.i + 1) + "/" + PHASES.length + " " + PHASES[_run.i].id } : null),
   };
