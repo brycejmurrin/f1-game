@@ -379,6 +379,17 @@ test("desktop-1440x900: a named 16:10 device, its own short id, not a matrix axi
   assert.equal(E.rotateDevice.want, false);
 });
 
+test("--settings: a LOAD SETTINGS export seeds every boot; anything else is refused before a browser", () => {
+  const p = parseArgs(["--device", "phone-landscape-844x390", "--settings", "tests/data/settings-defaults-export.json"]);
+  assert.equal(p.settings.format, "apex26-settings-v1");
+  assert.equal(p.settings.settings.display.hudBtnScale, 245, "the owner's phone export, read whole");
+  assert.equal(parseArgs(["--device", "phone-landscape-844x390"]).settings, null, "no flag: the shipped store");
+  const rf = (text) => () => text;
+  assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("{\"format\":\"other\"}") }), /apex26-settings-v1/);
+  assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("nope") }), /not JSON/);
+  assert.throws(() => parseArgs(["--settings", "missing.json"], { readFile: () => { throw new Error("ENOENT"); } }), /cannot read/);
+});
+
 test("portrait mode: race by default (portraitOk at boot, findings keep their severity), gate on request", () => {
   const P = "phone-portrait-390x844";
   // Option parsing: plan-wide --portrait under-lays every cell; only a gated device keeps GATE.
