@@ -7562,6 +7562,7 @@
     },
     "js/garage/arrival.js": {
       "angleMap": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "bindSettings": [
@@ -7576,14 +7577,10 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "crewFor": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "duration": [
-        "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs",
-        "tests/unit/garage-crew.test.mjs"
-      ],
-      "pose": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
@@ -7592,15 +7589,24 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "resultKind": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "shotsFor": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "start": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "step": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "timeline": [
         "tests/unit/garage-arrival.test.mjs"
       ]
     },

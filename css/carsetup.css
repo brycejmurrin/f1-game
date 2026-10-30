@@ -1940,7 +1940,7 @@ body:not(.desktop) #carsetup #cs-customize {
 #cs-arrival-label { font-weight: 700; letter-spacing: .12em; font-size: var(--label); }
 #cs-arrival-skip { min-height: var(--tap); }
 
-#ga-enabled { width: var(--tap); height: var(--tap); accent-color: var(--red); }
+#ga-enabled, #ga-after { width: var(--tap); height: var(--tap); accent-color: var(--red); }
 #ga-fov {
   width: 6ch; min-height: var(--tap); text-align: center;
   background: var(--carbon); color: var(--text); border: 1px solid var(--text);

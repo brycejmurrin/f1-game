@@ -132,6 +132,8 @@ redesign the car path and camera in Blender:
 
 ```sh
 node tools/garage/arrival-poses.mjs --angle cut --out artifacts/garage-previz/poses.json
+# every sequence (pit stop in, race start out, after-race home) on another camera preset:
+# node tools/garage/arrival-poses.mjs --dir all --angle director --result win --out artifacts/garage-previz/poses.json
 blender -b --factory-startup --python tools/gen/blender/garage-previz.py -- \
     --poses artifacts/garage-previz/poses.json --output-dir artifacts/garage-previz --render --step 2
 ```

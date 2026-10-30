@@ -1,0 +1,2 @@
+New: garage enter & leave tuner gets five cameras (left, right, high corner, floor level, door jamb), a three-camera DIRECTOR preset and CUSTOM per-shot cameras, camera height, and shot lengths (shutter shot, hold beat, car speed, end beat).
+New: AFTER THE RACE — the next garage visit after a race brings the car home flavoured by the result: a winner idles in to a welcome, podium and points finishes get their own beat and caption, a retired car is pushed in by the crew. PREVIEW AFTER RACE plays any result from the tuner.

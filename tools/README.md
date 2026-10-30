@@ -470,7 +470,7 @@ Blender authoring and deterministic runtime motion exports for the garage crew.
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **garage/arrival-poses.mjs** | Samples the real GarageArrival.pose / poseOut (garage in and out) to JSON frames for the Blender previz. | — |
+| **garage/arrival-poses.mjs** | Samples the real GarageArrival poses (pit stop, race start, after-race home) to JSON frames for the Blender previz. | — |
 | **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
 
 ### `tools/ui/`

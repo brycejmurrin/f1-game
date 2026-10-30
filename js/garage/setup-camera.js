@@ -233,7 +233,7 @@ function startArrivalPreview(dir, btn) {
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   const cfg = Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
-  preview = { t: 0, cfg, dir: dir === "out" ? "out" : "in", was: G.setupPreviewOn, btn };
+  preview = { t: 0, cfg, dir: dir === "out" || dir === "home" ? dir : "in", was: G.setupPreviewOn, btn };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
@@ -244,7 +244,7 @@ function startArrivalPreview(dir, btn) {
 }
 function stepPreview(dt) {
   preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed;
-  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg, reducedMotion());
+  const pose = GarageArrival.poseFor(preview.dir)(preview.t, preview.cfg, reducedMotion());
   if (pose.active) return pose;
   stopPreview();
   return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
@@ -272,6 +272,31 @@ window.addEventListener("keydown", (e) => {
   e.preventDefault();
   e.stopPropagation();   // not the settings page's door as well
 }, true);
+// AFTER THE RACE: endRace notes the player's result (noteResult); the next
+// garage visit that is not a pit stop or a friend's lobby plays the car brought
+// home, flavoured by it (GarageArrival RESULTS), once. A note over half an hour
+// old is stale. PLAY ANIMATIONS and AFTER THE RACE gate it, and the harness skips
+// it through LoadingScreen.isAutomation like the drive-out.
+let pendingHome = null;
+function noteResult(order, meta) {
+  const pl = G.player;
+  pendingHome = null;
+  if (!pl || !Array.isArray(order) || typeof RaceCeremony === "undefined" || !RaceCeremony.eligible(G, meta)) return null;
+  const pos = order.indexOf(pl) + 1;
+  pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now() };
+  return pendingHome;
+}
+function startHome(from) {
+  const p = pendingHome;
+  if (!p || from === "pit" || from === "vsfriend") return false;
+  pendingHome = null;
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  if (!cfg.enabled || !cfg.afterRace || performance.now() - p.at > 30 * 60e3) return false;
+  if (typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation()) return false;
+  endHome();
+  arrival.start({ home: p });
+  return true;
+}
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -1122,7 +1147,7 @@ if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.bind
 return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel,
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,

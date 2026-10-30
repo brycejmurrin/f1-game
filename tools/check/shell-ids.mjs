@@ -58,6 +58,19 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "ga-shots-row": "GarageArrival buildRows() makes the GARAGE ENTER & LEAVE camera / shot-length / after-race rows from its tables (the shell's node count is a shrink-only ratchet); every read in bindSettings is null-guarded",
+  "ga-shot1": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-shot2": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-shot3": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-height": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-door": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-hold": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-carspeed": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-endbeat": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-after": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-crew-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-result": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-preview-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "as-slang":         "audio/panel.js builds the SPOKEN LANGUAGE row with SettingRow.build after RADIO SOUND (the shell's node count is a shrink-only ratchet); its paint/wire reads are null-guarded",
   "pm-ckfinish-wheel": "CockpitFinishes.initUI builds pm-ckfinish-<name> through SettingRow.build for wheel/body/halo; this null-guarded lookup prevents duplicate insertion",
   "cs-tab-tune": "SetupUI creates cs-tab-<tab.id> buttons dynamically; SetupExperiments reads the TUNE tab after the garage panel is built",
