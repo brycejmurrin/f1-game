@@ -383,6 +383,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #hud-speed { font-size: calc(28px * var(--hud-text-boost, 1)); }
   #hud-energy { width: 132px; height: 15px; }
   .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 6); }
+  /* ONE INSTRUMENT (design pass 2a; the plate itself is in css/hud.css, which may read --accent):
+     SPEED is the hero figure (read every corner), GEAR a compact block, the inner plates go.
+     A player-placed gear or speed (data-hl-user) keeps its own plate. */
+  body:not(.desktop) #hud-gearbox:not([data-hl-user]) { background: none; border: 0; border-radius: 0; padding: 0 calc(var(--gap) * 2 / 3) 0 0;
+    box-shadow: inset -1px 0 0 var(--card-line); }
+  body:not(.desktop) #hud-speed:not([data-hl-user]) { background: none; box-shadow: none; }
+  body:not(.desktop) #hud-gear { font-size: 34px; }
+  body:not(.desktop) #hud-tach { width: 54px; }
+  body:not(.desktop) #hud-speed { font-size: calc(40px * var(--hud-text-boost, 1)); font-style: normal; }
   /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
      label / 19px value the stylesheet uses everywhere, with NO touch override
      at all — so the one place they are read at arm's length, on a phone, in
@@ -760,7 +769,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     #hud-gear { font-size: 40px; }
     #hud-tach { width: 84px; }
     body:not(.desktop) #hud-energy { width: 108px; }
-    body:not(.desktop) #hud-speed { font-size: calc(24px * var(--hud-text-boost, 1)); }
+    body:not(.desktop) #hud-speed { font-size: calc(30px * var(--hud-text-boost, 1)); }
+    body:not(.desktop) #hud-gear { font-size: 28px; }
     body:not(.desktop) #hud-ot,
     body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3); }
     body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
