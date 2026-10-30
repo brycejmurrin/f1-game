@@ -53,8 +53,24 @@ then moved to a `:has()` form for `source-integrity`, same cascade):
 - **Not measured**: the shipped-look pause and the second export run. The loadavg gate deferred both (exit 75);
   the base-vs-branch layout-audit covers the shipped look.
 
-Not run this round: the Playwright MCP live drive of three circuits (lights → lap → pit → CAM → finish → results) and
-the 20 s chrome-devtools trace for F-07; both are filed. The CI WebKit leg stays Bryce's call (#4271 lead 3).
+- **Scripted live drive** (`scratch/ui-hunt-3/live-drive.mjs`, Playwright, the owner's export, 844x390 touch,
+  safe 0/47/21/47, `navigator.webdriver` hidden). Steps on Monaco, Monza and Bahrain night: race → lights → 6 s
+  rendered → CAM tap → pause tap → Tab → RESUME tap → finish → results → MENU tap.
+  - Run 2: every step ok on all three circuits, 0 page errors.
+    - CAM went HELMET → chase.
+    - RESUME closed the pause in 739–828 ms.
+    - Results MENU sat at 300,300 119×57, and the tap reached the title.
+  - The in-race pause shot (`drive2/monza-pause.png`) shows the split card fully on screen at Bryce's look.
+  - The probe's "lowest button bottom 464" counts a button inside the card that is not painted. Explorer's
+    visibility-filtered count is 14/14 above y 390.
+  - Run 1, with the 3D loop live, timed out every screenshot and every CAM/pause tap. SwiftShader starves the
+    compositor, which measures the machine, not the game.
+- **Not run:**
+  - The Playwright **MCP** drive and the pit stop.
+  - The 20 s chrome-devtools trace for F-07 (#4318).
+  - The CI WebKit leg stays Bryce's call (#4271 lead 3).
+
+Filed: #4312 (survey contrast default + contrast check), #4318 (F-07 trace), #4319 (open HUD-CODE-AUDIT rows).
 
 ## Reproduce
 
