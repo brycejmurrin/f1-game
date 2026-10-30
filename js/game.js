@@ -2912,6 +2912,7 @@ function netOrder(order) {
 }
 
 function endRace(forcedOrder) {
+  if (state !== "race" && state !== "count") return;   // one classification and settlement per session
   Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
   GfxEscalation.resetReloadBudget();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
@@ -2984,7 +2985,7 @@ function endRace(forcedOrder) {
   // TWO DRY COMPOUNDS (FIA 2026 SR B6.3.6), every car: a finished Grand Prix the
   // rule covers (PitLane.twoCompoundApplies — the AI planner's own test). Not in
   // a room: a remote car's compound is not replicated.
-  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && cmpApplies;
+  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && (suspended || cars.some((c) => c.finished && !c.retired)) && cmpApplies;
   // WATCH uses the published classification, not the simulated tyre log.
   const dsq = realRace.status().watch ? cars.filter((c) => c.dsq) : SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
   for (const c of dsq) Log.info("game", "DSQ car=" + c.code + " why=" + c.dsq);   // B6.3.6: a suspended race pays +30 s instead, carried in c.penalty

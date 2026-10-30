@@ -6967,6 +6967,9 @@
         "tests/unit/ui-sheets-audit.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "applyCaution": [
+        "tests/unit/sporting-regs.test.mjs"
+      ],
       "applyLightTune": [
         "tests/unit/flyby-intro.test.mjs"
       ],
@@ -7047,6 +7050,7 @@
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
