@@ -334,6 +334,16 @@ test("unload during parallel downloads rejects the stale generation before any d
   assert.equal(assets.state().bytes, 0, "unload releases the pack byte accounting");
 });
 
+test("unload retires BitmapDecode worker when the material pack is torn down", () => {
+  let dropped = 0;
+  const assets = assetLoader({
+    BitmapDecode: { drop: () => { dropped++; } },
+  });
+  assets.init({ createTextureArray() {}, setMaterialMaps() {} });
+  assets.unload();
+  assert.equal(dropped, 1, "tier switch / assetLoad(false) must not leave a strip worker inflating");
+});
+
 test("unload drops cached models and rejects late manifest/model responses", async () => {
   const manifests = [deferredAssetDownload(), deferredAssetDownload()];
   const modelDownload = deferredAssetDownload();

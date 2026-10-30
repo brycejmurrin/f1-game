@@ -762,6 +762,12 @@ const Assets = (function () {
   function unload() {
     _loadGeneration++;
     for (const cancel of _requests) cancel();
+    // Pack-strip decode can run in js/workers/bitmap-decode-worker.js (apex26.packDecodeWorker).
+    // Cancel fetches and generation checks discard the result, but the worker keeps inflating
+    // until it finishes or times out — duplicate CPU after __apex.assetLoad(false) or a tier switch.
+    try {
+      if (typeof BitmapDecode !== "undefined" && BitmapDecode.drop) BitmapDecode.drop();
+    } catch (_) { /* best-effort worker teardown */ }
     _retried = true;   // an explicit off (__apex.assetLoad(false)) is never undone behind its back
     if (_gfx && _gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
     // Drop all pack-owned CPU state as well as the GPU maps. In particular,
