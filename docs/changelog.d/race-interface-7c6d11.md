@@ -1,1 +1,1 @@
-Improved the in-race HUD with clearer lap grouping, visible camera/pause keyboard focus, an absolute emergency touch-target floor, and radio placement that protects flags, tyre information and the central driving view when an outer lane fits.
+Improved: the in-race HUD has clearer lap grouping, visible camera/pause keyboard focus, an absolute emergency touch-target floor, and radio placement that protects flags, tyre information and the central driving view when an outer lane fits.
