@@ -2,7 +2,7 @@
 const GarageExterior = (function () {
   "use strict";
   const IDENTITY = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  const MESHES = ["ground", "terrain", "road", "props", "scenery", "glass", "water"];
+  const MESHES = ["ground", "terrain", "road", "props", "scenery", "sceneryLights", "glass", "water"];
   const wetWeather = weather => /^(wet|rain|storm)$/.test(weather || "");
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
@@ -39,7 +39,7 @@ const GarageExterior = (function () {
     return { night, wet, sunDir, sunColor, ambientSky, ambientGround, fogColor,
       fogDensity: weather === "fog" ? .0065 : storm ? .0038 : wet ? .0018 : Number.isFinite(p.fogDensity) ? p.fogDensity : .0008,
       exposure: night ? 1.05 : twilight ? 1.02 : 1,
-      sceneryEmission: night ? .78 : twilight ? .224 : 0,
+      lightEmission: night ? .78 : twilight ? .224 : 0,
       sky: { zenith, horizon, sunDir: sunDir.slice(), sunColor: sunColor.slice(), stars: night ? 1 : 0, starBright: overcast ? 0 : 1, moon: night ? .85 : tod === "dawn" ? .3 : 0, cloud: overcast ? .95 : night ? .22 : .4 } };
   }
   // Match the circuit's lane direction without changing caller-owned camera vectors.
@@ -125,7 +125,7 @@ const GarageExterior = (function () {
     const yieldTask = deps.yieldTask || (() => new Promise(resolve => setTimeout(resolve, 0)));
     let selected = null, key = "", generation = 0, status = "idle", error = null, readySet = null, job = null;
     let queue = Promise.resolve(), attempts = 0, retryAt = 0;
-    const material = { ground: {}, terrain: {}, road: {}, props: {}, scenery: {},
+    const material = { ground: {}, terrain: {}, road: {}, props: {}, scenery: {}, sceneryLights: {},
       glass: { roughness: .13, specular: .82, metalness: .12, clearcoat: 1 }, water: {} };
     let rainMesh = null;
     const rainMatrix = new Float32Array(IDENTITY);
@@ -162,7 +162,7 @@ const GarageExterior = (function () {
       Object.assign(material.props, { roughness: wet ? .48 : .78, metalness: .04, emissive: 0 });
       Object.assign(material.terrain, material.ground);
       Object.assign(material.scenery, material.props);
-      material.scenery.emissive = lighting(selected).sceneryEmission;
+      Object.assign(material.sceneryLights, material.scenery, { emissive: lighting(selected).lightEmission });
       Object.assign(material.water, { roughness: wet ? .16 : .10, metalness: .05, specular: wet ? .85 : .92 });
     }
     function state() { return { status, key, generation, error, attempts, retryAt, stats: readySet ? readySet.stats : null,

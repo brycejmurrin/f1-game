@@ -45,11 +45,15 @@ const GarageExteriorGeometry = (function () {
     }
     return result;
   }
-  function* clipSteps(source, anchor, limits, budget) {
-    const out = empty(), indexed = new Map();
+  function* clipSteps(source, anchor, limits, budget, lights = null) {
+    const out = empty(), indexed = new Map(), lightIndexed = new Map();
     for (let i = 0; i + 2 < source.idx.length; i += 3) {
       if (i % 6144 === 0) yield;
       const ids = [source.idx[i], source.idx[i + 1], source.idx[i + 2]];
+      // Above-white authored albedo is the race shader's light-source tag.
+      // Split those faces once, so night emission cannot wash out concrete.
+      const target = lights && ids.some(id => source.col[id * 3] > 1 || source.col[id * 3 + 1] > 1 || source.col[id * 3 + 2] > 1) ? lights : out;
+      const cache = target === out ? indexed : lightIndexed;
       let poly = ids.map(id => vertex(source, id, anchor));
       if (!poly.every(v => v.every(Number.isFinite))) throw new Error("Non-finite circuit exterior geometry");
       const inside = poly.every(v => v[0] >= limits[0] && v[0] <= limits[1] && v[1] >= limits[2] && v[1] <= limits[3] && v[2] >= limits[4] && v[2] <= limits[5]);
@@ -66,14 +70,14 @@ const GarageExteriorGeometry = (function () {
         if (budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
         for (let k = 0; k < tri.length; k++) {
           const v = tri[k], id = inside ? ids[k] : null;
-          if (id !== null && indexed.has(id)) { out.idx.push(indexed.get(id)); continue; }
-          const at = out.pos.length / 3;
-          if (id !== null) indexed.set(id, at);
+          if (id !== null && cache.has(id)) { target.idx.push(cache.get(id)); continue; }
+          const at = target.pos.length / 3;
+          if (id !== null) cache.set(id, at);
           if (++budget.vertices > MAX_VERTICES) throw new Error("Circuit exterior geometry budget exceeded");
-          out.pos.push(v[0], v[1], v[2]);
+          target.pos.push(v[0], v[1], v[2]);
           const n = Math.hypot(v[3], v[4], v[5]) || 1;
-          out.nrm.push(v[3] / n, v[4] / n, v[5] / n);
-          out.col.push(v[6], v[7], v[8]); out.mat.push(v[9]); out.idx.push(at);
+          target.nrm.push(v[3] / n, v[4] / n, v[5] / n);
+          target.col.push(v[6], v[7], v[8]); target.mat.push(v[9]); target.idx.push(at);
         }
       }
     }
@@ -225,11 +229,12 @@ const GarageExteriorGeometry = (function () {
     const dressing = yield* TrackBuildProps.buildSteps(track, { region, skipPits: true });
     // Admit complete distant objects, then cut only at the garage frontage plane.
     const outward = [-Infinity, Infinity, -Infinity, Infinity, GaragePrims.Z_DOOR, Infinity];
-    const scenery = yield* clipSteps(TrackModels.sealGeometry(dressing.out), anchor, outward, budget);
+    const sceneryLights = empty();
+    const scenery = yield* clipSteps(TrackModels.sealGeometry(dressing.out), anchor, outward, budget, sceneryLights);
     const glass = yield* clipSteps(dressing.glass, anchor, outward, budget);
     const water = yield* clipSteps(dressing.water, anchor, outward, budget);
-    return { supported: true, trackId: def.id, road, props, ground, terrain, scenery, glass, water, palette: def.palette, surface, anchor,
-      stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, contextScale: options.contextScale, groundBounds: floorLimits, night: track._night, terrainVertices: terrain.pos.length / 3, sceneryVertices: scenery.pos.length / 3, glassVertices: glass.pos.length / 3, waterVertices: water.pos.length / 3, region: track.sceneryRegion, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
+    return { supported: true, trackId: def.id, road, props, ground, terrain, scenery, sceneryLights, glass, water, palette: def.palette, surface, anchor,
+      stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, contextScale: options.contextScale, groundBounds: floorLimits, night: track._night, terrainVertices: terrain.pos.length / 3, sceneryVertices: (scenery.pos.length + sceneryLights.pos.length) / 3, sceneryLightVertices: sceneryLights.pos.length / 3, glassVertices: glass.pos.length / 3, waterVertices: water.pos.length / 3, region: track.sceneryRegion, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
   }
   function* buildSteps(def, options = {}) {
     // Keep the caps fixed: dense circuits get a smaller complete scenery window.

@@ -990,6 +990,16 @@ test('detached exterior retains real terrain and separate scenery/glass/water wi
   assert.equal(r.stats.glassVertices, 3); assert.equal(r.stats.waterVertices, 3);
 });
 
+test('night light-source separation preserves the complete scenery while leaving ordinary walls non-emissive', () => {
+  const h = exteriorFixture([[0,0,20],[2,0,20],[0,2,20], [4,0,20],[6,0,20],[4,2,20]], { dress: true });
+  for (let i = 9; i < 18; i += 3) h.raw.col.splice(i, 3, 1.3, 1.1, .75);
+  const r = finishExterior(h.builder).result;
+  assert.equal(r.scenery.idx.length, 3); assert.equal(r.sceneryLights.idx.length, 3);
+  assert.ok(r.scenery.col.every(v => v <= 1)); assert.ok(r.sceneryLights.col.some(v => v > 1));
+  assert.equal(r.stats.sceneryVertices, 6); assert.equal(r.stats.sceneryLightVertices, 3);
+  assert.ok(r.scenery.pos.every(Number.isFinite) && r.sceneryLights.pos.every(Number.isFinite));
+});
+
 
 test('circuit exterior surface samples an inclined raised road, excludes paint and has bounded finite lookup data', () => {
   const plane = [[-2, 1.8, 10], [-2, 2.6, 14], [2, 2.2, 10], [2, 2.2, 10], [-2, 2.6, 14], [2, 3, 14]];
@@ -1029,6 +1039,9 @@ test('circuit exterior surface retains actual Bahrain and Monaco departure wheel
       assert.ok(Math.abs(y - expected[wheel++]) < .003, id + ' exact generated ribbon height survives indexing');
     }
     if (id === 'bahrain') {
+      assert.ok(data.stats.sceneryVertices > 10000, 'actual authored venue scenery is present beyond the pit structures');
+      assert.ok(data.stats.terrainVertices > 1000, 'the exterior includes real circuit terrain, not only a floor plane');
+      assert.ok(data.stats.sceneryLightVertices > 0, 'authored light-source faces survive in their own pass');
       const xs = data.road.pos.filter((_v, i) => i % 3 === 0);
       assert.ok(Math.max(...xs) >= 150, 'actual Bahrain road continues into the extended follow-view graphics region');
     }

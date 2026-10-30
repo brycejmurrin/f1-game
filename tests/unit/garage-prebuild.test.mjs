@@ -750,18 +750,20 @@ test('exterior coalesces work, owns its meshes, and updates weather without rebu
   h.ext.release(); assert.equal(h.freed.length,3); assert.equal(h.ext.draw(),false);
 });
 
-test('exterior owns terrain, surrounding scenery, glass and water across draws, weather and release', async () => {
+test('exterior owns terrain, scenery, tagged lights, glass and water across draws, weather and release', async () => {
   const geo = () => ({ pos: [0,0,7,1,0,7,0,1,7], nrm: [0,1,0,0,1,0,0,1,0], col: [1,1,1,1,1,1,1,1,1], idx: [0,1,2] });
-  const h = exteriorHarness({ geometry: () => Object.fromEntries(['ground','terrain','road','props','scenery','glass','water'].map(k => [k, geo()])) });
-  assert.equal(await h.ext.request(h.selection()), true); assert.equal(h.uploads.length, 7);
-  h.ext.draw(); assert.equal(h.draws.length, 7);
-  assert.equal(h.draws[5].opts.clearcoat, 1); assert.equal(h.draws[6].opts.roughness, .10);
+  const h = exteriorHarness({ geometry: () => Object.fromEntries(['ground','terrain','road','props','scenery','sceneryLights','glass','water'].map(k => [k, geo()])) });
+  assert.equal(await h.ext.request(h.selection()), true); assert.equal(h.uploads.length, 8);
+  h.ext.draw(); assert.equal(h.draws.length, 8);
+  assert.equal(h.draws[6].opts.clearcoat, 1); assert.equal(h.draws[7].opts.roughness, .10);
+  assert.equal(h.draws[5].opts.emissive, 0, 'daylight light faces remain ordinarily lit');
   assert.equal(await h.ext.request(h.selection('a', 'wet')), true); assert.equal(h.builds(), 1);
-  h.ext.draw(); assert.equal(h.draws[13].opts.roughness, .16);
+  h.ext.draw(); assert.equal(h.draws[15].opts.roughness, .16);
   assert.equal(await h.ext.request(h.selection('a', 'wet', 'night')), true);
-  h.ext.draw(); assert.equal(h.draws[17].opts.emissive, 0, 'pit frontage keeps its local lamp rig');
-  assert.equal(h.draws[18].opts.emissive, .78, 'authored lit scenery follows race night emission');
-  h.ext.release(); assert.equal(h.freed.length, 14);
+  h.ext.draw(); assert.equal(h.draws[19].opts.emissive, 0, 'pit frontage keeps its local lamp rig');
+  assert.equal(h.draws[20].opts.emissive, 0, 'ordinary architecture cannot become a glowing white slab');
+  assert.equal(h.draws[21].opts.emissive, .78, 'only authored light-source faces receive night emission');
+  h.ext.release(); assert.equal(h.freed.length, 16);
 });
 
 test('scenery-authored atmosphere uses its owned palette without changing the selected circuit', async () => {
