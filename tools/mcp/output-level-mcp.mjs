@@ -20,8 +20,8 @@ const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 // instructions before it searches, so say when each server is the right one (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md).
 export const SERVER_PREFACES = {
   // The page is not served for them: name the URL and the command (a cold agent spent two calls finding both, MCP-REFINE-2026-10-30).
-  'playwright-official': 'Host browser (browser_*): drive menus, HUD and UI flows like a player (phone landscape 844x390, touch first). The game is http://127.0.0.1:3456/ once `npx serve -l 3456 .` runs at the repo root (curl it first). Prefer browser_find over a full browser_snapshot. browser_close before any apex_* browser tool; never while a Playwright test run or chrome-devtools is live.',
-  'chrome-devtools': 'Live working-tree canvas over Chrome DevTools: evaluate __apex hooks (__apex.agentHelp() lists them), console, network, performance traces, heap snapshots. The game is http://127.0.0.1:3456/ once `npx serve -l 3456 .` runs at the repo root. One browser at a time: never while a Playwright test run or the host browser_* is live.',
+  'playwright-official': 'Host browser (browser_*): menus, HUD and UI flows like a player (844x390 landscape, touch first) at http://127.0.0.1:3456/ (`npx serve -l 3456 .`). browser_find beats a full snapshot. browser_close before apex_* browser tools; never beside a Playwright run or chrome-devtools.',
+  'chrome-devtools': 'Live canvas over DevTools: __apex hooks (__apex.agentHelp() lists them), console, network, traces, heap, at http://127.0.0.1:3456/ (`npx serve -l 3456 .`). One browser at a time: never beside a Playwright run or the host browser_*.',
 };
 export const GATEWAY_INSTRUCTIONS = 'Output gateway: every tool takes outputLevel=compact(default)|diagnostic|full, presentation only (the action runs once). Saved evidence: the final-page retrieval tool (output_read; underscore-prefixed on a name collision) reads structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path.';
 // MCP 2025-06-18 ToolAnnotations defaults; a hint equal to its default says nothing.
