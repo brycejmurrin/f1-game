@@ -795,8 +795,8 @@ interface GameCtx {
   readonly holdCaution: (level: number, cause?: string) => number;
   /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
   readonly resetEpisodeOwners: () => void;
-  /** Read-only rendered camera damping anchors and independent simulation/render clocks. */
-  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; };
+  /** Read-only rendered camera damping anchors and independent simulation/render clocks; `warming`/`liveTicks` are tickBody's holds (__apex.info()). */
+  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; warming: boolean; liveTicks: number; };
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
   /** True while an #announce message is still on screen — a coach mark waits for it. */

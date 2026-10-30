@@ -3454,7 +3454,8 @@ const G = {
   cameraDampingState() {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
       previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
-      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT };
+      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT,
+      warming: !!((gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) || mirrorPass.preparing()), liveTicks: PerfGov.ticks() };   // tickBody's holds; PerfGov.tick runs only on the live race frames (__apex.info())
   },
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (lapRec.ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
@@ -4029,13 +4030,14 @@ function raceIntroFromSheet(go, sheet, btn) {
   // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
   // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
   // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
-  const sessionLate = typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
+  const sessionLate = typeof GarageDepartureMotion === "undefined" || typeof GarageDepartureWheels === "undefined"
+    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub);
   try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
   (async () => { try {
-    if (sessionLate) { await ensureRaceSession(); if (_introSheet !== owner || n !== _introRun) return; settings = entrySettings(); }
+    if (sessionLate) { if (!(await ensureRaceSession())) throw new Error("Race session preparation failed"); if (_introSheet !== owner || n !== _introRun) return; settings = entrySettings(); }
     if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.afterPaint) await RaceEntryProfile.afterPaint();
     if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) { Log.warn("game", "intro released without a garage-out", { stage: "sheet:warm", state }); sheetRelease(false); }
   } catch (e) { failed(e); } })();

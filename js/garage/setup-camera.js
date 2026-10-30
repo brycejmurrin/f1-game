@@ -158,6 +158,8 @@ let driveOut = null;
 function startDriveOut() {
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
   endHome();
+  driveOutEngine(false);   // repeated launch releases its previous audio graph
+  if (typeof clearSetupGestures === "function") clearSetupGestures();
   driveOut = null;
   if (!cfg.enabled) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
@@ -170,7 +172,7 @@ function startDriveOut() {
   // sped-up cut and never skipped — Start Race awaits this before the race/session
   // card (js/game.js studioDone → afterGarageOut → raceIntro).
   const play = Object.assign({}, cfg, { enabled: true });
-  driveOut = { t: 0, cfg: play };
+  driveOut = { t: 0, cfg: play, motion: { eye: [0, 0, 0], aim: [0, 0, 0] } };
   driveOutEngine(true);
   return Math.round(GarageArrival.wallSeconds(play, "out") * 1000 / play.speed);   // SLOW-MO included
 }
@@ -187,6 +189,23 @@ function stepDriveOut(held = false) {
   driveOut.last = now;
   if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed * GarageArrival.rate(driveOut.cfg, "out", driveOut.t);
   const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
+  if (typeof GarageDepartureMotion !== "undefined" && driveOut.cfg.angle === "cut") {
+    const T = GarageArrival.timeline(driveOut.cfg, "out"), delay = GarageArrival.duration(driveOut.cfg, "out") - T.base;
+    const go = T.door + T.hold + delay, rolling = T.settle - T.door - T.hold;
+    const u = Math.max(0, Math.min(1, (driveOut.t - go) / rolling));
+    const motion = GarageDepartureMotion.sample(u, pose.side, driveOut.motion);
+    pose.x = motion.x; pose.z = motion.z; pose.yaw = motion.yaw;
+    pose.distance = motion.distance;
+    // Explicit tuner cameras keep their framing; the shipped shot uses the authored rig.
+    if (reducedMotion()) {
+      motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
+      motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;
+      pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = 75;
+    } else {
+      pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = motion.fov + driveOut.cfg.fov - 54;
+    }
+    driveOut.motion = motion;
+  }
   driveOutSound(pose, gap);
   return pose;
 }
@@ -542,7 +561,7 @@ function resetSetupCam() {
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
+let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of
@@ -597,16 +616,17 @@ function previewKey() {
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
   const seat = garageSeat();
-  const key = previewKey();
+  const split = !!driveOut && typeof GarageDepartureWheels !== "undefined";
+  const key = previewKey() + (split ? "|departure" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
-    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv);
+    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|departure" : "");
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
     const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
       : (_spBase = { key: baseKey, hullKey, data: Car3D.build(liv.c1, liv.c2, {
-        livery: liv, refinish: true,
+        livery: liv, refinish: true, noWheels: split,
         // Same hull key = same geometry (a colour-only livery change): the last build's smoothing prep carries
         // over (Car3D.build shadeKeep), ~60% of a first-visit build. No extra cache: _spBase already holds it.
         shadeKeep: _spBase && _spBase.hullKey === hullKey && _spBase.data._refinish ? _spBase.data._refinish.keep : undefined,
@@ -615,6 +635,10 @@ function getSetupPreviewMesh() {
         helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
       }) }).data);
+    if (split) {
+      if (!departureWheels) departureWheels = GarageDepartureWheels.create(gfx);
+      departureWheels.prepare(key, liv, Parts.getVisualTiers(getTeamParts(team.id), team));
+    }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
@@ -756,6 +780,10 @@ function sequenceLook(p) {
   }
   const bars = on && !!p.bars;
   if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
+}
+function drawDepartureReflection(matrix, material) {
+  if (driveOut && departureWheels) departureWheels.draw(matrix, driveOut.motion.distance || 0,
+    -.45 * Math.sin(2 * (driveOut.motion.yaw || 0)), material);
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
@@ -951,8 +979,11 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
   const team = Teams.LIST[G.teamIdx];
   const carMesh = getSetupPreviewMesh();
+  context.departureWheels = driveOut && departureWheels ? drawDepartureReflection : null;
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
+  if (driveOut && departureWheels && arriving) departureWheels.draw(arrivalCar, arriving.distance || 0,
+    -.45 * Math.sin(2 * arriving.yaw), spMat);
   // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
   // the grid (js/game.js drawRearLights); parked in the bay it stays dark. The
   // tuner's REAR LIGHT can force it on, off or flashing (GarageArrival.rearLightOn).
@@ -1071,7 +1102,7 @@ function holdSetupCtl(id, rates, step) {
   };
   setupGestureResets.push(() => release());
   el.addEventListener("pointerdown", (e) => {
-    if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
+    if (!G.setupPreviewOn || driveOut || preview || (arrival.state && arrival.state.active)) return;
     if (pointerId !== null) return;
     e.preventDefault();
     pointerId = e.pointerId;
@@ -1122,7 +1153,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     const r = panel && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
     const inPanel = r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     return GarageExperience.canOrbit(G.setupPreviewOn, home.active, photoOpen,
-      !!preview || !!(arrival.state && arrival.state.active) || !!inPanel
+      !!driveOut || !!preview || !!(arrival.state && arrival.state.active) || !!inPanel
         || !!(e.target && e.target.closest && e.target.closest("#ps-panel")));
   }
   if (canvas) {
@@ -1202,7 +1233,7 @@ return {
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
   startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
-  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); sequenceLook(null); },
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

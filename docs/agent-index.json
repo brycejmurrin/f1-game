@@ -3157,6 +3157,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/garage-departure-motion.js",
+      "global": "GarageDepartureMotion",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/data/hub.js",
       "global": "DataHub",
       "roster": "LAZY_DATA"
@@ -3410,6 +3415,11 @@
       "path": "js/garage/crew-service.js",
       "global": "GarageCrewService",
       "roster": "tag"
+    },
+    {
+      "path": "js/garage/departure-wheels.js",
+      "global": "GarageDepartureWheels",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/garage/experience.js",

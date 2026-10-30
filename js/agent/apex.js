@@ -392,6 +392,10 @@ const api = {
     lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
+    // tickBody's holds: while `warming`, real frames charge neither the countdown nor
+    // physics; go() skips the lights, so wait for liveTicks past go() and !warming
+    // before driving a rendered race (#4253). step() is not held.
+    ...(({ warming, liveTicks }) => ({ warming, liveTicks }))(G.cameraDampingState()),
   }),
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,

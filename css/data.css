@@ -195,7 +195,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
 .sheet-head > .dh-tabs .dh-tab.active { background: none; border-bottom-color: var(--red); color: var(--text); }
 /* ⋯ holds GPS TRACE EXPORT. !important: menu-destinations.css (responsive layer,
    outranks this one) pads the old full-width row. */
-.sheet-head > .dh-developer-tools { position: relative; flex: 0 0 auto; padding: 0 !important; align-self: center; }
+.sheet-head > .dh-developer-tools { position: relative; flex: 0 0 auto; align-self: center; }
 .sheet-head > .dh-developer-tools > summary {
   list-style: none; display: grid; place-items: center;
   width: var(--tap-paint); font-size: var(--fs-4); line-height: 1;
