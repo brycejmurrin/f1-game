@@ -69,14 +69,45 @@ window.DrivingLine = (function () {
   function setPhoto(v) { photo = v == null ? null : !!v; return photo; }
   function shown() { return photo === null ? mode !== "off" : photo; }
   function drawMode() { return photo === true && mode === "off" ? "full" : photo === false ? "off" : mode; }
-  // LINE COLOUR. The speed cue is only a cue if it can be read: F1's own
-  // green/amber/red puts the two ends of the scale on the pair the common
-  // red-green deficiencies cannot separate. `safe` swaps in the IBM
-  // colour-blind-safe triple; every backend's shader mixes between the two on
-  // this one flag (SETTINGS › LINE COLOUR, and F1 25 offers the same choice).
+  // LINE COLOUR. The palette is DATA: each entry is the three colours the
+  // speed cue runs through — onPace (at or under the line's pace) → lift
+  // (smoothstep 0.98..1.06 of over = playerSpeed / lineSpeed) → brake
+  // (1.06..1.16) — in the 0..1 values every backend's shader takes as three
+  // vec3 uniforms (GLX LINE_FS uOnPace/uLift/uBrake, WGX LineU
+  // colOnPace/colLift/colBrake, TLX lineOnPace/lineLift/lineBrake). draw()
+  // hands them over as `_drawOpts.cols` (Float32Array(9): onPace, lift, brake).
+  // The main-colour variants change ONLY onPace and keep F1's amber and red, so
+  // the warning half of the cue reads the same whichever colour a player picks.
+  // COLOUR-BLIND is the one that swaps all three: F1's own green/amber/red puts
+  // the two ends of the scale on the pair the common red-green deficiencies
+  // (deuteranopia, protanopia) cannot separate, on a cue that only means
+  // anything read at a glance. It is the IBM design library's colour-blind-safe
+  // triple (blue #648FFF, orange #FE6100, magenta #DC267F): blue against orange
+  // is the classic safe pair, and orange against magenta separates on the BLUE
+  // channel, which both deficiencies keep. SETTINGS › LINE COLOUR lists them in
+  // this order; F1 25 ships the same colour-blind choice. The stored id
+  // (drivingLinePalette) is unchanged, so "f1" / "safe" saves keep working and
+  // an unknown id falls back to "f1".
+  const AMBER = [1.00, 0.72, 0.10], RED = [1.00, 0.12, 0.10];
+  const PALETTES = Object.freeze([
+    ["f1", "F1 GREEN", [0.10, 0.95, 0.35], AMBER, RED],
+    ["cyan", "CYAN", [0.10, 0.85, 1.00], AMBER, RED],
+    ["blue", "BLUE", [0.25, 0.45, 1.00], AMBER, RED],
+    ["white", "WHITE", [0.92, 0.95, 1.00], AMBER, RED],
+    ["purple", "PURPLE", [0.62, 0.35, 1.00], AMBER, RED],
+    ["pink", "PINK", [1.00, 0.35, 0.80], AMBER, RED],
+    ["safe", "COLOUR-BLIND", [0.392, 0.561, 1.000], [0.996, 0.380, 0.000], [0.863, 0.149, 0.498]],
+  ].map(([id, label, onPace, lift, brake]) => Object.freeze({ id, label,
+    onPace: Object.freeze(onPace.slice()), lift: Object.freeze(lift.slice()), brake: Object.freeze(brake.slice()) })));
   let palette = "f1";
-  const PALETTES = ["f1", "safe"];
-  function setPalette(p) { palette = PALETTES.includes(p) ? p : "f1"; return palette; }
+  const _cols = new Float32Array(9);   // onPace rgb, lift rgb, brake rgb of `palette`, refilled by setPalette
+  function setPalette(p) {
+    const e = PALETTES.find((r) => r.id === p) || PALETTES[0];
+    palette = e.id;
+    _cols.set(e.onPace, 0); _cols.set(e.lift, 3); _cols.set(e.brake, 6);
+    return palette;
+  }
+  setPalette("f1");
   function getPalette() { return palette; }
   // LINE OPACITY. F1 25 offers an "increased opacity" option; the complaint it
   // answers runs both ways, so this goes both ways — SUBTLE for the players who
@@ -274,7 +305,7 @@ window.DrivingLine = (function () {
   /* Draw through a backend: `gfx.drawDrivingLine(verts, count, dirty, opts)`.
      Builds lazily when the circuit changed. Returns false when the line is off
      or the backend's pass is not ready. */
-  const _drawOpts = { speed: 0, cornersOnly: false, palette: 0, opacity: 1 };
+  const _drawOpts = { speed: 0, cornersOnly: false, cols: _cols, opacity: 1 };
   // The circuit draw() was last handed, kept so cue() can build the profile with
   // the line hidden: game.js hands the api to draw() every frame and to nothing else.
   let _api = null;
@@ -288,7 +319,7 @@ window.DrivingLine = (function () {
     ensure(api);
     // One scratch opts, refilled per frame: every backend reads it synchronously.
     _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = dm === "corner";
-    _drawOpts.palette = palette === "safe" ? 1 : 0; _drawOpts.opacity = _opMul;
+    _drawOpts.opacity = _opMul;   // _drawOpts.cols IS _cols, kept current by setPalette
     const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, _drawOpts);
     if (drew) cache.dirty = false;
     return !!drew;
@@ -329,10 +360,11 @@ window.DrivingLine = (function () {
 
   function reset() { _api = null; cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
-  // MODES / PALETTES / STEP / HALF_W stay module-local (setters + build/draw);
-  // nothing outside reads them. OPACITIES / STRIDE / opacityMul / bankOffset
-  // stay exported — unit tests pin the opacity table and the bank lerp.
-  return { OPACITIES, STRIDE, setMode, mode: getMode, setPhoto, shown,
+  // MODES / STEP / HALF_W stay module-local (setters + build/draw); nothing
+  // outside reads them. PALETTES feeds SETTINGS › LINE COLOUR's values;
+  // OPACITIES / STRIDE / opacityMul / bankOffset stay exported — unit tests pin
+  // the palette and opacity tables and the bank lerp.
+  return { PALETTES, OPACITIES, STRIDE, setMode, mode: getMode, setPhoto, shown,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
            build, draw, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };

@@ -151,22 +151,66 @@ test("draw() honours the mode and reports a backend without the pass", () => {
   assert.equal(load().mode(), "full", "the shipped default is the whole lap, Forza's default");
 });
 
-test("LINE COLOUR is a palette flag the draw carries, not a colour the module knows", () => {
+// The shipped triples before the palette became data (2026-10-30): a saved
+// "f1" or "safe" must draw exactly what it drew then.
+const F1_COLS = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
+const SAFE_COLS = [0.392, 0.561, 1.000, 0.996, 0.380, 0.000, 0.863, 0.149, 0.498];
+const near = (a, b, msg) => {
+  assert.equal(a.length, b.length, msg);
+  for (let i = 0; i < a.length; i++) assert.ok(Math.abs(a[i] - b[i]) < 1e-6, `${msg} [${i}] ${a[i]} vs ${b[i]}`);
+};
+
+test("LINE COLOUR palettes are data: ids, labels and order, each three finite triples in [0,1]", () => {
+  const DL = load();
+  assert.deepEqual([...DL.PALETTES].map((p) => p.id), ["f1", "cyan", "blue", "white", "purple", "pink", "safe"]);
+  assert.deepEqual([...DL.PALETTES].map((p) => p.label),
+    ["F1 GREEN", "CYAN", "BLUE", "WHITE", "PURPLE", "PINK", "COLOUR-BLIND"]);
+  assert.ok(Object.isFrozen(DL.PALETTES), "the table is frozen");
+  for (const p of DL.PALETTES) {
+    assert.ok(Object.isFrozen(p), `${p.id} frozen`);
+    for (const k of ["onPace", "lift", "brake"]) {
+      assert.equal(p[k].length, 3, `${p.id}.${k} is rgb`);
+      for (const c of p[k]) assert.ok(Number.isFinite(c) && c >= 0 && c <= 1, `${p.id}.${k} ${c} in [0,1]`);
+    }
+  }
+  const byId = Object.fromEntries(DL.PALETTES.map((p) => [p.id, p]));
+  near([...byId.f1.onPace, ...byId.f1.lift, ...byId.f1.brake], F1_COLS, "f1 keeps the shipped triple");
+  near([...byId.safe.onPace, ...byId.safe.lift, ...byId.safe.brake], SAFE_COLS, "safe keeps the IBM triple");
+  // The main-colour variants change ONLY the on-pace colour: amber and red stay F1's.
+  for (const id of ["cyan", "blue", "white", "purple", "pink"]) {
+    near([...byId[id].lift, ...byId[id].brake], F1_COLS.slice(3), `${id} keeps F1's lift and brake`);
+    assert.notDeepEqual([...byId[id].onPace], [...byId.f1.onPace], `${id} has its own main colour`);
+  }
+});
+
+test("LINE COLOUR reaches the draw as the palette's three colours, and an unknown id is F1", () => {
   const DL = load();
   const api = stadium();
   DL.build(api);
   const seen = [];
-  const gfx = { drawDrivingLine: (v, n, dirty, opts) => { seen.push(opts.palette); return true; } };
+  const gfx = { drawDrivingLine: (v, n, dirty, opts) => { seen.push(Array.from(opts.cols)); return true; } };
   DL.setMode("full");
+  DL.draw(gfx, api, 40);   // the shipped default before any setPalette
   assert.equal(DL.setPalette("f1"), "f1");
   DL.draw(gfx, api, 40);
   assert.equal(DL.setPalette("safe"), "safe");
   DL.draw(gfx, api, 40);
-  // An unknown value must not silently become the colour-blind palette.
+  assert.equal(DL.setPalette("pink"), "pink");
+  DL.draw(gfx, api, 40);
+  // An unknown value (or a stale id from a future build) must not silently
+  // become the colour-blind palette or a missing colour.
   assert.equal(DL.setPalette("nonsense"), "f1");
   DL.draw(gfx, api, 40);
-  assert.deepEqual(seen, [0, 1, 0], "draw() passes palette 0 for F1 and 1 for the safe triple");
+  assert.equal(DL.setPalette(undefined), "f1");
+  near(seen[0], F1_COLS, "default draws F1");
+  near(seen[1], F1_COLS, "f1 draws F1");
+  near(seen[2], SAFE_COLS, "safe draws the IBM triple");
+  near(seen[3], [1.00, 0.35, 0.80, ...F1_COLS.slice(3)], "pink swaps only the on-pace colour");
+  near(seen[4], F1_COLS, "unknown falls back to F1");
 });
+
+// The backends' side of the palette (three colour uniforms, no 0/1 flag) is
+// pinned in gfx-backend-canary.test.mjs beside the other parity pins.
 
 test("LINE OPACITY is a multiplier the draw carries, and an unknown value is NORMAL", () => {
   const DL = load();

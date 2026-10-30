@@ -4699,16 +4699,34 @@ test("all three backends carry the driving line's colour-blind palette", () => {
   // colour-blind-safe triple instead. A backend that forgot it would signal a
   // DIFFERENT thing to the same player depending on which renderer they got —
   // the exact class of drift the parity snapshot exists for (2026-09-08).
-  // Pinned by the safe triple's blue, which no other fx colour uses.
-  for (const [what, file] of [["GLX", "js/render/glx/shaders/glsl-fx.js"],
-                              ["WGX", "js/render/webgpu/wgsl-fx.js"],
-                              ["TLX", "js/render/three/tsl-fx.js"]]) {
-    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
-    assert.match(src, /0\.392,\s*0\.561,\s*1\.0/,
-      `${what} (${file}) must carry the colour-blind-safe ON-PACE blue`);
-    assert.match(src, /0\.863,\s*0\.149,\s*0\.498/,
-      `${what} (${file}) must carry the colour-blind-safe BRAKE magenta`);
+  // Since 2026-10-30 the palette is DATA: the triples live once in
+  // DrivingLine.PALETTES and every backend shades with the three colours it is
+  // handed (opts.cols), so no backend can carry a private copy that drifts.
+  const dl = read("js/render/shared/driving-line.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(dl, /0\.392,\s*0\.561,\s*1\.0/, "the palette table carries the colour-blind-safe ON-PACE blue");
+  assert.match(dl, /0\.863,\s*0\.149,\s*0\.498/, "the palette table carries the colour-blind-safe BRAKE magenta");
+  // Each backend's shader names the three colours, its draw sets them from
+  // opts.cols, and neither keeps the old 0/1 flag or a private triple.
+  for (const [what, file, host, names, flag] of [
+    ["GLX", "js/render/glx/shaders/glsl-fx.js", "js/render/glx/glx.js", ["uOnPace", "uLift", "uBrake"], "uPalette"],
+    ["WGX", "js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js", ["colOnPace", "colLift", "colBrake"], "opts.palette"],
+    ["TLX", "js/render/three/tsl-fx.js", "js/render/three/tlx.js", ["lineOnPace", "lineLift", "lineBrake"], "linePalette"]]) {
+    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, ""), drawer = read(host).replace(/^[ \t]*\/\/.*$/gm, "");
+    // One list of everything wrong with this backend, so a drift names all of it at once.
+    const problems = [
+      ...names.filter((n) => !src.includes(n)).map((n) => `${file} lacks ${n}`),
+      ...(drawer.includes("opts && opts.cols") ? [] : [`${host} does not upload opts.cols`]),
+      ...((src + drawer).includes(flag) ? [`still carries the 0/1 flag ${flag}`] : []),
+      ...(/0\.392,\s*0\.561/.exec(src) ? [`${file} keeps a private colour-blind triple`] : []),
+    ];
+    assert.deepEqual(problems, [], `${what} must shade with the palette it is handed`);
   }
+  // WGX LineU grew three vec4 colours: the writer's Float32Array and the
+  // buffer size are one number, or the colours land past the end of the UBO.
+  const bytes = +read("js/render/webgpu/wgsl-fx.js").match(/LINE_UNIFORM_BYTES:\s*(\d+)/)[1];
+  const floats = +read("js/render/webgpu/wgx.js").match(/_lineU = new Float32Array\((\d+)\)/)[1];
+  assert.equal(bytes, 144, "LineU = mat4 + params + params2 + 3 colour vec4");
+  assert.equal(floats * 4, bytes, "_lineU is sized to LINE_UNIFORM_BYTES");
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
