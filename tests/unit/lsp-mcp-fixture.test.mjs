@@ -176,7 +176,7 @@ test("fixture: callers merge same-file uses, positions are bounds-checked, re-ex
     assert.equal(r.err, false, "the end-of-line cursor stays valid");
 
     r = await text("lsp_references", { symbol: "Trk.curv" });
-    // export (t.js:4) → alias (t.js:3) → export (s.js:4) → the [def]; the header names both ends.
+    // Trk's export → its `curv` alias of Spline → Spline's export → the [def]; the header names both ends.
     assert.equal(r.t, "6 references in 3 files (Trk.curv resolved from a use at src/b.js:3:15; declared at src/s.js:3:12)\n" +
       "src/b.js:3:15  [use] (top level)  const k = Trk.curv(2) + Trk.curv(3);\nsrc/b.js:3:29  [use] (top level)  const k = Trk.curv(2) + Trk.curv(3);\n" +
       "src/s.js:3:12  [def] (Spline)  function curv(t) { return t * 2; }\nsrc/s.js:4:12  [export] (Spline)  return { curv };\n" +
