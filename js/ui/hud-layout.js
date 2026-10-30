@@ -855,6 +855,22 @@ const HudLayout = (function () {
         el.style.setProperty("--announce-lane-w", Math.max(0, bounds.right - bounds.left) + "px");
         r = box(el);
         best = r && findSlot(r);
+        if (!best && r) {
+          // Wrapping can fit a call between enlarged controls when its normal
+          // width cannot. Derive a few real gaps, not repeated global shrink steps.
+          const intervals = blocks.filter(b => b.top - EDGE < r.bottom && b.bottom + EDGE > r.top)
+            .map(b => [Math.max(bounds.left, b.left - EDGE), Math.min(bounds.right, b.right + EDGE)])
+            .filter(([left, right]) => right > left).sort((a, b) => a[0] - b[0]);
+          const widths = []; let cursor = bounds.left;
+          for (const [left, right] of intervals) { if (left - cursor >= 96) widths.push(left - cursor); cursor = Math.max(cursor, right); }
+          if (bounds.right - cursor >= 96) widths.push(bounds.right - cursor);
+          for (const width of [...new Set(widths)].sort((a, b) => b - a)) {
+            el.style.setProperty("--announce-lane-w", width + "px");
+            const wrapped = box(el), slot = wrapped && findSlot(wrapped);
+            if (slot) { r = wrapped; best = slot; break; }
+          }
+        }
+        if (!best) { el.setAttribute("data-lane-collapsed", ""); continue; }
       }
       if (!best && id === "inputs") { el.setAttribute("data-col-drop", ""); continue; }
       if (!best && id === "damage") {
