@@ -127,6 +127,23 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/agent/apex-bridge.js": {
+      "boot": [
+        "tests/unit/apex-bridge.test.mjs"
+      ],
+      "handle": [
+        "tests/unit/apex-bridge.test.mjs"
+      ],
+      "issueOf": [
+        "tests/unit/apex-bridge.test.mjs"
+      ],
+      "pickCommands": [
+        "tests/unit/apex-bridge.test.mjs"
+      ],
+      "pollOnce": [
+        "tests/unit/apex-bridge.test.mjs"
+      ]
+    },
     "js/agent/apex-cam.js": {
       "hooks": [
         "tests/unit/apex-cam-fallback.test.mjs"
