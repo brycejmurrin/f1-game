@@ -164,11 +164,13 @@
      Transition on a coarse pointer (it snapshots the WebGL layer and hitched
      1.2 s on an iPhone), so every phone screen change was a hard cut. The
      incoming full-screen flow fades in over --dur-1 instead: opacity only, so
-     no tap target moves under the thumb. Modal sheets (.dim) keep scrim-in;
+     no tap target moves under the thumb. Linear, not --ease-out: on 120 ms the
+     ease-out curve is done by ~40 ms and read as the cut it replaces (lane 3E
+     filmstrip, #4299). Modal sheets (.dim) keep scrim-in;
      #loading runs its own phases. Off under both reduced-motion gates. Lives
      in this deferred sheet: no screen changes before it has loaded. */
   @media (prefers-reduced-motion: no-preference) {
-    :root:not([data-motion="reduce"]) body:not(.desktop) .screen:not(.dim, #loading) { animation: screen-in var(--dur-1) var(--ease-out); }
+    :root:not([data-motion="reduce"]) body:not(.desktop) .screen:not(.dim, #loading) { animation: screen-in var(--dur-1) linear; }
   }
   /* GARAGE SHELL WHILE IT BUILDS. SetupUI.openSetup shows #carsetup with
      aria-busy and builds the tabs and options two frames later; on a phone
