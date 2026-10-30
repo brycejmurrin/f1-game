@@ -462,16 +462,28 @@ const CarBodyGeom = (function () {
       py: le[1] + (te[1] - le[1]) * hinge,
     };
   }
+  // The flap solves ask a neighbour's top at ~40 z's per pose, ~120 poses per end, ~20
+  // pivots: rebuilding its 33-point line per ask was ~33 M elemPoint calls and 0.16-1.2 s a
+  // recipe (perf hunt 7). The line depends only on (e, d), so it is built once; the walk and
+  // its float ops are unchanged, so every answer is bit-identical.
+  const _topLines = new WeakMap();
+  function elemTopLine(e, d) {
+    let byD = _topLines.get(e), line = byD && byD.get(d);
+    if (line) return line;
+    const N = 32, z = new Float64Array(N + 1), top = new Float64Array(N + 1);
+    for (let k = 0; k <= N; k++) { const p = elemPoint(e, d, k / N); z[k] = p.z; top[k] = p.top; }
+    if (!byD) _topLines.set(e, byD = new Map());
+    byD.set(d, line = { z, top });
+    return line;
+  }
   function elemTopAt(e, d, z) {
-    const N = 32;
-    let prev = elemPoint(e, d, 0);
-    for (let k = 1; k <= N; k++) {
-      const cur = elemPoint(e, d, k / N);
-      if ((z <= prev.z && z >= cur.z) || (z >= prev.z && z <= cur.z)) {
-        const f = (z - prev.z) / ((cur.z - prev.z) || 1e-9);
-        return prev.top + (cur.top - prev.top) * f;
+    const L = elemTopLine(e, d), zs = L.z, tops = L.top;
+    for (let k = 1; k < zs.length; k++) {
+      const z0 = zs[k - 1], z1 = zs[k];
+      if ((z <= z0 && z >= z1) || (z >= z0 && z <= z1)) {
+        const f = (z - z0) / ((z1 - z0) || 1e-9);
+        return tops[k - 1] + (tops[k] - tops[k - 1]) * f;
       }
-      prev = cur;
     }
     return null;
   }
@@ -491,6 +503,7 @@ const CarBodyGeom = (function () {
     flankTrim: 0.009, flankDecal: 0.014,             // flank, from coverFlankX
   });
   const SLOT_MIN = 0.003;   // m of daylight to keep in a cascade slot
+  const CLEAR_FT = Array.from({ length: 41 }, (_, k) => foilThick(k / 40));   // solvePoses' CLEAR_N = 40 stations
   function hinged(id, wing, zLead, yLead, zTrail, yTrail, planform, prev) {
     const dz = zLead - zTrail, dy = yTrail - yLead;
     const chord = Math.sqrt(dz * dz + dy * dy);
@@ -536,14 +549,19 @@ const CarBodyGeom = (function () {
       // nose, so the rear simply never trips that half of the test — there is no
       // need for the wing to exempt itself, and exempting it was what left the
       // rear stack unchecked.
+      // elemPoint(self, d, k / CLEAR_N) inlined, its cos/sin hoisted per pose and foilThick tabled:
+      // the same expressions in the same order, so bit-identical (perf hunt 7).
       const clears = (d, prevDelta) => {
+        const ang = self.natural + d, c = Math.cos(ang), s = Math.sin(ang);
         for (let k = 0; k <= CLEAR_N; k++) {
-          const p = elemPoint(self, d, k / CLEAR_N);
-          const ceil = noseUnderAt(p.z);
-          if (isFinite(ceil) && p.top > ceil - NOSE_GAP) return false;
+          const t = k / CLEAR_N, u = (t - self.hinge) * self.chord;
+          const mid = self.py + u * s - FOIL_CAMBER * self.chord * 4 * t * (1 - t);
+          const hh = self.thick * 0.5 * CLEAR_FT[k], pz = self.pz - u * c;
+          const ceil = noseUnderAt(pz);
+          if (isFinite(ceil) && mid + hh > ceil - NOSE_GAP) return false;
           if (prev) {
-            const below = elemTopAt(prev, prevDelta, p.z);
-            if (below != null && p.bot < below + SLOT_MIN) return false;
+            const below = elemTopAt(prev, prevDelta, pz);
+            if (below != null && mid - hh < below + SLOT_MIN) return false;
           }
         }
         return true;

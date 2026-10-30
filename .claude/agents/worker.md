@@ -157,4 +157,6 @@ Deliver it through `SubagentHandback` when the host gives you that tool (the
 call ends your run), else as your final
 message. The parent merges your worktree branch, or reads your pushed PR.
 
+A session LAUNCHED by the dispatcher as a lane (claim, draft PR, `land`) is not this agent: it follows skill `worker`.
+
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.

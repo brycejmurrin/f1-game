@@ -18,11 +18,11 @@ Two audiences, two endings (steps 1–2 are shared):
 
 - **Attended** (the user asked, or `context-cap.py` names your live context near its stop): steps 1–3, then
   output the prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
-- **Unattended worker at its cap or stuck** (docs/WORKERS.md §The contract item 6): steps 1–2, then add
+- **Unattended worker at its cap or stuck** (skill `worker`, contract item 6): steps 1–2, then add
   `needs-owner` (`gh api -X POST repos/<owner>/<repo>/issues/<n>/labels -f 'labels[]=needs-owner'`, never MCP
   `issue_write` `labels`), send `@parent` one line naming the PR, and end. No chat prompt: nobody reads it; the
   takeover reads only the Hand-off block and the Plan. The dispatcher's next cycle launches the takeover once no
-  RUNNING or WORKING worker names the PR (docs/WORKERS.md §The dispatcher, rule 2).
+  RUNNING or WORKING worker names the PR (skill `dispatcher`, rule 2).
 
 1. **Push first.** A run in flight: stop it (`node tools/ci/test-bg.mjs --stop`) or name it and its log in the
    hand-off. A dirty tree or unverified work: commit it as WIP anyway, in two calls (`git add <paths>`, then
@@ -37,7 +37,7 @@ Two audiences, two endings (steps 1–2 are shared):
    Hand-off block: branch, head, owner, lane, verified, not-run, next) with `update_pull_request`.
 3. **The prompt**, in this order:
    - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL
-   - first: ADOPT the PR (docs/WORKERS.md §The contract item 8): comment `adopts PR #<n> — <host>:<session id>`,
+   - first: ADOPT the PR (skill `worker`, contract item 8): comment `adopts PR #<n> — <host>:<session id>`,
      remove `needs-owner` if set (`gh api -X DELETE …/labels/needs-owner`; a dispatcher-launched worker skips this, the
      dispatcher already did), set `owner:` in the Hand-off block
    - Goal in one sentence; Plan: the done / now / next items from the PR body
@@ -58,8 +58,8 @@ Two audiences, two endings (steps 1–2 are shared):
 ## Handing over an orchestrator or dispatcher
 
 - **One writer.** The old orchestrator stops writing at handover (no labels, Board edits, launches) and clears its
-  `/goal`; the successor's first `dispatch.mjs --apply` passes `--take-lock --self <its id>` (docs/WORKERS.md §The
-  dispatcher, the lock). Name the armed scheduled-task ids so the successor deletes or keeps them.
+  `/goal`; the successor's first `dispatch.mjs --apply` passes `--take-lock --self <its id>` (skill
+  `dispatcher`, the lock). Name the armed scheduled-task ids so the successor deletes or keeps them.
 - **Default to the deep launch template** (the full Hand-off block, `STOP AT`, exact numbers, the known
   container-only red), never a one-line "continue".
 - **Unique hunt id.** Give every hunt or survey session an id nothing else carries (hunts #5 and #6 both ran as

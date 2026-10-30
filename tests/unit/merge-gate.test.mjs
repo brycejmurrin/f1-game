@@ -18,7 +18,8 @@ import {
   untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, touchesGame,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
+import { planHash } from "../../tools/ci/ready-gate.mjs";
+import { BOUND_MAX_AGE_MIN, receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scratch = (prefix) => { const d = path.join(ROOT, "artifacts", "tmp"); fs.mkdirSync(d, { recursive: true }); return fs.mkdtempSync(path.join(d, prefix)); };
@@ -435,6 +436,42 @@ test("audit 4: the hashed gate set is the static import closure, recorded in the
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("ready receipt keyed to head + Plan: valid past 10 min while both match; a push, a Plan edit or the 24 h backstop invalidates it", () => {
+  const dir = scratch("gate-receipt-bound-");
+  try {
+    const now = Date.parse("2026-10-30T12:00:00Z");
+    const at = (minAgo) => new Date(now - minAgo * 60000).toISOString();
+    const PLAN = planHash("## Plan\n- [x] a\n- [ ] land: x\n");
+    const NEW = "b".repeat(40);
+    const both = (head, plan, expectPy = true) => {
+      const js = receiptVerdict(readReceipt(dir, "ready", 7), { kind: "ready", pr: 7, head, plan, now });
+      const [pok, pwhy] = PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, ${JSON.stringify(head)}, now=${now / 1000}, require_head=True, plan=${JSON.stringify(plan)})))`);
+      assert.equal(pok, js.ok, `python and js disagree: js=${js.why} py=${pwhy}`);
+      if (!js.ok && !/PR head/.test(js.why)) assert.equal(pwhy, js.why, "same refusal text");
+      return js;
+    };
+    const row = (head, plan) => { const v = both(head, plan); return v.ok ? "ok" : v.why.replace(/ \(max.*/, ""); };
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, planHash: PLAN, at: at(30) }, { main: null });
+    const rows = [row(HEAD, PLAN), row(NEW, PLAN), row(HEAD, planHash("## Plan\n- [x] a\n- [x] b\n")).slice(0, 26), row(HEAD, "").slice(0, 20)];
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, planHash: PLAN, at: at(BOUND_MAX_AGE_MIN + 1) }, { main: null });
+    rows.push(both(HEAD, PLAN).why.replace(/^.*(max \d+, the backstop).*$/, "$1"));
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(1) }, { main: null });
+    rows.push(both(HEAD, PLAN).why.replace(/^.*(records no Plan hash).*$/, "$1"));
+    assert.deepEqual(rows, ["ok", "the PR head is bbbbbbbbbbbb, but ready-gate passed on aaaaaaaaaaaa: re-run ready-gate on the current head",
+      "the PR's Plan section chan", "the ready-gate recei", "max 1440, the backstop", "records no Plan hash"],
+    "same head+Plan after 30 min ok; new head; Plan edited; no live Plan hash falls back to the 10 min window; past the backstop; old receipt");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("planHash: JS and Python agree; CRLF, trailing blanks and edits outside the Plan do not change it", () => {
+  const bodies = ["", "no plan", "## Goal\nx\n## Plan\n- [x] a  \n\n- [ ] land: y\n## Verified\nz", "## Plan\r\n- [x] a\r\n- [ ] land: y\r\n",
+    "## Plan\n- [ ] outer\n<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\n## Plan\n- [x] agent\n<!-- CURSOR_AGENT_PR_BODY_END -->", "<!-- c -->\n## Plan\n- [x] é"];
+  const same = (x, y) => planHash(x) === planHash(y);
+  assert.deepEqual([...bodies.map((b) => PY(`print(json.dumps(P.plan_hash(json.loads(${JSON.stringify(JSON.stringify(b))}))))`) === planHash(b)),
+    same(bodies[2], "## Goal\nchanged\n## Plan\n- [x] a\n- [ ] land: y\n## Verified\nother"), same(bodies[3], "## Plan\n- [x] a\n- [ ] land: y"), same(bodies[3], "## Plan\n- [x] a\n- [x] land: y")],
+  [true, true, true, true, true, true, true, true, false]);
+});
+
 test("audit 4: a future-dated receipt is refused; a ready receipt is pinned to the PR's current head", () => {
   const now = Date.parse("2026-10-26T20:00:00Z");
   const r = (sAhead, extra = {}) => ({ kind: "merge", pr: 7, head: HEAD, ok: true, at: new Date(now + sAhead * 1000).toISOString(), ...extra });
@@ -568,7 +605,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened", "edited"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
-  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
+  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync", "stale"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
   assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
   assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
@@ -1064,10 +1101,16 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.deepEqual(job.permissions, { actions: "write", "pull-requests": "read", issues: "read", statuses: "read" });
   assert.ok(!runsRepoCode(job) && !usesSecret(job), "no PR code, no secret");
   assert.equal(ghExpr(job.if, { event_name: "schedule" }), true);
+  const disp = (stale, ref = `refs/heads/${DEPLOY_BRANCH}`) => ({ event_name: "workflow_dispatch", ref, event: { inputs: { stale } } });
   assert.equal(ghExpr(job.if, { event_name: "pull_request_target" }), false);
+  assert.deepEqual([ghExpr(job.if, disp("true")), ghExpr(job.if, disp("false")), ghExpr(job.if, disp("true", "refs/heads/cursor/x"))], [true, false, false], "a stale=true dispatch on the deploy branch runs the sweep, on no other ref");
+  assert.deepEqual([ghExpr(LAND.jobs.resolve.if, disp("true")), ghExpr(LAND.jobs.resolve.if, disp("false"))], [false, true], "a stale dispatch is not a PR re-gate");
+  assert.equal(ghExpr(LAND.concurrency.group, { ...disp("true"), run_id: 4 }), "land-stale-sweep");
   assert.ok(LAND.on.schedule[0].cron);
   const run = job.steps[0].run;
-  const T = (m) => `2026-10-30T10:${String(m).padStart(2, "0")}:00Z`;
+  // The sweep reads the real clock, so the fixture times are relative to it: "now" is minute 40.
+  const base = Math.floor((Date.now() - 40 * 60000) / 60000) * 60000;
+  const T = (m) => new Date(base + m * 60000).toISOString().replace(".000Z", "Z");
   const lands = (n = 1) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ number: 7 + i, headRefOid: String(i + 1).repeat(40), isDraft: false, labels: [{ name: "land" }] })));
   const ci = (o = {}) => JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", display_title: "CI", created_at: T(0), updated_at: T(30), ...o }] });
   const st = (...a) => JSON.stringify(a.map(([state, m]) => ({ context: "gate", state, created_at: T(m) })));

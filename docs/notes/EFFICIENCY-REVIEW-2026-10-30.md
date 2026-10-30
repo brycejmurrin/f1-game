@@ -84,3 +84,9 @@ tokens to write 1.06M. A 16-minute dispatcher window cost $15.39.
 Bryce, 2026-10-30 ~09:05Z: "Build all, hooks included" (items 1–10, hook edits granted for
 items 4–6); the stop hook is environment-owned, so item 11 is a doc line; the dispatcher hands
 off to a fresh session after launching the fixes.
+
+## Applied
+
+Docs half of findings 1, 3, 5, 7, 9, 10 and 11 landed in #4231 (AGENTS.md rules 4 and 12 and §Coordination,
+docs/WORKERS.md §4 and §The dispatcher, skill `handoff`). Hook, script and dispatch.mjs halves belong to the
+other fix workers.

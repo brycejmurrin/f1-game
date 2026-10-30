@@ -264,8 +264,10 @@
 /* ON A PLATE, like #soundbtn beside it. The title art now runs under the brand
    column on every phone shape (and the desktop), and a 14px line of small
    print painted straight onto two cars' worth of strokes was the one thing
-   a real device found hard to read. Same --plate-opaque and hairline the
-   sound chip uses, so the two read as one row of chrome; padding in --gap
+   a real device found hard to read. Same --plate-opaque as the sound chip,
+   but no visible hairline: an outlined plate read as a third button (design
+   pass 2c). The border stays, transparent, so forced colours still draw it.
+   Padding in --gap
    only (rawSpacing is at zero slack); width: fit-content so the plate hugs
    the text whether the column centres or left-aligns it. */
 #disclaimer {
@@ -274,7 +276,7 @@
   padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.8);
   border-radius: var(--r-sm);
   background: var(--plate-opaque);
-  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+  border: 1px solid transparent;
 }
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */

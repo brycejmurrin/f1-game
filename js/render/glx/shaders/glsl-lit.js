@@ -1860,9 +1860,12 @@ void main() {
     // that alpha by the same geometric variance (specular AA) and map back to
     // an exponent, so the disc softens on tight curvature instead of strobing;
     // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
-    float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
-    float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow * uKeyMul;  // CAR SUN GLINT × KEY LIGHT — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    // Glint 0 (the mirror pass, MIRROR_TUNE) adds exactly 0: skip it on the uniform.
+    if (uCarSunGlint != 0.0) {
+      float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+      float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+      envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow * uKeyMul;  // CAR SUN GLINT × KEY LIGHT — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    }
     ccTrans = 1.0 - envW * 0.94;
     color *= ccTrans;                                       // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;

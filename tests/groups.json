@@ -51,6 +51,8 @@
     "tests/unit/always-lamp-floor.test.mjs",
     "tests/unit/ambient-env-override.test.mjs",
     "tests/unit/apca-timing.test.mjs",
+    "// ApexBridge (phone <-> Claude over one GitHub issue): ?bridge=<n> + device token only, OWNER apex-cmd comments after its hello, ETag 304 polls, __apex allowlist (no save/career/net), reply cap. VM + fake fetch, ~0.1 s.",
+    "tests/unit/apex-bridge.test.mjs",
     "tests/unit/apex-cam-fallback.test.mjs",
     "// Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.",
     "tests/unit/apex-memory.test.mjs",
