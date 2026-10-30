@@ -1739,8 +1739,8 @@ def guard(payload, root):
     gated = [x for x in gh if x.get("kind") == "ready"]
     receipts = P.project_root()   # CLAUDE_PROJECT_DIR, the same root github-mcp-guard.sh reads
     for x in gated:
-        live = P.live_head(receipts, x.get("pr")) if x.get("pr") else None
-        ok, why = P.receipt_check(receipts, "ready", x.get("pr"), live, verify_files=True, require_head=True)
+        live, plan = P.live_state(receipts, x.get("pr")) if x.get("pr") else (None, None)
+        ok, why = P.receipt_check(receipts, "ready", x.get("pr"), live, verify_files=True, require_head=True, plan=plan)
         if not ok:
             P.emit("deny", P.DENY_GATE_READY + " (" + x["why"] + ": " + why + ")")
             return 0
@@ -1754,8 +1754,8 @@ def guard(payload, root):
             continue
         n = x.get("api_ready_pr")
         if n and x.get("decision") == "ask":
-            live = P.live_head(receipts, n)
-            ok, why = P.receipt_check(receipts, "ready", n, live, verify_files=True, require_head=True)
+            live, plan = P.live_state(receipts, n)
+            ok, why = P.receipt_check(receipts, "ready", n, live, verify_files=True, require_head=True, plan=plan)
             if ok:
                 continue
             x = dict(x, ask=P.DENY_GATE_READY + " (" + why + ")")

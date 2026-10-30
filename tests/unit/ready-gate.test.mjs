@@ -208,7 +208,7 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
   const deps = (request) => ({ request, judge: (a) => evaluate({ ...a, localOpts: s.opts }), receipt: (d) => receipts.push(d), sleep: (x) => slept.push(x), log: (...a) => logs.push(a.join(" ")) });
   try {
     assert.equal(main(["--pr", "7"], deps(github())), 0);
-    assert.deepEqual(receipts.at(-1), { pr: 7, head: SHA, ok: true, evidence: "" });
+    assert.deepEqual({ ...receipts.at(-1), planHash: /^[0-9a-f]{64}$/.test(receipts.at(-1).planHash) }, { pr: 7, head: SHA, ok: true, evidence: "", planHash: true });
     assert.ok(logs.at(-1).startsWith(`[ready-gate] = ready-gate passed — Structural guards success sha=${SHA}`), logs.at(-1));
     assert.equal(main(["--pr", "7"], deps(github({ pull: { body: body("- [ ] open") } }))), 1);
     assert.ok(receipts.at(-1).ok === false && receipts.at(-1).evidence.startsWith("plan-open:"), JSON.stringify(receipts.at(-1)));
