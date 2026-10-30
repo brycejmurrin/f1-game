@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "modules": {
+    "js/core/hash32.js": {
+      "export": "Hash32",
+      "globals": {
+        "Math": [
+          "imul"
+        ],
+        "String": [
+          "<value>"
+        ],
+        "Object": [
+          "freeze"
+        ]
+      }
+    },
+    "js/race/pace-math.js": {
+      "export": "PaceMath",
+      "globals": {
+        "M4": [
+          "clamp",
+          "lerp"
+        ],
+        "PhysicsConsts": [
+          "<value>",
+          "X_VMAX_GAIN_LO",
+          "X_VMAX_GAIN_HI",
+          "X_DF_LOSS_LO",
+          "X_DF_LOSS_HI",
+          "X_COAST_CUT_LO",
+          "X_COAST_CUT_HI",
+          "DRAIN_LO",
+          "DRAIN_HI",
+          "REGEN_LO",
+          "REGEN_HI",
+          "OT_TIME_LO",
+          "OT_TIME_HI",
+          "GEAR_TOP",
+          "IDLE_RPM",
+          "MAX_RPM"
+        ],
+        "Math": [
+          "max"
+        ],
+        "Float32Array": [
+          "<value>"
+        ],
+        "Object": [
+          "freeze"
+        ],
+        "undefined": [
+          "<value>"
+        ]
+      }
+    },
+    "js/race/wx-hash.js": {
+      "export": "WxHash",
+      "globals": {
+        "Math": [
+          "imul"
+        ],
+        "Object": [
+          "freeze"
+        ]
+      }
+    },
+    "js/perf/thermal-drift.js": {
+      "export": "ThermalDrift",
+      "globals": {
+        "Number": [
+          "isFinite"
+        ]
+      }
+    }
+  },
+  "functions": {
+    "js/race/reliability.js": {
+      "retirementRisk": {
+        "globals": {
+          "clamp": [
+            "<value>"
+          ],
+          "TIER_RISK": [
+            "length",
+            "<index>"
+          ],
+          "DEV_RELIEF": [
+            "<value>"
+          ],
+          "BUILD_RELIEF": [
+            "<value>"
+          ]
+        }
+      },
+      "retirementPlan": {
+        "globals": {
+          "AT_LO": [
+            "<value>"
+          ],
+          "AT_HI": [
+            "<value>"
+          ],
+          "REASONS": [
+            "length",
+            "<index>"
+          ],
+          "Math": [
+            "min",
+            "floor"
+          ]
+        }
+      },
+      "qualityFor": {
+        "globals": {
+          "clamp": [
+            "<value>"
+          ]
+        }
+      }
+    },
+    "js/data/api-transport.js": {
+      "createTransport": {
+        "globals": {
+          "cancelledError": [
+            "<value>"
+          ],
+          "Promise": [
+            "resolve",
+            "race",
+            "<value>"
+          ],
+          "Set": [
+            "<value>"
+          ],
+          "Map": [
+            "<value>"
+          ],
+          "Object": [
+            "create",
+            "prototype"
+          ],
+          "Infinity": [
+            "<value>"
+          ],
+          "JSON": [
+            "parse",
+            "stringify"
+          ],
+          "Math": [
+            "min",
+            "max",
+            "round",
+            "pow"
+          ],
+          "String": [
+            "<value>"
+          ],
+          "Boolean": [
+            "<value>"
+          ],
+          "Error": [
+            "<value>"
+          ],
+          "SyntaxError": [
+            "<value>"
+          ],
+          "parseFloat": [
+            "<value>"
+          ],
+          "isFinite": [
+            "<value>"
+          ],
+          "Date": [
+            "parse"
+          ]
+        }
+      }
+    }
+  }
+}

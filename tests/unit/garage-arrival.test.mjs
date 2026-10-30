@@ -1349,6 +1349,40 @@ test('PREVIEW transport: pause holds, scrub holds the end, LOOP replays, EDIT re
   key('ArrowRight', { tagName: 'INPUT' }); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, 'the scrub keeps its own arrows');
   key('Escape'); assert.equal(h.playing(), null);
 });
+test('PREVIEW phase marks: the beats of the timeline on the scrub, JUMP TO in EDIT, and they move with HOLD BEAT', () => {
+  let saved = { angle: 'left', hold: 1 };
+  const h = previewHarness();
+  h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
+  const fn = h.fn;
+  assert.equal(h.start('in'), true);
+  const p = h.playing(), T = Arrival.timeline(p.cfg, 'in'), len = Arrival.duration(p.cfg, 'in');
+  const marks = fn('previewPhases')(p);
+  assert.deepEqual([...marks].slice(0, 5).map((m) => [m.id, m.t]),
+    [['door', 0], ['lane', T.door], ['pause', T.door + T.lane], ['back', T.door + T.lane + T.pause], ['park', T.park]]);
+  assert.ok(marks.every((m, i) => m.t < len && (i === 0 || m.t > marks[i - 1].t)), 'in order, inside the show');
+  assert.ok(h.$('ga-marks').innerHTML.includes(`data-phase="back" style="left:${((T.door + T.lane + T.pause) / len * 100).toFixed(2)}%"`));
+  assert.equal(h.$('ga-phase').hidden, true, 'JUMP TO only in EDIT');
+  // EDIT: JUMP TO holds the first frame of a phase and names the held one.
+  fn('previewEdit')(true);
+  assert.equal(h.$('ga-phase').hidden, false);
+  fn('previewPhase')('back');
+  assert.equal(h.playing().t, T.door + T.lane + T.pause); assert.equal(h.playing().paused, true);
+  assert.equal(h.$('ga-phase').value, 'back');
+  assert.equal(h.step(0).label, 'BRINGING CAR IN');
+  fn('previewSeek')(T.door + 0.1);
+  assert.equal(h.$('ga-phase').value, 'lane', 'the readout follows the scrub');
+  // HOLD BEAT NONE: the pause has no length, so its mark gives way to BACK IN.
+  saved = { angle: 'left', hold: 0 };
+  fn('refreshPreview')();
+  assert.ok(!h.$('ga-marks').innerHTML.includes('data-phase="pause"'));
+  assert.ok(!h.$('ga-phase').innerHTML.includes('PAUSE'));
+  // RACE START: shutter, hold, roll-out, empty lane.
+  assert.equal(h.start('out'), true);
+  const out = fn('previewPhases')(h.playing()), To = Arrival.timeline(h.playing().cfg, 'out');
+  assert.deepEqual([...out].map((m) => m.id).slice(0, 2), ['door', 'run'], 'HOLD BEAT NONE: straight from the shutter to the roll-out');
+  assert.ok(Math.abs(out[1].t - (To.door + To.hold + Arrival.duration(h.playing().cfg, 'out') - To.base)) < 1e-9);
+  assert.equal(out[out.length - 1].id, 'gone');
+});
 test('bindSettings tells a running preview about every saved edit and RESET', () => {
   const { $ } = harness(); let n = 0;
   Arrival.bindSettings($, { get: () => null, set() {} }, { preview() {}, changed: () => n++ });

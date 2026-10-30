@@ -877,7 +877,7 @@ test("hunt fixes: an 'interrupted' resume() never counts as recovered; TLX stops
     "third TLX loss outside race entry stashes ctx-lost notice then reloads (#3536)");
   assert.ok(tlx.includes("GfxEscalation.onReloadBudgetExceeded(n,"), "third loss during race entry routes through GfxEscalation instead of another reload");
   const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(game, /function endRace\(forcedOrder\) \{[\s\S]{0,200}GfxEscalation\.resetReloadBudget\(\)/);
+  assert.match(symbolSource("function endRace(forcedOrder)"), /GfxEscalation\.resetReloadBudget\(\)/);
   const cam = readFileSync(join(ROOT, "js/garage/setup-camera.js"), "utf8");
   assert.match(cam, /!document\.querySelector\("dialog\[open\], dialog\.screen:not\(\[hidden\]\)"\)/);
 });
