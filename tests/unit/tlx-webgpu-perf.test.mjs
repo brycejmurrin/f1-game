@@ -239,7 +239,7 @@ test("W6: the draw warm compiles the canvas passes on both sides of the upscale 
   const h = await postRig(t, { up: true });
   const opts = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };
   h.post.drawWarm(opts, h.frame);
-  await settle();
+  await h.post.warmSettled();       // the canvas compiles themselves, not a wall-clock wait (flaked under load)
   const built = pipelineBuilds(h.renderer);
   h.present(opts);                  // SGSR -> canvas
   h.setUpscale(false);
@@ -275,3 +275,12 @@ test("W7: the sky cache bake is warmed by a draw keyed like cacheStep's (depth o
   assert.ok(warmed.has(false), `the warm built the bake's no-depth pipeline (warm saw depth ${[...warmed]})`);
 });
 
+
+test("W8: the production draw warm awaits the queued canvas compiles before it settles and opens the live present", () => {
+  // drawWarm only QUEUES the SGSR/FXAA canvas compiles (serialised); _gpuSettled waits on submitted GPU work, not on them.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("_warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);");
+  assert.ok(i > 0, "the entry draw warm call is where the test expects it");
+  const after = src.slice(i, src.indexOf("_gpuSettled(5000)", i));
+  assert.match(after, /await post\.warmSettled\(\)/, "warmSettled is awaited between drawWarmStage and _gpuSettled");
+});

@@ -411,15 +411,51 @@ function currentBranch() {
  *  of every sibling PR. */
 export function changedFiles() {
   const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  const refs = [process.env.APEX_RATCHETS_BASE, `origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH].filter(Boolean);
-  for (const ref of refs) {
-    try {
-      const mb = git("merge-base", ref, "HEAD");
-      const out = [git("diff", "--name-only", mb), git("ls-files", "--others", "--exclude-standard")].join("\n");
-      return new Set(out.split("\n").filter(Boolean));
-    } catch { /* try the next ref */ }
+  const mb = mergeBase();
+  if (!mb) return null;
+  try {
+    const out = [git("diff", "--name-only", mb), git("ls-files", "--others", "--exclude-standard")].join("\n");
+    return new Set(out.split("\n").filter(Boolean));
+  } catch { return null; }
+}
+
+/** This branch's merge-base with the deploy branch (`APEX_RATCHETS_BASE` names
+ *  the ref in tests), or null when none is reachable. */
+export function mergeBase() {
+  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  for (const ref of [process.env.APEX_RATCHETS_BASE, `origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH].filter(Boolean)) {
+    try { return git("merge-base", ref, "HEAD"); } catch { /* try the next ref */ }
   }
   return null;
+}
+
+/* A BRANCH'S OWN TREE LOWERING (#4257, 2026-10-30). A topic fragment never
+ * lowered a tree ceiling (#3996: a lowering snapped from a LOOSE base — one the
+ * branch did not cause — left every sibling over once the first one merged). So
+ * a branch that only REMOVED raw colours (rawColor 334 -> 321 at slack 0) failed
+ * the one-slack rule with no sanctioned way out. The fix tells the two apart: a
+ * tree metric that can be measured at a git ref (tree-counts AT_REF) is counted
+ * at the merge-base, and the branch may lower its ceiling by its own reduction
+ * and no further (`ownMin`, the branch's delta head - base, never above 0).
+ * Deltas measured against the merge-base add under a clean merge exactly as
+ * file line counts do, so siblings stay at ceiling == value. `ownFrag` is the
+ * delta this branch's fragment already carries: an over row that only gives
+ * back part of it (a colour re-added) re-snaps instead of blocking as a raise.
+ * Rows outside AT_REF, or with no base, pass unchanged (the old rule). */
+export async function attributeTree(rows, { name, base = mergeBase(), at } = {}) {
+  if (!name || !base) return rows;
+  const file = path.join(FRAG_DIR, name);
+  const own = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")).tree || {} : {};
+  const out = [];
+  for (const r of rows) {
+    const ownFrag = own[r.metric] || 0;
+    if (!(r.tree && (r.slack > r.slackMax || (r.over > 0 && ownFrag < 0)))) { out.push(r); continue; }
+    at ||= (await import("./tree-counts.mjs")).AT_REF;   // only when a tree row needs it
+    if (!Object.hasOwn(at, r.metric)) { out.push(r); continue; }
+    try { out.push({ ...r, ownMin: Math.min(0, r.value - await at[r.metric](base)), ownFrag }); }
+    catch { out.push(r); /* base not readable (a shallow clone): the old rule */ }
+  }
+  return out;
 }
 
 /** A topic-branch delta may RAISE anything, but LOWER only a file the branch
@@ -430,23 +466,27 @@ export function scopeToBranch(rows, touched = changedFiles()) {
   // this branch's count wrote e.g. assertPins −54 into every topic fragment: the
   // first sibling to merge one pin then left each of them over on the merge
   // result (2026-10-27, PRs #3970/#3981/#3985). Tree lowering is the deploy
-  // branch's `--update` / `--fold`, never a topic branch's (#2583 for files).
-  if (!touched) return rows.filter((r) => !r.tree || r.value >= r.ceiling);
-  return rows.filter((r) => (r.tree ? r.value >= r.ceiling : r.value >= r.ceiling || touched.has(r.file)));
+  // branch's `--update` / `--fold`, never a topic branch's (#2583 for files) —
+  // except by the branch's OWN reduction, measured at its merge-base (#4257:
+  // attributeTree sets ownMin < 0, and mergeFragment bounds the delta by it).
+  const treeOk = (r) => r.value >= r.ceiling || r.ownMin < 0;
+  if (!touched) return rows.filter((r) => !r.tree || treeOk(r));
+  return rows.filter((r) => (r.tree ? treeOk(r) : r.value >= r.ceiling || touched.has(r.file)));
 }
 
 /** Add `rows`' (value - ceiling) to fragment `frag` in place. A tree delta that
- *  nets below zero is dropped, not kept: a topic fragment never lowers a
- *  tree-wide ceiling (scopeToBranch). Before #3996 the commit hook wrote stale
- *  lowerings (assertPins −50) into open fragments; re-snapping one kept it
+ *  nets below zero is dropped, not kept, unless the row carries the branch's own
+ *  reduction (`ownMin`, attributeTree): then it is kept, never below ownMin.
+ *  Before #3996 the commit hook wrote stale lowerings (assertPins −50) into open fragments; re-snapping one kept it
  *  negative at zero slack, so each pin the tip gained turned the PR red again
  *  (2026-10-27, #3970/#3981/#3985). Dropping it leaves the deploy's ceiling.
  *  Returns `frag`. PURE. */
 export function mergeFragment(frag, rows) {
   for (const r of rows) {
     const scope = r.tree ? (frag.tree ||= {}) : ((frag.files ||= {})[r.file] ||= {});
-    const d = (scope[r.metric] || 0) + (r.value - r.ceiling);
-    if (d > 0 || (d && !r.tree)) scope[r.metric] = d; else delete scope[r.metric];
+    let d = (scope[r.metric] || 0) + (r.value - r.ceiling);
+    if (r.tree && d < 0) d = r.ownMin < 0 ? Math.max(d, r.ownMin) : 0;
+    if (d) scope[r.metric] = d; else delete scope[r.metric];
     if (!r.tree && !Object.keys(scope).length) delete frag.files[r.file];
   }
   return frag;
@@ -596,9 +636,10 @@ export async function update(data = load(), { dryRun = false, lowerOnly = false 
 export async function updateCli({ dryRun = false, lowerOnly = false, absolute = false, branch } = {}) {
   const name = absolute ? null : fragmentName(branch === undefined ? currentBranch() : branch);
   if (!name || dryRun) return { rows: await update(load(), { dryRun, lowerOnly }), fragment: null };
-  const rows = await measure(load());
-  await writeFragment(name, scopeToBranch(updateReceipt(rows, { lowerOnly }).changes));
-  return { rows, fragment: `${FRAG_REL}/${name}` };
+  const rows = await attributeTree(await measure(load()), { name });
+  const scoped = scopeToBranch(updateReceipt(rows, { lowerOnly }).changes);
+  await writeFragment(name, scoped);
+  return { rows, fragment: `${FRAG_REL}/${name}`, scoped };
 }
 
 /** `--update --fragment` (#2337): snap to the measured values, but as this branch's
@@ -608,7 +649,7 @@ export async function updateCli({ dryRun = false, lowerOnly = false, absolute = 
 export async function updateFragment(data = load(), { branch } = {}) {
   const name = fragmentName(branch === undefined ? currentBranch() : branch);
   if (!name) throw new Error("--fragment needs a topic branch (not the deploy branch or a detached HEAD)");
-  const rows = await measure(data);
+  const rows = await attributeTree(await measure(data), { name });
   await writeFragment(name, scopeToBranch(updateReceipt(rows).changes));
   return rows;
 }
@@ -645,6 +686,8 @@ export async function updateFragment(data = load(), { branch } = {}) {
 export const AUTO_RAISE_METRICS = new Set(["lines", "codeLines"]);
 export function autoRaiseBlockReason(r, maxRaise = 40) {
   if (r.missing) return "the file is missing";
+  // Giving back part of this branch's own tree lowering is not a raise (attributeTree).
+  if (r.tree && r.ownFrag < 0 && r.over <= -r.ownFrag) return null;
   if (r.tree) return "a tree-wide metric is shrink-only — never auto-raised";
   if (!AUTO_RAISE_METRICS.has(r.metric)) return `${r.metric} is not a line count — never auto-raised`;
   if (r.slackMax === 0) return "its entry carries slack 0 (exact) — never auto-raised";
@@ -653,7 +696,10 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
 }
 
 export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), branch } = {}) {
-  const v = verdict(await relativize(await measure(data), { data }));
+  // On a topic branch the fragment (FRAG_DIR) takes the change; the deploy
+  // branch or a detached HEAD snaps the absolutes as before.
+  const name = fragmentName(branch === undefined ? currentBranch() : branch);
+  const v = verdict(await attributeTree(await relativize(await measure(data), { data }), { name }));
   const big = v.over.map((r) => ({ ...r, reason: autoRaiseBlockReason(r, maxRaise) })).filter((r) => r.reason);
   if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
   if (!v.over.length && !v.loose.length) return { ok: true, raised: [], lowered: [], blocked: [] };
@@ -662,12 +708,9 @@ export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), 
              raised: v.over.map((r) => ({ file: r.file, metric: r.metric })),
              lowered: v.loose.map((r) => ({ file: r.file, metric: r.metric })) };
   }
-  // On a topic branch the raise goes to the branch's own fragment (FRAG_DIR);
-  // the deploy branch or a detached HEAD snaps the absolutes as before.
-  const name = fragmentName(branch === undefined ? currentBranch() : branch);
   let rows;
   if (name) {
-    rows = await measure(data);
+    rows = await attributeTree(await measure(data), { name });
     await writeFragment(name, scopeToBranch(updateReceipt(rows).changes));
   } else rows = await update(data);
   const key = (r) => `${r.file} ${r.metric}`;
@@ -895,15 +938,19 @@ async function main() {
     const reason = (argv.find((x) => x.startsWith("--reason=")) || "").slice("--reason=".length).trim();
     if (asFragment && (dryRun || lowerOnly)) { console.error("--fragment goes with --update only"); process.exitCode = 2; return; }
     if (asFragment && !reason) { console.error('--fragment raises a ceiling deliberately: pass --reason="<why>" and repeat it in the commit message'); process.exitCode = 2; return; }
-    const { rows, fragment } = asFragment ? { rows: await updateFragment(load()), fragment: null } : await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
+    const { rows, fragment, scoped } = asFragment ? { rows: await updateFragment(load()), fragment: null } : await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
     if (asFragment) console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
     const receipt = updateReceipt(rows, { lowerOnly });
     if (argv.includes("--json")) console.log(JSON.stringify({ ok: receipt.missing.length === 0, dryRun, lowerOnly, ...receipt }, null, 2));
     else {
-      for (const r of receipt.changes) console.log(`${dryRun ? "WOULD " : ""}${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
+      // A topic fragment takes only scopeToBranch's rows; name the rest instead of claiming them.
+      const taken = new Set((scoped || receipt.changes).map((r) => `${r.file} ${r.metric}`));
+      for (const r of receipt.changes) console.log(taken.has(`${r.file} ${r.metric}`)
+        ? `${dryRun ? "WOULD " : ""}${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`
+        : `KEPT   ${r.file} ${r.metric}: ${r.ceiling} (${r.value} now, not this branch's own change — the deploy branch's --update lowers it)`);
       for (const r of receipt.skippedRaises) console.log(`SKIP RAISE ${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
       for (const r of receipt.missing) console.error(`MISSING ${r.file}`);
-      if (fragment && receipt.changes.length) console.log(`ratchets --update: topic branch, so the change is a delta in ${fragment}, not an edit of ratchets.json (add it to your commit; \`--fold\` snaps absolutes)`);
+      if (fragment && scoped?.length) console.log(`ratchets --update: topic branch, so the change is a delta in ${fragment}, not an edit of ratchets.json (add it to your commit; \`--fold\` snaps absolutes)`);
     }
     process.exitCode = receipt.missing.length ? 1 : 0;
     return;

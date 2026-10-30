@@ -236,7 +236,7 @@
   --visor-amber: #503d20;
   --visor-ice: #233b50;
   --visor-rose: #4c2d3c;
-  --dim: #9a9aa8;
+  --dim: #bdbdca; /* APCA Lc 67 on --bg, >= 60 on the HUD plate (#4258) */
   --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim));
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
@@ -294,7 +294,7 @@
   --layout-active: var(--bp-phone);
   /* One control column. 660px matched the landscape 32vw column at 1920. */
   --col-max: 660px;
-  --touch-label-floor: 10px; --touch-pedal-radius: 28%; --touch-tablet-btn: 96px; --touch-tablet-steer: 108px;
+  --touch-label-floor: 11px; --touch-pedal-radius: 28%; --touch-tablet-btn: 96px; --touch-tablet-steer: 108px;
   --menu-fit-sheet: 1180px; --menu-fit-sheet-wide: 1360px; --menu-fit-pause: 480px;
   /* Foldables. Fallbacks are the whole viewport and a zero hinge. Unitless 0:
      a px literal on a property whose name contains "gap" counts as raw spacing. */
@@ -558,6 +558,9 @@
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #5fe88a;
   --slower: #ff3b30;
+  /* Red as TEXT: --slower is a fill (Lc 40 as ink). Toward --text, so it follows
+     the CVD remaps and darkens under LIGHT; Lc >= 60 (apca-timing.test.mjs). */
+  --slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text));
   /* The RED FLAG chip's field (css/hud.css #hud-flag.flag-red): a fixed flag
      red like the yellow and the VSC amber, so COLOUR VISION never remaps it,
      and dark enough that --hud-ink-light reads on it (5.6:1). */
@@ -900,7 +903,8 @@ body:not(.desktop) {
   --bg: #0c0c14;
   --carbon: #15151E;
   --text: #f6f6f9;
-  --dim: #9a9aa8;
+  --dim: #bdbdca;
+  --slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text));
   --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
   --surf-1: color-mix(in oklab, #fff 4%, var(--bg));
   --surf-3: color-mix(in oklab, #fff 11%, var(--bg));
