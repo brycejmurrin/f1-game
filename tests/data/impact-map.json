@@ -18215,6 +18215,7 @@
         "tests/unit/screen-looks.test.mjs"
       ],
       "*": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
