@@ -424,7 +424,7 @@ const GarageArrival = (function () {
   const EYE_L = CAMS.left, EYE_R = CAMS.right;
   // @blender-rigs-index:start
   // tools/gen/blender/garage-camera-rigs.py: each rig's label and sample count; the samples are js/garage/garage-data.js (lazy).
-  const RIGS = {"crane":{"label":"CRANE","n":49},"orbit":{"label":"ORBIT","n":49},"dolly":{"label":"DOLLY","n":49},"rear":{"label":"REAR TRACK","n":49}};
+  const RIGS = {"crane":{"label":"CRANE","n":49},"orbit":{"label":"ORBIT","n":49},"dolly":{"label":"DOLLY","n":49},"rear":{"label":"REAR TRACK","n":49},"drone":{"label":"DRONE","n":49},"steadicam":{"label":"STEADICAM","n":49}};
   // @blender-rigs-index:end
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   // The samples ride js/garage/garage-data.js (LAZY_RACE), unpacked on first use. Until it lands a

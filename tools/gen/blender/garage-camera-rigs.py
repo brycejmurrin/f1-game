@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# @doc Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track) into js/garage/arrival.js.
+# @doc Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track, drone, steadicam) into js/garage/arrival.js.
 """Garage camera rigs, authored as animated Blender cameras and exported as sampled tables.
 
   python -m venv bpyenv && bpyenv/bin/pip install bpy==5.2.3      (or: blender -b --python ...)
@@ -112,12 +112,53 @@ def rig_rear(d, b):
     return [(0, (-0.6, 1.3, -4.6), 52), (b['back'], (-0.6, 1.3, -4.6), 52),
             (b['park'], (-0.9, 1.9, -5.7), 44), (b['end'], (-0.9, 1.95, -5.75), 44)]
 
+def bob(keys, t0, t1, amp, period):
+    """Extra keys between t0 and t1: x, z on the straight line between the keys
+    around them, y offset by +-amp every half period (a step, a float)."""
+    out = list(keys); n = int((t1 - t0) / (period / 2))
+    for j in range(1, n):
+        t = t0 + j * (t1 - t0) / n
+        a = max((k for k in keys if k[0] <= t), key=lambda k: k[0]); b = min((k for k in keys if k[0] > t), key=lambda k: k[0])
+        w = (t - a[0]) / (b[0] - a[0])
+        v = tuple(a[1][i] + (b[1][i] - a[1][i]) * w for i in range(3))
+        out.append((t, (v[0], v[1] + (amp if j % 2 else -amp), v[2]), a[2] + (b[2] - a[2]) * w))
+    return sorted(out, key=lambda k: k[0])
+
+def rig_drone(d, b):
+    if d == 'out':   # rises off the back of the car, follows it to the door, holds high over the doorway
+        return [(0, (-1.0, 2.9, -1.8), 56), (b['go'], (-0.9, 3.0, -1.6), 56),
+                (b['go'] + 1.2, (-0.3, 3.25, 1.4), 56), (b['atDoor'] + 0.3, (0.5, 3.4, 4.5), 58),
+                (b['atDoor'] + 1.8, (0.9, 3.5, 5.7), 60), (b['end'], (1.1, 3.5, 5.8), 60)]
+    # High just inside the door over the lane, drifts down and back over the car
+    # as it backs in, then a slow high reveal that orbits a little round the nose.
+    mid = b['back'] + 0.5 * (b['park'] - b['back'])
+    return [(0, (0.6, 3.4, 5.8), 58), (b['stop'], (1.3, 3.3, 5.7), 58), (b['back'], (1.0, 3.25, 5.4), 56),
+            (mid, (0.4, 3.05, 3.7), 54), (b['park'] - 0.6, (-0.4, 3.0, 2.6), 52)] + [
+            (b['end'], (-0.4 - 1.0 * k, 3.0 + 0.05 * k, 2.6 - 0.5 * k), 52 - 2 * k)
+            for k in [min(1.0, (b['end'] - b['park'] + 0.6) / 2.4)]]   # the drift scales with the hold after parking
+
+def rig_steadicam(d, b):
+    # Chest height on the far flank (-x). Along the walls, not the car's flank:
+    # the crews (result crews too) stand 1-3 m off the car and a lens walked
+    # through them is lifted over their heads (clearOfCrew).
+    if d == 'out':   # from the nose three-quarter, walks to the door with the car and stops on the threshold
+        return bob([(0, (-4.0, 1.45, 5.4), 50), (b['go'], (-4.0, 1.45, 5.4), 50),
+                    (b['atDoor'] + 0.4, (-3.0, 1.45, 5.9), 54), (b['end'], (-2.9, 1.45, 5.95), 54)],
+                   b['go'], b['atDoor'] + 0.4, 0.02, 0.9)
+    # Picks the car up on the far flank at the door, walks back along the front
+    # wall with it as it reverses past, and finishes on a three-quarter front at the nose.
+    return bob([(0, (-2.8, 1.45, 5.85), 52), (b['back'], (-2.9, 1.45, 5.8), 52),
+                (b['park'], (-3.9, 1.45, 5.45), 48), (b['end'], (-4.0, 1.45, 5.4), 48)],
+               b['back'], b['park'], 0.02, 0.9)
+
 PIVOT = (0.0, 0.5)   # game x, z the ORBIT circles
 RIGS = {
     'crane': dict(label='CRANE', keys=rig_crane, aimY=0.35),
     'orbit': dict(label='ORBIT', keys=rig_orbit, aimY=0.6, orbit=True),
     'dolly': dict(label='DOLLY', keys=rig_dolly, aimY=0.7),
     'rear': dict(label='REAR TRACK', keys=rig_rear, aimY=0.75),
+    'drone': dict(label='DRONE', keys=rig_drone, aimY=0.4),
+    'steadicam': dict(label='STEADICAM', keys=rig_steadicam, aimY=0.6),
 }
 
 # ── Blender scene ────────────────────────────────────────────────────────────

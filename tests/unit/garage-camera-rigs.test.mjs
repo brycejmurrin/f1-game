@@ -25,8 +25,8 @@ const RIGS = Object.fromEntries(RIG_IDS.map((id) => [id, rigData(id)]));
 const DIRS = ['in', 'out', 'home'];
 const us = Array.from({ length: 101 }, (_, i) => i / 100);
 
-test('four rigs, each with an uppercase label and a table for every sequence', () => {
-  assert.deepEqual([...RIG_IDS], ['crane', 'orbit', 'dolly', 'rear']);
+test('six rigs (crane, orbit, dolly, rear, drone, steadicam), each with an uppercase label and a table for every sequence', () => {
+  assert.deepEqual([...RIG_IDS], ['crane', 'orbit', 'dolly', 'rear', 'drone', 'steadicam']);
   assert.ok(Object.isFrozen(RIG_IDS));
   for (const id of RIG_IDS) {
     assert.equal(RIG_LABEL[id], RIG_LABEL[id].toUpperCase());
@@ -83,7 +83,7 @@ test('the generated block was written by the current generator (SHA256 of the .p
 });
 
 test('lazy: the ids and labels are eager, the samples land with js/garage/garage-data.js, and the index matches them', () => {
-  assert.deepEqual(NOT_YET, { ids: ['crane', 'orbit', 'dolly', 'rear'], sample: null }, 'before the data: every id listed, no rig plays');
+  assert.deepEqual(NOT_YET, { ids: ['crane', 'orbit', 'dolly', 'rear', 'drone', 'steadicam'], sample: null }, 'before the data: every id listed, no rig plays');
   const data = vm.runInContext('GarageData.RIGS', context);
   const index = JSON.parse(read('js/garage/arrival.js').split('// @blender-rigs-index:start')[1].split('const RIGS = ')[1].split(';\n')[0]);
   assert.deepEqual(index, Object.fromEntries(Object.entries(data).map(([id, r]) => [id, { label: r.label, n: r.n }])), 'rerun garage-camera-rigs.py --write-runtime');

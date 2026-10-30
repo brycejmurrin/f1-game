@@ -1606,7 +1606,7 @@ test('LIGHT CUE: off by default; a pick rides the pose; after the race BY RESULT
 });
 
 test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, the aim settles on the live car', () => {
-  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'orbit', 'rear']);
+  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'drone', 'orbit', 'rear', 'steadicam']);
   for (const id of Arrival.RIG_IDS) {
     assert.equal(Arrival.settings({ angle: id }).angle, id);
     for (const [dir, fn] of [['in', Arrival.pose], ['out', Arrival.poseOut], ['home', Arrival.poseHome]]) {
