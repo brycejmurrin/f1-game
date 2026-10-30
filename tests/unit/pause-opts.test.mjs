@@ -279,24 +279,20 @@ test("RESTART arms the same way; arming one button disarms the other", () => {
   assert.equal(restart.textContent, "RESTART RACE");
 });
 
-test("the arm expires after ARM_MS: on its timer, and by age when the timer is late", () => {
-  const { press, handled, quit, timers, runTimers, advance, M } = load();
+test("the arm has no timer and no age cap: TAP AGAIN stays until confirm", () => {
+  const { press, handled, quit, timers, advance, M } = load();
   press(quit);
-  assert.equal([...timers.values()][0].ms, 5000);
-  assert.equal(M.ARM_MS, 5000);
-  runTimers();
-  assert.equal(quit.textContent, "QUIT TO MENU");
-  assert.ok(!quit.classList.contains("armed"));
-  press(quit);
-  assert.deepEqual(handled, [], "after expiry the next press arms again");
-  advance(5001);                        // a throttled tab: the timer has not fired yet
-  press(quit);
-  assert.deepEqual(handled, [], "a stale arm is a fresh question");
-  assert.ok(quit.classList.contains("armed"));
+  assert.equal(timers.size, 0, "nothing reverts the label");
+  assert.equal(M.ARM_MIN_MS, 350);
+  advance(15_500);
+  assert.equal(quit.textContent, "TAP AGAIN");
+  assert.ok(M.isArmed("pm-quit"));
+  assert.ok(!press(quit).stopped);
+  assert.deepEqual(handled, ["pm-quit"]);
 });
 
-test("hiding the pause card disarms; other buttons pass through untouched", () => {
-  const { press, handled, quit, resume, pausemenu, observers } = load();
+test("hiding the pause card disarms; resume and Escape drop the arm and pass through", () => {
+  const { press, handled, quit, resume, pausemenu, observers, document, M } = load();
   press(quit);
   const mo = observers[0];
   assert.deepEqual(JSON.parse(JSON.stringify(mo.opts.attributeFilter)), ["hidden"]);
@@ -305,6 +301,16 @@ test("hiding the pause card disarms; other buttons pass through untouched", () =
   assert.ok(!quit.classList.contains("armed"));
   assert.ok(!press(resume).stopped);
   assert.deepEqual(handled, ["pm-resume"]);
+  pausemenu.hidden = false;
+  press(quit);
+  assert.ok(M.isArmed("pm-quit"));
+  press(resume);
+  assert.equal(quit.textContent, "QUIT TO MENU", "RESUME is another option: the arm drops");
+  assert.deepEqual(handled, ["pm-resume", "pm-resume"]);
+  press(quit);
+  document._handlers.keydown({ key: "Escape" });
+  assert.ok(!M.isArmed("pm-quit"), "Escape disarms while the card is open");
+  assert.equal(quit.textContent, "QUIT TO MENU");
 });
 
 test("a disabled RESTART (multiplayer) is never armed; CONFIRM OFF passes straight through", () => {
@@ -349,7 +355,7 @@ test("a real press younger than ARM_MIN_MS is the same double tap: swallowed, st
   }
 });
 
-test("late-handled taps: event timeStamp confirms after input lag; ghost and expiry unchanged", () => {
+test("late-handled taps: event timeStamp confirms after input lag; a sub-350 ms ghost does not", () => {
   const tap = { isTrusted: true, detail: 1 };
   const TS0 = 50_000;
   // (1) tap 2 handled late (wall) but timeStamp 1 s after tap 1 confirms
@@ -360,13 +366,12 @@ test("late-handled taps: event timeStamp confirms after input lag; ghost and exp
     assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 1000 }).stopped);
     assert.deepEqual(handled, ["pm-quit"]);
   }
-  // (2) timer disarms the label 6 s wall later; timeStamp gap 1 s still confirms
+  // (2) six seconds of wall time later the label is still TAP AGAIN and confirms
   {
-    const { press, handled, quit, advance, runTimers } = load();
+    const { press, handled, quit, advance } = load();
     press(quit, { ...tap, timeStamp: TS0 });
     advance(6000);
-    runTimers();
-    assert.equal(quit.textContent, "QUIT TO MENU", "visual revert on timer");
+    assert.equal(quit.textContent, "TAP AGAIN");
     assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 1000 }).stopped);
     assert.deepEqual(handled, ["pm-quit"]);
   }
@@ -377,45 +382,53 @@ test("late-handled taps: event timeStamp confirms after input lag; ghost and exp
     assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped);
     assert.deepEqual(handled, []);
     assert.ok(M.isArmed("pm-quit"));
-  }
-  // (4) timeStamp more than ARM_MS after the arm re-arms (TAP AGAIN again)
-  {
-    const { press, handled, quit, M } = load();
-    press(quit, { ...tap, timeStamp: TS0 });
-    assert.ok(press(quit, { ...tap, timeStamp: TS0 + M.ARM_MS + 1 }).stopped);
-    assert.deepEqual(handled, []);
     assert.equal(quit.textContent, "TAP AGAIN");
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + M.ARM_MS + 2000 }).stopped);
+  }
+  // (4) a stamp long after the arm still confirms; there is no age cap
+  {
+    const { press, handled, quit } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 20_000 }).stopped);
     assert.deepEqual(handled, ["pm-quit"]);
   }
 });
 
-test("a tap delivered after the arm timer still confirms; a ghost does not re-arm the clock", () => {
-  // Chrome's event.timeStamp is the handling time. A second press the player
-  // made inside the window can run after the 5s revert, with a stamp past
-  // ARM_MS. That press is the confirm. A 150 ms ghost in the same series is
-  // not, and it must not move the arm's clock (the 800 ms tap then confirms).
+test("b0b89dc: a 15.5 s stall keeps TAP AGAIN and the late second tap confirms once", () => {
+  // Live sequence on b0b89dc: the first tap arms, the main thread then stalls,
+  // and Chrome stamps the second click's timeStamp when the handler finally
+  // runs. That tap is the confirm. A ghost in the same series is not, and
+  // closing the card clears the arm so the next open starts over.
   const tap = { isTrusted: true, detail: 1 };
   const TS0 = 50_000;
   {
-    const { press, handled, quit, advance, runTimers, M } = load();
+    const { press, handled, quit, advance, timers, M } = load();
     press(quit, { ...tap, timeStamp: TS0 });
-    advance(M.ARM_MS + 3000);
-    runTimers();
-    assert.equal(quit.textContent, "QUIT TO MENU");
-    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped, "a ghost after the revert is still swallowed");
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.equal(timers.size, 0);
+    advance(15_500);
+    assert.equal(quit.textContent, "TAP AGAIN", "the label stays through the stall");
+    assert.ok(M.isArmed("pm-quit"));
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped, "a ghost under 350 ms does not confirm");
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.equal(M.armAge(TS0 + 150), 150, "the ghost does not move the arm clock");
     assert.deepEqual(handled, []);
-    assert.equal(quit.textContent, "QUIT TO MENU", "the ghost does not re-arm");
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + M.ARM_MS + 3000 }).stopped);
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 15_500 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"], "the late tap confirms exactly once");
+    assert.equal(quit.textContent, "QUIT TO MENU");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 16_000 }).stopped, "the next tap is a new arm, not a second confirm");
     assert.deepEqual(handled, ["pm-quit"]);
   }
   {
-    const { press, handled, quit } = load();
+    const { press, handled, quit, pausemenu, observers } = load();
     press(quit, { ...tap, timeStamp: TS0 });
-    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 120 }).stopped);
+    pausemenu.hidden = true;
+    observers[0].fn();
+    pausemenu.hidden = false;
+    assert.equal(quit.textContent, "QUIT TO MENU");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 20_000 }).stopped, "after close/reopen the tap re-arms");
     assert.equal(quit.textContent, "TAP AGAIN");
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 800 }).stopped, "800 ms after the arm confirms");
-    assert.deepEqual(handled, ["pm-quit"]);
+    assert.deepEqual(handled, []);
   }
 });
 

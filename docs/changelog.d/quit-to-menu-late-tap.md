@@ -1,1 +1,1 @@
-Fixed: QUIT TO MENU still leaves the race when the confirming tap arrives after the five-second "TAP AGAIN" label has reverted.
+Fixed: QUIT TO MENU stays on TAP AGAIN until the player confirms or leaves the pause card, so a second tap still quits after a long stall.
