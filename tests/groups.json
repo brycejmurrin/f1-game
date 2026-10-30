@@ -1219,6 +1219,8 @@
     "tests/unit/ui-journey-session.test.mjs",
     "// UiLayers.shownLayer must not force layout after a style write (survey #3248 / ForcedReflow).",
     "tests/unit/ui-layers-reflow.test.mjs",
+    "// look-diff (G4): knob catalog from the shipped modules, pixel/geometry diff, DEAD/SUBTLE/VISIBLE. No browser, ~5 s (three CLI spawns).",
+    "tests/unit/ui-look-diff.test.mjs",
     "// reach-score (UI layout program G5): two-thumb landscape zones, primary pick, dead space over layout-audit dom dumps and explorer inspections. Fixtures, no browser, < 1 s.",
     "tests/unit/ui-reach-score.test.mjs",
     "tests/unit/ui-sheets-audit.test.mjs",
