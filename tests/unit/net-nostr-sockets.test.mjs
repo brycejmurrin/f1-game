@@ -22,7 +22,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot({ joinMs } = {}) {
+function boot({ joinMs, listenMs } = {}) {
   const sockets = [];
   class FakeWebSocket {
     constructor(url) {
@@ -66,6 +66,7 @@ function boot({ joinMs } = {}) {
   let patched = src.replace('import("@trystero-p2p/nostr")', "__importNostr()").replace(/^const\b/gm, "var");
   // A shortened guest find-window, so the reply-deadline case runs in seconds.
   if (joinMs) patched = patched.replace("const JOIN_TIMEOUT_MS = 12000", "const JOIN_TIMEOUT_MS = " + joinMs);
+  if (listenMs) patched = patched.replace("const LISTEN_TIMEOUT_MS = 300000", "const LISTEN_TIMEOUT_MS = " + listenMs);
   vm.runInContext(patched, ctx, { filename: absSrc("js/net/nostr.js") });
   const NetNostr = vm.runInContext("NetNostr", ctx);
   const tick = () => new Promise((r) => setTimeout(r, 20));
@@ -268,4 +269,27 @@ test("a replayed old offer is ignored; a fresh offer is still answered (created_
   assert.ok(w.sent.some((f) => f.startsWith('["EVENT"')), "answer published for fresh offer");
   token.cancelled = true;
   await p;
+});
+
+test("the ICE-restart listener holds one socket set for a race, not a re-dial every JOIN window (perf hunt 6)", async (t) => {
+  // Scaled clock, 1/120: JOIN 12 s -> 100 ms, LISTEN 300 s -> 2.5 s, so one
+  // real second is a fake 120 s of healthy racing. The loop is transport.js
+  // answerRestart: a quiet relay ("expired") is worth another listen.
+  const SCALE = 120, joinMs = 12000 / SCALE, listenMs = 300000 / SCALE, fake120s = 120000 / SCALE;
+  const race = async (listen) => {
+    const h = boot({ joinMs, listenMs });
+    assert.equal(h.NetNostr.LISTEN_TIMEOUT_MS, listenMs, "the patch took");
+    const token = { cancelled: false }, t0 = Date.now();
+    setTimeout(() => { token.cancelled = true; }, fake120s);
+    let r = null;
+    do r = await h.NetNostr.directExchange({ code: "R3STRT", token, listen, reply: async () => null });
+    while (r && r.error === "expired" && !token.cancelled);
+    assert.ok(Date.now() - t0 >= fake120s, "the listener ran the whole window");
+    return h.sockets.length;
+  };
+  const relays = 2;   // the stub's apex26.nostrRelays
+  const before = await race(false), after = await race(true);
+  t.diagnostic(`sockets per fake 120 s with ${relays} relays: ${before} (JOIN window) -> ${after} (listen window)`);
+  assert.equal(after, relays, "one WebSocket (one TLS handshake) per relay for the whole fake 120 s");
+  assert.ok(before >= 2 * relays, `control: the JOIN-window listener re-dialled (${before} sockets)`);
 });

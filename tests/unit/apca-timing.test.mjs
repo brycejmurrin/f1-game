@@ -4,7 +4,7 @@
  * personal best, yellow = slower than your own. They are read at 14px, in a
  * corner, at 300 km/h — and they were not equally readable. Measured in APCA:
  *
- *     --faster    #a3e635   Lc 79.4
+ *     --faster    #a3e635   Lc 79.4   (now #5fe88a, Lc 77.4: moved off --you's lime)
  *     --sec-slow  #f6d200   Lc 80.4
  *     --sec-best  #c084fc   Lc 50.4   <- the BEST lap was the hardest to read
  *
@@ -153,4 +153,23 @@ test("colour-vision palettes clear 4.5:1 on the dark HUD plate", () => {
     }
   }
   assert.ok(n >= 9, `expected the cvd inks to be checked, saw ${n}`);
+});
+
+test("personal-best green and the player's lime are different hues", () => {
+  // --faster (PB, ghost delta) and --you (your row, your dot) were #a3e635 and
+  // #aeea00: 8° of hue apart, so on the sector strip and the results sheet lime
+  // meant both "you" and "faster" (DEFECT-LEDGER item D, design pass #1). The
+  // colour-vision palettes already kept them apart; this pins the default one.
+  const hue = (h) => {
+    const [r, g, b] = hex(h).map((v) => v / 255);
+    const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+    if (!d) return 0;
+    const H = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (H * 60 + 360) % 360;
+  };
+  assert.ok(Math.abs(hue("#a3e635") - hue("#aeea00")) < 40, "anti-vacuity: the old pair must fail this bar");
+  const gap = Math.abs(hue(token("--faster")) - hue(token("--you")));
+  assert.ok(Math.min(gap, 360 - gap) >= 40,
+    `--faster ${token("--faster")} and --you ${token("--you")} are ${gap.toFixed(0)}° of hue apart; ` +
+    `a personal best must not read as "you"`);
 });

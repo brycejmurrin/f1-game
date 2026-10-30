@@ -15,6 +15,8 @@
 //   node tools/ci/ready-gate.mjs --json
 //   node tools/ci/ready-gate.mjs --local         # local stamp only (no API)
 //
+// With --pr it also prints one `advisory:` line from the pre-flip probe (preflip-probe.mjs): never a block.
+//
 // With --pr the body's `## Plan` checklist (AGENTS.md rule 12) must be closed: an item neither ticked nor struck is
 // work the PR says is not done, so a green tip still reads `plan-open`. An item starting `land:` (or the older
 // `READY to`) is the landing step itself and never blocks. A body with no Plan section only warns.
@@ -29,6 +31,7 @@ import { api } from "./github-api.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { commitTreeId } from "../lib/work-tree-id.mjs";
 import { writeReceipt } from "../lib/gate-receipt.mjs";
+import { preflipAdvisory, readProbeReceipt } from "./preflip-probe.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** Sidecar written by a full green tooling-fast suite (see tooling-fast.mjs). */
@@ -373,6 +376,9 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);
+    if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip (update_pull_request draft:false), then add `land`; if it ages out, re-run ready-gate");
+    // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs).
+    if (resolved.pr) say(preflipAdvisory(readProbeReceipt(resolved.pr), v.sha, resolved.pr));
     say(verdictLine(v));
   }
   return v.code;

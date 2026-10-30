@@ -119,6 +119,7 @@ function boot(opts) {
   };
   if (opts && opts.realWatch) sb.RealRace = { isWatch: () => true, status: () => { throw new Error("WATCH guard must not build a status snapshot"); } };
   if (opts && opts.Audio) sb.Audio = opts.Audio;
+  if (opts && opts.ErsLayer) sb.ErsLayer = opts.ErsLayer;
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
@@ -2545,4 +2546,19 @@ test("boost activation is quiet when ERS is muted or its trim is zero", async ()
   assert.equal(A.boostState().peak, 0);
   A.setTune({ boost: 1 }); A.deployBoost();
   assert.ok(A.boostState().peak > 0 && A.boostState().peak <= 0.15, "stock whoosh is below the old 0.3 peak");
+});
+
+test("setEngine hands ErsLayer one record rewritten each frame, not a fresh 12-field literal (perf hunt 6)", () => {
+  const seen = [];
+  const ErsLayer = { update: (st) => seen.push({ ref: st, deploy: st.deploy, energy: st.energy, boost: st.boost }) };
+  const { GameAudio, ctxTime } = boot({ ErsLayer });
+  GameAudio.init();
+  GameAudio.startEngine();
+  const frame = (deploy) => { ctxTime(1 / 60); GameAudio.setEngine(0.7, 0, false, 0.6, 5, { deploy, energy: 0.8, ax: 2 }); };
+  frame(0); frame(1); frame(0.5);
+  assert.ok(seen.length >= 3, "ErsLayer is fed every frame");
+  const tail = seen.slice(-3);
+  assert.ok(tail.every((r) => r.ref === tail[0].ref), "the same record every frame");
+  assert.deepEqual(tail.map((r) => r.deploy), [0, 1, 0.5], "…carrying each frame's values when update reads it");
+  assert.deepEqual(tail.map((r) => r.boost), [false, true, true]);
 });

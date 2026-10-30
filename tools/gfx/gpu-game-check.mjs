@@ -44,6 +44,7 @@ import { fileURLToPath } from "node:url";
 // test is a second copy of its bugs.
 import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
+import { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
@@ -90,6 +91,8 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   montreal|monza; per cycle the live GPUBuffer/GPUTexture count and MB
                                   (device-side counter, mem-cycles-lib.mjs), three's render objects and
                                   heap; out.memCycles.verdict = plateau|growing over the second half
+  --lavapipe                      Dawn on Mesa Lavapipe (the gfx-probe pair): three's WebGPU path in a
+                                  GPU-less container, for COUNTS (passes, store ops, mips), never ms
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
@@ -186,9 +189,12 @@ const log = (m) => console.log(`[game-check] ${m}`);
 const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
   glErrDrain: glErrDrainEveryPresent ? "present" : "beat", entry };
 const { server, port } = await serve();
+const LAVAPIPE = argv.includes("--lavapipe");
 const launchOpts = {
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
-  args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
+  args: LAVAPIPE ? [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"]
+    : ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
+  ...(LAVAPIPE ? { env: { ...process.env, ...WEBGPU_LAVAPE_ENV } } : {}),
 };
 // --profile: one persistent context in place of browser + newContext. `launch` says whether the
 // profile already held a run (a returning player's launch) or was empty (the first ever).
@@ -1133,7 +1139,7 @@ try {
     const b = (m && m.backend) || {};
     const pick = (o, ks) => { const r = {}; for (const k of ks) if (o[k] !== undefined) r[k] = o[k]; return r; };
     return { mode, mirror: m ? { ...pick(m, ["mode", "shown", "cam", "drawn"]),
-      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull"]) } : null };
+      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull", "glassLod"]) } : null };
   }), 10000, "camera-end");
   if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
   out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };

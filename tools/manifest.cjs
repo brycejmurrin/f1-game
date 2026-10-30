@@ -272,7 +272,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
-  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply
+  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply, the Blender-authored body (tools/gen/blender/crew-body.py)
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
   "js/garage/crew-choreo.js",           // GarageCrewChoreo: Blender-authored crew clips (tools/gen/blender/crew-choreo.py)
