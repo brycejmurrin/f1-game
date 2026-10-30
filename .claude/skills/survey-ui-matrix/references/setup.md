@@ -20,11 +20,7 @@ mcp__chrome-devtools__emulate      viewport: "844x390x3,mobile,touch,landscape"
 mcp__chrome-devtools__navigate_page  http://localhost:3457/index.html?stallwatch=0
 ```
 
-`?stallwatch=0`: neither MCP browser reports `navigator.webdriver`, so on software GL the game's stall watchdog
-reloads the page about 20 s into a race (`sessionStorage apex26.stallReloads=1`, nav type `reload`), which looks
-like a crash (docs/DEBUG-HOOKS.md §stallWatch).
-
-Start the server first on 3457, a port the test suite does not use (`python3 -m http.server 3457`;
+Start the server first on 3457 (`?stallwatch=0`: neither MCP browser is `navigator.webdriver`, so the stall watchdog would reload a software-GL race), a port the test suite does not use (`python3 -m http.server 3457`;
 see below), then in
 `browser_evaluate` / `evaluate_script`:
 
