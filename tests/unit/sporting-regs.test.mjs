@@ -18,12 +18,14 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ctx = vm.createContext({});
 vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8"), ctx, { filename: absSrc("js/race/sporting-regs.js") });
 const R = vm.runInContext("SportingRegs", ctx);
+const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 const log = (...codes) => codes.map((code, i) => ({ code, lap0: i * 5, lap1: null }));
 
@@ -500,4 +502,28 @@ test("exemptions: caution, pit, finished/retired, troubled player, and non-race"
   const w = R.createBlueFlagWatch((o) => stuck.has(o)), f = blueField(40);
   stuck.add(f.p);
   assert.deepEqual(blueRun(w, f, 10), [], "troubled / stuck player");
+});
+
+test("SKIP after a player DNF under red applies the suspended-race compound tariff", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const { G, apex } = game;
+    apex.headless(true);
+    await game.race("monza", "day", "dry", { laps: 10 });
+    apex.tyres({ level: "real" }); game.step(1);
+    for (const car of G.cars) car.dnfAt = null;
+    const rival = G.cars.find((car) => !car.human);
+    assert.equal(G.pits.twoCompoundApplies(), true);
+    assert.equal(R.compoundShort(rival.tyreLog), true);
+    apex.retire(null);
+    G.applyCaution({ level: 4, sinceT: G.raceT });
+    G.els.pausebtn.onclick();
+    const skip = game.sandbox.document.getElementById("pm-skip-results");
+    assert.equal(skip.hidden, false, "a retired solo driver can settle the remaining field");
+    skip.onclick();
+    assert.equal(G.state, "results");
+    assert.equal(rival.penalty, 30, "a suspension without a finisher still enforces the +30 s tariff");
+    assert.equal(rival.dsq, undefined, "suspended races use a time penalty");
+    assert.equal(G.player.penalty || 0, 0, "a retirement is exempt");
+  } finally { game.close(); }
 });
