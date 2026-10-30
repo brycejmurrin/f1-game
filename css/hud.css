@@ -160,6 +160,9 @@ body:not(.hud-prof-broadcast) .hud-top > .hud-box { --hud-box-stripe: 0px; backg
 body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-ink-light); box-shadow: inset 3px 0 0 var(--accent);
   border-radius: var(--r-xs) 0 0 var(--r-xs); }
 body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-dark); text-shadow: none; }
+/* HIGH CONTRAST (the shipped default) gives every .hud-box its dark plate at (1,2,0), which turned the light POS
+   cell dark under its dark ink: "22/22" at ~1.06:1 (UI hunt #3). The hero cell keeps its light plate. */
+:root[data-ui-contrast="high"]:has(> body:not(.hud-prof-broadcast)) #hud-box-pos { background: var(--hud-ink-light); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower); }
