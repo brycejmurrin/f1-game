@@ -725,6 +725,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
+| **ci/preflip-probe.mjs** | Pre-flip probe: merge the deploy tip into a PR head in a temp worktree, run ratchets + fixture audit + diff units. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
 | **ci/queue-depth.mjs** | Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
@@ -785,7 +786,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
 | **perf/baselines/hot-bench.json** | `perf/hot-bench.mjs`, `tests/unit/perf-hot-bench.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
-| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
+| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `ci/tooling-fast.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

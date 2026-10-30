@@ -1104,6 +1104,16 @@
       ]
     },
     {
+      "path": "tools/ci/preflip-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/process-dashboard.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
