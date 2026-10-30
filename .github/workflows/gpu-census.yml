@@ -682,6 +682,7 @@ jobs:
             census-*.json
             game-*.json
             game-*.png
+            game-*.webm
           if-no-files-found: warn
           retention-days: 7
 
