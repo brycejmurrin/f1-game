@@ -12,7 +12,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 /** First match wins; `fix` is a literal command, or a note when no command can repair it. */
 export const HINTS = [
   { re: /ratchet|assert-?pin|ceiling|shrink|slack/i,
-    fix: "node tools/check/ratchets.mjs --update --lower-only   (a count that FELL is snapped down); a count that GREW: shrink it, or --update --fragment --reason=\"<why>\"" },
+    fix: "npm run precommit:fix   (= ratchets.mjs --update --lower-only, then npm run gen: a count that FELL is snapped down); a count that GREW: shrink it, or --update --fragment --reason=\"<why>\"" },
   { re: /groups\.json|gen:check|@gen-shell|generated|drift|TESTING\.md/i, fix: "npm run gen   (then stage the regenerated files)" },
   { re: /merge hygiene|conflict marker|<<<<<<</i, fix: "resolve the marker, then re-stage; check `git diff --cached --check`" },
   { re: /docs-integrity|docs\/|\.md\b/i, fix: "node --test tests/unit/docs-integrity.test.mjs   (first failing line names the file)" },

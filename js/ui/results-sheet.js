@@ -90,22 +90,31 @@ function seasonTable(cars, season) {
 }
 function seatColor(G, c) { return c.team && c.team.color ? G.cssCol(c.team.color) : "#555"; }
 
-// Bring the player's classification row into the sheet body after open. Sticky
-// top alone only helps once the row has scrolled past the fold — on open a
-// mid/back-field finish still sits below #results-table (landscape 844x390).
-// Double-rAF: endRace shows #results after buildResults returns.
-function revealYouRow(table) {
-  if (!table || typeof table.querySelector !== "function") return;
-  const you = table.querySelector(".res-row.you");
-  if (!you || typeof you.scrollIntoView !== "function") return;
-  const run = () => { try { you.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) { /* jsdom */ } };
-  if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(() => requestAnimationFrame(run));
-  } else if (typeof setTimeout === "function") {
-    setTimeout(run, 0);
-  } else {
-    run();
+// OPEN AT THE TOP. This used to scrollIntoView the player's row, which on an
+// 844x390 phone opened the sheet ~1260px down with the podium and the winner
+// off-screen. The ranking list's .res-row.you sticks to BOTH edges of the
+// scroller (css/overlays.css), so it shows once its list is in view without
+// moving the sheet. Double-rAF: endRace shows #results after buildResults returns.
+function resultsAtTop(table) {
+  if (!table) return;
+  const run = () => { table.scrollTop = 0; };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(run));
+  else run();
+}
+// "P1 <CODE>" beside the title: in the head, outside the scroller, so the
+// winner is on screen at open. Hidden on the TT and champion views.
+function winnerChip(els, code) {
+  const head = els.resultsTitle && els.resultsTitle.parentElement;
+  if (!head) return;
+  let chip = head.querySelector("#res-winner");
+  if (!chip && code) {
+    chip = document.createElement("span");
+    chip.id = "res-winner";
+    head.appendChild(chip);
   }
+  if (!chip) return;
+  chip.hidden = !code;
+  chip.textContent = code ? tr("results.winnerChip", { code }, "P1 {code}") : "";
 }
 
 function rankingList(container, label) {
@@ -533,7 +542,8 @@ function buildResults(order, race) {
       els.resultsTable.appendChild(hint);
     }
   }
-  revealYouRow(els.resultsTable);
+  winnerChip(els, order.length && !dnfOf(order[0]) ? order[0].code || "" : "");
+  resultsAtTop(els.resultsTable);
 }
 
 function buildTTResults() {
@@ -545,6 +555,7 @@ function buildTTResults() {
   els.resultsTitle.style.color = "";
   if (els.resMenu) els.resMenu.textContent = tr("results.menu", null, "MENU");   // a friend race's NEW FRIEND ROOM label must not outlive it
   els.resultsTitle.textContent = tr("results.ttTitle", { track: track.def.name }, "{track} — TIME TRIAL");
+  winnerChip(els, "");
   const best = G.player.best;
 
   // headline: your best lap this session (green if it set a new track record)
@@ -843,6 +854,7 @@ function buildChampion() {
   const champ = sorted[0];
   const champColor = seatColor(G, champ);
   els.resultsTitle.textContent = tr("results.worldChampion", null, "WORLD CHAMPION");
+  winnerChip(els, "");
   els.resultsTitle.style.color = champColor;
   els.resultsTable.textContent = "";
   const banner = document.createElement("div");

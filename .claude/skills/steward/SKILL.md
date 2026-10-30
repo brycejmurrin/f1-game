@@ -5,7 +5,7 @@ description: "Use when you own, pick up or are handed a PR, or a PR or the deplo
 
 # Driving a PR to green in Apex 26
 
-This file is the OVERRIDES, not the protocol: everything not listed here is `AGENTS.md` and `docs/WORKERS.md`.
+This file is the OVERRIDES, not the protocol: everything not listed here is `AGENTS.md` and skill `worker` (the lane contract; shared reference `docs/WORKERS.md`).
 Routes: failed-CI triage → agent `ci-red-triage`; pre-push validation → skill `check-changes`; live `version.json`
 or anything on github.io → agent `deploy-research` (the only route there); review, hunt or survey findings on the
 PR → agent `finding-verifier` before you fix any of them.
@@ -63,13 +63,13 @@ PR → agent `finding-verifier` before you fix any of them.
    --failures-only` (`--pages` after a deploy-branch push). Live means your commit is an ANCESTOR of the live
    `apex-sha` (agent `deploy-research`). Detail: `references/ci-verdicts.md`.
    If `subscribe_pr_activity` fails, keep one background `ci-watch.mjs --sha <head> --timeout 30` and tell the dispatcher
-   (docs/WORKERS.md §The contract item 4).
+   (skill `worker`, contract item 4).
 8. **CI wake** — re-read `headRefOid`, then `ci-watch --once`, and act on the verdict: `references/ci-verdicts.md`
    (also the `gate` commit status, which ci-watch never shows).
 9. **Host-neutral watch** — ownership is the claim comment plus `claimed`, or the Hand-off `owner:` line; watch per
    host (docs/WORKERS.md §4 and §Per vendor). Without a subscription: `references/host-watch.md`. Record missing
    capabilities as unverified.
-10. **Sweeping many PRs** is the dispatcher's job (docs/WORKERS.md §The dispatcher). A session reads
+10. **Sweeping many PRs** is the dispatcher's job (skill `dispatcher`). A session reads
     `node tools/ci/pr-board.mjs --json` (read-only; exit 3 = no token) to find who owns a red (§3); it does not
     sweep, disarm or take over another lane's PR.
 11. **Browser runs** — `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10.

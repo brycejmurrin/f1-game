@@ -545,11 +545,22 @@ const GLXPost = (function () {
     // framebuffer takes gl.COLOR, an FBO gl.COLOR_ATTACHMENT0 (WebGL2 §5.14).
     const _INV_COLOR = [gl.COLOR_ATTACHMENT0], _INV_DEFAULT = [gl.COLOR], _INV_DEPTH = [gl.DEPTH_ATTACHMENT];
     const _canInvalidate = typeof gl.invalidateFramebuffer === "function";
+    // DEFAULT-FRAMEBUFFER INVALIDATION IS OFF ON WEBKIT. Safari's WebGL maps the default
+    // framebuffer onto an internal FBO, and invalidating it is the one GLX path TLX never
+    // takes. WebKit 280799 (Safari 18: first frame, then a black canvas; fixed 18.2) is
+    // the shape of the iPhone "GLX shows black" report. The cost is a DEPTH store hint
+    // (alpha:false already turns the COLOR invalidate into an ANGLE no-op). FBO targets
+    // keep theirs. Device A/B: patch WebGL2RenderingContext.prototype.invalidateFramebuffer
+    // from Web Inspector (docs/notes/PERF-HUNT-8-2026-10-30.md).
+    const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+    const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
+    const _invFbo = _canInvalidate;
+    const _invDefault = _invFbo && !_webkit;
     function bindOverwrite(fbo) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       // A clipped output viewport is a SUBSET of a shared target (XR layer).
       // DontCare on the whole attachment would wipe the sibling eye.
-      if (_canInvalidate && !(core.outputClipped && core.outputClipped())) {
+      if ((fbo ? _invFbo : _invDefault) && !(core.outputClipped && core.outputClipped())) {
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, fbo ? _INV_COLOR : _INV_DEFAULT);
       }
     }
@@ -634,9 +645,9 @@ const GLXPost = (function () {
         // The multisampled surfaces are consumed — discard them so a tiled (mobile)
         // GPU never writes them back to memory (MDN WebGL best-practice; big
         // bandwidth/tile-store win, esp. for the multisampled DEPTH).
-        if (gl.invalidateFramebuffer) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
+        if (_invFbo) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
-      } else if (!needDepth && _canInvalidate && sceneFBO) {
+      } else if (!needDepth && _invFbo && sceneFBO) {
         // Direct path (no MSAA — every phone): nothing below samples sceneDepth
         // this frame (auto-tier 4 night sheds AO, contact, godray, SSR and
         // flare together), and the scene pass is still open on sceneFBO, so
@@ -1114,11 +1125,11 @@ const GLXPost = (function () {
       // storing depth back to memory each frame — pure bandwidth/tile-memory saving
       // with no visual effect. sceneDepth was already consumed by SSAO/SSR/god-ray
       // above; the default framebuffer's depth is unused (post is a fullscreen blit).
-      if (gl.invalidateFramebuffer) {
+      if (_invFbo) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
-        if (core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
+        if (_invDefault && core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
       }
 
       core.gpuTimerEnd();

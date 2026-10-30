@@ -219,14 +219,9 @@ body[data-hl-set="cockpit"]:not(.desktop) :is(#hud-energy, #hud-tyre, #hud-ot, #
    back the moment the player places it. */
 body[data-hl-set="helmet"]:not(.desktop) :is(#hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
 
-/* The floating speed used to come back below 900×600: the wheel LCD measured
-   a few pixels at 844×390, so a phone in cockpit (the touch default) lost the
-   number. A later pass at 852×393 shows the LCD digits AND the floating
-   speed both readable — two speeds. The LCD keeps the read on cockpit
-   (body.cockpit-cam, every viewport). CLASSIC / NONE have no LCD
-   (no data-wheel-lcd, and cockpit-cam stays off), so they keep the chip.
-   HELMET still paints GEAR on the visor (HELMET_TOUCH, the opaque pill).
-   Its floating SPEED is the same duplicate once the wheel has an LCD, so
-   it hides too — a placed SPEED (data-hl-user) still shows. */
-body[data-helmet-cam][data-wheel-lcd]:not(.desktop) #hud-speed:not([data-hl-user]) { display: none; }
+/* The wheel LCD keeps the speed read on COCKPIT (body.cockpit-cam, every
+   viewport): its digits project ~16 CSS px at 844×390. HELMET keeps the
+   floating SPEED: its touch GEAR pill (HELMET_TOUCH, plate-opaque) sits on
+   the wheel screen and covers the LCD's speed digits, so hiding the chip
+   left the shipped default camera with no speed at all (UI-HUNT-2-HUD). */
 } /* @layer overlays */
