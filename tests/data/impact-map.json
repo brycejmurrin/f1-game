@@ -251,6 +251,7 @@
     "js/audio/announcer.js": {
       "create": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/pause-silence.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
