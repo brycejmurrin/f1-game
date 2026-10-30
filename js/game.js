@@ -5369,11 +5369,11 @@ function updateCarBrakePlan(c, dt, ranked, S) {
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/physics/ai-drive.js.
+    const look = clamp(c.speed * 1.7, 30, 160);
+    AiDrive.beginLook();
     let kMax = 0;
     // The ?lab=aiLod far car reuses last step's corner plan on alternate steps (AiDrive.lodLab); traffic below still runs.
     if (aiLod && aiLod.skip(c, player, pits.inLane(c), blockerGap, unstuckActive)) { braking = aiLod.braking(c); brakeLvl = aiLod.level(c); kMax = aiLod.kMax(c); } else {
-    const look = clamp(c.speed * 1.7, 30, 160);
-    AiDrive.beginLook();
     // ON THE LINE the brake target reads the PATH's curvature (TrackLine.pathK:
     // the larger radius the line buys), off it the road's — so a car fighting
     // off-line is slower through the corner, as a real one is.
