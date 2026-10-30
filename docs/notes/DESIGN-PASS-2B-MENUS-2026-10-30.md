@@ -51,8 +51,23 @@ The garage, the career hub and the settings index were the three worst, and got 
 ## Not changed, proposals
 - `css/tokens.css` (lane 2d): none needed by this lane. The cyan `#4df` upgrade colour is a raw literal in
   `carsetup.css`; a token (`--upgrade`) would let the HUD and garage share it.
+- `--dim` text that carries meaning in this lane's screens (for lane 2d's proposed lift to about #b4b4c2,
+  APCA Lc 62, `UI-DESIGN-RESEARCH-2026-10-30.md`): the career hub meter labels (BALANCE, REPUTATION,
+  ROUND), the garage comparison note ("Fitted · inspect…"), the settings search hint and its match count.
+  Not worked around per file.
+- Second cue for colour states: the garage upgrade mark is an underline present only on upgraded tabs, so it
+  reads without its hue; the active tab keeps its plate and red edge.
+- Text size: APPEARANCE's door already names "UI size"; no change needed for the adjustable-text ask.
 - APPEARANCE (15.7 screens): its length is the per-screen look matrix; a later pass could collapse each
   screen's looks into a disclosure. Not attempted here.
 
-## Before / after
-Filled in from the after-run: shots in the gallery, `layout-audit --diff` verdict in the PR body.
+## Before / after (844x390, measured by `scratch/design-2b/capture.mjs`)
+| screen | before | after | px moved |
+|---|---|---|---|
+| garage | comparison card 131 px of a 209 px list; upgraded tabs in cyan ink | card 65 px; white labels, 3 px cyan underline | 9.9 % |
+| settings index | 2 of 10 doors fully on screen | 6 of 10 | 7.0 % |
+| career hub | header 127 px; 4 of 5 jump chips; team name in rgb(218,41,28) | header 95 px; 5 of 5; white ink after a team stripe | 25 % |
+
+`layout-audit --diff=audit.before.json` after the build: `= diff ok: 25 cells compared, 0 new, 0 fixed, 0 skipped`.
+Every tab, chip and door stays at 52 px or more. `menu-baseline.spec.js` goldens re-blessed in the same PR
+(the garage moves on both shapes).
