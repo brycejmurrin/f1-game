@@ -15992,7 +15992,8 @@
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/three-inspector.test.mjs"
+        "tests/unit/three-inspector.test.mjs",
+        "tests/unit/tool-hook-fixes.test.mjs"
       ]
     },
     "js/share/share-card-chips.js": {

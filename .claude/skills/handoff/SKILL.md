@@ -28,7 +28,7 @@ Two audiences, two endings (steps 1–2 are shared):
    `git ls-remote origin refs/heads/<branch>` shows `git rev-parse HEAD`.
 2. **Facts**: `node tools/ci/session-status.mjs --summary --pr` for branch/PR/CI state (its Markdown feeds
    `verified:` / `not-run:`; it is not the Hand-off block). Read the PR body for its Plan and Next step with
-   GitHub MCP `pull_request_read` (or `gh pr view <n> --json body`). No PR yet → open a DRAFT PR (`/ship`
+   GitHub MCP `pull_request_read` (or `gh api repos/brycejmurrin/f1-game/pulls/<n> -q .body`). No PR yet → open a DRAFT PR (`/ship`
    step 1): the body is the durable log. Refresh its Plan and the ` ```handoff ` fence (docs/WORKERS.md §The
    Hand-off block: branch, head, owner, lane, verified, not-run, next) with `update_pull_request`.
 3. **The prompt**, in this order:
