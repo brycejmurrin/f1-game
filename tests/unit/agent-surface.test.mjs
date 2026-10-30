@@ -247,7 +247,7 @@ test("MCP descriptions state tree vs browser", () => {
 const AGENT_KEYS = new Set([
   // Claude Code sub-agents
   "name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns",
-  "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "isolation", "color",
+  "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "background", "isolation", "color",
   "initialPrompt",
   // Cursor subagents
   "readonly", "is_background",
@@ -255,7 +255,7 @@ const AGENT_KEYS = new Set([
 const SKILL_KEYS = new Set([
   // Claude Code skills
   "name", "description", "allowed-tools", "model", "context", "agent", "hooks", "paths",
-  "user-invocable", "disable-model-invocation", "when_to_use", "argument-hint", "effort",
+  "user-invocable", "disable-model-invocation", "when_to_use", "argument-hint", "effort", "background",
   // Agent Skills spec (agentskills.io)
   "license", "compatibility", "metadata",
 ]);

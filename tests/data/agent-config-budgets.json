@@ -1,12 +1,12 @@
 {
-  "_comment": "2026-10-30: chars 11000 -> 12300 (+1.3k) and words 1500 -> 1750 for skills worker, dispatcher, challenge, orchestrate; Bryce grant (quoted relay via the dispatcher, 2026-10-30 ~10:18Z, answering may the next PR raise the skill-description budget by ~1.3k chars): Raise it ~1.3k (Recommended). Size/word budgets for the always-on agent surface, read by tests/unit/agent-config.test.mjs. Raise a number WITH the reason, like tests/data/ratchets.json. Evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md, docs/notes/AGENT-GUARDS-2026-10-14.md. Lowered 2026-10-26 (system audit, PR #3785): 8 skills folded or deleted and 8 descriptions trimmed took 45 skills / 12,586 chars / 1,689 words to 37 / 10,213 / 1,383; the caps keep ~8% headroom.",
+  "_comment": "2026-10-30: the skill description sums skip disable-model-invocation skills (their description is not in context: code.claude.com/docs/en/skills), so challenge and orchestrate need no raise; Bryce's ~1.3k raise grant (quoted relay via the dispatcher, 2026-10-30 ~10:18Z: Raise it ~1.3k (Recommended)) stays unused. Size/word budgets for the always-on agent surface, read by tests/unit/agent-config.test.mjs. Raise a number WITH the reason, like tests/data/ratchets.json. Evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md, docs/notes/AGENT-GUARDS-2026-10-14.md. Lowered 2026-10-26 (system audit, PR #3785): 8 skills folded or deleted and 8 descriptions trimmed took 45 skills / 12,586 chars / 1,689 words to 37 / 10,213 / 1,383; the caps keep ~8% headroom.",
   "agentsMdLines": 200,
   "agentsMdRuleLines": 75,
   "fleetCoreLines": 30,
   "fleetCoreBytes": 2048,
   "memoryIndexLines": 200,
-  "skillDescriptionWords": 1750,
-  "skillDescriptionChars": 12300,
+  "skillDescriptionWords": 1500,
+  "skillDescriptionChars": 11000,
   "skillDescriptionCharsEach": 1024,
   "agentsMdBytes": 28500,
   "agentsChainBytes": 31000

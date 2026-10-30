@@ -701,9 +701,11 @@ test("the always-on instruction surface stays inside its budget", () => {
     const { fm } = stripFrontmatter(read(`.claude/skills/${d.name}/SKILL.md`));
     // Measure the described surface, not YAML keys, name fields or scalar
     // quoting/folding syntax. Parsing also refuses malformed descriptions.
-    const description = parseYAML(fm)?.description;
+    const parsed = parseYAML(fm);
+    const description = parsed?.description;
     assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
-    descWords += description.split(/\s+/).filter(Boolean).length;
+    // user-only skills (disable-model-invocation) are not in context: see the budgets file comment
+    descWords += parsed["disable-model-invocation"] === true ? 0 : description.split(/\s+/).filter(Boolean).length;
   }
   // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
   // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
@@ -758,10 +760,11 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
     .map((f) => f.replace(/\.md$/, ""));
   let chars = 0;
   for (const name of skills) {
-    const desc = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm).description;
+    const meta = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm);
+    const desc = meta.description;
     // The Agent Skills spec caps a description at 1,024 characters.
     assert.ok(desc.length <= BUDGET.skillDescriptionCharsEach, `${name}: description is ${desc.length} chars (spec max ${BUDGET.skillDescriptionCharsEach})`);
-    chars += desc.length;
+    if (meta["disable-model-invocation"] !== true) chars += desc.length; // user-only: not always-on
     for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
       assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
     assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
