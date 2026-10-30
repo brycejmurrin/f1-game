@@ -16294,8 +16294,14 @@
       ]
     },
     "js/track/core/spline.js": {
+      "curvature": [
+        "tests/unit/lsp-mcp.test.mjs"
+      ],
       "postLimits": [
         "tests/unit/track-spline-walls.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/lsp-mcp.test.mjs"
       ],
       "wallAt": [
         "tests/unit/track-spline-walls.test.mjs"
@@ -17507,6 +17513,7 @@
         "tests/unit/hud-portrait-cluster.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-tests.test.mjs",
