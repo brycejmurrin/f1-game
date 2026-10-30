@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -527,4 +527,18 @@ test("the census sizes WebGL2 uploads from the call's own arguments (hunt 4 §A 
   assert.equal(GL.texSubImage2D([0, 0, 0, 0, 8, 8, 0, 0, new Uint8Array(256)]), 256);
   assert.equal(GL.texImage3D([0, 0, 0, 4, 4, 2, 0, 0, 0, new Uint8Array(128)]), 128);
   assert.equal(GL.texSubImage3D([0, 0, 0, 0, 0, 4, 4, 3, 0, 0, { width: 4, height: 4 }]), 4 * 4 * 3 * 4, "image source per layer at 4 B/texel");
+});
+
+test("analyseMirrorChurn turns both-end mirror and churn reads into per-frame rates, and says when a read failed (GPU hunt 3)", () => {
+  const a = { drawn: 100, glass: 99, renders: 400, allocs: 2, quality: "full", churn: { poolNew: 10, streamNew: 1 } };
+  const b = { drawn: 300, glass: 299, renders: 36, allocs: 3, quality: "lite", churn: { poolNew: 30, streamNew: 1 } };
+  const m = analyseMirrorChurn(a, b, 200);
+  assert.equal(m.drawnPerFrame, 1); assert.equal(m.glassPerFrame, 1);
+  assert.equal(m.allocs, 1);
+  assert.equal(m.rendersPerFrame, null, "a backend counter that restarted is no rate");
+  assert.deepEqual(m.quality, ["full", "lite"]);
+  assert.deepEqual(m.churnPerFrame, { poolNew: 0.1, streamNew: 0 });
+  assert.equal(analyseMirrorChurn({ ...a, renders: 0 }, { ...b, renders: 100 }, 200).rendersPerFrame, 0.5);
+  assert.equal(analyseMirrorChurn({ error: "timeout" }, b, 200).note, "mirror/churn read failed: timeout");
+  assert.equal(analyseMirrorChurn(a, b, 0).note, "no window frames");
 });

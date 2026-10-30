@@ -104,7 +104,8 @@ functions and slots, with no new localStorage key.
 - Frames in the window differ (377 → 534); every row is per frame.
 - fps is a paravirtual-runner number (PP-19) and is not quoted.
 
-WORKER-C-PLACEHOLDER
+Worker C (the TLX exact-zero shader gates) shipped nothing in this PR; the gates moved to #4272 item 5 and GPU hunt 3
+(`PERF-GPU3-2026-10-30.md`).
 
 ## Not run / limits
 

@@ -1659,3 +1659,21 @@ async function main() {
   if (opts.json) { mkdirSync(dirname(opts.json), { recursive: true }); writeFileSync(opts.json, json); }
   console.log(json);
 }
+
+// GPU hunt 3: the mirror and TLX churn counters read at both ends of the armed window (gpu-game-check
+// readMirChurn), as per-frame rates. `drawn` is mirror-pass's own pass count (backend-neutral);
+// `renders` restarts at 0 when WGX/GLX re-allocate the target, so a negative delta is a re-allocation,
+// counted by `allocs` where the backend reports it. A read that failed on either end reports why.
+export function analyseMirrorChurn(a, b, frames) {
+  if (!a || !b || a.error || b.error) return { note: "mirror/churn read failed: " + ((a && a.error) || (b && b.error) || "missing") };
+  if (!(frames > 0)) return { note: "no window frames" };
+  const d = (k) => (typeof a[k] === "number" && typeof b[k] === "number" ? b[k] - a[k] : null);
+  const rate = (v) => (v == null ? null : +(v / frames).toFixed(3));
+  const out = { frames, quality: [a.quality, b.quality], drawnPerFrame: rate(d("drawn")), glassPerFrame: rate(d("glass")),
+    allocs: d("allocs"), rendersPerFrame: d("renders") != null && d("renders") >= 0 ? rate(d("renders")) : null };
+  if (a.churn && b.churn) {
+    out.churnPerFrame = {};
+    for (const k of Object.keys(b.churn)) if (typeof a.churn[k] === "number") out.churnPerFrame[k] = rate(b.churn[k] - a.churn[k]);
+  }
+  return out;
+}

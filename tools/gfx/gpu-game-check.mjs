@@ -42,7 +42,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
 import { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
@@ -281,6 +281,17 @@ try {
     // runner pays ~11 stacks a frame, not ~90; out.uploads ranks the sites by KB. Random, not every 8th call: a
     // frame whose call count is a multiple of 8 would sample the same call sites every frame and never the rest.
     const UP_EVERY = 8, _hUp = new Map();
+    // GPU hunt 3: EVERY armed writeBuffer by its buffer's group (three labels a uniform buffer
+    // "bindingBuffer<id>_<group>_(stages)"; the id is per buffer, so the sampled rows above scatter one
+    // group over hundreds of keys and the top-60 cut drops most of it). Exact, unsampled; unlabeled = "(none)".
+    const _hUpGroup = new Map();
+    const _upGroup = (bytes, buf) => {
+      if (!_hArmed) return;
+      const l = (buf && buf.label) || "", k = l ? l.replace(/^bindingBuffer\d+_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
+      const r = _hUpGroup.get(k) || { n: 0, b: 0 };
+      r.n++; r.b += bytes;
+      _hUpGroup.set(k, r);
+    };
     const _upNote = (kind, kb, buf) => {
       if (!_hArmed || Math.random() * UP_EVERY >= 1) return;
       let site = "?", lib = "";
@@ -407,6 +418,7 @@ try {
             const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
             _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
             _upNote("writeBuffer", Math.max(0, bytes) / 1024, buffer);
+            _upGroup(Math.max(0, bytes), buffer);
           } catch (_) { /* the count stands without the size */ }
           const t = performance.now();
           try { return origWB.apply(this, arguments); } finally { _bumpWorkN("gpu.writeBufferMs", performance.now() - t); }
@@ -647,7 +659,7 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hUpGroup.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
@@ -661,7 +673,9 @@ try {
                        workFrames: _hWorkFrames,
                        stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30),
                        uploads: [..._hUp.entries()].map(([k, r]) => ({ site: k, n: r.n, kb: +r.kb.toFixed(1) }))
-                         .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60) }),
+                         .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60),
+                       uploadGroups: [..._hUpGroup.entries()].map(([g, r]) => ({ group: g, n: r.n, kb: +(r.b / 1024).toFixed(2) }))
+                         .sort((a, b) => b.n - a.n) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -1057,6 +1071,18 @@ try {
     const s = t.postState();
     return s ? Object.assign({ on: s.on !== false }, s.depth || {}) : null;
   }), 10000, "depth-read");
+  // GPU hunt 3: the mirror's and the TLX churn counters at BOTH ends of the armed window. The
+  // backends' mirror `renders` is reset by a target re-allocation on WGX and GLX (a lifetime count
+  // on TLX), so one end-of-window read cannot compare cadence across legs; the deltas can.
+  const readMirChurn = () => bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    let m = null, c = null;
+    try { m = A.mirror ? A.mirror() : null; } catch (_) { /* no mirror pass */ }
+    try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const s = t && t.memState ? t.memState() : null; c = s && s.churn ? Object.assign({}, s.churn) : null; } catch (_) { /* not TLX */ }
+    const b = (m && m.backend) || {};
+    return { drawn: m ? m.drawn : null, quality: m ? m.quality : null, renders: b.renders, glass: b.glass, allocs: b.allocs, churn: c };
+  }), 10000, "mirror-churn-read").catch((e) => ({ error: String((e && e.message) || e).slice(0, 80) }));
+  const _mc0 = await readMirChurn();
   const _depth0 = await readDepth();
   try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
   // WHERE THE CPU TIME GOES over the same window, by function. Census 201
@@ -1160,6 +1186,7 @@ try {
   // The driven window ends with the last beat (hunt 4 I4).
   await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
   const _depth1 = await readDepth();
+  const _mc1 = await readMirChurn();
   // WHICH CAMERA THE WINDOW DROVE, and the mirror it left (hunt 4 H5): the
   // director or a cut could have moved it, and mipFull says whether the
   // cockpit glass latched the full chain. backend fields per gfx.mirrorState().
@@ -1232,6 +1259,11 @@ try {
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
     out.uploadsSummary = analyseUploads(out.uploads, out.window && out.window.frames);
+    out.mirrorWindow = analyseMirrorChurn(_mc0, _mc1, out.window && out.window.frames);
+    // GPU hunt 3: writeBuffer per frame by buffer group, every call counted (not sampled).
+    { const f = out.window && out.window.frames;
+      out.uploadGroups = f > 0 && d.uploadGroups ? d.uploadGroups.map((r) => ({ group: r.group, nPerFrame: +(r.n / f).toFixed(2), kbPerFrame: +(r.kb / f).toFixed(3) }))
+        : { note: "no writeBuffer groups recorded" }; }
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
     // made against the rest.

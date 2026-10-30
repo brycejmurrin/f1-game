@@ -161,6 +161,17 @@ test("a leg with an upload summary prints one uploads: row, its classes, and at 
   assert.equal(legReport("webgpu", tlx(), { hardware: true }).rows.filter((r) => /^\s+uploads: /.test(r)).length, 0, "no summary, no row");
 });
 
+test("a leg prints one ugroups: row and one mirror: row when the census carries them (GPU hunt 3)", () => {
+  const uploadGroups = [{ group: "object", nPerFrame: 60.2, kbPerFrame: 6.6 }, { group: "render", nPerFrame: 20, kbPerFrame: 2.7 }];
+  const mirrorWindow = { frames: 500, quality: ["lite", "lite"], drawnPerFrame: 1, glassPerFrame: 1, rendersPerFrame: 1, allocs: 0, churnPerFrame: { poolNew: 0.2 } };
+  const { rows } = legReport("webgpu", tlx({}, { uploadGroups, mirrorWindow }), { hardware: true });
+  assert.deepEqual(rows.filter((r) => /^\s+ugroups: /.test(r)).map((r) => r.trim()), ["ugroups: object 60.2/f 6.6KB | render 20/f 2.7KB"]);
+  assert.deepEqual(rows.filter((r) => /^\s+mirror: /.test(r)).map((r) => r.trim()),
+    ["mirror: drawn 1/f glass 1/f renders 1/f allocs 0 rung lite>lite churn poolNew=0.2/f"]);
+  const bare = legReport("webgpu", tlx(), { hardware: true }).rows;
+  assert.equal(bare.filter((r) => /^\s+(ugroups|mirror): /.test(r)).length, 0, "no data, no rows");
+});
+
 test("TLX off the direct present path fails a hardware run while the native pin is in force (promoted 2026-10-14)", () => {
   const blit = { backendState: { ...tlx().gfx.backendState, softBlit: true } };
   let r = run({ legs: healthy({ webgpu: tlx(blit) }) });

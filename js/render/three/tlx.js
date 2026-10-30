@@ -1514,6 +1514,7 @@ const TLX = (function () {
       function prepareMirrorTarget(w, h, forWarm) {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         const lv = _mirLevels(w, h);
+        if (!mirRT || mirRT.width !== w || mirRT.height !== h || lv > _mirLevelsNow(w, h)) prepareMirrorTarget.allocs = (prepareMirrorTarget.allocs | 0) + 1;   // census: WGX/GLX's renders restart on one
         if (!mirRT) {
           mirRT = _mirTarget(post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType, w, h, _mirMrtWant());
           _mirSetLevels(lv, w, h);
@@ -5757,7 +5758,7 @@ const TLX = (function () {
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
-            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders,
+            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders, allocs: prepareMirrorTarget.allocs | 0,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
         },
