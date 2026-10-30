@@ -12887,6 +12887,7 @@
       "apply": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/damage.test.mjs",
+        "tests/unit/net-authority.test.mjs",
         "tests/unit/race-control.test.mjs"
       ],
       "beginLineStep": [

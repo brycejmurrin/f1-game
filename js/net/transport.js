@@ -649,7 +649,7 @@ const NetTransport = (function () {
     if (typeof NetNostr === "undefined" || !NetNostr.available()) return null;
     return {
       offer: (code, sdp, token) => NetNostr.directExchange({ code, send: sdp, token }),
-      answer: (code, reply, token) => NetNostr.directExchange({ code, reply, token }),
+      answer: (code, reply, token) => NetNostr.directExchange({ code, reply, token, listen: true }),
     };
   }
 

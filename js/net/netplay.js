@@ -167,9 +167,13 @@ const NetPlay = (function () {
     const peerKind = (peer) => SpectatePolicy.kind(peer);
     let epoch = null;
     function broadcastStrategy(data) {
+      // Serialised ONCE: each receiver's copy differs only by its epoch, spliced on the end.
+      let head = null;
       for (const [id, s] of sessions) {
         const to = peerEpochs.get(id);
-        if (to) { try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }); } catch (e) { /* peer closed */ } }
+        if (!to) continue;
+        if (head === null) head = JSON.stringify(data).slice(0, -1) + ',"epoch":';
+        try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }, head + JSON.stringify(to) + "}"); } catch (e) { /* peer closed */ }
       }
     }
     const sessionList = () => [...sessions.values()];
@@ -577,7 +581,7 @@ const NetPlay = (function () {
             const fromHost = (role === "guest" || role === SpectatePolicy.SPECTATOR) && s === session;
             const r = remotes.get(d.wire) || (fromHost ? aiRemotes.get(d.wire) : null);
             const authorized = fromHost || (role === "host" && remoteFor(id) === d.wire);
-            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track));
+            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track, d.tyreLog === undefined));
           }
           if (name === EV.BYE) {
             lastReason = "bye";
@@ -1192,7 +1196,7 @@ const NetPlay = (function () {
         // retired car per guest for the rest of the race, filling a frozen guest's EVENT_INBOX_CAP.
         lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
         lastFitted = fitted; lastNext = next; lastCompound = compound;
-        broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
+        broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id, !phaseChanged && !peerArrived));
         // Resend the host's terminal AI state with the existing reliable sync.
         // A guest may bind its race handlers after the original retirement.
         if (role === "host" && peerArrived) for (const c of G.cars || []) {
@@ -1207,10 +1211,11 @@ const NetPlay = (function () {
         const wire = G.wireId(c);
         if (c === localCar || wire < 0 || remotes.has(wire)) continue;
         let last = aiStrategyPhases.get(wire);
-        if (!last || peerArrived || now - last.at >= 1000 || c.tyreStints !== last.stints
+        const phase = !last || peerArrived || c.tyreStints !== last.stints
             || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
-            || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound) {
-          broadcastStrategy(strategyState(c, wire, G.track.def.id));
+            || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound;
+        if (phase || now - last.at >= 1000) {
+          broadcastStrategy(strategyState(c, wire, G.track.def.id, !phase));
           // Stagger the 1 Hz refresh: each AI car's phase is pushed LATER by its wire id, so the field's
           // ~21 payloads spread over the second instead of bursting in one frame, and no interval is
           // ever shorter than 1 s (perf hunt 4).
