@@ -117,8 +117,8 @@ elif name.endswith("__update_pull_request"):
     draft = ti.get("draft")
     falsy = draft is not None and draft is not True and str(draft).strip().lower() in ("false", "0", "no", "off", "")
     if falsy:
-        live = P.live_head(root, pr, ti.get("owner"), ti.get("repo"))
-        ok, why = P.receipt_check(root, "ready", pr, live, verify_files=True, require_head=True)
+        live, plan = P.live_state(root, pr, ti.get("owner"), ti.get("repo"))
+        ok, why = P.receipt_check(root, "ready", pr, live, verify_files=True, require_head=True, plan=plan)
         if not ok:
             decision, reason = "deny", P.DENY_GATE_READY + " (" + why + ")"
     if decision is None and str(ti.get("state") or "").strip().lower() == "closed":

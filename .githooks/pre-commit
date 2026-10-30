@@ -157,17 +157,26 @@ NODE
 then
   grep '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log >&2 || true
 else
-  echo "pre-commit: BLOCKED — ratchet check or auto-staging failed (artifacts/pre-commit-ratchets.log):" >&2
+  # Do NOT stop here: run the guard suite too, so every red surfaces in ONE pass
+  # (efficiency review 2026-10-30, finding 4). The verdict cache is skipped below.
+  RATCHET_RED=1
+  echo "pre-commit: ratchet check or auto-staging failed (artifacts/pre-commit-ratchets.log); running the guards too so every failure shows at once:" >&2
   tail -15 artifacts/pre-commit-ratchets.log >&2
-  exit 1
+  echo "pre-commit: ratchet fix: shrink the growing count, or \`node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"\` (a count that fell, or generated drift: \`npm run precommit:fix\`)." >&2
 fi
 # Verdict cache (#2889): a fresh green write-tree match skips the suite.
 # Printed on stdout so agents see the hit line; the suite log stays for misses.
-if node tools/ci/guards-verdict.mjs check; then
+if [ "${RATCHET_RED:-}" != 1 ] && node tools/ci/guards-verdict.mjs check; then
   echo "pre-commit: code commit — ratchets --auto-raise, then reused the green test:guards verdict for this staged tree." >&2
   exit 0
 fi
 require_index_worktree_match || exit 1
+# Every failing guard with its fix command, not the last 20 grep lines (finding 4).
+guards_red() {
+  echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Log: $LOG" >&2
+  node tools/ci/guards-report.mjs "$LOG"
+  [ $? = 1 ] || grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2   # rc 1 = it listed them
+}
 GUARD_TREE=$(git write-tree) || exit 1
 # Budget: git config apex.guardTimeout, then APEX_GUARD_TIMEOUT. When neither
 # is set, keep today's behaviour (no new default timeout in this githook).
@@ -189,16 +198,16 @@ if [ -n "${BUDGET:-}" ]; then
       echo "pre-commit: BLOCKED — npm run test:guards did not finish within ${BUDGET}s (apex.guardTimeout / APEX_GUARD_TIMEOUT). Retry on an idle box, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change. Log: $LOG" >&2
       exit 1
     fi
-    echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
-    grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
-    exit 1
+    guards_red; exit 1
   fi
 else
   if ! ( unset $(git rev-parse --local-env-vars); npm run --silent test:guards ) >"$LOG" 2>&1; then
-    echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
-    grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
-    exit 1
+    guards_red; exit 1
   fi
+fi
+if [ "${RATCHET_RED:-}" = 1 ]; then
+  echo "pre-commit: BLOCKED — the ratchet check failed (above); the guard suite itself was green." >&2
+  exit 1
 fi
 require_index_worktree_match || exit 1
 [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while guards ran." >&2; exit 1; }

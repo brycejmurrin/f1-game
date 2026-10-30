@@ -621,6 +621,11 @@
       "presentation": "native",
       "preserve": "Never reveal token or child auth stdout"
     },
+    "tools/ci/guards-report.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "stderr report (one block per failing guard with its fix line) and exit 1 when it listed any; the pre-commit hook reads that exit code"
+    },
     "tools/ci/guards-verdict.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -992,6 +997,16 @@
       "preserve": "@c2"
     },
     "tools/gen/blender/crew-choreo.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-camera-rigs.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-light-cues.py": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"

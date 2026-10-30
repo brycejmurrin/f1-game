@@ -180,3 +180,30 @@ test("gfx-debug obeys the file conventions", () => {
   assert.match(html, /src="js\/perf\/gfx-debug-overlay\.js\?v=[A-Za-z0-9._-]+"/,
     "new-file lockstep: a script tag in the shell (gen-shell writes it from the manifest)");
 });
+
+test("on GLX the overlay prints the post chain's verdict, so a dark-frame report says whether tonemapping ran (iPhone GLX report)", async () => {
+  const { bootGlx } = await import("../helpers/glx-mock.mjs");
+  const lineFor = (extensions) => {
+    const h = bootGlx({ extensions });
+    h.GLX.begin(h.frame());
+    const store = { getItem: () => null };
+    const sandbox = {
+      document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "webgl2", getContext: () => null } : null, querySelector: () => null },
+      location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+      GLX: { gpuErrors: () => 0, hdrMode: () => h.GLX.hdrMode(), msaa: () => h.GLX.msaa() },   // the real GLX readouts, no __tlx
+    };
+    sandbox.window = sandbox;
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: path.join(ROOT, "js/perf/gfx-debug-overlay.js") });
+    return vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-glx-post" });
+  };
+  const post = (ext) => {
+    const line = lineFor(ext).split("\n").find((l) => l.startsWith("post "));
+    return line ? Object.fromEntries(line.slice(5).split(" ").map((kv) => kv.split("="))) : null;
+  };
+  const half = post(["EXT_color_buffer_half_float"]);
+  assert.equal(half && half.hdr, "true", "half-float-only keeps the HDR chain (it lost it to an R11F bloom target before)");
+  assert.ok(half && Number.isFinite(+half.msaa), "the msaa count is a number");
+  assert.equal(post(["EXT_color_buffer_float"]).hdr, "true");
+  assert.equal(post([]).hdr, "false", "an 8-bit device says the tonemapped chain is off instead of saying nothing");
+});

@@ -433,8 +433,12 @@ def check(file, tool, ti, proposed=None, how=""):
         return
 
     # --- linked worktree: shared-contract files belong to the main session ----
-    gitdir = git("rev-parse", "--git-dir", cwd=d_)
-    common = git("rev-parse", "--git-common-dir", cwd=d_)
+    # Absolute both: from a subdirectory git prints --git-dir absolute and
+    # --git-common-dir relative ("../../.git"), so a text compare called the
+    # MAIN checkout a linked worktree for tools/manifest.cjs and
+    # tools/gen/gen-shell.mjs (2026-10-30). Same form as .githooks/pre-commit.
+    gitdir = git("rev-parse", "--path-format=absolute", "--git-dir", cwd=d_)
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=d_)
     if gitdir and common and gitdir != common and base in (
         "index.html", "manifest.cjs", "version.json", "sw.js", "roster.js",
         "gen-shell.mjs", "package.json", "package-lock.json", "playwright.config.js",

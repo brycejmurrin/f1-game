@@ -1128,56 +1128,59 @@
         // band strobe. Soft knee on the RAW footprint (same 0.10/0.55 as WGX).
         const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
         const base = max(edge, band.mul(dash)).toVar();
-
-        // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
-        // the road across the window, separated by a solid line. `through` uses
-        // the wrapped interval because the window straddles the start/finish
-        // line on every circuit.
-        const L = float(U.pitLane.w).toVar();
-        const lenM = float(U.pitLane.y).toVar();
-        const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
-        const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
-        const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
-        // WIDER than an edge line (0.20 against 0.10): the boundary is an
-        // instruction, not a hint about where the tarmac stops.
-        const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
-        const fadeIn = smoothstep(0.0, 2.0, through).toVar();
-        const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
-        const hasLane = select(lenM.greaterThan(0.0), float(1.0), float(0.0)).toVar();
-        const inWin = select(through.lessThanEqual(lenM), float(1.0), float(0.0)).toVar();
-        const gate = hasLane.mul(inWin).toVar();
-        // Everything on the pit side of the boundary — still branchless, and via
-        // select() rather than step(): step is NOT in this file's TSL destructure
-        // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
-        // failure mode the header warns about (boots clean, draws wrong). select
-        // is already the idiom two lines up.
-        const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
-        // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
-        // the very mark that says "the lane starts here" defeats the mark.
-        const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
-        // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
-        // it reads as a bay you park IN. Branchless throughout — select(), never
-        // step(), because step is not in this file's TSL destructure and a missing
-        // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
-        const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
-        const dBox = abs(through.sub(U.pitBox.x)).toVar();
-        const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
-        const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
-        const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
-                           smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
-        const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
-        const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(gate).mul(mip).toVar();
-        const pitFill = inLane.mul(fadeIn).mul(fadeOut).mul(gate).toVar();
-
         const m = base.mul(mip).toVar();
 
         albedo.assign(mix(albedo, vec3(0.95, 0.95, 0.97), m));
         rough.assign(mix(rough, 0.55, m));    // paint is smoother than tarmac
-        // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
-        // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
-        albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
-        albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
-        rough.assign(mix(rough, 0.55, pitLine));
+        // GLX's two branches (uniform y first, then the window): the skipped work
+        // mixes with weight exactly 0, and the bodies hold no derivative. w is the lap
+        // length (> 0; 1 when absent), so mod() never sees 0 (PitLane.laneUniform).
+        const lenM = float(U.pitLane.y).toVar();
+        If(lenM.greaterThan(0.0), () => {
+          // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
+          // the road across the window, separated by a solid line. `through` uses
+          // the wrapped interval because the window straddles the start/finish
+          // line on every circuit.
+          const L = float(U.pitLane.w).toVar();
+          const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
+          If(through.lessThanEqual(lenM), () => {
+            const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
+            const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
+            // WIDER than an edge line (0.20 against 0.10): the boundary is an
+            // instruction, not a hint about where the tarmac stops.
+            const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
+            const fadeIn = smoothstep(0.0, 2.0, through).toVar();
+            const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
+            // Everything on the pit side of the boundary — still branchless, and via
+            // select() rather than step(): step is NOT in this file's TSL destructure
+            // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
+            // failure mode the header warns about (boots clean, draws wrong). select
+            // is already the idiom two lines up.
+            const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
+            // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
+            // the very mark that says "the lane starts here" defeats the mark.
+            const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
+            // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
+            // it reads as a bay you park IN. Branchless throughout — select(), never
+            // step(), because step is not in this file's TSL destructure and a missing
+            // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
+            const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
+            const dBox = abs(through.sub(U.pitBox.x)).toVar();
+            const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
+            const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
+            const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
+                               smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
+            const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
+            const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(mip).toVar();
+            const pitFill = inLane.mul(fadeIn).mul(fadeOut).toVar();
+
+            // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
+            // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
+            albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
+            albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
+            rough.assign(mix(rough, 0.55, pitLine));
+          });
+        });
       });
       return vec4(albedo, rough);
     });
@@ -1493,10 +1496,13 @@
         const weave = float(0.5).toVar();
         const wvT = vec2(0.0).toVar();
         If(carbonFinish.or(carbonSurface), () => {
-          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
           const wvFade = clamp(vd.sub(10.0).div(10.0).oneMinus(), 0.0, 1.0).toVar();
-          weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
-          wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
+          // wvFade 0 (>= 20 m) leaves weave 0.5 / wvT 0 exactly; no derivative inside.
+          If(wvFade.greaterThan(0.0), () => {
+            const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+            weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+            wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
+          });
         });
         // FORGED CARBON (38): irregular chips faded to their mean 2/3 over 10-20 m (CarMaterialShade.FORGED; glsl-lit.js).
         const fgM = float(0.667).toVar();
@@ -2186,12 +2192,15 @@
             const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
-          // sun disc in the mirror: pow-400 lobe widened by the AA variance
-          const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
-          const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
-          envCC.addAssign(vec3(U.sunColor)
-            .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
-            .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
+          // sun disc in the mirror: pow-400 lobe widened by the AA variance. A finite
+          // term times carSunGlint 0 (the mirror pass, MIRROR_TUNE) adds exactly 0: skip it.
+          If(U.carSunGlint.notEqual(0.0), () => {
+            const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
+            const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
+            envCC.addAssign(vec3(U.sunColor)
+              .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
+              .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
+          });
           ccTrans.assign(envW.mul(0.94).oneMinus());
           color.mulAssign(ccTrans);                             // absorb under the mirror
           const addCC = envCC.mul(envW).toVar();

@@ -64,6 +64,18 @@ test("protect-files: a branch switch is not a generated-file edit; a file checko
   }
 });
 
+test("protect-files: the MAIN checkout may edit shared-contract files under a subdirectory", () => {
+  // git prints --git-dir absolute but --git-common-dir relative ("../../.git")
+  // from tools/gen/; the text compare read that as a linked worktree (2026-10-30).
+  const edit = (file) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], {
+    input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, file), old_string: "a", new_string: "b" } }),
+    encoding: "utf8", cwd: ROOT });
+  for (const f of ["tools/gen/gen-shell.mjs", "tools/manifest.cjs"]) {
+    const r = edit(f);
+    assert.equal(r.status, 0, `${f} refused in the main checkout:\n${r.stderr}`);
+  }
+});
+
 test("stop-guard stays silent while a `test-bg --wait` task is live; nudges (exit 2) over a bare live run", async () => {
   const tmp = path.join(ROOT, "artifacts", "tmp-stop-guard-test");
   fs.mkdirSync(tmp, { recursive: true });

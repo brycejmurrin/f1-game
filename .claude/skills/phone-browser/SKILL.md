@@ -13,6 +13,8 @@ is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix /
 ## First, which route
 
 - They want to PLAY: give them the live URL (AGENTS.md §Git branch & deploy) to open in the phone's own browser. Done.
+- They want Claude to MEASURE OR DRIVE THE LIVE GAME ON THEIR OWN PHONE: the GitHub-issue bridge
+  (`docs/notes/PHONE-BRIDGE-2026-10-30.md`), not this skill.
 - They want to SEE this working tree driven for them: this skill, and it needs a Grok custom connector.
 - Up front: in a proxied Claude cloud container the tunnel CANNOT start (the download's Node `fetch` ignores the
   proxy, and cloudflared needs direct egress to Cloudflare's edge — `references/failures.md`). There, offer the live

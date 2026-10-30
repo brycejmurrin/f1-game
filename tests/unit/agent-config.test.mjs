@@ -334,7 +334,7 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "node tools/ci/verify-change.mjs --fast --json",
     "node tools/ci/verify-change.mjs --plan",
     "npm run test:guards",
-    "npm run test:tooling-fast",
+    "npm run test:tooling-fast -- --changed",
     "node --test tests/unit/ratchets.test.mjs",
     "node tools/track/verify-track.cjs monza",
     "tools/mcp/js-debugger-mcp.sh list-tools",

@@ -104,8 +104,8 @@ test("sound off: no engine at all", () => {
 test("rain light on rolling in or out at night or in the wet; the ctx carries the door to the scene", () => {
   const cam = read("js/garage/setup-camera.js");
   assert.match(cam, /context\.door = arriving && arriving\.active \? arriving\.door : 1;/);
-  assert.match(cam, /if \(arriving && arriving\.active && \(context\.night \|\| \/rain\|wet\|storm\/\.test\(String\(context\.weather \|\| ""\)\)\) && CarMesh\.drawRearLights\)\s*CarMesh\.drawRearLights\(arrivalCar, 1\);/);
-  assert.match(cam, /stopDriveOut\(\) \{ driveOut = null; driveOutEngine\(false\); \}/);
+  assert.match(cam, /if \(arriving && arriving\.active && GarageArrival\.rearLightOn\(arriving, context\.night \|\| \/rain\|wet\|storm\/\.test\(String\(context\.weather \|\| ""\)\)\) && CarMesh\.drawRearLights\)\s*CarMesh\.drawRearLights\(arrivalCar, 1\);/);
+  assert.match(cam, /stopDriveOut\(\) \{ driveOut = null; driveOutEngine\(false\); sequenceLook\(null\); \}/);
 });
 
 /** A permissive stub element for the loading screen's paint(). */

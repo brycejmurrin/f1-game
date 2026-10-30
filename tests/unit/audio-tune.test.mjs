@@ -2562,3 +2562,164 @@ test("setEngine hands ErsLayer one record rewritten each frame, not a fresh 12-f
   assert.deepEqual(tail.map((r) => r.deploy), [0, 1, 0.5], "…carrying each frame's values when update reads it");
   assert.deepEqual(tail.map((r) => r.boost), [false, true, true]);
 });
+
+// A signal host over a fake context whose params LOG every scheduling call with
+// its time, so a one-shot's envelope can be read back exactly. Each call's
+// events are the slice logged after it began (a pooled node keeps its history).
+function loggingSignal() {
+  const counts = {}, sources = [];
+  const lp = (v) => {
+    const p = { value: v, log: [] };
+    for (const m of ["setValueAtTime", "linearRampToValueAtTime", "exponentialRampToValueAtTime"])
+      p[m] = (x, t) => { p.log.push([m, x, t]); p.value = x; };
+    p.cancelScheduledValues = (t) => { p.log.push(["cancel", null, t]); };
+    return p;
+  };
+  const mk = (kind) => {
+    counts[kind] = (counts[kind] || 0) + 1;
+    const n = { kind, type: "", connections: [], disconnected: 0, gain: lp(1), frequency: lp(350), Q: lp(1),
+      connect(t) { n.connections.push(t); return t; }, disconnect() { n.disconnected++; },
+      start(t, off) { n.startAt = t; n.offset = off; }, stop(t) { n.stopAt = t; } };
+    if (kind === "src") sources.push(n);
+    return n;
+  };
+  const ctx = { currentTime: 1, sampleRate: SR, createGain: () => mk("gain"), createBiquadFilter: () => mk("biquad"),
+    createOscillator: () => mk("osc"), createBufferSource: () => mk("src"),
+    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }) };
+  const bus = mk("bus");
+  const vctx = vm.createContext({ Math, Map, Object, Float32Array, console });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/signal.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/audio/signal.js") });
+  const sig = vm.runInContext("GameAudioSignal", vctx).create({ context: () => ctx, bus: () => bus, sfxOk: () => true, now: () => ctx.currentTime });
+  // One burst's observable plan: the filter and gain its source feeds, and the
+  // non-cancel events those params received during this call.
+  const fire = (call) => {
+    const mark = new Map();
+    const seen = (p) => { if (!mark.has(p)) mark.set(p, p.log.length); };
+    for (const s of sources) for (const f of s.connections) { seen(f.frequency); seen(f.Q); for (const g of f.connections) seen(g.gain); }
+    const before = sources.length;
+    call();
+    assert.equal(sources.length, before + 1, "each burst plays exactly one new one-shot source");
+    const src = sources[sources.length - 1], f = src.connections[0], g = f.connections[0];
+    const since = (p) => p.log.slice(mark.has(p) ? mark.get(p) : 0).filter((e) => e[0] !== "cancel");
+    return { src, f, g, type: f.type, q: f.Q.value, freq: f.frequency.value, freqEvents: since(f.frequency), gainEvents: since(g.gain), bus: g.connections[0] === bus };
+  };
+  return { sig, ctx, counts, sources, fire };
+}
+
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+function assertEvents(got, want, label) {
+  assert.equal(got.length, want.length, `${label}: ${JSON.stringify(got)}`);
+  for (let i = 0; i < want.length; i++) {
+    assert.equal(got[i][0], want[i][0], `${label} #${i} method`);
+    assert.ok(near(got[i][1], want[i][1]) && near(got[i][2], want[i][2]), `${label} #${i}: ${got[i]} != ${want[i]}`);
+  }
+}
+// Pre-pool code: a fixed-frequency burst set frequency.value (no event); the pool
+// sets it at t0 instead. Both mean "this frequency from t0", and nothing else.
+function assertFixedFreq(b, hz, t0, label) {
+  assert.ok(near(b.freq, hz), `${label}: frequency ${b.freq} != ${hz}`);
+  for (const e of b.freqEvents) assert.ok(e[0] === "setValueAtTime" && near(e[1], hz) && near(e[2], t0), `${label}: stray frequency event ${e}`);
+}
+
+test("noise one-shots keep the pre-pool envelope, filter and timing on every voice reuse (perf: pooled noiseBurst)", () => {
+  // Expected plans captured on the pre-pool signal.js (fresh source+biquad+gain per call).
+  const { sig, ctx, fire } = loggingSignal();
+  for (let round = 0; round < 12; round++) {   // more calls than voices, so each shape lands on a REUSED voice
+    ctx.currentTime += 0.5;
+    const t0 = ctx.currentTime;
+    const pop = fire(() => sig.noise(0.04, 0.045, 3100));
+    assert.equal(pop.type, "lowpass");
+    assert.equal(pop.q, 1, "lowpass noise keeps the default Q even after a hiss used the voice");
+    assertFixedFreq(pop, 3100, t0, "pop");
+    assertEvents(pop.gainEvents, [["setValueAtTime", 0.0001, t0], ["linearRampToValueAtTime", 0.04, t0 + 0.005], ["exponentialRampToValueAtTime", 0.0001, t0 + 0.05]], "pop gain");
+    assert.ok(near(pop.src.startAt, t0) && near(pop.src.stopAt, t0 + 0.145) && pop.bus, "pop source window and routing");
+    assert.ok(pop.src.offset >= 0 && pop.src.offset <= 3 - 0.195, "pop reads the shared pool from a random offset");
+
+    const h = fire(() => sig.hiss(0.03, 0.16, 3800, 1300));
+    assert.equal(h.type, "bandpass");
+    assert.ok(near(h.q, 1.4));
+    assertEvents(h.freqEvents, [["setValueAtTime", 3800, t0], ["exponentialRampToValueAtTime", 1300, t0 + 0.16]], "hiss frequency");
+    assertEvents(h.gainEvents, [["setValueAtTime", 0.0001, t0], ["linearRampToValueAtTime", 0.03, t0 + 0.008], ["exponentialRampToValueAtTime", 0.0001, t0 + 0.168]], "hiss gain");
+    assert.ok(near(h.src.stopAt, t0 + 0.26));
+
+    const s = fire(() => sig.scrapeNoise(0.2, 0.3));
+    assert.equal(s.type, "bandpass");
+    assert.ok(near(s.q, 1.2));
+    assertFixedFreq(s, 2600, t0, "scrape");
+    assertEvents(s.gainEvents, [["setValueAtTime", 0.0001, t0], ["linearRampToValueAtTime", 0.2, t0 + 0.02], ["exponentialRampToValueAtTime", 0.0001, t0 + 0.32]], "scrape gain");
+
+    const d = fire(() => sig.noise(0.07, 0.03, 2600, 0.09));   // a delayed rumble tick
+    const td = t0 + 0.09;
+    assertFixedFreq(d, 2600, td, "delayed");
+    assertEvents(d.gainEvents, [["setValueAtTime", 0.0001, td], ["linearRampToValueAtTime", 0.07, td + 0.005], ["exponentialRampToValueAtTime", 0.0001, td + 0.035]], "delayed gain");
+    assert.ok(near(d.src.startAt, td) && near(d.src.stopAt, td + 0.13));
+  }
+});
+
+test("noise one-shots reuse a fixed filter/gain pool, and overlapping or delayed bursts never cut one another", () => {
+  const { sig, ctx, counts, sources } = loggingSignal();
+  // 20 bursts inside 40 ms (a pit stop's rattles), half of them delayed: more
+  // than the pool, all sounding at once. None may be cut short.
+  for (let i = 0; i < 20; i++) { ctx.currentTime += 0.002; sig.noise(0.05, 0.045, 3000, (i % 2) * 0.12); }
+  assert.equal(sources.length, 20, "every burst is its own source");
+  assert.equal(sources.filter((s) => s.disconnected > 0).length, 0, "no sounding burst was disconnected to make room");
+  const built = { biquad: counts.biquad, gain: counts.gain };
+  // A sustained lift: 200 pops at 15 a second. The graph must not grow.
+  ctx.currentTime += 1;
+  for (let i = 0; i < 200; i++) { ctx.currentTime += 1 / 15; sig.noise(0.05, 0.045, 3000); }
+  assert.equal(sources.length, 220);
+  assert.equal(counts.biquad - built.biquad, 0, `200 spaced pops built ${counts.biquad - built.biquad} more filters`);
+  assert.equal(counts.gain - built.gain, 0, `200 spaced pops built ${counts.gain - built.gain} more gains`);
+  // A reused voice drops its finished source, so the pool never accretes inputs.
+  const wired = sources.slice(20).filter((s) => s.disconnected === 0);
+  assert.ok(wired.length <= 8, `${wired.length} finished sources still wired into the pool (at most one per voice)`);
+});
+
+test("overrun pops and the wastegate reuse a fixed pool of filter/gain nodes as the pop count grows", async () => {
+  const { GameAudio: A, release, counts, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const snap = () => ({ src: counts.src || 0, biquad: counts.biquad || 0, gain: counts.gain || 0 });
+  const drive = (frames, ax) => { for (let i = 0; i < frames; i++) { ctxTime(0.05); A.setEngine(0.8, 0, false, 0.7, 5, { ax }); } };
+  const a = snap();
+  drive(20, 8); drive(40, -4);
+  const b = snap();
+  for (let k = 0; k < 6; k++) { drive(20, 8); drive(40, -4); }
+  const c = snap();
+  const early = b.src - a.src, pops = c.src - a.src;
+  assert.ok(early >= 6 && pops > early * 5, `precondition: many more pops later (${early} then ${pops} in all)`);
+  // The pool fills lazily to the peak overlap, so it may still add a voice late,
+  // but never past its size: filters <= 8 noise voices, gains <= 8 noise + 8 blip.
+  assert.ok(b.biquad - a.biquad <= 8, `first lift built ${b.biquad - a.biquad} filters for ${early} pops`);
+  assert.ok(c.biquad - a.biquad <= 8, `${pops} pops (and seven wastegate dumps) built ${c.biquad - a.biquad} filters`);
+  assert.ok(c.gain - a.gain <= 16, `${pops} pops built ${c.gain - a.gain} gains`);
+});
+
+test("windFromSpeed writes into a caller's record and matches the fresh-object form", () => {
+  const A = await_boot();
+  const out = { gain: -1, hz: -1 };
+  for (const s of [0, 0.04, 0.05, 0.25, 0.6, 1, 1.4, -0.2]) {
+    const fresh = A.windFromSpeed(s);
+    assert.equal(A.windFromSpeed(s, out), out, "the record passed in is the one returned");
+    assert.equal(out.gain, fresh.gain, `gain at ${s}`);
+    assert.equal(out.hz, fresh.hz, `hz at ${s}`);
+  }
+  assert.notEqual(A.windFromSpeed(0.5), A.windFromSpeed(0.5), "without a record each call still returns its own object");
+});
+
+test("rain restarts (pause/resume, weather flips) reuse one 4 s loop buffer instead of regenerating it", () => {
+  const { GameAudio: A, ctx, flushTimers } = boot();
+  const { buffers } = observeBuffers(ctx);
+  A.init(); A.startEngine();
+  const rainBufs = () => buffers.filter((b) => b.length === SR * 4).length;
+  const rainLoop = () => [...live].find((n) => n.kind === "src" && n.loop && n.buffer && n.buffer.length === SR * 4 && n.stopAt == null);
+  A.startRain(0.1);
+  const first = rainLoop();
+  assert.ok(first, "the rain loop is playing");
+  A.stopRain(); flushTimers();
+  A.startRain(0.1);
+  const second = rainLoop();
+  assert.ok(second && second !== first, "the restart plays a fresh source");
+  assert.equal(second.buffer, first.buffer, "…over the same cached noise buffer");
+  A.stopRain(); flushTimers(); A.startRain(0.2);
+  assert.equal(rainBufs(), 1, "three rain starts generated the 4 s buffer once");
+});

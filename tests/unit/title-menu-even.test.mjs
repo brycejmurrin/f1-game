@@ -93,7 +93,8 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   const html = read("index.html");
   const title = read("js/ui/title-menu.js");
   assert.match(html, /id="menu-retention"[\s\S]*id="mb-continue"[\s\S]*id="mb-daily"/);
-  assert.match(html, /id="menu-explore"[\s\S]*id="mb-garage"/, "Garage is an explore door, not a leftover utility chip");
+  // The shell ships organize()'s end state (design pass 2c): no regrouping at game.js eval.
+  assert.match(html, /id="menu-buttons" data-destinations="true"[\s\S]*id="menu-garage"[^>]*>\s*<button id="mb-garage"/, "Garage owns its own cell, not a leftover utility chip");
   assert.doesNotMatch(html, /id="menu-secondary"[\s\S]*id="mb-garage"/);
   for (const id of ["mb-career", "mb-daily", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-label="[^"]+"`), `${id} has a readable name independent of text-node spacing`);
@@ -420,6 +421,20 @@ test("destination grouping preserves original controls and routes shortcuts thro
   assert.equal(doc.getElementById("mb-designer").parentNode.id, "menu-create");
   assert.equal(menu.children.filter((n) => n.id === "menu-create").length, 1);
   doc.getElementById("mb-visual").click(); doc.getElementById("mb-saves").click();
+  assert.deepEqual(opened, ["settings", "visual", "settings", "files"]);
+});
+
+test("a pre-organized shell is only wired: no regroup, shortcuts still open settings", () => {
+  const nodes = {};
+  const mk = (id) => (nodes[id] = { id, onclick: null, click() { this.onclick?.(); } });
+  const menu = { id: "menu-buttons", dataset: { destinations: "true" }, appendChild() { throw new Error("regrouped"); } };
+  for (const id of ["menu-create", "menu-secondary", "mb-visual", "mb-saves", "mb-settings"]) mk(id);
+  const doc = { getElementById: (id) => id === "menu-buttons" ? menu : nodes[id], createElement() { throw new Error("created"); } };
+  const opened = []; nodes["mb-settings"].onclick = () => opened.push("settings");
+  const ctx = vm.createContext({ SettingsNav: { show: (id) => opened.push(id) } });
+  vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
+  vm.runInContext("TitleMenu.organize", ctx)(doc);
+  nodes["mb-visual"].click(); nodes["mb-saves"].click();
   assert.deepEqual(opened, ["settings", "visual", "settings", "files"]);
 });
 

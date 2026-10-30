@@ -544,3 +544,88 @@ test("an aged multi-entry packet round-trips every car and its own stamp", () =>
   // Truncation is refused for the aged layout too.
   assert.equal(NetSnapshot.decodeSnapshot(bytes.slice(0, bytes.length - 1)), null);
 });
+
+// ---------------------------------------------------------------------------
+// adopt(): the decoded entry is stored, not copied (netplay onState)
+// ---------------------------------------------------------------------------
+// One reordered, duplicated, braking packet stream, pushed twice: once through
+// push() (copies its argument) and once through adopt() (keeps the decoded
+// object). Every pose either buffer reports must be the same number.
+function adoptStream() {
+  let seed = 12345;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 0x100000000);
+  const ticks = [];
+  for (let i = 0; i < 60; i++) ticks.push(1000 + i * 20);
+  for (let i = 0; i + 1 < ticks.length; i += 5) [ticks[i], ticks[i + 1]] = [ticks[i + 1], ticks[i]];   // reorder
+  for (let i = 7; i < ticks.length; i += 11) ticks.splice(i, 0, ticks[i - 2]);                           // duplicates
+  return ticks.map((t) => {
+    const k = (t - 1000) / 20;
+    const src = car({ s: (4900 + k * 3.1) % TOTAL, x: Math.sin(k) * 2, head: (k * 0.4) % TAU,
+                      speed: 70 - k * 0.5 + rnd(), gear: 1 + (k % 8), lap: 3 + (k > 32 ? 1 : 0),
+                      braking: k % 9 > 4, onKerb: k % 3 === 0 });
+    return { t, bytes: NetSnapshot.encodeSnapshot(t, [{ id: 4, car: src }]) };
+  });
+}
+
+test("adopt() poses every sample/predict identically to push() over a 1 s sweep", () => {
+  const copy = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100, keep: 8 });
+  const own = NetSnapshot.createInterp({ total: TOTAL, delayMs: 100, keep: 8 });
+  for (const { t, bytes } of adoptStream()) {
+    // Separate decodes: the copy path must not be handed the adopted object.
+    const a = copy.push(t, NetSnapshot.decodeSnapshot(bytes).cars[0]);
+    const b = own.adopt(t, NetSnapshot.decodeSnapshot(bytes).cars[0]);
+    assert.equal(b, a, `accept/refuse verdict at tick ${t}`);
+    assert.equal(own.size(), copy.size());
+    assert.deepEqual(own.sample(t + 40, {}), copy.sample(t + 40, {}), `sample after tick ${t}`);
+    assert.deepEqual(own.predict(t + 15, {}), copy.predict(t + 15, {}), `predict after tick ${t}`);
+  }
+  for (let now = 1000; now <= 2400; now += 7) {
+    assert.deepEqual(own.sample(now), copy.sample(now), `sample(${now})`);
+    assert.deepEqual(own.predict(now), copy.predict(now), `predict(${now})`);
+  }
+});
+
+test("adopt() stores the decoded object itself, stamped with its tick", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0, keep: 8 });
+  for (const { t, bytes } of adoptStream()) {
+    const entry = NetSnapshot.decodeSnapshot(bytes).cars[0];
+    if (!buf.adopt(t, entry)) {
+      assert.equal(entry.t, undefined, "a refused duplicate is never stamped");
+      continue;
+    }
+    assert.equal(entry.t, t);
+    if (buf.newest().t === t) assert.equal(buf.newest(), entry, "the stored sample IS the pushed object");
+  }
+  const last = NetSnapshot.decodeSnapshot(NetSnapshot.encodeSnapshot(5000, [{ id: 4, car: car({ s: 7 }) }])).cars[0];
+  buf.adopt(5000, last);
+  assert.equal(buf.newest(), last);
+  // push() still copies: its caller may reuse the object.
+  const reused = car({ s: 8 });
+  buf.push(5020, reused);
+  assert.notEqual(buf.newest(), reused);
+  assert.equal(reused.t, undefined, "push() never stamps the caller's object");
+});
+
+test("the bounded window matches a sorted keep-newest model, without per-push shift()", () => {
+  const keep = 8;
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0, keep });
+  const model = [];
+  const shift = Array.prototype.shift;
+  let shifts = 0;
+  Array.prototype.shift = function () { shifts++; return shift.apply(this, arguments); };
+  try {
+    for (const { t, bytes } of adoptStream()) {
+      buf.push(t, NetSnapshot.decodeSnapshot(bytes).cars[0]);
+      if (!model.includes(t)) { model.push(t); model.sort((a, b) => a - b); }
+      while (model.length > keep) model.splice(0, 1);
+      assert.ok(buf.size() <= keep, `size ${buf.size()} > keep`);
+      assert.equal(buf.size(), model.length);
+      assert.equal(buf.oldest().t, model[0]);
+      assert.equal(buf.newest().t, model[model.length - 1]);
+    }
+  } finally { Array.prototype.shift = shift; }
+  assert.equal(shifts, 0, "trimming the oldest must not shift() the whole buffer each push");
+  buf.clear();
+  assert.equal(buf.size(), 0);
+  assert.equal(buf.newest(), null);
+});

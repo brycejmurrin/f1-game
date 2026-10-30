@@ -387,6 +387,64 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   assert.equal((TLX.match(/const refuseTab = /g) || []).length, 1);
 });
 
+// Hunt 6 lead 1 (REFUTED): particles.js keeps _vertA / _vertB across frames, so the wrapped stream is built ONCE and
+// each dirty frame is one ranged upload of the payload, never a new buffer. Driven the way particles.js draw() calls it.
+// streams(P): memState().churn.streamNew's sum over these slots (slot.builds).
+const streams = (P) => P.partStreams.reduce((n, s) => n + (s.builds | 0), 0);
+test("hunt 6: 600 particle frames on stable arrays build each stream once; only a reallocation re-wraps (churn.streamNew)", () => {
+  const P = bootParticles();
+  const vertA = new Float32Array(256 * 60), vertB = new Float32Array((256 + 72) * 60);
+  let uploadsA = 0, uploadsB = 0;
+  for (let f = 0; f < 600; f++) {
+    const dirtyA = f % 3 === 0, pb = 60 * (1 + (f % 7));
+    const vA = P.partStreams[0].ib ? P.partStreams[0].ib.version : -1, vB = P.partStreams[1].ib ? P.partStreams[1].ib.version : -1;
+    P.api.drawParticles(vertA, 1200, false, dirtyA);
+    P.api.drawParticles(vertB, pb, true, true);
+    if (P.partStreams[0].ib.version !== vA) uploadsA++;
+    if (P.partStreams[1].ib.version !== vB) uploadsB++;
+    assert.equal(P.partStreams[1].ib.updateRanges[0].count, pb, "the additive upload is the payload, not the array");
+  }
+  assert.equal(streams(P), 2, "one wrap per blend group for the whole run");
+  assert.deepEqual(P.disposed, [], "no stream geometry freed");
+  assert.equal(uploadsA, 200, "alpha: one upload per dirty frame only");
+  assert.equal(uploadsB, 600);
+  P.api.drawParticles(new Float32Array((256 + 400) * 60), 1200, false, true);   // rainSeed grew _vertA
+  assert.equal(streams(P), 3, "a reallocation is the one re-wrap");
+  assert.equal(P.disposed.length, 1);
+});
+// Hunt 6 lead 2: the REAL acquireMesh / prunePool. A wrapper is minted per (geo, mat, occurrence) once and reused, so
+// churn.poolNew moves only on a new peak; a pruned wrapper is re-minted (a new three RenderObject) when drawn again.
+test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune + re-draw is counted (churn.poolNew/poolPruned)", () => {
+  const pruneAt = TLX.indexOf("      const PRUNE_EVERY_MS =");
+  const mk = new Function("THREE", `"use strict";
+    const meshPool = [], meshByGeo = new Map(), scene = new THREE.Scene(), dropped = [];
+    let _poolBatch = 0, _poolNow = 0, _r6 = false, _pruneLast = -Infinity, _pinArmed = true, _kidBatch = -1, _kids = null, _kidN = 0;
+    const fallbackMat = () => null, dropWrapper = (m) => dropped.push(m), poolRoot = null;
+    ${TLX.slice(pruneAt, TLX.indexOf("\n", pruneAt))}
+    ${fnSource(TLX, "function prunePool(now) {")}
+    ${fnSource(TLX, "function acquireMesh(geo, matrixArr, material, rec) {")}
+    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m]) => acquireMesh(g, null, m, null)); },
+      acquireMesh, prunePool, dropped };`);
+  const P = mk(THREE);
+  const geos = [0, 1, 2].map(() => new THREE.BufferGeometry());
+  const mats = [new THREE.MeshBasicNodeMaterial(), new THREE.MeshBasicNodeMaterial()];
+  const draws = [[geos[0], mats[0]], [geos[0], mats[0]], [geos[1], mats[0]], [geos[1], mats[1]], [geos[2], mats[1]]];
+  const first = P.frame(0, draws);
+  assert.equal((P.acquireMesh.n | 0), 5, "one wrapper per occurrence");
+  for (let f = 1; f <= 600; f++) {
+    const got = P.frame(f * 16, f % 2 ? draws : draws.slice(0, 3));   // a draw set that varies frame to frame
+    got.forEach((m, i) => assert.equal(m, first[i], "the same wrapper for the same (geo, mat, occurrence)"));
+  }
+  assert.equal((P.acquireMesh.n | 0), 5, "600 frames, no new wrapper");
+  assert.equal((P.prunePool.n | 0), 0);
+  P.frame(20000, draws.slice(0, 2));   // under 20 s idle: nothing goes
+  assert.equal((P.prunePool.n | 0), 0);
+  P.frame(31000, draws.slice(0, 2));   // > 20 s on: the three wrappers not drawn since ~9.6 s idle out
+  assert.equal((P.prunePool.n | 0), 3);
+  assert.equal(P.dropped.length, 3);
+  P.frame(31016, draws);
+  assert.equal((P.acquireMesh.n | 0), 8, "drawn again after a prune: re-minted, and counted");
+});
 // R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
 // present() / mirrorEnd() drive them, rendered by three r186 over the fake GL: three draws exactly the
 // acquired wrappers and walks nothing else.
@@ -1005,4 +1063,63 @@ test("#3115 F8/F9: the per-frame sky update/derive and lit updateFrame mint no c
   // updateFrame's `|| [..]` defaults only mint when a frame field is absent; the sky path has none at all.
   for (const head of ["function derive()", "function update(sky)"])
     assert.doesNotMatch(body(sky, head), /(?:=|\|\|)\s*\[\s*[-\d]/, head + " mints a literal array per call");
+});
+
+// Perf hunt 6 (TLX-L1, cars F3/F4): exact-zero gates as REAL control flow in the compiled lit fragment, each body
+// free of derivatives and implicit-LOD samples (WebKit rejects them in non-uniform flow). Bit-identity is by
+// construction (weight 0 / multiplier 0); pixels still need gfx-probe + gpu-census.yml.
+for (const language of ["WGSL", "GLSL"]) test(`hunt 6: pit-lane, sun-disc and weave gates wrap their work in ${language}`, async () => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  try {
+    await renderer.init();
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+      ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+    const g = new THREE.BufferGeometry();
+    for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1], ["trk", 3]])
+      g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
+    const B = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const b = new B(new THREE.Mesh(g, lit.makeMaterial({ clearcoat: 0.8, carPaint: 1 })), renderer);
+    b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+    const lines = b.fragmentShader.split("\n"), stacks = [], stack = [];
+    for (const [i, l] of lines.entries()) {   // the enclosing block headers of every line
+      for (const _ of l.match(/\}/g) || []) stack.pop();
+      stacks.push(stack.slice());
+      for (const _ of l.match(/\{/g) || []) stack.push(i);
+    }
+    const at = (re) => { const i = lines.findIndex(l => re.test(l)); assert.ok(i >= 0, `${language}: ${re}`); return i; };
+    const gate = (i, re) => {
+      const h = stacks[i].find(j => re.test(lines[j]));
+      assert.ok(h !== undefined, `${language}: ${lines[i].trim().slice(0, 90)} sits under ${re}`);
+      return h;
+    };
+    const clean = (h) => {
+      const body = lines.filter((_, k) => stacks[k].includes(h));
+      assert.ok(body.length > 0, `${language}: ${lines[h].trim()} has a body`);
+      const deriv = /\b(?:dpdx|dpdy|fwidth|dFdx|dFdy|textureSample|texture)\s*\(/;
+      assert.deepEqual(body.filter(l => deriv.test(l)), [], `${language}: derivative inside ${lines[h].trim()}`);
+    };
+    // L1: the pit lane runs under the uniform y > 0, its paint under the wrapped-window test.
+    const modRe = /(\w+) = (?:tsl_mod_float|mod)\( \( \( \w+ - ([\w.]+)\.x \) \+ (\w+) \), \3 \)/;
+    const modI = at(modRe), [, through, U] = lines[modI].match(modRe);
+    const lenM = lines[at(new RegExp(`\\w+ = ${U.replace(".", "\\.")}\\.y;`))].trim().split(" ")[0];
+    const lenH = gate(modI, new RegExp(`^\\s*if \\( \\( ${lenM} > 0\\.0 \\) \\)`));
+    for (const c of ["0.1, 0.36, 0.86", "0.15, 0.16, 0.19"])
+      clean(gate(at(new RegExp(`vec3(?:<f32>)?\\( ${c} \\)`)), new RegExp(`^\\s*if \\( \\( ${through} <= ${lenM} \\) \\)`)));
+    clean(lenH);
+    assert.ok(!stacks[at(/vec3(?:<f32>)?\( 0\.95, 0\.95, 0\.97 \)/)].includes(lenH), "white paint stays outside the pit gate");
+    // F4: the clearcoat sun disc runs only when its uniform multiplier is non-zero.
+    const discI = at(/pow\( max\( dot\(.*32\.0 \)/);
+    const glRe = /^\s*if \( \( ([\w.]+) != 0\.0 \) \)\s*\{?$/;
+    const glH = gate(discI, glRe), glint = lines[glH].match(glRe)[1];
+    assert.equal(lines.findIndex(l => l.trim().startsWith(`${glint} =`)), -1, "the disc gate reads a uniform (uniform control flow)");
+    assert.ok(lines[discI].includes(glint), "the gate is the disc's own multiplier");
+    clean(glH);
+    // F3: the carbon weave's sin/cos run only where its distance fade is above 0.
+    const fadeRe = /^\s*if \( \( (nodeVar\d+) > 0\.0 \) \)/;
+    const wvH = gate(at(/190\.0/), fadeRe), fade = lines[wvH].match(fadeRe)[1];
+    at(new RegExp(`${fade} = clamp\\( \\( 1\\.0 - \\( \\( \\w+ - 10\\.0 \\) / 10\\.0`));   // the weave gate is wvFade
+    clean(wvH);
+  } finally { renderer.dispose(); }
 });

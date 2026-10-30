@@ -111,8 +111,9 @@ label) for a ready PR, never ARM: no session arms; the veto is the `hold` label.
   `subscribe_github_ci` (its branch) and `subscribe_github_pr` (the PR). A CI notification is not a new task. A red
   on its own head: fix it, at most 2 fix pushes. When CI is green or the cap is spent: refresh the Plan and Hand-off
   block, unsubscribe, stop. **Steward** (drives one existing PR to merge): subscribe at start, fix reds on its head,
-  run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, unsubscribe and stand down if the dispatcher
-  adopts the PR. Never sleep-poll, use timers or shell loops, and never comment on its own PR (it echoes back as a
+  run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, and stay subscribed until the PR merges or closes
+  (a passing ready-gate is not the end). Unsubscribe early only if the dispatcher adopts the PR, then stand down.
+  Never sleep-poll, use timers or shell loops, and never comment on its own PR (it echoes back as a
   wake). The Cursor token does not add labels, claim, post issue comments, or open issues. Put `run-ci`,
   `lane:cursor`, and `land` in the block's `next:` line; Bryce or a later Claude lane applies them. Symbols go
   through apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after the edit);
