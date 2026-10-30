@@ -3427,6 +3427,16 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/exterior-geometry.js",
+      "global": "GarageExteriorGeometry",
+      "roster": "LAZY_GARAGE_EXTERIOR"
+    },
+    {
+      "path": "js/garage/exterior.js",
+      "global": "GarageExterior",
+      "roster": "LAZY_GARAGE_EXTERIOR"
+    },
+    {
       "path": "js/garage/livery-design-editor.js",
       "global": "GarageLiveryDesignEditor",
       "roster": "tag"

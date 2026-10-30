@@ -5072,6 +5072,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "ensureGarageExterior": [
+        "tests/unit/race-session-lazy.test.mjs"
+      ],
       "ensureLightPresets": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
@@ -5080,7 +5083,8 @@
       ],
       "ensureRaceSession": [
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
       ],
       "ensureScenery": [
         "tests/unit/assets-pack.test.mjs",
@@ -5698,7 +5702,8 @@
     },
     "js/data/garage-departure-motion.js": {
       "sample": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ]
     },
     "js/data/hub.js": {
@@ -7784,6 +7789,42 @@
         "tests/unit/scene-live.test.mjs"
       ]
     },
+    "js/garage/exterior-geometry.js": {
+      "*": [
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
+      ]
+    },
+    "js/garage/exterior.js": {
+      "cancel": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "create": [
+        "tests/unit/garage-prebuild.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "drawWeather": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "fitPose": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "lighting": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "ready": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "request": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "state": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ]
+    },
     "js/garage/livery-design-editor.js": {
       "attach": [
         "tests/unit/livery-design.test.mjs"
@@ -7863,7 +7904,8 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "ready": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
       ],
       "release": [
         "tests/unit/garage-arrival.test.mjs",
@@ -8045,6 +8087,9 @@
       ]
     },
     "js/garage/scene.js": {
+      "buildPitLane": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "buildStatic": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
@@ -16274,6 +16319,7 @@
     },
     "js/track/core/geom.js": {
       "addBox": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/track-graph.test.mjs"
@@ -16306,6 +16352,7 @@
         "tests/unit/scenery-kits.test.mjs"
       ],
       "emit": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "roundNormals": [
@@ -16322,7 +16369,6 @@
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-looks.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",

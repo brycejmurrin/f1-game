@@ -880,7 +880,7 @@ test("reflection fade preserves each room's authored floor colours and markings"
 test("departure exterior has supported lane ground and an open outward doorway", () => {
   const { GarageScene, meshes, draws } = harness();
   GarageScene.draw(TEAM, LIV, [0, 2, 12], null, 0, { ambient: false });
-  const floor = meshes[draws[0].mesh.id - 1], p = floor.pos, n = floor.nrm;
+  const floor = meshes[draws[1].mesh.id - 1], p = floor.pos, n = floor.nrm;
   const ground = [], facade = [];
   for (let i = 0; i < p.length; i += 3) {
     if (n[i + 1] > .99 && Math.abs(p[i + 1] + .036) < .001 && p[i + 2] >= 6.45) ground.push(p[i]);
@@ -889,4 +889,80 @@ test("departure exterior has supported lane ground and an open outward doorway",
   assert.ok(Math.min(...ground) <= -22 && Math.max(...ground) >= 22, "lane extends under the exterior follow");
   assert.ok(facade.length > 16, "near frontage has outward-facing surfaces");
   assert.ok(facade.every(([x, y]) => Math.abs(x) >= 2.7 - .001 || y >= 4.8 - .001), "central aperture stays clear");
+});
+
+// Exercise the detached CPU builder with bounded geometry, never a race build/GPU.
+function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 1 } = {}) {
+  const c = Math.cos(yaw), s = Math.sin(yaw), origin = [10, 2, -8];
+  const raw = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  for (const p of points) {
+    raw.pos.push(origin[0] + p[0] * c + p[2] * s, origin[1] + p[1], origin[2] - p[0] * s + p[2] * c);
+    raw.nrm.push(s, 0, c); raw.col.push(.2, .4, .6); raw.mat.push(16);
+  }
+  for (let n = 0; n < repeats; n++) for (let i = 0; i < points.length; i++) raw.idx.push(i);
+  const blank = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
+  const right = [-s, 0, -c], tangent = [-c, 0, s];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = v => { const m = Math.hypot(...v); return v.map(x => x / m); };
+  let builds = 0;
+  const ctx = vm.createContext({ GaragePrims: { Z_DOOR: 6.4 },
+    Tracks: { buildCenterline(_def, opts) { assert.equal(opts.line, false); builds++; return {}; },
+      build() { throw Error('full build forbidden'); }, buildPaced() { throw Error('race build forbidden'); } },
+    TrackPit: { build: () => ({ hasBays, side: 1, off: { workOut: 0 }, bay: { depth: 12.8, doorW: 5.4, doorH: 4.8 },
+      row: { boxes: [{ s: 20, k: 0 }] }, bands: { fast: 3.5 } }), rowOf: () => row },
+    TrackSpline: { curvature: () => 0, sample(_track, _arc, out) {
+      out.r = right; out.t = tangent; out.hw = 0;
+      out.p = origin.map((v, i) => v - right[i] * 6.4 - (i === 1 ? .02 : 0));
+    } }, TrackGeom: { norm, cross, addBox() {}, emit() {} },
+    TrackMesh: { bankOffsetAt: () => 0, buildRoad: () => raw, buildPitLane() {}, buildPitBoxes() {}, buildFloor: blank },
+    TrackSurface: { profile: () => ({}) }, SceneryPits: { build(opts) { assert.equal(opts.exteriorOnly, true); return {}; } } });
+  vm.runInContext(read('js/garage/exterior-geometry.js'), ctx, {filename:absSrc('js/garage/exterior-geometry.js')});
+  const builder = vm.runInContext('GarageExteriorGeometry', ctx);
+  return { builder, builds: () => builds, origin, yaw };
+}
+function finishExterior(builder, def = { id: 'fixture' }) {
+  const it = builder.buildSteps(def, { teamId: 'ferrari', night: true });
+  let r, yields = 0; do { r = it.next(); if (!r.done) yields++; } while (!r.done);
+  return { result: r.value, yields };
+}
+test('circuit exterior clips triangles at all six bounds, rotates normals and preserves material columns', () => {
+  const points = [
+    [-60, 0, 20], [-50, 0, 18], [-50, 2, 22], [60, 0, 20], [50, 0, 18], [50, 2, 22],
+    [0, -12, 20], [2, -8, 18], [-2, -8, 22], [0, 48, 20], [2, 40, 18], [-2, 40, 22],
+    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 115], [2, 0, 105], [-2, 2, 105],
+  ];
+  const h = exteriorFixture(points), { result: r, yields } = finishExterior(h.builder);
+  assert.equal(r.supported, true); assert.ok(yields > 5);
+  assert.ok(Math.abs(r.anchor.yaw - h.yaw) < 1e-10);
+  r.anchor.position.forEach((v, i) => assert.ok(Math.abs(v - h.origin[i]) < 1e-10));
+  const b = [-55, 55, -10, 45, 6.4, 110], seen = new Set(), geo = r.road;
+  assert.ok(geo.idx.length > 18, 'crossing triangles survive as clipped polygons');
+  assert.equal(geo.nrm.length, geo.pos.length); assert.equal(geo.col.length, geo.pos.length);
+  assert.equal(geo.mat.length, geo.pos.length / 3);
+  for (let i = 0; i < geo.pos.length; i++) {
+    const a = i % 3, v = geo.pos[i]; assert.ok(Number.isFinite(v));
+    assert.ok(v >= b[a * 2] - 1e-8 && v <= b[a * 2 + 1] + 1e-8);
+    for (const k of [a * 2, a * 2 + 1]) if (Math.abs(v - b[k]) < 1e-8) seen.add(k);
+    if (i < geo.pos.length - 12) {
+      assert.ok(Math.abs(geo.nrm[i] - (a === 2 ? 1 : 0)) < 1e-8);
+      assert.ok(Math.abs(geo.col[i] - [.2, .4, .6][a]) < 1e-8);
+    }
+  }
+  const ramp = geo.pos.slice(-12);
+  assert.deepEqual(Array.from(ramp), [-2.7, 0, 6.4, 2.7, 0, 6.4, -2.7, .03, 6.7, 2.7, .03, 6.7]);
+  assert.ok(Math.abs(Math.hypot(...geo.nrm.slice(-3)) - 1) < 1e-8);
+  assert.deepEqual(Array.from(r.stats.groundBounds), [-550, 550, -10000, 10000, 6.4, 750]);
+  assert.equal(seen.size, 6); assert.ok(geo.mat.every(m => m === 16));
+  assert.ok(geo.idx.every(i => i >= 0 && i < geo.pos.length / 3));
+});
+test('circuit exterior refuses unavailable bay and invalid/budget-breaking geometry', () => {
+  const tri = [[0, 0, 20], [2, 0, 20], [0, 2, 20]];
+  for (const [opts, reason] of [[{ hasBays: false }, 'circuit-has-no-bays'], [{ row: -1 }, 'team-has-no-bay']]) {
+    const { builder } = exteriorFixture(tri, opts), r = finishExterior(builder).result;
+    assert.equal(r.supported, false); assert.equal(r.reason, reason); assert.equal(r.road, null); assert.equal(r.anchor, null);
+  }
+  const missing = exteriorFixture(tri);
+  assert.equal(finishExterior(missing.builder, null).result.reason, 'missing-circuit'); assert.equal(missing.builds(), 0);
+  assert.throws(() => finishExterior(exteriorFixture([[NaN, 0, 20], ...tri.slice(1)]).builder), /Non-finite/);
+  assert.throws(() => finishExterior(exteriorFixture(tri, { repeats: 80001 }).builder), /budget exceeded/);
 });

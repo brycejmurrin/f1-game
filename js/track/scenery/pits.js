@@ -621,7 +621,7 @@ const SceneryPits = (function () {
       for (let i = 0; i < count; i++) {
         const box = boxes[i], k = box.k;
         const f = frameAtS(box.s), bs = f.basis, h = f.hw;
-        const mesh = bayMesh(box);
+        const mesh = ctx.exteriorOnly ? null : bayMesh(box);
         // Bay local +Z is the door end; it must point at the TRACK. addMesh
         // yaws about Y only, which a pit straight can afford.
         const rotY = Math.atan2(-sd * f.r[0], -sd * f.r[2]);

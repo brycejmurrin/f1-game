@@ -1,0 +1,1 @@
+Improved: Garage animations now share a bounded slice of the selected circuit’s actual pit complex, with selected weather, time, wet surfaces and outdoor rain. Preparation stays separate from the race world, and narrow or reversed lanes adapt the departure without changing saved driving cameras.

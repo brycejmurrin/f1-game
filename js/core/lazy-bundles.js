@@ -87,6 +87,15 @@ function ensureRaceSession() {
   });
   return raceSessionLoad;
 }
+// Optional garage exterior; its absence never blocks race-session preparation.
+let garageExteriorLoad = null;
+function ensureGarageExterior() {
+  if (typeof GarageExterior !== "undefined" && typeof GarageExteriorGeometry !== "undefined") return Promise.resolve(true);
+  if (!garageExteriorLoad) garageExteriorLoad = loadBackendScripts(ApexRoster.LAZY_GARAGE_EXTERIOR || [], [], { strict: true,
+    ready: (src) => src.endsWith("exterior-geometry.js") ? typeof GarageExteriorGeometry !== "undefined" : typeof GarageExterior !== "undefined" })
+    .then((ok) => { ok = !!ok && typeof GarageExterior !== "undefined" && typeof GarageExteriorGeometry !== "undefined"; if (!ok) garageExteriorLoad = null; return ok; }).catch(() => { garageExteriorLoad = null; return false; });
+  return garageExteriorLoad;
+}
 // LAZY_CIRCUIT (tools/manifest.cjs): full js/circuits/<id>.js payload. Title
 // boots with GENERATED meta.js (~picker fields only); path/pal/sectors/kit
 // hydrate here before buildCenterline / Tracks.build / TrackMaps.compute.
@@ -858,7 +867,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

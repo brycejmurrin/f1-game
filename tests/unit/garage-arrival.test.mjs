@@ -807,7 +807,7 @@ test('a refused garage begin returns false and cannot reveal the unpresented fra
     _spVP: [], _spView: [], _spProj: [], _spInvProj: [], eye: [],
     _spSun: [0, 0.86, 0.51], lightsRig: [],
     GarageScene: { live: () => [], SKYLIGHT: [], AMB_SKY: [], AMB_GROUND: [], BACKDROP: [] },
-    _spLiv() {}, garageNow() {}, garageCtx() {}, sceneTime: 0, context: {},
+    _spLiv() {}, garageNow() {}, garageCtx() {}, sceneTime: 0, context: {}, outside: null,
   });
   vm.runInContext('function refusedFrame() {\n' + introCameraSource.slice(at, end) +
     '\n gfx.present(); return true; }', refusal);
@@ -1122,7 +1122,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,
     els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
-    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false,
+    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false, garageCtx: () => ({ sceneNow: 0 }),
     pinGarageRes: noop, endGarageRes: noop, setupCam: { endGarageRes: noop }, studioShown: noop,
     window: { addEventListener: noop }, requestAnimationFrame: noop,
     previewFrames: [], worldFrames: [],

@@ -1,0 +1,19 @@
+# Selected-circuit garage exterior
+
+Fetched deploy base: `30c38ef6c01e08126ba9d75e825f41bd090c80d2`. Isolated worktree `/workspace/garage-world`, branch `cursor/garage-world-1030`. Explicit dependency: departure PR #4306 at `3ab7e47e48957b57da648f5f03569853c2f54023`; dependency merge `f4acd21aca4e0394aac48ca9a864c2884fa8cbdb`. Shared checkout source was not switched or reset.
+
+The exterior is a detached, owned geometry slice built from `Tracks.buildCenterline`, `TrackPit`, `TrackMesh` and `SceneryPits`, using the same pit placement as the race. It loads circuit data and the toolkit, then yields between build/clip/upload phases. It does not call the full world builder, replace `G.track`, borrow mutable world handles, run physics, or rebuild geometry on render frames. The narrow `SceneryPits.exteriorOnly` option omits cached detailed bay interiors while retaining the real outward structure.
+
+Road/props are clipped into bay-local coordinates outside the exact doorway. The selected bay has no duplicate interior; a small threshold ramp joins the interior and road. A larger bounded actual race-floor plane prevents a nearby ground edge. This slice includes the pit road, paint, pit complex and floor, rather than the full circuit’s distant bespoke scenery.
+
+One optional provider serves setup, Home garage, arrival, return and departure. It coalesces loads; generation checks reject stale work after selection changes, navigation and cancellation; partial GPU uploads are freed. A weather-only change updates materials without rebuilding geometry. Missing/failed exterior preparation retains the existing bounded garage backdrop and never gates race startup. Retry is explicit and bounded. The title’s studio remains its intentional studio scene. Home NIGHT chooses night exterior; other garage views follow the selected race time and weather independently of the indoor mood.
+
+Race selection prewarms the optional exterior. A sequence latches its selection and exterior availability; a late result can appear behind a closed shutter, never halfway through the shot. Idle setup can adopt a ready exterior at a frame boundary. Closing the garage cancels pending work and frees owned meshes. Renderer/camera ownership and saved driving-camera controls remain with their existing lifecycle owners.
+
+Pure exterior lighting uses circuit palette and selected day/night/dawn/dusk, fog/overcast/wet/rain/storm conditions. Sun vectors rotate into the same local frame as the geometry. The garage lamps remain the indoor key; sky/fog/daylight and surface wetness follow the exterior. Rain/storm use at most 96 cached streak quads outside the door, with transform-only motion; reduced motion holds the streak field and its fixed departure camera. No shared race particle pool is used.
+
+`GarageExterior.fitPose` mirrors car and camera together to the pit side. The authored departure’s turn radius adapts to selected lane bands with a 30 cm swept-envelope margin; explicit tuner paths retain their own paired rigs. Wheel distance follows the adjusted rendered path. Camera and physics preferences are not persisted by the exterior.
+
+Geometry audit checked all 52 circuits: 49 have usable team bays. Jeddah, Jerez and Mont-Tremblant explicitly have no garage bays and retain the fallback. Unknown team rows likewise fall back; no real bay placement is invented. Initial detached sweep maximum was about 15.4k final vertices, with Node build phases under 254 ms; these are CPU observations, not player GPU frame-rate claims. Actual-game readiness exposes geometry counts and maximum preparation-slice/upload timings through `__apex.garageCam().exterior`.
+
+Verification evidence belongs under `artifacts/garage-world`; the PR body records the current head, test verdicts, browser evidence and remaining limitations.

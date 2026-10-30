@@ -563,6 +563,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `livery-design-editor.js` | `GarageLiveryDesignEditor` | tag | Livery editing tools. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 | `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Garage-only articulated wheels: one cached fitted set, transform-only playback. |
+| `exterior-geometry.js` | `GarageExteriorGeometry` | LAZY_GARAGE_EXTERIOR | Detached circuit pit exterior: build once on selection, never on the render clock. |
+| `exterior.js` | `GarageExterior` | LAZY_GARAGE_EXTERIOR | Selected-world garage exterior. |
 
 **`js/fx/`**
 

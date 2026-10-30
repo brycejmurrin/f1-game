@@ -394,6 +394,7 @@ const api = {
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
   }),
   garageCam: () => ({
+    exterior: typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state().exterior : null,
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
     // dist is the ZOOM's stored distance; effDist is what the camera actually

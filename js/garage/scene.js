@@ -548,11 +548,11 @@ function live(liv, now, ctx) {
   liveNow = now;
   nightNow = !!(ctx && ctx.night);
   for (let k = 0; k < 3; k++) BACKDROP[k] = MD.bd ? MD.bd[k] : _bdBase[k] * MD.backdrop;
-  const ge = nightNow ? 6.5 * E * MD.gantry : 0;
+  const ge = nightNow && !(ctx && ctx.realExterior) ? 6.5 * E * MD.gantry : 0;
   for (let i = 0; i < 4; i++) {
     const o = (GANTRY_AT + i) * 15;
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
-    rig[o + 14] = nightNow ? 1.2 : 0;
+    rig[o + 14] = ge ? 1.2 : 0;
   }
   // THE SHUTTER SWELL: the two team-colour dado uplights rise to ~3x and fall
   // back as the door lifts on an arrival or the RACE! drive-out (ctx.door, 0..1;
@@ -1103,7 +1103,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
+let exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -1235,6 +1235,7 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
     if (floorMesh) _gfx.freeMesh(floorMesh);
+    if (exteriorFallbackMesh) _gfx.freeMesh(exteriorFallbackMesh);
     if (mirrorFadeMesh) { _gfx.freeMesh(mirrorFadeMesh); mirrorFadeMesh = null; }
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
@@ -1258,7 +1259,9 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
-    buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv, look);
+    buildBayFloor(flr, liv, look);
+    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, !!(ctx && ctx.night));
+    exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
@@ -1346,6 +1349,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   ensureDynamic();
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+  if (!(ctx && ctx.realExterior)) _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
   const studio = !!(ctx && ctx.studio);
   // Room first so its depth is in the buffer: the reflection then depth-tests
   // against props/shell (they win) and only needs bias to clear the floor.
@@ -1623,7 +1627,7 @@ function release() {
   let n = typeof GarageCrew !== "undefined" && GarageCrew.free ? GarageCrew.free() : 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
-  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
+  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);

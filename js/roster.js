@@ -873,6 +873,10 @@
       "js/track/scenery/build-props.js"
     ]
   ],
+    LAZY_GARAGE_EXTERIOR: [
+    "js/garage/exterior-geometry.js",
+    "js/garage/exterior.js"
+  ],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/dev-flags.js",
