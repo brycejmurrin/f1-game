@@ -39,7 +39,10 @@ function pushSentinel() {
 // nobody claims it does escapeTop() run (a nested modal ignores a synthetic key).
 let synthEsc = false;
 function escapeFirst() {
-  if (typeof KeyboardEvent === "undefined" || !(UiLayers.top && UiLayers.top())) return false;
+  // REPOSITION TOUCH CONTROLS is no layer (it hides SETTINGS and PAUSED), but
+  // it ends on Escape and marks body[data-dock-edit] (js/ui/dock-layout.js).
+  const docking = typeof document !== "undefined" && !!(document.body && document.body.hasAttribute && document.body.hasAttribute("data-dock-edit"));
+  if (typeof KeyboardEvent === "undefined" || !(docking || (UiLayers.top && UiLayers.top()))) return false;
   const ev = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
   synthEsc = true;
   try { (document.activeElement || document.body || document).dispatchEvent(ev); } finally { synthEsc = false; }
@@ -53,12 +56,32 @@ function onBack($) {
   if (!took && UiLayers.inRace()) { const p = $("pausebtn"); if (p) { p.click(); took = true; } }
   if (took) pushSentinel();
 }
+// SECTION LINKS ARE NO HISTORY. Each HOW TO PLAY / guide contents link was a
+// fragment navigation, a new entry the back gesture then spent silently (one
+// dead back per section visited) before it closed the sheet (UI hunt 3). The
+// jump scrolls in place and REPLACES the URL's hash; AriaState repaints
+// aria-current, which hashchange (not fired by replaceState) used to do.
+const SECTION_NAVS = "#htp-contents, #cg-contents, #ch-contents";
+function onSectionLink(e) {
+  const a = e.target && e.target.closest ? e.target.closest("a[href^='#']") : null;
+  if (!a || !a.closest(SECTION_NAVS) || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  // The section is looked up inside the link's own sheet: a contents link never
+  // jumps out of it, and the ids stay static (no dynamic getElementById).
+  const href = a.getAttribute("href"), sheet = a.closest("dialog, .sheet");
+  const target = sheet && Array.from(sheet.querySelectorAll("[id]")).find((n) => "#" + n.id === href);
+  if (!target) return;
+  e.preventDefault();
+  target.scrollIntoView({ block: "start" });
+  try { history.replaceState(history.state, "", href); } catch (_) { /* sandboxed page */ }
+  if (typeof AriaState !== "undefined" && AriaState.sync) AriaState.sync();
+}
 function guardBack($) {
   if (typeof window === "undefined" || typeof history === "undefined" || typeof history.pushState !== "function") return;
   pushSentinel();
   window.addEventListener("popstate", () => onBack($));
   window.addEventListener("pointerdown", pushSentinel, true);
   window.addEventListener("keydown", () => { if (!synthEsc) pushSentinel(); }, true);   // our own Escape is no re-arm
+  window.addEventListener("click", onSectionLink);
 }
 function create(G) {
   const { $, els } = G;
@@ -76,11 +99,6 @@ function create(G) {
     const top = UiLayers.top();
     return !top || top.id === "overlay";
   }
-  function afterHubOpens(tries) {
-    const tab = $("dh-tab-schedule");
-    if (tab) { tab.click(); return; }   // the hub remembers its last tab; NEXT GP always means the schedule
-    if (tries < MAX_TRIES) setTimeout(() => afterHubOpens(tries + 1), RETRY_MS);
-  }
   function fire(tries) {
     if (!titleLive()) {
       if (tries < MAX_TRIES) setTimeout(() => fire(tries + 1), RETRY_MS);
@@ -89,14 +107,17 @@ function create(G) {
     }
     const btn = go === "race" ? $("mb-race") : go === "daily" ? $("mb-daily") : go === "nextgp" ? $("mb-data") : $("mb-garage");   // literal ids: the dynamic-id ratchet is shrink-only
     if (!btn || btn.hidden || btn.disabled) { Log.info("game", "deep link dropped: door unavailable (" + go + ")"); return; }
+    // NEXT GP always means the schedule (the hub remembers its last tab). The
+    // door opens ON it once its bundle lands: polling 10 s for the tab missed a
+    // slow first load and opened the remembered tab instead (UI hunt 3).
+    if (go === "nextgp") btn.dataset.openTab = "schedule";
     btn.click();
-    if (go === "nextgp") afterHubOpens(0);
   }
   // TitleFlow installs this consumer before TitleMenu/game.js bind DAILY,
   // DATA and GARAGE. Let that synchronous wiring finish before clicking a door.
   setTimeout(() => fire(0), 0);
   return { go };
 }
-return { create, parse, DOORS, onBack, MARK, BASE };
+return { create, parse, DOORS, onBack, onSectionLink, MARK, BASE };
 })();
 Object.freeze(DeepLink);

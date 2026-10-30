@@ -102,17 +102,26 @@ Reports: `artifacts/lighthouse/<screen>/report.html` (not committed). Console ac
 pickers (which set / element is being edited: transient by design), and fullscreen cannot re-enter without a gesture
 (a browser rule). None is a bug.
 
-## Open leads (not fixed here)
+## Follow-up round (Bryce, 2026-10-30: "fix all")
 
-- **Dock edit mode vs BACK** (`js/ui/dock-layout.js:300`). REPOSITION TOUCH CONTROLS is not a UiLayers layer, so mid-race back
-  clicks pause instead of ending edit mode, and Settings is not restored. Give the DONE bar a layer + `data-esc-close`.
-- **HOW TO PLAY section links** push fragment entries. Each costs one silent back press before back closes the sheet.
-  The fix is to intercept `a[href^="#htp-"]` with `scrollIntoView` + `replaceState`. It needs care for `syncHashNav`'s `aria-current`, which reads
-  `location.hash` without a `hashchange`.
-- **`?go=nextgp`** waits at most 10 s for `#dh-tab-schedule`. A slow first load opens the remembered tab, with no log line.
-  `openDataHub("schedule")` exists; expose it through `G` instead of polling.
-- **Static `role=status` cards** (results earnings, badges, quali winner box) are filled before the dialog opens, so they are
-  never announced. Now that item 8 routes `LiveRegion` into the dialog, send one `LiveRegion.say(summary)` after the sheet opens.
+12. **Dock edit mode vs BACK (`js/ui/deep-link.js`).** REPOSITION TOUCH CONTROLS is no UiLayers layer, so BACK skipped
+    it: mid-race it paused, and Settings was not restored. While `body[data-dock-edit]` is up, BACK now sends the same
+    synthetic Escape that dock-layout's document-capture listener ends edit mode on (restoring Settings). Test: `deep-link.test.mjs`.
+13. **HOW TO PLAY section links (`DeepLink.onSectionLink`).** A contents link in `#htp-contents`, `#cg-contents` or `#ch-contents`
+    scrolls in place and *replaces* the hash, so it adds no history entry for BACK to spend silently. `AriaState.sync()`
+    repaints `aria-current`, which `replaceState` does not trigger through `hashchange`. Modified clicks and links with no
+    target fall back to the browser.
+14. **`?go=nextgp` (`deep-link.js` + `game.js` `#mb-data`).** The shortcut leaves a one-shot `data-open-tab="schedule"`
+    on the DATA HUB door. The door's handler reads it and calls `openDataHub(tab)`, so the hub opens on SCHEDULE however
+    slow the bundle is. This replaces the 10 s poll for `#dh-tab-schedule`.
+15. **Results and qualifying cards are spoken (`results-sheet.js` `sayCards`, `quali-sheet.js` `open`).** The earnings,
+    badge and winner-time cards were `role=status` regions built already filled, which is not announced. They are now
+    `data-say` cards. Their words (leaf texts joined, so "BADGE UNLOCKED Pole") are said through `LiveRegion` once the sheet
+    is visible, which puts them inside its dialog per item 8. A rebuild of the same classification stays quiet. Qualifying
+    says the new pole badge on `open()`. Tests: `ui-sheets-audit.test.mjs`, `quali-persist.test.mjs`.
+
+## Still open
+
 - **Real iPhone not verified.** The BrowserStack MCP opens only a hand-driven Live session (iPhone 16 / iOS 18.6 Safari on the
   live site). It has no automation hook, so the edge-swipe back, real double-tap timing against the ghost-tap shield, and
   VoiceOver basics remain **not run**. Per the research, iOS skips `pushState` entries made without a user gesture

@@ -16866,6 +16866,9 @@
       "create": [
         "tests/unit/deep-link.test.mjs"
       ],
+      "onSectionLink": [
+        "tests/unit/deep-link.test.mjs"
+      ],
       "parse": [
         "tests/unit/deep-link.test.mjs"
       ]
