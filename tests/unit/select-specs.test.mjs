@@ -1864,6 +1864,40 @@ test("spec-less js dirs route to a module-specific spec, and a dir with no cover
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test("performance mjs helpers select their actual browser consumers", () => {
+  for (const [helper, spec] of [
+    ["perf-session", "perf-session-budgets"],
+    ["perf-frametime", "perf-frametime"],
+    ["perf-race-entry", "perf-race-entry"],
+    ["race-cycle-memory", "race-cycle-memory"],
+  ]) {
+    assert.ok(specsImporting([`tests/helpers/${helper}.mjs`]).includes(`tests/specs/${spec}.spec.js`), helper);
+  }
+});
+
+test("mixed-module helper imports propagate through intermediates without selecting unrelated specs", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "select-module-import-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests/helpers"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests/specs"));
+    const files = {
+      [["tests", "helpers", "leaf.mjs"].join("/")]: "export const value = 1;",
+      [["tests", "helpers", "bridge.mjs"].join("/")]: "export * from './leaf.mjs';",
+      [["tests", "helpers", "leaf.cjs"].join("/")]: "module.exports = 1;",
+      [["tests", "helpers", "bridge.cjs"].join("/")]: "module.exports = require('./leaf.cjs');",
+      [["tests", "specs", "esm.spec.js"].join("/")]: "import '../helpers/bridge.mjs';",
+      [["tests", "specs", "cjs.spec.js"].join("/")]: "import '../helpers/bridge.cjs';",
+      [["tests", "specs", "unrelated.spec.js"].join("/")]: "export const value = 2;",
+    };
+    for (const [file, src] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), src);
+    assert.deepEqual(specsImporting([["tests", "helpers", "leaf.mjs"].join("/")], dir), [["tests", "specs", "esm.spec.js"].join("/")]);
+    assert.deepEqual(specsImporting([["tests", "helpers", "leaf.cjs"].join("/")], dir), [["tests", "specs", "cjs.spec.js"].join("/")]);
+    assert.deepEqual(specsImporting([["tests", "helpers", "leaf.mjs"].join("/"), ["tests", "helpers", "leaf.cjs"].join("/")], dir),
+      [["tests", "specs", "cjs.spec.js"].join("/"), ["tests", "specs", "esm.spec.js"].join("/")]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("files plans a hypothetical change and names rule 3's floor spec only when the diff evidences one", () => {
   const pinned = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/career/career-ui.js"] });
   assert.equal(pinned.changed, 1);
