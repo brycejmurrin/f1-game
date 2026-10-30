@@ -1908,7 +1908,7 @@ const AgentView = (function () {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest instead of every frame",
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
-          "ersPlan(plan?)": "sector ERS plan: 3× manual|deploy|save; read or set",
+          "ersPlan(plan?)": "sector ERS plan, 3× manual|deploy|save; get/set",
           "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once",
           // agentHelp() itself is deliberately absent: it is not an act, and an
           // entry describing the call whose output you are already reading is

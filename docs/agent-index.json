@@ -86,7 +86,7 @@
       "name": "ersPlan",
       "group": "act",
       "signature": "ersPlan(plan?)",
-      "summary": "sector ERS plan: 3× manual|deploy|save; read or set"
+      "summary": "sector ERS plan, 3× manual|deploy|save; get/set"
     },
     {
       "name": "objective",
