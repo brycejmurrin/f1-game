@@ -1049,6 +1049,7 @@ const LAZY_AGENT = [
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/agent/apex.js",
+  "js/agent/apex-bridge.js", // ApexBridge: postMessage commands from a framing claude.ai page (?bridge=1), reads __apex at call time
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
