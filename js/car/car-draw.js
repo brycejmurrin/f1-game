@@ -167,6 +167,7 @@ const CarDraw = (function () {
         noWheels: !!(extra && extra.noWheels),
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
         silhouette: !!(extra && extra.silhouette),
+        seats: extra && extra.seats,   // body-only: teammates' bodies from this build (#4219)
       });
     }
 
@@ -207,11 +208,38 @@ const CarDraw = (function () {
     // was a fresh closure per drawn car per pass (~66 a frame) on the hit path.
     let _pbMirror = false;
     let _pbTeam = null, _pbNum = null, _pbKind = 0, _pbSetup = null;   // 0 painted, 1 silhouette, 2 body-only
+    let _pbCar = null, _pbKey = "", _pbMates = null;
+    // TEAMMATES SHARE ONE BODY BUILD (#4219). Seats differ only in the lid (and an
+    // "auto" T-cam), so a body-only miss also derives every field teammate on the
+    // same build — Car3D.build opts.seats, byte-identical to their own builds — and
+    // parks that data under the key the teammate's own miss will look up. Each
+    // seat still gets its own mesh; the menu prep or race warm reaches the
+    // teammate within the same pass (22 builds -> 11, ~58 ms a seat in Node).
+    const _seatData = new Map(), SEAT_DATA_MAX = 12;
+    function seatMates(team, car, num) {
+      let want = null;
+      for (const c of _pbMates || G.cars || []) {
+        if (!c || c === car || c.isPlayer || c.team !== team || !c.visualSetup !== !_pbSetup) continue;
+        const n = carDecalNum(team, c);
+        if (n === num || (_pbSetup && c.visStamp !== car.visStamp)) continue;
+        const key = teamMeshKeyFor(team, lidKey(team, (c.visualSetup && c.visPaint) || n));
+        if (!teamBodies[key] && !_seatData.has(key)) (want || (want = new Map())).set(n, key);
+      }
+      return want;
+    }
     function buildPendingTeamMesh() {
       const team = _pbTeam, num = _pbNum, setup = _pbSetup;
       const extra = _pbKind === 1 ? { num, silhouette: true, setup }
         : _pbKind === 2 ? { noWheels: true, num, setup } : { num, setup };
-      const data = buildCarData(team, extra);
+      let data = _pbKind === 2 ? _seatData.get(_pbKey) : null;
+      if (data) _seatData.delete(_pbKey);
+      else {
+        const mates = _pbKind === 2 && !carModelBuf ? seatMates(team, _pbCar, num) : null;
+        if (mates) extra.seats = new Map(Array.from(mates.keys(), (n) => [n, null]));
+        data = buildCarData(team, extra);
+        if (mates) for (const [n, key] of mates) if (extra.seats.get(n)) _seatData.set(key, extra.seats.get(n));
+        for (const k of _seatData.keys()) if (_seatData.size > SEAT_DATA_MAX) _seatData.delete(k);
+      }
       const mesh = G.gfx.createMesh(data);
       // Only the existing covered warm may prepare the partner. Failed/unavailable
       // partners simply retain the detailed body; no CPU geometry is retained.
@@ -264,14 +292,18 @@ const CarDraw = (function () {
       const state = mp.state();
       return !state.collapsed && !(state.pip && state.pip.shown) && !(state.backend && state.backend.dead);
     }
-    function teamBodyMesh(team, car, mirrorWarm) {
+    // `mates`: the field a menu prep is warming (default G.cars), for seatMates.
+    function teamBodyMesh(team, car, mirrorWarm, mates) {
       _pbMirror = !!mirrorWarm && _mirrorWarmAllowed && FieldLod.on;
       if (_pbMirror && !_mirrorBodies) { _mirrorBodies = new WeakMap(); _mirrorBodyLow = new WeakMap(); }
       const num = carDecalNum(team, car);
       _pbTeam = team; _pbNum = num; _pbKind = 2;   // body-only: noWheels, num
       _pbSetup = (car && car.visualSetup) || null;
       const suffix = lidKey(team, (_pbSetup && car.visPaint) || _pbNum);
-      return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, suffix), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
+      _pbCar = car; _pbMates = mates || null; _pbKey = teamMeshKeyFor(team, suffix);
+      const mesh = putBoundedMesh(teamBodies, teamBodyOrder, _pbKey, buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
+      _pbMates = null;
+      return mesh;
     }
     // Fixed 6 cm clusters partitioned by exact paint+material, never averaged.
     // One pass (not the 14-search far-body decimator). Each vertex moves at
@@ -1215,7 +1247,7 @@ const CarDraw = (function () {
               if (c.isPlayer) {
                 playerBodyMesh(c.team, c, visualKey);
                 if (["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c, visualKey);
-              } else teamBodyMesh(c.team, c, true);
+              } else teamBodyMesh(c.team, c, true, field);
               const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
               if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
             }
@@ -2076,6 +2108,7 @@ const CarDraw = (function () {
         carModelBuf = buf;
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
         for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
+        _seatData.clear();
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
         freeSharedRivalBodies();
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
@@ -2148,7 +2181,7 @@ const CarDraw = (function () {
     function invalidateCustomMeshCaches(teamId) {
       const prefix = (teamId || "custom") + ":";
       invalidateCustomMeshCache(teamMeshes, teamMeshOrder, prefix);
-      invalidateCustomMeshCache(teamBodies, teamBodyOrder, prefix);
+      invalidateCustomMeshCache(teamBodies, teamBodyOrder, prefix); _seatData.clear();
       invalidateCustomMeshCache(playerBodies, playerBodyOrder, prefix);
       invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder, prefix);
     }
@@ -2159,6 +2192,7 @@ const CarDraw = (function () {
     function invalidateFactoryMeshCaches() {
       for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }
       for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
+      _seatData.clear();
       for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
       for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
       playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = cockpitBodyOrder.length = 0;
