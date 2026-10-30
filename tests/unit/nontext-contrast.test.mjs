@@ -447,7 +447,7 @@ const CASES = [
   // left dark ink on a dark plate (Bryce's iPhone, 2026-10-30), so HC names the cell's own restatement.
   { what: "timing strip POS cell", id: "#hud", ink: [hud, "body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos)", "color"],
     plate: [hud, "body:not(.hud-prof-broadcast) #hud-box-pos", "background"],
-    hc: [hud, ':root[data-ui-contrast="high"] body:not(.hud-prof-broadcast) #hud-box-pos', "background"] },
+    hc: [hud, ':root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *)', "background"] },
   { what: "metrics panel", id: "#game-metrics", ink: [hud, "#game-metrics", "color"], plate: [hud, "#game-metrics", "background"] },
   { what: "metrics bar buttons", id: "#game-metrics", ink: [hud, "#game-metrics-bar > button", "color"], plate: [hud, "#game-metrics", "background"] },
   // NON-TEXT (1.4.11, 3:1): the parts of a chip that carry its state.
