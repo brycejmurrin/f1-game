@@ -22,7 +22,17 @@ async function startGp(page, headless = true) {
   await page.waitForFunction(() => !!window.__apex.info().track
     && ["count", "race"].includes(window.__apex.info().state), null,
   { polling: 100, timeout: RACE_BUILD_MS });
-  await page.evaluate(() => { window.__apex.setPhysics({ pace: 1 }); window.__apex.go(); });
+  if (headless) await page.evaluate(() => { window.__apex.setPhysics({ pace: 1 }); window.__apex.go(); });
+  else {
+    // A rendered page holds tickBody while the race-entry program warm compiles
+    // (~30 s on SwiftShader): go() skipped those lights, crossFlag stepped the whole
+    // race inside the warm, and the cooldown's first real frames were still held
+    // (#4253). The countdown only advances on frames the warm lets through, so
+    // natural lights-out is the player's own proof that the warm has settled.
+    await page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
+    await page.waitForFunction(() => window.__apex.info().state === "race" && !GLX.warming(), null,
+      { polling: 100, timeout: RACE_BUILD_MS });
+  }
   expect(await page.evaluate(() => window.__apex.info().lapsTarget)).toBe(1);
 }
 
