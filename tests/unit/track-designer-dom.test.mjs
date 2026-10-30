@@ -1377,7 +1377,7 @@ test("START FROM hydrates a metadata-only pick and revokes stale replacements", 
 
 // Hydration may finish between pointermove and pointerup. Exercise the real
 // gesture handlers rather than calling the final commit hooks directly.
-for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test("pending START FROM " + (move ? "yields to an in-progress " : "survives a selection-only ") + gesture + " gesture", async () => {
+for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test(`pending START FROM ${move ? "yields to an in-progress " : "survives a selection-only "}${gesture} gesture`, async () => {
   const b = bootScreen(), captured = {}, arcs = [];
   for (const [global, key] of [["DesignerCanvas", "map"], ["DesignerProfile", "profile"]]) {
     const real = b.ctx[global];
