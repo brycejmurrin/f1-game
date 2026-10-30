@@ -229,9 +229,12 @@ export function inspectUI(options = {}) {
     .filter(e => ["status", "alert"].includes(e.getAttribute("role")) || ["polite", "assertive"].includes(e.getAttribute("aria-live")))
     .filter(e => text(e.textContent))
     .filter(e => options.root || !e.closest('.screen,dialog,[role="dialog"]') || paintedRoot(e.closest('.screen,dialog,[role="dialog"]')));
+  const visualBounds = vv && [vv.width, vv.height, vv.offsetLeft, vv.offsetTop].every(Number.isFinite) && vv.width > 0 && vv.height > 0;
+  const feedbackViewport = visualBounds ? { x: vv.offsetLeft, y: vv.offsetTop, width: vv.width, height: vv.height, source: "visual-viewport" }
+    : { x: 0, y: 0, width: innerWidth, height: innerHeight, source: "layout-viewport-fallback" };
   const feedback = feedbackNodes.slice(0, 100).map(e => {
     const r = e.getBoundingClientRect(), reasons = [], clippedBy = [];
-    let left = Math.max(0, r.x), right = Math.min(innerWidth, r.right), top = Math.max(0, r.y), bottom = Math.min(innerHeight, r.bottom);
+    let left = Math.max(feedbackViewport.x, r.x), right = Math.min(feedbackViewport.x + feedbackViewport.width, r.right), top = Math.max(feedbackViewport.y, r.y), bottom = Math.min(feedbackViewport.y + feedbackViewport.height, r.bottom);
     let unsupportedClip = false, unsupportedTransform = false, ownTextOverflow = false;
     for (let p = e; p; p = p.parentElement) {
       const style = getComputedStyle(p), b = p.getBoundingClientRect();
@@ -275,7 +278,7 @@ export function inspectUI(options = {}) {
     dialogs: [...document.querySelectorAll('dialog[open],[role="dialog"]')].filter(visible).map(e => e.id || name(e)),
     viewport: { width: innerWidth, height: innerHeight, textScale: Number(document.documentElement.dataset.explorerTextScale || 100) },
     adaptive, layoutContexts: [...layoutContexts.values()], layoutContextsTruncated,
-    controls, feedback, issues, coverage, totalControls: candidates.length, truncated: candidates.length > limit,
+    controls, feedback, feedbackViewport, issues, coverage, totalControls: candidates.length, truncated: candidates.length > limit,
     focus: document.activeElement ? { selector: selector(document.activeElement), name: name(document.activeElement), tag: document.activeElement.tagName } : null,
     errorOverlay: [...document.querySelectorAll('#__err_overlay,#vite-error-overlay')].filter(visible).map(e => e.textContent.slice(0, 1000)),
     game: { devAPI: !!window.__apex }, limitations: ["DOM names are screening; accessibility snapshot is authoritative", "Only explicit scale/appearance/camera/lighting bindings are mapped", "No game dev hooks invoked: some getters lazily build tracks", "CSS tokens retain browser serialization, including unresolved calc expressions; visual viewport metadata does not prove virtual keyboard behavior", "Layout ancestry is bounded to 12 ancestors per control and 256 unique contexts; clipping still checks every ancestor"] };

@@ -679,6 +679,15 @@ test("feedback collector retains hidden text but separates rendered content and 
   assert.equal(first.feedback[0].text, "Hidden error Other");
   assert.equal(first.feedback[0].renderedText, "Other", "hidden child text cannot satisfy the visible-feedback oracle");
   assert.equal(first.feedback[0].visibility, "fully-inside");
+  context.window.visualViewport = { width: 100, height: 800, offsetLeft: 0, offsetTop: 0 };
+  assert.equal(inspect().feedback[0].visibility, "partly-inside", "a wider layout viewport must not hide a narrow visual viewport");
+  assert.equal(inspect().feedbackViewport.source, "visual-viewport");
+  context.window.visualViewport = { width: 844, height: 390, offsetLeft: 0, offsetTop: 80 };
+  assert.equal(inspect().feedback[0].visibility, "outside", "visual viewport offsets share layout CSS-pixel coordinates");
+  context.window.visualViewport = { width: 0, height: 0, offsetLeft: 0, offsetTop: 0 };
+  assert.equal(inspect().feedbackViewport.source, "layout-viewport-fallback");
+  assert.equal(inspect().feedback[0].visibility, "fully-inside");
+  delete context.window.visualViewport;
   style.display = "none";
   assert.equal(inspect().feedback[0].visibility, "hidden");
   assert.equal(inspect().feedback[0].renderedText, "");
