@@ -17830,6 +17830,14 @@
         "tests/unit/loading-card.test.mjs"
       ]
     },
+    "js/ui/look-avail.js": {
+      "whyKnob": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs"
+      ]
+    },
     "js/ui/menu-nav.js": {
       "activeLayer": [
         "tests/specs/menu-keyboard.spec.js",
@@ -18237,10 +18245,8 @@
       "save": [
         "tests/unit/player-tools-ui.test.mjs"
       ],
-      "whyKnob": [
-        "tests/unit/screen-looks.test.mjs"
-      ],
       "*": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
