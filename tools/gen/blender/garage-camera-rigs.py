@@ -138,17 +138,20 @@ def rig_drone(d, b):
             for k in [min(1.0, (b['end'] - b['park'] + 0.6) / 2.4)]]   # the drift scales with the hold after parking
 
 def rig_steadicam(d, b):
-    # Chest height on the far flank (-x). Along the walls, not the car's flank:
-    # the crews (result crews too) stand 1-3 m off the car and a lens walked
-    # through them is lifted over their heads (clearOfCrew).
-    if d == 'out':   # from the nose three-quarter, walks to the door with the car and stops on the threshold
-        return bob([(0, (-4.0, 1.45, 5.4), 50), (b['go'], (-4.0, 1.45, 5.4), 50),
-                    (b['atDoor'] + 0.4, (-3.0, 1.45, 5.9), 54), (b['end'], (-2.9, 1.45, 5.95), 54)],
+    # Chest height along the far (-x) wall, a side profile of the car. The
+    # crews stand 1-3 m off the car and fill most of the bay over a visit (a
+    # lens walked through them is lifted over their heads by clearOfCrew);
+    # x -4.6, z -0.6..1.6 is the band every clip leaves >= 1.3 m clear. The
+    # front-wall corner was clear of crews too, but its racks, the jamb and
+    # crew torsos at 1 m filled the frame (2026-10-30 844x390 capture).
+    if d == 'out':   # from the car's flank, walks forward with it as it rolls out, holds on the doorway
+        return bob([(0, (-4.6, 1.45, -0.5), 50), (b['go'], (-4.6, 1.45, -0.5), 50),
+                    (b['atDoor'] + 0.4, (-4.5, 1.45, 1.5), 56), (b['end'], (-4.5, 1.45, 1.6), 56)],
                    b['go'], b['atDoor'] + 0.4, 0.02, 0.9)
-    # Picks the car up on the far flank at the door, walks back along the front
-    # wall with it as it reverses past, and finishes on a three-quarter front at the nose.
-    return bob([(0, (-2.8, 1.45, 5.85), 52), (b['back'], (-2.9, 1.45, 5.8), 52),
-                (b['park'], (-3.9, 1.45, 5.45), 48), (b['end'], (-4.0, 1.45, 5.4), 48)],
+    # Watches the door and the lane from the wall, walks back with the car as
+    # it reverses in, and finishes on its flank as it parks.
+    return bob([(0, (-4.5, 1.45, 1.6), 56), (b['back'], (-4.5, 1.45, 1.5), 56),
+                (b['park'], (-4.6, 1.45, -0.4), 50), (b['end'], (-4.6, 1.45, -0.6), 50)],
                b['back'], b['park'], 0.02, 0.9)
 
 PIVOT = (0.0, 0.5)   # game x, z the ORBIT circles

@@ -19,7 +19,7 @@ angle presets and the exports is the integrating PR's job.
 | `dolly` | DOLLY | on a track at x ≈ 3, from the door (z 5.5) back to z 0.4 alongside the car as it backs in | from z -1 to the door (z 5.6) alongside the car as it drives out |
 | `rear` | REAR TRACK | from the back of the bay, looking out the door; pulls back and up (z -4.6 → -5.7, y 1.3 → 1.9, fov 52 → 44) as the car reverses toward it | from the back wall, pushes low behind the car to z ≈ 2.4 as it leaves |
 | `drone` | DRONE | hovers high just inside the door (y 3.4, z 5.8), drifts toward the lane as the car stops, then down and back over it as it reverses in (y 3.05 at z 3.7), and ends in a slow high reveal (y ≈ 3.0) that orbits a little round the nose; the drift scales with the hold after parking, fov 58 → 50 | rises off the back of the parked car (y 2.9 → 3.4), follows it to the door and holds high over the doorway (y 3.5, z 5.8) as it leaves |
-| `steadicam` | STEADICAM | chest height (y 1.45, ±2 cm walking bob) on the far flank (-x) at the threshold, walks back along the front wall as the car reverses past, and finishes on a three-quarter front of the nose (x -4.0, z 5.4), fov 52 → 48 | from that nose three-quarter, walks with the car to the threshold (x -3.0, z 5.9) and stops there as it drives away |
+| `steadicam` | STEADICAM | chest height (y 1.45, ±2 cm walking bob) along the far (-x) wall: watches the door and lane from (-4.5, 1.6), walks back with the car as it reverses in, ends on its flank (-4.6, -0.6), fov 56 → 50 | from the flank (-4.6, -0.5), walks forward with the car as it rolls out and holds on the doorway (-4.5, 1.6) |
 
 Eye keys sit on the sequence's own beats (shutter open, car stopped, back-in
 start, parked; or roll, doorway, gone), read off the real poses. The aim Empty
@@ -80,4 +80,8 @@ is not the script's.
 - Through `arrival.js` (`clearOfCrew` on, every enter, leave and result crew at 50 ms steps): min eye-to-crew gap
   DRONE 1.30 m (never lifted), STEADICAM 1.03 m (the test floor is 0.8); worst eye step per 50 ms DRONE 0.17 m,
   STEADICAM 0.06 m (the test bound is 0.5).
-- Not rendered: no browser look, no 844×390 capture yet.
+- Moved to the far wall after the first 844×390 capture (parent, 2026-10-30, TLX WebGPU on the SwiftShader
+  adapter, `scratch/garage-phone.mjs`). The front-wall corner was clear of crews, but every frame was the jamb,
+  the front-wall racks and crew torsos at ~1 m. A crew-occupancy map (every clip, 0.1 s steps, 0.5 m grid) leaves
+  only the front corners and the far-wall band x -4.6, z -0.6..1.6 at ≥ 1.3 m from every member. Through
+  `clearOfCrew` the wall path's min gap is 1.14 m (CHECK) and its max lift 0.36 m.

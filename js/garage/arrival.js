@@ -100,12 +100,14 @@ const GarageArrival = (function () {
    * to scroll). Each is a partial settings object laid over the saved one, so
    * crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
    * BROADCAST: the TV pit-lane coverage — three locked-off cameras, broadcast
-   * light, captions. CINEMA: the Blender crane, a push and a slow door, the
-   * showroom mood under bars, no captions. DOCUMENTARY: a heavy handheld
+   * light, captions. CINEMA: the Blender crane (no CAMERA MOVE on top: a push
+   * carried the lens into a crew member and the car past the frame edge,
+   * 2026-10-30 844x390 capture), slow-mo at the door, the showroom mood under
+   * bars, no captions. DOCUMENTARY: a heavy handheld
    * drifting through three cameras under the garage's own light. */
   const STYLES = Object.freeze({
     broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
-    cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "push", sway: 0.5, zoom: 12, fov: 48, light: "showroom", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
+    cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "showroom", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
     documentary: Object.freeze({ label: "DOCUMENTARY", look: { angle: "custom", shots: ["door", "low", "left"], move: "drift", sway: 2, zoom: 6, fov: 58, light: "asset", cue: "none", captions: true, bars: false, slowmo: 0 } }),
   });
   /** The saved settings with style `id`'s look laid over them. */
