@@ -628,8 +628,7 @@
      draws it: purple = session best (one holder, transfers), green =
      personal best, yellow = slower than your own best; no reference yet
      keeps the row's own ink. --faster/--slower are the HUD's existing
-     delta inks (ghost, gaps, data hub), named so every reader agrees.
-     Green, not lime: lime is --you (design pass #1, apca-timing test). */
+     delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #5fe88a;
   --slower: #ff3b30;
   /* The RED FLAG chip's field (css/hud.css #hud-flag.flag-red): a fixed flag
