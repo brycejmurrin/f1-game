@@ -890,6 +890,7 @@
   "results.viewCoach": "VIEW IN DRIVING SETTINGS",
   "results.watchAgain": "WATCH AGAIN",
   "results.winner": "WINNER",
+  "results.winnerChip": "P1 {code}",
   "results.winnerElapsed": "OFFICIAL WINNER ELAPSED — {code}  {name}: {time}",
   "results.worldChampion": "WORLD CHAMPION",
   "results.yourBest": "YOUR BEST",
