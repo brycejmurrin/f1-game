@@ -1211,6 +1211,8 @@
     "// Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.",
     "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
     "tests/unit/ui-fixer-uncommitted.test.mjs",
+    "// tools/ui/flows.mjs (UI layout program G3): flag parsing, evidence → pass/fail/warn/skip rows, --diff regressions, flows.md. No browser, < 1 s.",
+    "tests/unit/ui-flows.test.mjs",
     "tests/unit/ui-improve-pass.test.mjs",
     "tests/unit/ui-journey-career.test.mjs",
     "tests/unit/ui-journey-race.test.mjs",

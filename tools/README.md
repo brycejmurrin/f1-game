@@ -497,6 +497,9 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/summary.mjs** | Offline summaries of saved explorer JSON (replay bundles, inspections); no browser, no inference beyond the data. | — |
 | **ui/explorer/transitions.mjs** | Bounded adaptive classification histories and forward/reverse viewport path comparisons. | — |
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
+| **ui/flows.mjs** | UI interaction flows (844x390 touch): doors, double-tap, focus, Escape, Back, persist, search, rotate, D-pad; --diff. | ui-menu-a11y |
+| **ui/flows/core.mjs** | UI flows pure core: flags, catalogs, evidence → pass/fail/warn/skip rows, --diff, flows.md. | ui-menu-a11y |
+| **ui/flows/probes.mjs** | UI flows browser probes: real taps/keys, one fresh context per check group; evidence for flows/core.mjs. | ui-menu-a11y |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
 | **ui/menu-fit.mjs** | DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport. | survey-ui-matrix |
