@@ -1,9 +1,5 @@
 {
   "files": {
-    "css/hud.css": {
-      "codeLines": -3,
-      "lines": -4
-    },
     "js/net/lobby.js": {
       "lines": 9
     }
