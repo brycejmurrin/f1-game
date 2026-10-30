@@ -43,7 +43,7 @@ node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
 HUD/menu glitch repro: serve `python3 -m http.server 3456`, `chrome-start`, navigate
-`http://127.0.0.1:3456/`, `await __apex.race(id); __apex.go()` ([references/chrome.md](references/chrome.md)
+`http://127.0.0.1:3456/`, `await __apex.race(id); __apex.go()` (`id` from `__apex.tracks()`) ([references/chrome.md](references/chrome.md)
 §Setup: `race()` is a promise, and `go()` before it settles finds no grid), then
 `take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
 `awaitPresent()` matters only if the 3D behind it must be current. Done = the
