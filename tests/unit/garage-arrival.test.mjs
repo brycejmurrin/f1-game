@@ -1525,7 +1525,7 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   let cur = 'shipped', saved = 0;
   const cls = new Set();
   const c = vm.createContext({ GarageScene: { mood: (id) => (id === undefined ? cur : (cur = id)), setMood() { saved++; } },
-    document: { documentElement: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } } });
+    document: { body: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } } });
   vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
   const look = vm.runInContext('sequenceLook', c);
   look({ active: true, mood: 'night', bars: true });

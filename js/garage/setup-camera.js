@@ -724,7 +724,7 @@ function sequenceLook(p) {
     else if (!want && _seqMoodWas !== null) { GarageScene.mood(_seqMoodWas); _seqMoodWas = null; }
   }
   const bars = on && !!p.bars;
-  if (bars !== _seqBars && typeof document !== "undefined") { _seqBars = bars; document.documentElement.toggleAttribute("data-ga-bars", bars); }
+  if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload

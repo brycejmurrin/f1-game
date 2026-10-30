@@ -1944,11 +1944,11 @@ body:not(.desktop) #carsetup #cs-customize {
 /* CINEMA BARS (GARAGE ENTER & LEAVE): letterbox the bay while a sequence plays
    (setup-camera.js sequenceLook). Over the canvas, under the garage sheet (35),
    so SKIP and STOP PREVIEW stay on top and tappable. */
-html[data-ga-bars] body::before, html[data-ga-bars] body::after {
+body[data-ga-bars]::before, body[data-ga-bars]::after {
   content: ""; position: fixed; left: 0; right: 0; height: 11vh; background: var(--bg); z-index: 34; pointer-events: none;
 }
-html[data-ga-bars] body::before { top: 0; }
-html[data-ga-bars] body::after { bottom: 0; }
+body[data-ga-bars]::before { top: 0; }
+body[data-ga-bars]::after { bottom: 0; }
 #ga-fov {
   width: 6ch; min-height: var(--tap); text-align: center;
   background: var(--carbon); color: var(--text); border: 1px solid var(--text);
