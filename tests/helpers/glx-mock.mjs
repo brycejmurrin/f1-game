@@ -80,7 +80,8 @@ export function bootGlx(opts = {}) {
   const contextAttrs = [];
   const answers = {
     isContextLost: () => contextLost,
-    getExtension: (name) => (opts.aniso && /anisotropic/.test(String(name)) ? ANISO
+    // opts.extensions: names answered with a plain extension object (e.g. the colour-buffer pair).
+    getExtension: (name) => (opts.extensions && opts.extensions.includes(String(name)) ? {} : opts.aniso && /anisotropic/.test(String(name)) ? ANISO
       : (opts.parallel && /parallel_shader_compile/.test(String(name)) ? PARALLEL : null)),
     getParameter: () => 16,
     // Desktop-class MSAA support, so glx/post.js takes its multisampled path.

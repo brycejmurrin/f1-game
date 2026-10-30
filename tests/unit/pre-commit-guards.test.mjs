@@ -21,6 +21,7 @@ import {
   okPath,
   unstagedTracked,
 } from "../../tools/ci/guards-verdict.mjs";
+import { parseFailures, report as guardsReport } from "../../tools/ci/guards-report.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HELPER = path.join(ROOT, "tools/ci/guards-verdict.mjs");
@@ -731,4 +732,21 @@ test('git hook borrows dependencies only in a linked worktree and skips asset-on
   r.put('assets/new.png','asset');r.g('add','assets');out=r.run();assert.equal(out.status,0,out.stderr);assert.match(out.stderr,/guards skipped.*no tools/);
   r.put(path.posix.join('js','new.js'),'code');r.g('add','js');out=r.run();assert.equal(out.status,1,out.stderr);assert.doesNotMatch(out.stderr,/guards skipped/);
  }finally{spawnSync('git',['worktree','remove','--force',wt],{cwd:r.dir,env:r.env});r.rm();}
+});
+
+test("guards-report lists EVERY failing guard with a fix command, not just the first (efficiency review finding 4)", () => {
+  const tap = [
+    "TAP version 13", "# Subtest: pins never grow", "not ok 1 - pins never grow", "  ---",
+    "  location: '/x/tests/unit/assert-match-ratchet.test.mjs:1:1'", "  error: '12 pins > ceiling 10'", "  ...",
+    "# Subtest: order", "not ok 2 - groups.json order", "  ---", "  location: '/x/tests/unit/groups.test.mjs:3:1'", "  error: 'groups.json out of order'", "  ...",
+    "not ok 3 - /x/tests/unit/groups.test.mjs", "  ---", "  ...",
+    "ok 4 - fine",
+  ].join("\n");
+  const fails = parseFailures(tap);
+  assert.deepEqual(fails.map((f) => f.name), ["pins never grow", "groups.json order"], "file-level wrapper dropped, both reds kept");
+  const text = guardsReport(tap);
+  assert.equal(/2 failing guards/.test(text), true, "text ~ " + /2 failing guards/);
+  assert.equal(/ratchets\.mjs --update --lower-only/.test(text), true, "text ~ " + /ratchets\.mjs --update --lower-only/);
+  assert.equal(/npm run gen/.test(text), true, "text ~ " + /npm run gen/);
+  assert.equal(guardsReport("ok 1 - fine\n"), "");
 });

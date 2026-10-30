@@ -903,28 +903,32 @@ fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>,
   if (F.params3.x > 0.0) {
     acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
   }
-  // GGX specular from the lamp (same microfacet BRDF as the sun).
-  // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
-  // so wet roads / walls still streak a lamp you can see, not only the pool.
-  let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
-  let Hl = normalize(Ld + V);
-  let NoHl = max(dot(N, Hl), 0.0);
-  let VoHl = max(dot(V, Hl), 0.0);
-  let Dl = D_GGX(NoHl, a);
-  let Vl = V_SmithGGX(NoV, NoLl, a);
-  let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-  let radianceS = lcol * (att * spotS * lampSh);
-  var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
-  lspec = lspec / (1.0 + lspec);
-  acc.col = acc.col + lspec;
-  // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
-  // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx/shaders/glsl-lit.js).
-  if (clearcoat > 0.001) {
-    let Dcc = D_GGX(NoHl, 0.03);
-    let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
-    let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
-    var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
-    acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+  // A lamp facing away (NoLl == 0) zeroes every term below: skip GGX + clearcoat
+  // (GLX glsl-lit.js and TLX gate the same; dominant on 28-32-lamp nights — perf hunt 7).
+  if (NoLl > 0.0) {
+    // GGX specular from the lamp (same microfacet BRDF as the sun).
+    // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
+    // so wet roads / walls still streak a lamp you can see, not only the pool.
+    let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
+    let Hl = normalize(Ld + V);
+    let NoHl = max(dot(N, Hl), 0.0);
+    let VoHl = max(dot(V, Hl), 0.0);
+    let Dl = D_GGX(NoHl, a);
+    let Vl = V_SmithGGX(NoV, NoLl, a);
+    let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+    let radianceS = lcol * (att * spotS * lampSh);
+    var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+    lspec = lspec / (1.0 + lspec);
+    acc.col = acc.col + lspec;
+    // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
+    // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx/shaders/glsl-lit.js).
+    if (clearcoat > 0.001) {
+      let Dcc = D_GGX(NoHl, 0.03);
+      let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+      let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
+      var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+      acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+    }
   }
   return acc;
 }

@@ -408,7 +408,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
       if (suv.x > 0.0 && suv.x < 1.0 && suv.y > 0.0 && suv.y < 1.0 && sc.z < 1.0) {
         lit = textureSampleCompareLevel(shadowTex, shadowSamp, suv, sc.z - 0.002);
       }
-      lit = lit * (1.0 - grCloud(p) * 0.62);
+      if (lit > 0.0) { lit = lit * (1.0 - grCloud(p) * 0.62); }   // shadowed: skip the cloud FBM (GLX/TLX parity, perf hunt 7)
       accum = accum + lit * hSun * trans;
     }
     if (uLampStr > 0.0 && td < 200.0) {

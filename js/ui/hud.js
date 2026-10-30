@@ -538,6 +538,23 @@ let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the fo
 // reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
 let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
 function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
+// fitHud's dock buttons, queried once per dock layout, not per 10 Hz tick: layoutDocks (game.js) re-parents GROUPS and
+// pickDocks swaps the handles, so the cache keys on [dockL, its children…, dockR, …]; invalidateFit drops it too.
+let _dockBtns = null, _dockKids = [];
+function dockKidsSame() {
+  let i = 0;
+  for (const d of [_dockL, _dockR]) {
+    if (_dockKids[i++] !== d) return false;
+    if (d) for (let j = 0; j < d.children.length; j++) if (_dockKids[i++] !== d.children[j]) return false;
+  }
+  return i === _dockKids.length;
+}
+function dockButtons() {
+  if (_dockBtns && dockKidsSame()) return _dockBtns;
+  _dockBtns = []; _dockKids = [];
+  for (const d of [_dockL, _dockR]) if (_dockKids.push(d) && d) { _dockKids.push(...d.children); _dockBtns.push(...d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")); }
+  return _dockBtns;
+}
 // THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
 // player offset on top of each element with `translate` / `scale` (data-hl,
 // --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
@@ -838,7 +855,7 @@ function fitHud() {
   // Which dock buttons are showing is part of the key: showTouchControls hides/unhides BOOST, OT, AERO
   // and the shifts after the first fit, and a taller column under a stale cap overflowed the top.
   let dockSig = "";
-  for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
+  for (const b of dockButtons()) dockSig += b.hidden ? "0" : "1";   // the list is cached; per tick only `.hidden`
   const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   const sameKey = head + hlKey() + tail === _fitKey;
@@ -2259,7 +2276,7 @@ function resetRace() {
 // reads per apply, only once the fit has found the tower; the caps still wait
 // for the tick.
 function invalidateFit() {
-  _fitKey = ""; _fitRetry = 0;
+  _fitKey = ""; _fitRetry = 0; _dockBtns = null;
   _fitPending = true;
   invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
   if (!_hudTop || hudPaintHidden()) return;

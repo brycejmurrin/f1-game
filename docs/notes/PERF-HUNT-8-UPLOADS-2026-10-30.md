@@ -1,9 +1,9 @@
-# Perf hunt 7 — GPU uploads on TLX WebGPU (2026-10-30)
+# Perf hunt 8 — GPU uploads on TLX WebGPU (2026-10-30)
 
 Scope: per-frame uploads (writeBuffer, createBuffer, bind groups) on TLX, the default backend and Bryce's iPhone
 WebGPU path, plus the hunt 5 leftovers (the WGX mirror chain, TLX exact-zero shader gates). Hunt 5
 (`PERF-HUNT-5-GPU-2026-10-30.md`, #4207) cut GPU passes. Hunt 6 (`PERF-HUNT-6-CPU-2026-10-30.md`, #4206, a peer
-session) was main-thread CPU. Every number here is a COUNT or a byte total from the macOS census, never a frame
+session) was main-thread CPU, and a second peer session's hunt 7 (`PERF-HUNT-7-2026-10-30.md`) landed first, so this one is numbered 8. Every number here is a COUNT or a byte total from the macOS census, never a frame
 time.
 
 ## Method
