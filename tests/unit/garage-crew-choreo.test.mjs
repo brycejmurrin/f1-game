@@ -72,9 +72,16 @@ test("MIX rotates every crew each way and never repeats a crew on consecutive vi
       assert.notEqual(id, Choreo.pick(dir, n + 1), `${dir} visit ${n}`);
     }
     assert.equal(seen.size, list.length, dir);
-    for (const id of Choreo.IDS[dir]) assert.ok(list.includes(id), `${id} in the ${dir} rotation`);
+    for (const id of Choreo.IDS[dir]) assert.equal(list.includes(id), Choreo.CLIPS[id].mix !== false, `${id} in the ${dir} rotation unless mix is false`);
     assert.equal(Choreo.pick(dir, -1), list[list.length - 1], "a negative count wraps");
   }
+});
+
+test("MIX keeps the shipped rotation; AFTER THE RACE crews are never dealt", () => {
+  const { Choreo } = load();
+  assert.deepEqual(Array.from(Choreo.MIX.in), ["current", "marshal", "inspect", "debrief", "service"]);
+  assert.deepEqual(Array.from(Choreo.MIX.out), ["current", "sendoff", "pushout", "check", "service"]);
+  for (let n = 0; n < 40; n++) assert.ok(!Choreo.CLIPS[Choreo.pick("in", n)]?.result, `visit ${n} deals an ordinary crew`);
 });
 
 test("one playback reads one crew; the next playback takes the next one", () => {
@@ -131,7 +138,7 @@ function inCar(px, pz, car, r = 0.25) {
 }
 test("no garage crew member stands in the car's path, either way round the lane", () => {
   const { Arrival, Choreo } = load(), out = Choreo.actors(12);
-  for (const dir of ["in", "out"]) for (const id of Choreo.IDS[dir]) for (const angle of ["left", "right", "cut"]) {
+  for (const dir of ["in", "out"]) for (const id of Choreo.IDS[dir].filter((x) => !Choreo.CLIPS[x].result)) for (const angle of ["left", "right", "cut"]) {
     const cfg = Arrival.settings({ angle, [dir === "in" ? "enterCrew" : "leaveCrew"]: id }), end = Arrival.duration(cfg, dir);
     for (let t = 0; t <= end; t += 0.05) {
       const pose = (dir === "in" ? Arrival.pose : Arrival.poseOut)(t, cfg, true);
@@ -141,6 +148,36 @@ test("no garage crew member stands in the car's path, either way round the lane"
         const a = out[i];
         assert.ok(!inCar(a.x, a.z, pose), `${id} member ${i} inside the car at t=${t.toFixed(2)} (${angle}): ${a.x.toFixed(2)},${a.z.toFixed(2)} car ${pose.x.toFixed(2)},${pose.z.toFixed(2)}`);
         assert.ok(Math.abs(a.x) < 5.1 && a.z > -6.1 && a.z < 12, `${id} member ${i} inside the bay or apron at t=${t.toFixed(2)}`);
+      }
+    }
+  }
+});
+
+// AFTER THE RACE result crews, played on the home sequence of their result.
+const RESULT_CREWS = { celebrate: "win", applause: "podium", recover: "dnf", console: "finish" };
+// Horizontal metres from an eye to a body standing at (x, z), the body a 0-1.8 m upright segment.
+const eyeGap = (e, x, z) => Math.hypot(e[0] - x, e[2] - z, Math.max(0, e[1] - 1.8));
+test("AFTER THE RACE crews: in-direction, result-timed, inside the bay, off the car and clear of every eye", () => {
+  const { Arrival, Choreo } = load(), out = Choreo.actors(12);
+  for (const [id, result] of Object.entries(RESULT_CREWS)) {
+    const clip = Choreo.CLIPS[id];
+    assert.ok(clip && clip.dir === "in" && clip.result === result && clip.mix === false && clip.label, id);
+    assert.ok(Choreo.IDS.in.includes(id), `${id} reads through the "in" path`);
+    for (const angle of ["left", "right", "cut"]) {
+      const cfg = Arrival.settings({ angle, homeCrew: id, result }), T = Arrival.timeline(cfg, "home"), end = Arrival.duration(cfg, "home");
+      assert.ok(Math.abs(end - (T.base + clip.extra)) < 1e-9 && Math.abs(clip.len - end) < 2e-3, `${id}: the clip spans the home sequence (${clip.len} vs ${end})`);
+      for (let t = 0; t <= end; t += 0.05) {
+        const pose = Arrival.poseHome(t, cfg, true);
+        assert.equal(pose.crew, id);
+        const n = Choreo.sample(id, t, pose.side, out, t, true);
+        for (let i = 0; i < n; i++) {
+          const a = out[i], at = `${id} member ${i} t=${t.toFixed(2)} (${angle}) at ${a.x.toFixed(2)},${a.z.toFixed(2)}`;
+          assert.ok(!inCar(a.x, a.z, pose), `${at}: inside the car ${pose.x.toFixed(2)},${pose.z.toFixed(2)}`);
+          for (const [cam, e] of Object.entries(Arrival.CAMS)) assert.ok(eyeGap(e, a.x, a.z) >= 0.8, `${at}: ${eyeGap(e, a.x, a.z).toFixed(2)} m from the ${cam} eye`);
+          // A pusher rides beside the car up the lane; everyone else, and a pusher once it is parked, stays in the bay.
+          if (clip.actors[i].lin && t < T.park) assert.ok(Math.hypot(a.x - pose.x, a.z - pose.z) < 2.2, `${at}: a pusher stays on the car`);
+          else assert.ok(Math.abs(a.x) < 5.1 && a.z > -6.1 && a.z < 6.3, `${at}: inside the bay`);
+        }
       }
     }
   }

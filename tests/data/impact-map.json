@@ -7621,7 +7621,8 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "timeline": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "wallLeft": [
         "tests/unit/garage-arrival.test.mjs"

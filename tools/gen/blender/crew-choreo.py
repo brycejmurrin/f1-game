@@ -11,7 +11,10 @@ the same ease between the same keys, so the exported keys ARE the curves; no
 dense sampling ships. `walk` (the gait phase GarageCrewMotion replays) is the
 signed distance each body travels along its own facing, integrated here from the
 evaluated world matrices. A member attached to the car (the PUSH-OUT crew) is
-baked from the car proxy's animated path into linear keys at 12 Hz.
+baked from the car proxy's animated path into linear keys at 12 Hz; car='local'
+members (the RECOVERY pushers) are keyed in the car's own frame and baked the
+same way, thinned to the keys linear interpolation needs. AFTER THE RACE clips
+carry `result` (timed on that result's home sequence) and mix False.
 
 Original project-authored motion. Blender XYZ = game X, -Z, Y; game yaw = Blender
 Z rotation (forward is local -Y). Garage clips are authored for the lane side +1
@@ -59,6 +62,22 @@ def car_in(t):
 
 def car_out(t, extra):
     return path_at(out_distance(t - DOOR_S - OUT_HOLD - extra))
+
+# AFTER THE RACE (arrival.js RESULTS + timeline("home")), default tuner: the
+# lane and back-in are scaled, the pause lengthened; a retired car is PUSHED
+# (smoothstep up the lane instead of braking).
+RESULTS = dict(win=(1.35, 1, 1.4, 1.5, False), podium=(1.2, 1, .9, 1, False), points=(1, 1, .4, .5, False),
+               finish=(1, 1, 0, 0, False), dnf=(2.2, 1.4, .3, .5, True))
+def home_tl(result):
+    lane, back, pause, end, pushed = RESULTS[result]
+    lane, pause, back = IN_LANE * lane, IN_PAUSE + pause, IN_BACK * back
+    park = DOOR_S + lane + pause + back
+    return dict(lane=lane, pause=pause, back=back, park=park, base=park + .3 + end, pushed=pushed)
+def car_home(t, result):
+    T = home_tl(result); u = max(0, min(1, (t - DOOR_S) / T['lane']))
+    lane = IN_LANE_M * (ease(u) if T['pushed'] else 1 - (1 - u) ** 2)
+    back = ease((t - DOOR_S - T['lane'] - T['pause']) / T['back'])
+    return path_at(OUT_PATH * (1 - back)) if back > 0 else (OUT_R + lane - IN_LANE_M, OUT_STRAIGHT + OUT_R, OUT_TURN)
 
 # ── THE CLIPS ────────────────────────────────────────────────────────────────
 # K(t, channel=value…): a key on the listed channels only; a channel holds its
@@ -166,8 +185,84 @@ for wx, wz in [(.79, 1.7), (-.79, 1.7), (.76, -1.6), (-.76, -1.6)]:
                       K(P(.84), **STAND), K(P(1), x=s * 1.45, z=wz + f * 1.45)))
 CLIPS['pit'] = dict(dir='pit', extra=0, label='PIT STOP CREW', len=PIT_LEN, actors=pit)
 
+# ── AFTER THE RACE: result crews (dir "in", timed on the home sequence of
+# `result`, mix False: MIX never deals them to an ordinary arrival). Crew stay
+# inside the bay, off the car's swept path and >= 0.8 m from every eye in
+# arrival.js CAMS, mirrored (DOOR eye x -0.9, z 5.9). Pushers are car='local':
+# authored in the CAR's frame (nose +Z) until their release key, after which
+# the car is parked at the origin and the two frames coincide.
+LOAD = dict(crouch=.28, lean=.12, handY=.95, reach=.30, wave=0)          # knees bent, about to spring
+JUMP = dict(crouch=0, lean=0, handY=1.85, reach=.14, wave=.8)            # arms flung up
+HIGH5 = dict(crouch=0, lean=.08, handY=1.62, reach=.50, wave=0)          # palm up for a high-five
+SLAP = dict(crouch=0, lean=.10, handY=1.36, reach=.52, wave=0)
+PUSH = dict(crouch=.12, lean=.28, handY=.95, reach=.60, wave=0)          # hands on the cockpit, driving with the legs
+SLUMP = dict(crouch=.04, lean=.10, handY=.80, reach=.05, wave=0)         # arms hanging, head down
+SOFT = dict(CLAP, wave=.35)                                              # polite, slow applause
+def jumps(t0, n, period=.44):
+    return [k for i in range(n) for k in (K(t0 + i * period, **LOAD), K(t0 + i * period + period / 2, **JUMP))]
+def door_line(s):   # facing the doorway from the side +s jamb line
+    return -s * (PI / 2 - .35)
+
+# CELEBRATION (a WIN): eight crew line both jambs; they cheer the car up the
+# lane, jump as it stops at the door, cheer it back in, then crowd round it.
+H = home_tl('win'); cel = []
+LINE, CROWD = [(2.0, 5.2), (2.7, 4.5), (3.4, 3.7), (4.1, 2.9)], [(.75, 3.75), (1.7, 2.3), (1.75, .7), (1.8, -.9)]
+for s in (1, -1):
+    for i, ((x, z), (tx, tz)) in enumerate(zip(LINE, CROWD)):
+        t0, tw = 2.4 + .12 * i + (.2 if s < 0 else 0), H['park'] + .2 + .15 * i + (.1 if s < 0 else 0)
+        cel.append(walker(s * x, z, door_line(s), K(t0, **STAND), K(t0 + .5, **CHEER),
+                          *jumps(DOOR_S + H['lane'] + .1 + .09 * i + (.22 if s < 0 else 0), 4), K(7.6, **CHEER), K(tw - .2, **CHEER),
+                          *go(tw, tw + 1.3, s * x, z, s * tx, tz, end_yaw=face(s * tx, tz, 0, 0)),
+                          K(tw + 1.8, **CLAP), K(13.7, **CLAP), K(14.1, **CHEER), K(15.0, **CHEER)))
+CLIPS['celebrate'] = dict(dir='in', extra=2.6, label='CELEBRATION CREW', result='win', mix=False, actors=cel)
+
+# APPLAUSE (a PODIUM): six crew clap the car home from the jambs; as it parks
+# two walk to the cockpit for a high-five and the outer pair high-five each other.
+H = home_tl('podium'); app = []
+for s in (1, -1):
+    p = H['park'] + (.3 if s < 0 else 0)
+    app.append(walker(s * 2.2, 5.0, door_line(s), K(2.6, **STAND), K(3.0, **CLAP), K(p, **CLAP), K(p + .2, **STAND),
+                      *go(p + .3, p + 1.0, s * 2.2, 5.0, s * 2.8, 4.35, end_yaw=face(s * 2.8, 4.35, s * 3.3, 3.75)),
+                      K(p + 1.4, **HIGH5), K(p + 1.6, **SLAP), K(p + 2.0, **CLAP), K(p + 3.3, **CLAP)))
+    app.append(walker(s * 3.0, 4.1, door_line(s), K(2.7, **STAND), K(3.1, **CLAP), K(p, **CLAP), K(p + .15, **STAND),
+                      *go(p + .2, p + 1.5, s * 3.0, 4.1, s * 1.6, .25, end_yaw=-s * PI / 2),
+                      K(p + 2.0, **HIGH5), K(p + 2.25, **SLAP), K(p + 2.7, **UP), K(p + 3.3, **UP)))
+    app.append(walker(s * 3.8, 3.2, door_line(s), K(2.8, **STAND), K(3.2, **CLAP), K(p, **CLAP), K(p + .2, **STAND),
+                      *go(p + .3, p + 1.0, s * 3.8, 3.2, s * 3.3, 3.75, end_yaw=face(s * 3.3, 3.75, s * 2.8, 4.35)),
+                      K(p + 1.4, **HIGH5), K(p + 1.6, **SLAP), K(p + 2.0, **CLAP), K(p + 3.3, **CLAP)))
+CLIPS['applause'] = dict(dir='in', extra=2.4, label='PODIUM CREW', result='podium', mix=False, actors=app)
+
+# RECOVERY (a RETIREMENT): two mechanics push the dead car up the lane from
+# its sides, turn at the door and push it back in; a third calls it back from
+# the jamb. Parked, the pushers step away, the caller checks the front wing and
+# the engineer brings a tablet to the cockpit.
+H = home_tl('dnf'); rel = H['park'] + .14; turn = DOOR_S + H['lane']
+CLIPS['recover'] = dict(dir='in', extra=3.0, label='RECOVERY CREW', result='dnf', mix=False, actors=[
+    walker(s * 1.65, -.9, -s * .7, K(0, **PUSH), K(turn, **PUSH), K(turn + .1, lean=.1, reach=.3), K(turn + .65, yaw=-s * (PI - .7), **PUSH),
+           K(rel, car=1), K(rel + .1, **STAND), *back_off(rel + .2, rel + 1.0, s * 1.65, -.9, s * 2.7, -1.3),
+           K(rel + 1.4, yaw=-s * PI / 2), K(rel + 1.8, **SLUMP), K(rel + 3.6, **SLUMP), prop='none', car='local') for s in (1, -1)] + [
+    walker(-2.7, 4.3, .3, K(6.4, **STAND), K(6.9, **CALL), K(9.5, yaw=.9), K(11.6, yaw=2.4), K(12.7, **CALL), K(13.0, **UP),
+           *go(rel + .2, rel + 1.2, -2.7, 4.3, -.7, 3.75, end_yaw=face(-.7, 3.75, 0, 0)), K(rel + 1.6, **WING), K(rel + 3.0, **WING), K(rel + 3.4, **STAND)),
+    walker(-3.6, 2.4, PI / 2 + .5, K(0, **TABLET), K(rel, **TABLET), *go(rel + .3, rel + 1.6, -3.6, 2.4, -1.6, .3, end_yaw=PI / 2),
+           K(rel + 2.0, lean=.24, handY=1.08, reach=.36), K(rel + 3.2, lean=.24), K(rel + 3.6, lean=.06), prop='tablet'),
+])
+
+# CONSOLATION (a finish outside the points): quiet applause from the jambs as
+# the car backs in, then heads drop; a mechanic leans in with a hand on the
+# driver's shoulder and the engineer brings the tablet to the other side.
+H = home_tl('finish'); p = H['park'] + .6
+CLIPS['console'] = dict(dir='in', extra=3.6, label='CONSOLATION CREW', result='finish', mix=False, actors=[
+    walker(s * 2.2, 5.0, door_line(s), K(4.6, **STAND), K(5.0, **SOFT), K(p, **SOFT), K(p + .5, **SLUMP), K(p + 1.9, **SLUMP), K(p + 2.2, **SOFT),
+           K(p + 2.8, **SLUMP)) for s in (1, -1)] + [
+    walker(3.6, 1.4, -PI / 2, K(p, **STAND), *go(p + .1, p + 1.2, 3.6, 1.4, 1.55, .45, end_yaw=-PI / 2),
+           K(p + 1.7, crouch=.05, lean=.36, handY=1.02, reach=.58), K(p + 2.9, crouch=.05, lean=.36, handY=1.02, reach=.58), K(p + 3.2, **SLUMP)),
+    walker(-3.6, -2.2, PI / 2, K(0, **TABLET), K(p, **TABLET), *go(p, p + 1.3, -3.6, -2.2, -1.6, .1, end_yaw=PI / 2),
+           K(p + 1.8, lean=.30, handY=.98, reach=.30), K(p + 2.9, lean=.30), K(p + 3.2, lean=.06, handY=1.12, reach=.32), prop='tablet'),
+])
+
 def clip_len(name, c):
     if 'len' in c: return c['len']
+    if 'result' in c: return home_tl(c['result'])['base'] + c['extra']
     if c['dir'] == 'in': return DURATION + c['extra']
     return DOOR_S + OUT_HOLD + c['extra'] + OUT_RUN + OUT_EXIT + .3
 
@@ -184,6 +279,7 @@ def set_ease(obj):
         for kp in fc.keyframe_points:
             kp.interpolation = 'SINE'; kp.easing = 'EASE_IN_OUT'
 def car_pose(c, t):
+    if 'result' in c: return car_home(t, c['result'])
     return car_in(t) if c['dir'] == 'in' else car_out(t, c['extra']) if c['dir'] == 'out' else (0, 0, 0)
 
 collections = {}
@@ -230,6 +326,9 @@ def world_of(c, a, t):
     scene.frame_set(int(math.floor(1 + t * FPS)), subframe=(1 + t * FPS) % 1)
     e = a['_obj']; lx, ly = e.matrix_world.translation.x, e.matrix_world.translation.y
     x, z, yaw = lx, -ly, e.matrix_world.to_euler().z
+    if a['car'] == 'local':   # car-frame keys (nose +Z), the car frozen at its release pose after it
+        cx, cz, cy = car_pose(c, min(t, a['_release'])); co, si = math.cos(cy), math.sin(cy)
+        return cx + x * co + z * si, cz - x * si + z * co, yaw + cy
     if a['car']:
         rel = a['_release']; tc = min(t, rel) if rel is not None else t
         cx, cz, cy = car_pose(c, tc); c0x, c0z, c0y = car_pose(c, 0)
@@ -237,6 +336,18 @@ def world_of(c, a, t):
         if t <= rel: return x + (cx - c0x), z + (cz - c0z), yaw + (cy - c0y)
         return x + (cx - c0x), z + (cz - c0z), yaw
     return x, z, yaw
+
+def thin(pairs, tol=.01):
+    """Drop baked keys that linear interpolation between the kept ones restores within tol."""
+    out = [pairs[0]]; i = 0
+    while i < len(pairs) - 1:
+        j = i + 1
+        while j + 1 < len(pairs):
+            (t0, v0), (t1, v1) = pairs[i], pairs[j + 1]
+            if any(abs(v0 + (v1 - v0) * (tm - t0) / (t1 - t0) - vm) > tol for tm, vm in pairs[i + 1:j + 1]): break
+            j += 1
+        out.append(pairs[j]); i = j
+    return out
 
 clips_out = {}; max_reach = 0.0; worst = ''
 for name, c in CLIPS.items():
@@ -247,6 +358,8 @@ for name, c in CLIPS.items():
         times = sorted({(kp.co.x - 1) / FPS for fc in e.animation_data.action.fcurves for kp in fc.keyframe_points})
         if a['car']:   # baked: dense linear keys through the attached interval
             rel = a['_release']; times = sorted(set(times) | {i / 12 for i in range(int(rel * 12) + 1)} | {rel})
+        if a['car'] == 'local':   # the whole clip, thinned below to what linear keys need
+            times = sorted(set(times) | {i / 12 for i in range(int(length * 12) + 1)} | {length})
         # walk: the body's travel along its own facing, from 60 Hz evaluation.
         walk, prev, wt = 0.0, None, {}
         n = int(length * 60) + 1
@@ -273,6 +386,7 @@ for name, c in CLIPS.items():
             # Drop keys equal to both neighbours (holds) to keep the table small.
             pairs = [(seq[i], seq[i + 1]) for i in range(0, len(seq), 2)]
             keep = [p for j, p in enumerate(pairs) if j in (0, len(pairs) - 1) or not (pairs[j - 1][1] == p[1] == pairs[j + 1][1])]
+            if a['car'] == 'local' and k in ('x', 'z', 'yaw', 'walk'): keep = thin(keep)
             ch[k] = [v for p in keep for v in p]
         # Validation: every hand target within the two-bone arm span (0.6 m).
         for t in keys_t[::6]:
@@ -283,6 +397,8 @@ for name, c in CLIPS.items():
             if d > max_reach: max_reach, worst = d, '%s actor %d t=%.2f (crouch %.2f lean %.2f handY %.2f reach %.2f)' % (name, len(actors), t, crouch, lean, hy, hz)
         actors.append(dict(prop=a['prop'], lin=1 if a['car'] else 0, ch=ch))
     clips_out[name] = dict(dir=c['dir'], extra=c['extra'], len=r(length), label=c['label'], actors=actors)
+    for k in ('result', 'mix'):
+        if k in c: clips_out[name][k] = c[k]
 assert max_reach < .66, 'a hand target exceeds the arm span: %.3f at %s' % (max_reach, worst)
 
 source_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
