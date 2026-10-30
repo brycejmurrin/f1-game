@@ -550,12 +550,12 @@ const GLXPost = (function () {
     // takes. WebKit 280799 (Safari 18: first frame, then a black canvas; fixed 18.2) is
     // the shape of the iPhone "GLX shows black" report. The cost is a DEPTH store hint
     // (alpha:false already turns the COLOR invalidate into an ANGLE no-op). FBO targets
-    // keep theirs. apex26.glxInvalidate: "0" = none anywhere, "1" = default-FB too.
-    const _invPref = (() => { try { return localStorage.getItem("apex26.glxInvalidate"); } catch (_) { return null; } })();
+    // keep theirs. Device A/B: patch WebGL2RenderingContext.prototype.invalidateFramebuffer
+    // from Web Inspector (docs/notes/PERF-HUNT-8-2026-10-30.md).
     const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
     const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
-    const _invFbo = _canInvalidate && _invPref !== "0";
-    const _invDefault = _invFbo && (_invPref === "1" || !_webkit);
+    const _invFbo = _canInvalidate;
+    const _invDefault = _invFbo && !_webkit;
     function bindOverwrite(fbo) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       // A clipped output viewport is a SUBSET of a shared target (XR layer).
