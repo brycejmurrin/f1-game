@@ -186,7 +186,7 @@
 :root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }
 :root[data-look-career-layout="stacked"] #cr-inner { --pair-at: 99999px; }
 
-/* COLUMN ORDER: SWAPPED mirrors the pair — the calendar/championship pane takes
+/* CALENDAR SIDE: LEFT (stored "swapped") mirrors the pair — the calendar/championship pane takes
    the left track and the contract pane, with the action bar still under it as
    `.pane-pair` places it, takes the right. The tracks swap too, so each pane
    keeps its shipped share (1.05fr for the main pane), and the divider and the
@@ -220,7 +220,7 @@
   grid-row: 2;
 }
 
-/* LEFT COLUMN is the VISUAL left track, whichever pane COLUMN ORDER put there,
+/* LEFT COLUMN is the VISUAL left track, whichever pane CALENDAR SIDE put there,
    so the slider means what its label says in both orders. The token is a
    percent of the sheet ("40%"); the right track takes what is left after the
    gutter as 1fr, so the two can never overflow the sheet. Declared after the

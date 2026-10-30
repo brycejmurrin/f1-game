@@ -2020,6 +2020,12 @@ body[data-ga-bars]::after { bottom: 0; }
   :root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner { background: var(--panel); }
 }
 
+/* HEADINGS: CENTRE. The shared rule (css/overlays.css) centres .sheet-head,
+   but the garage head is a stack of bands whose title row (#cs-titlebar) is a
+   flex row of its own that stretches or grows, so justify-content on the head
+   moved nothing (look-diff 2026-10-30, 0 % at 844x390). Centre the title row. */
+:root[data-look-garage-head="centre"] #carsetup #cs-titlebar { justify-content: center; text-align: center; }
+
 /* STAT BARS: HIDE. The block is an item in #cs-header's flex column, so its
    gap goes with it; the head simply gets shorter and the list taller. */
 :root[data-look-garage-stats="hide"] #carsetup #cs-stats-inner { display: none; }

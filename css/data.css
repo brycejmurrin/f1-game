@@ -616,6 +616,15 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    foldable-hinge max-width (css/components.css) still clamps it. */
 :root[data-look-datahub-w] #datahub .dh-card { width: min(calc(760px * var(--look-datahub-w, 1)), 100%); }
 
+/* BUTTON HEIGHT on a compact hub. The shared rule (css/overlays.css) scales
+   --tap / --chip-h, but a compact card's ✕ and tabs size off --tap-paint,
+   which .dh-card re-derives above — so at 844x390 touch the knob painted
+   nothing (look-diff 2026-10-30, 0 % at 80 and 150). Scale the painted
+   floor the same way, against the card's own zoom. */
+:root[data-look-datahub-btn] #datahub .dh-card {
+  --tap-paint: max(24px, calc(var(--tap-paint-at) * var(--look-datahub-btn, 1) / var(--sheet-scale, var(--ui-scale))));
+}
+
 /* ROW HEIGHT — one answer for the three row kinds the tabs draw: standings /
    live / telemetry rows (.dh-row), schedule rows (.dh-race) and the results
    tables. TIGHT trims only the block padding (the inline padding carries the
@@ -1383,6 +1392,24 @@ body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
 }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs::-webkit-scrollbar { display: none; }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tab { scroll-snap-align: start; }
+/* THUMB REACH (reach round 2026-10-30): on a phone held sideways the strip sat
+   top-centre (844x390: 4 of 7 tabs in the far reach of both thumbs). On the
+   phone band — touch plus the zoom-aware compact wide body, never a viewport
+   max-height (ui-improve-pass pin) — it becomes a BOTTOM bar: the same one
+   scrolling row, so it costs no extra height, and unlike a left rail
+   (~120 px of 734) it costs the tables no width — they already scroll
+   sideways at 36rem. Flex `order` only: DOM and Tab order (tabs, then the
+   panel they control) are unchanged; MenuNav reaches the bar with Down off
+   the panel's last row. The pill / underline / rows / stripes looks style the
+   tabs themselves and still apply. */
+@media (pointer: coarse) {
+  body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
+    order: 1;
+    border-bottom: 0;
+    border-top: 1px solid color-mix(in oklab, var(--plate-line) 50%, transparent);
+    padding-bottom: calc(var(--gap) * 0.4);
+  }
+}
 
 /* Classification tables scroll sideways on a phone instead of crushing the
    driver column. Data tables are the WCAG 1.4.10 two-dimensional exception. */
