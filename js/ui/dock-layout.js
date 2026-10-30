@@ -232,9 +232,13 @@ const DockLayout = (function () {
         return b;
       };
       mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
-      const size = mk("size", "SIZE", null, null);
-      size.disabled = true;
+      // The readout is text, not a control: a disabled button paints see-through
+      // over the timing tower (measured 844x390), so it is an opaque span.
+      const size = document.createElement("span");
+      size.dataset.k = "size";
       size.setAttribute("aria-live", "polite");
+      size.style.cssText = "padding:0 10px;line-height:40px;font-weight:700;background:var(--bg,#111);color:var(--text,#fff);border-radius:8px;";
+      editBar.appendChild(size);
       mk("bigger", "+", "Bigger buttons", () => stepSize(1));
       mk("shape", "SHAPE", "Next button shape", () => {
         const i = SHAPES.findIndex((s) => s[0] === shape);
@@ -323,7 +327,7 @@ const DockLayout = (function () {
     const repoBtn = $("pm-dock-reposition");
     if (repoBtn) repoBtn.onclick = () => {
       setEditing(!editing);
-      if (editing && G.announce) G.announce("Drag the touch controls. Tap DONE when finished.", 3, "coach");
+      if (editing && G.announce) G.announce("Drag, size and shape the controls, then DONE.", 3, "coach");
     };
     const resetBtn = $("pm-dock-reset");
     if (resetBtn) resetBtn.onclick = () => {
