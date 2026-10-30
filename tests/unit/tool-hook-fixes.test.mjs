@@ -1,5 +1,6 @@
 /* tool-hook-fixes.test.mjs — orchestration review 2026-10-29 fix 4: sync-pr/deploy merge staging, leftover sync branch,
    test-bg --grep, the stop-guard and protect-files hook papercuts, the generated sw.js required-lazy list. */
+import "../helpers/git-fixture-env.mjs"; // fixture git must never inherit the caller hook's repository
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -64,16 +65,41 @@ test("protect-files: a branch switch is not a generated-file edit; a file checko
   }
 });
 
-test("protect-files: the MAIN checkout may edit shared-contract files under a subdirectory", () => {
-  // git prints --git-dir absolute but --git-common-dir relative ("../../.git")
-  // from tools/gen/; the text compare read that as a linked worktree (2026-10-30).
-  const edit = (file) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], {
-    input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, file), old_string: "a", new_string: "b" } }),
-    encoding: "utf8", cwd: ROOT });
-  for (const f of ["tools/gen/gen-shell.mjs", "tools/manifest.cjs"]) {
-    const r = edit(f);
-    assert.equal(r.status, 0, `${f} refused in the main checkout:\n${r.stderr}`);
-  }
+test("protect-files: MAIN allows shared-contract edits from subdirectories and linked worktrees refuse them", () => {
+  // Use actual independent git metadata: ROOT may itself be a linked worktree.
+  // The old relative common-dir comparison misidentified a main repository
+  // when the hook queried git from tools/ or tools/gen/.
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const fixture = fs.mkdtempSync(path.join(scratch, "protect-main-linked-"));
+  const main = path.join(fixture, "main");
+  const linked = path.join(fixture, "linked");
+  const targets = ["tools/gen/gen-shell.mjs", "tools/manifest.cjs"];
+  const git = (args, cwd = main) => {
+    const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+    assert.equal(r.status, 0, `git ${args.join(" ")}:\n${r.stdout}${r.stderr}`);
+    return r;
+  };
+  const edit = (root, file) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], {
+    input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: path.join(root, file), old_string: "a", new_string: "b" } }),
+    encoding: "utf8", cwd: root });
+  try {
+    fs.mkdirSync(main);
+    git(["init", "-q"]);
+    for (const file of targets) {
+      fs.mkdirSync(path.dirname(path.join(main, file)), { recursive: true });
+      fs.writeFileSync(path.join(main, file), "a");
+    }
+    git(["add", "."]);
+    git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"]);
+    git(["worktree", "add", "-qb", "fixture-linked", linked]);
+    for (const file of targets) {
+      const allowed = edit(main, file);
+      assert.equal(allowed.status, 0, `${file} refused in main fixture:\n${allowed.stderr}`);
+      const refused = edit(linked, file);
+      assert.equal(refused.status, 2, `${file} permitted in linked fixture:\n${refused.stderr}`);
+    }
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });
 
 test("stop-guard stays silent while a `test-bg --wait` task is live; nudges (exit 2) over a bare live run", async () => {
