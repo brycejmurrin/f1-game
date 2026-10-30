@@ -7622,13 +7622,16 @@
       ]
     },
     "js/garage/crew-draw.js": {
+      "build": [
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "place": [
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-arrival.test.mjs"
       ]
     },
     "js/garage/crew-motion.js": {
@@ -7816,6 +7819,7 @@
     },
     "js/garage/scene-crew.js": {
       "build": [
+        "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -16231,6 +16235,7 @@
     },
     "js/track/core/pit.js": {
       "build": [
+        "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",

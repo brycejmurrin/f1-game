@@ -976,6 +976,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/blender/crew-body.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/blender/crew-choreo.py": {
       "action": "keep-native",
       "presentation": "native",

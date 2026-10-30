@@ -2,17 +2,17 @@
    drive-out. Two mechanics beside the car's nose who step back as the shutter
    lifts, and a lollipop man out in the working lane on the camera's side who
    holds his board across the car's path and lifts it as the car rolls. Built
-   from the room's own primitives (GaragePrims), in the active livery's overalls, and
+   from GarageCrewDraw.body (Blender-authored lofts), in the active livery's overalls, and
    drawn only while a pose is playing — a parked setup preview has no crew.
    Optional service playback adds four blanket handlers and a front-jack operator.
    Split out of scene.js (the ratchet); GarageScene.draw calls draw(). */
 const GarageCrew = (function () {
   "use strict";
-  const { block, cyl, tube, scale, rgb } = GaragePrims;
+  const { block, tube, rgb } = GaragePrims;
 
   const acc = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
   const OPTS = { roughness: 0.9, metalness: 0.02, specular: 0.12, clearcoat: 0 };
-  const BOOT = [0.06, 0.06, 0.07], VISOR = [0.05, 0.06, 0.08];
+  const VISOR = [0.05, 0.06, 0.08];
   // WHERE THEY STAND (bay metres: x right, z toward the door at 6.4).
   const MECH_X0 = 1.55, MECH_X1 = 2.9, MECH_Z0 = 2.6;   // beside the nose → stepped back
   const LOLLI_X = 2.2, LOLLI_Z = 8.6;                                 // working lane, camera side
@@ -21,54 +21,18 @@ const GarageCrew = (function () {
   let gfx = null, key = null, mechMesh = null, bodyMesh = null, poleMesh = null;
   const _m = new Float32Array(16);
 
-  // A closed, rounded full-face shell shared by every crew style. Face-coloured
-  // quads keep the visor and livery stripe flush with the shell, with no floating
-  // panels; +z is forward, and the dark lower ring is the neck seal.
-  function helmet(out, H, c1, c2) {
-    const rings = 6, sides = 12;
-    for (let j = 0; j < rings; j++) for (let i = 0; i < sides; i++) {
-      const visor = j === 2 && i >= 1 && i <= 4;
-      const stripe = i === 2 || i === 3 || i === 8 || i === 9;
-      const col = j === rings - 1 ? BOOT : visor ? VISOR : stripe ? c2 : c1;
-      const base = out.pos.length / 3;
-      for (const [r, t] of [[j, i], [j, i + 1], [j + 1, i + 1], [j + 1, i]]) {
-        const a = r / rings * Math.PI, b = t / sides * Math.PI * 2;
-        const x = Math.sin(a) * Math.cos(b), y = Math.cos(a), z = Math.sin(a) * Math.sin(b);
-        const nx = x / 0.14, ny = y / 0.16, nz = z / 0.145, n = Math.hypot(nx, ny, nz);
-        out.pos.push(H[0] + 0.14 * x, H[1] + 0.16 * y, H[2] + 0.145 * z);
-        out.nrm.push(nx / n, ny / n, nz / n); out.col.push(...col); out.mat.push(0);
-      }
-      if (j > 0) out.idx.push(base, base + 1, base + 2);
-      if (j < rings - 1) out.idx.push(base, base + 2, base + 3);
-    }
-  }
+  // The full-face shell every crew style wears (GarageCrewDraw.body's Blender-authored
+  // loft: chin bar, visor, crown stripe, trim neck roll); +z is forward.
+  function helmet(out, H, c1, c2) { return GarageCrewDraw.body.helmet(out, H, c1, c2); }
 
-  // A standing figure about the origin, facing +z: boots, legs, team overalls,
-  // arms at the sides, a helmet with a visor. `arms` false leaves the right arm
-  // off for the lollipop man, whose arm is the pole mesh.
-  function figure(out, c1, c2, arms) {
-    for (const s of [-1, 1]) {
-      block(out, s * 0.10, 0.05, 0.03, 0.07, 0.05, 0.12, BOOT);
-      block(out, s * 0.10, 0.48, 0, 0.075, 0.38, 0.085, scale(c1, 0.8));
-    }
-    block(out, 0, 1.13, 0, 0.21, 0.30, 0.13, c1);                       // overalls
-    block(out, 0, 1.30, 0.135, 0.15, 0.04, 0.006, scale(c2, 0.95));     // chest panel
-    for (const s of arms ? [-1, 1] : [-1]) {
-      block(out, s * 0.27, 1.13, 0, 0.055, 0.29, 0.065, c1);
-      block(out, s * 0.27, 1.40, 0, 0.06, 0.03, 0.07, c2);              // shoulder panel
-      block(out, s * 0.27, 0.80, 0, 0.05, 0.05, 0.05, BOOT);             // glove
-    }
-    cyl(out, 0, 1.43, 0, 0.06, 0.07, BOOT, 8);                          // collar
-    helmet(out, [0, 1.62, 0], c1, c2);
-  }
   /* Crew LOOKS (B·G2, 2026-10-19): alternative crews, picked on the setup
    * sheet's CREW row (GarageCrew.setLook(id), saved as apex26.crewLook).
-   * "classic" is the shipped block-figure crew and stays the default.
+   * "classic" (the default) is two mechanics and the lollipop man, standing.
    * "sculpted" draws GarageCrewMotion articulated guides (no baked look mesh);
    * pitstop / workshop / welcome bake posed figures + props into ONE static
    * mesh in bay metres, plus the lollipop. */
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
-  const GLOVE = [0.07, 0.07, 0.08], RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
+  const RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];
   let look = "classic", lookMesh = null, motionRig = null, serviceRig = null, choreoProps = null;
   const J0 = { foot: [0.11, 0.05, 0.03], knee: [0.11, 0.50, 0.02], hip: [0.10, 0.92, 0], pelvis: [0, 0.95, 0],
@@ -101,31 +65,22 @@ const GarageCrew = (function () {
     }
     return J;
   }
-  // One helmeted figure into `out`, facing +z; noArmR leaves the
-  // lollipop man's pole arm off.
+  // One helmeted figure into `out`, facing +z, from GarageCrewDraw.body's parts
+  // baked between the pose's joints (rest lengths THIGH 0.43, SHIN 0.44, ARM
+  // 0.30, torso pelvis→neck 0.51); noArmR leaves the lollipop man's pole arm off.
   function rig(out, J, c1, c2, noArmR) {
-    const low = scale(c1, 0.72), band = scale(c2, 0.95);
+    const B = GarageCrewDraw.body;
     for (const s of ["L", "R"]) {
-      const f = J["foot" + s], k = J["knee" + s], h = J["hip" + s];
-      block(out, f[0], f[1], f[2] + 0.04, 0.065, 0.05, 0.12, BOOT);
-      tube(out, k, f, 0.062, low, 8);
-      tube(out, h, k, 0.082, c1, 8);
-      block(out, k[0], k[1], k[2] + 0.06, 0.06, 0.06, 0.02, GLOVE);              // knee pad
+      const f = J["foot" + s], ankle = [f[0], f[1] + 0.03, f[2]];   // the sole on the floor (f.y 0.05)
+      B.segment(out, "thigh", J["hip" + s], J["knee" + s], c1, c2, 0.43);
+      B.segment(out, "shin", J["knee" + s], ankle, c1, c2, 0.44);
+      B.boot(out, f, c1, c2, 0.03);
     }
-    tube(out, J.pelvis, J.chest, 0.16, c1, 10);
-    tube(out, J.chest, J.neck, 0.13, c1, 10);
-    const mid = [0, 1, 2].map((i) => J.pelvis[i] * 0.35 + J.chest[i] * 0.65);
-    const dir = [0, 1, 2].map((i) => (J.chest[i] - J.pelvis[i]) * 0.08);
-    tube(out, [mid[0] - dir[0], mid[1] - dir[1], mid[2] - dir[2]], [mid[0] + dir[0], mid[1] + dir[1], mid[2] + dir[2]], 0.166, band, 10);   // chest band
-    tube(out, [J.pelvis[0], J.pelvis[1] - 0.02, J.pelvis[2]], [J.pelvis[0], J.pelvis[1] + 0.04, J.pelvis[2]], 0.165, GLOVE, 10);   // belt
+    B.segment(out, "torso", J.pelvis, J.neck, c1, c2, 0.51, 0.95);
     for (const s of noArmR ? ["L"] : ["L", "R"]) {
-      const sh = J["shoulder" + s], el = J["elbow" + s], ha = J["hand" + s];
-      tube(out, sh, el, 0.058, c1, 8);
-      tube(out, el, ha, 0.05, c1, 8);
-      block(out, ha[0], ha[1], ha[2], 0.045, 0.045, 0.05, GLOVE);
-      block(out, sh[0], sh[1] + 0.02, sh[2], 0.07, 0.03, 0.07, band);           // shoulder panel
+      B.segment(out, "upper", J["shoulder" + s], J["elbow" + s], c1, c2, 0.30);
+      B.segment(out, "fore", J["elbow" + s], J["hand" + s], c1, c2, 0.30);
     }
-    cyl(out, J.neck[0], J.neck[1] - 0.04, J.neck[2], 0.055, 0.1, GLOVE, 8);
     helmet(out, J.head, c1, c2);
   }
 
@@ -260,9 +215,9 @@ const GarageCrew = (function () {
     free();
     key = [style, ...c1, ...c2, nose.z, noseY];
     const classic = style === "classic", J = joints("stand");
-    const m = acc(); if (classic) figure(m, c1, c2, true); else rig(m, J, c1, c2, false);
+    const m = acc(); rig(m, J, c1, c2, false);
     mechMesh = gfx.createMesh(m);
-    const b = acc(); if (classic) figure(b, c1, c2, false); else rig(b, J, c1, c2, true);
+    const b = acc(); rig(b, J, c1, c2, true);
     bodyMesh = gfx.createMesh(b);
     const L = classic ? null : buildLook(style, c1, c2, nose);
     lookMesh = L && L.idx.length ? gfx.createMesh(L) : null;

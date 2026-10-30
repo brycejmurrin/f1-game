@@ -453,3 +453,34 @@ test('service cable follows both gloves and disconnects before moving; engineer 
   const count=meshes.length;draws.length=0;Crew.draw(LIV,[-3,2,-4],Arrival.pose(12,cfg,false));assert.equal(meshes.length,count);
   const calm=Service.layout(Arrival.pose(12,cfg,true))[6].handY;assert.equal(calm,Service.layout(Arrival.pose(13,cfg,true))[6].handY,'reduced motion holds decorative typing');
 });
+
+test('crew body export matches its Blender source; every part closed outward, sole flat, inside the triangle budget', () => {
+  const digest = createHash('sha256').update(read('tools/gen/blender/crew-body.py')).digest('hex');
+  assert.ok(read('js/garage/crew-draw.js').includes('Source SHA256: ' + digest),
+    'regenerate: blender -b --factory-startup --python tools/gen/blender/crew-body.py -- --output-dir artifacts/crew-body --write-runtime');
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array });
+  for (const f of ['js/garage/crew-draw.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const B = vm.runInContext('GarageCrewDraw.body', ctx), c1 = [0.8, 0.1, 0.05], c2 = [0.95, 0.85, 0.1];
+  let tris = 0;
+  for (const name of Object.keys(B.PARTS)) {
+    const d = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, name, c1, c2), n = d.pos.length / 3;
+    const spec = B.PARTS[name], per = name === 'torso' || name === 'head' ? 1 : 2;
+    tris += per * d.idx.length / 3;
+    assert.ok(d.idx.every((i) => i >= 0 && i < n) && d.pos.every(Number.isFinite), name + ': valid mesh');
+    for (let i = 0; i < d.nrm.length; i += 3) assert.ok(Math.abs(Math.hypot(d.nrm[i], d.nrm[i + 1], d.nrm[i + 2]) - 1) < 1e-9, name + ': unit normals');
+    // Outward: every face's normal points away from its ring's axis point.
+    for (let i = 0; i < d.idx.length; i += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => d.pos.slice(d.idx[i + k] * 3, d.idx[i + k] * 3 + 3));
+      const u = b.map((v, k) => v - a[k]), v = c.map((x, k) => x - a[k]);
+      const nn = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const m = [0, 1, 2].map((k) => (a[k] + b[k] + c[k]) / 3), t = spec.axis === 'z' ? m[2] : m[1];
+      const r = spec.rings.reduce((best, q) => Math.abs(q[0] - t) < Math.abs(best[0] - t) ? q : best);
+      const o = spec.axis === 'z' ? [r[3], r[4], t] : [r[3], t, r[4]];
+      assert.ok(nn.reduce((s, x, k) => s + x * (m[k] - o[k]), 0) > 0, `${name}: face ${i / 3} winds outward`);
+    }
+  }
+  assert.ok(tris <= 2200, 'one figure stays inside 2200 triangles: ' + tris);
+  const boot = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'boot', c1, c2);
+  let minY = Infinity; for (let i = 1; i < boot.pos.length; i += 3) minY = Math.min(minY, boot.pos[i]);
+  assert.ok(Math.abs(minY + 0.08) < 1e-9, 'the sole sits 0.08 m under the foot target, as the planted-boot tests assume');
+});
