@@ -69,6 +69,12 @@ does not discover, install or validate hosted tools.
    not as "NEVER" lines agents can forget.
 5. **Path-scoped rules** (`.cursor/rules/*.mdc` with globs) for renderer
    backends; keep always-on rules thin.
+6. **Server instructions are the MCP router.** They are the only per-server
+   text a deferring client loads before it searches (Claude Code keeps 4,096
+   chars), so apex-tools' `instructions` is the question → tool map, also
+   served as resource `apex://start-here`; `apex://debug-hooks/{section}` serves
+   the `__apex` reference a section at a time
+   ([MCP-REFINE-2026-10-30](notes/MCP-REFINE-2026-10-30.md)).
 
 **One-time Dashboard (not inventable from git):**
 
