@@ -7590,6 +7590,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "rearLightOn": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "resultKind": [
         "tests/unit/garage-arrival.test.mjs"
       ],

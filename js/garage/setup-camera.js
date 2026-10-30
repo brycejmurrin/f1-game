@@ -920,8 +920,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
   // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
-  // the grid (js/game.js drawRearLights); parked in the bay it stays dark.
-  if (arriving && arriving.active && (context.night || /rain|wet|storm/.test(String(context.weather || ""))) && CarMesh.drawRearLights)
+  // the grid (js/game.js drawRearLights); parked in the bay it stays dark. The
+  // tuner's REAR LIGHT can force it on, off or flashing (GarageArrival.rearLightOn).
+  if (arriving && arriving.active && GarageArrival.rearLightOn(arriving, context.night || /rain|wet|storm/.test(String(context.weather || ""))) && CarMesh.drawRearLights)
     CarMesh.drawRearLights(arrivalCar, 1);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.

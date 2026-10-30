@@ -6,7 +6,7 @@ const GarageArrival = (function () {
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
     afterRace: true, homeCrew: "auto", result: "win",
-    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false });
+    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto" });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
    * z +6.4): LEFT / RIGHT are the two shipped interior eyes; HIGH a ceiling
    * corner over the back-left (under the ceiling truss, whose 4.6 m beam filled
@@ -51,6 +51,9 @@ const GarageArrival = (function () {
    * (a GarageScene mood held while it plays; ASSET = the garage's own), DOOR
    * GLOW (the team-colour shutter swell's size), CAPTIONS and CINEMA BARS. */
   const MOVES = Object.freeze(["still", "push", "pull", "drift"]), MOVE_M = 1.2;
+  // REAR LIGHT: the car's red rain light while it rolls. AUTO = at night or in
+  // the wet (the shipped rule, setup-camera.js), FLASH = the FIA rain light's blink.
+  const REAR = Object.freeze(["auto", "on", "off", "flash"]);
   const moodIds = () => typeof GarageScene !== "undefined" && GarageScene.MOODS ? Object.keys(GarageScene.MOODS) : [];
   /** The mood a sequence plays under, or null for the garage's own. */
   function lightFor(config, dir) {
@@ -114,7 +117,8 @@ const GarageArrival = (function () {
       move: MOVES.includes(v.move) ? v.move : DEFAULT.move, sway: number("sway", 0, 2), zoom: number("zoom", 0, 20),
       light: v.light === "asset" || moodIds().includes(v.light) ? v.light : DEFAULT.light,
       homeLight: v.homeLight === "auto" || v.homeLight === "asset" || moodIds().includes(v.homeLight) ? v.homeLight : DEFAULT.homeLight,
-      swell: number("swell", 0, 2), captions: v.captions !== false, bars: v.bars === true };
+      swell: number("swell", 0, 2), captions: v.captions !== false, bars: v.bars === true,
+      rearLight: REAR.includes(v.rearLight) ? v.rearLight : DEFAULT.rearLight };
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
@@ -169,6 +173,7 @@ const GarageArrival = (function () {
     "LIGHTING AND LOOK. SEQUENCE LIGHTING holds a garage lighting mood while a sequence plays (the garage's own comes back after); DOOR GLOW is the team-colour flood as the shutter lifts; CINEMA BARS letterbox the shot.",
     ["ga-light", "SEQUENCE LIGHTING", () => [["asset", "AS THE GARAGE"]].concat(moodOpts())],
     ["ga-swell", "DOOR GLOW", [["0", "OFF"], ["0.5", "SOFT"], ["1", "NORMAL"], ["2", "BIG"]]],
+    ["ga-rear", "REAR LIGHT", [["auto", "AUTO · NIGHT OR WET"], ["on", "ON"], ["flash", "FLASHING"], ["off", "OFF"]]],
     ["ga-captions", "CAPTIONS", "check"],
     ["ga-bars", "CINEMA BARS", "check"],
     "AFTER THE RACE: a winner idles up the lane to a welcome and a longer hold, a podium or points finish gets its own caption and beat, a retired car is pushed in by the crew with the engine off.",
@@ -223,7 +228,7 @@ const GarageArrival = (function () {
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
       carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
       move: $("ga-move"), sway: $("ga-sway"), zoom: $("ga-zoom"), light: $("ga-light"), swell: $("ga-swell"),
-      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home") };
+      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
     const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell"], CHECK = ["enabled", "afterRace", "captions", "bars"];
     // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
@@ -405,7 +410,7 @@ const GarageArrival = (function () {
       ? [Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)] : aimAt(cam, p, t < T.door);
     return shot({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
       engine: !(r && r.pushed), side, calm, camera: cam, shot: n + 1, mood: lightFor(config, dir), swell: lookNum(config, "swell", 1),
-      bars: !!config.bars, captions: config.captions !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: config.fov,
+      bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: config.fov,
       door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
@@ -461,6 +466,7 @@ const GarageArrival = (function () {
     }
     return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", sequence: "out", engine: true, side, calm, camera: cam,
       shot: n + 1, mood: lightFor(config, "out"), swell: lookNum(config, "swell", 1), bars: !!config.bars, captions: config.captions !== false,
+      rearLight: config.rearLight || "auto",
       crewClear: ease((t - (go - .3)) / .3), crew: crewFor(config, "out"), fov: config.fov, door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw,
       label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm, config.height || 0, look);
   }
@@ -523,6 +529,13 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, crewFor, lightFor, angleMap, shotsFor, resultKind, MOVES,
+  /** Whether the rain light shows on this pose: REAR LIGHT, else night / wet (`wet`). */
+  function rearLightOn(p, wet) {
+    const m = p && p.rearLight || "auto";
+    if (m === "on") return true;
+    if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
+    return m === "auto" && !!wet;
+  }
+  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, crewFor, lightFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
     CAMS, CAM_IDS, ANGLES, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

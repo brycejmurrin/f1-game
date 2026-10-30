@@ -1538,3 +1538,14 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   assert.equal(cur, 'shipped', 'a stop (null) restores too');
   assert.equal(saved, 0, 'nothing is written to the player\'s LIGHTING');
 });
+
+test('REAR LIGHT: AUTO keeps the night-or-wet rule; ON, OFF and FLASH override it', () => {
+  const at = (rearLight, seconds = 1) => Arrival.pose(seconds, Arrival.settings({ rearLight }));
+  assert.equal(Arrival.settings(null).rearLight, 'auto'); assert.equal(Arrival.settings({ rearLight: 'disco' }).rearLight, 'auto');
+  assert.deepEqual([Arrival.rearLightOn(at('auto'), true), Arrival.rearLightOn(at('auto'), false)], [true, false], 'the shipped rule');
+  assert.deepEqual([Arrival.rearLightOn(at('on'), false), Arrival.rearLightOn(at('off'), true)], [true, false]);
+  const blink = [0, 0.125, 0.25, 0.375].map((s) => Arrival.rearLightOn(at('flash', s), false));
+  assert.deepEqual(blink, [true, false, true, false], 'FLASH blinks at ~4 Hz');
+  assert.equal(Arrival.poseOut(2, Arrival.settings({ rearLight: 'on' })).rearLight, 'on', 'the race start too');
+  assert.equal(Arrival.poseHome(2, Arrival.settings({ rearLight: 'flash' })).rearLight, 'flash');
+});
