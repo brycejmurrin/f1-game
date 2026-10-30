@@ -662,6 +662,7 @@ An unknown option prints this usage and exits 2.`;
     const g = pick(files);
     const pkgJ = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const named = [...g.keys()].filter((n) => pkgJ.scripts[`test:${n}`]).sort();
+    const specs = extraSpecs(files).map((r) => ({ spec: r.spec, kind: r.kind, because: r.module }));
     console.log(JSON.stringify({
       // "none" — nothing changed, run nothing. "unmatched" — files changed but
       // no rule claimed them, so the selection is NOT trustworthy and the
@@ -669,7 +670,9 @@ An unknown option prints this usage and exits 2.`;
       ...selectionReceipt(files, pkgJ.scripts),
       files,
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
-      specs: extraSpecs(files).map((r) => ({ spec: r.spec, kind: r.kind, because: r.module })),
+      specs,
+      // An empty list read as "no spec needed" to a cold agent (MCP-REFINE-2026-10-30): name where the spec comes from.
+      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: for the ONE pre-push spec run select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field)` }),
     }));
     process.exit(0);
   }

@@ -19,8 +19,9 @@ const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 // Third-party servers that send no instructions of their own: a deferring client sees only tool names and
 // instructions before it searches, so say when each server is the right one (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md).
 export const SERVER_PREFACES = {
-  'playwright-official': 'Host browser (browser_*): drive menus, HUD and UI flows like a player (phone landscape 844x390, touch first). browser_close before any apex_* browser tool; never while a Playwright test run or chrome-devtools is live.',
-  'chrome-devtools': 'Live working-tree canvas over Chrome DevTools: evaluate __apex hooks, console, network, performance traces, heap snapshots. One browser at a time: never while a Playwright test run or the host browser_* is live.',
+  // The page is not served for them: name the URL and the command (a cold agent spent two calls finding both, MCP-REFINE-2026-10-30).
+  'playwright-official': 'Host browser (browser_*): drive menus, HUD and UI flows like a player (phone landscape 844x390, touch first). The game is http://127.0.0.1:3456/ once `npx serve -l 3456 .` runs at the repo root (curl it first). Prefer browser_find over a full browser_snapshot. browser_close before any apex_* browser tool; never while a Playwright test run or chrome-devtools is live.',
+  'chrome-devtools': 'Live working-tree canvas over Chrome DevTools: evaluate __apex hooks (__apex.agentHelp() lists them), console, network, performance traces, heap snapshots. The game is http://127.0.0.1:3456/ once `npx serve -l 3456 .` runs at the repo root. One browser at a time: never while a Playwright test run or the host browser_* is live.',
 };
 export const GATEWAY_INSTRUCTIONS = 'Output gateway: every tool takes outputLevel=compact(default)|diagnostic|full, presentation only (the action runs once). Saved evidence: the final-page retrieval tool (output_read; underscore-prefixed on a name collision) reads structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path.';
 // MCP 2025-06-18 ToolAnnotations defaults; a hint equal to its default says nothing.
@@ -196,7 +197,12 @@ function runGateway({ server, command, args = [], root = process.cwd() }) {
             result = readOriginalMcpArtifact({ root, artifact: a.artifact, maxBytes: 8 * 1024 * 1024 });
           } else {
             const page = a.format === 'collection' ? readOutputCollection({ root, artifact: a.artifact, pointer: a.pointer, offset: a.offset, limit: a.limit }) : readOutputArtifact({ root, artifact: a.artifact, offset: a.offset, limit: a.limit, level });
-            result = { content: [{ type: 'text', text: JSON.stringify(page) }], structuredContent: page };
+            // A byte page is the artifact's own text: send it as-is after a one-line header, never re-escaped
+            // inside a JSON string (that cost ~2.1x the original, field test 2026-10-30).
+            const { text, ...meta } = page;
+            result = a.format === 'collection' || page.encoding
+              ? { content: [{ type: 'text', text: JSON.stringify(page) }], structuredContent: page }
+              : { content: [{ type: 'text', text: `${JSON.stringify(meta)}\n${text}` }], structuredContent: page };
           }
           if (own(message, 'id')) send({ jsonrpc: '2.0', id: message.id, result });
           return;
