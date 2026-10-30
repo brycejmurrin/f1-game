@@ -39,6 +39,9 @@ Cloudflare Pages and GitHub Pages are different products. D1 can be reached thro
 ## Bounded new work
 
 Tracking issue: [#4387](https://github.com/brycejmurrin/f1-game/issues/4387).
+The [expanded setup plan](AGENT-MESSAGE-IMPLEMENTATION-PLAN-2026-10-30.md)
+details API/MCP compatibility, Actions triggers, provider adapters, identity,
+recovery, measured preview costs and dependency-ordered rollout gates.
 
 First deliverable: a read-only `messages.list` / `messages.get` interface over existing
 GitHub comments, with a rebuildable local index. Prove it reduces API calls or output
