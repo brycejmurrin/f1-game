@@ -568,7 +568,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened", "edited"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
-  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
+  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync", "stale"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
   assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
   assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
@@ -1064,7 +1064,11 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.deepEqual(job.permissions, { actions: "write", "pull-requests": "read", issues: "read", statuses: "read" });
   assert.ok(!runsRepoCode(job) && !usesSecret(job), "no PR code, no secret");
   assert.equal(ghExpr(job.if, { event_name: "schedule" }), true);
+  const disp = (stale, ref = `refs/heads/${DEPLOY_BRANCH}`) => ({ event_name: "workflow_dispatch", ref, event: { inputs: { stale } } });
   assert.equal(ghExpr(job.if, { event_name: "pull_request_target" }), false);
+  assert.deepEqual([ghExpr(job.if, disp("true")), ghExpr(job.if, disp("false")), ghExpr(job.if, disp("true", "refs/heads/cursor/x"))], [true, false, false], "a stale=true dispatch on the deploy branch runs the sweep, on no other ref");
+  assert.deepEqual([ghExpr(LAND.jobs.resolve.if, disp("true")), ghExpr(LAND.jobs.resolve.if, disp("false"))], [false, true], "a stale dispatch is not a PR re-gate");
+  assert.equal(ghExpr(LAND.concurrency.group, { ...disp("true"), run_id: 4 }), "land-stale-sweep");
   assert.ok(LAND.on.schedule[0].cron);
   const run = job.steps[0].run;
   const T = (m) => `2026-10-30T10:${String(m).padStart(2, "0")}:00Z`;
