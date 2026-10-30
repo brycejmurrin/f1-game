@@ -215,7 +215,7 @@ html:has(> body > #pausemenu[open]) #ios-install {
 :root[data-look-popups-vpos="top"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: start; }
 :root[data-look-popups-vpos="bottom"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: end; }
 
-/* TABLE ROWS — the shared .res-row (standings, results, qualifying, career
+/* ROW HEIGHT (POPUPS) — the shared .res-row (standings, results, qualifying, career
    history). TIGHT goes below even the compact tier's block padding
    (css/career.css), so it still reads on a sheet SheetShape has compacted;
    ROOMY floors each row at the tap height. Scoped, so the CAREER hub's own
