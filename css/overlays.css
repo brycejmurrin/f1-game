@@ -75,11 +75,10 @@ body:not(.rotate-measure):has(> #pausemenu[open]) #rotate-device {
   pointer-events: none !important;
 }
 /* The iOS install tip sits above the race and used to paint through the
-   pause card's translucent foot on phone portrait. */
-body:has(> #pausemenu:not([hidden])) #ios-install,
-body:has(> #pausemenu[open]) #ios-install,
-html:has(> body > #pausemenu:not([hidden])) #ios-install,
-html:has(> body > #pausemenu[open]) #ios-install {
+   pause card's translucent foot on phone portrait, and through the results
+   card at 844x390 (layout-audit results, UI hunt #3 lead 4). */
+body:has(> :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-install,
+html:has(> body > :is(#pausemenu, #results):is(:not([hidden]), [open])) #ios-install {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -1100,30 +1099,33 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
    One wide card instead: RESUME a tall slab with QUIT under it, RESTART |
    SETTINGS and the 3-up tool tray on the right, so every door is on screen
    and nothing scrolls. The race card's track name is the heading. Only the
-   shipped GRID layout at the shipped CARD WIDTH on a compact wide body (the
-   zoom-correct short-landscape answer, js/ui/sheet-shape.js): every player
-   layout and the width knob keep their own card. Here, not css/dialogs.css: this layer
-   outranks the tray's and the race card's own grid-column (experience.css). */
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu { --sheet-w: min(760px, 100%); }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-head { display: none; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+   shipped GRID layout on a compact wide body (the zoom-correct short-landscape
+   answer, js/ui/sheet-shape.js): every player layout keeps its own card. The
+   PAUSE look's CARD WIDTH and BUTTON HEIGHT scale this card (760 px × width,
+   the door floor × height): standing down for them gave a WIDTH 130 player the
+   old stack with QUIT at y 460 of 390 (UI hunt #3, lead 1). Here, not
+   css/dialogs.css: this layer outranks the tray's and the race card's own
+   grid-column (experience.css), and the look's own width / height rules. */
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu { --sheet-w: min(calc(760px * var(--look-pause-w, 1)), 100%); }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-head { display: none; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: auto auto 1fr auto;
   grid-template-areas: "ctx ctx ctx" "resume restart settings" "resume tools tools" "quit tools tools";
   align-items: stretch;
 }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context { grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--gap); padding-block: calc(var(--gap) / 3); }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context > span { display: inline; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-restart { grid-area: restart; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-settings { grid-area: settings; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 3; align-content: start; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quit::before { content: none; }
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context { grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--gap); padding-block: calc(var(--gap) / 3); }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context > span { display: inline; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-restart { grid-area: restart; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-settings { grid-area: settings; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 3; align-content: start; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quit::before { content: none; }
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
 /* The doors outside the tray paint the touch comfort floor, not the compact one. */
-:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body > button:not(.as-tbtn) {
-  min-height: max(var(--tap), var(--tap-paint), var(--tap-paint-at));
+:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), var(--tap-paint-at), calc(var(--tap-0) * var(--look-pause-btn, 0)));
 }
 #race-settings:not([open]) { display: none; }
 #standings:not([open]) { display: none; }

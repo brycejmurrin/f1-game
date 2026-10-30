@@ -899,7 +899,7 @@ test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas ge
 // scheduled until every layer has landed), the bind held back while pending, byte parity with the sync path, and the
 // fallback to readbackTextureLayers when the async call returns null (or apex26.tlxPackAsync=0).
 async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
-  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
   const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   const a = TLX.indexOf("      function readbackTextureLayers(size, images, n, data) {");
   const b = TLX.indexOf("      // CSS-box observation is shared", a);

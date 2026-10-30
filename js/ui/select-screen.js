@@ -322,14 +322,26 @@ const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion:
 // Touch / coarse pointer: startViewTransition snapshots the title WebGL layer
 // and blocks the main thread on return (D·IP2 BrowserStack iPhone: 1.2 s worst
 // frame title←select). Same direct-apply path as reduced motion — the crossfade
-// is not worth a hitch on the phone Bryce plays on.
+// is not worth a hitch on the phone Bryce plays on (fadeIn below replaces it).
 const vtPhone = window.matchMedia
   ? (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)
   : false;
+// The phone still gets a transition, just not a snapshot: whatever screen the
+// swap reveals fades in over 120 ms (design pass #3, lane 2c's proposal). An
+// opacity animation runs on the compositor, so the WebGL title is never read
+// back, and the swap itself stays synchronous.
+const SHOWN = "#overlay:not([hidden]), .screen:not([hidden])";
+const fadeIn = (fn) => {
+  const before = new Set(document.querySelectorAll(SHOWN));
+  fn();
+  for (const s of document.querySelectorAll(SHOWN)) {
+    if (!before.has(s) && s.animate) s.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "cubic-bezier(0, 0, 0.2, 1)" });
+  }
+};
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches
-    || document.documentElement.dataset.motion === "reduce"
-    || vtPhone) { fn(); return; }
+    || document.documentElement.dataset.motion === "reduce") { fn(); return; }
+  if (vtPhone) { fadeIn(fn); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {

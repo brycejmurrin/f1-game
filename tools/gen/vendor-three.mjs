@@ -5,8 +5,8 @@
 /**
  * vendor-three.mjs — the ONE way a three.js version enters vendor/.
  *
- *   node tools/gen/vendor-three.mjs 0.186.1                       # npm pack into scratch/, patch, minify, write vendor/three-0.186.1/
- *   node tools/gen/vendor-three.mjs 0.186.1 --tarball scratch/three-0.186.1.tgz
+ *   node tools/gen/vendor-three.mjs 0.186.1                       # npm pack into scratch/, patch, minify, write vendor/three-0.187.0/
+ *   node tools/gen/vendor-three.mjs 0.186.1 --tarball scratch/three-0.187.0.tgz
  *   node tools/gen/vendor-three.mjs --check                        # no network: every vendor/three-* /MANIFEST.json still matches its files
  *
  * Why this exists: three.js stopped shipping minified builds in r186 (PR #33893,
@@ -118,23 +118,27 @@ async function generate(version, tarballArg) {
   for (const name of OUTPUTS) sources[`build/${name}.js`] = fs.readFileSync(path.join(pkg, `build/${name}.js`), "utf8");
   const pristine = Object.fromEntries(Object.entries(sources).map(([k, v]) => [k, sha256(v)]));
   for (const patch of PATCHES) {
-    if (!(patch.file in sources)) die(`patch ${patch.id} names ${patch.file}, not one of ${Object.keys(sources).join(", ")}`);
-    let src = sources[patch.file];
+    // An edit may name its own file (r187 moved the node classes into three.tsl.js).
     for (const e of patch.edits) {
-      const n = src.split(e.find).length - 1;
-      if (n !== e.count) die(`patch ${patch.id} (${patch.title}): needle found ${n} site(s), expected ${e.count} — upstream changed the shape; read the patch before re-deriving it:\n${JSON.stringify(e.find).slice(0, 160)}`);
-      src = src.split(e.find).join(e.replace);
+      const file = e.file || patch.file;
+      if (!(file in sources)) die(`patch ${patch.id} names ${file}, not one of ${Object.keys(sources).join(", ")}`);
+      const n = sources[file].split(e.find).length - 1;
+      if (n !== e.count) die(`patch ${patch.id} (${patch.title}): needle found ${n} site(s), expected ${e.count} in ${file} — upstream changed the shape; read the patch before re-deriving it:\n${JSON.stringify(e.find).slice(0, 160)}`);
+      sources[file] = sources[file].split(e.find).join(e.replace);
     }
-    sources[patch.file] = src;
-    console.log(`[vendor-three] patch ${patch.id}: ${patch.edits.length} edit(s) applied to ${patch.file}`);
+    console.log(`[vendor-three] patch ${patch.id}: ${patch.edits.length} edit(s) applied`);
   }
-  // The internal chunk import, as upstream's own min build wrote it.
-  {
-    const k = "build/three.webgpu.js";
-    const n = sources[k].split("from './three.core.js'").length - 1;
-    if (n < 1) die("three.webgpu.js no longer imports ./three.core.js — the chunk layout changed");
-    sources[k] = sources[k].split("from './three.core.js'").join("from './three.core.min.js'");
-    console.log(`[vendor-three] rewrote ${n} core import(s) to ./three.core.min.js`);
+  // The internal chunk imports, as upstream's own min build wrote them. r187 chains
+  // webgpu -> tsl -> core (r186: webgpu -> core, and tsl re-exported 'three/webgpu').
+  if (sources["build/three.webgpu.js"].split("from './three.core.js'").length < 2) die("three.webgpu.js no longer imports ./three.core.js — the chunk layout changed");
+  for (const k of Object.keys(sources)) {
+    for (const name of OUTPUTS) {
+      const from = `from './${name}.js'`;
+      const n = sources[k].split(from).length - 1;
+      if (!n) continue;
+      sources[k] = sources[k].split(from).join(`from './${name}.min.js'`);
+      console.log(`[vendor-three] ${k}: rewrote ${n} import(s) of ./${name}.js to ./${name}.min.js`);
+    }
   }
 
   // 3. Minify: @rollup/plugin-terser's defaults for an ES output (module: true),

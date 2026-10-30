@@ -124,6 +124,10 @@ const CamPicker = (function () {
         if (camPicker.visible()) { camPicker.hide(); return; }
         cycleCam();
       };
+      if (typeof InputHoldButtons !== "undefined") InputHoldButtons.secondaryTap(b, {
+        cancel: cancelHold,
+        activate: e => { if (held && e.timeStamp - downTs < HOLD_MS) held = false; b.click(); },
+      });
       // Tap anywhere outside the grid closes it.
       document.addEventListener("pointerdown", (e) => {
         if (camPicker.visible() && e.target !== b && !e.target.closest("#campicker")) camPicker.hide();

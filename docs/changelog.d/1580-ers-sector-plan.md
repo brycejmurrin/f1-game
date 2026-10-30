@@ -1,0 +1,1 @@
+New: Race Settings › ERS SECTOR 1–3: a manual energy plan. Set each sector to DEPLOY (BOOST switches on as you enter it), SAVE (BOOST switches off so the battery harvests) or MANUAL (your own BOOST button, the default). You can still press BOOST to override (#1580).

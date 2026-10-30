@@ -2,6 +2,49 @@
 const DataExport = (function () {
   "use strict";
 
+  // Private archive codec: independent of hub instances, DOM and OpenF1.
+  const CRC_TABLE = (function () {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let crc = -1;
+    for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xff];
+    return (crc ^ -1) >>> 0;
+  }
+  function makeZip(files) {  // files: [{name, data: Uint8Array}]
+    const enc = new TextEncoder();
+    const u16 = function (n) { return [n & 255, (n >>> 8) & 255]; };
+    const u32 = function (n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; };
+    const parts = [], central = [];
+    let offset = 0;
+    files.forEach(function (f) {
+      const nameB = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+      const local = [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(crc), u32(sz), u32(sz), u16(nameB.length), u16(0));
+      parts.push(new Uint8Array(local), nameB, f.data);
+      central.push({ nameB: nameB, crc: crc, sz: sz, offset: offset });
+      offset += local.length + nameB.length + sz;
+    });
+    const cdStart = offset;
+    const cd = [];
+    central.forEach(function (c) {
+      const hdr = [].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(c.crc), u32(c.sz), u32(c.sz), u16(c.nameB.length), u16(0), u16(0), u16(0), u16(0),
+        u32(0), u32(c.offset));
+      cd.push(new Uint8Array(hdr), c.nameB);
+      offset += hdr.length + c.nameB.length;
+    });
+    const end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0),
+      u16(central.length), u16(central.length), u32(offset - cdStart), u32(cdStart), u16(0)));
+    return new Blob(parts.concat(cd, [end]), { type: "application/zip" });
+  }
+
   function create(ctx) {
     const { el, clear } = ctx;
     const hubOpen = ctx.isOpen || function () { return true; };
@@ -144,48 +187,6 @@ const DataExport = (function () {
         log("done — " + Object.keys(out.circuits).length + " circuits captured");
         return out;
       });
-    }
-
-    const CRC_TABLE = (function () {
-      const t = new Uint32Array(256);
-      for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-        t[n] = c >>> 0;
-      }
-      return t;
-    })();
-    function crc32(bytes) {
-      let crc = -1;
-      for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xff];
-      return (crc ^ -1) >>> 0;
-    }
-    function makeZip(files) {  // files: [{name, data: Uint8Array}]
-      const enc = new TextEncoder();
-      const u16 = function (n) { return [n & 255, (n >>> 8) & 255]; };
-      const u32 = function (n) { return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; };
-      const parts = [], central = [];
-      let offset = 0;
-      files.forEach(function (f) {
-        const nameB = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
-        const local = [].concat(u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
-          u32(crc), u32(sz), u32(sz), u16(nameB.length), u16(0));
-        parts.push(new Uint8Array(local), nameB, f.data);
-        central.push({ nameB: nameB, crc: crc, sz: sz, offset: offset });
-        offset += local.length + nameB.length + sz;
-      });
-      const cdStart = offset;
-      const cd = [];
-      central.forEach(function (c) {
-        const hdr = [].concat(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
-          u32(c.crc), u32(c.sz), u32(c.sz), u16(c.nameB.length), u16(0), u16(0), u16(0), u16(0),
-          u32(0), u32(c.offset));
-        cd.push(new Uint8Array(hdr), c.nameB);
-        offset += hdr.length + c.nameB.length;
-      });
-      const end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0),
-        u16(central.length), u16(central.length), u32(offset - cdStart), u32(cdStart), u16(0)));
-      return new Blob(parts.concat(cd, [end]), { type: "application/zip" });
     }
 
     function safeName(s) { return String(s || "circuit").replace(/[^a-z0-9_-]+/gi, "_"); }
