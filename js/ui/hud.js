@@ -495,7 +495,22 @@ const FIT_CLASH_TRIES = 5;
 // stayed there until the 3 s same-key re-measure (hud-survey 1280x720 cockpit:
 // aero right edge 1297 of 1280). textContent costs no layout; a length that
 // changes re-fits once, and the countdown only does so when a digit rolls over.
-function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const el = _hlEls[i]; k += el.hidden ? "h" : "v" + (el.textContent || "").length + ","; } return k; }
+// A chip css/track-detail.css hides (touch cockpit strip: body[data-hl-set=cockpit]:not(.desktop),
+// not player-placed) counts as hidden too: its ERS glyph / AERO countdown re-ran the full fit
+// ~0.5/s for a box nobody sees (perf hunt 8). Mirrors that selector without a layout read.
+const _HL_CSS_HID = new Set(["hud-energy", "hud-tyre", "hud-ot", "hud-aero", "hud-bb"]);
+let _blueHeld = null;
+function hlKey() {
+  const b = typeof document !== "undefined" ? document.body : null;
+  const strip = !!b && !!b.dataset && b.dataset.hlSet === "cockpit" && !(b.classList && b.classList.contains("desktop"));
+  let k = "";
+  for (let i = 0; i < _hlEls.length; i++) {
+    const el = _hlEls[i];
+    const cssHid = strip && _HL_CSS_HID.has(el.id) && !(el.hasAttribute && el.hasAttribute("data-hl-user"));
+    k += el.hidden || cssHid ? "h" : "v" + (el.textContent || "").length + ",";
+  }
+  return k;
+}
 // THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
 // in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
 // paced the getBoundingClientRect pass and nothing else: these ran at the full
@@ -1761,8 +1776,8 @@ function speakHud(player, cars, timeTrial) {
   if (caution) {
     if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
   } else _flagSaid = "";
-  const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
-    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
+  const blueCar = _blueHeld = !caution && !timeTrial && _ro && G.track && G.state === "race"
+    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26, _blueHeld) : null;
   if (blueCar) {
     const lapsUp = Math.round(((blueCar.prog || 0) - (player.prog || 0)) / G.track.total);
     if (blueCar !== _blueSaid || lapsUp !== _blueLaps) {

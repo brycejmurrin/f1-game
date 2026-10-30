@@ -17477,6 +17477,9 @@
       "hText": [
         "tests/unit/hud-feel.test.mjs"
       ],
+      "hlKey": [
+        "tests/unit/hud-dock-btn-cache.test.mjs"
+      ],
       "invalidateFit": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-announce-lane-cache.test.mjs",
