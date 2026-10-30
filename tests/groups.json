@@ -1083,6 +1083,7 @@
     "tests/unit/tlx-viewport.test.mjs",
     "// tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).",
     "tests/unit/tolerance-diff.test.mjs",
+    "tests/unit/tool-hook-fixes.test.mjs",
     "tests/unit/tooling-fast-runner.test.mjs",
     "// tools/ci/tooling-timings.mjs: CI-measured per-file durations for the guards-shard packer (BUILD-HUNT-2026-10-24 B1). Pure fixtures, ~0.2 s.",
     "tests/unit/tooling-timings.test.mjs",

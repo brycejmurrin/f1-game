@@ -256,6 +256,12 @@ function swOptionalBlock() {
   return out.join("\n") + "\n";
 }
 
+/** The strict lazy group install must cache whole (CAREER screen files): derived from LAZY_CAREER_UI so a feature PR
+ *  that adds a career file no longer hand-edits a regex line in sw.js (it re-conflicted on every sync). */
+function swRequiredLazyBlock() {
+  return `const REQUIRED_LAZY = ${JSON.stringify(MANIFEST.LAZY_CAREER_UI || [])};\n`;
+}
+
 function swLazyAgentBlock() {
   return `  const LAZY_AGENT = ${JSON.stringify(MANIFEST.LAZY_AGENT)};\n`;
 }
@@ -317,6 +323,7 @@ export function generate() {
   controller = replaceMarked(controller, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(controller));
   let sw = read("sw.js");
   sw = replaceMarked(sw, "// @gen-shell:sw-optional", "// /@gen-shell:sw-optional", swOptionalBlock());
+  sw = replaceMarked(sw, "// @gen-shell:sw-required-lazy", "// /@gen-shell:sw-required-lazy", swRequiredLazyBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-lazy-agent", "// /@gen-shell:sw-lazy-agent", swLazyAgentBlock());
   return { "index.html": html, "tools/carview.html": carview, "cockpit-view.html": cockpitViewPage(), "controller.html": controller, "sw.js": sw, "js/roster.js": rosterSource() };
 }
