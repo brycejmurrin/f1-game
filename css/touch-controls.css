@@ -495,6 +495,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
        player's setting fits. */
     zoom: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
   }
+  /* THE STEER DOCK HAS ITS OWN CAP. On a landscape phone the 3-high taps
+     column binds --hud-z-dock near 118 % while the one-row steer arrows have
+     room to 2-3x; fitHud writes --hud-z-dock-l (>= --hud-z-dock, always
+     published with it) so BUTTON SIZE keeps growing the side that fits. */
+  body:not(.desktop) #dock-left,
+  body.desktop #dock-left:has(.touchbtn:not([hidden])) {
+    --touch-label-z: var(--hud-z-dock-l, var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale))));
+    zoom: var(--hud-z-dock-l, var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale))));
+  }
   /* …DOWN TO THE 44px RUNG, NOT TO 1. The floor above was a flat 1, so the
      BUTTON SIZE slider (40–300%, index.html) did nothing below 100% — on a
      coarse pointer that is everything under the 1.25 default's 80% mark,

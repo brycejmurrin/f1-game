@@ -17978,6 +17978,7 @@
       "create": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
       "layoutOf": [
