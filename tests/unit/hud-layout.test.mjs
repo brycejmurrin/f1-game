@@ -1091,14 +1091,13 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
     assert.ok(r && /touch helmet/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
   }
   for (const id of ["energy", "tyre", "speed", "gearbox"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
-  // With a wheel LCD the floating SPEED is a duplicate — soft-hide until placed
-  // (css/track-detail.css data-helmet-cam + data-wheel-lcd; MOVE & SIZE notes it).
-  assert.match(TD, /body\[data-helmet-cam\]\[data-wheel-lcd\]:not\(\.desktop\) #hud-speed:not\(\[data-hl-user\]\) \{ display: none; \}/);
-  const lcd = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" } });
+  // The GEAR pill covers the wheel LCD's speed digits (UI-HUNT-2-HUD), so a touch
+  // helmet keeps the floating SPEED whatever the wheel: no CSS hide, no soft reason.
+  assert.doesNotMatch(TD, /data-helmet-cam[^{]*#hud-speed[^{]*\{\s*display:\s*none/);
+  const lcd = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "" } });
   lcd.H.setCam("helmet");
-  const spd = lcd.H.hiddenReason("speed");
-  assert.ok(spd && spd.soft && /wheel LCD/.test(spd.reason), "touch helmet + LCD soft-hides SPEED: " + JSON.stringify(spd));
-  assert.equal(lcd.H.hiddenReason("gearbox"), null, "GEAR stays on the visor pill with an LCD");
+  assert.equal(lcd.H.hiddenReason("speed"), null, "touch helmet keeps SPEED beside the GEAR pill");
+  assert.equal(lcd.H.hiddenReason("gearbox"), null, "GEAR stays on the visor pill");
   const placed = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" },
     stored: { hudLayout: { v: 4, standard: { helmet: { speed: { x: 5, y: 0, s: 100 } } } } } });
   placed.H.setCam("helmet");

@@ -321,15 +321,11 @@ test("expected-visible rules", () => {
   assert.deepEqual([classic.ot.want, classic.tyre.want, classic.energy.want, classic.gearbox.want], [false, false, false, true],
     "touch cockpit with a screenless wheel: chips hidden, the gearbox (no LCD) shown");
   // HELMET is the visor HUD (its own layout set, never cockpit-cam): a touch
-  // helmet keeps ENERGY, TYRES and GEAR, leaves OT / AERO to their buttons and,
-  // with a wheel LCD (the default wheel), speed to the LCD; a desktop helmet shows the lot.
-  const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false, helmetLcd: true });
-  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, false],
-    "touch helmet + wheel LCD: the visor keeps ENERGY / TYRES / GEAR, speed is on the LCD");
-  assert.equal(E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false }).speed.want, false,
-    "touch helmet with no measured ctx assumes the default wheel LCD");
-  assert.equal(E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false, helmetLcd: false }).speed.want, true,
-    "touch helmet with a screenless wheel keeps the floating speed");
+  // helmet keeps ENERGY, TYRES, GEAR and speed (its GEAR pill covers the wheel
+  // LCD's digits), leaves OT / AERO to their buttons; a desktop helmet shows the lot.
+  const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
+  assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, true],
+    "touch helmet: the visor keeps ENERGY / TYRES / GEAR / speed");
   const visorDesk = E({ device: "desktop-1280", cam: "helmet" }, { desktop: true, cockpitCam: false });
   assert.deepEqual([visorDesk.ot.want, visorDesk.tyre.want, visorDesk.energy.want, visorDesk.gearbox.want, visorDesk.speed.want], [true, true, true, true, true]);
   assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "helmet", map: "auto" })).layoutSet, "helmet");

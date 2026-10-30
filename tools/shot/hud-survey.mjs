@@ -248,8 +248,7 @@ export function applyCell(c) {
       bodyHud: (document.body.className.match(/\b(hud-[a-z-]+|cockpit-cam|desktop|in-race)\b/g) || []).join(" "),
       theme: document.documentElement.getAttribute("data-ui-theme"),
     },
-    ctx: { desktop: body.contains("desktop"), cockpitCam: body.contains("cockpit-cam"), bcam: body.contains("hud-bcam"),
-      helmetLcd: !!document.body.hasAttribute?.("data-helmet-cam") && !!document.body.hasAttribute?.("data-wheel-lcd") },
+    ctx: { desktop: body.contains("desktop"), cockpitCam: body.contains("cockpit-cam"), bcam: body.contains("hud-bcam") },
   };
 }
 

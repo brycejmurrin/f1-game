@@ -757,11 +757,9 @@ export function expectedVisibility(cell, ctx = {}) {
   camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
   // css/track-detail.css: body.cockpit-cam #hud-speed { display: none } at EVERY size (the >= 900x600 limit
   // this rule had was a false "missing" on every phone cockpit cell; salvaged from PR #1316).
-  // css/track-detail.css: body[data-helmet-cam][data-wheel-lcd]:not(.desktop) soft-hides SPEED until placed
-  // (js/ui/hud-layout.js mirrors it); a helmet with a wheel screen is the touch default.
-  const helmetLcd = ctx.helmetLcd != null ? !!ctx.helmetLcd : helmetSet && !desktop;
-  camRule("speed", !(cockpitCam || (broadcast && bcam) || (helmetLcd && !desktop && !placed.has("speed"))),
-    "cockpit-cam always hides the floating speed (wheel LCD); a touch helmet with a wheel LCD hides it unless placed; BROADCAST + broadcast cam hides .hud-bottom");
+  // A helmet keeps it on every device: its GEAR pill covers the wheel LCD's digits (UI-HUNT-2-HUD).
+  camRule("speed", !(cockpitCam || (broadcast && bcam)),
+    "cockpit-cam always hides the floating speed (wheel LCD); a helmet keeps it (the GEAR pill covers the LCD); BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
     else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k)) || (helmetSet && k !== "energy" && !desktop && !placed.has(k))),

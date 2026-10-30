@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -166,4 +167,13 @@ test("css/hud.css: one radio home per profile — no leftover broadcast 14svh, f
   assert.match(css,
     /body\.hud-mirror-on\.hud-mirror-side:not\(\.hud-radio-top\):not\(\[data-radio-corner\]\) #announce/,
     "beside-the-mirror stands down for both slot markers");
+});
+
+test("both radio slots size the card to the slot, not to the dock lane announceLane still publishes (UI-HUNT-2-HUD)", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const slotRules = (prefix) => rules.filter((r) => r.selector.startsWith(prefix) && String(r.decls.get("max-width") || "").includes("--radio-top-w"));
+  const widths = (prefix) => slotRules(prefix).map((r) => r.decls.get("width") || "");
+  const want = "min(max-content, calc(var(--radio-top-w) / var(--hud-z)))";
+  assert.deepEqual(widths("body.hud-radio-top #announce"), [want], "tower-row slot: width follows the slot");
+  assert.deepEqual(widths("body[data-radio-corner]"), [want], "corner slot: width follows the slot, so the base rule's lane width cannot squeeze it");
 });

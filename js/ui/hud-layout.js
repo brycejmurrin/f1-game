@@ -113,9 +113,9 @@ const HudLayout = (function () {
   // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
   // where the wheel's screen is (the chase row's own centre, one step down),
   // SPEED moves right of it (the owner asked for the chip on the visor,
-  // 2026-10-05; the LCD's digits are a few pixels tall on a phone).
+  // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
-    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: 0, s: 100 } };
+    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 17, y: 0, s: 100 } };
   const SHIPPED = Object.freeze({
     standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
     minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
@@ -1035,7 +1035,7 @@ const HudLayout = (function () {
   const BOTTOM = ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
-  /** body[data-*] presence (mode-switch sets data-helmet-cam / data-wheel-lcd). */
+  /** body[data-*] presence (mode-switch sets data-helmet-cam). */
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
   // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
   // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
@@ -1074,9 +1074,6 @@ const HudLayout = (function () {
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
-    // css/track-detail.css: body[data-helmet-cam][data-wheel-lcd] soft-hides SPEED until placed.
-    [["speed"], (h, a) => !h("desktop") && !a && bodyAttr("data-helmet-cam") && bodyAttr("data-wheel-lcd"),
-      "touch helmet: the wheel LCD shows it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],
