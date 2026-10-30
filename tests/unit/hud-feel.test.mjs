@@ -1139,11 +1139,12 @@ test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap
     assert.ok(72 * h.zL + 44 * Math.min(1.5, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: steer + CAM fit the height`);
     assert.ok(236 * h.zR + 44 * Math.min(2, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: taps + PAUSE fit the height`);
     assert.ok(152 * h.zL + 134 * h.zR + 240 * h.zBot + 2 * 8 + 20 <= h.W - 94 + 1, `${tag}: steer, cluster and pedals share the bar (1 px: --hud-z-bot ceils onto 0.01 at 245 %)`);
-    assert.ok(h.zBot >= 10 / 14 - 1e-9, `${tag}: the gear/speed cluster keeps its readable floor (${h.zBot})`);
+    // UI hunt #3: budgeted at the 10 px floor, BUTTON 245 painted SPEED at 10.1 px over the owner's HUD 155.
+    assert.ok(h.zBot >= 1 - 1e-9, `${tag}: BUTTON SIZE never shrinks the gear/speed cluster below its shipped size (${h.zBot})`);
   }
   const owner = dockHarness(2.45), max = dockHarness(3);
-  assert.equal(owner.zL, 2.45, "the owner's 245 % paints 245 % steer arrows");
-  assert.ok(max.zL > 2.45 && max.zL < 3, `300 % stops at the bar's width budget (${max.zL})`);
+  assert.ok(owner.zL > 1.5 && owner.zL <= 2.45, `the owner's 245 % still paints steer arrows well past the pedals (${owner.zL})`);
+  assert.equal(max.zL, owner.zL, `300 % stops at the same bar-width budget (${max.zL})`);
 });
 
 test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait keeps the shared cap", () => {

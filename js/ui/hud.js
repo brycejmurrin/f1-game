@@ -1410,11 +1410,12 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const want = Math.max(btnFloor, btnScale), dockZ = Math.min(want, Math.max(0.4, capDock));
     // THE STEER DOCK (#dock-left) FOLLOWS BUTTON SIZE PAST THE PEDAL COLUMN'S CAP: budgeted against the other
     // dock and its top button at their CAPS (never the slider: monotonic), >= capDock, and the gear/speed
-    // cluster keeps its readable floor (or a smaller HUD SIZE). Portrait: the shared cap.
+    // cluster keeps its SHIPPED size (or a smaller HUD SIZE): budgeting it at the 10 px floor let BUTTON 245
+    // paint SPEED at 10.1 px whatever HUD SIZE said (UI hunt #3, owner's export). Portrait: the shared cap.
     if (window.innerWidth > window.innerHeight) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
       const zO = Math.min(3, Math.max(0.4, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
-      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, READABLE_Z) * 100) / 100;   // set() ceils --hud-z-bot
+      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, 1) * 100) / 100;   // set() ceils --hud-z-bot
       capDockS = Math.max(capDock, Math.min(gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity, gS.w ? roomS / gS.w : Infinity));
     } else capDockS = capDock;
     const zS = Math.min(want, Math.max(0.4, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;

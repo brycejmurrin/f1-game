@@ -75,11 +75,12 @@ body:not(.rotate-measure):has(> #pausemenu[open]) #rotate-device {
   pointer-events: none !important;
 }
 /* The iOS install tip sits above the race and used to paint through the
-   pause card's translucent foot on phone portrait. */
-body:has(> #pausemenu:not([hidden])) #ios-install,
-body:has(> #pausemenu[open]) #ios-install,
-html:has(> body > #pausemenu:not([hidden])) #ios-install,
-html:has(> body > #pausemenu[open]) #ios-install {
+   pause card's translucent foot on phone portrait, and through the results
+   card at 844x390 (layout-audit results, UI hunt #3 lead 4). */
+body:has(> :is(#pausemenu, #results):not([hidden])) #ios-install,
+body:has(> :is(#pausemenu, #results)[open]) #ios-install,
+html:has(> body > :is(#pausemenu, #results):not([hidden])) #ios-install,
+html:has(> body > :is(#pausemenu, #results)[open]) #ios-install {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
