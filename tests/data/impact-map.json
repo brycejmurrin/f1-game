@@ -7495,6 +7495,7 @@
         "tests/unit/sim-bytecode-budget.test.mjs"
       ],
       "wireId": [
+        "tests/unit/car-fields-vm.test.mjs",
         "tests/unit/net-authority.test.mjs"
       ],
       "worldFromTrack": [

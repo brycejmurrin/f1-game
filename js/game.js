@@ -1226,7 +1226,7 @@ function saveTeamParts(teamId, parts) {
 const customLiv = CustomLiveries.create({ store });
 const {
   getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-  getLiveries, resolveLivery, wingColorOf,
+  getLiveries, resolveLivery, wingColorOfLivery,
 } = customLiv;
 
 // Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
@@ -1240,11 +1240,13 @@ const _flapWorld = new Float32Array(16);
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
 function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still, viewLivery) {
-  const col = wingColorOf(team), b = clamp(blend, 0, 1);
+  // One resolveLivery per car per frame (wingColorOf resolved it a second time): the wing colour always
+  // follows the team's own livery, the finish and surface the viewed one.
+  const own = resolveLivery(team), col = wingColorOfLivery(own, team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const livery = viewLivery || resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
+  const livery = viewLivery || own, finish = CarMaterials.finishOf(livery, "wingFinish");
   const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   // The flown drs plane (paint "rearWing") keeps the livery's REAR WING colour, as Car3D.build painted it baked.
   const rearCol = surface === "carbon" ? col : (livery.rearWing || livery.c2 || team.color2);
@@ -3358,7 +3360,7 @@ const G = {
   // (js/physics/incident-sim.js). trackFrom is the LOCAL predictor+Newton read (never
   // a global search — see its comment), worldFromTrack its exact inverse.
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
-  worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
+  worldFromTrack: (s, x, out) => worldFromTrack(s, x, out || smp2),   // `out` (a Tracks.sample record) keeps the sample at s
   GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
   raceProfile,   // the race-entry stopwatch (startRace), read by __apex.raceProfile()
   // The friction-circle constants, for js/race/quali-model.js: it runs a quasi-steady
@@ -4754,8 +4756,8 @@ function update(dt) {
 }
 
 // CarFields.warmDoubles: the named fields are born Double (a 0 default is a Smi; the first fraction re-mapped the object mid-race and deopted every optimized reader, PERF-HUNT-5).
-const _aiBoost = CarFields.warmDoubles({ traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0, vTop: 0, trailT: 0 }, ["chaserSpeed", "trailT"]);
-const _aiOtFire = CarFields.warmDoubles({ traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0 }, ["blockerGap", "gapAhead", "roomL", "roomR", "speed", "aheadSpeed", "kAhead", "vTop"]);
+const _aiBoost = CarFields.warmDoubles({ traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0, vTop: 0, trailT: 0, street: false, towVmax: 0, ourVmax: 0, ourPace: 0, towPace: 0 }, ["chaserSpeed", "trailT", "towVmax", "ourVmax", "ourPace", "towPace"]);
+const _aiOtFire = CarFields.warmDoubles({ traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0, queueT: 0, blockerVmax: 0, ourVmax: 0, ourPace: 0, blockerPace: 0 }, ["blockerGap", "gapAhead", "roomL", "roomR", "speed", "aheadSpeed", "kAhead", "vTop", "queueT", "blockerVmax", "ourVmax", "ourPace", "blockerPace"]);
 // AI lateral controller (updateCar, "--- lateral ---"): heading state, not a
 // position P-loop. Tunables, not model numbers — see the block for the why.
 const AI_PASS_LATCH_M = 16;    // m: the pass latch's window, read by BOTH ends. The release always
@@ -4771,15 +4773,15 @@ const AI_LOOK_CAP = 64;        // samples the per-car look-ahead cache keeps (16
 // WallClamp.apply's ctx, pooled like _aiBr: a fresh literal + addShake closure per car per tick was ~1,300 objects/s at 22 cars.
 const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromTrack, soundOn: false, incidentSim, addShake(d) { feel.shake = Math.min(1, feel.shake + d); } };
 const _blueCtx = { total: 0, vRef: 0, caution: 0, race: true };   // blueWatch.tick reads it, never keeps it
-const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 }, ["errMul"]);
+const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1, diffCorner: 0, pace: 0, vmax: 0 }, ["errMul", "diffCorner", "pace", "vmax"]);
 const _aiLane = CarFields.warmDoubles({ traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 }, ["queueT"]);
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 // PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
 const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false, axTarget: 0,
   surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, modsBraking: 1, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
   weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null, damage: null };
-const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0, trailT: 0 }, ["freeSpeed", "queueT", "kTurn", "trailT"]);
-const _aiDefend = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0 }, ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR"]);
+const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0, trailT: 0, roadL: 0, roadR: 0, ourVmax: 0, ourPace: 0, blockerPace: 0 }, ["freeSpeed", "queueT", "kTurn", "trailT", "roadL", "roadR", "ourVmax", "ourPace", "blockerPace"]);
+const _aiDefend = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0, chaserVmax: 0, ourVmax: 0, chaserPace: 0, ourPace: 0 }, ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR", "chaserVmax", "ourVmax", "chaserPace", "ourPace"]);
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
