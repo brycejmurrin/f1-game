@@ -3,7 +3,7 @@ const GarageExteriorGeometry = (function () {
   "use strict";
   const MAX_VERTICES = 240000, MAX_INDICES = 720000;
   const empty = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
-  const bounds = () => [-55, 55, -10, 45, GaragePrims.Z_DOOR, 110];
+  const bounds = () => [-250, 250, -10, 45, GaragePrims.Z_DOOR, 160];
 
   const groundBounds = () => [-550, 550, -10000, 10000, GaragePrims.Z_DOOR, 750];
 
@@ -97,7 +97,7 @@ const GarageExteriorGeometry = (function () {
   // Pit paint shares FLAT with the ribbon. Preserve raised pavement; the query
   // resolves its coincident 15 mm paint overlay without selecting lower roads.
   function* surfaceSteps(road) {
-    const cell = 2, triangles = [], cells = Object.create(null);
+    const cell = 2, triangles = [], cells = Object.create(null), contact = [-55, 55, GaragePrims.Z_DOOR, 110];
     let refs = 0, cellCount = 0, maxFaces = 0, work = 0;
     for (let i = 0; i + 2 < road.idx.length; i += 3) {
       if (i % 6144 === 0) yield;
@@ -109,10 +109,18 @@ const GarageExteriorGeometry = (function () {
       const ac = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
       const n = TrackGeom.cross(ab, ac);
       if (!(n[1] > Math.hypot(...n) * .6)) continue;
+      // Render continuation is wider than tyre support. Clip only this face's
+      // index footprint; a remote triangle must not grow the contact hash.
+      if (Math.max(p[a], p[b], p[c]) < contact[0] || Math.min(p[a], p[b], p[c]) > contact[1] ||
+          Math.max(p[a + 2], p[b + 2], p[c + 2]) < contact[2] || Math.min(p[a + 2], p[b + 2], p[c + 2]) > contact[3]) continue;
+      let footprint = [[p[a], p[a + 1], p[a + 2]], [p[b], p[b + 1], p[b + 2]], [p[c], p[c + 1], p[c + 2]]];
+      for (const [axis, limit, sign] of [[0, contact[0], 1], [0, contact[1], -1], [2, contact[2], 1], [2, contact[3], -1]])
+        if (footprint.length) footprint = clipPlane(footprint, axis, limit, sign);
+      if (footprint.length < 3) continue;
       const face = triangles.length / 9;
       triangles.push(p[a], p[a + 1], p[a + 2], p[b], p[b + 1], p[b + 2], p[c], p[c + 1], p[c + 2]);
-      const x0 = Math.floor(Math.min(p[a], p[b], p[c]) / cell), x1 = Math.floor(Math.max(p[a], p[b], p[c]) / cell);
-      const z0 = Math.floor(Math.min(p[a + 2], p[b + 2], p[c + 2]) / cell), z1 = Math.floor(Math.max(p[a + 2], p[b + 2], p[c + 2]) / cell);
+      const x0 = Math.floor(Math.min(...footprint.map(v => v[0])) / cell), x1 = Math.floor(Math.max(...footprint.map(v => v[0])) / cell);
+      const z0 = Math.floor(Math.min(...footprint.map(v => v[2])) / cell), z1 = Math.floor(Math.max(...footprint.map(v => v[2])) / cell);
       for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
         const key = x + "," + z;
         if (!cells[key]) { cells[key] = []; cellCount++; }
@@ -123,7 +131,7 @@ const GarageExteriorGeometry = (function () {
       }
     }
     return { cell, triangles: Float64Array.from(triangles), cells,
-      bounds: [-55, 55, GaragePrims.Z_DOOR, 110], refs, maxFaces };
+      bounds: contact, refs, maxFaces };
   }
   // Query only one bounded cell without temporary arrays; null means off the owned road.
   function sampleHeight(surface, x, z) {

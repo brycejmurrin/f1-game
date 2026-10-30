@@ -927,15 +927,15 @@ function finishExterior(builder, def = { id: 'fixture' }) {
 }
 test('circuit exterior clips triangles at all six bounds, rotates normals and preserves material columns', () => {
   const points = [
-    [-60, 0, 20], [-50, 0, 18], [-50, 2, 22], [60, 0, 20], [50, 0, 18], [50, 2, 22],
+    [-260, 0, 20], [-240, 0, 18], [-240, 2, 22], [260, 0, 20], [240, 0, 18], [240, 2, 22],
     [0, -12, 20], [2, -8, 18], [-2, -8, 22], [0, 48, 20], [2, 40, 18], [-2, 40, 22],
-    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 115], [2, 0, 105], [-2, 2, 105],
+    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 165], [2, 0, 155], [-2, 2, 155],
   ];
   const h = exteriorFixture(points), { result: r, yields } = finishExterior(h.builder);
   assert.equal(r.supported, true); assert.ok(yields > 5);
   assert.ok(Math.abs(r.anchor.yaw - h.yaw) < 1e-10);
   r.anchor.position.forEach((v, i) => assert.ok(Math.abs(v - h.origin[i]) < 1e-10));
-  const b = [-55, 55, -10, 45, 6.4, 110], seen = new Set(), geo = r.road;
+  const b = [-250, 250, -10, 45, 6.4, 160], seen = new Set(), geo = r.road;
   assert.ok(geo.idx.length > 18, 'crossing triangles survive as clipped polygons');
   assert.equal(geo.nrm.length, geo.pos.length); assert.equal(geo.col.length, geo.pos.length);
   assert.equal(geo.mat.length, geo.pos.length / 3);
@@ -1005,6 +1005,10 @@ test('circuit exterior surface retains actual Bahrain and Monaco departure wheel
       assert.ok(Number.isFinite(y), id + ' tyre has a supported surface');
       assert.ok(Math.abs(y - expected[wheel++]) < .003, id + ' exact generated ribbon height survives indexing');
     }
+    if (id === 'bahrain') {
+      const xs = data.road.pos.filter((_v, i) => i % 3 === 0);
+      assert.ok(Math.max(...xs) >= 150, 'actual Bahrain road continues into the extended follow-view graphics region');
+    }
     const ramp = data.road.pos.slice(-12);
     for (const at of [6, 9]) {
       const y = Builder.sampleHeight(data.surface, ramp[at], ramp[at + 2]);
@@ -1029,4 +1033,21 @@ test('circuit exterior sill normals follow actual cross slope and contact data e
   assert.ok(Math.abs(normal[2] + f / n) < 1e-8);
   assert.ok(Math.abs(h.builder.sampleHeight(r.surface, 0, 6.4) - .02) < 1e-8, 'index samples actual road, not the zero-height sill edge');
   assert.equal(r.surface.triangles.length / 9, 2, 'bridge triangles were never indexed');
+});
+
+
+test('circuit exterior retains distant rendered road while tyre lookup remains a bounded local index', () => {
+  const near = [[0, 0, 20], [0, 0, 24], [2, 0, 20]];
+  const far = [[140, 1, 20], [140, 1, 24], [155, 1, 20], [0, 2, 140], [0, 2, 145], [2, 2, 140]];
+  const h = exteriorFixture(near.concat(far)), r = finishExterior(h.builder).result;
+  assert.ok(r.road.pos.some((v, i) => i % 3 === 0 && v >= 150), 'real rendered continuation survives past 55 m');
+  assert.ok(r.road.pos.some((v, i) => i % 3 === 2 && v >= 140), 'forward graphics extent is independent of contact extent');
+  assert.equal(r.surface.triangles.length / 9, 1, 'remote rendered faces and decorative sill are not indexed');
+  assert.equal(h.builder.sampleHeight(r.surface, 150, 21), null); assert.equal(h.builder.sampleHeight(r.surface, 0, 140), null);
+  assert.equal(h.builder.sampleHeight(r.surface, .5, 21), 0);
+  assert.deepEqual(Array.from(r.surface.bounds), [-55, 55, 6.4, 110]);
+  for (const key of Object.keys(r.surface.cells)) {
+    const [x, z] = key.split(',').map(Number);
+    assert.ok(x >= -28 && x <= 27 && z >= 3 && z <= 55, 'all cell references remain in contact bounds');
+  }
 });
