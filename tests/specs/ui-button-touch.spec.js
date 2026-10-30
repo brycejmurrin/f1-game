@@ -29,7 +29,7 @@ test.describe("Garage categories — touch scrolling", () => {
   async function swipe(context, page, axis, distance, group, edge = "inner") {
     const point = await page.locator("#cs-tabs").evaluate((rail, arg) => {
       const r = rail.getBoundingClientRect();
-      const row = [...rail.querySelectorAll('[role="group"]')].find((el) => el.getAttribute("aria-label") === arg.group);
+      const row = [...rail.querySelectorAll(".cs-tab-row")].find((el) => el.dataset.tier === arg.group);
       if (!row) throw new Error(`missing category group: ${arg.group}`);
       const visible = [...row.querySelectorAll(".cs-tab")].map((tab) => tab.getBoundingClientRect())
         .filter((b) => b.width > 0 && b.height > 0 && b.left >= r.left - 1 && b.right <= r.right + 1 && b.top >= r.top - 1 && b.bottom <= r.bottom + 1);

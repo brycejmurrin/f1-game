@@ -255,5 +255,18 @@ const SettingsSearch = (function () {
       input,
     });
   }
-  return Object.freeze({ CATALOG, register, find, reveal, create });
+  // Escape / pad B (`cancel`) in a non-empty FIND A SETTING clears it first, like the circuit search.
+  function onEscape(e) {
+    const cancel = e.type === "cancel";
+    if ((!cancel && e.key !== "Escape") || e.isComposing || e.defaultPrevented) return;
+    const t = cancel ? document.activeElement : e.target;
+    if (!t || !t.value || !t.closest || !t.closest("[data-settings-search]")) return;
+    t.value = ""; if (t.oninput) t.oninput();
+    e.preventDefault(); e.stopPropagation();
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("keydown", onEscape, true);
+    window.addEventListener("cancel", onEscape, true);
+  }
+  return Object.freeze({ CATALOG, register, find, reveal, create, onEscape });
 })();

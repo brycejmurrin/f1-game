@@ -1083,6 +1083,28 @@ test("career settlement displays final sponsor target, MET/MISSED and reason wit
 });
 
 
+// UI hunt 3: the earnings card was a role=status region built already filled,
+// which screen readers do not announce. It is spoken once per result instead.
+test("the round's earnings are spoken once per result, as words, and a rebuild stays quiet", () => {
+  const { cars } = tiedSeason();
+  const said = [], timers = [];
+  const h = bootResults({ season: null, cars, seasonMode: false, globals: {
+    LiveRegion: { say: (text, kind) => said.push([text, kind]) }, setTimeout: (fn) => timers.push(fn) } });
+  h.els.results.hidden = false;
+  h.G.careerSettlement = { pos: 1, pts: 25, money: 500, rep: 50, sponsorPay: 0 };
+  const order = cars.slice();
+  h.api.buildResults(order);
+  const box = h.els.resultsTable.children.find((e) => e.classList.contains("res-settle"));
+  assert.equal(box.getAttribute("role"), null, "no pre-filled live region");
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1);
+  assert.equal(said[0][1], "save");
+  assert.ok(said[0][0].startsWith("ROUND SETTLED "), "heading and figures are separate words: " + said[0][0]);
+  h.api.buildResults(order);
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1, "a rebuild of the same result is not spoken again");
+});
+
 test("translated results views expose stable navigation state and replace stale champion state", () => {
   const { season, cars } = tiedSeason();
   const h = bootResults({ season, cars, catalogue: {

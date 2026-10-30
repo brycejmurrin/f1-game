@@ -839,6 +839,31 @@ test("TopModal: an app that focuses inside its screen first still gets focus bac
   assert.equal(h.focused(), "mb-garage", "CLOSE GARAGE returns to the door, not <body>");
 });
 
+// UI hunt 3 (1280×800 keyboard walk): GARAGE closes behind the loading plate
+// and shows the title a beat later, so the opener's screen was not up at hide
+// time and focus fell to <body> — round 1's fix only covered the direct path.
+test("TopModal: an opener whose screen returns after a loading plate gets focus when it shows", () => {
+  const h = bootTopModal(["overlay", "carsetup", "loading"]);
+  const overlay = h.layer("overlay"), garage = h.layer("carsetup"), plate = h.layer("loading");
+  garage.hidden = true; plate.hidden = true;
+  h.add(overlay, "mb-race", { y: 10 });                     // the title's own landing spot
+  const door = h.add(overlay, "mb-garage", { y: 60 });
+  const cam = h.add(garage, "cs-cam", { y: 10 });
+  h.TopModal.scanLayers();
+  door.focus();
+  garage.hidden = false; cam.focus();
+  h.TopModal.onFocusIn({ target: cam, relatedTarget: door });
+  h.flip(garage, false);
+  overlay.hidden = true; h.flip(overlay, true);             // the title steps aside for the garage
+  plate.hidden = false; h.flip(plate, false);               // close: the plate covers the teardown…
+  h.dom.document.activeElement = h.dom.body;
+  garage.hidden = true; h.flip(garage, true);               // …the garage hides under it…
+  assert.notEqual(h.focused(), "mb-garage", "nothing to focus yet: the title is not up");
+  plate.hidden = true; h.flip(plate, true);
+  overlay.hidden = false; h.flip(overlay, false);           // …and the title shows a beat later
+  assert.equal(h.focused(), "mb-garage", "the parked door gets focus when its screen shows");
+});
+
 test("TopModal: the ghost-tap shield swallows only a fast pointer repeat at the same spot (#3)", () => {
   let now = 1000;
   const h = bootTopModal(["overlay", "select"], { Date: { now: () => now } });

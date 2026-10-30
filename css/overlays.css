@@ -177,6 +177,25 @@ html:has(> body > #pausemenu[open]) #ios-install {
    ~110 own over 22 cars, nothing hidden. Expected ~3.4 screens. */
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-row { padding-block: calc(var(--gap) * 0.2); }
 #results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-swatch { height: 1.1em; }
+/* THUMB REACH (reach round 2026-10-30): with a THUMB, the title-row bar put
+   NEXT / RACE AGAIN and MENU in the top-right corner (844x390: y < 25 %), out
+   of reach of a two-handed landscape grip. On the phone band (touch plus the
+   zoom-aware short wide sheet that put the bar in the title row) it goes back
+   to the sheet's own foot row, the bottom band
+   both thumbs reach — the same .sheet-foot plate every other sheet stands on
+   (revert-layer hands back css/components.css's paint and hairline). The
+   table pays one foot row (~59 px) of the ~222 the title-row move bought;
+   a mouse or a desktop keeps the title-row bar. */
+@media (pointer: coarse) {
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-body { grid-column: 1; grid-row: 2; }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { grid-column: 1; grid-row: 3; background: revert-layer; }
+  #results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: revert-layer; }
+}
 
 /* ---------- SCREEN LOOKS: POPUPS fold (js/ui/screen-looks.js) ----------
    SETTINGS › APPEARANCE › POPUPS: the screen's own two knobs. The shared core
@@ -196,7 +215,7 @@ html:has(> body > #pausemenu[open]) #ios-install {
 :root[data-look-popups-vpos="top"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: start; }
 :root[data-look-popups-vpos="bottom"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: end; }
 
-/* TABLE ROWS — the shared .res-row (standings, results, qualifying, career
+/* ROW HEIGHT (POPUPS) — the shared .res-row (standings, results, qualifying, career
    history). TIGHT goes below even the compact tier's block padding
    (css/career.css), so it still reads on a sheet SheetShape has compacted;
    ROOMY floors each row at the tap height. Scoped, so the CAREER hub's own

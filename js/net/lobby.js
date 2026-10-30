@@ -104,6 +104,10 @@ const NetLobby = (function () {
       // BACK is offered wherever there is a step to go back to: any
       // HOST/JOIN/code sub-step, and the pick INVITE ANOTHER shows in a room.
       if (backBtn) backBtn.hidden = step === "room" || (step === "pick" && !transports.size);
+      // Escape and the back gesture press whatever BACK the screen shows, the
+      // way the garage arrival swaps its door (UI hunt 3: Escape on HOST threw
+      // the whole lobby away while the on-screen BACK stepped back).
+      if (e.screen) e.screen.setAttribute("data-esc-close", backBtn && !backBtn.hidden ? "vs-back" : "vs-close");
       focusInto(e[step]);
     }
     const shownStep = (e) => ["pick", "hosting", "joining", "room", "code"].map((k) => e[k]).find((x) => x && !x.hidden);
@@ -2191,6 +2195,11 @@ const NetLobby = (function () {
         invalidateOperations(); stopScan(); stopCodeWait();
         codeReopen = null; codeParked = null;
         teardown(); role = null; resetSteps();
+        // An emptied room's INVITE ANOTHER hid the JOIN routes and left the
+        // room flag up; with nobody connected the pick is a fresh start, as open().
+        if (G.setNetRoom) G.setNetRoom(false);
+        if ($("vs-join")) $("vs-join").hidden = false;
+        if ($("vs-code-join")) $("vs-code-join").hidden = false;
         show("pick"); say("");
       };
       // A paste straight into the box runs too, so all four routes in behave

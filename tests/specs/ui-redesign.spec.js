@@ -757,8 +757,11 @@ test("garage categories separate performance from finishing and setup", async ({
   await expect(page.locator("#carsetup")).toBeVisible();
   const rows = page.locator("#cs-tabs .cs-tab-row");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toHaveAttribute("aria-label", "Performance categories");
-  await expect(rows.nth(1)).toHaveAttribute("aria-label", "Finishing and setup categories");
+  await expect(rows.nth(0)).toHaveAttribute("data-tier", "Performance categories");
+  await expect(rows.nth(1)).toHaveAttribute("data-tier", "Finishing and setup categories");
+  // A tablist owns only tabs: the tier rows are layout, so every tab keeps its tablist parent.
+  await expect(rows.nth(0)).toHaveAttribute("role", "none");
+  await expect(page.getByRole("tablist", { name: "Garage categories" }).getByRole("tab")).toHaveCount(15);
   await expect(rows.nth(0)).toContainText("ENGINE");
   for (const label of ["FLOOR", "COCKPIT", "WHEELS", "SETUP", "LIVERY"])
     await expect(rows.nth(1)).toContainText(label);
