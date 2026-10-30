@@ -647,8 +647,15 @@ window.SheetShape = (function () {
      outside the scroller. Here, not per screen: this settle runs on every
      resize/rotation AND at the iOS late-settle times; TopModal has no resize
      hook and ScrollFade's settle ends before iOS's rotation does. Only the
-     nearest scroller moves, and only when focus is outside its box. */
+     nearest scroller moves, and only when focus is outside its box.
+     ONCE PER VIEWPORT SIZE: the late settles land at a size already handled,
+     and by then the player may have scrolled on purpose — snapping focus back
+     fought that scroll (photo-studio-conditions retried on exactly this). */
+  let focusKeptAt = "";
   function keepFocusVisible() {
+    const size = innerWidth + "x" + innerHeight;
+    if (size === focusKeptAt) return;
+    focusKeptAt = size;
     const el = document.activeElement, UL = window.UiLayers;
     const layer = el && el.scrollIntoView && UL && UL.top && UL.top();
     if (!layer || el === layer || !layer.contains(el)) return;

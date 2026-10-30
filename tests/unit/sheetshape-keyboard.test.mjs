@@ -290,7 +290,7 @@ test("visual viewport resize updates title density as well as keyboard padding",
    The settle path brings focus back into its nearest scroller, and only then. */
 test("a rotation scrolls the top layer's focused control back into its scroller", () => {
   let layer = null;
-  const { dom, fire, runTimers } = boot({
+  const { dom, sb, fire, runTimers } = boot({
     UiLayers: { top: () => layer },
     getComputedStyle: (el) => ({ getPropertyValue: () => "", overflowY: el._overflowY || "visible" }),
   });
@@ -302,10 +302,13 @@ test("a rotation scrolls the top layer's focused control back into its scroller"
   const calls = [];
   btn.scrollIntoView = (o) => calls.push(o);
   btn.focus();
+  sb.innerWidth = 844; sb.innerHeight = 390;   // a rotation changes the size
   fire("win", "orientationchange");
   assert.deepEqual(calls.map((o) => o.block), ["nearest"], "an off-screen focused control is scrolled in, nearest");
   btn._rect = box(300, 44); runTimers();
   assert.equal(calls.length, 1, "a visible focused control is left where it is");
-  btn._rect = box(900, 44); layer = null; fire("win", "resize");
+  btn._rect = box(900, 44); runTimers(); fire("win", "orientationchange");
+  assert.equal(calls.length, 1, "the same size is handled once: a later scroll by the player stands");
+  btn._rect = box(900, 44); layer = null; sb.innerWidth = 390; sb.innerHeight = 844; fire("win", "resize");
   assert.equal(calls.length, 1, "no menu layer (racing): nothing moves");
 });
