@@ -97,7 +97,7 @@ test("fresh install reads SHIPPED; the row mounts above the studio with a disabl
   const { M, panel, dom } = boot();
   assert.equal(M.current(), "shipped");
   const box = dom.byId("pm-layoutpreset-box");
-  assert.equal(panel.children.indexOf(box), 1, "after the panel help, before #appearance-studio");
+  assert.equal(panel.children[1], box, "after the panel help, before #appearance-studio");
   assert.equal(panel.children[2].id, "appearance-studio");
   const sel = dom.byId("pm-layoutpreset-sel");
   assert.deepEqual(sel.children.map((o) => [o.value, !!o.disabled]),
