@@ -798,11 +798,19 @@ function teamStats(team) {
 // The option ids this team may fit. Every cost-0 option is always owned: Parts.DEFAULTS
 // are all cost-0, so Parts._resolve()'s fallback always lands on something owned
 // and a save can never produce an illegal car.
+// Memoised (perf hunt 9): the pit HUD asks every 10 Hz tick and the garage every
+// frame. The catalog is fixed after load, so the set moves only with the save
+// object, its owned array (reassigned on load/migrate, push on research) and the
+// team. Callers only read the set (.has / truthiness); never mutate it.
+const _owned = { career: null, arr: null, len: -1, team: null, set: null };
 function owned(teamId) {
   if (!inCareer() || teamId !== career.team) return null;
-  const s = new Set(career.owned);
+  const m = _owned, arr = career.owned;
+  if (m.set && m.career === career && m.arr === arr && m.len === arr.length && m.team === teamId) return m.set;
+  const s = new Set(arr);
   for (const cat of Parts.CATALOG)
     for (const o of cat.options) if (!o.cost) s.add(o.id);
+  m.career = career; m.arr = arr; m.len = arr.length; m.team = teamId; m.set = s;
   return s;
 }
 // The facility discount lands HERE, not at the point of sale, so the garage's
