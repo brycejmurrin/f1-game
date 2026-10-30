@@ -1,4 +1,5 @@
 import { readCssSource } from "../helpers/css-source.mjs";
+import { cssRules, decl, ruleFor, rulesFor } from "../helpers/css-rules.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -80,17 +81,44 @@ test("compact pause stack tightens without changing type tokens", () => {
   assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack\s+button[^}]*min-height:\s*max\(36px,\s*var\(--tap-min\)\)/);
 });
 
-test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no holes", () => {
-  const dialogs = readCssSource("css/dialogs.css");
-  assert.match(dialogs, /@media\s*\(max-height:\s*400px\)[\s\S]*?#pausemenu\s*>\s*\.sheet\s*\{[^}]*max-height:\s*min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)/);
-  assert.match(dialogs, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+\.sheet-body\.stack\s*>\s*button:not\(\.as-tbtn\)\s*\{[^}]*min-height:\s*var\(--tap\)/);
-  const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
-  // two tiles to a row; no holes because the tray is a wrapping flex row whose tiles grow
-  assert.match(overlays, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+#pm-quick-doors\s*\{[^}]*--tray-cols:\s*2/);
-  const exp = fs.readFileSync(path.join(ROOT, "css/experience.css"), "utf8");
-  assert.match(exp, /#pm-quick-doors\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap/);
-  assert.match(exp, /#pm-quick-doors\s*>\s*\*\s*\{[^}]*flex:\s*1\s+1\s+calc\(/, "every tile grows, so a short last row fills the tray");
-  assert.match(exp, /#pm-quick-doors\s*>\s*details\[open\]\s*\{[^}]*flex-basis:\s*100%/, "an open disclosure tile takes the tray's full width");
+test("short landscape pause: capped sheet, doors left with QUIT on-card, the tray right and scrolling alone", () => {
+  const dialogs = cssRules(readCssSource("css/dialogs.css"));
+  const at400 = { context: /^@media \(max-height: 400px\)$/ };
+  assert.equal(decl(dialogs, "#pausemenu > .sheet", "max-height", at400), "min(100%, calc(100 * var(--svhz) - 24px))");
+  assert.equal(decl(dialogs, /#pausemenu \.sheet-body\.stack > button:not\(\.as-tbtn\)/, "min-height", at400),
+    "max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)))", "every door holds the #3274 painted floor");
+  const overlays = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(rulesFor(overlays, /#pm-quick-doors/, at400).length, 0, "the ≤400px 2-col tray rule is gone (the tray is its own pane)");
+  const exp = cssRules(fs.readFileSync(path.join(ROOT, "css/experience.css"), "utf8"));
+  const short = { context: /^@media \(orientation: landscape\) and \(max-height: 500px\)$/ };
+  const G = ":root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu";
+  assert.equal(decl(exp, G, "--sheet-w", short), "780px", "the default card uses the phone's width");
+  const areas = decl(exp, G + " .sheet > .sheet-body", "grid-template-areas", short);
+  const rows = [...areas.matchAll(/"([^"]+)"/g)].map((m) => m[1].split(" "));
+  assert.ok(rows.every((r) => r[2] === "tray"), "the tray spans every row of the right column");
+  assert.deepEqual(rows.map((r) => r.slice(0, 2).join(" ")), ["ctx ctx", "resume resume", "restart settings", "standings skip", "quit quit"]);
+  for (const [id, area] of [["#pm-race-context", "ctx"], ["#pm-resume", "resume"], ["#pm-restart", "restart"], ["#pm-settings", "settings"], ["#pm-standings", "standings"], ["#pm-skip-results", "skip"], ["#pm-quit", "quit"], ["#pm-quick-doors", "tray"]]) {
+    assert.equal(decl(exp, `${G} ${id}`, "grid-area", short), area, id);
+  }
+  const tray = ruleFor(exp, `${G} #pm-quick-doors`, "grid-area", short).decls;
+  assert.equal(tray.get("--tray-cols"), "3");
+  assert.equal(tray.get("contain"), "size", "the tray does not size the rows: the doors decide the card's height");
+  assert.equal(tray.get("overflow-y"), "auto");
+  assert.equal(tray.get("overscroll-behavior"), "contain");
+  assert.equal(tray.get("align-self"), "stretch");
+  // ONE tray tile floor, painted 52 on touch.
+  const floors = exp.filter((r) => /#pm-quick-doors (button|> details > summary)/.test(r.selector) && r.decls.has("min-height") && r.context.some((c) => /max-height/.test(c)));
+  assert.deepEqual(floors.map((r) => r.decls.get("min-height")), ["max(34px, var(--tap-paint))"]);
+  // The PAUSED head is visually hidden, not removed: aria-labelledby="dlg-pause" still names the dialog.
+  const head = ruleFor(exp, `${G} .sheet-head`, "clip-path", short).decls;
+  assert.equal(head.get("clip-path"), "inset(50%)");
+  assert.equal(head.get("height"), "0");
+  assert.ok(!head.has("display") && !head.has("visibility"), "display/visibility would drop the label from the a11y tree");
+  assert.equal(decl(exp, `${G} #pm-race-context > span`, "display", short), "block", "the race line becomes the header");
+  // The base tray stays a wrapping flex row whose tiles grow; an open disclosure takes the full width.
+  assert.equal(decl(exp, "#pm-quick-doors", "display"), "flex");
+  assert.equal(decl(exp, "#pm-quick-doors", "flex-wrap"), "wrap");
+  assert.equal(decl(exp, "#pm-quick-doors > details[open]", "flex-basis"), "100%");
 });
 
 test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warning never is", () => {

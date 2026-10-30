@@ -41,6 +41,9 @@ test('pause context reads live classification and distinguishes online practice'
   assert.equal(b.title, 'Monza'); assert.match(b.detail,/P2/); assert.match(b.detail,/LAP 2 \/ 12/); assert.match(b.detail,/PRACTICE/); assert.match(b.detail,/RACE CONTINUES/);
   G.timeTrial = true; G.session = 'tt'; G.netPlay.active=()=>false;
   assert.doesNotMatch(ctx.api.raceBrief(G).detail,/P2|\/ 12|ONLINE/);
+  // No race: the line under (or, on a short landscape phone, in place of) the PAUSED heading must not repeat it.
+  const idle = ctx.api.raceBrief({ player: null, track: null });
+  assert.equal(idle.title, 'NO RACE'); assert.doesNotMatch(idle.title + ' ' + idle.detail, /PAUSED/i);
 });
 test('pause context carries the career brief line from CareerExperience', () => {
   const local = vm.createContext({ CareerExperience: { objectiveStatus: (G) => G.session === 'race' ? 'OBJECTIVE · TARGET P6 · NOW P8' : '' } });
