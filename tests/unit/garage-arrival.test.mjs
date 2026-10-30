@@ -314,7 +314,7 @@ function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}
     window: { addEventListener: (t, fn) => { if (t === 'keydown') keys.push(fn); } } });
   vm.runInContext(src, c);
   const fn = (n) => vm.runInContext(n, c);
-  return { $, G, c, frames, keys, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
+  return { $, G, c, frames, keys, fn, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
 }
 test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canvas back', () => {
   for (const dir of ['in', 'out']) {
@@ -1305,6 +1305,56 @@ test('a covered PREP menu with no owed warm frames still presents for a queued w
   const q = body.indexOf('const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());');
   const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
   assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
+});
+test('PREVIEW transport: pause holds, scrub holds the end, LOOP replays, EDIT re-poses on a change and IN / OUT switch', () => {
+  let saved = { angle: 'left', fov: 50 };
+  const h = previewHarness();
+  h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
+  const fn = h.fn;
+  assert.equal(h.start('in'), true);
+  h.step(0.1); h.step(0.1);
+  fn('previewPause')(true);
+  const held = h.playing().t;
+  for (let i = 0; i < 5; i++) h.step(0.1);
+  assert.equal(h.playing().t, held, 'PAUSE holds the clock');
+  assert.equal(h.$('ga-play').textContent, 'PLAY');
+  assert.equal(h.$('ga-time').textContent, `0.2 / ${Arrival.duration(h.playing().cfg, 'in').toFixed(1)} s · OPENING GARAGE`, 'time, length and the caption');
+  fn('previewSeek')(Arrival.DURATION + 5);
+  const end = h.step(0.1);
+  assert.equal(h.playing() !== null, true, 'a scrub to the end holds the frame instead of closing');
+  assert.equal(end.active, true); assert.equal(end.z, 0, 'the parked pose');
+  assert.equal(h.$('ga-scrub').value, '1000');
+  fn('previewSeek')(1); fn('previewSeek')(h.playing().t - 1 / 24);
+  assert.ok(Math.abs(h.playing().t - (1 - 1 / 24)) < 1e-9, 'a frame back');
+  // LOOP: past the end it starts again rather than handing the canvas back.
+  h.playing().loop = true; fn('previewPause')(false);
+  fn('previewSeek')(Arrival.DURATION - 0.05); fn('previewPause')(false);
+  h.step(0.1);
+  assert.ok(h.playing() && h.playing().t < 0.2, 'LOOP replays from the top');
+  // EDIT: paused, the panel back, a saved change re-poses the held frame.
+  fn('previewEdit')(true);
+  assert.equal(h.playing().paused, true); assert.equal(h.$('garrival-inner').hidden, false, 'the panel is over the room');
+  saved = { angle: 'right', fov: 70 };
+  fn('refreshPreview')();
+  const now = h.step(0.1);
+  assert.equal(now.fov, 70, 'the new lens on the held frame'); assert.ok(now.eye[0] > 0, 'the new angle');
+  // From EDIT, PREVIEW OUT switches direction and plays.
+  assert.equal(h.start('out'), true);
+  assert.equal(h.playing().dir, 'out'); assert.equal(h.playing().paused, false); assert.equal(h.$('garrival-inner').hidden, true);
+  assert.equal(h.start('in'), false, 'outside EDIT a second start is still refused');
+  // Space and the arrows drive it from the keyboard; Escape still stops.
+  const key = (k, target) => { const ev = { key: k, target, preventDefault() {}, stopPropagation() {} }; for (const f of h.keys) f(ev); };
+  key(' '); assert.equal(h.playing().paused, true, 'Space pauses');
+  const t0 = h.playing().t; key('ArrowRight'); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, '→ steps a frame');
+  key('ArrowRight', { tagName: 'INPUT' }); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, 'the scrub keeps its own arrows');
+  key('Escape'); assert.equal(h.playing(), null);
+});
+test('bindSettings tells a running preview about every saved edit and RESET', () => {
+  const { $ } = harness(); let n = 0;
+  Arrival.bindSettings($, { get: () => null, set() {} }, { preview() {}, changed: () => n++ });
+  $('ga-fov').value = '60'; $('ga-fov').onchange();
+  $('ga-reset').onclick();
+  assert.equal(n, 2);
 });
 
 // ── CAMERAS, SHOT LENGTHS, AFTER THE RACE (#garrival's 2026-10-30 controls) ──
