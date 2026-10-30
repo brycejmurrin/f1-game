@@ -243,3 +243,45 @@ test("query CLI handles shared flag spellings and rejects invalid limits, cyclic
     const cycle = query(file, "--json"); assert.equal(cycle.status, 1, cycle.error?.message); assert.match(cycle.stderr, /cycle/); assert.equal(cycle.stdout, "");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("profile child modes preserve numeric exits and reject signal or spawn failure", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+  const scratch = join(root, "scratch"); mkdirSync(scratch, { recursive: true });
+  const dir = mkdtempSync(join(scratch, "profile-child-unit-"));
+  const cli = join(dir, "tools/perf/profile.mjs");
+  try {
+    for (const sub of ["tools/perf", "tools/lib", "tools/shot", "tools/gfx"]) mkdirSync(join(dir, sub), { recursive: true });
+    // Run the real CLI dispatch and wrapper with inert profiler children. Any
+    // unexpected browser work fails immediately rather than starting Chromium.
+    writeFileSync(cli, readFileSync(join(root, "tools/perf/profile.mjs"), "utf8"));
+    for (const file of ["tools/perf/lib.mjs", "tools/lib/cli-args.mjs"])
+      writeFileSync(join(dir, file), readFileSync(join(root, file), "utf8"));
+    writeFileSync(join(dir, "tools/lib/harness.mjs"), `
+      export function launchChromium() { throw new Error("unexpected browser launch"); }
+      export function startStaticServer() { throw new Error("unexpected server launch"); }
+      export async function shutdown() {}
+    `);
+    const child = `
+      console.error("inert profiler diagnostic");
+      if (process.argv[2] === "signal") process.kill(process.pid, "SIGTERM");
+      else process.exit(Number(process.argv[2]));
+    `;
+    for (const file of ["tools/shot/profile-gameloop.mjs", "tools/gfx/frame-hitch.mjs"])
+      writeFileSync(join(dir, file), child);
+    const invoke = (mode, arg, env = process.env) => spawnSync(process.execPath,
+      [cli, arg, "--mode", mode], { cwd: dir, env, encoding: "utf8", timeout: 3000 });
+    for (const mode of ["cpu", "hitch"]) {
+      for (const code of [0, 7]) {
+        const r = invoke(mode, String(code));
+        assert.equal(r.status, code, `${mode} numeric exit: ${r.stderr}`);
+        assert.match(r.stderr, /inert profiler diagnostic/, "child stderr remains inherited");
+      }
+      const signalled = invoke(mode, "signal");
+      assert.notEqual(signalled.status, 0, `${mode}: a signalled child must not report success`);
+      assert.match(signalled.stderr, /SIGTERM/, "the terminal diagnostic names the signal");
+      const missing = invoke(mode, "0", { ...process.env, PATH: dir });
+      assert.notEqual(missing.status, 0, `${mode}: failed node spawn must not report success`);
+      assert.match(missing.stderr, /ENOENT/, "spawn failure is visible in the terminal diagnostic");
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
