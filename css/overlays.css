@@ -1190,7 +1190,7 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
 :root[data-btn-shape="round"] .touchbtn.pedal { border-radius: 50%; }
 :root[data-btn-shape="squircle"] .touchbtn { border-radius: 28%; }
 :root[data-btn-shape="square"] .touchbtn { border-radius: 12%; }
-:root[data-btn-shape="square"] body #grp-steer { border-radius: var(--r-md); }
+:root[data-btn-shape="square"] .dock-grp#grp-steer { border-radius: var(--r-md); }
 
 } /* @layer overlays */
 
