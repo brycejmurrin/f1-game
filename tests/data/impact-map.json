@@ -18071,6 +18071,7 @@
         "tests/specs/ui-resize.spec.js",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/screen-looks.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
     },
@@ -18108,6 +18109,9 @@
       ],
       "save": [
         "tests/unit/player-tools-ui.test.mjs"
+      ],
+      "whyKnob": [
+        "tests/unit/screen-looks.test.mjs"
       ],
       "*": [
         "tests/unit/save-schema-registry.test.mjs"
