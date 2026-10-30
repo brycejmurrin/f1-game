@@ -81,7 +81,9 @@ export function probeDoors(env, doors) {
           await s.page.keyboard.press("Escape");
           // #loading is a transition plate (closing the GARAGE shows RETURNING
           // for ~3 s on SwiftShader): wait it out before judging where Escape went.
-          const x = await waitSt(s.page, (y) => y.top === "overlay", 2500)
+          // 8 s: PHOTO STUDIO keeps the main thread busy rendering and one Escape
+          // took ~4 s to land on SwiftShader (2.5 s read a slow close as stuck).
+          const x = await waitSt(s.page, (y) => y.top === "overlay", 8000)
             .then((y) => y.top === "loading" ? waitSt(s.page, (z) => z.top !== "loading", 20000) : y);
           ev.escapes.push(x.top);
           if (x.top === "overlay") { await sleep(400); ev.focusAfter = (await st(s.page)).focus; break; }
