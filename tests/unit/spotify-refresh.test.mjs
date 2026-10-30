@@ -629,7 +629,7 @@ test("a stalled now-playing body can reject after cancellation without an unhand
 });
 
 for (const failure of ["stalled", "rejected"]) {
-  test("playback refusal restores built-in music when its error body is " + failure, async () => {
+  test(`playback refusal restores built-in music when its error body is ${failure}`, async () => {
     const audio = fakeAudio();
     let signal, resolveBody;
     const body = new Promise((resolve) => { resolveBody = resolve; });
@@ -769,7 +769,7 @@ test("the real soundtrack previous control delegates to Spotify's backend", asyn
 });
 
 for (const action of ["disconnect", "replace-client", "clear-client"]) {
-  test(action + " pauses the owned remote transport before clearing credentials, with no late retry", async () => {
+  test(`${action} pauses the owned remote transport before clearing credentials, with no late retry`, async () => {
     const audio = soundtrackAudio();
     const seen = [];
     let finishPause, pauseSignal;
