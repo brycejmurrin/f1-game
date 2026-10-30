@@ -324,6 +324,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
 | `api-wrap.js` | `SceneryApiWrap` | LAZY_TRACK_BUILD | SceneryApiWrap: the scenery(api) coordinate wrap (origin shift, reverse side, authored-frame along/every). |
+| `region.js` | `TrackSceneryRegion` | LAZY_TRACK_BUILD | Optional bounded CPU scenery emission. |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**

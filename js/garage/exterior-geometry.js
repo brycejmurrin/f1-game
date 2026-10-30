@@ -3,9 +3,9 @@ const GarageExteriorGeometry = (function () {
   "use strict";
   const MAX_VERTICES = 240000, MAX_INDICES = 720000;
   const empty = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
-  const bounds = () => [-250, 250, -10, 45, GaragePrims.Z_DOOR, 160];
+  const bounds = (scale = 1) => [-650 * scale, 650 * scale, -120, 300, GaragePrims.Z_DOOR, 1000 * scale];
 
-  const groundBounds = () => [-550, 550, -10000, 10000, GaragePrims.Z_DOOR, 750];
+  const groundBounds = () => [-900, 900, -10000, 10000, GaragePrims.Z_DOOR, 1300];
 
   // Match SceneryPits' exact-arc, yaw-only placement, including its banked origin.
   function anchorOf(track, teamId) {
@@ -30,7 +30,7 @@ const GarageExteriorGeometry = (function () {
     const nx = source.nrm[j], nz = source.nrm[j + 2];
     return [dx * c - dz * s, source.pos[j + 1] - a.position[1], dx * s + dz * c,
       nx * c - nz * s, source.nrm[j + 1], nx * s + nz * c,
-      source.col[j], source.col[j + 1], source.col[j + 2]];
+      source.col[j], source.col[j + 1], source.col[j + 2], source.mat && source.mat[i] || 0];
   }
   function clipPlane(poly, axis, limit, sign) {
     const result = [];
@@ -46,11 +46,13 @@ const GarageExteriorGeometry = (function () {
     return result;
   }
   function* clipSteps(source, anchor, limits, budget) {
-    const out = empty();
+    const out = empty(), indexed = new Map();
     for (let i = 0; i + 2 < source.idx.length; i += 3) {
       if (i % 6144 === 0) yield;
-      let poly = [vertex(source, source.idx[i], anchor), vertex(source, source.idx[i + 1], anchor), vertex(source, source.idx[i + 2], anchor)];
+      const ids = [source.idx[i], source.idx[i + 1], source.idx[i + 2]];
+      let poly = ids.map(id => vertex(source, id, anchor));
       if (!poly.every(v => v.every(Number.isFinite))) throw new Error("Non-finite circuit exterior geometry");
+      const inside = poly.every(v => v[0] >= limits[0] && v[0] <= limits[1] && v[1] >= limits[2] && v[1] <= limits[3] && v[2] >= limits[4] && v[2] <= limits[5]);
       for (let axis = 0; axis < 3 && poly.length; axis++) {
         poly = clipPlane(poly, axis, limits[axis * 2], 1);
         if (poly.length) poly = clipPlane(poly, axis, limits[axis * 2 + 1], -1);
@@ -60,16 +62,19 @@ const GarageExteriorGeometry = (function () {
         const tri = [poly[0], poly[j], poly[j + 1]], a = tri[0], b = tri[1], c = tri[2];
         const cross = TrackGeom.cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
         if (Math.hypot(...cross) < 1e-9) continue;
-        budget.vertices += 3; budget.indices += 3;
-        if (budget.vertices > MAX_VERTICES || budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
-        const base = out.pos.length / 3, material = source.mat && source.mat[source.idx[i]] || 0;
-        for (const v of tri) {
+        budget.indices += 3;
+        if (budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
+        for (let k = 0; k < tri.length; k++) {
+          const v = tri[k], id = inside ? ids[k] : null;
+          if (id !== null && indexed.has(id)) { out.idx.push(indexed.get(id)); continue; }
+          const at = out.pos.length / 3;
+          if (id !== null) indexed.set(id, at);
+          if (++budget.vertices > MAX_VERTICES) throw new Error("Circuit exterior geometry budget exceeded");
           out.pos.push(v[0], v[1], v[2]);
           const n = Math.hypot(v[3], v[4], v[5]) || 1;
           out.nrm.push(v[3] / n, v[4] / n, v[5] / n);
-          out.col.push(v[6], v[7], v[8]); out.mat.push(material);
+          out.col.push(v[6], v[7], v[8]); out.mat.push(v[9]); out.idx.push(at);
         }
-        out.idx.push(base, base + 1, base + 2);
       }
     }
     return out;
@@ -173,18 +178,24 @@ const GarageExteriorGeometry = (function () {
     return { supported: false, reason, trackId: def && def.id || null,
       road: null, props: null, ground: null, surface: null, anchor: null, stats: { vertices: 0, indices: 0 } };
   }
-  function* buildSteps(def, options = {}) {
+  function* buildRegion(def, options) {
     if (!def || !def.id) return unsupported(def, "missing-circuit");
+    // Resolve the lazy centreline first: its points getter finalises _sceneryShift.
+    const centerline = Tracks.buildCenterline(def, { line: false });
+    // Scenery closures may adjust their palette (Spa); never mutate the picker/race definition.
+    const copy = value => ArrayBuffer.isView(value) ? value.slice() : Array.isArray(value) ? value.map(copy) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, copy(v)])) : value;
+    def = copy(def);
     // line:false avoids racing-line / physics construction. Never call Tracks.build(Paced).
-    const track = Object.assign({}, Tracks.buildCenterline(def, { line: false }), { meshes: {} });
+    const track = Object.assign({}, centerline, { def, meshes: {} });
     yield { phase: "centerline" };
     track.pit = TrackPit.build(track, def, TrackSpline.curvature);
     const anchor = anchorOf(track, options.teamId);
     if (!anchor) return unsupported(def, track.pit && track.pit.hasBays ? "team-has-no-bay" : "circuit-has-no-bays");
     track.surface = TrackSurface.profile(def, track);
     track._night = options.night === undefined ? !!def.night : !!options.night;
+    track._gfx = { mobileTier: true }; // Detached CPU soup; no renderer/instance-cache ownership.
     yield { phase: "surface" };
-    const limits = bounds(), floorLimits = groundBounds(), budget = { vertices: 0, indices: 0 };
+    const limits = bounds(options.contextScale), floorLimits = groundBounds(), budget = { vertices: 0, indices: 0 };
     let raw = TrackMesh.buildRoad(track);
     // The race appends this ribbon to start-line geometry; use its SAME generator,
     // with its own buffer here, without building grid boxes or the whole scenery.
@@ -195,6 +206,9 @@ const GarageExteriorGeometry = (function () {
     const surface = yield* surfaceSteps(road);
     bridge(road, anchor, track.asphaltCol || def.palette && def.palette.asphalt || [.16, .17, .19], budget, surface);
     yield { phase: "surface-indexed" };
+    track.terrainGeo = yield* TrackMesh.buildTerrainSteps(track);
+    const terrain = yield* clipSteps(track.terrainGeo, anchor, limits, budget);
+    yield { phase: "terrain-clipped" };
     raw = empty();
     const pitStats = SceneryPits.build({ track, out: raw, night: track._night, exteriorOnly: true,
       rawBox: TrackGeom.addBox, rawEmit: TrackGeom.emit, upOf: TrackMesh.upOf,
@@ -203,8 +217,29 @@ const GarageExteriorGeometry = (function () {
     const props = yield* clipSteps(raw, anchor, limits, budget); raw = null;
     yield { phase: "pit-clipped" };
     const ground = yield* clipSteps(TrackMesh.buildFloor(track), anchor, floorLimits, budget);
-    return { supported: true, trackId: def.id, road, props, ground, surface, anchor,
-      stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, groundBounds: floorLimits, night: track._night, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
+    const c = Math.cos(anchor.yaw), s = Math.sin(anchor.yaw);
+    const region = { maxVertices: MAX_VERTICES, maxIndices: MAX_INDICES, intersects(p, radius) {
+      const dx = p[0] - anchor.position[0], dz = p[2] - anchor.position[2], x = dx * c - dz * s, z = dx * s + dz * c, y = p[1] - anchor.position[1];
+      return x + radius >= limits[0] && x - radius <= limits[1] && y + radius >= limits[2] && y - radius <= limits[3] && z + radius >= limits[4] && z - radius <= limits[5];
+    } };
+    const dressing = yield* TrackBuildProps.buildSteps(track, { region, skipPits: true });
+    // Admit complete distant objects, then cut only at the garage frontage plane.
+    const outward = [-Infinity, Infinity, -Infinity, Infinity, GaragePrims.Z_DOOR, Infinity];
+    const scenery = yield* clipSteps(TrackModels.sealGeometry(dressing.out), anchor, outward, budget);
+    const glass = yield* clipSteps(dressing.glass, anchor, outward, budget);
+    const water = yield* clipSteps(dressing.water, anchor, outward, budget);
+    return { supported: true, trackId: def.id, road, props, ground, terrain, scenery, glass, water, surface, anchor,
+      stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, contextScale: options.contextScale, groundBounds: floorLimits, night: track._night, terrainVertices: terrain.pos.length / 3, sceneryVertices: scenery.pos.length / 3, glassVertices: glass.pos.length / 3, waterVertices: water.pos.length / 3, region: track.sceneryRegion, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
+  }
+  function* buildSteps(def, options = {}) {
+    // Keep the caps fixed: dense circuits get a smaller complete scenery window.
+    for (const contextScale of [1, .6, .35]) {
+      try { return yield* buildRegion(def, Object.assign({}, options, { contextScale })); }
+      catch (error) {
+        if (contextScale === .35 || !/^(Scenery region geometry|Circuit exterior geometry) budget exceeded$/.test(error.message)) throw error;
+        yield { phase: "smaller-scenery-window" };
+      }
+    }
   }
   return Object.freeze({ buildSteps, sampleHeight });
 })();

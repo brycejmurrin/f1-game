@@ -16334,6 +16334,7 @@
       "addBox": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/track-graph.test.mjs"
       ],
@@ -16349,7 +16350,8 @@
       ],
       "addMesh": [
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/scenery-ground-audit.test.mjs"
+        "tests/unit/scenery-ground-audit.test.mjs",
+        "tests/unit/scenery-guards.test.mjs"
       ],
       "addMountain": [
         "tests/unit/geom-mountain-lowmat.test.mjs"
@@ -16572,10 +16574,8 @@
       "create": [
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
-      ],
-      "*": [
-        "tests/unit/scenery-guards.test.mjs"
       ]
     },
     "js/track/scenery/graph.js": {
@@ -16591,12 +16591,17 @@
       "create": [
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/rendergeom-graph.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/track-graph.test.mjs"
       ],
       "instance": [
         "tests/unit/lobed-trees.test.mjs",
         "tests/unit/rendergeom-graph.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/track-graph.test.mjs"
+      ],
+      "model": [
+        "tests/unit/scenery-guards.test.mjs"
       ],
       "replay": [
         "tests/unit/rendergeom-graph.test.mjs",
@@ -16604,6 +16609,7 @@
       ],
       "stats": [
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/track-graph.test.mjs"
       ],
       "*": [
@@ -16622,11 +16628,11 @@
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "*": [
         "tests/specs/new-hooks.spec.js",
-        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/source-integrity.test.mjs"
       ]
     },
@@ -16698,10 +16704,10 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "*": [
-        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/track-build-load.test.mjs"
@@ -16719,6 +16725,13 @@
         "tests/unit/load-order.test.mjs"
       ]
     },
+    "js/track/scenery/region.js": {
+      "create": [
+        "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-guards.test.mjs"
+      ]
+    },
     "js/track/scenery/stands.js": {
       "create": [
         "tests/unit/lazy-track-build.test.mjs",
@@ -16726,10 +16739,8 @@
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
         "tests/unit/rendergeom-graph.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
-      ],
-      "*": [
-        "tests/unit/scenery-guards.test.mjs"
       ]
     },
     "js/track/scenery/structures.js": {
@@ -16740,13 +16751,13 @@
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
         "tests/unit/rendergeom-graph.test.mjs",
+        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
       ],
       "*": [
         "tests/specs/agent-view.spec.js",
         "tests/unit/agent-view-vm.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
-        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/shared-math.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/span-kinds.test.mjs"

@@ -640,6 +640,7 @@ const TRACK_VM = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -1323,9 +1324,11 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
+  ["js/track/scenery/region.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/scenery/landforms.js", "js/track/scenery/nature.js"],
   ["js/track/scenery/stands.js", "js/track/scenery/structures.js"],

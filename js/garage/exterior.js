@@ -2,6 +2,7 @@
 const GarageExterior = (function () {
   "use strict";
   const IDENTITY = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+  const MESHES = ["ground", "terrain", "road", "props", "scenery", "glass", "water"];
   const wetWeather = weather => /^(wet|rain|storm)$/.test(weather || "");
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
@@ -38,6 +39,7 @@ const GarageExterior = (function () {
     return { night, wet, sunDir, sunColor, ambientSky, ambientGround, fogColor,
       fogDensity: weather === "fog" ? .0065 : storm ? .0038 : wet ? .0018 : Number.isFinite(p.fogDensity) ? p.fogDensity : .0008,
       exposure: night ? 1.05 : twilight ? 1.02 : 1,
+      sceneryEmission: night ? .78 : twilight ? .224 : 0,
       sky: { zenith, horizon, sunDir: sunDir.slice(), sunColor: sunColor.slice(), stars: night ? 1 : 0, starBright: overcast ? 0 : 1, moon: night ? .85 : tod === "dawn" ? .3 : 0, cloud: overcast ? .95 : night ? .22 : .4 } };
   }
   // Match the circuit's lane direction without changing caller-owned camera vectors.
@@ -123,7 +125,8 @@ const GarageExterior = (function () {
     const yieldTask = deps.yieldTask || (() => new Promise(resolve => setTimeout(resolve, 0)));
     let selected = null, key = "", generation = 0, status = "idle", error = null, readySet = null, job = null;
     let queue = Promise.resolve(), attempts = 0, retryAt = 0;
-    const material = { ground: {}, road: {}, props: {} };
+    const material = { ground: {}, terrain: {}, road: {}, props: {}, scenery: {},
+      glass: { roughness: .13, specular: .82, metalness: .12, clearcoat: 1 }, water: {} };
     let rainMesh = null;
     const rainMatrix = new Float32Array(IDENTITY);
     // Lit transparency keeps normal scene depth testing; noAlphaWrite preserves the scene's alpha.
@@ -150,13 +153,17 @@ const GarageExterior = (function () {
       rainMesh = handle;
     }
     function notify() { if (deps.onChange) { try { deps.onChange(state()); } catch (_) { /* observer owns no resources */ } } }
-    function free(set) { if (set) for (const name of ["ground", "road", "props"]) if (set[name]) gfx.freeMesh(set[name]); }
+    function free(set) { if (set) for (const name of MESHES) if (set[name]) gfx.freeMesh(set[name]); }
     function appearance() {
       if (!/^(rain|storm)$/.test(selected.weather)) freeWeather();
       const wet = wetWeather(selected.weather);
       Object.assign(material.ground, { roughness: wet ? .65 : .94, metalness: 0 });
       Object.assign(material.road, { roughness: wet ? .24 : .85, metalness: wet ? .06 : 0, specular: wet ? .65 : .25 });
       Object.assign(material.props, { roughness: wet ? .48 : .78, metalness: .04, emissive: 0 });
+      Object.assign(material.terrain, material.ground);
+      Object.assign(material.scenery, material.props);
+      material.scenery.emissive = lighting(selected).sceneryEmission;
+      Object.assign(material.water, { roughness: wet ? .16 : .10, metalness: .05, specular: wet ? .85 : .92 });
     }
     function state() { return { status, key, generation, error, attempts, retryAt, stats: readySet ? readySet.stats : null,
       trackId: selected ? selected.trackId : null, weather: selected ? selected.weather : null, tod: selected ? selected.tod : null, rain: !!rainMesh, anchor: readySet ? readySet.anchor : null }; }
@@ -204,7 +211,8 @@ const GarageExterior = (function () {
           if (!data || data.supported === false) {
             status = "unsupported"; error = data && data.reason || "No real garage bay"; return false;
           }
-          for (const name of ["ground", "road", "props"]) {
+          for (const name of MESHES) {
+            if (!["ground", "road", "props"].includes(name) && (!data[name] || !data[name].pos.length)) continue;
             await wait(yieldTask()); if (!current()) return false;
             if (!data[name] || !data[name].pos || !data[name].pos.every(Number.isFinite)) throw new Error("Invalid exterior " + name);
             const uploadAt = now();
@@ -216,7 +224,7 @@ const GarageExterior = (function () {
           if (!current()) return false;
           readySet = Object.assign({}, owned, { surface: data.surface || null, stats: Object.assign({}, data.stats,
             { maxSliceMs, uploadMs, buildWallMs: Math.max(0, now() - buildAt) }), anchor: data.anchor || null });
-          for (const name of ["ground", "road", "props"]) delete owned[name];
+          for (const name of MESHES) delete owned[name];
           status = "ready"; weatherMesh(); return ready();
         } catch (e) {
           if (current()) { status = "failed"; error = String(e && e.message || e); retryAt = Date.now() + 1000; }
@@ -232,9 +240,7 @@ const GarageExterior = (function () {
     }
     function draw() {
       if (!ready()) return false;
-      gfx.draw(readySet.ground, IDENTITY, material.ground);
-      gfx.draw(readySet.road, IDENTITY, material.road);
-      gfx.draw(readySet.props, IDENTITY, material.props);
+      for (const name of MESHES) if (readySet[name]) gfx.draw(readySet[name], IDENTITY, material[name]);
       return true;
     }
     function drawWeather(sceneNow, reducedMotion) {

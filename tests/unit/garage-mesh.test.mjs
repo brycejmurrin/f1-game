@@ -892,7 +892,7 @@ test("departure exterior has supported lane ground and an open outward doorway",
 });
 
 // Exercise the detached CPU builder with bounded geometry, never a race build/GPU.
-function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 1 } = {}) {
+function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 1, dress = false, cachedDef = null } = {}) {
   const c = Math.cos(yaw), s = Math.sin(yaw), origin = [10, 2, -8];
   const raw = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const p of points) {
@@ -906,7 +906,7 @@ function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 
   const norm = v => { const m = Math.hypot(...v); return v.map(x => x / m); };
   let builds = 0;
   const ctx = vm.createContext({ GaragePrims: { Z_DOOR: 6.4, HALF_W: 5.4, Z_BACK: -6.4 },
-    Tracks: { buildCenterline(_def, opts) { assert.equal(opts.line, false); builds++; return {}; },
+    Tracks: { buildCenterline(_def, opts) { assert.equal(opts.line, false); builds++; return { def: cachedDef || _def }; },
       build() { throw Error('full build forbidden'); }, buildPaced() { throw Error('race build forbidden'); } },
     TrackPit: { build: () => ({ hasBays, side: 1, off: { workOut: 0 }, bay: { depth: 12.8, doorW: 5.4, doorH: 4.8 },
       row: { boxes: [{ s: 20, k: 0 }] }, bands: { fast: 3.5 } }), rowOf: () => row },
@@ -914,7 +914,15 @@ function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 
       out.r = right; out.t = tangent; out.hw = 0;
       out.p = origin.map((v, i) => v - right[i] * 6.4 - (i === 1 ? .02 : 0));
     } }, TrackGeom: { norm, cross, addBox() {}, emit() {} },
-    TrackMesh: { bankOffsetAt: () => 0, buildRoad: () => raw, buildPitLane() {}, buildPitBoxes() {}, buildFloor: blank },
+    TrackMesh: { bankOffsetAt: () => 0, buildRoad: () => raw, buildPitLane() {}, buildPitBoxes() {}, buildFloor: blank,
+      *buildTerrainSteps() { yield; return dress ? raw : blank(); } },
+    TrackModels: { sealGeometry: geo => geo }, TrackBuildProps: { *buildSteps(track, opts) {
+      assert.equal(opts.skipPits, true); assert.ok(track.terrainGeo, 'real terrain precedes scenery anchoring');
+      assert.ok(opts.region.maxVertices > 0); assert.equal(opts.region.intersects(origin, 20), true);
+      assert.equal(opts.region.intersects([origin[0] + 10000, 0, origin[2]], 1), false);
+      if (track.def.palette) track.def.palette.grass[0] = .99;
+      yield; return { out: dress ? raw : blank(), glass: dress ? raw : blank(), water: dress ? raw : blank() };
+    } },
     TrackSurface: { profile: () => ({}) }, SceneryPits: { build(opts) { assert.equal(opts.exteriorOnly, true); return {}; } } });
   vm.runInContext(read('js/garage/exterior-geometry.js'), ctx, {filename:absSrc('js/garage/exterior-geometry.js')});
   const builder = vm.runInContext('GarageExteriorGeometry', ctx);
@@ -927,15 +935,15 @@ function finishExterior(builder, def = { id: 'fixture' }) {
 }
 test('circuit exterior clips triangles at all six bounds, rotates normals and preserves material columns', () => {
   const points = [
-    [-260, 0, 20], [-240, 0, 18], [-240, 2, 22], [260, 0, 20], [240, 0, 18], [240, 2, 22],
-    [0, -12, 20], [2, -8, 18], [-2, -8, 22], [0, 48, 20], [2, 40, 18], [-2, 40, 22],
-    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 165], [2, 0, 155], [-2, 2, 155],
+    [-660, 0, 20], [-640, 0, 18], [-640, 2, 22], [660, 0, 20], [640, 0, 18], [640, 2, 22],
+    [0, -122, 20], [2, -118, 18], [-2, -118, 22], [0, 305, 20], [2, 295, 18], [-2, 295, 22],
+    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 1005], [2, 0, 995], [-2, 2, 995],
   ];
   const h = exteriorFixture(points), { result: r, yields } = finishExterior(h.builder);
   assert.equal(r.supported, true); assert.ok(yields > 5);
   assert.ok(Math.abs(r.anchor.yaw - h.yaw) < 1e-10);
   r.anchor.position.forEach((v, i) => assert.ok(Math.abs(v - h.origin[i]) < 1e-10));
-  const b = [-250, 250, -10, 45, 6.4, 160], seen = new Set(), geo = r.road;
+  const b = [-650, 650, -120, 300, 6.4, 1000], seen = new Set(), geo = r.road;
   assert.ok(geo.idx.length > 18, 'crossing triangles survive as clipped polygons');
   assert.equal(geo.nrm.length, geo.pos.length); assert.equal(geo.col.length, geo.pos.length);
   assert.equal(geo.mat.length, geo.pos.length / 3);
@@ -951,7 +959,7 @@ test('circuit exterior clips triangles at all six bounds, rotates normals and pr
   const ramp = geo.pos.slice(-12);
   assert.deepEqual(Array.from(ramp), [-2.7, 0, 6.4, 2.7, 0, 6.4, -2.7, .03, 6.7, 2.7, .03, 6.7]);
   assert.ok(Math.abs(Math.hypot(...geo.nrm.slice(-3)) - 1) < 1e-8);
-  assert.deepEqual(Array.from(r.stats.groundBounds), [-550, 550, -10000, 10000, 6.4, 750]);
+  assert.deepEqual(Array.from(r.stats.groundBounds), [-900, 900, -10000, 10000, 6.4, 1300]);
   assert.equal(seen.size, 6); assert.ok(geo.mat.every(m => m === 16));
   assert.ok(geo.idx.every(i => i >= 0 && i < geo.pos.length / 3));
 });
@@ -964,7 +972,22 @@ test('circuit exterior refuses unavailable bay and invalid/budget-breaking geome
   const missing = exteriorFixture(tri);
   assert.equal(finishExterior(missing.builder, null).result.reason, 'missing-circuit'); assert.equal(missing.builds(), 0);
   assert.throws(() => finishExterior(exteriorFixture([[NaN, 0, 20], ...tri.slice(1)]).builder), /Non-finite/);
-  assert.throws(() => finishExterior(exteriorFixture(tri, { repeats: 80001 }).builder), /budget exceeded/);
+  assert.throws(() => finishExterior(exteriorFixture(tri, { repeats: 240001 }).builder), /budget exceeded/);
+});
+
+test('detached exterior retains real terrain and separate scenery/glass/water without palette mutation', () => {
+  const def = { id: 'fixture', palette: { grass: [.2, .3, .4] } };
+  const cachedDef = { palette: { grass: [.1, .2, .3] } };
+  const h = exteriorFixture([[0, 0, 20], [2, 0, 20], [0, 2, 20]], { dress: true, cachedDef });
+  const r = finishExterior(h.builder, def).result;
+  assert.deepEqual(def.palette.grass, [.2, .3, .4], 'scenery palette adjustments are detached from the selected race');
+  assert.deepEqual(cachedDef.palette.grass, [.1, .2, .3], 'a cached centreline cannot lend its mutable definition to scenery');
+  for (const name of ['terrain', 'scenery', 'glass', 'water']) {
+    assert.equal(r[name].idx.length, 3, name + ' survives the world-to-garage transform');
+    assert.equal(r[name].pos.length, 9);
+  }
+  assert.equal(r.stats.sceneryVertices, 3); assert.equal(r.stats.terrainVertices, 3);
+  assert.equal(r.stats.glassVertices, 3); assert.equal(r.stats.waterVertices, 3);
 });
 
 

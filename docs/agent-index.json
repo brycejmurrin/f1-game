@@ -4592,6 +4592,11 @@
       "roster": "LAZY_TRACK_BUILD"
     },
     {
+      "path": "js/track/scenery/region.js",
+      "global": "TrackSceneryRegion",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/track/scenery/stands.js",
       "global": "SceneryStands",
       "roster": "LAZY_TRACK_BUILD"
