@@ -1896,6 +1896,7 @@ const TLX = (function () {
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
             releaseGeometry,
+            releaseAttribute,
           });
         }
       } catch (e) {
@@ -2096,6 +2097,7 @@ const TLX = (function () {
       // build-time merge in tlx-chunked.js and leave this draw path on.
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
+      const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
       function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
         const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
@@ -4148,6 +4150,11 @@ const TLX = (function () {
         _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
       }
 
+      // A merge slot's outgrown index (tlx-chunked mergeVisible): three's Attributes.delete destroys its GPU buffer.
+      function releaseAttribute(attr) {
+        try { if (renderer._attributes) renderer._attributes.delete(attr); } catch (_) { /* the GC frees it */ }
+      }
+
       function disposeGeometry(geo) {
         if (!geo) return;
         if (geo.__tlxSplit) { for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); } geo.__tlxSplit = null; }
@@ -5389,6 +5396,10 @@ const TLX = (function () {
           const S = shadowSys.S;
           if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
             const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, reach || null, reach ? reach[3] : 0);
+            // The main pass's merged draw (slot 0/1) for the depth passes: ONE caster for the visible chunks, not
+            // a pool slot, RenderObject and bind group each. One slot for sun and lamps: an unchanged set reuses it.
+            const g = _chunkMerge && n > 1 ? chunkedSys.mergeVisible(mesh, n, 2) : null;
+            if (g) { _shMergeWrap.geo = g; shadowSys.castShadow(_shMergeWrap, model); _shMergeWrap.geo = null; return; }
             const vis = chunkedSys.visList;
             for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
             return;

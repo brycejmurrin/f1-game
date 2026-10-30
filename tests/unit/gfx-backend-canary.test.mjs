@@ -5716,7 +5716,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "tlx.js buildGeometry must pass fmt24 to every _pk call — the non-chunked meshes refused on Metal too");
   assert.match(tlxSrc, /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/,
     "buildGeometry's fmt24 must read the live backend");
-  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,\s*\}\)/,
+  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,(?:\s*\w+,)*\s*\}\)/,
     "tlx.js must hand the chunked factory its format rule and geometry-owner release callback");
 });
 
