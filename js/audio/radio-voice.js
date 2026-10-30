@@ -636,6 +636,11 @@ var RadioVoice = (function () {
       const poll = () => {
         gatePoll = null;
         if (G.state === "race" || G.state === "count") { pack.raceLoadGate(false); return; }
+        // A start that exits before count (stale, quit, ctx lost, failed quali order) lands on the
+        // title with no loading cover: release, or the latch and this poll outlive it. (The state
+        // reads "menu" during the load itself too; the cover's phase is what tells them apart.)
+        const ls = G.loadingScreen;
+        if (G.state === "menu" && !(ls && ls.phase && ls.phase())) { pack.raceLoadGate(false); return; }
         gatePoll = setTimeout(poll, 400);
       };
       gatePoll = setTimeout(poll, 800);
