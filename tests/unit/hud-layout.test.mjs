@@ -1070,7 +1070,8 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
     "ENERGY stays in the bottom strip beside TYRES, not mid-visor over the wheel");
   assert.ok(T.H.get("tyre", "helmet").x === 0 && T.H.get("tyre", "helmet").y < 0, "TYRES stays in the left corner, lifted off the steer buttons");
   assert.deepEqual(plain(T.H.get("gearbox", "helmet")), { x: 0, y: 0, s: 100 }, "GEAR takes the LCD's place: the row's own centre");
-  assert.ok(T.H.get("speed", "helmet").x > 0 && T.H.get("speed", "helmet").y === 0, "SPEED moves right of GEAR");
+  assert.ok(T.H.get("speed", "helmet").x > 0 && T.H.get("speed", "helmet").y < 0,
+    "SPEED sits right of GEAR and lifted above ENERGY (844x390 survey: y 0 overlapped ENERGY, x 17 the AERO button)");
   for (const id of ["ot", "aero", "bb"]) assert.deepEqual(plain(T.H.get(id, "helmet")), { x: 0, y: 0, s: 100 }, id + ": shipped on touch");
   assert.deepEqual(plain(T.H.get("energy", "cockpit")), plain(D.H.get("energy", "cockpit")), "the cockpit strip is the same on both");
   assert.equal(T.H.isShipped("helmet"), true);

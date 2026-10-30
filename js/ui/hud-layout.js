@@ -112,10 +112,10 @@ const HudLayout = (function () {
   const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
   // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
   // where the wheel's screen is (the chase row's own centre, one step down),
-  // SPEED moves right of it (the owner asked for the chip on the visor,
+  // SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor,
   // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
-    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 17, y: 0, s: 100 } };
+    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: -5, s: 100 } };
   const SHIPPED = Object.freeze({
     standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
     minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
