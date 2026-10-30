@@ -66,3 +66,19 @@ The existing CSS loop accepts `--axe` to scan the opened screen with the locked
 local axe-core package. See [free design tooling](../../../docs/DESIGN-TOOLS.md).
 Retain incomplete checks for review; automated results do not replace the
 keyboard, touch, screen-reader, focus, and scroll checks above.
+
+## Feedback measurement
+
+Inspector output includes a separate bounded `feedback` inventory for nonempty
+status/alert/live regions, including hidden descendants of an explicit root.
+Its geometry and ARIA fields are observations: inactive panes and clipped
+screen-reader announcements can be intentional. Summary rows say
+`feedback-observation`, never an automatic accessibility failure.
+
+For a journey requiring visible feedback, use the existing explorer replay:
+`{"type":"assert","oracle":{"type":"feedback","selector":"#vs-status","text":"Paste their invite code first."}}`.
+This requires one populated feedback element, matching rendered text and a fully inside
+viewport/scrollport rectangle. It never scrolls, focuses or retries. CSS clips/masks, non-axis-aligned transforms and self-overflowing text remain
+unmeasured. Occlusion, contrast and actual screen-reader delivery
+need separate checks. Existing `text` and `visible` oracles keep their semantics.
+Research and priorities: [agent UI measurement](../../../docs/notes/AGENT-UI-MEASUREMENT-2026-10-30.md).

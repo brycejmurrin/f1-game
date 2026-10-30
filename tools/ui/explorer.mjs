@@ -139,10 +139,11 @@ export function summarizeInspection(report, screen) {
     const v = r.requestedViewport ? `${r.requestedViewport.width}x${r.requestedViewport.height}` : "?";
     const i = r.inspection, c = i?.coverage;
     const bounds = [i?.truncated && "controls", i?.layoutContextsTruncated && "layout-contexts", i?.accessibilityTruncated && "accessibility",
-      i?.styles?.truncated && "css", r.settlement?.truncated && "settlement", r.settlement?.history?.truncated && "history"].filter(Boolean);
+      i?.coverage?.feedback?.omitted > 0 && "feedback", i?.styles?.truncated && "css", r.settlement?.truncated && "settlement", r.settlement?.history?.truncated && "history"].filter(Boolean);
     const bindings = c ? Object.entries(c.bindings).map(([k, n]) => `${k}:${n}`).join(",") : "unknown";
     lines.push([screen, v, i ? i.issues?.length ? "findings" : "no-findings" : "unavailable", "coverage",
-      `controls=${c ? `${c.controls.inspected}/${c.controls.total}` : "unknown"}; bindings=${bindings}; settlement=${r.settlement?.stable === true ? "stable" : r.settlement?.stable === false ? "unstable" : "unknown"}; truncated=${bounds.join(",") || "none-reported"}; behavior=not-tested; persistence=not-tested`].join("\t"));
+      `controls=${c ? `${c.controls.inspected}/${c.controls.total}` : "unknown"}; feedback=${c?.feedback ? `${c.feedback.inspected}/${c.feedback.total}` : "unknown"}; bindings=${bindings}; settlement=${r.settlement?.stable === true ? "stable" : r.settlement?.stable === false ? "unstable" : "unknown"}; truncated=${bounds.join(",") || "none-reported"}; behavior=not-tested; persistence=not-tested`].join("\t"));
+    for (const f of i?.feedback || []) lines.push([screen, v, `feedback-observation:${f.visibility}`, f.selector, `${f.text}${f.textTruncated ? " [truncated]" : ""}; announcement=not-tested`].join("\t"));
     for (const i of r.inspection?.issues || []) lines.push([screen, v, i.kind + (i.provisional ? " (provisional)" : ""), i.selector, i.message].join("\t"));
   }
   return lines.length ? lines.join("\n") : `${screen}\tunavailable\tno observations`;

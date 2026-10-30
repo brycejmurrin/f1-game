@@ -94,6 +94,9 @@ function action(input) {
 function oracle(input) {
   object(input, 'oracle');
   switch (input.type) {
+    case 'feedback':
+      fields(input, ['type', 'selector', 'text'], 'feedback oracle');
+      return { type: input.type, selector: selector(input.selector), text: text(input.text, 'feedback text') };
     case 'binding': {
       fields(input, ['type', 'selector', 'runtime', 'saved'], 'binding oracle');
       const scalar = (v, nullable = false) => {

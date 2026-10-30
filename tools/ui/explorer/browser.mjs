@@ -78,7 +78,7 @@ export async function performAction(session, a) {
     case "wait": await page.locator(a.selector).waitFor({ state: a.state || "visible" }); break;
     case "checkpoint": break;
     case "assert": {
-      const check = a.oracle.type === "binding" ? await checkBinding(session, a.oracle) : { matches: await matchesOracle(session, a.oracle) };
+      const check = a.oracle.type === "feedback" ? await checkFeedback(session, a.oracle) : a.oracle.type === "binding" ? await checkBinding(session, a.oracle) : { matches: await matchesOracle(session, a.oracle) };
       if (!check.matches) throw new Error(`Replay assertion failed: ${JSON.stringify({ expected: a.oracle, actual: check.actual ?? null })}`);
       break;
     }
@@ -90,6 +90,7 @@ export async function performAction(session, a) {
 export async function matchesOracle(session, oracle) {
   if (!oracle) return false;
   const { page, logs } = session;
+  if (oracle.type === "feedback") return (await checkFeedback(session, oracle)).matches;
   if (oracle.type === "binding") return (await checkBinding(session, oracle)).matches;
   if (oracle.type === "game") {
     const state = await page.evaluate(() => ({ ...window.__apex.info(), weather: window.__apex.repro().wx }));
@@ -104,6 +105,16 @@ export async function matchesOracle(session, oracle) {
   if (state === "detached") return await l.count() === 0;
   const v = await l.isVisible();
   return state === "visible" ? v : !v;
+}
+
+/** Read-only geometric feedback assertion. No scrolling, focus changes or healing. */
+export async function checkFeedback({ page }, oracle) {
+  const count = await page.locator(oracle.selector).count();
+  if (count !== 1) return { matches: false, actual: { count, reason: count ? "ambiguous-target" : "missing-target" } };
+  const report = await page.evaluate(inspectUI, { root: oracle.selector });
+  const target = report.feedback?.find(f => f.isRoot);
+  return { matches: !!target && !target.renderedTextTruncated && typeof target.renderedText === "string" && target.renderedText.includes(oracle.text) && target.visibility === "fully-inside",
+    actual: target || { count, reason: "not-a-populated-feedback-region" } };
 }
 
 /** Exact visible control, current DOM/runtime agreement and optional explicit saved value. */

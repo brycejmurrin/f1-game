@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseOptions, main } from "../../tools/ui/explorer.mjs";
 import { MISSIONS, missionBrief, MODE_TITLES } from "../../tools/ui/explorer/catalog.mjs";
 import { validateScenario } from "../../tools/ui/explorer/core.mjs";
-import { matchesOracle, performAction, installFault, inspectUI, captureSceneDiagnostics } from "../../tools/ui/explorer/browser.mjs";
+import { matchesOracle, checkFeedback, performAction, installFault, inspectUI, captureSceneDiagnostics } from "../../tools/ui/explorer/browser.mjs";
 import vm from "node:vm";
 
 test("explorer CLI rejects unbounded probes, typo modes and credential URLs before browser acquisition", () => {
@@ -37,6 +37,70 @@ test("minimizer oracle matches the same console finding rather than any error", 
   const session = { logs: { errors: [{ kind: "pageerror", message: "Unrelated problem" }, { kind: "console", message: "Expected marker" }] } };
   assert.equal(await matchesOracle(session, { type: "console", kind: "pageerror", pattern: "Expected marker" }), false);
   assert.equal(await matchesOracle(session, { type: "console", kind: "console", pattern: "Expected marker" }), true);
+});
+
+test("feedback requires one target and distinguishes missing from ambiguous without inspecting either", async () => {
+  const oracle = { type: "feedback", selector: "#status", text: "Expected message" };
+  for (const [count, reason] of [[0, "missing-target"], [2, "ambiguous-target"]]) {
+    const session = { page: {
+      locator: selector => { assert.equal(selector, oracle.selector); return { count: async () => count }; },
+      evaluate: async () => { throw new Error("An absent or ambiguous target cannot be measured"); },
+    } };
+    assert.deepEqual(await checkFeedback(session, oracle), { matches: false, actual: { count, reason } });
+  }
+});
+
+test("feedback matches only the explicitly inspected root with complete visible text", async () => {
+  const oracle = { type: "feedback", selector: "[role=status]", text: "Expected message" };
+  const root = { selector: "#status", isRoot: true, text: "Expected message — retry available", renderedText: "Expected message — retry available", renderedTextTruncated: false,
+    visibility: "fully-inside", box: { x: 10, y: 20, width: 200, height: 44 } };
+  const child = { ...root, selector: "#status-child", isRoot: false };
+  let rows = [child, root];
+  const session = { page: {
+    locator: selector => { assert.equal(selector, oracle.selector); return { count: async () => 1 }; },
+    evaluate: async (fn, args) => { assert.equal(fn, inspectUI); assert.deepEqual(args, { root: oracle.selector }); return { feedback: rows }; },
+  } };
+  const pass = await checkFeedback(session, oracle);
+  assert.equal(pass.matches, true, "a root found by a role selector may have a generated ID selector in its report");
+  assert.equal(pass.actual, root, "retain the measured row as evidence");
+  for (const patch of [
+    { visibility: "hidden" }, { visibility: "partly-inside" }, { visibility: "outside" },
+    { visibility: "unmeasured-clip" }, { visibility: undefined },
+    { renderedText: "A different message" }, { renderedText: "" }, { renderedText: undefined }, { renderedTextTruncated: true },
+  ]) {
+    const actual = { ...root, ...patch }; rows = [child, actual];
+    const result = await checkFeedback(session, oracle);
+    assert.equal(result.matches, false, JSON.stringify(patch));
+    assert.equal(result.actual, actual, "a passing child cannot substitute for the failed root");
+  }
+  for (const absent of [[], [child]]) {
+    rows = absent;
+    assert.deepEqual(await checkFeedback(session, oracle), {
+      matches: false, actual: { count: 1, reason: "not-a-populated-feedback-region" },
+    });
+  }
+});
+
+test("replay feedback assertions preserve measured failure evidence and accept the repaired root", async () => {
+  const oracle = { type: "feedback", selector: "#status", text: "Expected message" };
+  const actual = { selector: "#status", isRoot: true, text: oracle.text, renderedText: oracle.text, renderedTextTruncated: false,
+    visibility: "partly-inside", visibleFraction: 0.4, clippedBy: [{ selector: "#body", axis: "y" }] };
+  const session = { page: { locator: () => ({ count: async () => 1 }), evaluate: async () => ({ feedback: [actual] }) } };
+  await assert.rejects(() => performAction(session, { type: "assert", oracle }), error => {
+    const prefix = "Replay assertion failed: ";
+    assert.ok(error.message.startsWith(prefix));
+    assert.deepEqual(JSON.parse(error.message.slice(prefix.length)), { expected: oracle, actual });
+    return true;
+  });
+  actual.visibility = "fully-inside"; actual.visibleFraction = 1; actual.clippedBy = [];
+  await performAction(session, { type: "assert", oracle });
+});
+
+test("existing selector visibility and literal text oracles keep their distinct meanings", async () => {
+  const session = { page: { locator: () => ({ isVisible: async () => false, textContent: async () => "Expected message" }) } };
+  assert.equal(await matchesOracle(session, { type: "selector", selector: "#status" }), false);
+  assert.equal(await matchesOracle(session, { type: "selector", selector: "#status", state: "hidden" }), true);
+  assert.equal(await matchesOracle(session, { type: "text", selector: "#status", text: "Expected message" }), true);
 });
 
 test("race mission verifies actual track and weather instead of just a visible HUD", async () => {
@@ -593,4 +657,54 @@ test("MCP UI summary retains bounded console and request evidence without claimi
   assert.equal(result.diagnostics.truncated, true);
   assert.match(result.limitation, /not a UI pass/);
   assert.equal(summarizeUIInspection({ controls: [], errors: [], requests: [] }).diagnostics.consoleErrors, 0);
+});
+
+
+test("feedback collector retains hidden text but separates rendered content and conservative clipping", () => {
+  const rect = { x: 10, y: 20, width: 200, height: 44, right: 210, bottom: 64 };
+  const style = { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible", clip: "auto", clipPath: "none", transform: "none", maskImage: "none" };
+  const parent = { id: "parent", tagName: "DIV", parentElement: null, getBoundingClientRect: () => rect };
+  const feedback = { id: "status", tagName: "DIV", parentElement: parent, textContent: "Hidden error Other", innerText: "Other",
+    scrollWidth: 200, clientWidth: 200, scrollHeight: 44, clientHeight: 44,
+    matches: q => q.includes('[role="status"]'), querySelectorAll: () => [], closest: () => null,
+    getAttribute: k => k === "role" ? "status" : null, getBoundingClientRect: () => rect };
+  const document = { querySelectorAll: q => q === "#status" ? [feedback] : [], documentElement: { scrollWidth: 844, dataset: {} }, activeElement: null };
+  const parentStyle = { ...style };
+  const context = vm.createContext({ document, window: {}, innerWidth: 844, innerHeight: 390,
+    location: { href: "http://localhost/" }, CSS: { escape: s => s }, matchMedia: () => ({ matches: false }),
+    getComputedStyle: e => e === feedback ? style : e === parent ? parentStyle : style });
+  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})({root:'#status'})`, context)));
+  const first = inspect();
+  assert.equal(first.controls.length, 0, "feedback is not a tiny tap target");
+  assert.equal(first.feedback[0].text, "Hidden error Other");
+  assert.equal(first.feedback[0].renderedText, "Other", "hidden child text cannot satisfy the visible-feedback oracle");
+  assert.equal(first.feedback[0].visibility, "fully-inside");
+  style.display = "none";
+  assert.equal(inspect().feedback[0].visibility, "hidden");
+  assert.equal(inspect().feedback[0].renderedText, "");
+  assert.equal(inspect().feedback[0].reasons[0].kind, "display-none");
+  style.display = "block"; feedback.scrollHeight = 45;
+  assert.equal(inspect().feedback[0].visibility, "unmeasured-text-overflow", "self-clipped or overflowing text needs line-bound measurements");
+  feedback.scrollHeight = 44; parentStyle.maskImage = "linear-gradient(transparent,transparent)";
+  assert.equal(inspect().feedback[0].visibility, "unmeasured-clip");
+  parentStyle.maskImage = "none"; parentStyle.transform = "matrix(0, 1, -1, 0, 0, 0)";
+  assert.equal(inspect().feedback[0].visibility, "unmeasured-transform");
+  parentStyle.transform = "none"; parentStyle.overflowY = "hidden";
+  parent.getBoundingClientRect = () => ({ ...rect, height: 20, bottom: 40 });
+  assert.equal(inspect().feedback[0].visibility, "partly-inside");
+  assert.deepEqual(inspect().feedback[0].clippedBy, ["#parent"]);
+});
+
+
+test("MCP feedback summaries distinguish missing coverage and bound advisory samples", async () => {
+  const { summarizeUIInspection } = await import("../../tools/mcp/ui-tools.mjs");
+  const legacy = summarizeUIInspection({ controls: [] }).records[0].feedback;
+  assert.equal(legacy.available, false); assert.equal(legacy.observed, null); assert.equal(legacy.samples, null);
+  const feedback = Array.from({ length: 11 }, (_, n) => ({ selector: `#status-${n}`, text: "x".repeat(2048), visibility: "hidden" }));
+  const result = summarizeUIInspection({ controls: [], feedback, coverage: { feedback: { total: 12, inspected: 11, omitted: 1 } } });
+  const row = result.records[0];
+  assert.equal(row.feedback.observed, 11); assert.equal(row.feedback.samples.length, 10);
+  assert.match(row.feedback.samples[0].text, /truncated/); assert.equal(row.feedback.truncated, true); assert.equal(row.truncated, true);
+  assert.equal(row.advisoryTotal, 0, "hidden feedback observations do not become automatic defects");
+  assert.throws(() => summarizeUIInspection({ controls: [], feedback: [null] }), /feedback/);
 });

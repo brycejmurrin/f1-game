@@ -86,6 +86,35 @@ test('binding replay assertions accept finite data and reject executable or unkn
     assert.throws(() => validateScenario(scenario([{ type: 'assert', oracle: bad }])), TypeError);
 });
 
+test('feedback oracles normalize independently at scenario and replay assertion boundaries', () => {
+  for (const text of ['Expected message', 'x'.repeat(2048)]) {
+    const oracle = { type: 'feedback', selector: '#status', text };
+    const input = { ...scenario([{ type: 'assert', oracle }]), oracle };
+    const normalized = validateScenario(input);
+    assert.deepEqual(normalized.oracle, oracle);
+    assert.deepEqual(normalized.actions[0], { type: 'assert', oracle });
+    assert.notEqual(normalized.oracle, oracle, 'the scenario oracle must not retain caller data');
+    assert.notEqual(normalized.actions[0].oracle, oracle, 'the replay oracle must not retain caller data');
+    normalized.oracle.text = 'Changed normalized message';
+    assert.equal(input.oracle.text, text);
+    assert.equal(normalized.actions[0].oracle.text, text);
+  }
+});
+
+test('feedback oracles reject missing, empty, unbounded, executable and unknown fields in both contexts', () => {
+  const valid = { type: 'feedback', selector: '#status', text: 'Expected message' };
+  const invalid = [
+    { type: 'feedback', text: valid.text }, { ...valid, selector: '' },
+    { type: 'feedback', selector: valid.selector },
+    ...['', '   ', 'x'.repeat(2049), 'bad\0message', null, {}, [], () => true].map(text => ({ ...valid, text })),
+    { ...valid, script: 'window.alert(1)' }, { ...valid, state: 'visible' },
+  ];
+  for (const oracle of invalid) {
+    assert.throws(() => validateScenario({ ...scenario([]), oracle }), TypeError);
+    assert.throws(() => validateScenario(scenario([{ type: 'assert', oracle }])), TypeError);
+  }
+});
+
 test('state signature ignores timers, logs and source ordering but preserves interaction states', () => {
   const first = snapshot({
     time: 123, logs: ['first'], roots: [{ role: 'main', id: 'title', time: 1 }],
