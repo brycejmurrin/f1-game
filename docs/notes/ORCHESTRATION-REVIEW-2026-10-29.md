@@ -222,3 +222,17 @@ design that docs/WORKERS.md already retired; they are recorded so they are not r
 6. Hook and rule reconciliation (stop hooks, timers).
 7. The `sync-pr`, `wait-for` and `test-bg` defects.
 8. Hunt to issues, and a deep launch template.
+
+## Decisions (Bryce, dispatcher AskUserQuestion, 2026-10-30 ~00:35 PT)
+
+- **Build:** all four fix areas: faster and truer pre-push; landing gaps; dispatcher hygiene; tool and hook bugs. Also a
+  subagent re-review of CLAUDE.md, AGENTS.md, all skills and the docs "to make more clear". The dispatcher sequenced the
+  docs re-review after the four fix PRs, because all five edit AGENTS.md, docs/WORKERS.md and the skills.
+- **Permissions:** "Draft it for me". See `docs/notes/PERMISSION-PROPOSAL-2026-10-30.md`; nothing is applied.
+- **Relays:** "Yes, quoted relays count". A dispatcher relaying Bryce's exact words with their timestamp counts as his
+  grant for that action. docs/WORKERS.md gets this rule in the dispatcher-hygiene PR.
+- **Timers:** Bryce said "Figure out", so the dispatcher decided: keep the harness's bounded safety check-in. One
+  `send_later` per watched PR, about 50 min after the last activity, re-armed at most 3 times, cancelled on merge or
+  close. Subscriptions do not wake a session on stale `gate` statuses, merge conflicts or other people's pushes, and
+  #3981 and #4062 sat stuck on exactly those. AGENTS.md rule 13's "no timers, no standby wakes" stays for sleep loops
+  and shell polling; rule 13 is amended to allow this one bounded check-in.
