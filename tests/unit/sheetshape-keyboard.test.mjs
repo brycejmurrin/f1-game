@@ -284,3 +284,28 @@ test("visual viewport resize updates title density as well as keyboard padding",
   fire("vv", "resize");
   assert.equal(dom.document.body.dataset.density, "compact");
 });
+
+/* UI hunt 2026-10-29 #12: CAREER rotated 844x390 → portrait kept #cr-body's
+   scrollTop while its content grew, leaving the focused control off-screen.
+   The settle path brings focus back into its nearest scroller, and only then. */
+test("a rotation scrolls the top layer's focused control back into its scroller", () => {
+  let layer = null;
+  const { dom, fire, runTimers } = boot({
+    UiLayers: { top: () => layer },
+    getComputedStyle: (el) => ({ getPropertyValue: () => "", overflowY: el._overflowY || "visible" }),
+  });
+  const box = (top, height) => ({ left: 0, right: 400, width: 400, top, bottom: top + height, height });
+  const make = (parent, tag, rect) => { const n = dom.makeElement(tag); n._rect = rect; parent.appendChild(n); return n; };
+  layer = make(dom.document.body, "dialog", box(0, 844));
+  const body = make(layer, "div", box(60, 700)); body._overflowY = "auto"; body.scrollHeight = 1374;
+  const btn = make(make(body, "div", box(200, 40)), "button", box(900, 44));
+  const calls = [];
+  btn.scrollIntoView = (o) => calls.push(o);
+  btn.focus();
+  fire("win", "orientationchange");
+  assert.deepEqual(calls.map((o) => o.block), ["nearest"], "an off-screen focused control is scrolled in, nearest");
+  btn._rect = box(300, 44); runTimers();
+  assert.equal(calls.length, 1, "a visible focused control is left where it is");
+  btn._rect = box(900, 44); layer = null; fire("win", "resize");
+  assert.equal(calls.length, 1, "no menu layer (racing): nothing moves");
+});
