@@ -1317,7 +1317,7 @@ test('every camera, preset and sequence keeps the eye inside the bay and ends wh
       assert.ok(p.eye[0] > -5.4 && p.eye[0] < 5.4 && p.eye[2] > -6.4 && p.eye[2] < 6.4, tag + ': eye inside the walls');
       assert.ok(p.eye[1] > 0.25 && p.eye[1] < 3.65, tag + ': eye above the floor and under the overhead rig');
       assert.ok(p.aim.every(Number.isFinite) && [p.x, p.z, p.yaw].every(Number.isFinite), tag + ': finite');
-      assert.ok(p.camera in Arrival.CAMS, tag + ': a known camera');
+      assert.ok((p.camera in Arrival.CAMS) || (p.camera in Arrival.RIG_LABEL), tag + ': a known camera or rig');
     }
     const last = fn(end + 0.5, cfg, true);
     assert.equal(last.active, false);
@@ -1601,4 +1601,26 @@ test('LIGHT CUE: off by default; a pick rides the pose; after the race BY RESULT
     assert.deepEqual(['win', 'podium', 'points', 'finish', 'dnf'].map((r) => home(r)), ['flashes', 'pulse', null, null, 'beacon']);
     assert.equal(home('win', 'none'), null); assert.equal(home('finish', 'lightsup'), 'lightsup');
   } finally { delete context.GarageScene; }
+});
+
+test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, the aim settles on the live car', () => {
+  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'orbit', 'rear']);
+  for (const id of Arrival.RIG_IDS) {
+    assert.equal(Arrival.settings({ angle: id }).angle, id);
+    for (const [dir, fn] of [['in', Arrival.pose], ['out', Arrival.poseOut], ['home', Arrival.poseHome]]) {
+      const cfg = Arrival.settings({ angle: id, enterCrew: 'marshal', leaveCrew: 'check', homeCrew: 'service', result: 'dnf', sway: 0 });
+      const end = Arrival.duration(cfg, dir);
+      for (let t = 2.5; t < end; t += 0.25) {
+        const p = fn(t, cfg, true), s = Arrival.rigSample(id, dir, t / end, p.side);
+        assert.equal(p.camera, id);
+        assert.deepEqual(p.eye.map((v) => +v.toFixed(6)), s.eye.map((v) => +v.toFixed(6)), `${id} ${dir} t${t}: the rig's eye`);
+        assert.ok(Math.abs(p.fov - s.fov) < 1e-9, 'the rig\'s lens at FIELD OF VIEW 54');
+        // Once the shutter shot is over, the aim is ON the car whatever crew or result stretches the timing.
+        if (dir !== 'out' && t > Arrival.timeline(cfg, dir).door + 0.8)
+          assert.ok(Math.abs(p.aim[0] - Math.max(-8, Math.min(8, p.x))) < 1e-9 && Math.abs(p.aim[2] - Math.max(-3, Math.min(14, p.z))) < 1e-9, `${id} ${dir} t${t}: aimed at the car`);
+      }
+    }
+    assert.ok(Arrival.angleMap(id).includes('<polyline'), id + ': the map draws the rig\'s path');
+  }
+  assert.ok(Math.abs(Arrival.pose(5, Arrival.settings({ angle: 'crane', fov: 64 })).fov - Arrival.rigSample('crane', 'in', 5 / Arrival.duration(Arrival.settings({ angle: 'crane' }), 'in')).fov - 10) < 1e-6, 'FIELD OF VIEW offsets the rig lens');
 });

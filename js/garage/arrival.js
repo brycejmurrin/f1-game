@@ -115,7 +115,7 @@ const GarageArrival = (function () {
     const crew = (key) => crewIds(key === "leaveCrew" ? "out" : "in").includes(v[key]) ? v[key] : DEFAULT[key];
     const shots = Array.isArray(v.shots) && v.shots.length === 3 ? v.shots.map((c, i) => CAMS[c] ? c : DEFAULT.shots[i]) : DEFAULT.shots.slice();
     return { enabled: v.enabled !== false, speed: number("speed", 0.5, 2),
-      angle: ANGLES.includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75),
+      angle: ALL_ANGLES.includes(v.angle) ? v.angle : "cut", fov: number("fov", 40, 75),
       enterCrew: crew("enterCrew"), leaveCrew: crew("leaveCrew"),
       shots, height: number("height", -1, 1.5), door: number("door", 0.6, 4),
       // HOLD BEAT: null keeps each sequence's own (0.4 s in, 1.1 s out).
@@ -154,11 +154,20 @@ const GarageArrival = (function () {
         + `<circle cx="${x}" cy="${z}" r="5" fill="${lit ? "#e10600" : "none"}" stroke="currentColor" stroke-width="${lit ? 1.5 : 0.8}"/>`
         + (cuts && lit ? `<text x="${x}" y="${(+z + 3.5).toFixed(1)}" font-size="8" text-anchor="middle" fill="#fff">${n}</text>` : "");
     };
-    return `<rect x="10" y="8" width="100" height="84" fill="none" stroke="currentColor" stroke-width="2"/>`
+    const room = `<rect x="10" y="8" width="100" height="84" fill="none" stroke="currentColor" stroke-width="2"/>`
       + `<line x1="${X(-2.7)}" y1="${Z(6.4)}" x2="${X(2.7)}" y2="${Z(6.4)}" stroke="#2a2a2e" stroke-width="4"/>`
       + `<rect x="4" y="96" width="112" height="16" fill="currentColor" opacity="0.12"/>`
-      + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`
-      + CAM_IDS.map(eye).join("");
+      + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`;
+    // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
+    if (RIGS[angle]) {
+      const pts = [];
+      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
+      const a = pts[0].split(" "), b = pts[16].split(" ");
+      return room + `<polyline points="${pts.join(" ")}" fill="none" stroke="#e10600" stroke-width="2" stroke-dasharray="4 3"/>`
+        + `<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>`
+        + `<circle cx="${b[0]}" cy="${b[1]}" r="5" fill="#e10600" stroke="currentColor" stroke-width="1.5"/>`;
+    }
+    return room + CAM_IDS.map(eye).join("");
   }
   const CAM_NAMES = Object.freeze({ left: "left of the bay", right: "right of the bay", high: "high corner", low: "floor level", door: "door jamb" });
   /* THE ROWS BEYOND THE SHIPPED FORM, built from these tables into #ga-rows once
@@ -209,6 +218,7 @@ const GarageArrival = (function () {
     // Once: the presets' options are the mark (a second bindSettings builds nothing).
     if (!doc || !angle || !fov || !angle.closest || !fov.closest || Array.from(angle.children || []).some((o) => o.value === "custom")) return;
     for (const id of Object.keys(ANGLE_TEXT)) { const o = doc.createElement("option"); o.value = id; o.textContent = ANGLE_TEXT[id]; angle.appendChild(o); }
+    for (const id of RIG_IDS) { const o = doc.createElement("option"); o.value = id; o.textContent = "BLENDER · " + RIG_LABEL[id]; angle.appendChild(o); }
     const make = (tag, cls, text) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
     const node = (r) => {
       if (typeof r === "string") return make("p", "adv-help", r);
@@ -283,7 +293,8 @@ const GarageArrival = (function () {
       if (map) {
         map.innerHTML = angleMap(value.angle, value.shots);
         const used = shotsFor(value, "in");
-        if (map.setAttribute) map.setAttribute("aria-label", value.angle === "cut" ? "Two camera cut: left of the bay, then right"
+        if (map.setAttribute) map.setAttribute("aria-label", RIGS[value.angle] ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
+          : value.angle === "cut" ? "Two camera cut: left of the bay, then right"
           : new Set(used).size === 1 ? "One camera, " + CAM_NAMES[used[0]] + ", looking out of the door"
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
       }
@@ -348,6 +359,7 @@ const GarageArrival = (function () {
    * move as smooth as Blender's curves; the eye is clamped inside the bay, short of the door's plane. */
   const RIG_IDS = Object.freeze(Object.keys(RIGS));
   const RIG_LABEL = Object.freeze(Object.fromEntries(RIG_IDS.map((id) => [id, RIGS[id].label])));
+  const ALL_ANGLES = Object.freeze(ANGLES.concat(RIG_IDS));   // GARAGE ANGLE: presets, then the Blender rigs
   function rigSample(id, dir, u, side = 1) {
     const rig = typeof id === "string" && Object.prototype.hasOwnProperty.call(RIGS, id) ? RIGS[id] : null;
     if (!rig) return null;
@@ -436,7 +448,8 @@ const GarageArrival = (function () {
   }
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
-    const cams = shotsFor(config, "in"), side = sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
+    const rig = RIGS[config.angle] ? config.angle : null;
+    const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
     const n = t < T.door ? 0 : t < s2 ? 1 : 2, cam = cams[n];
     const look = { config, last: n === 2, k: n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2) };
     const u = Math.max(0, Math.min(1, (t - T.door) / T.lane));
@@ -451,13 +464,27 @@ const GarageArrival = (function () {
     // The shipped LEFT / RIGHT eyes keep their own framing; the new ones aim by aimAt.
     const aim = cam === "left" || cam === "right"
       ? [Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)] : aimAt(cam, p, t < T.door);
+    const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
     return shot({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
-      engine: !(r && r.pushed), side, calm, camera: cam, shot: n + 1, mood: lightFor(config, dir), cue: cueFor(config, dir), swell: lookNum(config, "swell", 1),
-      bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", sound: config.sound !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: config.fov,
+      engine: !(r && r.pushed), side, calm, camera: rig || cam, shot: n + 1, mood: lightFor(config, dir), cue: cueFor(config, dir), swell: lookNum(config, "swell", 1),
+      bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", sound: config.sound !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: rs ? rs.fov : config.fov,
       door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
-      CAMS[cam], aim, t, calm, config.height || 0, look);
+      rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look);
+  }
+  /* A BLENDER RIG (crane, orbit, dolly, rear track; lane A's generated block)
+   * gives the eye and lens over u = t / duration. Its baked aim was keyed on one
+   * timing (crew "current", a win), so past the shutter shot the aim eases onto
+   * the car's live position instead and frames it whatever crew or result
+   * stretches the sequence. FIELD OF VIEW offsets the rig's lens from 54. */
+  function rigOn(id, dir, t, end, door, p, config, side) {
+    const s = rigSample(id, dir === "home" ? "home" : dir, end > 0 ? t / end : 0, side);
+    if (!s) return null;
+    const w = ease((t - door) / 0.8), car = [Math.max(-8, Math.min(8, p.x)), 0.6, Math.max(-3, Math.min(14, p.z))];
+    for (let i = 0; i < 3; i++) s.aim[i] += (car[i] - s.aim[i]) * w;
+    s.fov = Math.max(30, Math.min(80, s.fov + (Number.isFinite(config.fov) ? config.fov - 54 : 0)));
+    return s;
   }
   const lookNum = (c, key, dflt) => c && Number.isFinite(c[key]) ? c[key] : dflt;
   const pose = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "in");
@@ -490,7 +517,8 @@ const GarageArrival = (function () {
   function poseOut(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, "out"), end = duration(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
-    const cams = shotsFor(config, "out"), side = sideFor(cams[1]);
+    const rig = RIGS[config.angle] ? config.angle : null;
+    const cams = shotsFor(config, "out"), side = rig ? 1 : sideFor(cams[1]);
     const opening = t < T.door;
     const d = outDistance(Math.min(t, settle) - go, Object.assign({}, T, { settle: T.run + OUT_EXIT_M / T.v }));
     const p = pathAt(d, side);
@@ -501,16 +529,18 @@ const GarageArrival = (function () {
     // The aim follows it round to the jamb and holds on the doorway as it goes.
     const legacy = cam === "left" || cam === "right", cs = legacy ? sideFor(cam) : side;
     const aim = legacy ? [cs * Math.min(cs * p.x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + p.z * 0.62)] : aimAt(cam, p, opening);
-    let e = eye;
-    if (!calm && t > settle) {
+    const rs = rig ? rigOn(rig, "out", t, end, go, p, config, side) : null;
+    let e = rs ? rs.eye : eye;
+    if (rs) for (let i = 0; i < 3; i++) aim[i] = rs.aim[i];
+    else if (!calm && t > settle) {
       const k = 1 - Math.exp(-(t - settle) / HOLD_TAU);
       e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, Math.min(5.9, eye[2] + HOLD_PUSH * k)];
       aim[0] -= cs * 2.2 * k;
     }
-    return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", sequence: "out", engine: true, side, calm, camera: cam,
+    return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", sequence: "out", engine: true, side, calm, camera: rig || cam,
       shot: n + 1, mood: lightFor(config, "out"), cue: cueFor(config, "out"), swell: lookNum(config, "swell", 1), bars: !!config.bars, captions: config.captions !== false,
       rearLight: config.rearLight || "auto", sound: config.sound !== false,
-      crewClear: ease((t - (go - .3)) / .3), crew: crewFor(config, "out"), fov: config.fov, door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw,
+      crewClear: ease((t - (go - .3)) / .3), crew: crewFor(config, "out"), fov: rs ? rs.fov : config.fov, door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw,
       label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm, config.height || 0, look);
   }
   /** The pose function of a sequence: "in" (pit stop), "out" (race start), "home" (after the race). */
@@ -613,5 +643,5 @@ const GarageArrival = (function () {
     return m === "auto" && !!wet;
   }
   return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
-    CAMS, CAM_IDS, ANGLES, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

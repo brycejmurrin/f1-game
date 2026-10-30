@@ -7600,6 +7600,7 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "rigSample": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-camera-rigs.test.mjs"
       ],
       "settings": [
