@@ -47,6 +47,25 @@ backend-surface-parity: 199 pass). `gfx-backend-canary` is 280 pass. Its chunked
   parent as WebGL2-leg work and are not changed here.
 - Known negatives were not retried: the sky cache at 512² (#3962), godray R11F (opt-in), and batching submits (needs a three past r186).
 
+## Follow-up: "fix all" (branch `cursor/tlx-webgpu-perf2-9c4d`)
+
+After #4216 merged, Bryce asked to fix every open item. Outcome per item:
+
+| item | outcome | evidence |
+|---|---|---|
+| Mirror target DPR (`mirror-pass.js targetSize`) | **Fixed.** The cap now follows the main canvas's cap: 1.5 when `G.gfx.mobileTier`, else 2. That is the same rule as GLX's and TLX's `DPR_CAP`, read from a name every backend already publishes. An iPhone (DPR 3) lite mirror target goes from 960×274 to 720×205 for a 400×114 CSS rect, which is 0.56× the pixels in the mirror's scene pass and its mips. Desktop is unchanged. | `mirror-pass.test.mjs` "quality ladder" (the base tree draws 960×274) |
+| FXAA inside the mirror inset (`tsl-post.js`) | **Fixed.** One inset guard now takes the mirror sample and its tone, and FXAA runs in that guard's `else`. Before, inset pixels ran the whole FXAA body (up to 23 taps) and kept the mirror colour live across it, only to overwrite the result. Output is bit-identical: the same sample and the same tone. | `tlx-mirror-inset.test.mjs`: WGSL and GLSL have one guard with FXAA in its `else`, and the gradient and derivative rules hold |
+| `pinSkyMaterial()` per present | **Fixed.** It returns at once while `scene.backgroundNode` is null, which TLX always keeps it. | code read: no non-null assignment in `js/render/three/` |
+| `capMirrorLights` per-frame object | **Fixed.** It reuses a scratch result, like `_vlOut`. | the mirror lamp-cap test (unchanged counts) |
+| `ssaoU.texel` | **Removed.** It was written every AO frame and read by no node. | `grep`: no reader |
+| Instanced registry under a pass root | **Dropped.** Vendored r186 `_projectObject` returns on its first line for `visible === false`, so a hidden registry mesh costs one call and one compare per pass. Gating the list would also need every warm and `compileAsync(scene)` path to restore it. Not worth the risk. | `three.webgpu.min.js` `_projectObject(e,t,r,s,i){if(!1===e.visible)return;…` |
+| B5 blob/decal Dynamic usage | **No-op, closed.** Each pass rewrites the run with `setRange0` (the written rows only) just before drawing it, so three uploads exactly that range. A full Dynamic re-upload needs a run drawn without a rewrite, and `_hideUndrawnInstanced` hides those. | `tlx.js` `_blobAppend` / `_decalAppend` / `setRange0` |
+| B7 warm-plus on WebGL2 | **Kept as is (measured).** three's WebGL2 path links at first draw, and with warm-plus off the post programs blocked mid-race for 4.25 s (census 245, `tlx.js` `_warmPlus`). | the measurement cited at the knob |
+| B3/B4 (SSR tag RGBA16F without `OES_draw_buffers_indexed`; bloom RGBA16F with only half-float) | **Not changed.** The only cheaper formats store less precision (8-bit tag, or LDR bloom), which is a look change. They need an on-device A/B. iOS reportedly exposes `EXT_color_buffer_float`, so B4 rarely applies on an iPhone. | `tlx-post.js` format probes |
+| B2 (rg11b10 scene on WebGL2) | **Stays reverted** (Device Farm: 42.5 vs 45.7 fps). | LIVE-DEBUGGER-PHONEPERF §Reverted |
+| B8 (lighter WebGL2 mobile tier) | **Left to the parent session** (a look change on the WebGL2 leg). | parent message |
+| WebKit device evidence | **Owed by a device run.** BrowserStack has no credentials here and the Device Farm has no further approved runs. The route is Bryce's PHONE TEST › GPU TEST (`PHONE-GPU-TEST-2026-10-21.md`). | — |
+
 ## Real-GPU follow-up
 
 The unit counts are three's shared core plus the vendored WebGPU attribute utility. They are not a device frame. The

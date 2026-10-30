@@ -3909,6 +3909,9 @@ const TLX = (function () {
       }
 
       function pinSkyMaterial() {
+        // three's Background builds a mesh only for a background NODE; TLX keeps backgroundNode null (begin,
+        // drawSky, mirrorBegin) and a plain Color background, so every per-present call found nothing.
+        if (!scene.backgroundNode) return;
         try {
           const store = renderer._background;
           if (!store) return;
@@ -5718,7 +5721,7 @@ const TLX = (function () {
             }
             _poolShow();
             _hideUndrawnInstanced();
-            if (scene.backgroundNode) pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
