@@ -88,5 +88,7 @@ an explicit migration policy and acceptance cases.
 
 No fresh CPU, heap, GPU or player-device performance result follows from this
 static review. Hosted tools also need source identity: the available Apex MCP
-reported `/workspace/f1-game`, an older checkout, so these current measurements
-used the isolated worktree's semantic CLI and checker instead.
+reported `/workspace/f1-game` without establishing this isolated worktree's
+commit identity. These current measurements therefore used the isolated
+worktree's semantic CLI and checker. Matching checkout paths on separate hosts
+do not establish matching files or revisions.
