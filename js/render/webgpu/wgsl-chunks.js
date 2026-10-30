@@ -1304,18 +1304,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (detail > 0.0) {
     let wp = in.wpos.xz;
     let fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
-    let n = svnoise(wp * 0.35) * 0.60 + svnoise(wp * 2.1) * 0.40 * fineFade;
+    // Exact-zero gates (GLX LIT_FS parity, perf hunt 8): past 125 m the fine octave and past
+    // 63 m the crack block multiply by 0, so their noise is skipped; the result is unchanged.
+    var n = svnoise(wp * 0.35) * 0.60;
+    if (fineFade > 0.0) { n = n + svnoise(wp * 2.1) * 0.40 * fineFade; }
     albedo = albedo * (1.0 + (n - 0.5) * detail);
     patchM = svnoise(wp * 0.055 + vec2<f32>(9.1));
     let pm = smoothstep(0.52, 0.72, patchM);
     albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
     // Sparse cracks (GLX lit.js): ridge-noise lines, zone-masked, near-field only.
     let crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
-    let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
-    let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
-    let crack = (1.0 - smoothstep(0.015, crAA, cr))
-              * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
-    albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
+    if (crackFade > 0.0) {
+      let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
+      let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
+      let crack = (1.0 - smoothstep(0.015, crAA, cr))
+                * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
+      albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
+    }
     albedo = max(albedo, vec3<f32>(0.0));
   }
   // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js). Interference
@@ -2463,11 +2468,15 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
       // Twilight / day horizon cloud-bank (GLX SKY_FS): distant cumulus on a
       // compressed plane so the low gameplay sky band isn't a plain wash.
-      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
-      let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
-      let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
-                  * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
-      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      // Exact-zero gate (GLX SKY_FS hunt 2 G3): the band fade is exactly 0 once up >= 0.26,
+      // so bankCov == 0 and max(cov, 0) is cov (cov >= 0). Skips the fbm(bp) (perf hunt 8).
+      if (up < 0.27) {
+        let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
+        let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
+        let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+        cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      }
       cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     covRay = cov;
