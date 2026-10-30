@@ -590,7 +590,7 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
 
 test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /let DPR_CAP = mobileTier \? 1\.5 : 2;/, "the cap is mutable");
+  assert.match(tlx, /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/, "the cap is mutable (B8: the ?lab=tlxLite tier seeds it lower)");
   assert.match(tlx, /capDpr\(n\) \{\s*if \(!\(n >= 1\) \|\| n >= DPR_CAP\) return false;\s*DPR_CAP = n; resizeNow\(\); return true;/);
 });
 
