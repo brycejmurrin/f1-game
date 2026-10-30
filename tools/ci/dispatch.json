@@ -8,6 +8,8 @@
   "staleHours": { "default": 2, "codex": 6 },
   "launchClaimHours": 2,
   "archiveAfterMinutes": 10,
+  "lockHours": 3,
+  "foreignHours": 2,
   "nudgeIdleMinutes": 20,
   "nudgeEveryMinutes": 60,
   "recentClosedHours": 48,

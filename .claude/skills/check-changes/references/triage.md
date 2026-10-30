@@ -15,7 +15,7 @@ test result: the group is left alive. Read the log, not the exit code:
 cat /proc/loadavg                                   # >= 3 = the box was/is busy (rule 8)
 node tools/ci/test-bg.mjs --status                  # running / how it ended, elapsed, log path
 ps -eo pid,pcpu,args --sort=-pcpu | head            # who holds the CPU now; ONE busy playwright of yours is expected, a second or a sibling node suite is the load
-grep -aE '^= (run (passed|failed|timedout|interrupted)|bg exit)' artifacts/logs/<group>.log   # no line = still running (or died: --status says)
+grep -aE '= (run (passed|failed|timedout|interrupted)|bg exit)' artifacts/logs/<group>.log   # no line = still running (or died: --status says)
 grep -aE 'x FAIL|! retry|= FAILURES|= slowest' artifacts/logs/<group>.log | head   # per-test 78.0s-style durations; `while setting up "context"` = load
 ```
 
@@ -91,7 +91,7 @@ base result is UNKNOWN, not green. A pass that needed the retry is still a red
 - Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
   `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
 - Verdicts come from the log's terminal line `= run <status>  (N/M done,
-  K failed)` — match with `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`
+  K failed)` — match with `grep -E '= (run (passed|failed|timedout|interrupted)|bg exit)'`
   (ERE alternation; fixed-string/BRE grep never matches) — never the process
   table.
 - `tools/ci/verify-change.mjs` runs the whole selection serialized correctly and

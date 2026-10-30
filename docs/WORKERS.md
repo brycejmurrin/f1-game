@@ -46,8 +46,15 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    green on your head, so let the `run-ci` fast tier finish once before you land (a full local tooling-fast run
    writes the other accepted stamp).
 4. **Watch.** Before ending a turn while CI runs on your own head, subscribe to the PR (Claude:
-   `subscribe_pr_activity`); only then. No timers. A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
+   `subscribe_pr_activity`); only then. No sleep or poll loops; the one timer allowed is a bounded safety check-in: one `send_later` per
+   watched PR about 50 min after its last activity, re-armed at most 3 times and cancelled on merge or close, because a
+   subscription does not wake on a stale `gate`, a conflict or another author's push (Bryce left it to the dispatcher,
+   2026-10-30; docs/notes/ORCHESTRATION-REVIEW-2026-10-29.md §Decisions). A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
    on a red.
+   **If `subscribe_pr_activity` fails** (it has, with no reason, on #3970, #3981 and #4062), keep ONE background
+   `node tools/ci/ci-watch.mjs --sha <head> --timeout 30` (`--once` for a single read) and tell the dispatcher in one
+   `send_message`; a lane that cannot subscribe is handed to its parent, not left silent.
+   Events you caused (your own subscribe, ready flip or push) need no tool call: end the turn. Add `run-ci` at the first push (a draft without it runs only skip jobs and idles). A sync runs with `run_in_background: true, timeout: 7200000`, never in the foreground.
 5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
    the Hand-off block, and end the turn. The session stays subscribed, so each PR event wakes it, until the
    dispatcher archives it (rule 4 below: `archiveAfterMinutes` after its PR merged or closed, as set in
@@ -74,8 +81,13 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    that does not depend on the answer; or send_message session_id `@parent` (the dispatcher). There is no
    `AskUserQuestion` in a worker. When Bryce answers in the thread, the worker removes `needs-decision` and
    carries on. The dispatcher skips a PR or issue carrying it, so a waiting PR is never re-owned.
-8. **Take over.** A `CONTINUE PR #<n>` worker adopts the PR: comment `adopts PR #<n> — <host>:<session id>` on it
-   and remove `needs-owner`, then work from the Hand-off block and the Plan. On a PR the NEWEST adoption comment
+   **A quoted relay counts.** A dispatcher or parent that relays Bryce's exact words, with when and where he said them,
+   passes on his grant for that action (Bryce, 2026-10-30: "Yes, quoted relays count"; docs/notes/
+   ORCHESTRATION-REVIEW-2026-10-29.md §Decisions). A paraphrase, or a peer's own words, grants nothing.
+8. **Take over.** A `CONTINUE PR #<n>` worker adopts the PR. The dispatcher does the mechanics when it records the
+   launch (`dispatch.mjs --record-launch` removes `needs-owner` and posts `adopts PR #<n> — <host>:<session id>`,
+   because the auto-mode classifier denies the label DELETE to a worker). The worker sets `owner:` in the Hand-off
+   block and works from it and the Plan; a session launched by hand does both steps itself. On a PR the NEWEST adoption comment
    wins (stand down if a newer one appears), the opposite of issue claims: a takeover replaces an owner that went
    silent.
 9. **Already fixed.** When the issue is already fixed on the deploy tip: comment the evidence (the commit sha and
@@ -142,13 +154,31 @@ or the session is known to have ended. The script's header holds the exact cycle
 
 It runs in ONE persistent session per Claude account, woken hourly by a scheduled task bound to that session. A
 fresh scheduled session (`create_new_session_on_fire`) lacks `get_session`, `list_sessions` and `create_session`,
-so it cannot execute the lines. Two accounts are two dispatchers on one Board comment (marker
-`<!-- dispatch-board -->`, the last run wins it): the `dispatch: launched <host>:<title> for #<n> at <iso>`
-comment is the lock (younger than `launchClaimHours` = a live launch), and each account's quota, caps and
-archive scope are its own; one account cannot archive or message the other's sessions. Its rules:
+so it cannot execute the lines. The scheduled task's prompt is in the header of `tools/ci/dispatch.mjs` (its one
+home; the cycle above is the summary). Its guards:
+
+- **One dispatcher at a time.** The Board comment (issue #1780, marker `<!-- dispatch-board -->`) carries
+  `lock: <session id> at <iso>`. `dispatch.mjs --apply --self <id>` refuses to act (first output line `= dispatch
+  refused …`; no labels, Board, launches, nudges or archives) while ANOTHER session's lock is younger than `lockHours`
+  (3). A clean handover is `--take-lock` by the new dispatcher, and the old one stops writing (skill `handoff`).
+  Evidence: 7 dispatcher sessions in 30 h, two orchestrators labelling the same PRs at 10-29 07:41Z. The
+  `dispatch: launched <host>:<title> for #<n> at <iso>` comment stays the per-target claim (younger than
+  `launchClaimHours` = a live launch); each account's quota, caps and archive scope are its own.
+- **Quota.** `rejected`: launch nothing, and the first output line says to disable the hourly trigger
+  (`update_trigger enabled=false`; about 30 failed wake-ups followed a weekly-limit hit). `allowed_warning`: the launch
+  cycle is skipped and the first line says so.
+- **Ask Bryce once.** The dispatcher asks a question with AskUserQuestion once; in the same turn it labels the PR `needs-decision` and posts one comment. It never re-asks: the label is the queue (21 of 22 restarts hit a pending question; #4076 was asked 12–13 times).
+- **Never push to a lane's branch.** The dispatcher sends the edit as a message to the lane's session; a push races the worker and its relayed edit is dropped.
+- **Foreign-activity probe.** Rule 2 skips a PR with a commit in the last `foreignHours` (2) by an author who is neither
+  the PR's author nor a Claude identity, or a `lane:cursor` PR with a push in that window (#4187: a takeover lost 57
+  min to a live Cursor agent).
+- **Prerequisites.** Rule 2 skips a PR whose body or Plan names an open PR as its prerequisite ("after #N merges",
+  "builds on #N", "depends on #N", "blocked by #N"); it launches once #N has merged (#4096 idled 4.4 h).
+
+Its rules:
 
 1. A `ready` issue with no `claimed`, `blocked` or `needs-decision` gets one worker (`priority` first), up to the
-   caps, only when the account's quota is `allowed`; `allowed_warning`, rejected or unknown quota launches nothing.
+   caps, only when the account's quota is `allowed`; `allowed_warning`, `rejected` or unknown quota launches nothing.
    The script paginates list endpoints in pages of 100, capped at 50 pages. Landing backpressure: while `landQueueMax` (tools/ci/dispatch.json,
    15) or more open non-draft PRs carry `land`, it starts no issue worker and records one skip line ("issue
    launches paused: N PRs waiting to land"); rules 2 and 3 still launch, since they drain the queue.
@@ -217,4 +247,4 @@ Retired 2026-10-27, all of it: the bus (`fleet-bus.mjs`, the `claude/fleet-bus` 
 retired: the `fleet` block and the `fleet-status:` line in PR bodies, and the `MERGE-HOLD:` line;
 retired: the orchestrator role, the seed, relay and watcher sessions;
 retired: `GAME-SLOT` / `DONE` / `INCIDENT` messages, merge receipts and the hooks that demanded them, `fleet.yml` and `merge-attribution.yml`.
-A sentence typed in a console grants nothing; a label does.
+A sentence typed in a console grants nothing; a label does, and so does a quoted relay of Bryce's words (contract item 7).

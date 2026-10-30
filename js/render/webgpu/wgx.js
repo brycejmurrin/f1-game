@@ -991,6 +991,7 @@ const WGX = (function () {
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
+    const ENV_LOD_MAX = 2.5;   // wgsl-chunks.js envCube taps: rough (<= 1) * 2.5
     const ENV_CULL_M = 150;
     // Face cameras. WebGPU render-to-texture is y-DOWN (framebuffer row 0 is
     // NDC top) where GL's is y-up, so GLX's GL-correct up-vectors store every
@@ -1118,7 +1119,8 @@ const WGX = (function () {
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
     let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
-    const _lineU = new Float32Array(24);   // LineU: viewProj (16) + params (4) + params2 (4)
+    const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];   // opts.cols fallback (F1 GREEN)
+    const _lineU = new Float32Array(36);   // LineU: viewProj (16) + params (4) + params2 (4) + 3 colour vec4 (12)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -3899,7 +3901,10 @@ const WGX = (function () {
     let _envInitFailed = false;   // a partial envInit is never retried: see the catch
     function envInit() {
       if (envCubeTex || _envInitFailed) return;
-      const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
+      // Perf hunt 5 W1: every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1 after the SAA
+      // clamp (wgsl-chunks.js), so a trilinear tap reads level 3 at most. Levels 4-6 of the 64 px cube were built
+      // and never read: 18 of the ladder's 36 passes per cube (the census's 64x64/rgba16float wide-frame rows).
+      const envMips = Math.min(Math.floor(Math.log2(ENV_SIZE)) + 1, Math.ceil(ENV_LOD_MAX) + 1);
       try {
         envCubeTex = device.createTexture({
           size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
@@ -4004,16 +4009,17 @@ const WGX = (function () {
       if (!envCubeTex || !litPass || !_envEncoder) return;
       _flushLitRings();
       litPass.end();
+      _envFacesMask |= 1 << face;
+      // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
+      // !_envProbeLive left mip0 updating while higher LODs froze at the first
+      // capture — lacquer roughness LOD stayed at the start-line reflection.
+      // W3: recorded into the face's own encoder, after its pass (queue order kept): one submit, not two.
+      if (_envFacesMask === 63) _generateMips(envCubeTex, 6, _envEncoder);
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
       _activeFrameBG = frameBindGroup;
-      _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
-        // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
-        // !_envProbeLive left mip0 updating while higher LODs froze at the first
-        // capture — lacquer roughness LOD stayed at the start-line reflection.
-        _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
           envCubeView = envSampleView;   // main frame group now mirrors the real world
@@ -5359,8 +5365,12 @@ const WGX = (function () {
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
       _lineU[18] = 1.6;                     // emissive strength: a constant, no producer sends one
-      _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
+      _lineU[19] = 0;                              // params.w spare (was the 0|1 palette flag)
       _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
+      // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake rgb into the
+      // colOnPace / colLift / colBrake vec4s at floats 24 / 28 / 32; F1 GREEN when absent.
+      const lc = (opts && opts.cols) || LINE_COLS_F1;
+      for (let k = 0; k < 3; k++) { const o = 24 + k * 4; _lineU[o] = lc[k * 3]; _lineU[o + 1] = lc[k * 3 + 1]; _lineU[o + 2] = lc[k * 3 + 2]; }
       device.queue.writeBuffer(lineUBO, 0, _lineU);
       _setPipe(litPass, pLine);
       _setBG0(litPass, lineFxBG);

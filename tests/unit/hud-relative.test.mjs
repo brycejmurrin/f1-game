@@ -495,3 +495,30 @@ test("fit key ignores ot-*/ax-* class churn on clearance controls (perf H7 row 1
   ot.className = "hidden-by-layout"; R.tick(G, p);
   assert.ok(fits > base, "a class that can move the box still does");
 });
+
+test("REL off (the default): refit touches no DOM, and the key still sees the clearance controls the phone stamp needs (perf hunt 6)", () => {
+  let lookups = 0, rects = 0, on = false;
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", className: "", style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute() {}, appendChild(c) { el.children.push(c); return c; },
+      getBoundingClientRect() { rects++; return { left: 0, right: 1, top: 0, bottom: 1, width: 1, height: 1 }; } };
+    return el;
+  };
+  const root = mk(), announce = mk();
+  const doc = { body: { className: "", classList: { contains: () => false } }, documentElement: mk(), createElement: mk,
+    getElementById: (id) => { lookups++; return id === "hud-rel" ? root : id === "announce" ? announce : null; } };
+  const R = load({ document: doc, HudElements: { isOn: () => on } });
+  const base = lookups;
+  for (let i = 0; i < 100; i++) R.refit(i % 10 === 0);   // 10 s of phone ticks, a forced sync each second
+  assert.equal(lookups - base, 0, "refit reads nothing while REL is off");
+  assert.equal(rects, 0, "no layout reads while REL is off");
+  const k0 = R.fitKey();
+  announce.hidden = false;
+  assert.notEqual(R.fitKey(), k0, "the radio card showing still changes the key hud.js stamps on");
+  assert.ok(R.fitKey().startsWith("off"));
+  on = true;
+  assert.ok(!R.fitKey().startsWith("off"), "switched on, the key sees the layout again");
+  const before = lookups;
+  R.refit();
+  assert.ok(lookups > before, "and the first tick after turning it on fits");
+});

@@ -243,7 +243,8 @@ async function mirrorRig(t, ls = {}) {
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
     const post = { hdrOk: () => true };
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; }, glass() { _mirGlassSeen = true; } };`);
+    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; },
+      glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);
   const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) });
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
   // One mirror frame: mirrorBegin's prepareMirrorTarget(w, h), then mirrorEnd's render into the target.
@@ -280,12 +281,27 @@ test("A-H5: the mirror target stores and regenerates 3 levels, not 9, while only
   assert.equal(h.M.rt().texture.mipmaps.length, 5, "no shrink at the same size (no churn)");
 });
 
-test("A-H5: the cockpit glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+test("perf hunt 5 F1: the cockpit glass grows the chain to its bounded LOD, not the full 9 levels", async (t) => {
   const h = await mirrorRig(t);
   h.M.rect(RECT);
   h.frame(461, 132);
   assert.equal(h.M.rt().texture.mipmaps.length, 3);
-  h.M.glass();   // drawMirrorGlass ran
+  h.M.glass(1.84);   // drawMirrorGlass at the live helmet pose (mip-footprint-lod.test.mjs)
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 4, "ceil(1.84 + 0.25) + 1 levels");
+  assert.equal(h.storage.filter((n) => n > 1).at(-1), 4, "re-allocated with 4 levels, not 9");
+  h.M.glass(1.2); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 4, "the session max: a smaller footprint never shrinks it");
+  h.M.glass(3.1); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 5, "a larger one grows it");
+});
+
+test("A-H5: an UNBOUNDED glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 3);
+  h.M.glass();   // drawMirrorGlass with no bound (two straddling frames, no CPU arrays)
   h.frame(461, 132);
   assert.equal(h.M.rt().texture.mipmaps.length, 0, "the full chain again (an empty mipmaps array = three's own rule)");
   assert.equal(h.storage.filter((n) => n > 1).at(-1), 9, "re-allocated with all 9 levels");

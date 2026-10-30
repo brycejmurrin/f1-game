@@ -23,3 +23,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Workers never wait for user](workers-never-wait-for-user.md) — unattended sessions ask @parent/dispatcher, subscribe for CI; parents nudge stalled children
 - [Fan out with subagents](fan-out-with-subagents.md) — 2026-10-26: multi-part tasks go to worker subagents in worktrees
 - [Launch prompts route questions to dispatcher](launch-prompts-route-questions-to-dispatcher.md) — every launched session messages the dispatcher; only the dispatcher uses AskUserQuestion; triggers min 1 h so stagger
+- [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-defaults-export.json is his real iPhone export (HELMET, buttons, BUTTON 245%); seed it for HUD/touch work

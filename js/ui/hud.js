@@ -906,6 +906,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
   let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  let zDockPubS = +root.style.getPropertyValue("--hud-z-dock-l") || zDockPub;   // #dock-left (steer) paints at its own cap
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el || manualHud(el)) return 0;
@@ -952,6 +953,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // harness without rects takes every tick, so the bail stays free of computed-style passes.
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
   zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  zDockPubS = +root.style.getPropertyValue("--hud-z-dock-l") || zDockPub;
   const half = window.innerWidth / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
@@ -1262,9 +1264,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // into #announce.
   // Fixed control groups are measured independently of readout content.
   const hudDockEl = _dockL ? _dockL.parentNode : null;
+  const steerDock = _dockMir ? _dockR : _dockL;   // #dock-left wherever MIRROR paints it
   const groups = (d) => {
     if (!d) return { h: 0, w: 0, stack: 0 };
-    const z = zoomDiv(d, zDockPub);
+    const z = zoomDiv(d, d === steerDock ? zDockPubS : zDockPub);
     let h = 0, w = 0, stack = 0, n = 0;
     for (const g of d.children) {
       const r = g.getBoundingClientRect();
@@ -1277,7 +1280,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   };
   const gL = groups(_dockL), gR = groups(_dockR);
   const dockH = Math.max(gL.h, gR.h);
-  let capDock = Infinity;
+  let capDock = Infinity, capDockS = Infinity;
+  const READABLE_Z = 10 / 14;   // 10 CSS px over --fs-micro 14: the gap-chip clamp's and PR #1734's label floor
   if (dockH) {
     // Controls own their space: race text, panels and HUD zoom never change this budget.
     const barR = hudDockEl ? hudDockEl.getBoundingClientRect() : null;
@@ -1354,10 +1358,20 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const controlsW = gL.w + gR.w;
     capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
       controlsW ? (barW - 2 * barGap - 2 * FIT_AIR) / controlsW : Infinity);
-    const dockZ = Math.min(Math.max(btnFloor, btnScale), Math.max(0.4, capDock));
+    const want = Math.max(btnFloor, btnScale), dockZ = Math.min(want, Math.max(0.4, capDock));
+    // THE STEER DOCK (#dock-left) FOLLOWS BUTTON SIZE PAST THE PEDAL COLUMN'S CAP: budgeted against the other
+    // dock and its top button at their CAPS (never the slider: monotonic), >= capDock, and the gear/speed
+    // cluster keeps its readable floor (or a smaller HUD SIZE). Portrait: the shared cap.
+    if (window.innerWidth > window.innerHeight) {
+      const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
+      const zO = Math.min(3, Math.max(0.4, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
+      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, READABLE_Z) * 100) / 100;   // set() ceils --hud-z-bot
+      capDockS = Math.max(capDock, Math.min(gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity, gS.w ? roomS / gS.w : Infinity));
+    } else capDockS = capDock;
+    const zS = Math.min(want, Math.max(0.4, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
-    const roomW = barW - controlsW * dockZ - 2 * barGap - 2 * FIT_AIR;
+    const roomW = barW - gL.w * zDL - gR.w * zDR - 2 * barGap - 2 * FIT_AIR;
     if (bottom && roomW > 0) capBot = Math.min(capBot, roomW / bottom);
     // Broadcast stacks its tower/map/messages above the left controls. Fit
     // that readout column to the remaining height without resizing controls.
@@ -1368,7 +1382,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
-      const cap = Math.max(1 / 1.4, (roomL - gL.h * dockZ) / Math.max(1, height));
+      const cap = Math.max(1 / 1.4, (roomL - gL.h * zDL) / Math.max(1, height));
       capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
     }
 
@@ -1412,10 +1426,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
   // inline once the player has moved it. Comparing the dock's cap against the
   // wrong slider would either pin a cap that fits or drop one that does not.
-  // 10 CSS px over --fs-micro 14: same painted floor as the gap-chip clamp
-  // and PR #1734's touch labels. Portrait only — landscape keeps the 0.4
+  // READABLE_Z (above) floors --hud-z-top in portrait only — landscape keeps the 0.4
   // band floor (short phones still drop the gap strip instead).
-  const READABLE_Z = 10 / 14;
   const set = (prop, cap, base) => {
     if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else {
@@ -1445,6 +1457,12 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
+  // The steer cap rides WITH the shared one (set()'s test): absent together, else explicit (never a fall-back
+  // to --hud-z-dock). A changed steer zoom refits once so TYRES / LIMITS read the new dock top.
+  const wantDock = Math.max(btnFloor, btnScale), zSteer = Math.round(Math.min(wantDock, Math.max(0.4, capDockS)) * 1000) / 1000;
+  if (capDock < wantDock) root.style.setProperty("--hud-z-dock-l", String(zSteer));
+  else root.style.removeProperty("--hud-z-dock-l");
+  if (Math.abs(zSteer - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));

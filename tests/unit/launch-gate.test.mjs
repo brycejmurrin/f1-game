@@ -185,3 +185,9 @@ test("audit 4 G13: a page needs its own timestamp, no hand-written mtime skew; t
   assert.equal(run(f, "--pr", "x").status, 2);
   assert.equal(run(f, "--bogus").status, 2);
 });
+
+test("verdict: a rejected quota tells the dispatcher to disable its hourly trigger; allowed_warning does not", () => {
+  const rl = (status) => ({ external_metadata: { rate_limit_info: { status } } });
+  assert.equal(verdict(rl("rejected")).why.includes("disable the hourly dispatcher trigger (update_trigger enabled=false)"), true);
+  assert.equal(verdict(rl("allowed_warning")).why.includes("disable the hourly"), false);
+});

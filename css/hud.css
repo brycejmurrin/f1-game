@@ -1565,7 +1565,8 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
    the right pedals at HUD 145%. */
 #game-metrics {
   --gm-top: calc(12px + var(--sat, 0px) + min(120px, calc(80px * var(--hud-z-top, var(--hud-scale, 1)))));
-  --gm-dock: max(120px, calc(80px * var(--hud-z-dock, var(--hud-scale, 1)) + var(--sab, 0px)));
+  /* -l: the steer dock's cap (>= --hud-z-dock, published with it) — the tallest dock either side. */
+  --gm-dock: max(120px, calc(80px * var(--hud-z-dock-l, var(--hud-z-dock, var(--hud-scale, 1))) + var(--sab, 0px)));
   /* THE BAND SCALE THIS PANEL LIVES IN — the same expression --gm-top above
      already uses to POSITION itself, and the same one metricsRatio() reads in
      js/perf/metrics-overlay.js to choose the narrow vs wide layout. Sharing it

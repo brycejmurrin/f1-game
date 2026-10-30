@@ -46,6 +46,7 @@ const SettingsSearch = (function () {
     ["line-opacity", "Driving line opacity", "display", "pm-lineopacity-sel", "visual guide transparent"],
     ["touch-size", "Touch button size", "display", "pm-btnscale", "bigger smaller pedals arrows"],
     ["touch-opacity", "Touch button opacity", "display", "pm-btnopacity", "transparent pedals arrows"],
+    ["touch-shape", "Touch button shape", "display", "pm-btnshape-sel", "round square corners pedals arrows"],
     ["panel-opacity", "HUD panel opacity", "display", "pm-panelopacity", "transparent readouts"],
     ["resolution", "Resolution", "graphics", "pm-res-sel", "render scale performance quality pixels graphics picture sharpness"],
     ["fullscreen", "Fullscreen", "graphics", "pm-fullscreen-sel", "full screen window"],
