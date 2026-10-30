@@ -4787,6 +4787,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/look-avail.js",
+      "global": "LookAvail",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/menu-nav.js",
       "global": "MenuNav",
       "roster": "tag"

@@ -146,7 +146,9 @@ const SCREENS = [
      window.__apex.race('bahrain');
      await until('#pausemenu', 6000).catch(() => {});
      window.__apex.park(0.1);
-     const rd = document.getElementById('rotate-device'); if (rd) rd.hidden = true;
+     // The portrait rotate gate is CSS-gated (body.in-race:not(.rotate-ok)), never
+     // force-hidden: take its own door, RACE IN PORTRAIT, as a player would.
+     const rr = document.getElementById('rotate-race'); if (rr) rr.click();
      document.getElementById('pausemenu').hidden = false;
      document.getElementById('pm-settings').click();
      document.getElementById('pm-open-display').click();
@@ -336,7 +338,9 @@ async function shot(page, file) {
           if (name === "pause") {
             await page.evaluate(() => {
               window.__apex.park(0.1);
-              const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+              // Rotate gate: its own door (RACE IN PORTRAIT → body.rotate-ok), not
+              // `hidden = true` on a CSS-gated layer (tools/ui/ui-reset.mjs NEVER_HIDE).
+              const rr = document.getElementById("rotate-race"); if (rr) rr.click();
               document.getElementById("pausemenu").hidden = false;
             });
             await sleep(300);

@@ -779,6 +779,7 @@
     ]
   ],
     LAZY_UI_PRESETS: [
+    "js/ui/look-avail.js",
     "js/ui/layout-presets.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],

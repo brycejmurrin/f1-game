@@ -262,6 +262,29 @@ export function collectDomInfo(opts) {
   const bodyCs = getComputedStyle(document.body);
   const rootCs = getComputedStyle(document.documentElement);
   const topEl = window.UiLayers && window.UiLayers.top && window.UiLayers.top();
+  // reach-score inputs (tools/ui/reach-score.mjs PROPOSED_DOM_FIELDS): every
+  // visible control and every visible content leaf inside the root, CSS px.
+  const seen = (el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return false;
+    return el.checkVisibility ? el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : true;
+  };
+  const FOCUSABLE = (window.MenuNav && window.MenuNav.FOCUSABLE) ||
+    "button,a[href],input,select,textarea,summary,[tabindex]:not([tabindex='-1'])";
+  const taps = rootEl ? [...rootEl.querySelectorAll(FOCUSABLE)].filter(seen).slice(0, 300).map((el) => {
+    const b = boxOf(el);
+    return {
+      tag: el.tagName.toLowerCase(), id: el.id || "", cls: String(el.className || "").slice(0, 80),
+      text: (el.innerText || el.value || el.getAttribute("aria-label") || "").trim().slice(0, 40),
+      x: b.x, y: b.y, w: b.w, h: b.h, disabled: !!el.disabled,
+      autofocus: el.hasAttribute("autofocus"), menuDefault: el.hasAttribute("data-menu-default"),
+      focused: document.activeElement === el,
+    };
+  }) : [];
+  const content = rootEl ? [...rootEl.querySelectorAll("*")].filter((el) =>
+    (/^(IMG|CANVAS|SVG|VIDEO)$/i.test(el.tagName) ||
+      (!el.children.length && (el.textContent || "").trim())) && seen(el))
+    .slice(0, 600).map((el) => { const b = boxOf(el); return { x: b.x, y: b.y, w: b.w, h: b.h }; }) : [];
   return {
     ok: true,
     viewport: innerWidth + "x" + innerHeight,
@@ -275,6 +298,9 @@ export function collectDomInfo(opts) {
     },
     layer: topEl ? { id: topEl.id || "", tag: topEl.tagName.toLowerCase() } : null,
     root: nodeOf(rootEl, true),
+    taps,
+    content,
+    tapFloor: parseFloat(bodyCs.getPropertyValue("--tap")) || null,
     sel,
     hits: hitEls.map((el) => nodeOf(el, false)),
   };
