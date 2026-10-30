@@ -991,6 +991,7 @@ const WGX = (function () {
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
+    const ENV_LOD_MAX = 2.5;   // wgsl-chunks.js envCube taps: rough (<= 1) * 2.5
     const ENV_CULL_M = 150;
     // Face cameras. WebGPU render-to-texture is y-DOWN (framebuffer row 0 is
     // NDC top) where GL's is y-up, so GLX's GL-correct up-vectors store every
@@ -3899,7 +3900,10 @@ const WGX = (function () {
     let _envInitFailed = false;   // a partial envInit is never retried: see the catch
     function envInit() {
       if (envCubeTex || _envInitFailed) return;
-      const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
+      // Perf hunt 5 W1: every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1 after the SAA
+      // clamp (wgsl-chunks.js), so a trilinear tap reads level 3 at most. Levels 4-6 of the 64 px cube were built
+      // and never read: 18 of the ladder's 36 passes per cube (the census's 64x64/rgba16float wide-frame rows).
+      const envMips = Math.min(Math.floor(Math.log2(ENV_SIZE)) + 1, Math.ceil(ENV_LOD_MAX) + 1);
       try {
         envCubeTex = device.createTexture({
           size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
@@ -4004,16 +4008,17 @@ const WGX = (function () {
       if (!envCubeTex || !litPass || !_envEncoder) return;
       _flushLitRings();
       litPass.end();
+      _envFacesMask |= 1 << face;
+      // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
+      // !_envProbeLive left mip0 updating while higher LODs froze at the first
+      // capture — lacquer roughness LOD stayed at the start-line reflection.
+      // W3: recorded into the face's own encoder, after its pass (queue order kept): one submit, not two.
+      if (_envFacesMask === 63) _generateMips(envCubeTex, 6, _envEncoder);
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
       _activeFrameBG = frameBindGroup;
-      _envFacesMask |= 1 << face;
       if (_envFacesMask === 63) {
         _envFacesMask = 0;
-        // Regenerate mips EVERY completed cube (GLX/TLX parity). Gating this on
-        // !_envProbeLive left mip0 updating while higher LODs froze at the first
-        // capture — lacquer roughness LOD stayed at the start-line reflection.
-        _generateMips(envCubeTex, 6);
         if (!_envProbeLive) {
           _envProbeLive = true;
           envCubeView = envSampleView;   // main frame group now mirrors the real world

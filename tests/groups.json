@@ -652,6 +652,8 @@
     "tests/unit/metrics.test.mjs",
     "// #3369: Miami frac-0 dual_lite orbit/trackside clear of Hard Rock bowl (buildContext, ~3 s).",
     "tests/unit/miami-hard-rock-orbit.test.mjs",
+    "// Perf hunt 5 F1: PostCommon.mipFootprintLod bounds the cockpit glass's mirror-chain LOD (never below brute-force perspective derivatives). VM, ms.",
+    "tests/unit/mip-footprint-lod.test.mjs",
     "// Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte",
     "// material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.",
     "tests/unit/mirror-glass-night.test.mjs",

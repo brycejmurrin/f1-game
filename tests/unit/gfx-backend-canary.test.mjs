@@ -7203,6 +7203,8 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     const recs = [];
     const make = new Function("st", "recs", `
       let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
+      const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
       const draw = function (mesh, model, opts) {${body}};
       return { draw, glass: () => _mirGlass };`);

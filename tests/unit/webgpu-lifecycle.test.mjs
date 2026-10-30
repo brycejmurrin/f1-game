@@ -2992,6 +2992,28 @@ test("WGX mirror frame records its mip ladder into the mirror's own submit", asy
   assert.ok(passes >= 1 + 6, `the mirror pass plus the 6-level mip ladder still record (${passes} passes)`);
 });
 
+test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 36) inside the face-5 submit", async () => {
+  // Every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1, so level 3 is the highest a trilinear
+  // tap reads; the census's 64x64/rgba16float wide-frame rows were the 7-level ladder (6 faces x 6 levels).
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const opens = () => h.passCalls.filter(([k]) => k === "beginRenderPass").map(([, a]) => a[0]);
+  const perFace = [];
+  for (let f = 0; f < 6; f++) {
+    const s0 = h.submitCount, p0 = opens().length;
+    assert.ok(gfx.envFaceBegin(f, [0, 0, 0], {}), `face ${f} opens`);
+    gfx.envFaceEnd(f);
+    perFace.push({ submits: h.submitCount - s0, passes: opens().length - p0 });
+  }
+  const cube = h.textures.find((t) => t.desc.size && t.desc.size[2] === 6 && t.desc.dimension === "2d" && t.desc.size[0] === 64);
+  assert.ok(cube, "the env cube texture");
+  assert.equal(cube.desc.mipLevelCount, 4, "64 px cube: levels 0-3, the ones an LOD <= 2.5 tap reads");
+  assert.deepEqual(perFace.slice(0, 5).map((r) => r.passes), [1, 1, 1, 1, 1], "faces 0-4: the face pass alone");
+  assert.equal(perFace[5].passes, 1 + 6 * 3, "face 5: its pass plus 6 layers x 3 levels");
+  assert.deepEqual(perFace.map((r) => r.submits), [1, 1, 1, 1, 1, 1], "the ladder rides face 5's own submit");
+});
+
 test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and mirror no longer evict each other", async () => {
   // Measured live (Monza, 20 frames): the rear-view pass and the main pass cull the same prop batches with
   // different frustums into ONE instBuf under ONE cell-set key, so every cull missed and rewrote the buffer
