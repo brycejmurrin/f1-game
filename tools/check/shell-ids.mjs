@@ -61,6 +61,8 @@ export const RUNTIME_IDS = {
   "ga-shots-row": "GarageArrival buildRows() makes the GARAGE ENTER & LEAVE camera / shot-length / after-race rows from its tables (the shell's node count is a shrink-only ratchet); every read in bindSettings is null-guarded",
   "ga-slowmo": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-sound": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-cue": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-cue-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-rear": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-move": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-sway": "GarageArrival buildRows(), same table and the same null-guarded reads",

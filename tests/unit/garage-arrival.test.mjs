@@ -1589,3 +1589,16 @@ test('SLOW-MO AT THE DOOR slows the door crossing only; the wall clock and the R
   assert.ok(Math.abs(n * 0.05 - Arrival.wallSeconds(half, 'in')) < 0.11, `played in ${(n * 0.05).toFixed(2)} s`);
   assert.deepEqual([Arrival.settings({ slowmo: 0.25 }).slowmo, Arrival.settings({ slowmo: 1 }).slowmo, Arrival.settings({ slowmo: -1 }).slowmo], [0.25, 0, 0]);
 });
+
+test('LIGHT CUE: off by default; a pick rides the pose; after the race BY RESULT flashes a win and turns the beacon for a retirement', () => {
+  context.GarageScene = { MOODS: {}, CUES: ['lightsup', 'flashes', 'beacon', 'pulse', 'lightsout'] };
+  try {
+    assert.equal(Arrival.pose(1, Arrival.settings(null)).cue, null, 'the shipped lighting: no cue');
+    assert.equal(Arrival.settings({ cue: 'strobe' }).cue, 'none');
+    assert.equal(Arrival.pose(1, Arrival.settings({ cue: 'lightsup' })).cue, 'lightsup');
+    assert.equal(Arrival.poseOut(1, Arrival.settings({ cue: 'lightsout' })).cue, 'lightsout');
+    const home = (result, homeCue) => Arrival.poseHome(1, Arrival.settings({ result, homeCue })).cue;
+    assert.deepEqual(['win', 'podium', 'points', 'finish', 'dnf'].map((r) => home(r)), ['flashes', 'pulse', null, null, 'beacon']);
+    assert.equal(home('win', 'none'), null); assert.equal(home('finish', 'lightsup'), 'lightsup');
+  } finally { delete context.GarageScene; }
+});

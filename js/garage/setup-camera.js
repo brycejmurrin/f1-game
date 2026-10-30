@@ -722,6 +722,7 @@ let _bayAt = 0, _bayAcc = 0, _bayBusy = true;
 // (which runs its own), and never a preview over a race in progress, whose own
 // engine graph it would stop.
 let _seqMoodWas = null, _seqBars = false, _seqSound = false, _seqSoundAt = 0;
+const _seqCue = { id: null, t: 0 };   // the ctx.cue record, reused every frame
 function sequenceLook(p) {
   const on = !!(p && p.active), want = on && p.mood;
   const sound = on && !!p.sound && p.engine !== false && !driveOut && !(preview && G.state === "race");
@@ -894,6 +895,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
   context.swell = arriving && arriving.active && Number.isFinite(arriving.swell) ? arriving.swell : 1;   // its DOOR GLOW size
+  // Its LIGHT CUE (scene.js live: { id, t } in seconds since the sequence began; null = none).
+  if (arriving && arriving.active && arriving.cue) { _seqCue.id = arriving.cue; _seqCue.t = arriving.seconds || 0; context.cue = _seqCue; }
+  else context.cue = null;
   const liv = _spLiv();
   const lightsRig = GarageScene.live(liv, sceneTime, context);
   if (gfx.begin({
