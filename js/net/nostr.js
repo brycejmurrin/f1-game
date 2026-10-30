@@ -418,6 +418,7 @@ const NetNostr = (function () {
         socketUrl.set(w, url);
         w.onopen = () => {
           opened++;
+          attempt = 0;   // a socket that opened earns the short backoff again (a 300 s listen sees idle closes)
           if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
           try {
             // Trystero stamps the REQ with `since: now()` — THIS device's clock,

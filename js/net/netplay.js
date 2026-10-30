@@ -581,7 +581,10 @@ const NetPlay = (function () {
             const fromHost = (role === "guest" || role === SpectatePolicy.SPECTATOR) && s === session;
             const r = remotes.get(d.wire) || (fromHost ? aiRemotes.get(d.wire) : null);
             const authorized = fromHost || (role === "host" && remoteFor(id) === d.wire);
-            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track, d.tyreLog === undefined));
+            if (r && authorized && applyStrategy(r.car, d) && role === "host") {
+              r.stratHeard = true;   // the host now holds this human's full state for a late receiver (tick's peerArrived)
+              broadcastStrategy(strategyState(r.car, d.wire, d.track, d.tyreLog === undefined));
+            }
           }
           if (name === EV.BYE) {
             lastReason = "bye";
@@ -1199,6 +1202,12 @@ const NetPlay = (function () {
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id, !phaseChanged && !peerArrived));
         // Resend the host's terminal AI state with the existing reliable sync.
         // A guest may bind its race handlers after the original retirement.
+        // The relay echo forwards a guest's scalar refresh as scalars, so a receiver whose epoch
+        // arrived after that guest's last phase would never see its tyre or stint log: resend each
+        // relayed human's full state with the new epoch.
+        if (role === "host" && peerArrived) for (const [wire, r] of remotes) {
+          if (r.stratHeard) broadcastStrategy(strategyState(r.car, wire, G.track.def.id));
+        }
         if (role === "host" && peerArrived) for (const c of G.cars || []) {
           if (!c.local && !c.human && c.retired) reportLap({ lap: c.lap, code: c.code,
             driverId: c.driverId, retired: c.dnf || "mechanical", invalid: true });

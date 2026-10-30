@@ -1036,8 +1036,8 @@ function boardCourier({ delayAnswerAck = false } = {}) {
       s.onAnswer = (out) => resolve({ ok: true, payload: out });
       if (s.wake) s.wake();
     }),
-    answer: (code, reply, token) => new Promise((resolve) => {
-      const request = { code, reply, token, active: true }; listens.push(request);
+    answer: (code, reply, token, listen) => new Promise((resolve) => {
+      const request = { code, reply, token, listen: !!listen, active: true }; listens.push(request);
       const s = slot(code);
       const go = async () => {
         const out = token.cancelled ? null : await reply(s.offer);
@@ -1191,6 +1191,23 @@ test("actual connected recovery cancels an unanswered offer and refuses its late
     await h.flush(); h.advance(30000);
     assert.equal(h.a.pc.currentRemoteDescription, original);
     assert.equal(h.a.status, "open");
+  } finally { h.done(); }
+});
+
+test("the healthy listener holds a long window; the answerer's own outage re-dials a fresh short one (perf hunt 6)", async () => {
+  const courier = boardCourier(), h = restartPair(courier);
+  try {
+    await h.connect(); h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
+    assert.equal(await h.until(() => courier.listens.length === 1), true);
+    const healthy = courier.listens[0];
+    assert.equal(healthy.listen, true, "a healthy race holds one long listen (no 12 s relay re-dial)");
+    h.set(h.b, "failed"); h.advance(0);
+    assert.equal(await h.until(() => courier.listens.length === 2), true, "the answerer's own outage listens again");
+    const outage = courier.listens[1];
+    assert.equal(healthy.token.cancelled, true, "the minutes-old socket set is dropped, not trusted");
+    assert.equal(outage.listen, false, "an outage episode re-dials on the short window");
+    assert.equal(outage.code, healthy.code, "…on the same credentials and attempt");
+    h.a.close(); h.b.close(); await h.flush();
   } finally { h.done(); }
 });
 

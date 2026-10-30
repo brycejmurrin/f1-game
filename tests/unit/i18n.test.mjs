@@ -79,6 +79,19 @@ test("English plural one/other", () => {
   assert.equal(I18n.t("laps", { n: 3 }, msg), "3 laps");
 });
 
+test("a plural message builds Intl.PluralRules once per language, not once per call (perf hunt 6)", () => {
+  let built = 0;
+  class CountingRules extends Intl.PluralRules { constructor(...a) { super(...a); built++; } }
+  const CountingIntl = new Proxy(Intl, { get: (t, k) => (k === "PluralRules" ? CountingRules : t[k]) });
+  const { I18n } = loadI18n({ Intl: CountingIntl });
+  I18n._resetForTest();
+  const msg = "{n, plural, one {# lap left} other {# laps left}}";
+  const before = built;
+  for (let i = 0; i < 100; i++) I18n.t("hud.tyre.lapsLeft", { n: i % 4 }, msg);   // the 10 Hz HUD tyre label, 10 s
+  assert.equal(I18n.t("hud.tyre.lapsLeft", { n: 1 }, msg), "1 lap left", "the cached rules still pick one/other");
+  assert.ok(built - before <= 1, `PluralRules constructions for 101 plural labels: ${built - before}`);
+});
+
 test("Russian plural categories resolve", () => {
   const { I18n } = loadI18n();
   I18n._resetForTest();

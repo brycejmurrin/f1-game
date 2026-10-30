@@ -270,7 +270,14 @@ const GLXBackend = (function () {
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
   let _activeProg = null;
-  function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
+  // A switch away from the road-decal programs also lifts their ROAD_BIAS:
+  // drawShadow/drawMark leave it on, so a field of shadows and skid stamps
+  // states it once instead of enable/offset/offset/disable per draw (perf hunt 6).
+  function useProg(p) {
+    if (p === _activeProg) return;
+    if (_polyOn && p !== shadowProg && p !== markProg) setPolyOffset(null);
+    gl.useProgram(p); _activeProg = p;
+  }
 
   // Per-frame view-projection upload cache for the blob-shadow / skid-mark
   // programs. uViewProj never changes within a frame, but drawShadow/drawMark are
@@ -2487,7 +2494,6 @@ const GLXBackend = (function () {
     setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    setPolyOffset(null);
   }
 
   function drawMark(modelMat, w, l) {
@@ -2504,7 +2510,6 @@ const GLXBackend = (function () {
     setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    setPolyOffset(null);
   }
 
   // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per

@@ -271,7 +271,7 @@ test("a replayed old offer is ignored; a fresh offer is still answered (created_
   await p;
 });
 
-test("the ICE-restart listener holds one socket set for a race, not a re-dial every JOIN window (perf hunt 6)", async () => {
+test("the ICE-restart listener holds one socket set for a race, not a re-dial every JOIN window (perf hunt 6)", async (t) => {
   // Scaled clock, 1/120: JOIN 12 s -> 100 ms, LISTEN 300 s -> 2.5 s, so one
   // real second is a fake 120 s of healthy racing. The loop is transport.js
   // answerRestart: a quiet relay ("expired") is worth another listen.
@@ -289,6 +289,7 @@ test("the ICE-restart listener holds one socket set for a race, not a re-dial ev
   };
   const relays = 2;   // the stub's apex26.nostrRelays
   const before = await race(false), after = await race(true);
+  t.diagnostic(`sockets per fake 120 s with ${relays} relays: ${before} (JOIN window) -> ${after} (listen window)`);
   assert.equal(after, relays, "one WebSocket (one TLS handshake) per relay for the whole fake 120 s");
   assert.ok(before >= 2 * relays, `control: the JOIN-window listener re-dialled (${before} sockets)`);
 });

@@ -507,7 +507,8 @@ const NetTransport = (function () {
         return live(ctx) ? pc.localDescription.sdp : null;
       };
       while (live(ctx)) {
-        const r = await courier.answer(ctx.code + "R" + ctx.attempt, reply, ctx.token);
+        // Only the healthy listener holds a long window; an outage episode re-dials every JOIN window.
+        const r = await courier.answer(ctx.code + "R" + ctx.attempt, reply, ctx.token, listener === ctx);
         if (!live(ctx)) return;
         if (r && r.ok) {
           ctx.attempt++;
@@ -518,7 +519,18 @@ const NetTransport = (function () {
     function beginRestart() {
       restartTimer = null;
       if (episode || !courier || ep.status !== "open") return;
-      if (listener) { episode = listener; listener = null; return; }
+      // The healthy listener's sockets may be minutes old and silently dead (a NAT
+      // rebind or network switch closes nothing on an idle reader). An outage
+      // re-dials: a fresh episode on the same code and attempt, short windows.
+      if (listener) {
+        const old = listener; listener = null;
+        cancelRestart(old);
+        if (old.code) {
+          const ctx = episode = { code: old.code, attempt: old.attempt, token: { cancelled: false } };
+          answerRestart(ctx).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); });
+          return;
+        }
+      }
       const ctx = episode = { code: null, attempt: 0, token: { cancelled: false } };
       restartCode().then((k) => {
         if (!k || !live(ctx)) return null;
@@ -649,7 +661,7 @@ const NetTransport = (function () {
     if (typeof NetNostr === "undefined" || !NetNostr.available()) return null;
     return {
       offer: (code, sdp, token) => NetNostr.directExchange({ code, send: sdp, token }),
-      answer: (code, reply, token) => NetNostr.directExchange({ code, reply, token, listen: true }),
+      answer: (code, reply, token, listen) => NetNostr.directExchange({ code, reply, token, listen: !!listen }),
     };
   }
 
