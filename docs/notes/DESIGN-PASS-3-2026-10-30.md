@@ -32,3 +32,6 @@ branch, and this table links them.
   conflicts on a golden PNG, take the deploy tip's file and re-bless on the merged tree.
 - **Models.** A and E (design judgment, a living gallery) run on the session's default model; B and D on
   Sonnet (`tools/ci/dispatch.json` `model`), per the dispatcher's efficiency rule.
+- **The Codex race-interface lane** (`cursor/race-interface-7c6d11`, Bryce's own tool, 17:09Z) owns HUD layout
+  and placement, `css/touch-controls.css` and the input logic. Lane A keeps only the colour tokens and the HUD
+  ink/panel-colour values. Lane E keeps the motion block. The split is posted on PR #4286.
