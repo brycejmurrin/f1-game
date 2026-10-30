@@ -1,0 +1,1 @@
+Improved: the default three.js renderer re-uploads only the changed tail of its merged track index when the visible set changes, and grows that buffer in steps instead of re-creating it at every new peak (fewer GPU uploads and allocations mid-race, pixel-identical).

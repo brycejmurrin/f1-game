@@ -632,15 +632,23 @@
         const src = vis[0].geo;
         for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
       }
+      // Perf hunt 7 (census 41021778161: index 82 KB/f, a 1.18 MB createBuffer mid-race): an exact-size array
+      // re-created the index buffer at every new high-water set. Grow by half again, capped at the mesh's whole
+      // index, so a race reaches its peak in a few steps. Only a fresh array rewrites from 0; otherwise the
+      // leading chunks that did not change keep their bytes and the upload range starts at the first change.
+      let keep = 0;
       if (!s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor) {
-        s.arr = new Ctor(cnt);
+        let total = mesh._tlxMvTotal | 0;
+        if (!total) { for (const ch of mesh.chunks) { const ix = ch && ch.geo && ch.geo.index; if (ix) total += ix.count != null ? ix.count : ix.array.length; } mesh._tlxMvTotal = total; }
+        s.arr = new Ctor(Math.max(cnt, Math.min(total, Math.ceil((s.arr ? s.arr.length : 0) * 1.5))));
         g.setIndex(new THREE.BufferAttribute(s.arr, 1));
-      }
-      let o = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      } else for (const m = Math.min(s.n, n); keep < m && s.ids[keep] === vis[keep];) keep++;
+      let o = 0, from = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       const dst = s.arr;
       for (let i = 0; i < n; i++) {
         const ch = vis[i], a = ch.geo.index.array, c = ic[i];
-        if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
+        if (i < keep) from = o + c;
+        else if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
         else for (let k = 0; k < c; k++) dst[o + k] = a[k];
         o += c; s.ids[i] = ch;
         const mn = ch.min, mx = ch.max;
@@ -651,10 +659,13 @@
       s.n = n;
       g.setDrawRange(0, o);
       const attr = g.index, r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
-      r.count = o;
       const ur = attr.updateRanges || (attr.updateRanges = []);
+      // three clears updateRanges after it uploads (both backends): a range still queued is a change that never
+      // reached the GPU (the pass did not draw), so the new one starts no later than it.
+      if (ur.length === 1 && ur[0] === r && r.count > 0) from = Math.min(from, r.start);
+      r.start = from; r.count = o - from;
       if (!(ur.length === 1 && ur[0] === r)) { ur.length = 0; ur.push(r); }
-      attr.needsUpdate = true;
+      if (r.count > 0) attr.needsUpdate = true;   // a set that only lost tail chunks moves the draw range alone
       const bs = g.boundingSphere, cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5, cz = (z0 + z1) * 0.5;
       const ct = bs.center || (bs.center = new THREE.Vector3());
       ct.x = cx; ct.y = cy; ct.z = cz;
