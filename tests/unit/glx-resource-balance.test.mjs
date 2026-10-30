@@ -98,3 +98,25 @@ for (const failBucket of [1, 3]) test(`chunked index allocation failure in bucke
   h.GLX.draw(prior, IDENTITY);
   assert.equal(h.count("bindVertexArray"), beforeDraw + 1, "the cached prior VAO must bind again after failure");
 });
+
+test("a field of blob shadows and skid stamps states ROAD_BIAS once, and the next program lifts it (perf hunt 6)", () => {
+  const h = bootGlx();
+  h.GLX.begin(h.frame()); h.reset();
+  const M = new Float32Array(16);
+  for (let i = 0; i < 22; i++) h.GLX.drawShadow(M, 2.4, 5.8);   // the shadow pass: one per car
+  for (let i = 0; i < 30; i++) h.GLX.drawMark(M, 0.3, 0.5);     // per-mark skid fallback
+  const POLY = h.gl.POLYGON_OFFSET_FILL;
+  const polyCalls = () => h.count("polygonOffset") + h.count("enable", (a) => a[0] === POLY) + h.count("disable", (a) => a[0] === POLY);
+  assert.equal(h.count("drawElements"), 52, "every decal still draws");
+  // Before: enable + offset + offset(0,0) + disable around EACH draw = 208 calls.
+  assert.ok(polyCalls() <= 2, `polygon-offset state calls for 52 decals: ${polyCalls()}`);
+  assert.equal(h.count("disable", (a) => a[0] === POLY), 0, "the bias stays on across the decal run");
+  // Any other program must not inherit the bias: a sky draw is the next pass.
+  h.reset();
+  const v3 = [0.5, 0.5, 0.5];
+  h.GLX.drawSky({ invViewProj: M, zenith: v3, horizon: v3, sunDir: v3, sunColor: v3, moonDir: v3, moonColor: v3, cityGlow: v3, nightGlow: v3 });
+  assert.equal(h.count("disable", (a) => a[0] === POLY), 1, "switching to a non-decal program lifts ROAD_BIAS first");
+  const iPoly = h.calls.findIndex((c) => c[0] === "disable" && c[1][0] === POLY);
+  const iDraw = h.calls.findIndex((c) => c[0] === "drawArrays");
+  assert.ok(iDraw > iPoly, "the bias is lifted before the sky draws");
+});
