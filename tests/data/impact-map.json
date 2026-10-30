@@ -17688,8 +17688,12 @@
       ]
     },
     "js/ui/live-region.js": {
+      "region": [
+        "tests/unit/hud-radio-slot.test.mjs"
+      ],
       "reset": [
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
       "state": [
@@ -17701,8 +17705,7 @@
       "*": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
-        "tests/unit/hud-pins.test.mjs",
-        "tests/unit/hud-radio-slot.test.mjs"
+        "tests/unit/hud-pins.test.mjs"
       ]
     },
     "js/ui/loading-card.js": {
