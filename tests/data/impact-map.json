@@ -15204,6 +15204,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs"
       ],
+      "_gpuSettled": [
+        "tests/unit/tlx-webgpu-perf.test.mjs"
+      ],
       "_gpuSupported": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -15353,6 +15356,9 @@
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "drawWarmStage": [
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "dropWrapper": [
         "tests/unit/render-final-contracts.test.mjs",
