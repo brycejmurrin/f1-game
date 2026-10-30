@@ -1401,7 +1401,8 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
      story podium on short phone sheets — mid-word names under a green bar on
      portrait, and empty-looking P1–P3 slots on landscape where the bar ate
      the whole name block (layout-audit 2026-10-04). Top-sticky still keeps
-     "me vs the front" while scrolling the classification list. */
+     "me vs the front" while scrolling the classification list. RESULTS
+     overrides this, scoped to its ranking lists (both edges; rule below). */
   position: sticky; top: 0; z-index: 1;
 }
 /* Reduced transparency swaps --surf-1's ground; keep the sticky row opaque over
@@ -1556,6 +1557,22 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 #results .res-name [data-stint-text] { white-space: normal; overflow-wrap: anywhere; }
 
 #results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+/* RESULTS STICKY, SCOPED. The shared .res-row.you is sticky top; on this sheet
+   that piled the TIME TRIAL headline (a .res-row.you outside any list) onto the
+   leaderboard's own you row, and an open TYRE STINTS fold under a sticky row
+   covered the rows after it. Here only a RANKING list's row sticks, to BOTH
+   edges: its containing block is the list, so it cannot leave it to cover the
+   story podium above, and it shows at open without results-sheet.js scrolling
+   the sheet away from the winner. An open stint fold drops it back into flow. */
+#results-table .res-row.you { position: relative; }
+#results-table [data-results-part="ranking"] > .res-row.you { position: sticky; top: 0; bottom: 0; }
+#results-table .res-row.you:has([data-stint-details][open]) { position: relative; }
+/* The winner at open: "P1 <CODE>" beside the title, outside the scroller. */
+#results #res-winner {
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 700; color: var(--gold);
+  border: 1px solid color-mix(in oklab, var(--gold) 55%, transparent); border-radius: var(--r-pill);
+  padding: 0 calc(var(--gap) * 0.6); white-space: nowrap;
+}
 
 /* Ceremony podium overlay (#4070): full-bleed beat while #results stays hidden.
    Host is created at runtime (keeps shellNodes flat). CONTINUE reuses .bigbtn

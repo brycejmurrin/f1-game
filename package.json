@@ -7,6 +7,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "precommit:fix": "node tools/check/ratchets.mjs --update --lower-only && npm run gen",
     "test": "node tools/ci/run-playwright.mjs",
     "test:render": "node tools/ci/run-playwright.mjs --project=render --workers=4",
     "test:results-flow": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js",

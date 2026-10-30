@@ -1217,10 +1217,16 @@ def poll_loops(text):
     not commands."""
     t = _blank_quotes(strip_heredocs(text))
     out = []
-    for m in re.finditer(r"(^|[;&|(\s])(for|while|until)\b([\s\S]*?)\bdo\b([\s\S]*?)\bdone\b", t):
-        head, body = m.group(3), m.group(4)
+    # The keyword must open a command (after ; & | ( { newline, or then/do/else), so prose such as an unquoted
+    # `echo until we sleep` or a commit message never matches (efficiency review 2026-10-30, finding 5).
+    for m in re.finditer(r"(^|[;&|({\n]|\s-[a-z]*c)\s*((?:then|do|else)\s+)?(for|while|until)\b([\s\S]*?)\bdo\b([\s\S]*?)\bdone\b", t):
+        kw, head, body = m.group(3), m.group(4), m.group(5)
         whole = head + " " + body
         if not re.search(r"\bsleep\b", whole):
+            continue
+        # Finding 5: ANY until/while loop that sleeps is a hand-written poll, whatever it watches. `while read` drains input.
+        if kw in ("until", "while") and not re.match(r"\s*(IFS=\S*\s+)?read\b", head):
+            out.append({"why": kw + " … sleep"})
             continue
         # pass-4 H12: `for i in 1 2 3; do git fetch origin && break; sleep 5; done` is a bounded retry of a
         # network call (a literal list of <= 5 items, no seq, a `break` in the body), not a poll.
@@ -1229,9 +1235,27 @@ def poll_loops(text):
             continue
         w = POLL_WATCH.search(whole)
         if w:
-            out.append({"why": m.group(2) + " … " + re.sub(r"\s+", " ", w.group(0)) + " … sleep"})
+            out.append({"why": kw + " … " + re.sub(r"\s+", " ", w.group(0)) + " … sleep"})
         elif re.search(r"\bseq\b", head):
             out.append({"why": "seq … sleep"})
+    return out
+
+
+def floor_issues(text, background):
+    """[{why}] for a test floor run the wrong way (efficiency review 2026-10-30, finding 4: `tooling-fast … | tail` hid
+    red tests behind the pipe's exit 0 for 16 min, and foreground floors ran 9-22 min). Refused: `tooling-fast` or
+    `ready-gate` piped into tail/head, and a FOREGROUND full `tooling-fast` (no --changed, no explicit test file).
+    Quoted prose and heredocs are not commands."""
+    t = _blank_quotes(strip_heredocs(text))
+    out = []
+    for m in re.finditer(r"(?:tooling-fast(?:\.mjs)?|test:tooling-fast|ready-gate(?:\.mjs)?)\b([^;&|\n]*)(\|&?\s*(?:tail|head)\b)?", t):
+        args, piped = m.group(1), m.group(2)
+        name = m.group(0).split()[0]
+        if piped:
+            out.append({"why": name.rstrip("\\") + " piped into " + piped.lstrip("|& ").strip()})
+        elif name.startswith(("tooling-fast", "test:tooling-fast")) and not background \
+                and not re.search(r"--(changed|help|print-scope|stop)\b|-h\b|\.test\.m?js\b", args):
+            out.append({"why": "foreground full tooling-fast"})
     return out
 
 
@@ -1638,6 +1662,7 @@ def guard(payload, root):
         raises = ratchet_issues(cmd)
         gh = gh_issues(cmd) + http_issues(cmd)
         polls = poll_loops(cmd)
+        floors = floor_issues(cmd, bool((payload.get("tool_input") or {}).get("run_in_background")))
         browser = browser_starts(cmd, browser_groups(root)) if sub else []
     except ParseError:
         print("PARSE null")
@@ -1715,10 +1740,17 @@ def guard(payload, root):
         return 2
     if polls and os.environ.get("APEX_POLL_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_POLL_OK=1\s", cmd):
         sys.stderr.write("BLOCKED: a shell poll loop (" + "; ".join(sorted({p["why"] for p in polls})) + ") — AGENTS.md "
-                         "rules 4 and 13: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
-                         "`node tools/ci/ci-watch.mjs --sha <sha> --failures-only` / `node tools/ci/wait-for.mjs`; never "
+                         "rules 4 and 13: wait with `node tools/ci/wait-for.mjs --log-matches <log> '^= '` or a BACKGROUND "
+                         "`node tools/ci/ci-watch.mjs --sha <sha> --timeout 30` (run_in_background); never "
                          "a for/while … sleep loop (2026-10 week: three 120-iteration loops in one orchestrator). "
                          "APEX_POLL_OK=1 <command> for a bounded retry of a network call.\n")
+        return 2
+    if floors and os.environ.get("APEX_FLOOR_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_FLOOR_OK=1\s", cmd):
+        sys.stderr.write("BLOCKED: " + "; ".join(sorted({f["why"] for f in floors})) + " — a pipe into tail/head returns the PIPE's "
+                         "exit code (red tests read as 0), and a full floor runs 9-22 min in the foreground. Run `tooling-fast` with "
+                         "run_in_background: true (or `--changed`), no `| tail`, and read its closing line "
+                         "`= tooling-fast passed|failed (<n> files, <m> failed)`; `ready-gate` the same, unpiped "
+                         "(2026-10-30 efficiency review, finding 4). APEX_FLOOR_OK=1 <command> to override.\n")
         return 2
     closed = closed_pr_refusal(dests, root) if dests and os.environ.get("APEX_CLOSED_PR_PUSH_OK") != "1" else ""
     if closed:

@@ -14777,7 +14777,8 @@
     "js/render/three/tlx-chunked.js": {
       "build": [
         "tests/unit/build-worker.test.mjs",
-        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "chunkPrepareConfig": [
         "tests/unit/build-worker.test.mjs",
@@ -14881,6 +14882,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
@@ -15303,6 +15305,7 @@
       ],
       "prunePool": [
         "tests/unit/tlx-glow-instancing.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ],
@@ -17476,6 +17479,9 @@
       ],
       "hText": [
         "tests/unit/hud-feel.test.mjs"
+      ],
+      "hlKey": [
+        "tests/unit/hud-dock-btn-cache.test.mjs"
       ],
       "invalidateFit": [
         "tests/specs/hud-layout.spec.js",

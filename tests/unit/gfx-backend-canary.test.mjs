@@ -6602,6 +6602,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
   const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
+  const kicks = [], kickRaceBundles = (audio) => kicks.push(audio);   // perf hunt 7: the race bundles start while the picker is up
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6612,6 +6613,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   trackIdx = 1; schedule(true); trackIdx = 0; schedule(true); const latest = fire();
   requests.shift().resolve(); await old; assert.deepEqual(builds, [], "A-B-A cannot revive old work");
   requests.shift().resolve(); await latest; assert.deepEqual(builds, [0]);
+  assert.ok(kicks.length > 0 && kicks.every((a) => a === false), "the open picker starts the race bundles, never LAZY_AUDIO (#1135)");
   schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
   assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
   assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
@@ -6656,6 +6658,7 @@ test("selector retains a different circuit during compilation, then releases it 
   const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
+  const kickRaceBundles = () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
   let flybyBuildTimer = 0, timerId = 0;
   const timers = new Map(), setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout = id => timers.delete(id);

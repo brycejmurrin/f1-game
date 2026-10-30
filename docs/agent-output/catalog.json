@@ -633,6 +633,9 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
+      ],
+      "npmScripts": [
+        "precommit:fix"
       ]
     },
     {
@@ -962,6 +965,12 @@
       "path": "tools/ci/github-token.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ci/guards-report.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/ci/guards-verdict.mjs",
@@ -4219,6 +4228,10 @@
     {
       "name": "memory:show",
       "command": "node tools/env/apex-memory.mjs show"
+    },
+    {
+      "name": "precommit:fix",
+      "command": "node tools/check/ratchets.mjs --update --lower-only && npm run gen"
     },
     {
       "name": "prepare",

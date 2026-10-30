@@ -538,7 +538,9 @@ var PitLane = (function () {
       const held = zz.boxS + (c.pitWorked || 0);
       if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
       c.pitPos0 = 0; c.pitWorked = 0;
-      if (G.store && G.store.set) G.store.set("pitTaught", 1);
+      // Only the FIRST stop writes: a store write bumps store.rev, which re-resolves every team's
+      // livery and parts memo on the pit-exit frame (perf hunt 8).
+      if (G.store && G.store.set && !taught()) G.store.set("pitTaught", 1);
     }
 
     // ── WORKING ON THE CAR MID-STOP ──────────────────────────────────────────

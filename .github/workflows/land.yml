@@ -128,7 +128,10 @@ name: Land
 # STALE GATE (`sweep` job). A `gate` older than the PR's last green `CI` run, or `pending` 15 min after CI finished, left
 # #3970 stuck (a label flip or a push was the only cure). On a schedule (`schedule` runs on the default branch, same page
 # as above) `sweep` re-gates up to STALE_MAX such `land` PRs per run through the existing dispatch path, at most
-# RETRY_MAX times per head since its CI finished. Removing and re-adding `land` does the same by hand.
+# RETRY_MAX times per head since its CI finished. Removing and re-adding `land` does the same by hand, and so does a
+# dispatch on the deploy branch with `stale=true` (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f stale=true`).
+# GitHub delays scheduled runs under load (this repo's other cron workflows fire hours apart), so the dispatch is also
+# how the sweep is proven live.
 #
 # DRAFT + `land`. A draft that carries `land` gets `gate` failure "draft: flip ready first …" and, once per head, a
 # comment with the route (ready-gate, `update_pull_request` draft:false, `land`); `ready_for_review` re-gates it.
@@ -181,6 +184,11 @@ on:
         required: false
         default: "false"
         type: string
+      stale:
+        description: "true = run the stale-gate sweep now (the `sweep` job; pr, head, attempt and sync are ignored)"
+        required: false
+        default: "false"
+        type: string
 
 env:
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
@@ -208,7 +216,7 @@ concurrency:
     ${{ (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold')
     || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
-    || format('land-{0}', github.event.pull_request.number || (github.event_name == 'schedule' && 'stale-sweep') || (github.event.inputs.sync == 'true' && 'sync') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
+    || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event.inputs.stale == 'true') && 'stale-sweep') || (github.event.inputs.sync == 'true' && 'sync') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 permissions: {}
@@ -225,7 +233,7 @@ jobs:
             && (github.event.action != 'edited' || github.event.changes.body))))
       || (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.display_title, 'CI ignored')
         && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')
-      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -862,7 +870,7 @@ jobs:
   # `gate` statuses written after that CI run, since every re-gate writes one; nothing is counted in repo files).
   sweep:
     name: sweep
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

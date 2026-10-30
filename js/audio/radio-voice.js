@@ -618,7 +618,9 @@ var RadioVoice = (function () {
       const lap1 = [];
       const rest = [];
       for (const sp of Object.keys(PACK_VOICE)) {
-        const on = sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn;
+        // The announcer pack only ever speaks comm lines, and say() mutes those with the announcer off: TEAM RADIO
+        // alone used to fetch and keep its ~4-6 MB .bin for nothing (perf hunt 7).
+        const on = sp === "announcer" ? ann && announcerPackOn() : enabled && packOn;
         if (!on) continue;
         (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
       }
