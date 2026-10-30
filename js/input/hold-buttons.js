@@ -211,6 +211,44 @@ const InputHoldButtons = (function () {
       pointerCounts: () => holdBtns.map((h) => h.ids.size) };
   }
 
-  return { create };
+  // Native compatibility clicks can omit a second finger while a pedal is held.
+  // Bridge only that contact; primary touch, mouse and keyboard keep native activation.
+  function secondaryTap(el, { activate = (_e) => el.click(), cancel = () => {}, beforeActivate = (_e) => true } = {}) {
+    if (!el || !el.addEventListener) return;
+    let down = null, consumed = null;
+    const clear = () => { if (down) cancel(); down = null; };
+    const enabled = () => !el.disabled && !el.hidden && el.isConnected !== false && el.getAttribute("aria-disabled") !== "true" && (!el.checkVisibility || el.checkVisibility({ checkVisibilityCSS: true }));
+    const inside = e => { const r = el.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
+    window.addEventListener("pointerdown", () => { consumed = null; }, true);
+    el.addEventListener("pointerdown", e => {
+      clear();
+      if (e.pointerType !== "touch" || e.isPrimary !== false || !enabled()) return;
+      down = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      try { el.setPointerCapture(e.pointerId); } catch (_) { /* implicit touch capture remains */ }
+    });
+    el.addEventListener("pointermove", e => { if (down && e.pointerId === down.id && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) clear(); });
+    el.addEventListener("pointerup", e => {
+      if (!down || e.pointerId !== down.id) return;
+      down = null;
+      if (!enabled() || !inside(e)) { cancel(); return; }
+      // Keep this contact's native click from reaching a newly opened modal.
+      consumed = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp };
+      if (beforeActivate(e) !== false) activate(e);
+    });
+    for (const type of ["pointercancel", "lostpointercapture"]) el.addEventListener(type, e => { if (down && e.pointerId === down.id) clear(); });
+    if (typeof MutationObserver !== "undefined") new MutationObserver(() => { if (!enabled()) clear(); }).observe(el, { attributes: true, attributeFilter: ["hidden", "style", "class"] });
+    window.addEventListener("blur", clear);
+    window.addEventListener("resize", clear);
+    window.addEventListener("orientationchange", clear);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
+    window.addEventListener("click", e => {
+      const c = consumed;
+      if (!c || !e.isTrusted || e.detail === 0 || e.timeStamp < c.at || e.timeStamp - c.at > 750) return;
+      if ((typeof e.pointerId === "number" && e.pointerId !== c.id) || Math.hypot(e.clientX - c.x, e.clientY - c.y) > 12) return;
+      consumed = null; e.preventDefault(); e.stopImmediatePropagation();
+    }, true);
+  }
+
+  return { create, secondaryTap };
 })();
 Object.freeze(InputHoldButtons);

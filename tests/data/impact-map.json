@@ -8569,6 +8569,7 @@
     "js/input/hold-buttons.js": {
       "create": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
@@ -9022,6 +9023,7 @@
       ],
       "*": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/free-cam.test.mjs",
@@ -17940,6 +17942,9 @@
     "js/ui/pause-opts.js": {
       "apply": [
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/pause-opts.test.mjs"
+      ],
+      "initUI": [
         "tests/unit/pause-opts.test.mjs"
       ],
       "setConfirm": [

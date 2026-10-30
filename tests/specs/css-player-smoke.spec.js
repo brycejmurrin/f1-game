@@ -8,6 +8,8 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 test("trusted pointer can reach pause and resume repeatedly", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("apex26.steerMode", JSON.stringify("buttons"));
+    // Exercise the production modal click shield, including second-finger taps.
+    Object.defineProperty(navigator, "webdriver", { configurable: true, get: () => false });
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
@@ -57,6 +59,7 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
       });
     }
   });
+  await expect(page.locator("#loading")).toBeHidden({ timeout: BOOT_MS });
   expect(await page.evaluate(() => window.__apex.inputState().steerMode)).toBe("buttons");
   for (const id of ["btn-throttle", "btn-brake", "btn-steer-left", "btn-steer-right"]) {
     await hitTarget(id);
@@ -74,5 +77,30 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     { id: "pausebtn", trusted: true }, { id: "pm-resume", trusted: true },
     { id: "pausebtn", trusted: true }, { id: "pm-resume", trusted: true },
   ]);
+
+  // Compatibility clicks are absent for a second touch while GAS is held.
+  // Check the actual camera change as well as the independent driving contact.
+  const cdp = await page.context().newCDPSession(page);
+  const contact = async (id, pointerId) => { const h = await hitTarget(id); return { x: h.x, y: h.y, id: pointerId }; };
+  const touch = (type, points) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
+  try {
+    const gas = await contact("btn-throttle", 1), cam = await contact("btn-cam", 2);
+    const before = await page.evaluate(() => window.__apex.camera().index);
+    await touch("touchStart", [gas]); await touch("touchStart", [cam]);
+    await touch("touchEnd", [cam]); // Chromium legacy route ends the named contact.
+    const after = await page.evaluate(() => ({ camera: window.__apex.camera().index, throttle: window.__apex.inputState().btn.throttle }));
+    expect(after.camera).not.toBe(before);
+    expect(after.throttle).toBe(true);
+    await touch("touchCancel", []);
+    expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
+
+    const held = await contact("btn-throttle", 3), pause = await contact("pausebtn", 4);
+    await touch("touchStart", [held]); await touch("touchStart", [pause]); await touch("touchEnd", [pause]);
+    await expect(page.locator("#pausemenu")).toBeVisible();
+    expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
+    await touch("touchCancel", []);
+    await pointerClick("pm-resume");
+    await expect(page.locator("#pausemenu")).toBeHidden();
+  } finally { await touch("touchCancel", []); await cdp.detach(); }
 });
 

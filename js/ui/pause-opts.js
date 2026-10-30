@@ -223,6 +223,18 @@ const PauseOpts = (function () {
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
     if (!pm || pm._pauseOptsWired) return;
     pm._pauseOptsWired = true;
+    if (typeof InputHoldButtons !== "undefined") InputHoldButtons.secondaryTap(document.getElementById("pausebtn"), {
+      beforeActivate: e => {
+        // The synthetic activation must still arm the real modal's ghost-tap shield.
+        let blocked = false;
+        if (typeof TopModal !== "undefined") TopModal.onClickShield({
+          isTrusted: e.isTrusted, detail: 1, target: e.target, timeStamp: e.timeStamp,
+          clientX: e.clientX, clientY: e.clientY,
+          preventDefault() { blocked = true; }, stopImmediatePropagation() {},
+        });
+        return !blocked;
+      },
+    });
     pm.addEventListener("click", onPauseClick, true);
     if (typeof MutationObserver !== "undefined") {
       const mo = new MutationObserver(() => { if (pm.hidden) disarm(); });
