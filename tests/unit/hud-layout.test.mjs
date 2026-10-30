@@ -1185,6 +1185,8 @@ test("measured clearance protects instruments and controls without changing save
   const cam = make("#btn-cam", 735, 80, 75, 44), radio = make("#announce", 585, 31, 175, 74);
   const limits = make("#hud-limits", 590, 202, 125, 24);
   const ot = make("#hud-ot", 250, 330, 140, 30), aero = make("#hud-aero", 400, 330, 140, 30);
+  const steer = [make("#steer-left", 59, 159.8, 176.4, 176.4), make("#steer-right", 248.5, 159.8, 176.4, 176.4)];
+  const shift = make("#shift-up", 650, 200, 64, 64);
   const stored = { v: 4, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
   const before = JSON.stringify(stored);
   let placedRadio = false;
@@ -1195,7 +1197,7 @@ test("measured clearance protects instruments and controls without changing save
       querySelectorAll: (sel) => {
         if (sel.includes("#pausebtn")) {
           assert.match(sel, /#hud-ot/); assert.match(sel, /#hud-aero/); assert.match(sel, /#hud-bb/);
-          return [gear, tyre, cam, ot, aero];
+          return [gear, tyre, cam, ot, aero, ...(sel.split(", ").includes(".steerbtn") ? steer : []), ...(sel.split(", ").includes(".shiftbtn") ? [shift] : [])];
         }
         return [gear, speed, cam];
       } },
@@ -1206,7 +1208,7 @@ test("measured clearance protects instruments and controls without changing save
   const manualRelative = rel.getBoundingClientRect();
   ctx.HudLayout.clearReadouts();
   const readouts = [limits, radio, damage, strat];
-  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel].map((e) => e.getBoundingClientRect());
+  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel, ...steer, shift].map((e) => e.getBoundingClientRect());
   for (const el of readouts) {
     const r = el.getBoundingClientRect();
     assert.ok(protectedBoxes.every((b) => !overlap(r,b)), el.id + " clears controls and instruments");
