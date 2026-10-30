@@ -212,6 +212,9 @@ const NetTransport = (function () {
       quali: 1, qabort: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };
     let inbox = [];
+    // pump()'s other buffer: it swaps with inbox, so a frame with mail
+    // allocates no batch copy. null while a pump walks it (see ep.pump).
+    let spare = [];
     let queuedState = 0;
     let queuedEvents = 0;
     let queuedBytes = 0;
@@ -617,9 +620,13 @@ const NetTransport = (function () {
       // and throw on `.channel` — out of pump(), out of the game loop, on the
       // one frame a peer says goodbye. Clearing BEFORE the loop also means a
       // handler that queues a fresh message keeps it for the next pump instead
-      // of having it wiped by a trailing reset.
-      const batch = inbox.slice(0);
-      inbox.length = 0;
+      // of having it wiped by a trailing reset. Detaching is a SWAP with the
+      // spare buffer (no per-frame copy); the walked batch is emptied after the
+      // loop and becomes the next spare. A re-entrant pump finds spare null
+      // and takes a fresh array rather than the batch being walked.
+      const batch = inbox;
+      inbox = spare || [];
+      spare = null;
       queuedState = queuedEvents = queuedBytes = 0;
       for (let i = 0; i < batch.length; i++) {
         const m = batch[i];
@@ -631,6 +638,8 @@ const NetTransport = (function () {
         // PONG clock math on it rather than on handler-run time.
         ep._emit("message", m.channel, m.data, m.at);
       }
+      batch.length = 0;
+      spare = batch;
       if (terminalReason && ep.status === "closing") {
         const reason = terminalReason;
         terminalReason = null;

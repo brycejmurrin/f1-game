@@ -48,7 +48,11 @@ const NetInterp = (function () {
       const maxExtrapMs = opts.maxExtrapMs != null ? opts.maxExtrapMs : 250;
       const maxInterpGapMs = opts.maxInterpGapMs != null ? opts.maxInterpGapMs : MAX_INTERP_GAP_MS;
       const keep = opts.keep || 32;
-      let samples = [];                      // ascending by t
+      // Ascending by t. The live window is samples[head..length): trimming
+      // the oldest advances `head` and compacts once per `keep` pushes, where
+      // a per-push shift() walked the whole full buffer every packet.
+      const samples = [];
+      let head = 0;
 
       // A tick this far AHEAD of the local clock at arrival is not latency or
       // clock-sync error (the offset is bounded by half the 4 s RTT cap in
@@ -58,13 +62,16 @@ const NetInterp = (function () {
       // adaptive-delay update: the rival froze and the delay stopped adapting.
       const maxAheadMs = opts.maxAheadMs != null ? opts.maxAheadMs : MAX_AHEAD_MS;
 
-      function push(t, st, arrivalMs) {
+      // `own` (the adopt() path): `st` is a fresh object the caller hands over
+      // and never touches again, so it is stamped and stored as is instead of
+      // copied. push() keeps copying for callers that reuse their object.
+      function insert(t, st, arrivalMs, own) {
         if (!Number.isFinite(t)) return false;
         // Arrival is in the receiver's full local clock domain.  It is the best
         // epoch anchor for a decoded uint32 tick; when absent, the newest sample
         // keeps direct unit-test/loopback pushes in the same epoch.
         const reference = Number.isFinite(arrivalMs) ? arrivalMs
-          : (samples.length ? samples[samples.length - 1].t : null);
+          : (samples.length > head ? samples[samples.length - 1].t : null);
         t = tickNear(t, reference);
         if (Number.isFinite(arrivalMs) && t - arrivalMs > maxAheadMs) { dropped("tick ahead of clock"); return false; }
         if (opts.adaptive && Number.isFinite(arrivalMs) && (lastTick == null || t > lastTick)) {
@@ -89,19 +96,28 @@ const NetInterp = (function () {
           }
           lastArrival = arrivalMs; lastTick = t;
         }
-        const rec = Object.assign({ t }, st);
         // Fast path: the normal case is strictly newer than everything held.
-        if (!samples.length || t > samples[samples.length - 1].t) {
-          samples.push(rec);
-        } else {
+        let pos = samples.length;
+        if (samples.length > head && t <= samples[samples.length - 1].t) {
           let i = samples.length - 1;
-          while (i >= 0 && samples[i].t > t) i--;
-          if (i >= 0 && samples[i].t === t) return false;   // duplicate — ignore
-          samples.splice(i + 1, 0, rec);
+          while (i >= head && samples[i].t > t) i--;
+          if (i >= head && samples[i].t === t) return false;   // duplicate — ignore (before stamping st)
+          pos = i + 1;
         }
-        while (samples.length > keep) samples.shift();
+        let rec;
+        if (own) { rec = st; rec.t = t; } else rec = Object.assign({ t }, st);
+        if (pos === samples.length) samples.push(rec);
+        else samples.splice(pos, 0, rec);
+        if (samples.length - head > keep) head = samples.length - keep;
+        if (head >= keep) {
+          samples.copyWithin(0, head);
+          samples.length -= head;
+          head = 0;
+        }
         return true;
       }
+      const push = (t, st, arrivalMs) => insert(t, st, arrivalMs, false);
+      const adopt = (t, st, arrivalMs) => insert(t, st, arrivalMs, true);
 
       // Extrapolation cannot exceed this share of the car's speed, however hard
       // the last two packets say it was braking. Two samples a jitter apart can
@@ -171,7 +187,7 @@ const NetInterp = (function () {
       // the packet shape being stable within a session (it is; the protocol is
       // versioned) — fields never vanish mid-session, so no stale-key sweep.
       function at(target, out) {
-        if (!samples.length) return null;
+        if (samples.length <= head) return null;
         // Callers normally pass full performance.now(); loopback/tests may pass
         // the modulo value.  Compare in the sample's epoch in either case.
         target = tickNear(target, samples[samples.length - 1].t);
@@ -181,7 +197,7 @@ const NetInterp = (function () {
           // Gating on the flag matters: without it a momentary dip between two
           // packets would be extrapolated as if it were sustained.
           let decel = 0;
-          if (newest.braking && samples.length > 1) {
+          if (newest.braking && samples.length - head > 1) {
             const prev = samples[samples.length - 2];
             const dts = (newest.t - prev.t) / 1000;
             if (dts > 0.001 && Number.isFinite(prev.speed) && Number.isFinite(newest.speed)) {
@@ -191,9 +207,9 @@ const NetInterp = (function () {
           }
           return advance(newest, Math.min(target - newest.t, maxExtrapMs), out, decel);
         }
-        const oldest = samples[0];
+        const oldest = samples[head];
         if (target <= oldest.t) { const o = Object.assign(out || {}, oldest); o.extrapolated = false; return o; }
-        for (let i = samples.length - 1; i > 0; i--) {
+        for (let i = samples.length - 1; i > head; i--) {
           const a = samples[i - 1], b = samples[i];
           if (target >= a.t && target <= b.t) {
             const span = b.t - a.t;
@@ -220,6 +236,9 @@ const NetInterp = (function () {
 
       return {
         push, sample,
+        // push() for a decoded packet entry nobody else holds (netplay onState):
+        // stores the object itself, stamped with t, instead of a copy.
+        adopt,
         // Where the rival actually IS, as opposed to where it is DRAWN. Contact
         // must be resolved against this: sample() deliberately returns the pose
         // delayMs in the past, and hitting a car where it was 100 ms ago is a
@@ -227,13 +246,13 @@ const NetInterp = (function () {
         // path, just without the delay — so it extrapolates along the road and is
         // bounded exactly as sample() is.
         predict: (nowMs, out) => at(nowMs, out),
-        size: () => samples.length,
-        newest: () => (samples.length ? samples[samples.length - 1] : null),
-        oldest: () => (samples.length ? samples[0] : null),
+        size: () => samples.length - head,
+        newest: () => (samples.length > head ? samples[samples.length - 1] : null),
+        oldest: () => (samples.length > head ? samples[head] : null),
         timing: () => ({ delayMs, jitterMs: jitter, lagMs: lag, adaptive: !!opts.adaptive }),
         // The time the last sample() posed — what a relay must stamp that pose with.
         presentedAt: () => presentedAt,
-        clear: () => { samples = []; delayMs = baseDelay; jitter = 0; lag = 0; interval = 0; lastArrival = null; lastTick = null; presentedAt = -Infinity; },
+        clear: () => { samples.length = 0; head = 0; delayMs = baseDelay; jitter = 0; lag = 0; interval = 0; lastArrival = null; lastTick = null; presentedAt = -Infinity; },
       };
     }
 
