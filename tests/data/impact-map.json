@@ -7050,6 +7050,7 @@
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/ghost.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"

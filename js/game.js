@@ -2911,8 +2911,7 @@ function netOrder(order) {
   return sorted;
 }
 
-function endRace(forcedOrder) {
-  if (state !== "race" && state !== "count") return;   // one classification and settlement per session
+function endRace(forcedOrder) { if (state !== "race" && state !== "count") return;   // one settlement per session
   Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
   GfxEscalation.resetReloadBudget();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
