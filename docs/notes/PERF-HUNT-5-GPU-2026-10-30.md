@@ -54,13 +54,15 @@ an implementation ("max(|m_ux|,|m_vx|) ≤ f_x ≤ √2(|m_ux|+|m_vx|)"; Vulkan-
 - `tlx.js` keeps the session max (`_mirGlassLod`) and sizes the chain to `ceil(lod + 0.25) + 1` levels, A-H5's
   formula for the inset rect.
 - One unbounded frame does not latch. That frame is the camera and car out of step, measured as the frame after a
-  `jump()` teleport. Two in a row, missing CPU arrays, or `apex26.tlxGlassFull=1` latch the full chain as before.
+  `jump()` teleport. Two in a row, or missing CPU arrays, latch the full chain as before. The A/B lever is the existing
+  `apex26.tlxMirMips=0` (the full chain always). A session-only `apex26.tlxGlassFull` key served the measurements below
+  and was dropped, because the store registry refuses a writer-less key.
 
 **Measured (lavapipe, montreal, helmet, 1280×720, the census scenario):**
 
 | arm | `glassLod` | mip levels | `mipFull` | gpuErrors |
 |---|---|---|---|---|
-| `apex26.tlxGlassFull=1` (the old latch) | — | 9 once grown | true | 0 |
+| old latch (`apex26.tlxGlassFull=1` while measuring) | — | 9 once grown | true | 0 |
 | default (bounded) | 1.84 steady, 2.31 session max incl. the jump frames | 4 | false | 0 |
 
 So the glass needs 4 levels where it was given 9. On the census frame that removes 5 of the 8 mip render passes per
@@ -70,7 +72,7 @@ setup and a tile flush per pass on a TBDR GPU), not bytes.
 
 **Pixels.** Identical by construction: no tap reads a level past the bound.
 
-A screenshot A/B cannot resolve this on this box. I ran two loads of the old latch (`apex26.tlxGlassFull=1`) and one
+A screenshot A/B cannot resolve this on this box. I ran two loads of the old latch (the then `apex26.tlxGlassFull=1`) and one
 bounded load: lavapipe, montreal, helmet, mirror on, `park(0.1)` + `freeze(true)`, after 6 mirror renders.
 
 | comparison | whole frame: pixels differing / max Δ | glass rectangles only (10 800 px) |
@@ -101,11 +103,79 @@ perspective-correct LOD (central differences at about 740 interior points per tr
 It is exactly log2(texels/px) + 0.5 for a screen-parallel quad. At the live cockpit pose it holds with 4 levels (above). It is Infinity for an eye-plane straddle, and
 −Infinity (no fragments) for a quad behind or off-screen. It scales by exactly 1 LOD per doubling of the target.
 
-CENSUS-PLACEHOLDER
+## Hardware result (macOS census, same inputs: montreal, helmet, api entry)
+
+| run | head | TLX WebGPU passes/f median (max) | stored / discarded per frame | mirror | gpuErrors (4 legs) | meanLuma |
+|---|---|---|---|---|---|---|
+| 40868057244 (nightly) | `c8f844b1` | 27 (–) | 29.65 / 3.06 | 9 levels, mipFull true | 0 | 68.5 |
+| 40838027433 | `228b4b9e` | 27 (29) | 30.12 / 3.05 | 9 levels, mipFull true | 0 | 68.7 |
+| **41005913372** | **`bf2a21d9` (F1)** | **22 (24)** | **23.78 / 3.05** | **4 levels, mipFull false, glassLod 2.31** | **0** | 68.5 |
+
+- Five fewer render passes and about six fewer attachment stores a frame on Bryce's path (TLX WebGPU) at the default
+  camera. Submits are unchanged at 20: three's mip build shares the mirror's submit.
+- The TLX WebGL2 leg reads the same mirror state (4 levels, glassLod 2.31): one shorter `generateMipmap` a frame.
+- The Verdict's wide-frame list no longer carries the mirror. Baseline: `WIDE FRAMES ADD: 2.15x
+  461x132/rgba16float:clear, …`. After: `0.66x 2048x2048/r8unorm|d:clear, 0.66x 512x512/r32float:clear, …`.
+- fps (20.3 / 24.5 → 26.5) and the census's normal-frame ms (14.9 / 13.1 → 5.6) moved the right way. Both are
+  paravirtual-runner numbers (PP-19), quoted as correlation, never as the result. meanLuma is unchanged (68.5), which
+  is consistent with the pixel argument but is not proof of it.
+
+## F2 — WGX env cube: 4 mip levels, built in the face-5 submit (hunter W1 + W3)
+
+The census's open WGX lead, `WIDE FRAMES ADD: 4.24x 64x64/rgba16float:clear`, is the env cube's mip ladder. The
+inventory tags each view by its texture's base size, so every level lands in the 64×64 row. 7 levels × 6 faces gave
+36 clear>store passes on the frame that completes a cube.
+
+Every `envCube` tap in `wgsl-chunks.js` (1789, 1795, 1867, 1896) is `textureSampleLevel(…, rough * 2.5)`. After the
+SAA clamp at 1405, rough is ≤ 1, and the wet and car terms only mix it toward 0.30 or 0.02 or scale it down. So a
+tap reads level 3 at most. The fix is `envMips = min(7, ceil(2.5) + 1) = 4`. Levels 0–3 are built from the same
+parents as before, so the result is bit-identical by construction, and the ladder drops to 18 passes. W3 records
+the ladder into face 5's own encoder after its pass, so queue order is unchanged and a cube costs one submit less.
+
+Test: `webgpu-lifecycle.test.mjs` "perf hunt 5 W1/W3" drives six env faces through the mock device and asserts:
+- 4 levels on the cube texture
+- one pass on each of faces 0–4
+- 1 + 18 passes on face 5
+- one submit per face
+
+On the old code it fails (expected 4 levels, got 7).
+
+Gates: `wgx-validate.mjs --static` clean. `webgpu-lifecycle` + `renderer-soft-lifecycle` pass 165 / 0. The census
+re-run on the PR head reads the WGX leg's row.
+
+CENSUS2-PLACEHOLDER
+
 
 ## Hunt
 
-HUNT-PLACEHOLDER
+Workflow run `wf_69455213-93c`: seven code-hunter slices (TLX lit, TLX post, shadows, culling,
+cars, fx/sky, WGX parity), each report sent to finding-verifier. 54 verdict rows: 30 CONFIRMED, 19 NEEDS-BROWSER,
+8 REFUTED, 7 STALE. The raw output is session-local (`scratch/perf5/hunt-result.json`).
+
+Shipped here, ranked by measured work removed per line:
+
+| id | what | measured | status |
+|---|---|---|---|
+| F1 (parent) | TLX glass mip chain bounded | −5 passes/f, −5.9 stores/f on the macOS census | this PR |
+| W1 | WGX env cube 7 → 4 levels | −18 passes per cube (the 64×64 wide-frame rows) | this PR |
+| W3 | WGX env ladder in the face-5 submit | −1 submit per cube | this PR |
+
+CONFIRMED, not shipped. These are per-pixel ALU gates, bit-identical by the verifier's trace, but their gain is
+unmeasured and each needs a shader pixel A/B that this box cannot resolve (see the A/B noise above). Follow-ups:
+
+- TLX-L1: the pit-lane mark block in `roadMarkings` runs on every road fragment. GLX branches on `uPitLane.y`;
+  the branch was never ported to TLX (`tsl-lit.js:1116-1181`).
+- TLX-L2 / shadows S1, S2: skip `cloudShadow`'s FBM when `sunSh == 0`, and skip the car-shadow taps when the static
+  taps are all 0. S1 helps on DRY days only, because overcast presets set shadowStr < 1 so sunSh never reaches 0.
+- cars F3 / F4: the carbon weave sin/cos when `wvFade == 0` (far carbon), and the sun disc in the mirror pass where
+  `carSunGlint` is 0. Both run on all three backends.
+- TLX-P5-3: lens-dirt fetch with bloom off. TLX-P5-1: WebGL2 phones' square post targets (cover), whose off-rect
+  area is cleared and stored but never read (≤ 54 %); WebGL2 leg only.
+- W2 / cars F1: WGX and GLX still keep the mirror's full chain. `PostCommon.mipFootprintLod` is the shared bound to
+  port; it needs the same live footprint as TLX.
+- culling S1–S5, fx P5-FX1/2: CPU-side index rebuilds and particle uploads; rates need a browser.
+
+NEEDS-BROWSER rows (19) were not acted on. Their verdict text is in the run output.
 
 ## Not run / limits
 

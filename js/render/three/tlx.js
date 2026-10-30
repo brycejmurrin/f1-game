@@ -1585,10 +1585,9 @@ const TLX = (function () {
       // Perf hunt 5 F1: the glass no longer latches the FULL chain (helmet is the
       // default camera, so the cap never applied: 9 levels, 8 passes a frame).
       // drawMirrorGlass bounds its true LOD each frame (PostCommon.mipFootprintLod)
-      // and _mirGlassLod keeps the session max; unbounded (a vertex behind the eye,
-      // no CPU arrays) or apex26.tlxGlassFull=1 latches the full chain as before.
-      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0, _mirGlassFull = false;
-      try { _mirGlassFull = localStorage.getItem("apex26.tlxGlassFull") === "1"; } catch (_) { /* no storage: bounded */ }
+      // and _mirGlassLod keeps the session max; unbounded (a triangle straddling the
+      // eye plane, no CPU arrays) latches the full chain as before; tlxMirMips=0 is the A/B.
+      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;
       try {
         const v = localStorage.getItem("apex26.tlxMirMips");
         if (v !== null && v !== "" && +v >= 0) { _mirMipCap = Math.floor(+v); _mirMipPinned = true; }
@@ -5752,13 +5751,13 @@ const TLX = (function () {
           _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
           if (_mirGlassLod < Infinity && (_frameVP[11] !== 0 || _frameVP[15] !== 0)) {   // no frame camera yet: no bound
             const g = mesh.geo, pa = g.attributes.position, ua = g.attributes.uv, st = post && post.sceneTarget ? post.sceneTarget() : null;
-            const l = _mirGlassFull || !pa || !pa.array || !ua || !ua.array || typeof PostCommon === "undefined" ? Infinity
+            const l = !pa || !pa.array || !ua || !ua.array || typeof PostCommon === "undefined" ? Infinity
               : PostCommon.mipFootprintLod(pa.array, ua.array, g.index && g.index.array, model, _frameVP,
                 Math.min(W, st ? st.width : W), Math.min(H, st ? st.height : H), mirRT.width, mirRT.height);
             // One unbounded frame is the camera and car out of step (measured: the frame after a jump()
             // teleport); it does not latch. Two in a row, or no arrays at all, latch the full chain.
             if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
-            else if (++_mirGlassInf >= 2 || !(l === l) || _mirGlassFull || !pa || !ua) _mirGlassLod = Infinity;
+            else if (++_mirGlassInf >= 2 || !(l === l) || !pa || !ua) _mirGlassLod = Infinity;
           }
           return true;
         },
