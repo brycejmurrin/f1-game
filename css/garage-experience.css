@@ -13,6 +13,19 @@
   }
   .cs-inspection p { margin: 0; color: var(--dim); font-size: var(--fs-2); line-height: 1.4; }
   .cs-inspection > button { justify-self: start; }
+  /* Short landscape (design pass 2b): the card was 131 of the list's 209 px at 844x390,
+     so one part showed under it. Name and note on the left, the action on the right:
+     65 px, and the next two parts come into view. */
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) .cs-inspection {
+    grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    column-gap: var(--gap); row-gap: 0; padding-block: calc(var(--gap) * 0.75);
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) .cs-inspection p {
+    font-size: var(--fs-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) .cs-inspection > button {
+    grid-column: 2; grid-row: 1 / span 2;
+  }
   #cs-options .cs-opt:focus-visible { outline-color: var(--red); outline-offset: calc(var(--gap) * 0.25); }
   /* Paint editor: ONE greyed look for every dependent row (pill and colour rows dimmed to
      0.38, pattern sliders to tuner.css's 0.75 — two looks for one state, audit D8), with the

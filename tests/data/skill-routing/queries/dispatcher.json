@@ -1,0 +1,30 @@
+[
+{
+"query": "I am the hourly dispatcher, run the dispatch cycle",
+"expect": "dispatcher"
+},
+{
+"query": "launch workers for ready issues and record the launch",
+"expect": "dispatcher"
+},
+{
+"query": "the quota is rejected, disable the hourly dispatcher trigger",
+"expect": "dispatcher"
+},
+{
+"query": "take over as dispatcher and take the Board lock",
+"expect": "dispatcher"
+},
+{
+"query": "dispatcher PAUSE_TRIGGER line what do I do",
+"expect": "dispatcher"
+},
+{
+"query": "is my PR green and merged",
+"expect": "check"
+},
+{
+"query": "fix a red PR I own",
+"expect": "steward"
+}
+]

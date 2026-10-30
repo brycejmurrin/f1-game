@@ -1479,6 +1479,7 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
@@ -1496,6 +1497,7 @@
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/hud-tyres.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
@@ -2012,6 +2014,11 @@
     {
       "path": "js/agent/agentview.js",
       "global": "AgentView",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex-bridge.js",
+      "global": "ApexBridge",
       "roster": "LAZY_AGENT"
     },
     {
@@ -4753,6 +4760,11 @@
       "path": "js/ui/layers.js",
       "global": "UiLayers",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/layout-presets.js",
+      "global": "LayoutPresets",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/live-region.js",

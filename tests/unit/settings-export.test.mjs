@@ -520,6 +520,22 @@ test("SAVE ALL from a desktop does not pin desktop defaults on a phone", () => {
   assert.equal(phone.collect("all").settings.display.resMode, null, "the phone keeps its own resolution default");
 });
 
+// UI hunt 3: a device-picked BUILD IN BACKGROUND was pinned ON by an ALL file,
+// and an unset JSON row was restored as the literal "null".
+test("SAVE ALL keeps unset rows unset on the target: no pinned auto-pick, no literal null", () => {
+  const file = boot().collect("all");
+  assert.equal(file.settings.display.buildWorker, null, "unset build worker exports unset");
+  const g = Object.values(file.settings).find((grp) => Object.prototype.hasOwnProperty.call(grp, "uiScale"));
+  assert.equal(g.uiScale, null);
+  const writes = [];
+  const target = boot({ store: { set(k, v) { writes.push([k, v]); } } });
+  target.SettingsExport.applySettings(file, target.G);
+  const ui = writes.find(([k]) => k === "uiScale");
+  assert.ok(ui, "the row is still written");
+  assert.equal(ui[1], undefined, "an unset JSON row is removed (store.set undefined), never stored as null");
+  assert.equal(target.collect("all").settings.display.buildWorker, null, "the target keeps its own auto-pick");
+});
+
 test("unset gfxBackend exports as null on touch and desktop alike", () => {
   assert.equal(boot({ mobile: true }).collect("all").settings.display.gfxBackend, null);
   assert.equal(boot({ mobile: false }).collect("all").settings.display.gfxBackend, null);
@@ -698,7 +714,8 @@ test("restoring default motion restores OS preference following", () => {
   assert.equal(saved.settings.a11y.motion, null);
   const target = boot({ disk: { "apex26.motion": '"reduce"' } });
   target.loadSettings(saved);
-  assert.equal(target.disk.get("apex26.motion"), "null");
+  assert.equal(target.GameStore.store.get("motion", null), null, "unset again: the key is removed, readers default to the OS");
+  assert.notEqual(target.disk.get("apex26.motion"), '"reduce"');
   const bad = target.loadSettings({ format: "apex26-settings-v1", settings: {
     a11y: { motion: "unknown" }, driving: { steerMode: null },
   } });

@@ -618,7 +618,9 @@ var RadioVoice = (function () {
       const lap1 = [];
       const rest = [];
       for (const sp of Object.keys(PACK_VOICE)) {
-        const on = sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn;
+        // The announcer pack only ever speaks comm lines, and say() mutes those with the announcer off: TEAM RADIO
+        // alone used to fetch and keep its ~4-6 MB .bin for nothing (perf hunt 7).
+        const on = sp === "announcer" ? ann && announcerPackOn() : enabled && packOn;
         if (!on) continue;
         (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
       }
@@ -636,6 +638,11 @@ var RadioVoice = (function () {
       const poll = () => {
         gatePoll = null;
         if (G.state === "race" || G.state === "count") { pack.raceLoadGate(false); return; }
+        // A start that exits before count (stale, quit, ctx lost, failed quali order) lands on the
+        // title with no loading cover: release, or the latch and this poll outlive it. (The state
+        // reads "menu" during the load itself too; the cover's phase is what tells them apart.)
+        const ls = G.loadingScreen;
+        if (G.state === "menu" && !(ls && ls.phase && ls.phase())) { pack.raceLoadGate(false); return; }
         gatePoll = setTimeout(poll, 400);
       };
       gatePoll = setTimeout(poll, 800);

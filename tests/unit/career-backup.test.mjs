@@ -2158,7 +2158,7 @@ test("NEW CAREER BACK steps back to the slot picker and restores the borrowed li
   let toTitle = 0;
   ui.G.refreshCareerButton = () => { toTitle++; };
   ui.G.els.overlay.hidden = true;
-  const empty = () => ui.G.$("cr-left").querySelectorAll(".cr-slot-main").find((b) => b.getAttribute("aria-label") === "Driver career slot 2, empty");
+  const empty = () => ui.G.$("cr-left").querySelectorAll(".cr-slot-main").find((b) => b.getAttribute("aria-label") === "SLOT 2 EMPTY Start a career here, Driver career");
   const card = empty();
   assert.ok(card, "an empty driver slot card");
   ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();

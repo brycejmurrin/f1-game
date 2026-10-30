@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -166,4 +167,42 @@ test("css/hud.css: one radio home per profile — no leftover broadcast 14svh, f
   assert.match(css,
     /body\.hud-mirror-on\.hud-mirror-side:not\(\.hud-radio-top\):not\(\[data-radio-corner\]\) #announce/,
     "beside-the-mirror stands down for both slot markers");
+});
+
+// UI hunt 3: showModal() makes everything outside the dialog inert, so a line
+// said with Settings (or any dialog) open went to an unreadable #announce-live.
+test("LiveRegion speaks inside the topmost open modal, through an empty polite twin", () => {
+  const made = [], timers = [];
+  const node = (tag) => ({ tagName: tag, attrs: {}, kids: [], textContent: "", className: "",
+    setAttribute(k, v) { this.attrs[k] = v; }, appendChild(n) { this.kids.push(n); return n; },
+    querySelector(sel) { return sel === ":scope > [data-announce-modal]" ? this.kids.find((k) => "data-announce-modal" in k.attrs) || null : null; } });
+  const page = node("div"); let modals = [];
+  const sb = {
+    document: { getElementById: (id) => (id === "announce-live" ? page : null), querySelectorAll: (sel) => (sel === ":modal" ? modals : []),
+      createElement: (t) => { const n = node(t); made.push(n); return n; } },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, performance: { now: () => 0 },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/ui/live-region.js"), "utf8") + ";this.LiveRegion=LiveRegion;", sb, { filename: absSrc("js/ui/live-region.js") });
+  const settings = node("dialog"); modals = [settings];
+  sb.LiveRegion.say("Gears is unavailable", "save");
+  const twin = settings.kids[0];
+  assert.ok(twin && "data-announce-modal" in twin.attrs, "a twin inside the modal");
+  assert.equal(twin.attrs["aria-live"], "polite"); assert.equal(twin.attrs.role, "status");
+  assert.equal(twin.textContent, "", "empty for the beat before it speaks");
+  timers.shift()();
+  assert.equal(twin.textContent, "Gears is unavailable"); assert.equal(page.textContent, "");
+  timers.shift()();                                   // hold ends
+  modals = []; sb.LiveRegion.say("Safety car", "flag"); timers.shift()();
+  assert.equal(page.textContent, "Safety car", "no modal: the page region as before");
+  modals = [settings]; sb.LiveRegion.say("again", "flag");
+  assert.equal(settings.kids.length, 1, "the twin is made once per modal");
+});
+
+test("both radio slots size the card to the slot, not to the dock lane announceLane still publishes (UI-HUNT-2-HUD)", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const slotRules = (prefix) => rules.filter((r) => r.selector.startsWith(prefix) && String(r.decls.get("max-width") || "").includes("--radio-top-w"));
+  const widths = (prefix) => slotRules(prefix).map((r) => r.decls.get("width") || "");
+  const want = "min(max-content, calc(var(--radio-top-w) / var(--hud-z)))";
+  assert.deepEqual(widths("body.hud-radio-top #announce"), [want], "tower-row slot: width follows the slot");
+  assert.deepEqual(widths("body[data-radio-corner]"), [want], "corner slot: width follows the slot, so the base rule's lane width cannot squeeze it");
 });
