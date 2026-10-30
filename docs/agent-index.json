@@ -3417,6 +3417,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/garage-data.js",
+      "global": "GarageData",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/garage/livery-design-editor.js",
       "global": "GarageLiveryDesignEditor",
       "roster": "tag"

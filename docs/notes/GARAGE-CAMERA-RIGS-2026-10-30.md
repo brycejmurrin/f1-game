@@ -3,8 +3,10 @@
 Moving cameras for the garage sequences: moves a fixed eye (`GarageArrival.CAMS`)
 cannot do. Authored as animated Blender cameras by
 `tools/gen/blender/garage-camera-rigs.py`, sampled, and written into the
-`// @blender-rigs:start` / `:end` block of `js/garage/arrival.js` (with the
-script's SHA256). `rigSample(id, dir, u, side = 1)` next to it returns
+`// @blender-rigs:start` / `:end` block of `js/garage/garage-data.js` (with the
+script's SHA256; lazy, LAZY_RACE, since 2026-10-30 — the ids, labels and sample
+counts stay eager in `arrival.js`'s `@blender-rigs-index` block, and until the
+data lands a rig angle plays the "cut" cameras). `rigSample(id, dir, u, side = 1)` next to it returns
 `{ eye, aim, fov }`; `RIG_IDS` and `RIG_LABEL` list them. Wiring them into the
 angle presets and the exports is the integrating PR's job.
 

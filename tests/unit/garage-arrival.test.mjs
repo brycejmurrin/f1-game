@@ -6,9 +6,11 @@ import { absSrc } from '../helpers/abs-src.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
-vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
+vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival.js') });
+// The Blender rigs' samples (LAZY_RACE): loaded as the game's idle prefetch / garage entry would.
+vm.runInContext(readFileSync(new URL('../../js/garage/garage-data.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/garage-data.js') });
 const Arrival = vm.runInContext('GarageArrival', context);
-vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
+vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/track/core/pit.js') });
 const TrackPit = vm.runInContext('TrackPit', context);
 function raceEntryProfileStub({ budgetMs = 30000, now = () => 0 } = {}) {
   let t0 = now();

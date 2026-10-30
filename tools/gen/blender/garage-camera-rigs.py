@@ -194,18 +194,22 @@ meta = dict(authoring=authoring, sourceSHA256=source_hash, samples=N, maxEyeStep
 (out / 'garage-camera-rigs.json').write_text(json.dumps(dict(meta, data=data), indent=1) + '\n')
 
 # Packed for the runtime: each integer as two base64url characters, offset 2048 (a JSON
-# number list put the eager shell over its byte budget; arrival.js unpacks it at load).
+# number list put the eager shell over its byte budget; arrival.js unpacks it on first use).
 B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
 def pack(seq):
     assert all(-2048 <= v < 2048 for v in seq), 'a rig value outside the packed range'
     return ''.join(B64[(v + 2048) >> 6] + B64[(v + 2048) & 63] for v in seq)
 packed = {rid: {k: pack(v) if isinstance(v, list) else v for k, v in e.items()} for rid, e in data.items()}
 
-if opts.write_runtime:
-    p = root / 'js/garage/arrival.js'; text = p.read_text()
-    start = text.index('  // @blender-rigs:start'); end = text.index('  // @blender-rigs:end', start)
-    block = ('  // @blender-rigs:start\n  // ' + authoring + '; tools/gen/blender/garage-camera-rigs.py; ' + str(N) +
-             ' samples over u: eye, aim (cm), fov (0.1 deg), two base64url chars each (+2048).\n  // Source SHA256: ' + source_hash +
-             '\n  const RIGS = ' + json.dumps(packed, separators=(',', ':')) + ';\n')
+def splice(rel, marker, block):
+    p = root / rel; text = p.read_text()
+    start = text.index('  // @' + marker + ':start'); end = text.index('  // @' + marker + ':end', start)
     p.write_text(text[:start] + block + text[end:])
+if opts.write_runtime:   # the samples are lazy (js/garage/garage-data.js); the eager arrival.js keeps the ids and labels
+    splice('js/garage/garage-data.js', 'blender-rigs', '  // @blender-rigs:start\n  // ' + authoring + '; tools/gen/blender/garage-camera-rigs.py; ' + str(N) +
+           ' samples over u: eye, aim (cm), fov (0.1 deg), two base64url chars each (+2048).\n  // Source SHA256: ' + source_hash +
+           '\n  const RIGS = ' + json.dumps(packed, separators=(',', ':')) + ';\n')
+    index = {rid: dict(label=e['label'], n=e['n']) for rid, e in data.items()}
+    splice('js/garage/arrival.js', 'blender-rigs-index', "  // @blender-rigs-index:start\n  // tools/gen/blender/garage-camera-rigs.py: each rig's label and sample count; the samples are js/garage/garage-data.js (lazy).\n"
+           '  const RIGS = ' + json.dumps(index, separators=(',', ':')) + ';\n')
 print(json.dumps(dict(blend=str(blend), authoring=authoring, samples=N, maxEyeStep=worst, beats=meta['beats'])))

@@ -102,6 +102,8 @@ const GarageArrival = (function () {
     try { if (typeof localStorage !== "undefined") localStorage.setItem("apex26.crewVisit", String(_visit)); } catch (_) { /* private mode */ }
     return n;
   }
+  // A Blender crew whose key tables have not landed (js/garage/garage-data.js, lazy) plays the shipped crew.
+  const playable = (v) => typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.known(v) && !GarageCrewChoreo.has(v) ? "current" : v;
   function crewFor(config, dir) {
     const key = dir === "out" ? "leaveCrew" : dir === "home" ? "homeCrew" : "enterCrew";
     let v = config && config[key];
@@ -109,12 +111,12 @@ const GarageArrival = (function () {
       const r = RESULTS[config && config.result] || RESULTS.finish;
       v = typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has(r.crew) ? r.crew : r.crewAlt;
     }
-    if (v !== "mix") return v || "current";
+    if (v !== "mix") return playable(v || "current");
     if (typeof GarageCrewChoreo === "undefined") return "current";
     let memo = _picked.get(config);
     if (!memo) { memo = {}; _picked.set(config, memo); }
     if (!memo[key]) memo[key] = GarageCrewChoreo.pick(dir === "out" ? "out" : "in", nextVisit());
-    return memo[key];
+    return playable(memo[key]);
   }
   function settings(value) {
     const v = value && typeof value === "object" ? value : {};
@@ -167,7 +169,7 @@ const GarageArrival = (function () {
       + `<rect x="4" y="96" width="112" height="16" fill="currentColor" opacity="0.12"/>`
       + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`;
     // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
-    if (RIGS[angle]) {
+    if (rigData(angle)) {
       const pts = [];
       for (let i = 0; i <= 16; i++) { const e = rigSample(angle, "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
       const a = pts[0].split(" "), b = pts[16].split(" ");
@@ -356,17 +358,27 @@ const GarageArrival = (function () {
     return { x: side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)), z, yaw: side * th };
   }
   const EYE_L = CAMS.left, EYE_R = CAMS.right;
-  // @blender-rigs:start
-  // Blender 5.2.3 LTS (bpy module); tools/gen/blender/garage-camera-rigs.py; 49 samples over u: eye, aim (cm), fov (0.1 deg), two base64url chars each (+2048).
-  // Source SHA256: 01dd82bea5ab83cac0790997226192b2f09affebded7283cf9d613a76e50d33f
-  const RIGS = {"crane":{"label":"CRANE","n":49,"in":"kEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkFgtlUgAhupspYkFgtlUgAhupspYkFgtlUf5htpxpYkGgtlTfZhnqGpYkGgtlTeshfqkpYkHgtlTd0hVrKpYkHgtlSc1hKrzpYkIgtlSb2g_sdpYkIgtlRa-g0tEpYkJgulRaGgrtkpYkJgulQZxglt7pYkKgulPamgjuEpYkKgulOcxgjuEpYkLgulMfLgjuEpYkMgvlLhDgjuEpYkMgvlJisgjuEpYkMgvlHkDgjuEpYkNgvlFlHgjuEpYkNgwlDl6gjuEpYkNgwlBmdgjuEpYkOgxk-mkgjuEpYkOgxk7mkgjuEpYkOgyk4mkgjuEpYkOgyk1mjgjuEpYkOg2kvmUgjuEpWkNg9kolugjuEpTkMhGkfk6gjuEpOkLhTkUj9gjuEpJkJhhkIi6gjuEpCkIhxj7h4gjuEo6kGiDjsg_gjt2oykEiWjegVgjs0oqkCiqjOgCgjrLohkAi-i_gAgjpmoZj-jSiwgAgjoCoQj8jmihgAgjmgoIj5j5iSgAgjlFoBj4kMiFgAgjjwn6j2kdh4gAgjiln0j0kshtgAgjhmnujzk6hjgAgjg0npjylFhbgAgjgRnljxlNhVgAgjgCnijwlShRgAgjgAnhjwlUhQgAgjgAng","out":"jSlKhagAhupsn0jSlKhagAhupsn0jSlKhZgAhupsn0jSlKhYgAhupsn0jSlKhWgAhupsn0jSlKhUgAhspfn0jSlKhSgAhloin0jSlKhQgAhanIn0jSlKhNgAhNlcn0jSlKhLgAg_jrn0jSlKhKgAgziDn0jSlKhIgAgpgyn0jSlKhHgAgkgGn0jSlKhGgAgjgAn0jSlJhHgAgjgEn0jQk_hUgAgjgUn3jMkshvgAgjgxn9jGkRiTgAgjhaoGi_jwi_gAgjiPoQi4jNjvgAgjjQociwiokhgAgjkUopioiFlSgAgjlXo2iihll_gAgjmapCichKmlgAgjnepMiYg3nDgAgjohpUiWgunUgAgjpkpYiWgtnagAgjqopYiWgtnegFgjrrpYiXgtnjgVgjsqpYiYgtnngvgjtxpYiZgunqhTgjuEpYibgunth-gjuEpYicgunwiygjuEpYiegunyjsgjuEpYiggvn1kqgjuEpYiigvn2ltgjuEpYikgvn4mfgjuEpYimgwn5mkgjuEpYiogwn7mkgjuEpYiqgwn8mkgjuEpYirgxn8mkgjuEpYitgxn9mkgjuEpYivgxn9mkgjuEpYiwgxn-mkgjuEpYiygyn-mkgjuEpYizgyn-mkgjuEpYizgyn-mkgjuEpYi0gyn-mkgjuEpYi0gyn-mkgjuEpY","home":"kEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkFgtlUf8htpupYkFgtlUfShmqLpYkFgtlUeKhZq7pYkGgtlUcxhJr2pYkGgtlTbYg5sxpYkHgtlTaOgstjpYkHgtlTZigkuApYkIgtlSZggjuEpYkIgtlSbLgjuEpYkJgulRd7gjuEpYkJgulQgFgjuEpYkKgulPh_gjuEpYkKgulOjkgjuEpYkLgulNk0gjuEpYkLgulMlvgjuEpYkMgvlKmWgjuEpYkMgvlImkgjuEpYkNgvlHmkgjuEpYkNgwlFmkgjuEpYkNgwlCmkgjuEpYkOgwlAmkgjuEpYkOgxk9mkgjuEpYkOgxk7mkgjuEpYkOgyk4mkgjuEpYkOgzk0mhgjuEpYkOg6kulvgjuEpUkNhHknkjgjuEpNkNhYkdjFgjuEpFkMhtkShogjuEo6kLiFkGgggjtYovkKifj4gBgjq5ojkJi7jqgAgjosoXkIjWjbgAgjmeoLkGjxjLgAgjkdoAkEkKi8gAgjisn3kCkgisgAgjhUnukAkzidgAgjgYnoj-lCiOgAgjgBnjj8lMiAgAgjgAngj5lQhzgAgjgAngj2lShogAgjgAngj0lThegAgjgAngjylUhXgAgjgAngjxlUhSgAgjgAngjwlUhQgAgjgAng"},"orbit":{"label":"ORBIT","n":49,"in":"j8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmaf5htpxowj8iMmafZhpqGowj8iMmaeshkqkowj8iMmad0hdrKowj8iMmac1hWrzowj8iMmab2hOsdowj8iMmaa-hHtEowj8iMmaaGhCtkowj8iMmaZxg-t7owj8iMmaamg8uEowj8iMmacxg8uEowj8iMmafLg8uEowj8iMmahDg8uEowj8iMmaisg8uEowj8iMmakDg8uEowj8iMmalHg8uEowj8iMmal6g8uEowj8iMmamdg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj9iMmamjg8uEowkDiNmWmUg8uEowkPiOmMlug8uEovkhiQl-k6g8uEotk3iSlpj9g8uEorlPiVlQi6g8uEoplniYkwh4g8uEonl_ibkLg_g8t2olmTifjigVg8s0oimkiii0gCg8rLofmwimiDgAg8pmocm3iqhSgAg8oCoZm4iugggAg8mgoXmziyfwgAg8lFoUmqi1fEgAg8jwoSmdi4ebgAg8iloPmPi7d4gAg8hmoNl_i-dagAg8g0oLlxjAdCgAg8gRoKlljCcxgAg8gCoJlejDcngAg8gAoIlbjDcjgAg8gAoI","out":"loi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhtpfoIloi-c2gAhooioIloi-c2gAhhnIoIloi-c2gAhYlcoIloi-c2gAhPjroIloi-c2gAhHiDoIloi-c2gAhAgyoIloi-c2gAg8gGoIloi-c2gAg8gAoIlpi-c3gAg8gEoIl2i8dJgAg8gUoJmLi5dwgAg8gxoMmii1eogAg8haoPmzivfugAg8iPoTm4ipg_gAg8jQoYmtijiTgAg8kUodmTidjigAg8lXoiluiXkmgAg8maomlFiTlbgAg8neoqkfiPmAgAg8ohoukEiNmVgAg8pkowj8iMmbgAg8qoowj5iMmdgFg8rrowj3iMmegVg8sqowj1iMmfgvg8txowjziMmhhTg8uEowjyiMmih-g8uEowjwiMmjiyg8uEowjviMmjjsg8uEowjuiMmkkqg8uEowjtiMmlltg8uEowjsiMmlmfg8uEowjsiMmmmkg8uEowjriMmmmkg8uEowjqiMmmmkg8uEowjqiMmnmkg8uEowjqiMmnmkg8uEowjqiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEow","home":"j8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmaf8hupuowj8iMmafShoqLowj8iMmaeKhgq7owj8iMmacxhVr2owj8iMmabYhLsxowj8iMmaaOhCtjowj8iMmaZig9uAowj8iMmaZgg8uEowj8iMmabLg8uEowj8iMmad7g8uEowj8iMmagFg8uEowj8iMmah_g8uEowj8iMmajkg8uEowj8iMmak0g8uEowj8iMmalvg8uEowj8iMmamWg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj-iMmZmhg8uEowkLiNmQlvg8uEovkjiPl8kjg8uEotlBiSlfjFg8uEoqliiVk3hog8uEonmCiZkGggg8tYojmcidjMgBg8q5ofmvihiLgAg8osobm3imhJgAg8meoXm2iqgHgAg8kdoTmsivfLgAg8isoQmbizeWgAg8hUoNmIi3drgAg8gYoKl3i7dMgAg8gBoJlqi9c4gAg8gAoIlkjAcvgAg8gAoIlfjBcpgAg8gAoIldjCcmgAg8gAoIlbjDckgAg8gAoIlbjDcjgAg8gAoIlbjDcjgAg8gAoI"},"dolly":{"label":"DOLLY","n":49,"in":"iqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSf5htpxpEirh9oRfZhqqGpEirh9oReshmqkpEirh9oQd0hhrKpEish9oQc1hbrzpEish9oPb2hVsdpEith9oOa-hPtEpEith9oNaGhLtkpEiuh9oMZxhHt7pEivh9oLamhGuEpEiwh9oJcxhGuEpEiyh9oIfLhGuEpEizh9oGhDhGuEpEi1h9oEishGuEpEi3h9oBkDhGuEpEi5h9n-lHhGuEpEi7h9n8l6hGuEpEi9h9n4mdhGuEpEjAh9n1mkhGuEpEjDh9nxmkhGuEpEjGh9ntmkhGuEpEjJh9nomjhGuEpEjNh9nhmUhGuEpDjSh9nYluhGuEpCjXh9nLk6hGuEpBjch8m8j9hGuEo_jih8mri6hGuEo8joh8mYh4hGuEo6juh7mDg_hGt2o3j0h7lsgVhGs0o0j6h7lUgChGrLoxkAh6k6gAhGpmoukGh6kfgAhGoCorkLh6kDgAhGmgookQh5jngAhGlFolkVh5jKgAhGjwojkZh5isgAhGilohkch4iOgAhGhmofkfh4hwgAhGg0oekhh4hSgAhGgRodkih4g1gAhGgCockih4gYgAhGgAockih4gKgAhGgAoc","out":"kih4eIgAhupsockih4eIgAhupsockih4eIgAhupsockih4eIgAhupsockih4eJgAhupsockih4eJgAhtpfockih4eKgAhpoiockih4eLgAhjnIockih4eMgAhclcockih4eOgAhVjrockih4eQgAhOiDockih4eSgAhJgyockih4eWgAhGgGockih4eZgAhGgAockih4efgAhGgEockih4e2gAhGgUodkih4ffgAhGgxofkih5gXgAhGhaojkih5hagAhGiPonkih6ikgAhGjQorkih7jwgAhGkUowkih7k9gAhGlXo0kih8mFgAhGmao5kih8nFgAhGneo9kih9n5gAhGohpBkih9oegAhGpkpDkih9ovgAhGqopEkih9oxgFhGrrpEkih9oygVhGsqpEkih9ozgvhGtxpEkhh9o0hThGuEpEkhh9o1h-hGuEpEkgh9o2iyhGuEpEkgh9o3jshGuEpEkfh9o3kqhGuEpEkeh9o4lthGuEpEkeh9o4mfhGuEpEkdh9o5mkhGuEpEkch9o5mkhGuEpEkch9o5mkhGuEpEkbh9o6mkhGuEpEkah9o6mkhGuEpEkah9o6mkhGuEpEkZh9o6mkhGuEpEkZh9o6mkhGuEpEkZh9o6mkhGuEpEkYh9o6mkhGuEpEkYh9o6mkhGuEpEkYh9o6mkhGuEpE","home":"iqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSf8hupupEiqh9oSfShqqLpEiqh9oSeKhjq7pEiqh9oRcxhar2pEirh9oRbYhSsxpEirh9oRaOhLtjpEirh9oQZihHuApEish9oPZghGuEpEish9oPbLhGuEpEith9oOd7hGuEpEiuh9oNgFhGuEpEivh9oMh_hGuEpEiwh9oKjkhGuEpEixh9oJk0hGuEpEiyh9oHlvhGuEpEi0h9oFmWhGuEpEi2h9oDmkhGuEpEi3h9oAmkhGuEpEi5h9n-mkhGuEpEi8h9n7mkhGuEpEi-h9n3mkhGuEpEjBh9n0mkhGuEpEjDh9nwmkhGuEpEjGh9nsmkhGuEpEjKh9nmmhhGuEpEjPh9nXlvhGuEpDjVh9nAkjhGuEpAjdh8mgjFhGuEo9jmh8l7hohGuEo5jvh7lRgghGtYo1j4h7klgBhGq5oxkBh6j4gAhGososkKh6jLgAhGmeookRh5iggAhGkdokkYh5h5gAhGisohkdh4hXgAhGhUoekhh4g8gAhGgYodkih4gpgAhGgBockih4gegAhGgAockih4gVgAhGgAockih4gQgAhGgAockih4gMgAhGgAockih4gLgAhGgAockih4gKgAhGgAockih4gKgAhGgAoc"},"rear":{"label":"REAR TRACK","n":49,"in":"fEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0f5htpxoIfEiCY0fZhrqGoIfEiCY0eshnqkoIfEiCY0d0hirKoIfEiCY0c1hdrzoIfEiCY0b2hYsdoIfEiCY0a-hTtEoIfEiCY0aGhPtkoIfEiCY0ZxhMt7oIfEiCY0amhLuEoIfEiCY0cxhLuEoIfEiCY0fLhLuEoIfEiCY0hDhLuEoIfEiCY0ishLuEoIfEiCY0kDhLuEoIfEiCY0lHhLuEoIfEiCY0l6hLuEoIfEiCY0mdhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mjhLuEoIfEiCYzmUhLuEoHfDiDYxluhLuEoEfCiEYuk6hLuEoBfAiGYqj9hLuEn9e_iIYmi6hLuEn4e9iKYgh4hLuEnye7iMYag_hLt2nse5iPYUgVhLs0nme2iSYNgChLrLnge0iWYGgAhLpmnaeyiZX_gAhLoCnUewidX4gAhLmgnPetihXwgAhLlFnKesilXpgAhLjwnFeqiqXigAhLilnBeoiuXbgAhLhmm-enizXUgAhLg0m7emi3XOgAhLgRm5emi8XIgAhLgCm4emjBXDgAhLgAm4emjDXBgAhLgAm4","out":"ewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhtpfnMewi0XRgAhqoinMewi0XRgAhlnInMewi0XSgAhflcnMewi0XTgAhYjrnMewi0XUgAhSiDnMewi0XVgAhOgynMewi0XXgAhLgGnMewi0XZgAhLgAnMewi0XdgAhLgEnMeyixX0gAhLgUnPe0isYggAhLgxnUe4ilZcgAhLhance9icalgAhLiPnmfDiTb1gAhLjQnxfJiJdJgAhLkUn9fPh_edgAhLlXoKfUh2fsgAhLmaoWfZhvgygAhLneohfdhphqgAhLohopfhhliRgAhLpkovfihkijgAhLqoowfkhkitgFhLrrowflhki2gVhLsqowfmhli-gvhLtxowfnhljGhThLuEowfohljMh-hLuEowfohmjSiyhLuEowfphmjXjshLuEowfqhnjckqhLuEowfqhojglthLuEowfqhojjmfhLuEowfrhpjmmkhLuEowfrhqjpmkhLuEowfrhqjrmkhLuEowfshrjsmkhLuEowfshsjumkhLuEowfshsjumkhLuEowfshtjvmkhLuEowfshtjwmkhLuEowfshujwmkhLuEowfshujwmkhLuEowfshujwmkhLuEowfshujwmkhLuEow","home":"fEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0f8hupuoIfEiCY0fShqqLoIfEiCY0eKhkq7oIfEiCY0cxhdr2oIfEiCY0bYhVsxoIfEiCY0aOhPtjoIfEiCY0ZihMuAoIfEiCY0ZghLuEoIfEiCY0bLhLuEoIfEiCY0d7hLuEoIfEiCY0gFhLuEoIfEiCY0h_hLuEoIfEiCY0jkhLuEoIfEiCY0k0hLuEoIfEiCY0lvhLuEoIfEiCY0mWhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mhhLuEoIfDiEYxlvhLuEoFfBiHYrkjhLuEoAe_iKYjjFhLuEn5e8iPYahohLuEnxe5iVYPgghLtYnoe2ibYEgBhLq5nfezihX4gAhLosnXevinXtgAhLmenPetitXigAhLkdnHeqiyXYgAhLisnBeoi3XQgAhLhUm8eni7XKgAhLgYm5emi-XGgAhLgBm4emjAXEgAhLgAm4emjBXDgAhLgAm4emjCXCgAhLgAm4emjDXBgAhLgAm4emjDXBgAhLgAm4emjDXBgAhLgAm4emjDXBgAhLgAm4"}};
-  // @blender-rigs:end
+  // @blender-rigs-index:start
+  // tools/gen/blender/garage-camera-rigs.py: each rig's label and sample count; the samples are js/garage/garage-data.js (lazy).
+  const RIGS = {"crane":{"label":"CRANE","n":49},"orbit":{"label":"ORBIT","n":49},"dolly":{"label":"DOLLY","n":49},"rear":{"label":"REAR TRACK","n":49}};
+  // @blender-rigs-index:end
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-  for (const rig of Object.values(RIGS)) for (const d of ["in", "out", "home"]) {
-    const s = rig[d];
-    if (typeof s !== "string") continue;
-    const a = rig[d] = new Array(s.length / 2);
-    for (let i = 0; i < a.length; i++) a[i] = B64.indexOf(s[2 * i]) * 64 + B64.indexOf(s[2 * i + 1]) - 2048;
+  // The samples ride js/garage/garage-data.js (LAZY_RACE), unpacked on first use. Until it lands a
+  // rig is not ready (null) and its angle plays the "cut" cameras (shotsFor's fallback).
+  const _rigs = {};
+  function rigData(id) {
+    if (typeof id !== "string" || !Object.prototype.hasOwnProperty.call(RIGS, id)) return null;
+    if (_rigs[id]) return _rigs[id];
+    const src = typeof GarageData !== "undefined" && GarageData.RIGS ? GarageData.RIGS[id] : null;
+    if (!src) return null;
+    const rig = { label: src.label, n: src.n };
+    for (const d of ["in", "out", "home"]) {
+      const s = src[d];
+      if (typeof s !== "string") continue;
+      const a = rig[d] = new Array(s.length / 2);
+      for (let i = 0; i < a.length; i++) a[i] = B64.indexOf(s[2 * i]) * 64 + B64.indexOf(s[2 * i + 1]) - 2048;
+    }
+    return (_rigs[id] = rig);
   }
   /* MOVING RIGS (tools/gen/blender/garage-camera-rigs.py): Blender cameras whose eye, aim and fov are
    * sampled at RIGS[id].n points of a sequence's progress u = t / duration (0..1; a missing dir falls
@@ -376,7 +388,7 @@ const GarageArrival = (function () {
   const RIG_LABEL = Object.freeze(Object.fromEntries(RIG_IDS.map((id) => [id, RIGS[id].label])));
   const ALL_ANGLES = Object.freeze(ANGLES.concat(RIG_IDS));   // GARAGE ANGLE: presets, then the Blender rigs
   function rigSample(id, dir, u, side = 1) {
-    const rig = typeof id === "string" && Object.prototype.hasOwnProperty.call(RIGS, id) ? RIGS[id] : null;
+    const rig = rigData(id);
     if (!rig) return null;
     const s = rig[dir] || rig.in, n = rig.n, f = Math.max(0, Math.min(1, Number.isFinite(u) ? u : 0)) * (n - 1);
     const i = Math.min(n - 2, Math.floor(f)), k = f - i, m = side < 0 ? -1 : 1, v = [0, 0, 0, 0, 0, 0, 0];
@@ -463,7 +475,7 @@ const GarageArrival = (function () {
   }
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
-    const rig = RIGS[config.angle] ? config.angle : null;
+    const rig = rigData(config.angle) ? config.angle : null;
     const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
     const n = t < T.door ? 0 : t < s2 ? 1 : 2, cam = cams[n];
     const look = { config, last: n === 2, k: n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2) };
@@ -582,7 +594,7 @@ const GarageArrival = (function () {
   function poseOut(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, "out"), end = duration(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
-    const rig = RIGS[config.angle] ? config.angle : null;
+    const rig = rigData(config.angle) ? config.angle : null;
     const cams = shotsFor(config, "out"), side = rig ? 1 : sideFor(cams[1]);
     const opening = t < T.door;
     const d = outDistance(Math.min(t, settle) - go, Object.assign({}, T, { settle: T.run + OUT_EXIT_M / T.v }));

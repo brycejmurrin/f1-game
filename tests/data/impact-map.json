@@ -5072,7 +5072,11 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "ensureGarageData": [
+        "tests/unit/data-lazy-loader.test.mjs"
+      ],
       "ensureLightPresets": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureNet": [
@@ -7632,6 +7636,9 @@
       "resultKind": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "rigData": [
+        "tests/unit/garage-camera-rigs.test.mjs"
+      ],
       "rigSample": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-camera-rigs.test.mjs"
@@ -7763,6 +7770,14 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
+      ]
+    },
+    "js/garage/garage-data.js": {
+      "*": [
+        "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-camera-rigs.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/livery-design-editor.js": {

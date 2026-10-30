@@ -23,29 +23,31 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const FILES = ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js",
-  "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/crew-choreo.js", "js/garage/scene-crew.js", "js/garage/pit-crew.js", "js/garage/arrival.js"];
-function load(extra = {}) {
+  "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/garage-data.js", "js/garage/crew-choreo.js", "js/garage/scene-crew.js", "js/garage/pit-crew.js", "js/garage/arrival.js"];
+function load(extra = {}, files = FILES) {
   const draws = [], meshes = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length }; meshes.push(mesh); return mesh; }, freeMesh() {}, draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, WeakMap, Map, String, Log: { info() {}, warn() {} }, ...extra });
-  for (const f of FILES) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of files) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const get = (n) => vm.runInContext(n, ctx, { filename: "garage-crew-choreo:get" });
   get("GarageCrew").init(gfx);
-  return { Choreo: get("GarageCrewChoreo"), Crew: get("GarageCrew"), Arrival: get("GarageArrival"), Pit: get("PitCrewAnim"), gfx, draws, meshes };
+  // CLIPS: the lazy key tables (js/garage/garage-data.js) when loaded, the eager index's entries otherwise.
+  const Data = get("typeof GarageData !== 'undefined' ? GarageData : null");
+  return { Choreo: get("GarageCrewChoreo"), Data, CLIPS: Data ? Data.CLIPS : {}, Crew: get("GarageCrew"), Arrival: get("GarageArrival"), Pit: get("PitCrewAnim"), gfx, draws, meshes };
 }
 
 test("runtime key tables match the current Blender authoring source", () => {
   const digest = createHash("sha256").update(read("tools/gen/blender/crew-choreo.py")).digest("hex");
-  assert.ok(read("js/garage/crew-choreo.js").includes("Source SHA256: " + digest),
+  assert.ok(read("js/garage/garage-data.js").includes("Source SHA256: " + digest),
     "regenerate: blender -b --python tools/gen/blender/crew-choreo.py -- --output-dir artifacts/crew-choreo --write-runtime");
 });
 
 test("three or more new crews each way, a pit clip, and well-formed key tables", () => {
-  const { Choreo } = load();
+  const { Choreo, CLIPS } = load();
   assert.ok(Choreo.IDS.in.length >= 3, "enter variants: " + Choreo.IDS.in);
   assert.ok(Choreo.IDS.out.length >= 3, "leave variants: " + Choreo.IDS.out);
   assert.deepEqual(Array.from(Choreo.IDS.pit), ["pit"]);
-  for (const [id, clip] of Object.entries(Choreo.CLIPS)) {
+  for (const [id, clip] of Object.entries(CLIPS)) {
     assert.ok(clip.actors.length > 0 && clip.len > 0 && clip.label, id);
     for (const a of clip.actors) for (const [k, keys] of Object.entries(a.ch)) {
       assert.ok(keys.length >= 2 && keys.length % 2 === 0, `${id}.${k}`);
@@ -160,9 +162,9 @@ const RESULT_CREWS = { celebrate: "win", applause: "podium", recover: "dnf", con
 // Horizontal metres from an eye to a body standing at (x, z), the body a 0-1.8 m upright segment.
 const eyeGap = (e, x, z) => Math.hypot(e[0] - x, e[2] - z, Math.max(0, e[1] - 1.8));
 test("AFTER THE RACE crews: in-direction, result-timed, inside the bay, off the car and clear of every eye", () => {
-  const { Arrival, Choreo } = load(), out = Choreo.actors(12);
+  const { Arrival, Choreo, CLIPS } = load(), out = Choreo.actors(12);
   for (const [id, result] of Object.entries(RESULT_CREWS)) {
-    const clip = Choreo.CLIPS[id];
+    const clip = CLIPS[id];
     assert.ok(clip && clip.dir === "in" && clip.result === result && clip.mix === false && clip.label, id);
     assert.ok(Choreo.IDS.in.includes(id), `${id} reads through the "in" path`);
     for (const angle of ["left", "right", "cut"]) {
@@ -261,13 +263,13 @@ test("without the garage modules the stop falls back to the static crew", () => 
 });
 
 test("the garage draws a Blender crew without rebuilding meshes mid-playback", () => {
-  const { Crew, Arrival, Choreo, draws, meshes } = load();
+  const { Crew, Arrival, Choreo, CLIPS, draws, meshes } = load();
   for (const d of ["in", "out"]) for (const id of Choreo.IDS[d]) {
     const r = Choreo.CLIPS[id].result, dir = r ? "home" : d;   // a result clip plays after the race
     const cfg = Arrival.settings(r ? { homeCrew: id, result: r } : { [d === "in" ? "enterCrew" : "leaveCrew"]: id }), end = Arrival.duration(cfg, dir);
     const pose = (t) => Arrival.poseFor(dir)(t, cfg, false);
     draws.length = 0; Crew.draw({ c1: [1, 0, 0], c2: [1, 1, 1] }, [-3, 2, -4], pose(0.5), {});
-    assert.ok(draws.length > 12 * Choreo.CLIPS[id].actors.length, `${id}: every member drawn`);
+    assert.ok(draws.length > 12 * CLIPS[id].actors.length, `${id}: every member drawn`);
     const n = meshes.length;
     for (let t = 0; t < end; t += 0.5) Crew.draw({ c1: [1, 0, 0], c2: [1, 1, 1] }, [-3, 2, -4], pose(t), {});
     assert.equal(meshes.length, n, `${id}: no mesh built during playback`);
@@ -306,4 +308,28 @@ test("Blender camera rigs keep clear of every result crew without snapping (crew
       prev = p.eye.slice();
     }
   }
+});
+
+// LAZY: the key tables ride js/garage/garage-data.js (LAZY_RACE); the index stays in crew-choreo.js.
+test("lazy key tables: the index lists every clip at boot, and until the tables land the shipped crews play", () => {
+  const { Choreo, Arrival, Pit } = load({}, FILES.filter((f) => f !== "js/garage/garage-data.js"));
+  assert.deepEqual([...Choreo.IDS.in, ...Choreo.IDS.out, ...Choreo.IDS.pit].sort(), Object.keys(Choreo.CLIPS).sort(), "every clip is pickable");
+  assert.equal(Choreo.label("marshal"), "MARSHAL CREW");
+  assert.equal(Choreo.has("marshal"), false); assert.equal(Choreo.extra("marshal"), 0); assert.equal(Choreo.sample("marshal", 1), 0);
+  for (const dir of ["in", "out"]) {
+    const key = dir === "out" ? "leaveCrew" : "enterCrew";
+    for (const id of Choreo.IDS[dir].filter((x) => !Choreo.CLIPS[x].result)) {   // result crews are AFTER THE RACE's
+      const c = Arrival.settings({ [key]: id });
+      assert.equal(c[key], id, "a saved Blender crew survives boot");
+      assert.equal(Arrival.poseFor(dir)(1, c, false).crew, "current", id + " plays the shipped crew until the tables land");
+      assert.equal(Arrival.duration(c, dir), Arrival.duration(Arrival.settings({ [key]: "current" }), dir), id + " keeps the shipped timing");
+    }
+  }
+  assert.notEqual(Arrival.poseFor("home")(1, Arrival.settings({ result: "win" }), false).crew, "celebrate", "a result crew waits for its tables");
+  const G = { gfx: {}, pits: { stopAnim: () => ({ u: 0.5 }) } };
+  assert.equal(Pit.draw(G, { isPlayer: true, pitState: "box" }, new Float32Array(16)), false, "the in-race stop keeps the static crew mesh");
+  const index = JSON.parse(read("js/garage/crew-choreo.js").split("// @blender-choreo-index:start")[1].split("const CLIPS = ")[1].split(";\n")[0]);
+  const data = load().Choreo, full = JSON.parse(read("js/garage/garage-data.js").split("// @blender-choreo:start")[1].split("const CLIPS = ")[1].split(";\n")[0]);
+  assert.deepEqual(index, Object.fromEntries(Object.entries(full).map(([id, c]) => { const { actors, ...rest } = c; return [id, rest]; })), "rerun crew-choreo.py --write-runtime");
+  assert.ok(data.has("marshal"));
 });

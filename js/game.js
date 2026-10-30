@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2740,7 +2740,7 @@ const _customTrackStarts = new WeakSet();
 // Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
 // startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
 // LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
-function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
+function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -8911,7 +8911,7 @@ function openSettings() {
   // LAZY_AUDIO: kick ensureAudio but reveal Settings sync — awaiting the
   // ~449 KB bundle before #pmsettings unhides broke ui-scale (probe ~400ms
   // after mb-settings click). MUSIC & SOUND waits in settings-tabs.js.
-  ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
+  ensureAudio(); ensureGarageData(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown; GARAGE ENTER & LEAVE previews the Blender rigs
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
   // showModal() runs after the hidden flip; defer so hub focus beats the dialog's
@@ -9078,7 +9078,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  loadingScreen.stop(); garagePre.markOpen(from);   // stale busy/prep plate (z 36) must not cover #carsetup
+  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
