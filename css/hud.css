@@ -2102,6 +2102,10 @@ body.lt-open .touchbtn { display: none !important; }
   background: var(--hc-hud-plate);
   outline: 1px solid var(--hc-hud-line);   /* outline leaves the inset team stripe intact */
 }
+/* …except the timing strip's POS cell, which keeps its light plate: its ink is --hud-ink-dark
+   (design pass 2a), and the solid dark plate above (#announce in :is() outranks the POS rule)
+   painted the player's rank dark on dark (Bryce, iPhone, 2026-10-30). */
+:root[data-ui-contrast="high"] body:not(.hud-prof-broadcast) #hud-box-pos { background: var(--hud-ink-light); }
 @media (forced-colors: active) { .hud-box { --hud-box-stripe: 0px; } } /* tokens.css supplies the system border */
 /* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
    A REAL RACE WATCH / HIGHLIGHTS run (body.bc-on). The picture is a
