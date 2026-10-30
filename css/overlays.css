@@ -1187,10 +1187,10 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
    Here, not touch-controls.css: that sheet sits on the eager critical-path
    budget, and this one loads after it in the same layer, so a :root-scoped
    rule wins without !important. */
-:root[data-btn-shape="round"] .touchbtn.pedal { border-radius: 50%; }
+:root[data-btn-shape="round"] :is(#btn-throttle, #btn-brake) { border-radius: 50%; }
 :root[data-btn-shape="squircle"] .touchbtn { border-radius: 28%; }
 :root[data-btn-shape="square"] .touchbtn { border-radius: 12%; }
-:root[data-btn-shape="square"] .dock-grp#grp-steer { border-radius: var(--r-md); }
+:root[data-btn-shape="square"] #hud-dock #grp-steer { border-radius: var(--r-md); }
 
 } /* @layer overlays */
 

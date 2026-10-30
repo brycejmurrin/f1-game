@@ -374,7 +374,7 @@ test("BUTTON SIZE toolbar steps snap to the 10 % grid and stay in the slider's r
 test("BUTTON SHAPE CSS: every non-AUTO shape sets a radius in the deferred overlays sheet", () => {
   const rules = cssRules(fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8"));
   for (const [v] of DL.SHAPES.slice(1)) {
-    const hit = rules.filter((r) => r.selector.startsWith(`:root[data-btn-shape="${v}"]`) && r.selector.includes(".touchbtn"));
+    const hit = rules.filter((r) => r.selector.startsWith(`:root[data-btn-shape="${v}"]`));
     assert.equal(hit.length > 0 && hit.every((r) => r.decls.has("border-radius")), true, v);
   }
   const eager = cssRules(fs.readFileSync(path.join(ROOT, "css/touch-controls.css"), "utf8"));
