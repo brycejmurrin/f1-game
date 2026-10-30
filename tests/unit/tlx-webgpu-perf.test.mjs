@@ -14,7 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parse } from "acorn";
+import { vendorModule, bindImports } from "../helpers/vendor-class.mjs";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -24,30 +24,26 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-const VENDOR = "vendor/three-0.186.1/three.webgpu.min.js";
+const VENDOR = "vendor/three-0.187.0/three.webgpu.min.js";
 const THREE = await import(pathToFileURL(path.join(ROOT, VENDOR)).href);
+const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-fx.js",
   "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
-// The actual generated WebGPUAttributeUtils (webgpu-uint16-index.test.mjs's extraction) over a byte-model queue.
-const source = read(VENDOR);
-const ast = parse(source, { ecmaVersion: "latest", sourceType: "module" });
-const cls = ast.body.find((n) => n.type === "ClassDeclaration" && n.body.body.some((m) => m.key.name === "createShaderVertexBuffers"));
-const code = source.slice(cls.start, cls.end);
+// The actual generated WebGPUAttributeUtils (and the module-level writeBufferAligned r187 calls) over a byte-model queue.
+const vmod = vendorModule(read(VENDOR));
+const { code: utilsCode, imports: utilsImports } = vmod.closure([vmod.classWith("createAttribute", "updateAttribute", "getVertexBufferLayout")]);
 const uctx = { Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float32Array,
-  GPUBufferUsage: { INDEX: 16, VERTEX: 32, STORAGE: 128 } };
-for (const n of ast.body) if (n.type === "ImportDeclaration") for (const s of n.specifiers)
-  if (s.imported && s.imported.name in THREE) uctx[s.local.name] = THREE[s.imported.name];
-uctx[/([\w$]+)\.mappedAtCreation=/.exec(code)[1]] = { reset() {} };
-uctx[/const e=([\w$]+)\(a\),r=e\?1:a\.BYTES_PER_ELEMENT/.exec(code)?.[1] || "ss"] = (a) => ArrayBuffer.isView(a);   // a typed array: ranges in elements
-const AttributeUtils = vm.runInNewContext(`${code};${cls.id.name}`, uctx, { filename: absSrc(VENDOR) });
+  GPUBufferUsage: { INDEX: 16, VERTEX: 32, STORAGE: 128 }, ...bindImports(utilsImports, THREE, CORE) };
+const AttributeUtils = vm.runInNewContext(`${utilsCode};${vmod.classWith("createAttribute", "updateAttribute", "getVertexBufferLayout").id.name}`, uctx, { filename: absSrc(VENDOR) });
 function gpu() {
   const data = new WeakMap(), bufs = new Map();
   const backend = {
     get(a) { if (!data.has(a)) data.set(a, {}); return data.get(a); },
+    getBufferAttribute: (a) => (a.isInterleavedBufferAttribute ? a.data : a),   // r187 WebGPUBackend
     device: {
       createBuffer(d) { const bytes = new Uint8Array(d.size); return { bytes, getMappedRange: () => bytes.buffer, unmap() {}, destroy() {} }; },
       queue: { writeBuffer(b, off, arr, start = 0, count = arr.length - start) {

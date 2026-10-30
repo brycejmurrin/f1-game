@@ -14921,6 +14921,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "drawWarm": [
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "ensureGR": [
