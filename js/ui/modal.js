@@ -332,13 +332,21 @@ window.TopModal = (function () {
   function onLayerShow(layer) {
     shieldLayer(layer);
     const a = document.activeElement;
-    if (a && a !== document.body && !inside(layer, a) && !(parked && layer.contains(parked))) parked = null;   // the player moved on
     // The app may have placed focus itself (GARAGE, PRACTICE) before this
     // callback: still remember the control it came from, or close dropped
     // focus on <body> (UI hunt 2026-10-29 #4).
-    if (inside(layer, a)) { opener.set(layer, recentOutside(layer)); return; }
+    if (inside(layer, a)) {
+      const from = recentOutside(layer);
+      opener.set(layer, from);
+      // ...and tell the screen it left where to come back to. The GARAGE
+      // focuses inside before the title hides, so the title never saw its
+      // door focused; when a RETURNING plate sits between close and title,
+      // the title's own show restores focus from this, not from <body>.
+      const home = from && homeLayer(from);
+      if (home && home !== layer) lastFocus.set(home, from);
+      return;
+    }
     opener.set(layer, connected(a) && a !== document.body ? a : null);
-    if ((!a || a === document.body) && parked && layer.contains(parked)) return;   // taken once un-inerted, below
     const back = lastFocus.get(layer);
     const target = (connected(back) && layer.contains(back) && usable(back)) ? back : landing(layer);
     if (target) focusQuiet(target);
@@ -353,6 +361,11 @@ window.TopModal = (function () {
       if (trail.length > 6) trail.shift();
     }
   }
+  function homeLayer(el) {
+    const ids = (window.UiLayers && window.UiLayers.LAYER_IDS) || [];
+    for (let p = el.parentElement; p; p = p.parentElement) if (p.id && ids.indexOf(p.id) >= 0) return p;
+    return null;
+  }
   function recentOutside(layer) {
     for (let i = trail.length - 1; i >= 0; i--) {
       if (connected(trail[i]) && !layer.contains(trail[i])) return trail[i];
@@ -365,26 +378,19 @@ window.TopModal = (function () {
     if (inside(layer, a)) lastFocus.set(layer, a);
     const back = opener.get(layer);
     opener.delete(layer);
-    if (!connected(back)) return;
-    if (a && a !== document.body && !layer.contains(a)) return;   // something else took focus
     const top = window.UiLayers && window.UiLayers.top ? window.UiLayers.top() : null;
-    // The GARAGE closes behind the loading plate and shows the title a beat
-    // later (MenuTeardown.deferUi): the opener's screen is not up yet, so
-    // park it for that screen's show instead of dropping it (UI hunt 3:
-    // Escape from the Garage left focus on <body> at 1280×800).
-    // The FIRST park holds: the plate's own opener (the garage control it
-    // covered) hides next and must not replace the door the player came from.
-    if (!usable(back) || (top && !top.contains(back))) { if (!connected(parked)) parked = back; return; }
+    if (!connected(back) || !usable(back)) {
+      // Its opener's screen is gone (a race started, or a RETURNING plate
+      // opened from inside the GARAGE). If focus fell to <body>, hand it to
+      // what the layer now on top remembers: the title's own show could not,
+      // because the plate was still modal when the title came back.
+      const mem = top && lastFocus.get(top);
+      if ((!a || a === document.body) && connected(mem) && top.contains(mem) && usable(mem)) focusQuiet(mem);
+      return;
+    }
+    if (a && a !== document.body && !layer.contains(a)) return;   // something else took focus
+    if (top && !top.contains(back)) return;             // another layer owns the keys now
     focusQuiet(back);
-  }
-  let parked = null;
-  function takeParked(layer) {
-    const p = parked, a = document.activeElement;
-    if (!p || !layer.contains(p) || (a && a !== document.body)) return false;
-    parked = null;
-    if (!usable(p)) return false;
-    focusQuiet(p);
-    return true;
   }
 
   // Tabbing past a layer's last control can focus browser chrome, or park a
@@ -410,7 +416,7 @@ window.TopModal = (function () {
       // Hide: un-inert the title BEFORE onLayerHide refocuses the opener there
       // (focus() on an inert node is a no-op). Show: record the opener first —
       // inerting #overlay while it holds focus would blur it to <body>.
-      if (el.hidden) { syncMenuIsolation(); onLayerHide(el); } else { onLayerShow(el); syncMenuIsolation(); takeParked(el); }
+      if (el.hidden) { syncMenuIsolation(); onLayerHide(el); } else { onLayerShow(el); syncMenuIsolation(); }
     })
       .observe(el, { attributes: true, attributeFilter: ["hidden"] });
   }

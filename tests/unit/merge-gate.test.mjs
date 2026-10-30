@@ -566,7 +566,7 @@ function ghExpr(src, github) {
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
   const on = LAND.on;
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
-  assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened"], branches: [DEPLOY_BRANCH] });
+  assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened", "edited"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
   assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
   assert.equal(on.repository_dispatch, undefined);
@@ -575,7 +575,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 });
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
-  assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry"]);
+  assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry", "sweep"]);
   assert.deepEqual(jobsWhere(usesSecret), ["post", "arm", "sync"]);
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
@@ -653,11 +653,12 @@ function runStep(script, env, files = {}) {
     `    *" --method PUT "*) echo "token=\${GH_TOKEN:-}" >> "$GH_LOG"`,
     `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
-    `    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
+    `    *"/issues/"*"/comments"*) data=\${FAKE_COMMENTS:-[]} ;;`,
+`    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
     `    *"/branches/"*) if [ "$(grep -c '/branches/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}"; else echo "\${NOW_TIP:-}"; fi; return 0 ;;`,
     `    *" pr merge "*) [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
-    `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
+        `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
     `    *) data=\${FAKE_PR:-'{}'}`,
@@ -1023,4 +1024,73 @@ test("land.yml sync step: budget = SYNC_MAX minus the land PRs already in CI; LA
 
   r = runStep(run, env({ PAUSED: "true" }));
   assert.deepEqual(tried(r), [], "merge-pause re-read at the act");
+});
+
+// ---- 2026-10-30 landing gaps: edited body, draft + land, the stale-gate sweep, ship-pr --------------------------
+
+test("land.yml edited: only a BODY edit on a `land` PR re-gates; a title edit runs alone in a noise group and resolve skips it", () => {
+  const prt = (action, changes, labels = ["land"]) => ({ event_name: "pull_request_target", run_id: 99,
+    event: { action, changes, pull_request: { number: 7, labels: labels.map((name) => ({ name })) } } });
+  assert.ok(ghExpr(LAND.jobs.resolve.if, prt("edited", { body: { from: "x" } })), "a body edit re-gates");
+  assert.ok(!ghExpr(LAND.jobs.resolve.if, prt("edited", { title: { from: "x" } })), "a title edit does not");
+  assert.ok(!ghExpr(LAND.jobs.resolve.if, prt("edited", { body: { from: "x" } }, [])), "a PR without `land` is not re-gated by an edit");
+  const group = (github) => ghExpr(LAND.concurrency.group, github);
+  assert.equal(group(prt("edited", { title: { from: "x" } })), "land-noise-99", "a title edit never cancels the PR's evaluation");
+  assert.equal(group(prt("edited", { body: { from: "x" } })), "land-7");
+  assert.equal(ghExpr(LAND.concurrency.group, { event_name: "schedule", run_id: 4, event: {} }), "land-stale-sweep");
+});
+
+test("land.yml post: `land` on a draft writes a gate failure naming the flip, and comments once per head", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  const row = JSON.stringify([{ number: 7, head: HEAD7, why: "the PR is a draft", draft: true }]);
+  const env = (o = {}) => ({ GH_TOKEN: "t", DISARM_TOKEN: "t", PRS: "[]", NOTASKED: row, DISARM: "[]", PAUSED: "false", AT: "2026-10-30T10:00:05Z", TRUSTED: "[]", FAKE_PR: pr7({ draft: true }), ...o });
+  const bodies = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)));
+  let r = runStep(run, env());
+  assert.equal(r.status, 0, r.stderr);
+  const [status, comment] = bodies(r);
+  assert.equal(status.state, "failure");
+  const prefix = "= merge-gate not asked — draft: flip ready first — ready-gate, then update_pull_request draft:false";
+  assert.equal(status.description.slice(0, prefix.length), prefix);
+  assert.ok(status.description.length <= 140);
+  assert.equal(comment.body.split("\n")[0], `<!-- land-draft:${HEAD7} -->`);
+  r = runStep(run, env({ FAKE_COMMENTS: JSON.stringify([{ body: `<!-- land-draft:${HEAD7} -->\nold` }]) }));
+  assert.equal(bodies(r).length, 1, "the comment for this head already exists: only the status is written");
+  r = runStep(run, env({ NOTASKED: JSON.stringify([{ number: 7, head: HEAD7, why: "no `land` label", draft: false }]) }));
+  assert.equal(bodies(r).length, 0, "a plain not-asked PR with no gate status still posts nothing");
+});
+
+test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (or pending after it), bounded by STALE_MAX and RETRY_MAX", () => {
+  const job = LAND.jobs.sweep;
+  assert.deepEqual(job.permissions, { actions: "write", "pull-requests": "read", issues: "read", statuses: "read" });
+  assert.ok(!runsRepoCode(job) && !usesSecret(job), "no PR code, no secret");
+  assert.equal(ghExpr(job.if, { event_name: "schedule" }), true);
+  assert.equal(ghExpr(job.if, { event_name: "pull_request_target" }), false);
+  assert.ok(LAND.on.schedule[0].cron);
+  const run = job.steps[0].run;
+  const T = (m) => `2026-10-30T10:${String(m).padStart(2, "0")}:00Z`;
+  const lands = (n = 1) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ number: 7 + i, headRefOid: String(i + 1).repeat(40), isDraft: false, labels: [{ name: "land" }] })));
+  const ci = (o = {}) => JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", display_title: "CI", created_at: T(0), updated_at: T(30), ...o }] });
+  const st = (...a) => JSON.stringify(a.map(([state, m]) => ({ context: "gate", state, created_at: T(m) })));
+  const go = (env) => runStep(run, { FAKE_LANDS: lands(), FAKE_RUNS: ci(), FAKE_STATUSES: st(["pending", 20]), STALE_MAX: "4", ...env });
+  const dispatched = (r) => r.calls.filter((c) => c.includes("--method POST") && c.includes("land.yml/dispatches"));
+  let r = go({});
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(dispatched(r).length, 1, "gate older than CI: re-gated");
+  assert.equal(dispatched(r)[0], `gh api --method POST repos/o/r/actions/workflows/land.yml/dispatches -f ref=${DEPLOY_BRANCH} -f inputs[pr]=7 -f inputs[head]=${"1".repeat(40)} -f inputs[attempt]=0`);
+  const one = { number: 7, headRefOid: "1".repeat(40), isDraft: false, labels: [{ name: "land" }] };
+  const cases = [
+    [{ FAKE_STATUSES: st(["success", 40]) }, 0, "a gate newer than CI is current"],
+    [{ FAKE_STATUSES: st(["failure", 40]) }, 0, "a newer failure is a verdict, not stale"],
+    [{ FAKE_RUNS: ci({ status: "in_progress", conclusion: null }) }, 0, "CI still running: the gate is rightly waiting"],
+    [{ FAKE_RUNS: ci({ conclusion: "failure" }) }, 0, "no green CI: nothing to re-gate for"],
+    [{ FAKE_STATUSES: "[]" }, 1, "a land PR with no gate at all is re-gated"],
+    [{ FAKE_STATUSES: st(["pending", 31]) }, 0, "a gate written after CI is current until it has been pending 15 min"],
+    [{ FAKE_STATUSES: st(["failure", 33], ["pending", 32], ["pending", 31], ["pending", 20]) }, 0, "RETRY_MAX re-gates since CI finished spent the budget"],
+    [{ FAKE_LANDS: lands(6), STALE_MAX: "2" }, 2, "at most STALE_MAX per run"],
+    [{ PAUSED: "true" }, 0, "merge-pause: nothing"],
+    [{ FAKE_LANDS: JSON.stringify([{ ...one, isDraft: true }]) }, 0, "a draft is never swept"],
+    [{ FAKE_LANDS: JSON.stringify([{ ...one, labels: [{ name: "land" }, { name: "hold" }] }]) }, 0, "hold is never swept"],
+  ];
+  for (const [env, want, why] of cases) assert.equal(dispatched(go(env)).length, want, why);
+  assert.equal(go({ GH_POST_RC: "1" }).status, 0, "a failed dispatch warns, never fails the sweep");
 });

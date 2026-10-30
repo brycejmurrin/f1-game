@@ -64,6 +64,12 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
    red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
 
+   The route, in this order: `node tools/ci/ship-pr.mjs --pr <n>` (runs ready-gate; on a pass prints the next two calls),
+   the GitHub MCP `update_pull_request` with `draft:false` (the hook allows it within 10 min of the receipt; older: re-run
+   ready-gate), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`. `land` on a draft does nothing
+   until the flip (`gate` reads "draft: flip ready first", with one comment per head). Removing and re-adding `land`
+   re-gates a stale `gate` by hand; `land.yml` also re-gates on a PR-body edit and on a schedule (the stale-gate sweep).
+
    How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
    job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
    `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
@@ -213,8 +219,9 @@ arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and bin
   `subscribe_github_ci` (its branch) and `subscribe_github_pr` (the PR). A CI notification is not a new task. A red
   on its own head: fix it, at most 2 fix pushes. When CI is green or the cap is spent: refresh the Plan and Hand-off
   block, unsubscribe, stop. **Steward** (drives one existing PR to merge): subscribe at start, fix reds on its head,
-  run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, unsubscribe and stand down if the dispatcher
-  adopts the PR. Never sleep-poll, use timers or shell loops, and never comment on its own PR (it echoes back as a
+  run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, and stay subscribed until the PR merges or closes
+  (a passing ready-gate is not the end). Unsubscribe early only if the dispatcher adopts the PR, then stand down.
+  Never sleep-poll, use timers or shell loops, and never comment on its own PR (it echoes back as a
   wake). The Cursor token does not add labels, claim, post issue comments, or open issues. Put `run-ci`,
   `lane:cursor`, and `land` in the block's `next:` line; Bryce or a later Claude lane applies them. Symbols go
   through apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after the edit);

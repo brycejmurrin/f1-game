@@ -248,9 +248,9 @@ const SettingsSearch = (function () {
         return document.activeElement === target;
       },
       cancel() { fromSearch = false; clearFeedback(); },
-      // A fresh open starts unfiltered, as the circuit picker's menu door does;
-      // BACK and returnToSearch inside one session keep the query (UI hunt 3).
-      clear() { if (input.value) { input.value = ""; paint(); } },
+      // A fresh Settings session starts unfiltered (UI hunt 2026-10-29 #5);
+      // restore() still brings a result page BACK to the query within one.
+      reset() { fromSearch = false; clearFeedback(); if (input.value) { input.value = ""; paint(); } },
       dispose() { subscribers.delete(paint); clearFeedback(); box.remove(); },
       input,
     });

@@ -77,16 +77,14 @@ test("cancelled lazy audio search cannot steal the next category BACK target", a
   assert.equal(h.dom.document.activeElement, display);
   h.complete(); await tick(); await tick(); assert.equal(h.index.hidden, false); assert.equal(h.dom.document.activeElement, display);
 });
-// Product call (UI hunt 3, 2026-10-30): a fresh open starts unfiltered, the same
-// rule as the circuit picker's menu door (select-screen-fixes.test.mjs); BACK
-// inside one session still restores the query (the tests above).
-test("a fresh settings session cancels search-return ownership and clears the query", () => {
+test("a fresh settings session cancels search-return ownership and clears the query (UI hunt #5)", () => {
   const h = boot(), control = h.el("select", "pm-gears-sel", h.dom.document.querySelector("#pm-panel-controls")); control.value = "auto";
-  h.result("manual gears").onclick(); h.nav.showCurrent();
-  assert.equal(h.search.value, "", "a reopened sheet is unfiltered");
-  assert.equal([...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult).length, 0, "no stale result rows");
+  h.result("manual gears").onclick(); assert.ok(h.search.value); h.nav.showCurrent();
+  assert.equal(h.search.value, ""); assert.equal([...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult).length, 0, "reopened sheet is unfiltered");
   const display = h.dom.document.querySelector("#pm-open-display"); display.focus(); display.onclick(); h.nav.back();
   assert.equal(h.dom.document.activeElement, display); assert.equal(control.value, "auto");
+  const result = h.result("manual gears"); result.onclick(); h.nav.invalidate(); h.nav.returnToSearch();
+  assert.equal(h.search.value, "manual gears", "a result page's return (Race Settings) keeps the query");
 });
 test("Escape in a non-empty search clears the query and keeps the sheet; an empty field lets Escape through", () => {
   const h = boot();

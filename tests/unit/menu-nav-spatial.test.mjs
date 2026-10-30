@@ -260,23 +260,6 @@ test("step(): vertical wrap still uses the in-band edge, not an out-of-band item
   assert.equal(step(last, 0, 1, [top, mid, last, otherCol]).id, "bahrain");
 });
 
-// The Data Hub at 844×390: the ✕ sits top-right, above no tab's band, so Up
-// from the rail wrapped to the bottom and no arrow ever reached it (UI hunt 3).
-test("step(): ArrowUp off a tab rail reaches an out-of-band header close before the wrap", () => {
-  const { step } = loadMenuNav();
-  const tab = (id, left) => el(id, left, 60, 90, 32, { getAttribute: (k) => k === "role" ? "tab" : null });
-  const close = el("dh-close-btn", 790, 8, 44, 44);
-  const tabs = [tab("dh-tab-1", 20), tab("dh-tab-2", 120), tab("dh-tab-3", 220)];
-  const body = el("first-row", 20, 120, 400, 40), foot = el("foot", 20, 330, 400, 40);
-  const list = [close, ...tabs, body, foot];
-  assert.equal(step(tabs[0], 0, -1, list).id, "dh-close-btn", "Up from the first tab reaches the ✕");
-  assert.equal(step(tabs[2], 0, -1, list).id, "dh-close-btn");
-  assert.equal(step(tabs[1], 0, 1, list).id, "first-row", "Down is unchanged");
-  const plain = el("plain", 20, 60, 90, 32);
-  assert.equal(step(plain, 0, -1, [close, plain, body, foot]).id, "foot",
-    "a non-tab control keeps the in-band wrap (the Zandvoort trap stays shut)");
-});
-
 test("step(): chip-row Left/Right stay in-group until an end, then fall through", () => {
   const { step } = loadMenuNav();
   const a = el("chip-a", 40, 80, 48, 24);
@@ -347,30 +330,19 @@ test("step(): the pane's foot never beats an in-band successor, and Down from th
   assert.equal(step(back, 0, 1, [top, mid, last, back]).id, "first", "BACK (no pane) wraps as before");
 });
 
-// Career at 844×390 → 390×844: the pane re-flowed under a kept scrollTop and the
-// focused control sat outside it (UI hunt 3). One frame after a resize it is
-// scrolled back with block:"nearest"; focus outside the top layer is left alone.
-test("onResize: a rotation brings the focused control in the top layer back into view, once per frame", () => {
-  const frames = [];
-  const scrolled = [];
-  const focused = { scrollIntoView: (o) => scrolled.push(["in", o.block]) };
-  const outside = { scrollIntoView: () => scrolled.push(["out"]) };
-  const layer = { id: "career", contains: (n) => n === focused };
-  const doc = { readyState: "loading", addEventListener() {}, activeElement: focused, body: {} };
-  const ctx = {
-    document: doc, Log: { info() {} }, requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
-    getComputedStyle: () => ({ overflowY: "auto", overflowX: "hidden" }), addEventListener() {},
-  };
-  ctx.window = ctx;
-  ctx.UiLayers = { shown: () => true, top: () => layer };
-  vm.runInNewContext(SRC, ctx, { filename: path.resolve(SRC_PATH) });
-  const nav = ctx.MenuNav;
-  nav.onResize(); nav.onResize();
-  assert.equal(frames.length, 1, "a burst of resize events costs one frame");
-  frames.shift()();
-  assert.deepEqual(scrolled, [["in", "nearest"]]);
-  doc.activeElement = outside; nav.onResize(); frames.shift()();
-  assert.deepEqual(scrolled, [["in", "nearest"]], "focus outside the top layer is not touched");
+// UI hunt 2026-10-29 #10: the Data Hub's roving tab rail is one stop (the
+// selected tab, far left); the head's ✕ sits top-right in no tab's band.
+test("step(): Up from a tab rail reaches the sheet head's close, not the wrap to the bottom", () => {
+  const { step } = loadMenuNav();
+  const tab = (id, x) => el(id, x, 60, 110, 44, { getAttribute: (k) => (k === "role" ? "tab" : null) });
+  const close = el("dh-close-btn", 780, 8, 44, 44);
+  const schedule = tab("dh-tab-schedule", 14, 0), standings = tab("dh-tab-standings", 300, 0);
+  const row = el("row", 14, 130, 400, 40), foot = el("foot", 14, 340, 400, 40);
+  assert.equal(step(schedule, 0, -1, [close, schedule, row, foot]).id, "dh-close-btn");
+  assert.equal(step(standings, 0, -1, [close, standings, row, foot]).id, "dh-close-btn");
+  assert.equal(step(row, 0, -1, [close, schedule, row, foot]).id, "dh-tab-schedule", "content Up still lands on the rail");
+  const plain = el("plain", 14, 60, 110, 44);
+  assert.equal(step(plain, 0, -1, [close, plain, row, foot]).id, "foot", "a non-tab keeps the in-band wrap (Zandvoort trap)");
 });
 
 test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => {

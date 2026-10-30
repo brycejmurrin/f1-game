@@ -246,12 +246,20 @@ const TLX = (function () {
       // to three WebGL2 once any detected WebGPU failure (init throw, device
       // lost x3, early GPU errors, a refused tab) has happened here. The value
       // is the reason; RESET RENDERER (renderer-picker.js) removes it.
+      // The latch EXPIRES: stamped "<ms>|<Safari version>|<reason>", it holds 7 days and only
+      // on the WebKit build that failed. A Safari update is what usually fixes WebGPU, and an
+      // unstamped (older) latch re-probes once, so a phone is never parked on the slower
+      // WebGL2 leg for good by one bad boot (Bryce: "WebGL as a backup is slow").
+      const _webkitKey = (ua.match(/Version\/[\d.]+|OS \d+[_\d]*/g) || []).join(",");
       const _webkitStayGL = isWebKit && (function () {
-        try { return !!localStorage.getItem("apex26.tlxWebKitGL"); } catch (_) { return false; }
+        try {
+          const m = /^(\d+)\|([^|]*)\|/.exec(localStorage.getItem("apex26.tlxWebKitGL") || "");
+          return !!m && Date.now() - +m[1] < 7 * 864e5 && m[2] === _webkitKey;
+        } catch (_) { return false; }
       })();
       const _latchWebKitGL = (why) => {
         if (!isWebKit || _glPin === "0" || _glPin === "1") return;
-        try { localStorage.setItem("apex26.tlxWebKitGL", String(why).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
+        try { localStorage.setItem("apex26.tlxWebKitGL", (Date.now() + "|" + _webkitKey + "|" + String(why)).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
       };
       // Software WebGPU never composites a visible swapchain — AUTO keeps
       // three's WebGPU backend and 2D-blits the LDR target (same as WGX)
@@ -3911,6 +3919,9 @@ const TLX = (function () {
       }
 
       function pinSkyMaterial() {
+        // three's Background builds a mesh only for a background NODE; TLX keeps backgroundNode null (begin,
+        // drawSky, mirrorBegin) and a plain Color background, so every per-present call found nothing.
+        if (!scene.backgroundNode) return;
         try {
           const store = renderer._background;
           if (!store) return;
@@ -5720,7 +5731,7 @@ const TLX = (function () {
             }
             _poolShow();
             _hideUndrawnInstanced();
-            if (scene.backgroundNode) pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;

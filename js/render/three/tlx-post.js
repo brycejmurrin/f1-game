@@ -746,7 +746,6 @@
         setPersp(U, F.invProj, F.proj);
         const sv = F.sunVS || [0, 0, -1];
         U.sunVS.value.set(sv[0], sv[1], sv[2]);
-        U.texel.value.set(1 / aoW, 1 / aoH);
         U.strength.value = aoStr;
         U.radius.value = gk("ssaoRadius");          // AO RADIUS knob
         const csOn = contactStr > 0 && F.proj && F.sunVS;

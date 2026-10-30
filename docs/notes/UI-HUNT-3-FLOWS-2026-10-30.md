@@ -49,6 +49,15 @@ Web research with cited URLs: `scratch/uihunt3/web-research.md` (summarised in Â
 
 ## Fixed in this PR
 
+> **Merged with #4228 (`cursor/ui-hunt-tail-a809`, landed first).** It fixed four of the same leads independently:
+> the settings-search reset (`SettingsSearch.reset()`), the Data Hub âœ• by D-pad (the same tab-rail pass in
+> `MenuNav.step`), focus after rotation (`SheetShape.settleViewport`), and Garage focus through the RETURNING plate
+> (`modal.js`). At the merge this branch took #4228's versions of those four and dropped its own
+> (`MenuNav.onResize`, `search.clear()`, the parked opener). Items 1, 2, 3 and 7 below therefore describe what
+> #4228 shipped. This PR's own Garage test (`menu-a11y-audit`, the loading-plate opener) passes against
+> #4228's `modal.js`. The Escape / pad-B clearing of the search (item 3, second half) remains this PR's.
+
+
 1. **D-pad reach (`js/ui/menu-nav.js` `step`).** Up from a `role=tab` rail with nothing above in its band picks the nearest
    control above anywhere (Y first, X as a light tie-break, the sideways pass on swapped axes) before the in-band edge
    wrap. Only tabs: plain controls keep the Zandvoort rule. Test: `menu-nav-spatial.test.mjs`.
