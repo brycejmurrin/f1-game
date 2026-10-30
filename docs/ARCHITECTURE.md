@@ -563,7 +563,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
 | `livery-design-editor.js` | `GarageLiveryDesignEditor` | tag | Livery editing tools. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
-| `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Garage-only articulated wheels: one cached fitted set, transform-only playback. |
+| `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Legacy race-session entry point; the first-visit garage renderer lives in CarWheels. |
 
 **`js/fx/`**
 

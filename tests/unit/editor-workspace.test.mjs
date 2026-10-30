@@ -148,3 +148,85 @@ test("Free Camera stays on the toolbar when compact tools collapse", () => {
   h.media.matches = true; h.resize();
   assert.equal(entry.parentNode, h.sheet.querySelector(".ew-toolbar"));
 });
+
+function garage() {
+  const h = boot(), { doc } = h;
+  const root = doc.createElement("div"), sheet = doc.createElement("div"), rows = doc.createElement("div"), foot = doc.createElement("div");
+  root.hidden = true; sheet.className = "sheet"; rows.id = "ga-rows"; foot.className = "sheet-foot";
+  const angleRow = doc.createElement("div"), angle = doc.createElement("select");
+  angleRow.className = "set-row"; angle.id = "ga-angle"; angleRow.append(angle);
+  const otherRow = doc.createElement("div"); otherRow.className = "set-row";
+  const paragraphs = ["Sequence instructions", "Crew instructions", "Lighting instructions"].map(text => {
+    const p = doc.createElement("p"); p.className = "adv-help"; p.textContent = text; return p;
+  });
+  rows.append(paragraphs[0], otherRow, angleRow, paragraphs[1], paragraphs[2]);
+  const calls = [], sequences = [["ga-preview-in", "Pit stop"], ["ga-preview-out", "Race start"], ["ga-preview-home", "Return"]];
+  const buttons = sequences.map(([id]) => { const b = doc.createElement("button"); b.id = id; b.onclick = () => calls.push(id); foot.append(b); return b; });
+  const reset = doc.createElement("button"), done = doc.createElement("button");
+  reset.id = "ga-reset"; reset.onclick = () => calls.push("reset"); done.id = "ga-close"; foot.append(reset, done);
+  const transport = doc.createElement("div"); transport.id = "ga-transport"; transport.hidden = true;
+  sheet.append(rows, foot); root.append(sheet, transport);
+  const api = h.workspace.attach(root, { rows: "ga-rows", first: "ga-angle", reset: "ga-reset", sequences, done: "ga-close",
+    defaultPreview: "ga-preview-out", previewSession: "ga-transport" });
+  return { ...h, root, sheet, rows, foot, angleRow, paragraphs, buttons, calls, reset, done, transport, api };
+}
+
+test("garage controls start with angle while instructions and Reset stay in closed help", () => {
+  const h = garage(), help = h.rows.querySelector("details");
+  assert.equal(h.rows.children[0], h.angleRow);
+  assert.equal(help.open, false);
+  assert.equal(help.querySelector("summary").textContent, "Help and reset");
+  assert.deepEqual(help.querySelectorAll(".adv-help"), h.paragraphs);
+  assert.equal(h.reset.parentNode, help);
+  assert.deepEqual(h.foot.querySelectorAll("button"), [h.done]);
+  help.open = true; h.reset.click();
+  assert.deepEqual(h.calls, ["reset"]);
+});
+
+test("compact garage sequence strip preserves each real preview handler and short label", () => {
+  const h = garage(), strip = h.sheet.querySelector(".balanced-row");
+  assert.equal(strip.getAttribute("aria-label"), "Preview sequence");
+  assert.deepEqual(strip.querySelectorAll("button"), h.buttons);
+  assert.deepEqual(h.buttons.map(b => b.textContent), ["Pit stop", "Race start", "Return"]);
+  for (const b of h.buttons) b.click();
+  assert.deepEqual(h.calls, ["ga-preview-in", "ga-preview-out", "ga-preview-home"]);
+});
+
+test("garage furniture survives preview changes and remount without duplicated controls", () => {
+  const h = garage();
+  h.api.setPreview(true); h.api.setPreview(false);
+  assert.equal(h.workspace.attach(h.root), h.api);
+  assert.equal(h.sheet.querySelectorAll(".ew-toolbar").length, 1);
+  assert.equal(h.sheet.querySelectorAll(".balanced-row").length, 1);
+  assert.equal(h.rows.querySelectorAll("details").length, 1);
+  assert.deepEqual(h.sheet.querySelector(".balanced-row").querySelectorAll("button"), h.buttons);
+});
+
+
+test("garage toolbar Preview starts the real Race start action only after the user requests it", () => {
+  const h = garage();
+  h.root.hidden = false; h.observe();
+  assert.deepEqual(h.calls, [], "opening the editor does not autoplay");
+  h.sheet.querySelector(".ew-preview").click();
+  assert.deepEqual(h.calls, ["ga-preview-out"]);
+  assert.equal(h.sheet.dataset.editorView, "preview");
+});
+
+test("garage toolbar Preview preserves the active sequence and paused editing transport", () => {
+  const h = garage();
+  h.buttons[2].click(); h.transport.hidden = false;
+  h.api.setPreview(false);
+  const toggle = h.sheet.querySelector(".ew-preview");
+  toggle.click(); toggle.click(); toggle.click();
+  assert.deepEqual(h.calls, ["ga-preview-home"], "the Race start action never replaces an existing Return session");
+  assert.equal(h.transport.hidden, false);
+  assert.equal(h.sheet.dataset.editorView, "preview");
+});
+
+test("generic editor Preview remains furniture-only", () => {
+  const h = boot(); let calls = 0;
+  h.doc.getElementById("ga-preview-out").onclick = () => calls++;
+  h.sheet.querySelector(".ew-preview").click();
+  assert.equal(calls, 0);
+  assert.equal(h.sheet.dataset.editorView, "preview");
+});

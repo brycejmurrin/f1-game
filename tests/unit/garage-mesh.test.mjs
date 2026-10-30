@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -889,4 +890,137 @@ test("departure exterior has supported lane ground and an open outward doorway",
   assert.ok(Math.min(...ground) <= -22 && Math.max(...ground) >= 22, "lane extends under the exterior follow");
   assert.ok(facade.length > 16, "near frontage has outward-facing surfaces");
   assert.ok(facade.every(([x, y]) => Math.abs(x) >= 2.7 - .001 || y >= 4.8 - .001), "central aperture stays clear");
+});
+
+function garageWheelHarness() {
+  const draws = [], meshes = [], freed = [], recipes = [];
+  const ctx = vm.createContext({
+    Car3D: { TYRE_BAND: [null, [1, 0, 0]], BRAKE_CALIPER: [null, [1, 1, 0]],
+      buildWheelLayers(...args) {
+        recipes.push(args);
+        return { rotating: { kind: "rotating", axle: recipes.length }, fixed: { kind: "fixed", axle: recipes.length } };
+      } },
+  });
+  for (const file of ["js/core/mat4.js", "js/car/car-wheels.js"])
+    vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+  const gfx = { createMesh(data) { meshes.push(data); return data; },
+    freeMesh(mesh) { freed.push(mesh); },
+    draw(mesh, matrix) { draws.push({ mesh, matrix: Array.from(matrix) }); } };
+  return { ctx, gfx, draws, meshes, freed, recipes,
+    Wheels: vm.runInContext("CarWheels", ctx), M4: vm.runInContext("M4", ctx) };
+}
+
+test("garage wheels are available before the legacy race-session shim and retain fitted layers", () => {
+  const h = garageWheelHarness();
+  assert.equal(vm.runInContext("typeof GarageDepartureWheels", h.ctx), "undefined", "first garage visit has not loaded the race-session shim");
+  assert.equal(typeof h.Wheels.createGarage, "function");
+  const wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+  wheels.prepare("first", { rimTint: "#334455", caliperTint: "#ff3300" }, tiers);
+  wheels.prepare("first", {}, tiers);
+  assert.equal(h.recipes.length, 2, "one fitted front and rear pair");
+  assert.equal(h.meshes.length, 4, "rotating and fixed geometry share the cache");
+  assert.deepEqual(Array.from(h.recipes[0][2]), [1, .2, 0], "fitted wheel keeps livery caliper tint");
+  const base = h.M4.ident();
+  for (const distance of [0, .34, -.34, .34, .34]) wheels.draw(base, distance, .2, {});
+  assert.equal(h.recipes.length, 2, "stepping, reversing and holding only transform meshes");
+  assert.equal(h.draws.length, 40, "all four wheels retain rotating and fixed passes");
+  wheels.release(); wheels.release();
+  assert.equal(h.freed.length, 4, "release is idempotent");
+  wheels.prepare("second", {}, tiers);
+  assert.equal(h.recipes.length, 4, "re-entry restores released layers");
+  wheels.prepare("changed", {}, tiers);
+  assert.equal(h.freed.length, 8, "parts changes release the superseded fitted set");
+});
+
+test("garage wheel transforms reverse and seek exactly while calipers stay fixed", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), base = h.M4.ident();
+  wheels.prepare("moving", {}, { tyres: 1, brakes: 1 });
+  const frame = (distance) => {
+    h.draws.length = 0;
+    wheels.draw(base, distance, .2, {});
+    return h.draws.map(d => ({ mesh: d.mesh, matrix: d.matrix }));
+  };
+  const zero = frame(0), forward = frame(.34 * Math.PI / 2), reverse = frame(-.34 * Math.PI / 2);
+  assert.notDeepEqual(forward[0].matrix, zero[0].matrix, "a quarter turn changes the rendered rotating transform");
+  assert.ok(Math.abs(forward[0].matrix[5]) < 1e-6);
+  assert.ok(Math.abs(forward[0].matrix[6] + reverse[0].matrix[6]) < 1e-6, "reverse changes the spin sign");
+  for (let i = 1; i < 8; i += 2) {
+    assert.deepEqual(forward[i].matrix, zero[i].matrix, "fixed caliper does not follow the rim");
+    assert.deepEqual(reverse[i].matrix, zero[i].matrix, "reverse leaves fixed hardware planted");
+  }
+  assert.deepEqual(frame(.34 * Math.PI / 2), forward, "scrubbing back restores the exact same draw matrices");
+  assert.deepEqual(frame(.34 * Math.PI / 2), forward, "a paused frame does not advance phase");
+  assert.equal(h.recipes.length, 2, "no per-frame geometry rebuild");
+});
+
+test("legacy departure wheel entry delegates to the common first-visit implementation", () => {
+  const h = garageWheelHarness(), calls = [], sentinel = {};
+  const shim = vm.createContext({ CarWheels: { createGarage(gfx) { calls.push(gfx); return sentinel; } } });
+  vm.runInContext(read("js/garage/departure-wheels.js"), shim, { filename: absSrc("js/garage/departure-wheels.js") });
+  const legacy = vm.runInContext("GarageDepartureWheels", shim);
+  assert.equal(legacy.create(h.gfx), sentinel);
+  assert.deepEqual(calls, [h.gfx], "compatibility entry has one implementation owner");
+});
+
+
+test("garage wheel upload failure frees partial layers and the same preparation can retry", () => {
+  for (let failAt = 0; failAt < 4; failAt++) {
+    const h = garageWheelHarness(), create = h.gfx.createMesh;
+    let uploads = 0;
+    h.gfx.createMesh = (data) => {
+      if (uploads++ === failAt) throw new Error("wheel upload failed");
+      return create(data);
+    };
+    const wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+    assert.throws(() => wheels.prepare("retry", {}, tiers), /wheel upload failed/);
+    assert.equal(h.meshes.length, failAt, "only completed uploads own a handle");
+    assert.deepEqual(h.freed, h.meshes, "every partially uploaded layer is released");
+    wheels.draw(h.M4.ident(), 1, 0, {});
+    assert.equal(h.draws.length, 0, "a failed set cannot render partial wheels");
+    h.gfx.createMesh = create;
+    wheels.prepare("retry", {}, tiers);
+    assert.equal(h.recipes.length, 4, "same key builds again after failure");
+    wheels.draw(h.M4.ident(), 1, 0, {});
+    assert.equal(h.draws.length, 8, "retry restores all four wheel pairs");
+    wheels.release(); wheels.release();
+    assert.equal(h.freed.length, failAt + 4, "retry and release retain no handles");
+    assert.equal(new Set(h.freed).size, failAt + 4, "no layer is freed twice");
+  }
+});
+
+
+test("the ordinary garage selects articulated wheels before any departure or race-session load", () => {
+  const builds = [], prepared = [], renderer = { prepare: (...args) => prepared.push(args) };
+  const team = { id: "test" }, tiers = { tyres: 1, brakes: 1 }, liv = { c1: [1, 0, 0], c2: [0, 0, 0] };
+  const env = {
+    Teams: { LIST: [team] }, G: { teamIdx: 0 }, gfx: {},
+    garageSeat: () => ({ num: 1 }), previewKey: () => "car", resolveLivery: () => liv,
+    partsVisualKey: () => "parts", seatTag: () => "1", hullKeyOf: () => "hull", getTeamParts: () => ({}),
+    Parts: { getVisualTiers: () => tiers }, CarWheels: { createGarage: () => renderer },
+    Car3D: { FINISH_FIELDS: [], build: (_a, _b, opts) => { builds.push(opts); return { data: true }; } },
+    GarageScene: { previewMesh: (_key, _hull, make) => ({ mesh: make(), hull: [] }) },
+  };
+  const make = new Function("env", `const {${Object.keys(env).join(",")}} = env;
+    let _spMesh, _spMeshKey = "", _spHull, _spBase, departureWheels, driveOut = null;
+    ${fnSource(read("js/garage/setup-camera.js"), "function getSetupPreviewMesh()")}
+    return getSetupPreviewMesh;`);
+  const get = make(env), first = get();
+  assert.equal(builds[0].noWheels, true, "an ordinary garage body must not bake stationary wheels");
+  assert.equal(prepared.length, 1, "first visit prepares common wheel layers without the legacy shim");
+  assert.equal(get(), first);
+  assert.equal(builds.length, 1, "successive preview frames reuse body geometry");
+  assert.equal(prepared.length, 1, "successive preview frames reuse wheel geometry");
+});
+
+test("garage reflection and normal wheel draws share the signed current-pose phase without driveOut", () => {
+  const drawSource = fnSource(read("js/garage/setup-camera.js"), "function drawDepartureReflection(");
+  for (const distance of [-2, 0, 2]) {
+    const draws = [], wheels = { draw: (...args) => draws.push(args) };
+    const draw = new Function("departureWheels", "_spWheelDistance", "_spWheelSteer", `let driveOut = null; ${drawSource}; return drawDepartureReflection;`)(wheels, distance, .15);
+    const normal = {}, reflection = {}, material = {};
+    draw(normal, material); draw(reflection, material);
+    assert.equal(draws.length, 2, "arrival/return wheel layers also reach the reflection pass");
+    assert.deepEqual(draws[0], [normal, distance, .15, material]);
+    assert.deepEqual(draws[1], [reflection, distance, .15, material]);
+  }
 });

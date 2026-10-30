@@ -42,6 +42,13 @@
 #appearance-studio button[aria-pressed="true"] { background: var(--red); color: var(--menu-accent-ink, var(--text)); border-color: var(--red); box-shadow: var(--edge); }
 #appearance-studio button:focus-visible, #appearance-studio input:focus-visible, #appearance-studio select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #appearance-studio button:disabled { opacity: .45; cursor: default; }
+#appearance-studio #pm-tl-edit {
+  width: 100%;
+  min-height: var(--tap-paint);
+  border-color: var(--red);
+  font-weight: 700;
+}
+
 #appearance-studio [data-as="row"] input[type="range"] { flex: 1; min-width: 0; accent-color: var(--red); }
 #appearance-studio [data-as="row"] input[type="color"] { width: calc(var(--tap) * 1.3); border: 1px solid var(--plate-line); padding: calc(var(--gap) * .25); background: var(--plate); }
 #appearance-studio [data-as="row"] output { font-size: var(--fs-2); min-width: 4ch; font-variant-numeric: tabular-nums; }
