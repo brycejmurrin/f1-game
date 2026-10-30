@@ -295,6 +295,37 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
     min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   }
 }
+/* THUMB REACH (reach round 2026-10-30, tools/ui/reach-score.mjs): on a phone
+   held sideways in two hands RESUME, the first row, sat top-centre — the far
+   end of both thumb arcs (844x390: y 79-131 of 390). On the phone band (touch,
+   short landscape: the pause block's own 500px query plus coarse) it becomes a
+   full-width bar pinned to the card's bottom edge and the card docks to the
+   bottom of the screen. Absolute against the .sheet (not the scrolling body),
+   so it never scrolls away and never covers a door: the sheet reserves its
+   height as padding. DOM, Tab and autofocus order are unchanged (RESUME is
+   still first); MenuNav is geometric, so Up from RESUME reaches the door above
+   it and Down wraps to the top. NOT the split card (css/overlays.css: shipped
+   GRID at shipped width on a compact wide body), whose RESUME slab already
+   sits in the left thumb band; every player layout and the width knob get the
+   bar. A player's TOP/BOTTOM position and SIDEBAR's full-height strip keep
+   their own vertical placement. */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  :root:is([data-pause-layout], [data-look-pause-w]) #pausemenu > .sheet,
+  body:not([data-density="compact"][data-shape="wide"]) #pausemenu > .sheet {
+    --pm-resume-h: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)), calc(var(--tap-0) * var(--look-pause-btn, 0)));
+    position: relative;
+    padding-bottom: calc(var(--pm-resume-h) + var(--pad) * 0.7);
+  }
+  :root:is([data-pause-layout], [data-look-pause-w]) #pausemenu #pm-resume,
+  body:not([data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume {
+    position: absolute; inset: auto var(--pad) calc(var(--pad) * 0.35);
+    height: var(--pm-resume-h); min-height: 0; margin: 0; z-index: 1;
+  }
+  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):is([data-pause-layout], [data-look-pause-w]) #pausemenu,
+  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):has(> body:not([data-density="compact"][data-shape="wide"])) #pausemenu {
+    align-items: end;
+  }
+}
 /* Opaque enough that leftover HUD cannot read through the card. Color is
    the original dim wash, not carnival inks.
    --pause-wash / --pause-scrim are the PAUSE MENU › BACKGROUND setting
