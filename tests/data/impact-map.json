@@ -7593,6 +7593,9 @@
       "resultKind": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "rigSample": [
+        "tests/unit/garage-camera-rigs.test.mjs"
+      ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -7634,6 +7637,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "place": [
+        "tests/unit/garage-camera-rigs.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
