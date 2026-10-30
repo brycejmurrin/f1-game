@@ -42,5 +42,54 @@ CVD remaps at 55 %: deutan/protan (#ee7733) → #f7b393, Lc 69.8; tritan (#ff9eb
 Timing family on `--bg`: `--sec-best` 65.1, `--faster` 77.2, `--sec-slow` 80.4, `--slower-ink` 63.2 —
 spread 17.2, inside the 20 Lc band.
 
+## Finding: HIGH CONTRAST is the shipped default
+`AppearanceOpts` defaults `uiContrast` to `"high"`, and Bryce's own export
+(`tests/data/settings-defaults-export.json`) has it on. Under HIGH CONTRAST `--dim` is
+`color-mix(in oklab, var(--text) 86%, var(--bg))` ≈ #c9c9d4, Lc 74 on `--bg`. So the `--dim` lift
+below changes only the STANDARD contrast setting; on Bryce's phone the visible changes of this lane
+are the red text ink, the 11 px label floor and the POS fix. The first variant round ran in the
+default and measured nothing for `--dim` (a `:root` variant loses to `:root[data-ui-contrast]`);
+the round was re-shot with contrast off.
+
+## Variants
+Injected live after each screen opened, 844x390 @2x, STANDARD contrast; px moved vs shipped:
+
+| variant | `--dim` | red ink mix | careerhub | settings | datatelemetry | hud (forced red states) |
+|---|---|---|---|---|---|---|
+| A | #b4b4c2 | 60 % | 0.34 % | 0.51 % | 1.86 % | 0.07 % |
+| **B** | **#bdbdca** | **55 %** | 0.38 % | 0.51 % | 2.06 % | 0.07 % |
+| C | #c8c8d4 | 50 % | 0.74 % | 1.69 % | 2.23 % | 0.07 % |
+
+A single-ink lift is not a layout variant: every screen moves under 2.3 %, and part of that is the
+animated circuit behind the sheets. The pick is on measurement, not on pixel delta.
+
 ## Decisions
-<!-- filled after the variant round -->
+- **`--dim` → #bdbdca** (B). The only candidate that clears Lc 60 on every dark ground including the
+  HUD plate over a mid-grey scene (65.0); #b4b4c2 falls to 59.9 there. C (#c8c8d4) sits at HIGH
+  CONTRAST's own value, which would erase the STANDARD/HIGH step. Hierarchy holds: `--text` Lc 102 vs
+  `--dim` 67. Meaning-bearing `--dim` sites from 2b (career meter labels, garage comparison note,
+  settings search hint and count) only gain. Disabled controls use opacity, not `--dim`, so they stay
+  a step below. LIGHT `--dim` unchanged (already ≥ 60.2). The HUD scope restates the same value.
+- **`--slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text))`** (B). Lc 63.2 on `--bg`, 60.9
+  on the HUD plate; timing family spread 17.2 (band 20). Mixing toward `--text` instead of a fixed
+  hex keeps the hue, follows every CVD remap of `--slower` with no new `[data-cvd]` entries, and
+  darkens under LIGHT (#8d312e, Lc 78.3). Applied only where red is TEXT: POS-loss flash, hot tyre
+  letter, slow DELTA, limits-hot ink (its border keeps `--slower`), penalty WHO, tower rank loss,
+  RELATIVE lapped row, strategy cover, the Data Hub deltas, the designer's red summary, the ghost gap
+  (`js/ui/hud.js`) and the results gap (`js/ui/results-sheet.js`). Fills, gradients, damage and
+  outlines keep `--slower`.
+- **`--touch-label-floor` 10 → 11 px.** `css/touch-controls.css` belongs to the Codex race-interface
+  lane (coordinator split, PR #4286), so its dock-scope `--dim: #9a9aa8` restatement is left to it.
+- **POS cell under HIGH CONTRAST** (reported by the Codex lane on #4286): `:root[data-ui-contrast="high"]
+  :is(.hud-box, #announce)` took `#announce`'s id weight through `:is()`, scored (1,2,0) and beat the
+  POS light cell (1,1,1): dark ink on a dark plate, 1.08:1, in every race on Bryce's setting. Split
+  into two selectors; split out as #4321 to land ahead of this PR. Its regression test's first version was
+  vacuous: a running race animates colour and background, so a synchronous `getComputedStyle` read
+  the transition's start value (18.05:1 everywhere, pass on the broken tip). The probe now freezes
+  `#hud` transitions while it reads and asserts the rows differ; verified failing on the tip.
+
+## Deferred (waits on #4257, fix in #4305)
+Item 4 of #4258 and the HUD rawColor-lowering swaps: `--upgrade` for the garage's raw `#4df`;
+`--hud-strip-bg` onto `.hud-box`, `#hud-sectors`, `#hud-limits`, `#hud-gearbox`, `.hud-gaps`; lane
+2d's `--hairline` swaps in `css/data.css` (11 sites) and `#htp-contents`; `.dh-wins` `#f6d200` →
+`var(--gold)`. Listed on #4258.
