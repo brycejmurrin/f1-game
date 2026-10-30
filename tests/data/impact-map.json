@@ -4040,6 +4040,9 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
+      "hash": [
+        "tests/unit/reliability.test.mjs"
+      ],
       "hireDriver": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
@@ -5455,6 +5458,9 @@
       ]
     },
     "js/core/script-loader.js": {
+      "browserAttempt": [
+        "tests/unit/script-loader-retry-eval.test.mjs"
+      ],
       "create": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -5476,6 +5482,9 @@
       ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
+      ],
+      "runLoadGraph": [
+        "tests/unit/script-loader-retry-eval.test.mjs"
       ],
       "warm": [
         "tests/unit/script-loader-preload.test.mjs"
