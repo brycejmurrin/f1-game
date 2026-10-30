@@ -391,7 +391,7 @@ test("the speed digits, energy bar and sector red are set up to be read at a gla
   // (css/tokens.css measures it at ~2.6:1 on the page). No HUD text may use it.
   const hud = read("js/ui/hud.js").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(hud, /#e10600/i, "hud.js writes no text in the brand red");
-  assert.match(hud, /var\(--slower\)/, "the ghost delta reads the shared --slower token");
+  assert.match(hud, /var\(--slower-ink\)/, "the ghost delta reads the shared red TEXT ink, --slower-ink (#4258)");
   assert.match(hud, /var\(--faster\)/, "and --faster");
 });
 
