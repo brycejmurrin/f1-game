@@ -14642,6 +14642,7 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "*": [
+        "tests/unit/mip-footprint-lod.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs",

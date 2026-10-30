@@ -1,0 +1,1 @@
+Improved: the cockpit mirror glass (helmet view) no longer forces the full mirror mip chain on the default three.js renderer; the chain is sized to what the glass can sample (4 levels instead of 9, about 5 fewer render passes a frame), pixel-identical.
