@@ -132,8 +132,11 @@ function announceLane(root) {
   // radio card; letting them clip it first can hide an urgent pit call.
   if (els.tyre && !els.tyre.hidden && els.tyre.getBoundingClientRect) clip(laneRect(els.tyre), false);
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
-  const on = any && w > 0;
-  const collapsed = !on && any && secR && secR.width;
+  // A lane under one short word pair wraps the card into a sliver with its text cut
+  // (UI-HUNT-2-HUD: ~105 px): collapse it, and HudLayout.clearReadouts reopens the
+  // card at full width in a free slot (or radioTopSlot's corner takes it).
+  const on = any && w >= RADIO_UNDER_MIN;
+  const collapsed = !on && any && ((secR && secR.width) || w > 0);
   if (on) {
     hStyle(root, "--announce-lane-x", x.toFixed(1) + "px");
     hStyle(root, "--announce-lane-shift", "0%");
@@ -226,6 +229,8 @@ function radioTopSlot(root, bcast) {
   hToggle(b, "hud-radio-top", !!slot && !corner);
   if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
   if (!slot) return;
+  // The lane may have collapsed the card; a slot it fits in reopens it (the corner rule skips collapsed cards).
+  if (ann && ann.toggleAttribute) ann.toggleAttribute("data-lane-collapsed", false);
   if (slot.corner) hStyle(root, "--radio-top-r", (vpW() - slot.x - slot.w).toFixed(1) + "px");
   // MOVE & SIZE then scales the card itself (#announce, origin top left), so
   // the slot is published at 1/SIZE: the PAINTED card fills it, not s times it.

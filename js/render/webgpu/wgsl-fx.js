@@ -448,16 +448,20 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //    LOOK          : a chevron every PERIOD m pointing the way the lap runs,
   //                    wings trailing the tip (GLX LINE_FS PERIOD / SWEEP / THICK).
   //    BIND GROUP    : @group(0) @binding(0) var<uniform> U : LineU
-  //                    (viewProj + params = playerSpeed, cornersOnly, str, palette)
+  //                    (viewProj + params = playerSpeed, cornersOnly, str; params2.x
+  //                    opacity; colOnPace / colLift / colBrake = LINE COLOUR)
   //    BLEND         : alpha  (srcAlpha, oneMinusSrcAlpha)
   //    DEPTH         : test ENABLED, write DISABLED, depthBias toward camera.
   //    TOPOLOGY      : triangle-strip, cull none.
   const LINE = `
 struct LineU {
   viewProj : mat4x4<f32>,   // off  0
-  params   : vec4<f32>,     // off 64  x playerSpeed (m/s), y cornersOnly 0|1, z str, w palette 0|1
+  params   : vec4<f32>,     // off 64  x playerSpeed (m/s), y cornersOnly 0|1, z str, w spare (was the 0|1 palette flag)
   params2  : vec4<f32>,     // off 80  x opacity, yzw spare
-};                          // size 96
+  colOnPace: vec4<f32>,     // off 96  LINE COLOUR rgb (w unused): DrivingLine.PALETTES
+  colLift  : vec4<f32>,     // off 112
+  colBrake : vec4<f32>,     // off 128
+};                          // size 144
 @group(0) @binding(0) var<uniform> U : LineU;
 
 struct VSOut {
@@ -488,18 +492,11 @@ fn vs_main(
 @fragment
 fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let over = U.params.x / max(in.speed, 1.0);          // 1.0 = on the line's pace
-  // Two palettes, mixed rather than branched (GLX LINE_FS, TLX lineMat: the
-  // three carry the same maths). F1's green/amber/red puts the two ends of the
-  // scale on the pair the common red-green deficiencies cannot separate; the
-  // alternative is the IBM colour-blind-safe triple (blue / orange / magenta),
-  // where blue-orange is the classic safe pair and orange-magenta separates on
-  // the BLUE channel, which both deficiencies keep. params.w picks.
-  let cb = U.params.w;
-  let onPace = mix(vec3<f32>(0.10, 0.95, 0.35), vec3<f32>(0.392, 0.561, 1.000), cb);
-  let lift   = mix(vec3<f32>(1.00, 0.72, 0.10), vec3<f32>(0.996, 0.380, 0.000), cb);
-  let brake  = mix(vec3<f32>(1.00, 0.12, 0.10), vec3<f32>(0.863, 0.149, 0.498), cb);
-  var col = mix(onPace, lift, smoothstep(0.98, 1.06, over));
-  col = mix(col, brake, smoothstep(1.06, 1.16, over));
+  // on pace → lift → brake, the palette's colours as uniforms (GLX LINE_FS,
+  // TLX lineMat: the three carry the same maths; the table and why it has a
+  // colour-blind entry live in driving-line.js PALETTES).
+  var col = mix(U.colOnPace.xyz, U.colLift.xyz, smoothstep(0.98, 1.06, over));
+  col = mix(col, U.colBrake.xyz, smoothstep(1.06, 1.16, over));
   // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS):
   // pattern space is (along, across), so no derivatives for the soft edge.
   let PERIOD = 5.0;
@@ -533,7 +530,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU + MarkU (shared quad UBO): mat4 64 + mat4 64 + vec4 16
     // MARK_UNIFORM_BYTES dropped: mark pipelines reuse BLOB_SHADOW_UNIFORM_BYTES (same layout)
     SKID_UNIFORM_BYTES:         64,   // SkidU:   mat4 64
-    LINE_UNIFORM_BYTES:         96,   // LineU:   mat4 64 + vec4 16 + vec4 16
+    LINE_UNIFORM_BYTES:        144,   // LineU:   mat4 64 + 2*vec4 32 (params) + 3*vec4 48 (LINE COLOUR)
     GLOW_UNIFORM_BYTES:         80,   // GlowU:   mat4 64 + vec4 16
     DECAL_UNIFORM_BYTES:       224,   // DecalU:  mat4 64 + mat4 64 + 6*vec4 96
     // vertex buffer strides (bytes) for the pipeline vertex-layout descriptors

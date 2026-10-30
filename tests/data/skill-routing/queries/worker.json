@@ -1,0 +1,30 @@
+[
+{
+"query": "I was launched as a lane worker with CONTINUE PR 4100, what is my contract",
+"expect": "worker"
+},
+{
+"query": "claim the issue, open the draft PR and land it as the launched worker",
+"expect": "worker"
+},
+{
+"query": "what do I do when I hit my STOP AT cap as a launched worker",
+"expect": "worker"
+},
+{
+"query": "should I ask the user or add needs-decision as an unattended lane",
+"expect": "worker"
+},
+{
+"query": "take over a needs-owner PR adopt it",
+"expect": "worker"
+},
+{
+"query": "the PR is red and failing CI, fix it",
+"expect": "steward"
+},
+{
+"query": "write me a handoff prompt for a new session",
+"expect": "handoff"
+}
+]

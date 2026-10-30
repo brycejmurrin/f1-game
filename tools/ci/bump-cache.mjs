@@ -85,7 +85,7 @@ const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
 function lazyFiles() {
   const M = createRequire(import.meta.url)("../manifest.cjs");
   const lists = [...Object.values(M.DEFERRED || {}), M.LAZY_AGENT, M.LAZY_RACE, M.LAZY_RACE_SESSION, M.LAZY_AUDIO,
-    M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_TRACK_BUILD, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
+    M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_UI_PRESETS, M.LAZY_TRACK_BUILD, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
     (M.LAZY_WORKER || [])];
   return [...new Set(lists.flat().filter((f) => typeof f === "string"))].sort();
 }

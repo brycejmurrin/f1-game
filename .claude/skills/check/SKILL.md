@@ -23,8 +23,8 @@ third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structura
 `land.yml`'s `gate` COMMIT STATUS. Never start a run, push or re-run anything to answer.
 
 1. `node tools/ci/session-status.mjs --summary --pr` — branch, push/dirty state and PR/CI
-   snapshot. It finds OPEN PRs only: "no open PR" may mean merged — check with `gh pr list --head <branch>
-   --state merged` (or MCP `search_pull_requests`), then pass `--pr <n>`. Use `git rev-parse HEAD` when the
+   snapshot. It finds OPEN PRs only: "no open PR" may mean merged — check with `gh api "repos/brycejmurrin/f1-game/pulls?state=all&head=brycejmurrin:<branch>"`
+   (or MCP `search_pull_requests`), then pass `--pr <n>`. Use `git rev-parse HEAD` when the
    snapshot has no head SHA. No PR is not evidence that no run exists.
 2. `node tools/ci/ci-watch.mjs --sha <head> --once` — the `= ci …` line. Anything but `passed` is not green:
    `running (0 failed)` is not stale; `none` = the push started no run; `hollow` = a draft without `run-ci`;
@@ -36,7 +36,7 @@ third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structura
 4. Only when step 1 shows a live run (or `artifacts/logs/` has a log newer than
    the head commit): `node tools/ci/test-bg.mjs --status`, and the `= run …`
    line of `artifacts/logs/<group>.log` (anchor on
-   `^= (run (passed|failed|timedout|interrupted)|bg exit)`).
+   `= (run (passed|failed|timedout|interrupted)|bg exit)`).
 5. Live build, only when liveness is asked: agent `deploy-research` returns the live `apex-sha` (never curl
    github.io from the main context; steward §7). Then `git merge-base --is-ancestor <head> <live sha>` — exit 0
    means live; exit 1 means not live only in a full clone. If `git rev-parse --is-shallow-repository` prints

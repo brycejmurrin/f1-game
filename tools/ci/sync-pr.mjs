@@ -153,6 +153,19 @@ export function staleSyncBranch(localBranch, prBranch, readGit = git) {
   return +n.out === 0 ? { stale: true, why: "no commits of its own" } : { stale: false, why: `${n.out} commit(s) of its own — an interrupted sync; --resume it or rename it` };
 }
 
+/** What to do with a leftover local sync-pr-<branch> on a non-resume run: delete a dead one, REUSE one whose merge already
+ *  holds the deploy tip (an interrupted verify: carry on as --resume), refuse one that may carry hand work. */
+export function leftoverAction(localBranch, prBranch, readGit = git) {
+  const st = staleSyncBranch(localBranch, prBranch, readGit);
+  if (st.stale) return { action: "delete", why: st.why };
+  if (readGit(["merge-base", "--is-ancestor", `${REMOTE}/${DEPLOY_BRANCH}`, localBranch]).code === 0)
+    return { action: "resume", why: "its merge already holds the deploy tip — reusing it (as --resume)" };
+  return { action: "refuse", why: st.why };
+}
+
+/** True when origin/<branch> moved from `startSha` (a warning during the run, not a refusal). */
+export const headMoved = (startSha, nowSha) => !!startSha && !!nowSha && startSha !== nowSha;
+
 /** True when origin/<branch> holds a commit our merge result does not contain: someone pushed meanwhile. */
 export function remoteMoved(localBranch, prBranch, readGit = git) {
   return readGit(["merge-base", "--is-ancestor", `${REMOTE}/${prBranch}`, localBranch]).code !== 0;
@@ -164,7 +177,8 @@ export function remoteMoved(localBranch, prBranch, readGit = git) {
  *  wrong, and when it failed (a merge stopped mid-way by a throwing gen step)
  *  nothing said so. A merge in progress is aborted first; the result is
  *  checked; the returned line is the truth. `readGit` is injectable for tests. */
-export function returnTo(startedOn, keptBranch, readGit = git) {
+export function returnTo(startedOn, keptBranch, readGit = git, { keepMerge = false } = {}) {
+  if (keepMerge) return { ok: false, line: `merge LEFT IN PROGRESS on ${keptBranch} (MERGE_HEAD kept) — finish it there; the working tree was not moved` };
   if (readGit(["rev-parse", "-q", "--verify", "MERGE_HEAD"]).code === 0) readGit(["merge", "--abort"]);
   const r = readGit(["checkout", startedOn]);
   const where = readGit(["branch", "--show-current"]).out || readGit(["rev-parse", "--short", "HEAD"]).out;
@@ -200,7 +214,7 @@ export async function main() {
     spawnSync("node", ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
   }
 
-  const resume = flag("--resume");
+  let resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
   if (!resume && !flag("--force-clean-behind")) {
     // AGENTS.md "sync only when you must": ask the predicate before any merge or push.
@@ -216,6 +230,11 @@ export async function main() {
   const startedOn = git(["branch", "--show-current"]).out || git(["rev-parse", "HEAD"]).out;
   const localBranch = `sync-pr-${branch.replace(/[^\w.-]/g, "-")}`;
   const exists = git(["show-ref", "--verify", "--quiet", `refs/heads/${localBranch}`]).code === 0;
+  if (!resume && exists) {
+    const lo = leftoverAction(localBranch, branch);
+    if (lo.action === "resume") { log(`${localBranch}: ${lo.why}`); resume = true; }
+  }
+  const headAtStart = git(["rev-parse", "--verify", `${REMOTE}/${branch}`]).out;
   if (resume) {
     if (!exists) throw new Error(`--resume: no local ${localBranch} to resume (run without --resume)`);
     if (startedOn !== localBranch) must(git(["checkout", localBranch]), `checkout ${localBranch}`);
@@ -257,11 +276,14 @@ export async function main() {
     }
   } catch (e) {
     log(`STOPPED: ${e.message}`);
-    log(returnTo(startedOn, localBranch).line + " — fix, then either re-run or push it yourself.");
+    log(returnTo(startedOn, localBranch, git, { keepMerge: !!e.keepMerge }).line + (e.keepMerge ? "" : " — fix, then either re-run or push it yourself."));
     if (e.resume) log(`resume from the stopped stage: ${e.resume}`);
     return 1;
   }
 
+  git(["fetch", "--no-tags", REMOTE, branch]);
+  if (headMoved(headAtStart, git(["rev-parse", "--verify", `${REMOTE}/${branch}`]).out))
+    log(`WARNING: origin/${branch} moved during this run (${headAtStart.slice(0, 9)} → now); re-run sync-pr to merge the new commits${flag("--push") ? "" : " before publishing"}`);
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
     // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a

@@ -38,9 +38,7 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
     assert.equal((shader.match(new RegExp(`\\b${grad}\\(`, "g")) || []).length, 1);
     assert.doesNotMatch(shader, /\b(?:dpdx|dpdy|dFdx|dFdy)\s*\(/, "no lazy derivatives within a varying branch");
     const insetGuards = shader.split("\n").filter(line => /\bif\s*\(/.test(line) && />=/.test(line) && /\.w/.test(line) && /\.z/.test(line));
-    assert.equal(insetGuards.length, 2, "both sampling and final overwrite have an inset guard");
-    const normalize = s => s.replace(/nodeVar\d+/g, "pixel").trim();
-    assert.equal(normalize(insetGuards[0]), normalize(insetGuards[1]), "sampling uses exactly the overwrite predicate");
+    assert.equal(insetGuards.length, 1, "one inset guard: the mirror sample and its overwrite, FXAA in its else");
     assert.equal((insetGuards[0].match(/>=/g) || []).length, 2, "inclusive left/top");
     assert.equal((insetGuards[0].match(/<(?![=])/g) || []).length, 2, "exclusive right/bottom");
     assert.equal((insetGuards[0].match(/> 0\.5/g) || []).length, 1, "mirror-off remains gated by exactly one test");
@@ -52,9 +50,10 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
     }
     assert.equal(depth, 0);
     const branch = shader.slice(branchStart, end);
-    assert.match(branch, new RegExp(`\\b${grad}\\(`));
     assert.doesNotMatch(branch, /\b(?:textureSample|texture)\s*\(/, "no implicit sample in the inset branch");
-    const sampler = branch.match(new RegExp(`${grad}\\(\\s*(\\w+)`))[1];
+    const rest = shader.slice(end);
+    assert.match(rest, /^\s*else\s*\{/, "FXAA runs only outside the inset (else of the same guard)");
+    const sampler = branch.match(new RegExp(`${grad}\\(\\s*(\\w+)`))[1];   // throws unless the gradient call is in the branch
     assert.doesNotMatch(shader, new RegExp(`\\b(?:textureSample|texture)\\(\\s*${sampler}\\b`), "no additional fullscreen mirror sample");
   } finally {
     for (const m of materials) m.dispose();

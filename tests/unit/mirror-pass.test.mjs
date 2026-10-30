@@ -209,6 +209,13 @@ test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a
     assert.equal(h.mp.state().quality, q);
     assert.deepEqual([b[1], b[2]], [w, ht], q + " target");
   }
+  // The target's DPR follows the main canvas's cap: an iPhone (DPR 3) on mobileTier is 1.5, a desktop 2 (then MAX_W clamps).
+  for (const [opt, w, ht] of [[{ mobile: true, dpr: 3 }, 720, 205], [{ tier: 0, dpr: 3 }, 1024, 292]]) {
+    const h = boot(Object.assign({ mode: "on" }, opt));
+    h.render();
+    const b = h.calls.find((c) => c[0] === "begin");
+    assert.deepEqual([b[1], b[2]], [w, ht], JSON.stringify(opt) + " target (a flat cap of 2 drew the phone's 960x274)");
+  }
   const min = boot({ mode: "on", tier: 4 });
   for (let i = 0; i < 6; i++) min.render();
   // Frame 1 always draws; then frames 3 and 6.

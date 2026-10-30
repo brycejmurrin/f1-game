@@ -281,7 +281,9 @@ in float vZone;
 in highp float vAlong;   // metres along the lap (to ~7 km): fp16 mediump steps 4 m there and broke the 5 m chevrons on phones
 uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
-uniform float uPalette;       // 0 = F1 green/amber/red, 1 = colour-blind safe
+uniform vec3 uOnPace;         // LINE COLOUR: the palette's three colours, from
+uniform vec3 uLift;           // DrivingLine.PALETTES (js/render/shared/driving-line.js,
+uniform vec3 uBrake;          // which also carries the colour-blind rationale)
 uniform float uOpacity;       // 0.65 subtle … 1 as shipped … 1.35 solid
 uniform float uStr;           // emissive strength (bloom feed)
 out vec4 outColor;
@@ -295,21 +297,11 @@ const float SWEEP = 1.6;
 const float THICK = 1.1;
 void main() {
   float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
-  // Two palettes, mixed rather than branched (uPalette is 0 or 1 and uniform,
-  // but a mix is free here and keeps every backend's version identical).
-  // F1's own grammar is green/amber/red, which is the WORST pair for the
-  // common red-green deficiencies — the two ends of the scale are the two
-  // colours a deuteranope or protanope cannot separate, on a cue that only
-  // means anything if you can read it at a glance. The alternative is the IBM
-  // design library's colour-blind-safe triple (blue #648FFF, orange #FE6100,
-  // magenta #DC267F): blue against orange is the classic safe pair, and orange
-  // against magenta separates on the BLUE channel, which both deficiencies
-  // keep. SETTINGS › LINE COLOUR picks; F1 25 ships the same choice.
-  vec3 onPace = mix(vec3(0.10, 0.95, 0.35), vec3(0.392, 0.561, 1.000), uPalette);
-  vec3 lift   = mix(vec3(1.00, 0.72, 0.10), vec3(0.996, 0.380, 0.000), uPalette);
-  vec3 brake  = mix(vec3(1.00, 0.12, 0.10), vec3(0.863, 0.149, 0.498), uPalette);
-  vec3 col = mix(onPace, lift, smoothstep(0.98, 1.06, over));
-  col = mix(col, brake, smoothstep(1.06, 1.16, over));
+  // on pace → lift → brake, the palette's colours as uniforms (WGX LINE and
+  // TLX lineMat carry the same maths; the table and why it has a colour-blind
+  // entry live in driving-line.js PALETTES).
+  vec3 col = mix(uOnPace, uLift, smoothstep(0.98, 1.06, over));
+  col = mix(col, uBrake, smoothstep(1.06, 1.16, over));
   float tip = PERIOD * 0.6 - SWEEP * abs(vAcross);       // the stroke's centre line, per across
   float d = mod(vAlong - tip, PERIOD);                   // metres past that centre line, wrapped
   d = min(d, PERIOD - d);

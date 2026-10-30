@@ -4,6 +4,11 @@ A worker is one session, one task, one PR. GitHub holds every piece of state: is
 the PR is the work and the report, checks are the gates, comments are the only messages. GitHub lands the PR;
 no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestration-redesign.md` §3–4.
 
+**Roles are skills.** This page is the entry point and the SHARED reference (where work is, dependencies, the Hand-off
+block, labels, vendors, `LAND_TOKEN`). The procedure for a role lives in its skill, one home each
+(`docs/notes/ORCHESTRATION-ROLES-2026-10-30.md`): a launched lane loads skill `worker`; the hourly dispatcher loads
+skill `dispatcher`; a session that owns a PR's head also uses `steward`, `ship` and `handoff`.
+
 ## Where the work is
 
 - **The Board** is issue #1780 (the dispatcher's one status comment, `deploy:red` while the Pages train is red).
@@ -32,65 +37,18 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
 
 ## The contract
 
-1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. If an older claim comment
-   is already there, stand down; the older claim wins. Add or remove a label ONLY with
-   `gh api -X POST repos/<owner>/<repo>/issues/<n>/labels -f 'labels[]=claimed'` (`-X DELETE …/labels/<name>` to
-   remove), never the GitHub MCP `issue_write` `labels` field: it REPLACES the whole list (workers wiped `bug` and
-   `area:ui` off #3263–#3267 that way, 2026-10-27).
-2. **Branch and draft PR.** Branch `cursor/<topic>-<hash>` from the deploy tip. Open a DRAFT PR into
-   `claude/f1-game-project-26h3ng` at the first commit, from `.github/pull_request_template.md`: Goal, Plan (the live
-   checklist), Verified / Not run, Hand-off. Add `lane:<host>` and `Closes #<n>`.
-3. **Work.** AGENTS.md §The loop: make all edits, then verify once to the pre-push floor (AGENTS.md rule 3 is its
-   one home). The full tiers run on the PR: add `run-ci` to the draft for the fast tier; the full tier runs once
-   the PR is ready; the `gate` check runs on the merge result. `ready-gate` (step 5) needs `Structural guards`
-   green on your head, so let the `run-ci` fast tier finish once before you land (a full local tooling-fast run
-   writes the other accepted stamp).
-4. **Watch.** Before ending a turn while CI runs on your own head, subscribe to the PR (Claude:
-   `subscribe_pr_activity`); only then. No sleep or poll loops; the one timer allowed is a bounded safety check-in: one `send_later` per
-   watched PR about 50 min after its last activity, re-armed at most 3 times and cancelled on merge or close, because a
-   subscription does not wake on a stale `gate`, a conflict or another author's push (Bryce left it to the dispatcher,
-   2026-10-30; docs/notes/ORCHESTRATION-REVIEW-2026-10-29.md §Decisions). A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
-   on a red.
-   **If `subscribe_pr_activity` fails** (it has, with no reason, on #3970, #3981 and #4062), keep ONE background
-   `node tools/ci/ci-watch.mjs --sha <head> --timeout 30` (`--once` for a single read) and tell the dispatcher in one
-   `send_message`; a lane that cannot subscribe is handed to its parent, not left silent.
-5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
-   the Hand-off block, and end the turn. The session stays subscribed, so each PR event wakes it, until the
-   dispatcher archives it (rule 4 below: `archiveAfterMinutes` after its PR merged or closed, as set in
-   `tools/ci/dispatch.json`, on the hourly cycle). `land.yml` runs `merge-gate.mjs --check` as the check named `gate`
-   and arms auto-merge pinned to your head; the ruleset merges when `gate` is green (its ci row requires the newest
-   check named exactly `CI` green on your head). Adding `land` while CI still runs is fine: `gate` shows in
-   progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
-   red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
+Owned by skill `worker` (`.claude/skills/worker/`) (the text, the gotchas and the land mechanics). The item
+numbers are cited from hooks, tools and skills, so they stay:
 
-   How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
-   job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
-   `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
-   progress ("error, will retry"), never red. `gate` turns green only while the deploy tip is still the one it
-   measured (else in progress "re-gating", through the same retry), and any other `gate` disarms an armed PR.
-   `land.yml` may merge the deploy tip into a `land` PR whose `gate` refused only on distance (update-branch, its
-   AUTO-SYNC, at most `SYNC_MAX` waiting on CI at once); pull before pushing to such a branch.
-6. **Stop at the cap.** The brief's caps are its `STOP AT` line (context) and $10 soft (cost). At either, or when
-   stuck: finish the current unit, push, refresh the Plan and the Hand-off block, add `needs-owner`, send_message
-   `@parent` one line naming the PR, and end. The dispatcher launches the takeover on its next cycle. The $15 hard-cap archive is NOT built (`dispatch.mjs`
-   reads no cost), so the soft cap is yours to keep.
-7. **Ask through a label, never the chat.** Nobody reads a worker's chat. Never end a turn with a question or a
-   request to the user or Bryce: decide and record the pick in the PR body; or, for a question only Bryce can
-   answer, add `needs-decision` plus one comment listing the options and your pick, and keep working on everything
-   that does not depend on the answer; or send_message session_id `@parent` (the dispatcher). There is no
-   `AskUserQuestion` in a worker. When Bryce answers in the thread, the worker removes `needs-decision` and
-   carries on. The dispatcher skips a PR or issue carrying it, so a waiting PR is never re-owned.
-   **A quoted relay counts.** A dispatcher or parent that relays Bryce's exact words, with when and where he said them,
-   passes on his grant for that action (Bryce, 2026-10-30: "Yes, quoted relays count"; docs/notes/
-   ORCHESTRATION-REVIEW-2026-10-29.md §Decisions). A paraphrase, or a peer's own words, grants nothing.
-8. **Take over.** A `CONTINUE PR #<n>` worker adopts the PR. The dispatcher does the mechanics when it records the
-   launch (`dispatch.mjs --record-launch` removes `needs-owner` and posts `adopts PR #<n> — <host>:<session id>`,
-   because the auto-mode classifier denies the label DELETE to a worker). The worker sets `owner:` in the Hand-off
-   block and works from it and the Plan; a session launched by hand does both steps itself. On a PR the NEWEST adoption comment
-   wins (stand down if a newer one appears), the opposite of issue claims: a takeover replaces an owner that went
-   silent.
-9. **Already fixed.** When the issue is already fixed on the deploy tip: comment the evidence (the commit sha and
-   the repro you ran) on the issue and close it as completed. No PR, no question.
+1. Claim (comment `claims #<n>`, label `claimed`, labels only via `gh api`).
+2. Branch and draft PR (`lane:<host>`, `run-ci`, `Closes #<n>`).
+3. Work to the pre-push floor (AGENTS.md rule 3), then the tiers run on the PR.
+4. Watch: `subscribe_pr_activity`, the bounded safety check-in, the fallback when the subscribe fails.
+5. Land: `ready-gate` exit 0, flip ready, `land` label (`gate` and `land.yml` mechanics: skill `worker` `references/land.md`).
+6. Stop at the cap: `STOP AT`, $10 soft, `needs-owner`, `@parent` one line.
+7. Ask through a label, never the chat (`needs-decision`; a quoted relay counts; a denial is final).
+8. Take over (`CONTINUE PR #<n>`, the newest adoption comment wins).
+9. Already fixed: comment the evidence and close the issue.
 
 The PR is the report. Nothing else is read.
 
@@ -138,67 +96,10 @@ dispatcher) until a sync job exists again.
 
 ## The dispatcher
 
-`node tools/ci/dispatch.mjs` is a pure function of GitHub state and `tools/ci/dispatch.json` (the caps). A node
-script cannot call the session tools, so it only PLANS: GitHub writes (labels, launch comments, the Board
-comment) happen with `--apply`, and every session action is printed as a `CREATE_SESSION <json>` or
-`NUDGE_SESSION <id> <message>` or `ARCHIVE_SESSION <id>` line that the running agent executes (`send_message`,
-`archive_session`). One cycle, in order: `dispatch.mjs --children` → `get_session` for every named child
-(save each result for `--sessions`) → `get_session` without an id (its `rate_limit_info.status` is `--quota`)
-→ `dispatch.mjs --apply` → per
-`CREATE_SESSION` line: `get_session` (must complete; `launch-gate.py` refuses `create_session` without that fresh
-quota receipt) → `create_session` → run the printed `RECORD_LAUNCH` line, which posts the launch comment after the
-launch. Live workers are `role:worker` sessions that are RUNNING or WORKING, plus recent launch comments
-whose sessions are not represented in the fetched records; those claims count until `launchClaimHours` expires
-or the session is known to have ended. The script's header holds the exact cycle and launch-gate commands.
-
-It runs in ONE persistent session per Claude account, woken hourly by a scheduled task bound to that session. A
-fresh scheduled session (`create_new_session_on_fire`) lacks `get_session`, `list_sessions` and `create_session`,
-so it cannot execute the lines. The scheduled task's prompt is in the header of `tools/ci/dispatch.mjs` (its one
-home; the cycle above is the summary). Its guards:
-
-- **One dispatcher at a time.** The Board comment (issue #1780, marker `<!-- dispatch-board -->`) carries
-  `lock: <session id> at <iso>`. `dispatch.mjs --apply --self <id>` refuses to act (first output line `= dispatch
-  refused …`; no labels, Board, launches, nudges or archives) while ANOTHER session's lock is younger than `lockHours`
-  (3). A clean handover is `--take-lock` by the new dispatcher, and the old one stops writing (skill `handoff`).
-  Evidence: 7 dispatcher sessions in 30 h, two orchestrators labelling the same PRs at 10-29 07:41Z. The
-  `dispatch: launched <host>:<title> for #<n> at <iso>` comment stays the per-target claim (younger than
-  `launchClaimHours` = a live launch); each account's quota, caps and archive scope are its own.
-- **Quota.** `rejected`: launch nothing, and the first output line says to disable the hourly trigger
-  (`update_trigger enabled=false`; about 30 failed wake-ups followed a weekly-limit hit). `allowed_warning`: the launch
-  cycle is skipped and the first line says so.
-- **Foreign-activity probe.** Rule 2 skips a PR with a commit in the last `foreignHours` (2) by an author who is neither
-  the PR's author nor a Claude identity, or a `lane:cursor` PR with a push in that window (#4187: a takeover lost 57
-  min to a live Cursor agent).
-- **Prerequisites.** Rule 2 skips a PR whose body or Plan names an open PR as its prerequisite ("after #N merges",
-  "builds on #N", "depends on #N", "blocked by #N"); it launches once #N has merged (#4096 idled 4.4 h).
-
-Its rules:
-
-1. A `ready` issue with no `claimed`, `blocked` or `needs-decision` gets one worker (`priority` first), up to the
-   caps, only when the account's quota is `allowed`; `allowed_warning`, `rejected` or unknown quota launches nothing.
-   The script paginates list endpoints in pages of 100, capped at 50 pages. Landing backpressure: while `landQueueMax` (tools/ci/dispatch.json,
-   15) or more open non-draft PRs carry `land`, it starts no issue worker and records one skip line ("issue
-   launches paused: N PRs waiting to land"); rules 2 and 3 still launch, since they drain the queue.
-2. An open PR whose `updated_at` is older than 2 h (6 h for `lane:codex`), or that already carries `needs-owner`
-   (its worker stopped at the cap: no 2 h wait), with no `hold` or `needs-decision`, gets `needs-owner` and ONE
-   takeover worker launched with `CONTINUE PR #<n>` (contract step 8). Never re-owned: a
-   `land` PR with no red check, no failed (or stale pending) `gate` status and no conflict (GitHub is landing it;
-   `dispatch:merge-pause` makes a pending gate an expected wait),
-   a PR a RUNNING or WORKING `role:worker` session names, and bot PRs.
-3. When the latest COMPLETED `pages.yml` run on the deploy branch is red, it labels the Board `deploy:red` and
-   launches one fixer unless an open PR already carries `deploy:red`.
-4. A session whose every referenced PR and issue is known closed, with the youngest closure more than
-   `archiveAfterMinutes` (tools/ci/dispatch.json) ago, is archived. Never archived: a session tagged
-   `no-archive` or `role:dispatcher`, an untagged one, one without a claim comment, and one that is RUNNING, WORKING
-   or BLOCKED.
-5. A child that is BLOCKED, REVIEW_READY or idle for 20 min, whose PR or issue is open and not labelled `land`,
-   `needs-owner`, `hold` or `needs-decision`, gets one `NUDGE_SESSION` ("Continue …: subscribe to the PR, finish
-   the Plan; questions go to @parent or `needs-decision`, never the user"), at most once an hour.
-6. It rewrites the Board comment: open PRs, state, age, owner, launches, waiting children, nudges (the hourly
-   record), quota per host, caps and the land queue depth.
-
-`node tools/ci/pr-board.mjs` suggests LAND (the `land` label) for a PR that is ready to go, never ARM: no session
-arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and binds nothing.
+Owned by skill `dispatcher` (`.claude/skills/dispatcher/`): the hourly cycle, the six rules, the lock, quota,
+ask-once and the efficiency rules. The exact command order and the scheduled task's prompt are the header of
+`tools/ci/dispatch.mjs`. Dispatch caps: `tools/ci/dispatch.json`. `node tools/ci/pr-board.mjs` suggests LAND (the `land`
+label) for a ready PR, never ARM: no session arms; the veto is the `hold` label.
 
 ## Per vendor
 
@@ -210,8 +111,9 @@ arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and bin
   `subscribe_github_ci` (its branch) and `subscribe_github_pr` (the PR). A CI notification is not a new task. A red
   on its own head: fix it, at most 2 fix pushes. When CI is green or the cap is spent: refresh the Plan and Hand-off
   block, unsubscribe, stop. **Steward** (drives one existing PR to merge): subscribe at start, fix reds on its head,
-  run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, unsubscribe and stand down if the dispatcher
-  adopts the PR. Never sleep-poll, use timers or shell loops, and never comment on its own PR (it echoes back as a
+  run `node tools/ci/ready-gate.mjs --pr <n>` when the Plan is done, and stay subscribed until the PR merges or closes
+  (a passing ready-gate is not the end). Unsubscribe early only if the dispatcher adopts the PR, then stand down.
+  Never sleep-poll, use timers or shell loops, and never comment on its own PR (it echoes back as a
   wake). The Cursor token does not add labels, claim, post issue comments, or open issues. Put `run-ci`,
   `lane:cursor`, and `land` in the block's `next:` line; Bryce or a later Claude lane applies them. Symbols go
   through apex-lsp (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after the edit);

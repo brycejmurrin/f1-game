@@ -172,12 +172,12 @@ function startDriveOut() {
   const play = Object.assign({}, cfg, { enabled: true });
   driveOut = { t: 0, cfg: play };
   driveOutEngine(true);
-  return Math.round(GarageArrival.duration(play, "out") * 1000 / play.speed);
+  return Math.round(GarageArrival.wallSeconds(play, "out") * 1000 / play.speed);   // SLOW-MO included
 }
 // Wall ms of the drive-out still to play: stepDriveOut advances on the wall clock
 // (gap capped at 0.1 s), so a stalled frame delays it rather than skipping it.
 function driveOutLeft() {
-  return driveOut ? Math.max(0, (GarageArrival.duration(driveOut.cfg, "out") - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
+  return driveOut ? Math.max(0, GarageArrival.wallLeft(driveOut.cfg, "out", driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
 // Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
 // 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous
@@ -185,7 +185,7 @@ function driveOutLeft() {
 function stepDriveOut(held = false) {
   const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
   driveOut.last = now;
-  if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
+  if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed * GarageArrival.rate(driveOut.cfg, "out", driveOut.t);
   const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
   driveOutSound(pose, gap);
   return pose;
@@ -239,7 +239,7 @@ const FRAME_S = 1 / 24;
 let preview = null;
 const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
-const previewPose = (p) => (p.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
+const previewPose = (p) => GarageArrival.poseFor(p.dir)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
 function transport() {
   const stop = $("ga-preview-stop");
   if (typeof document === "undefined" || !stop || !stop.insertAdjacentHTML || $("ga-transport")) return;
@@ -302,7 +302,7 @@ function refreshPreview() {
 }
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
-  const d = dir === "out" ? "out" : "in";
+  const d = dir === "out" || dir === "home" ? dir : "in";
   // From EDIT, PREVIEW IN / OUT switch the running preview's direction.
   if (preview && preview.editing) {
     Object.assign(preview, { dir: d, t: 0, btn: btn || preview.btn });
@@ -327,18 +327,21 @@ function startArrivalPreview(dir, btn) {
 }
 function stepPreview(dt) {
   const p = preview;
-  if (!p.paused) p.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * p.cfg.speed;
+  if (!p.paused) p.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * p.cfg.speed * GarageArrival.rate(p.cfg, p.dir, p.t);
   if (p.loop && !p.paused && p.t >= previewLen(p)) p.t = 0;
   const pose = previewPose(p);
   previewSync();
   if (pose.active) return pose;
   if (!p.paused) stopPreview();   // a paused or scrubbed show holds its last frame
-  return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
+  // This frame still holds the last pose, not the turntable's; when the show closed, its mood and bars
+  // are gone already (stopPreview restored them, and no garage frame follows).
+  return p.paused ? Object.assign(pose, { active: true }) : Object.assign(pose, { active: true, mood: null, bars: false });
 }
 function stopPreview() {
   if (!preview) return false;
   const p = preview;
   preview = null;
+  sequenceLook(null);
   G.setupPreviewOn = p.was;
   const inner = $("garrival-inner");
   if (inner) inner.hidden = false;
@@ -365,6 +368,31 @@ window.addEventListener("keydown", (e) => {
   e.preventDefault();
   e.stopPropagation();   // not the settings page's door as well
 }, true);
+// AFTER THE RACE: endRace notes the player's result (noteResult); the next
+// garage visit that is not a pit stop or a friend's lobby plays the car brought
+// home, flavoured by it (GarageArrival RESULTS), once. A note over half an hour
+// old is stale. PLAY ANIMATIONS and AFTER THE RACE gate it, and the harness skips
+// it through LoadingScreen.isAutomation like the drive-out.
+let pendingHome = null;
+function noteResult(order, meta) {
+  const pl = G.player;
+  pendingHome = null;
+  if (!pl || !Array.isArray(order) || typeof RaceCeremony === "undefined" || !RaceCeremony.eligible(G, meta)) return null;
+  const pos = order.indexOf(pl) + 1;
+  pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now() };
+  return pendingHome;
+}
+function startHome(from) {
+  const p = pendingHome;
+  if (!p || from === "pit" || from === "vsfriend") return false;
+  pendingHome = null;
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  if (!cfg.enabled || !cfg.afterRace || performance.now() - p.at > 30 * 60e3) return false;
+  if (typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation()) return false;
+  endHome();
+  arrival.start({ home: p });
+  return true;
+}
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -778,6 +806,29 @@ function _stampRect(out, r) {
 }
 const BAY_MIN_MS = 24, BAY_GAP_MS = 250;
 let _bayAt = 0, _bayAcc = 0, _bayBusy = true;
+// SEQUENCE LIGHTING and CINEMA BARS (GARAGE ENTER & LEAVE): a playing sequence's
+// pose names a GarageScene mood and the bars; the garage's own mood comes back
+// (mood(), never setMood: nothing is saved) on the first frame without one.
+// ENGINE SOUND ON ARRIVAL: the drive-out's engine voice (driveOutEngine/Sound)
+// for a car driven IN (pit stop, after the race, a preview), revving with its
+// speed. Never a pushed car (pose.engine false), never over the RACE! drive-out
+// (which runs its own), and never a preview over a race in progress, whose own
+// engine graph it would stop.
+let _seqMoodWas = null, _seqBars = false, _seqSound = false, _seqSoundAt = 0;
+const _seqCue = { id: null, t: 0 };   // the ctx.cue record, reused every frame
+function sequenceLook(p) {
+  const on = !!(p && p.active), want = on && p.mood;
+  const sound = on && !!p.sound && p.engine !== false && !driveOut && !(preview && G.state === "race");
+  if (sound && !_seqSound && !_outEngine) { driveOutEngine(true); _seqSound = _outEngine; _seqSoundAt = 0; }
+  else if (!sound && _seqSound) { _seqSound = false; driveOutEngine(false); }
+  if (sound && _seqSound) { const now = performance.now(); driveOutSound(p, _seqSoundAt ? (now - _seqSoundAt) / 1000 : 0); _seqSoundAt = now; }
+  if (typeof GarageScene !== "undefined" && GarageScene.mood) {
+    if (want && GarageScene.mood() !== want) { if (_seqMoodWas === null) _seqMoodWas = GarageScene.mood(); GarageScene.mood(want); }
+    else if (!want && _seqMoodWas !== null) { GarageScene.mood(_seqMoodWas); _seqMoodWas = null; }
+  }
+  const bars = on && !!p.bars;
+  if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
+}
 function renderSetupPreview(dt, holdDriveOut = false) {
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
   // before the first garage present. Measured on tip a52e9108 at 4× CPU: tapping
@@ -811,6 +862,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  sequenceLook(arriving);
   _bayBusy = home.active || !!driveOut || !!preview || !!(arriving && arriving.active);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
   // Title Home ambient is already gated by home.moving (respects OS / Menu
@@ -935,6 +987,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
+  context.swell = arriving && arriving.active && Number.isFinite(arriving.swell) ? arriving.swell : 1;   // its DOOR GLOW size
+  // Its LIGHT CUE (scene.js live: { id, t } in seconds since the sequence began; null = none).
+  if (arriving && arriving.active && arriving.cue) { _seqCue.id = arriving.cue; _seqCue.t = arriving.seconds || 0; context.cue = _seqCue; }
+  else context.cue = null;
   const liv = _spLiv();
   const lightsRig = GarageScene.live(liv, sceneTime, context);
   if (gfx.begin({
@@ -970,8 +1026,9 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
   // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
-  // the grid (js/game.js drawRearLights); parked in the bay it stays dark.
-  if (arriving && arriving.active && (context.night || /rain|wet|storm/.test(String(context.weather || ""))) && CarMesh.drawRearLights)
+  // the grid (js/game.js drawRearLights); parked in the bay it stays dark. The
+  // tuner's REAR LIGHT can force it on, off or flashing (GarageArrival.rearLightOn).
+  if (arriving && arriving.active && GarageArrival.rearLightOn(arriving, context.night || /rain|wet|storm/.test(String(context.weather || ""))) && CarMesh.drawRearLights)
     CarMesh.drawRearLights(arrivalCar, 1);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
@@ -1215,8 +1272,9 @@ if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.bind
 return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel,
-  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); },
+  // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

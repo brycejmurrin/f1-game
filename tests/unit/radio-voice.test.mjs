@@ -1366,3 +1366,58 @@ test("a spoken language WITH a system voice speaks through it", async () => {
   assert.equal(spoke.length, 1);
   assert.equal(spoke[0].voice, de);
 });
+
+// THE RACE-LOAD GATE MUST NOT OUTLIVE A START THAT NEVER REACHES COUNT. prepare()
+// latches the pack's announcer fetches and polls for race/count; a start that
+// exits first (stale body, quitToMenu, ctx lost, a failed quali order) used to
+// leave the latch on and the 400 ms poll waking the menus forever.
+function gateRig() {
+  const timers = new Map(); let id = 0, clock = 0;
+  const gates = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console,
+    setTimeout: (fn, ms) => { timers.set(++id, { fn, at: clock + ms }); return id; },
+    clearTimeout: (t) => { timers.delete(t); } });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  ctx.VoicePack = { create: () => ({ stop() {}, remaining: () => 0, ensure() {}, ensureStaged() {}, raceLoadGate: (on) => gates.push(on) }) };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  let phase = "build";
+  const G = { soundOn: true, state: "menu", loadingScreen: { phase: () => phase }, store: { get: (k, d) => d, set() {} } };
+  const v = vm.runInContext("RadioVoice", ctx).create(G);
+  const advance = (ms) => {
+    const end = clock + ms;
+    for (;;) {
+      let next = null;
+      for (const [k, t] of timers) if (t.at <= end && (!next || t.at < next[1].at)) next = [k, t];
+      if (!next) break;
+      timers.delete(next[0]); clock = next[1].at; next[1].fn();
+    }
+    clock = end;
+  };
+  return { v, G, gates, timers, advance, cover: (p) => { phase = p; } };
+}
+
+test("the race-load gate holds over the loading cover and releases when a start exits to the menu", () => {
+  const { v, gates, timers, advance, cover } = gateRig();
+  v.prepare();
+  assert.deepEqual(gates, [true], "prepare() latches the gate");
+  advance(5000);
+  assert.deepEqual(gates, [true], "still loading (state menu under the cover): held");
+  assert.equal(timers.size, 1, "and still polling");
+  cover("");   // the start bailed out: the cover is down, the title is back
+  advance(5000);
+  assert.deepEqual(gates, [true, false], "the gate is released");
+  assert.equal(timers.size, 0, "and no poll is left waking the menus");
+});
+
+test("the race-load gate still releases at count, and a menu with no cover releases it too", () => {
+  const a = gateRig();
+  a.v.prepare(); a.G.state = "count"; a.advance(5000);
+  assert.deepEqual(a.gates, [true, false]);
+  assert.equal(a.timers.size, 0);
+  const b = gateRig();
+  b.cover(""); b.v.prepare(); b.advance(5000);
+  assert.deepEqual(b.gates, [true, false], "a stale prepare on the bare title releases on the first poll");
+  assert.equal(b.timers.size, 0);
+});

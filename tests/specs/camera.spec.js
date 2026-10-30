@@ -6,7 +6,7 @@
 //        cinematic, low, tcam, rear, visor, trackside, rival, pitwall, drone, helmet.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { frameContent, frameDelta, screenshotPixels } from "../helpers/visual-oracle.js";
-import { screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
+import { awaitCaptureReady, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 
 test.describe("Apex 26 — player camera modes", () => {
@@ -88,17 +88,12 @@ test.describe("Apex 26 — player camera modes", () => {
     const shots = {};
     await page.evaluate(() => { window.__apex.freeze(true); window.__apex.headless(true); });
     for (const mode of ["chase", "cockpit", "overhead"]) {
-      await page.evaluate(async (m) => {
-        const a = window.__apex;
-        a.camera(m);
-        const ready = GLX.softPresent?.() ? GLX.awaitSoftPresent(60_000) : null;
-        try {
-          a.snapCam(true); // arm and paint exactly this camera
-          a.headless(true); // snapCam(true) enables the live loop; quiet it now
-          if (ready) await ready;
-          else await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        } finally { a.headless(true); }
-      }, mode);
+      // snapCam(true) arms a paint of exactly this camera and leaves the live loop on;
+      // awaitCaptureReady (per-backend present counters) proves a fresh frame was PRESENTED,
+      // then pauses the loop for the read. The old hand-rolled wait quieted the loop straight
+      // after arming and read a never-painted (black) TLX frame, on the deploy tip too.
+      await page.evaluate((m) => { const a = window.__apex; a.camera(m); a.snapCam(true); }, mode);
+      await awaitCaptureReady(page, { timeoutMs: 60_000, pauseRender: true });
       const chrome = await page.addStyleTag({ content: "body > :not(canvas):not(script):not(style) { visibility:hidden !important } dialog::backdrop { background:transparent !important }" });
       try {
         shots[mode] = await screenshotPixels(page, (await screenshotPresentedCanvas(page, { skipAwait: true })).buf);

@@ -911,7 +911,7 @@ const GLXBackend = (function () {
       gl.bindVertexArray(null);
     }
     if (lineProg) {
-      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uPalette", "uOpacity", "uStr"]);
+      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uOnPace", "uLift", "uBrake", "uOpacity", "uStr"]);
       // Static interleaved strip: [x, y, z, across, speed, zone, along] per
       // vertex (DrivingLine.STRIDE = 7), uploaded once per circuit.
       lineVAO = gl.createVertexArray();
@@ -2540,12 +2540,11 @@ const GLXBackend = (function () {
     return true;
   }
 
-  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one
-  // triangle strip, stride-7 floats), drawn like the skid batch — depth-tested,
-  // no depth write, biased onto the road — but emissive, so bloom lifts it
-  // into the glow every racing game's line has. `opts.speed` is the player's
-  // speed for the dynamic colour; `opts.cornersOnly` fades the straights.
-  // Returns false when the pass is unavailable so the caller can say so.
+  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one triangle strip, stride-7 floats), drawn
+  // like the skid batch — depth-tested, no depth write, biased onto the road — but emissive, so bloom lifts it into
+  // the glow every racing game's line has. `opts.speed` is the player's speed for the dynamic colour, `opts.cols` its
+  // LINE COLOUR (9 floats, F1 GREEN when absent); `opts.cornersOnly` fades the straights. false = pass unavailable.
+  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   function drawDrivingLine(verts, vertCount, dirty, opts) {
     if (ctxGone()) return true;
     if (!lineProg) return false;
@@ -2554,7 +2553,8 @@ const GLXBackend = (function () {
     gl.uniformMatrix4fv(lineU.uViewProj, false, frameViewProj);
     gl.uniform1f(lineU.uPlayerSpeed, (opts && opts.speed) || 0);
     gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
-    gl.uniform1f(lineU.uPalette, opts && opts.palette ? 1 : 0);
+    const lc = (opts && opts.cols) || LINE_COLS_F1;   // LINE COLOUR: onPace, lift, brake (DrivingLine.PALETTES)
+    gl.uniform3fv(lineU.uOnPace, lc, 0, 3); gl.uniform3fv(lineU.uLift, lc, 3, 3); gl.uniform3fv(lineU.uBrake, lc, 6, 3);
     gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
     gl.uniform1f(lineU.uStr, 1.6);          // emissive strength: a constant, no producer sends one
     setBlend(true);
