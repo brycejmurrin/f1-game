@@ -2205,7 +2205,6 @@ let _menuFly = null;
 // (23 links, all in the menu and the flyby).
 let _warmKey = "";
 const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
-const _liveTicks = { n: 0 };   // frames past tickBody's warm and mirror-prep holds — the ones that charge the countdown and physics (__apex.info().liveTicks)
 // ONE WARM PER WORLD PER SESSION (`_warmed`; "|lit" is a dark world's second one).
 // Its programs stay built, and a repeat links nothing yet holds TLX's presents for
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
@@ -3454,7 +3453,7 @@ const G = {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
       previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
       renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT,
-      warming: !!((gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) || mirrorPass.preparing()), liveTicks: _liveTicks.n };   // tickBody's holds (__apex.info())
+      warming: !!((gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) || mirrorPass.preparing()), liveTicks: PerfGov.ticks() };   // tickBody's holds; PerfGov.tick runs only on the live race frames (__apex.info())
   },
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (lapRec.ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
@@ -8541,7 +8540,6 @@ function tickBody(now) {
     lastFrame = Math.max(now, performance.now());
     return;
   }
-  _liveTicks.n++;
   if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active()) {   // …or the solo RESUME countdown (js/ui/experience.js) still runs
     director.tick(0);   // holds its shot; a camera picked in the pause menu still releases it
     // Nothing downstream reads the pad's edge latches while we are parked here,

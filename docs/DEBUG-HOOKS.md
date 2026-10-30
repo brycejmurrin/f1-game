@@ -353,7 +353,7 @@ Returns `track: null` if no circuit is loaded — poll this to know when a track
 has finished building.
 `warming` is true while a rendered page holds `tickBody` (a program or rig warm
 pending or queued, or the mirror prep): real frames then charge neither
-the countdown nor physics. `liveTicks` counts the frames let past those holds.
+the countdown nor physics. `liveTicks` counts live race frames (`PerfGov.ticks()`: past those holds, not paused, in count or race).
 `go()` skips the lights, which in play wait out the race-entry warm, so a rendered
 spec that drives after `go()` first waits for `liveTicks >= t + 3 && !warming`
 (`t` read at `go()`). `step()` is never held (#4253).
