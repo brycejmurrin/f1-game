@@ -168,6 +168,7 @@
 :root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
+  animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
 }
 /* A hidden tab stops spending frames on a menu nobody can see. */

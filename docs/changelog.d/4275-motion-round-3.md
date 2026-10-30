@@ -1,0 +1,1 @@
+Fixed: with reduced motion on (phone setting or MOTION: REDUCED), the "TAP TO RACE" loading hint waits its 3 s again instead of showing at once, and the in-game setting now skips staggered delays the same way the phone setting does (#4275).
