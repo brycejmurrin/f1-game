@@ -234,3 +234,20 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
     assert.equal(receipts.length, n, "no receipt without --pr");
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
 });
+
+test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label call, a refusal prints neither; nothing is flipped itself", async () => {
+  const { main: ship, nextCalls } = await import("../../tools/ci/ship-pr.mjs");
+  const out = [], seen = [];
+  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l) }), out.join("\n")]; };
+  let [rc, text] = go(["--pr", "7"], 0);
+  assert.equal(rc, 0);
+  assert.deepEqual(seen.at(-1), ["--pr", "7"]);
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "10 min", "re-run ready-gate", "gh api -X POST repos/brycejmurrin/f1-game/issues/7/labels -f 'labels[]=land'"];
+  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls and the receipt-age note are printed");
+  [rc, text] = go(["--pr", "7"], 1);
+  assert.equal(rc, 1);
+  assert.deepEqual(parts.filter((x) => text.includes(x)), [], "a refusal prints neither call");
+  [rc] = go(["--pr", "x; rm"], 0);
+  assert.equal(rc, 1, "a non-numeric PR is a usage error");
+  assert.equal(nextCalls(9, "o/r").length, 3);
+});

@@ -18,6 +18,8 @@ const TLX = (function () {
     anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
     return pump;
   }
+  // drawDrivingLine's `opts.cols` fallback (F1 GREEN: onPace, lift, brake; DrivingLine.PALETTES).
+  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
@@ -3909,6 +3911,9 @@ const TLX = (function () {
       }
 
       function pinSkyMaterial() {
+        // three's Background builds a mesh only for a background NODE; TLX keeps backgroundNode null (begin,
+        // drawSky, mirrorBegin) and a plain Color background, so every per-present call found nothing.
+        if (!scene.backgroundNode) return;
         try {
           const store = renderer._background;
           if (!store) return;
@@ -5718,7 +5723,7 @@ const TLX = (function () {
             }
             _poolShow();
             _hideUndrawnInstanced();
-            if (scene.backgroundNode) pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
@@ -6197,7 +6202,11 @@ const TLX = (function () {
           fx.lineSpeed.value = (opts && opts.speed) || 0;
           fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
           fx.lineStr.value = 1.6;           // emissive strength: a constant, no producer sends one
-          fx.linePalette.value = opts && opts.palette ? 1 : 0;
+          // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake; F1 GREEN when absent.
+          const lc = (opts && opts.cols) || LINE_COLS_F1;
+          fx.lineOnPace.value.set(lc[0], lc[1], lc[2]);
+          fx.lineLift.value.set(lc[3], lc[4], lc[5]);
+          fx.lineBrake.value.set(lc[6], lc[7], lc[8]);
           fx.lineOpacity.value = (opts && opts.opacity) || 1;
           pushRec(lineStream.geo, null, fx.lineMat, undefined, undefined, 0, null, null);
           _fxFrame.lineVerts = vertCount;

@@ -1290,6 +1290,12 @@
       ]
     },
     {
+      "path": "tools/ci/ship-pr.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/spec-staleness.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

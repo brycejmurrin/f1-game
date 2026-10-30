@@ -782,6 +782,37 @@ test("round 2 gh: squash/rebase denied, merges denied outright, ready flips need
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("gh api / curl REST ready flip: passes with a fresh ready-gate receipt on the live head, else asks with the gate text", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-api-ready-"));
+  const head = "a".repeat(40);
+  let gh = fakeGh(dir, { head });
+  const run = (command) => hook("bash-guard.sh", bashCall(command), { env: { ...gh, APEX_MERGE_DESK: "" }, cwd: dir });
+  const flips = ["gh api -X POST repos/o/r/pulls/12/ccr/ready_for_review",
+    "gh api --method=PATCH repos/o/r/pulls/12 -F draft=false",
+    "curl -X POST https://api.github.com/repos/o/r/pulls/12/ccr/ready_for_review"];
+  const asksGate = (c, why) => {
+    const r = run(c);
+    assert.equal(decisionOf(r), "ask", `${why}: ${c}\n${r.stdout}`);
+  };
+  try {
+    for (const c of flips) asksGate(c, "no receipt");
+    writeGateReceipt(dir, "ready", 12, head);
+    for (const c of flips) assert.equal(decisionOf(run(c)), null, `fresh receipt on the live head passes: ${c}`);
+    writeGateReceipt(dir, "ready", 12, head, { at: new Date(Date.now() - 31 * 60000).toISOString() });
+    for (const c of flips) asksGate(c, "stale receipt");
+    writeGateReceipt(dir, "ready", 12, head);
+    gh = fakeGh(dir, { head: "b".repeat(40) });
+    for (const c of flips) asksGate(c, "the head moved after the gate");
+    gh = fakeGh(dir, { head });
+    writeGateReceipt(dir, "ready", 13, head);
+    fs.rmSync(path.join(dir, "artifacts/ready-gate/12.json"));
+    asksGate(flips[0], "a receipt for another PR does not open #12");
+    writeGateReceipt(dir, "ready", 12, head);
+    assert.equal(decisionOf(run("gh api graphql -f query='mutation { markPullRequestReadyForReview(input:{pullRequestId:\"x\"}) { clientMutationId } }'")), "ask",
+      "GraphQL carries no PR number: it keeps the plain ask");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("round 2 subagent ban: decided on the parsed argv, every runner spelling, node-only checks stay open", () => {
   const sub = (command, extra = { agent_id: "a1", agent_type: "general-purpose" }) => hook("bash-guard.sh", bashCall(command, extra));
   const browser = ["node \"tools/ci/test-bg.mjs\" smoke", "npx playwright 'test'", "eval \"npm test\"", "sh -ec 'npm test'",

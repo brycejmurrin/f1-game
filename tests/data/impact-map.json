@@ -14458,7 +14458,8 @@
         "tests/unit/track-line-circuits.test.mjs"
       ],
       "draw": [
-        "tests/unit/driving-line.test.mjs"
+        "tests/unit/driving-line.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "nodeBank": [
         "tests/unit/driving-line.test.mjs"
@@ -14469,6 +14470,7 @@
       "reset": [
         "tests/unit/driving-line.test.mjs",
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "setMode": [
@@ -14488,7 +14490,8 @@
         "tests/unit/driving-line.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/driving-line-opts.test.mjs"
       ]
     },
     "js/render/shared/frustum.js": {
@@ -14853,7 +14856,6 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
@@ -16874,6 +16876,9 @@
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/dock-layout.test.mjs"
       ],
+      "applyShape": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
       "clampXY": [
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs"
@@ -16899,6 +16904,12 @@
         "tests/unit/dock-layout.test.mjs"
       ],
       "setEditing": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
+      "shapeOf": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
+      "sizeStep": [
         "tests/unit/dock-layout.test.mjs"
       ],
       "usablePad": [
@@ -18015,6 +18026,7 @@
       "create": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
       "layoutOf": [

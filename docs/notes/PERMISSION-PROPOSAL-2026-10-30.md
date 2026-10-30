@@ -1,6 +1,7 @@
 # Permission proposal: unattended lanes (draft for Bryce, 2026-10-30)
 
-Bryce asked for a draft on 2026-10-30 (dispatcher AskUserQuestion, "Draft it for me"). Nothing here is applied:
+Bryce asked for a draft on 2026-10-30 (dispatcher AskUserQuestion, "Draft it for me"). Proposal 1 is **applied** (Bryce granted "Implement the fixes", 2026-10-30 ~07:40Z; PR number in the PR
+titled "hooks: ready-flip via gh api allowed with a fresh ready-gate receipt"); 2 and 3 are not.
 `.claude/hooks/**` and `.claude/settings*.json` need his explicit yes (`.claude/rules/claude-config.md`). The evidence
 is `docs/notes/ORCHESTRATION-REVIEW-2026-10-29.md`, Part 1 finding 1 and Part 2 finding 1: about 3 h lost across 4
 sessions to prompts nobody could answer.
@@ -19,7 +20,7 @@ the same way.
 
 ## Proposed changes (narrowest first)
 
-1. **Ready flip — make the hook match the MCP guard.** In `shellparse.py`, return `ask` for `…/ccr/ready_for_review`
+1. **Ready flip — make the hook match the MCP guard. (applied)** In `shellparse.py`, return `ask` for `…/ccr/ready_for_review`
    only when there is no fresh ready-gate receipt for that PR's live head. Reuse the receipt check
    `merge_policy.py` already applies to the MCP route. With a receipt, the hook passes; without one it denies with the
    `DENY_GATE_READY` text. Hook edit, Bryce's yes needed. No settings change.

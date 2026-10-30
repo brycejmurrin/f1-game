@@ -54,6 +54,7 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    **If `subscribe_pr_activity` fails** (it has, with no reason, on #3970, #3981 and #4062), keep ONE background
    `node tools/ci/ci-watch.mjs --sha <head> --timeout 30` (`--once` for a single read) and tell the dispatcher in one
    `send_message`; a lane that cannot subscribe is handed to its parent, not left silent.
+   Events you caused (your own subscribe, ready flip or push) need no tool call: end the turn. Add `run-ci` at the first push (a draft without it runs only skip jobs and idles). A sync runs with `run_in_background: true, timeout: 7200000`, never in the foreground.
 5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
    the Hand-off block, and end the turn. The session stays subscribed, so each PR event wakes it, until the
    dispatcher archives it (rule 4 below: `archiveAfterMinutes` after its PR merged or closed, as set in
@@ -62,6 +63,12 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    check named exactly `CI` green on your head). Adding `land` while CI still runs is fine: `gate` shows in
    progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
    red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
+
+   The route, in this order: `node tools/ci/ship-pr.mjs --pr <n>` (runs ready-gate; on a pass prints the next two calls),
+   the GitHub MCP `update_pull_request` with `draft:false` (the hook allows it within 10 min of the receipt; older: re-run
+   ready-gate), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`. `land` on a draft does nothing
+   until the flip (`gate` reads "draft: flip ready first", with one comment per head). Removing and re-adding `land`
+   re-gates a stale `gate` by hand; `land.yml` also re-gates on a PR-body edit and on a schedule (the stale-gate sweep).
 
    How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
    job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
@@ -166,6 +173,8 @@ home; the cycle above is the summary). Its guards:
 - **Quota.** `rejected`: launch nothing, and the first output line says to disable the hourly trigger
   (`update_trigger enabled=false`; about 30 failed wake-ups followed a weekly-limit hit). `allowed_warning`: the launch
   cycle is skipped and the first line says so.
+- **Ask Bryce once.** The dispatcher asks a question with AskUserQuestion once; in the same turn it labels the PR `needs-decision` and posts one comment. It never re-asks: the label is the queue (21 of 22 restarts hit a pending question; #4076 was asked 12–13 times).
+- **Never push to a lane's branch.** The dispatcher sends the edit as a message to the lane's session; a push races the worker and its relayed edit is dropped.
 - **Foreign-activity probe.** Rule 2 skips a PR with a commit in the last `foreignHours` (2) by an author who is neither
   the PR's author nor a Claude identity, or a `lane:cursor` PR with a push in that window (#4187: a takeover lost 57
   min to a live Cursor agent).
