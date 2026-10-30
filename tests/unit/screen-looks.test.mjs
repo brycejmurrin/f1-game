@@ -31,7 +31,7 @@ const PEEK_LAYER = RESP + "\n" + OVERLAYS;
 const TARGETS = { pausemenu: "dialog", datahub: "dialog", select: "div", "race-settings": "dialog",
   career: "div", carsetup: "div", trackdesigner: "dialog", standings: "dialog", pmsettings: "dialog", overlay: "div" };
 
-function boot({ stored = {}, settingsOpen = true, withPause = false, win = null } = {}) {
+function boot({ stored = {}, settingsOpen = true, withPause = false, win = null, avail = true } = {}) {
   const dom = makeDom();
   const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
   for (const [id, tag] of Object.entries(TARGETS)) mk(tag, id);
@@ -78,10 +78,13 @@ function boot({ stored = {}, settingsOpen = true, withPause = false, win = null 
   sb.window = sb;
   if (win) Object.assign(sb, win);   // innerWidth / innerHeight: the availability checks read the viewport
   const ctx = vm.createContext(sb);
-  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js"];
+  // js/ui/look-avail.js is lazy (LAZY_UI_PRESETS, the first APPEARANCE enter); it repaints the built folds on eval.
+  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js",
+    ...(avail ? ["js/ui/look-avail.js"] : [])];
   for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("ScreenLooks", ctx);
   const P = withPause ? vm.runInContext("PauseOpts", ctx) : null;
+  const A = avail ? vm.runInContext("LookAvail", ctx) : null;
   /** Fire a window CAPTURE listener the way the browser would, with spies. */
   const fire = (type, extra = {}) => {
     const ev = Object.assign({ type, defaultPrevented: false, stopped: false }, extra);
@@ -90,7 +93,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false, win = null 
     for (const { fn, cap } of winL.get(type) || []) if (cap) fn(ev);
     return ev;
   };
-  return { dom, M, P, data, timers, observers, fire, sb, winL, html: dom.documentElement, panel, general, pauseBody, tsBody, replay,
+  return { dom, M, P, A, data, timers, observers, fire, sb, winL, html: dom.documentElement, panel, general, pauseBody, tsBody, replay,
     get reclassified() { return reclassified; } };
 }
 
@@ -436,8 +439,8 @@ test("designer: the knob is in the settings export, and the CSS keeps the tap fl
 // 844x390 at the touch default UI SIZE (109 %, js/ui/scale.js): the profile
 // the look-diff CLI (UI layout program G4) measured 41 DEAD values on (2026-10-30).
 test("availability: the pure checks answer the measured phone no-ops, and only those", () => {
-  const { M } = boot();
-  const P = M.env(844, 390, 1.09), D = M.env(1600, 1000, 1);
+  const { M, A } = boot();
+  const P = A.env(844, 390, 1.09), D = A.env(1600, 1000, 1);
   const look = (id, o) => Object.assign(M.normalize(id, {}), o || {});
   // [env, screen, knob, value, overrides, expected reason substring, or "" ]
   const ROWS = [
@@ -452,7 +455,7 @@ test("availability: the pure checks answer the measured phone no-ops, and only t
     [D, "career", "layout", "split", null, "already splits"], [D, "garage", "glass", "solid", null, "SHIPPED is already"],
   ];
   for (const [e, id, k, v, o, want] of ROWS) {
-    const got = M.why(id, k, v, look(id, o), e);
+    const got = A.why(id, k, v, look(id, o), e);
     assert.ok(want === "" ? got === "" : got.indexOf(want) >= 0, `${id}.${k}=${v} ${JSON.stringify(o)} -> "${got}"`);
   }
   // Knob-level: WIDTH notes (slider stays live) on the phone only; CAREER's dependents switch with COLUMNS.
@@ -461,13 +464,13 @@ test("availability: the pure checks answer the measured phone no-ops, and only t
     ...["split", "side"].flatMap((k) => [[P, "career", k, null, true], [P, "career", k, { layout: "split" }, null], [D, "career", k, { layout: "stacked" }, true]]),
   ];
   for (const [e, id, k, o, off] of KNOBS) {
-    const kn = M.whyKnob(id, k, look(id, o), e);
+    const kn = A.whyKnob(id, k, look(id, o), e);
     assert.equal(kn ? kn.off : null, off, `${id}.${k} ${JSON.stringify(o)}`);
   }
   // Nothing else is ever marked.
   const MARKED = new Set(["density", "music", "build", "names", "cols", "layout", "glass"]);
   for (const s of M.SCREENS) for (const n of s.knobs) if (n.kind === "cycle" && !MARKED.has(n.k))
-    for (const [v] of n.values) for (const e of [P, D]) assert.equal(M.why(s.id, n.k, v, look(s.id), e), "", `${s.id}.${n.k}=${v}`);
+    for (const [v] of n.values) for (const e of [P, D]) assert.equal(A.why(s.id, n.k, v, look(s.id), e), "", `${s.id}.${n.k}=${v}`);
 });
 
 test("availability: the fold disables moot values with a reason, keeps the stored value, re-reads on resize", () => {
@@ -492,6 +495,18 @@ test("availability: the fold disables moot values with a reason, keeps the store
     sideOff: true, splitOff: true, widthOff: false, widthWhy: false });   // stored TIGHT keeps CAREER stacked
   assert.deepEqual(plain(data.lookCareer), { side: "swapped", density: "tight" }, "nothing rewritten");
   assert.ok(observers.some((o) => o.target === dom.body && o.opts.attributeFilter.includes("data-density")), "watches SheetShape's body answer");
+});
+
+test("lazy LookAvail: before it loads a peek shows the real screen and no line shows; its eval repaints the folds", () => {
+  const b = boot({ avail: false, win: { innerWidth: 844, innerHeight: 390 } });
+  const lines = () => ["pm-look-career-density-why", "pm-look-select-w-why"].map((id) => b.dom.byId(id).hidden);
+  b.M.peek("select", 0);
+  assert.deepEqual([b.dom.byId("sel-tracks").children.length, lines()], [0, [true, true]]);
+  b.M.endPeek();
+  vm.runInContext(read("js/ui/look-avail.js").replace(/^const\b/gm, "var"), b.sb, { filename: absSrc("js/ui/look-avail.js") });
+  assert.deepEqual(lines(), [false, false], "the forced repaint");
+  b.M.peek("select", 0);
+  assert.ok(b.dom.byId("sel-tracks").children.length >= 6, "stand-ins once loaded");
 });
 
 test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height; stored ids are unchanged", () => {
