@@ -508,7 +508,7 @@ The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Re
 ### three.js Inspector (TLX, opt-in)
 
 `?inspector=1` (or `__apex.inspector(true)`) loads the vendored three.js Inspector panel on the TLX renderer; it is off under the Playwright
-harness and on the deployed site, and nothing under `vendor/three-0.186.1/addons/inspector/` is fetched while it is off. `__apex.inspector()` reads
+harness and on the deployed site, and nothing under `vendor/three-0.187.0/addons/inspector/` is fetched while it is off. `__apex.inspector()` reads
 `{on, supported, reason}`. Pin `apex26.gfxBackend=three` first, or a software-GL boot may answer `supported:false` (#2674). Reference:
 [DEBUG-HOOKS §inspector](DEBUG-HOOKS.md), notes in `docs/notes/THREE-INSPECTOR-2026-10-16.md`.
 
