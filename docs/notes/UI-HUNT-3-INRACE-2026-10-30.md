@@ -55,3 +55,25 @@ then moved to a `:has()` form for `source-integrity`, same cascade):
 
 Not run this round: the Playwright MCP live drive of three circuits (lights → lap → pit → CAM → finish → results) and
 the 20 s chrome-devtools trace for F-07; both are filed. The CI WebKit leg stays Bryce's call (#4271 lead 3).
+
+## Reproduce
+
+The owner-profile matrix (save as `scratch/ui-hunt-3/bryce.json`), then
+`node tools/shot/hud-survey.mjs --matrix scratch/ui-hunt-3/bryce.json --settings tests/data/settings-defaults-export.json --gl llvmpipe`:
+
+```json
+{"cells": [
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-helmet","cam":"helmet"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-chase","cam":"chase"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-cockpit","cam":"cockpit"},
+  {"device":"phone-landscape-844x390","steer":"buttons","name":"d-helmet","cam":"helmet"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-helmet-again","cam":"helmet"},
+  {"device":"phone-landscape-844x390","steer":"buttons","name":"d-chase","cam":"chase"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-chase-again","cam":"chase"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-helmet-bc","cam":"helmet","profileLive":"broadcast"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-helmet-last","cam":"helmet"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-helmet-monaco","cam":"helmet","track":"monaco"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-chase-monaco","cam":"chase","track":"monaco"},
+  {"device":"phone-landscape-844x390","steer":"buttons","hudScale":155.25,"btnScale":245,"textSize":"large","contrast":"high","mirror":"on","map":"on","gaps":"on","name":"b-helmet-bahrain-night","cam":"helmet","track":"bahrain","tod":"night"}
+]}
+```
