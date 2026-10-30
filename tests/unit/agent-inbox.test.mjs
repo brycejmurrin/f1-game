@@ -19,7 +19,7 @@ const envelope=(body='bounded work',messageId='task-1')=>({schema:'apex.message.
 function source(rows,{failPage,metadataAfter,pageTransform}={}) {
   const calls=[]; let meta=0;
   const request=(route,opts)=>{
-    calls.push(route); assert.deepEqual(opts,{method:'GET'});
+    calls.push(route); assert.deepEqual(opts,{method:'GET',anonymous:true});
     if(route==='issues/42') return {json:++meta===2 && metadataAfter ? metadataAfter : {number:42,comments:rows.length,updated_at:TIME}};
     const match=route.match(/^issues\/42\/comments\?per_page=(\d+)&page=(\d+)$/);
     assert.ok(match,'only repository-relative thread reads');
@@ -155,6 +155,18 @@ test('SQLite cache survives reopen and transaction rollback preserves other thre
   assert.throws(()=>store.replaceThread(99,'issue',[{id:1,issue:99,body:'conflict',actor:'x',url:'x',updatedAt:TIME,envelope:null,parseError:null}],TIME,0));
   assert.equal(store.get(42,1).content,'ordinary comment');
   assert.equal(store.status(99).generation,0);
+});
+
+test('cache read handles cannot initialize or modify SQLite state',t=>{
+  const root=scratch(t), file=path.join(root,'read-only.sqlite');
+  let store=new InboxStore(file); refresh(store,[comment(1,'read fixture')]); store.close();
+  store=new InboxStore(file,{readOnly:true}); t.after(()=>store.close());
+  assert.equal(store.get(42,1).content,'read fixture');
+  assert.throws(()=>store.replaceThread(42,'issue',[],TIME,1),/readonly|read-only/i);
+  assert.equal(store.get(42,1).content,'read fixture');
+  const empty=path.join(root,'empty.sqlite'); fs.writeFileSync(empty,'');
+  assert.throws(()=>new InboxStore(empty,{readOnly:true}),/not initialized/);
+  assert.equal(fs.statSync(empty).size,0);
 });
 
 test('cache path supports a fresh checkout and refuses traversal, links and unrelated databases',t=>{

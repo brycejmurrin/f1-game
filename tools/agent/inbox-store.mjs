@@ -32,15 +32,20 @@ function normalizeComment(c, { repo, issue, kind }) {
 }
 
 export class InboxStore {
-  constructor(file, { repo = REPO } = {}) {
+  constructor(file, { repo = REPO, readOnly = false } = {}) {
     if (repo !== REPO) throw new Error(`Inbox is scoped to ${REPO}`);
     this.repo = repo;
-    this.db = new DatabaseSync(file);
+    this.db = new DatabaseSync(file,{readOnly});
     try {
       const app = this.db.prepare('PRAGMA application_id').get().application_id;
       const tables = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
       if (app !== APP_ID && (app !== 0 || tables.length)) throw new Error('Not an Apex inbox database');
       if (app === APP_ID && this.db.prepare('PRAGMA user_version').get().user_version !== 1) throw new Error('Unsupported inbox database version');
+      if(readOnly) {
+        if(app!==APP_ID) throw new Error('Inbox cache is not initialized; sync first');
+        this.db.exec('PRAGMA busy_timeout=5000; PRAGMA trusted_schema=OFF');
+        return;
+      }
       this.db.exec(`PRAGMA busy_timeout=5000; PRAGMA trusted_schema=OFF;
         CREATE TABLE IF NOT EXISTS inbox_comments (
           id INTEGER PRIMARY KEY, issue INTEGER NOT NULL, body TEXT NOT NULL,
@@ -170,7 +175,9 @@ export function syncThread(store, issue, { request = api, maxPages = 10, pageSiz
   let calls=0, receivedBytes=0;
   const get = route => {
     calls++;
-    const response = request(route,{method:'GET'});
+    // Fixed public repository: existing credentials are used when present, but
+    // public GETs need no new credential. Never retry an authenticated denial as anonymous.
+    const response = request(route,{method:'GET',anonymous:true});
     if (response.error) throw new Error(`GitHub read failed: ${response.error}`);
     const size=Buffer.byteLength(JSON.stringify(response.json) ?? '');
     if (size>2*1024*1024) throw new Error('GitHub response exceeds 2 MiB page budget');

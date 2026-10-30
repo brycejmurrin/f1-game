@@ -55,7 +55,7 @@ export function run(args) {
   const file=cachePath(opts.db??'scratch/agent-inbox/cache.sqlite');
   if(verb!=='sync' && !fs.existsSync(file)) throw new Error('Inbox cache missing; run sync first');
   fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});
-  const store=new InboxStore(file);
+  const store=new InboxStore(file,{readOnly:verb!=='sync'});
   try {
     if(verb==='sync') return syncThread(store,issue,{maxPages:number('max-pages',10)});
     if(verb==='status') return {ok:true,...store.status(issue)};

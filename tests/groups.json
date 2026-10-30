@@ -535,6 +535,8 @@
     "tests/unit/import-hardening-apxc1.test.mjs",
     "tests/unit/import-models-workflow.test.mjs",
     "tests/unit/import-models.test.mjs",
+    "tests/unit/inbox-main-mcp.test.mjs",
+    "tests/unit/inbox-mcp.test.mjs",
     "tests/unit/incident-gate.test.mjs",
     "tests/unit/init-owner-resize-observer.test.mjs",
     "tests/unit/input-ghost.test.mjs",
@@ -1344,6 +1346,8 @@
         "tests/unit/agent-message-contract.test.mjs",
         "tests/unit/agent-output-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
+        "tests/unit/inbox-main-mcp.test.mjs",
+        "tests/unit/inbox-mcp.test.mjs",
         "tests/unit/output-level-mcp.test.mjs",
         "tests/unit/output-surface.test.mjs"
       ],

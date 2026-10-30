@@ -1826,6 +1826,11 @@
       "presentation": "native",
       "preserve": "Correctness and timing separate"
     },
+    "tools/mcp/inbox-mcp.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "JSON-RPC stdout framing, closed tool arguments, bounded cache payloads/cursors, isError, and no provider sends; no CLI output wrapping."
+    },
     "tools/mcp/lsp-mcp.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
