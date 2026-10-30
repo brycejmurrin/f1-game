@@ -506,7 +506,10 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 // cost depends on a tree this box does not reproduce.
 let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
 function syncComputedRootVars() {
-  const k = vpW() + "x" + vpH() + "|" + document.body.className;
+  // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
+  // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
+  const rs = document.documentElement.style;
+  const k = vpW() + "x" + vpH() + "|" + document.body.className + "|" + rs.getPropertyValue("--hud-scale") + "|" + rs.getPropertyValue("--hud-btn-scale");
   if (k === _cssRootKey) return;
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
