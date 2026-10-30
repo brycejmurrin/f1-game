@@ -451,7 +451,7 @@ function create(G) {
   // the economy is tuned, and a wrong number here is worse than no number.
   // Each section is a fold (design pass #3): its heading is the summary and the
   // folds share a name, so one reads at a time and the guide opens as a list of
-  // its own contents — 4.5 screens at 844x390 where the open document was 19.
+  // its own contents — 5 screens at 844x390 where the open document was 19.
   function guideSection(title, paras) {
     const fold = el("details", "cr-card");
     fold.setAttribute("name", "cg-fold");

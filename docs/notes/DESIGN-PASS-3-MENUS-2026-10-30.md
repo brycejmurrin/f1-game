@@ -27,20 +27,24 @@ Living gallery (same URL as 2b, republished this round): https://claude.ai/artif
 | race settings | 4 | 4 | 4 | 4 | 3 | 4 | 4 | TIME OF DAY wraps to two lines |
 | select, settings, career, hub, history | 4 | 4 | 4 | 4 | 4 | 4 | 4 | — (pass 2b) |
 
-The career guide and the garage part list were the worst and got variants; lane 2c's crossfade was built
-as proposed (motion has no still to diff).
+The career guide and the garage part list were the worst and got variants; the guide was built, the
+garage was not (below). Lane 2c's crossfade was built as proposed (motion has no still to diff).
 
 ## Decisions (Bryce delegates open decisions — recorded here)
 - **Career guide: B, folds.** Every section is a `<details>` whose summary is the heading; the folds share
-  a `name`, so one is open at a time, the first on entry. 19.1 → 4.5 screens, every heading a 52 px row with
+  a `name`, so one is open at a time, the first on entry. 19.1 → 5.1 screens, every heading a 52 px row with
   ▾/▴ beside the red slash. On a compact wide sheet the jump strip folds away (the headings are the
   contents); elsewhere it stays and a jump opens the fold it lands on. A (quiet text tabs, frameless prose)
   saved 1.6 screens and read as the same page; C (a sideways pager, one section per page) was 15.6 screens
   of width and showed one heading at a time.
-- **Garage part list: A, two-up.** On a compact wide sheet the part rows sit two a row; wheels 8.3 → 3.7
-  screens, engine 9.1 → 4.6, four parts on screen where one was. The badge wraps instead of clipping.
-  B (one-line rows, badge inline) and C (badge as plain caps) each moved under 5 % of pixels and saved
-  nothing: the rows were already at the 52 px floor, so height had to come from width.
+- **Garage part list: no build.** A (two-up) measured 8.3 → 3.7 screens in the variant harness, but the
+  number was false: in a grid the 52 px rows kept their track height and the wrapped content overflowed
+  them (the built audit showed names, badges and RESEARCH prices painted over each other in the career
+  state). Laid out as a wrapping flex row so each part could grow, a half-width part is 167–227 px tall
+  (name, badge, two delta chips and price stacked), so the list got longer, not shorter. B (one-line rows,
+  badge inline) and C (badge as plain caps) moved under 5 % of pixels and saved nothing: the rows were
+  already at the 52 px floor. The list stays as shipped. Lesson for the harness: measure each row's
+  `scrollHeight` against its box, not only the list's screens.
 - **Crossfade (lane 2c's proposal): built.** A coarse pointer still skips the View Transition snapshot (the
   1.2 s iPhone hitch), but whatever screen a swap reveals now fades in over 120 ms with a decelerate curve
   (`js/ui/select-screen.js`). Reduced motion keeps the hard cut.

@@ -741,8 +741,8 @@
 #cg-body > details { padding: 0; gap: 0; }
 #cg-body > details > summary {
   list-style: none; cursor: pointer; margin: 0;
-  display: flex; align-items: center; gap: var(--gap);
-  min-height: var(--tap-paint); padding-inline: calc(var(--pad) * 0.7);
+  display: flex; align-items: center; gap: calc(var(--gap) * 0.5);
+  min-height: var(--tap-paint); padding-block: 0; padding-inline: calc(var(--pad) * 0.7);
 }
 #cg-body > details > summary::-webkit-details-marker { display: none; }
 #cg-body > details > summary::after { content: "\25BE"; margin-left: auto; color: var(--red); }
