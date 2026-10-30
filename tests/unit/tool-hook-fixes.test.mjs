@@ -72,7 +72,7 @@ test("protect-files: the MAIN checkout may edit shared-contract files under a su
     encoding: "utf8", cwd: ROOT });
   for (const f of ["tools/gen/gen-shell.mjs", "tools/manifest.cjs"]) {
     const r = edit(f);
-    assert.ok(!/shared-contract/.test(r.stderr), `${f} refused in the main checkout:\n${r.stderr}`);
+    assert.equal(r.status, 0, `${f} refused in the main checkout:\n${r.stderr}`);
   }
 });
 

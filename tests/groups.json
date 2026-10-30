@@ -2192,6 +2192,7 @@
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/hud-tyres.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",

@@ -17588,6 +17588,26 @@
         "tests/unit/global-registry.test.mjs"
       ]
     },
+    "js/ui/layout-presets.js": {
+      "apply": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "current": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "expected": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "snapshot": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "undo": [
+        "tests/unit/layout-presets.test.mjs"
+      ]
+    },
     "js/ui/live-region.js": {
       "reset": [
         "tests/unit/hud-feel.test.mjs",
@@ -17822,6 +17842,7 @@
     },
     "js/ui/pause-opts.js": {
       "apply": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/pause-opts.test.mjs"
       ],
       "setConfirm": [
@@ -18076,6 +18097,7 @@
     },
     "js/ui/screen-looks.js": {
       "apply": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "build": [
@@ -18086,6 +18108,7 @@
         "tests/unit/screen-looks.test.mjs"
       ],
       "isShipped": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/screen-looks.test.mjs"
       ],
       "normalize": [
@@ -18229,6 +18252,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ]
     },
@@ -18526,18 +18550,23 @@
       ]
     },
     "js/ui/title-layout.js": {
+      "apply": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
       "build": [
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "current": [
         "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "enter": [
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "normalize": [
