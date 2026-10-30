@@ -993,3 +993,8 @@ test('rainy night keeps the sky shader night gate while hiding stars beneath clo
   assert.equal(sky.starBright,0,'cloud hides stars without enabling daylight scattering');
   assert.equal(sky.moon,.85);
 });
+
+test('night pit frontage receives lighting without a whole-mesh emissive override', async () => {
+  const h=exteriorHarness();await h.ext.request(h.selection('a','rain','night'));h.ext.draw();
+  assert.equal(h.draws[2].opts.emissive,0);h.ext.release();
+});

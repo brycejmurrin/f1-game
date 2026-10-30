@@ -153,10 +153,10 @@ const GarageExterior = (function () {
     function free(set) { if (set) for (const name of ["ground", "road", "props"]) if (set[name]) gfx.freeMesh(set[name]); }
     function appearance() {
       if (!/^(rain|storm)$/.test(selected.weather)) freeWeather();
-      const wet = wetWeather(selected.weather), dark = selected.night;
+      const wet = wetWeather(selected.weather);
       Object.assign(material.ground, { roughness: wet ? .65 : .94, metalness: 0 });
       Object.assign(material.road, { roughness: wet ? .24 : .85, metalness: wet ? .06 : 0, specular: wet ? .65 : .25 });
-      Object.assign(material.props, { roughness: wet ? .48 : .78, metalness: .04, emissive: dark ? .75 : 0 });
+      Object.assign(material.props, { roughness: wet ? .48 : .78, metalness: .04, emissive: 0 });
     }
     function state() { return { status, key, generation, error, attempts, retryAt, stats: readySet ? readySet.stats : null,
       trackId: selected ? selected.trackId : null, weather: selected ? selected.weather : null, tod: selected ? selected.tod : null, rain: !!rainMesh, anchor: readySet ? readySet.anchor : null }; }

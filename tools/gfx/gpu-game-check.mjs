@@ -227,7 +227,7 @@ const console_ = [];
 try {
   const ctx = persistent || await browser.newContext({ viewport: garageViewport,
     ...(garageCapture ? { recordVideo: { dir: dirname(jsonAt || "."), size: garageViewport } } : {}),
-    ...(garageCapture === "phone" ? { hasTouch: true, isMobile: true,
+    ...(garageCapture === "phone" ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2,
       userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36" } : {}) });
   const page = await ctx.newPage();
   if (garageCapture) { captureContext = ctx; captureVideo = page.video(); }
