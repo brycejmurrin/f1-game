@@ -42,6 +42,18 @@ function vpSync() { if (_vp.stale) { _vp.w = window.innerWidth; _vp.h = window.i
 const vpW = () => { vpSync(); return _vp.w; };
 const vpH = () => { vpSync(); return _vp.h; };
 
+// ONE BLINK CLOCK. Each HUD `pulse` (css/hud.css: OT armed, ERS, VSC, pit cue,
+// limits, the 0.4 s redline) began its own phase when its class landed, so two
+// warnings on screen together blinked out of step (DEFECT-LEDGER item H). Pinning
+// every pulse's startTime to the document timeline's zero puts them on one
+// clock: the 0.8 s pulses share a phase and the redline is their harmonic.
+function syncPulse(e) {
+  const el = e.target;
+  if (e.animationName !== "pulse" || !el || typeof el.getAnimations !== "function") return;
+  for (const a of el.getAnimations()) if (a.animationName === "pulse" && a.startTime !== 0) a.startTime = 0;
+}
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
+
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
 let _invalidateFit = null, _syncPhoneFit = null;
 function create(G) {
