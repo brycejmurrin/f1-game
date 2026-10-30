@@ -844,9 +844,10 @@ const HudLayout = (function () {
       // fixed obstacles, retaining their saved offset and dimensions.
       if (id === "map" && !autoMap) continue;
       if (id === "announce" && placedRadio) { blocks.push(r); continue; }
-      // SPEED moves only for the desktop visor, where its shipped vertical
-      // offset can meet the enlarged gearbox. Everywhere else it has priority.
-      if (id === "speed" && !(has("desktop") && shown() === "helmet")) { blocks.push(r); continue; }
+      // SPEED moves only on the visor (HELMET), where its shipped offset can meet the
+      // enlarged gearbox (desktop) or, on touch, OT / AERO once TEXT LARGER or a big
+      // BUTTON SIZE widens the row (UI-HUNT-2-HUD). Everywhere else it has priority.
+      if (id === "speed" && shown() !== "helmet") { blocks.push(r); continue; }
       let best = findSlot(r);
       // A narrow dock lane can wrap a long call beyond the available height.
       // Let placement try the card's normal width before accepting a collision.
