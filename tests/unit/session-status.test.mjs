@@ -227,3 +227,180 @@ test("CLI --summary --json keeps the full JSON contract; default Markdown remain
   assert.match(brief.stdout, /Status summary/);
   assert.doesNotMatch(brief.stdout, /\*\*Commits\*\*/);
 });
+
+// Independent advisory tools: no network, browser, claims or reservations.
+const { explainPrWait, collectPrWait } = await import("../../tools/ci/pr-wait.mjs");
+const { comparePaths, collectOverlap } = await import("../../tools/ci/path-overlap.mjs");
+
+test("pr-wait: pending concurrency, runner queue and execution remain distinct without fake position", () => {
+  const snapshot = { complete: true, pr: { number: 7, state: "open", head: { sha: SHA } },
+    runs: [{ id: 8, name: "CI", head_sha: SHA, status: "in_progress" }], jobsRunId: 8,
+    jobs: [{ id: 1, status: "pending" }, { id: 2, status: "queued" }, { id: 3, status: "in_progress" }] };
+  const out = explainPrWait(snapshot);
+  assert.deepEqual(out.reasons.map((r) => r.state), ["concurrency-wait", "runner-wait", "executing"]);
+  assert.equal(out.queuePosition, null);
+  assert.equal(explainPrWait({ ...snapshot, jobsRunId: 9 }).complete, false);
+});
+
+test("pr-wait: same-head CI, gate drift, conflict and live evidence are explicit", () => {
+  const base = { complete: true, pr: { number: 7, state: "open", head: { sha: SHA } },
+    runs: [{ id: 8, name: "CI", head_sha: SHA, status: "completed", conclusion: "success" }] };
+  assert.equal(explainPrWait({ ...base, gate: { state: "pending", description: "deploy tip moved: re-gating" } }).state, "gate-revalidation");
+  assert.equal(explainPrWait({ ...base, pr: { ...base.pr, mergeable_state: "dirty" } }).state, "conflict");
+  assert.equal(explainPrWait({ ...base, runs: [{ ...base.runs[0], head_sha: OTHER }] }).state, "ci-unknown");
+  assert.equal(explainPrWait({ ...base, runs: [{ ...base.runs[0], name: "CI", display_title: "CI ignored: edit" }] }).state, "ci-unknown");
+  const merged = { ...base, pr: { ...base.pr, merged: true, merge_commit_sha: OTHER } };
+  assert.equal(explainPrWait(merged).state, "deployment-unknown");
+  assert.equal(explainPrWait({ ...merged, deploy: { sourceSha: OTHER, liveSha: SHA, ancestor: true } }).state, "deployed");
+});
+
+test("pr-wait: bounded API collection detects head drift and unread pages", () => {
+  let reads = 0;
+  const request = (p) => p === "pulls/7" ? { json: { number: 7, head: { sha: reads++ ? OTHER : SHA } } }
+    : p.startsWith("actions/") ? { json: { workflow_runs: [] } } : { error: "HTTP 403" };
+  const out = collectPrWait(7, { request });
+  assert.equal(out.complete, false);
+  assert.match(out.issues.join(" "), /403.*head changed/s);
+});
+
+test("path-overlap: directory boundaries, renames, contradictions and siblings are advisory", () => {
+  const out = comparePaths({ complete: true, owned: ["fixture-race/", "fixture-tool.txt"], forbidden: ["fixture-tool.txt"],
+    prs: [{ number: 9, head: SHA, files: [{ filename: "fixture-new.txt", previous_filename: "fixture-race/old.txt" }, "fixture-racers/x.txt"] }],
+    assignments: [{ owner: "sibling", owned: ["fixture-race/a.txt"] }] });
+  assert.deepEqual(out.overlaps.map((x) => x.kind), ["brief-contradiction", "open-pr", "sibling-assignment"]);
+  assert.equal(out.reservation, false);
+  assert.equal(comparePaths({ complete: true, owned: ["fixture-race/"], prs: [{ files: ["fixture-racers/x.txt"] }] }).state, "no-observed-overlap");
+  assert.equal(comparePaths({ complete: true, owned: ["../other", "js/**"], prs: [] }).state, "unknown");
+});
+
+test("path-overlap: truncated and unauthorized snapshots cannot claim complete coverage", () => {
+  const brief = { owned: ["fixture-race/a.txt"] };
+  const request = (p) => p.startsWith("pulls?") ? { json: [{ number: 7, head: { sha: SHA } }] } : { error: "HTTP 403" };
+  const out = collectOverlap(brief, { request });
+  assert.equal(out.complete, false);
+  assert.equal(out.state, "unknown");
+  assert.match(out.issues.join(" "), /403/);
+  const many = collectOverlap(brief, { maxPages: 1, maxPrs: 0, request: () => ({ json: Array.from({ length: 100 }, (_, i) => ({ number: i + 1 })) }) });
+  assert.equal(many.complete, false);
+  assert.match(many.issues.join(" "), /Page limit/);
+});
+
+test("pr-wait: terminal CI failure names its actual failed job, not a guessed assertion", () => {
+  const out = explainPrWait({ complete: true, pr: { number: 7, head: { sha: SHA } },
+    runs: [{ id: 8, name: "CI", head_sha: SHA, status: "completed", conclusion: "failure" }],
+    jobsRunId: 8, jobs: [{ id: 9, name: "Structural guards B", conclusion: "failure" }] });
+  assert.equal(out.state, "ci-failed");
+  assert.equal(out.reasons[0].jobId, 9);
+  assert.equal(out.reasons[0].detail, "Job failed; assertion requires its log");
+});
+
+test("path-overlap: changing PR heads and invalid inventories remain incomplete", () => {
+  const request = (p) => p.startsWith("pulls?") ? { json: [{ number: 7, head: { sha: SHA } }] }
+    : p.includes("/files") ? { json: [] } : { json: { head: { sha: OTHER } } };
+  const out = collectOverlap({ owned: ["fixture-race/a.txt"] }, { request });
+  assert.equal(out.state, "unknown");
+  assert.equal(out.complete, false);
+  assert.match(out.issues.join(" "), /head changed/);
+  assert.equal(comparePaths({ owned: ["a.js"], prs: {}, assignments: {}, complete: true }).state, "unknown");
+});
+
+test("advisory collectors: complete offline answers work without mutations; page caps remain unknown", () => {
+  const pr = { number: 7, state: "open", head: { sha: SHA } };
+  const request = (p, options) => {
+    assert.equal(options, undefined, "collectors pass paths only; shared client defaults to GET");
+    if (p === "pulls/7") return { json: pr };
+    if (p.startsWith("actions/workflows/")) return { json: { total_count: 1, workflow_runs: [{ id: 8, name: "CI", head_sha: SHA, status: "completed", conclusion: "success" }] } };
+    if (p.startsWith("actions/runs/")) return { json: { total_count: 0, jobs: [] } };
+    if (p.startsWith("commits/")) return { json: [{ context: "gate", state: "success" }] };
+    if (p.startsWith("pulls?")) return { json: [pr] };
+    if (p.startsWith("pulls/7/files?")) return { json: [{ filename: "fixture-other.txt" }] };
+    throw new Error("unexpected path " + p);
+  };
+  assert.equal(collectPrWait(7, { request }).state, "landing");
+  const overlap = collectOverlap({ owned: ["fixture-race/"] }, { request });
+  assert.equal(overlap.complete, true);
+  assert.equal(overlap.state, "no-observed-overlap");
+  const capped = collectPrWait(7, { maxPages: 1, request: (p) => p === "pulls/7" ? { json: pr }
+    : p.startsWith("actions/") ? { json: { total_count: 101, workflow_runs: Array.from({ length: 100 }, () => ({ name: "CI", display_title: "CI ignored: edit" })) } } : { json: [] } });
+  assert.equal(capped.complete, false);
+  assert.match(capped.issues.join(" "), /Page limit/);
+});
+
+test("pr-wait: newer ignored display titles never supersede real running or failed CI", () => {
+  const pr = { number: 7, head: { sha: SHA } };
+  const ignored = { id: 99, name: "CI", display_title: "CI ignored: edit", head_sha: SHA,
+    status: "completed", conclusion: "success", created_at: "2026-10-30T20:00:00Z" };
+  for (const status of ["in_progress", "completed"]) {
+    const real = { id: 8, name: "CI", display_title: "CI", head_sha: SHA,
+      status, conclusion: status === "completed" ? "failure" : null, created_at: "2026-10-30T19:00:00Z" };
+    const jobs = [{ id: 9, name: "Real gate", status, conclusion: real.conclusion }];
+    const expected = status === "completed" ? "ci-failed" : "executing";
+    assert.equal(explainPrWait({ complete: true, pr, runs: [ignored, real], jobsRunId: 8, jobs }).state, expected);
+    const requested = [];
+    const request = (p) => {
+      requested.push(p);
+      if (p === "pulls/7") return { json: pr };
+      if (p.startsWith("actions/workflows/")) return { json: { total_count: 2, workflow_runs: [ignored, real] } };
+      if (p.startsWith("actions/runs/8/jobs?")) return { json: { total_count: 1, jobs } };
+      if (p.startsWith("commits/")) return { json: [] };
+      throw new Error("Unexpected path " + p);
+    };
+    const out = collectPrWait(7, { request });
+    assert.equal(out.state, expected);
+    assert.equal(out.complete, true);
+    assert.equal(requested.some((p) => p.includes("runs/99/")), false);
+  }
+});
+
+
+test("path-overlap: bounded inventories preserve observed matches and disclose omissions", () => {
+  const files = Array.from({ length: 301 }, (_, i) => `fixture-race/file-${i}.txt`);
+  const prs = Array.from({ length: 51 }, (_, i) => ({ number: i + 1, files }));
+  const assignments = Array.from({ length: 33 }, (_, i) => ({ owner: `sibling-${i}`, owned: ["fixture-race/"] }));
+  const out = comparePaths({ complete: true, owned: ["fixture-race/"], forbidden: [], prs, assignments });
+  assert.equal(out.state, "overlap");
+  assert.equal(out.complete, false);
+  assert.equal(out.checkedPrs, 50);
+  assert.equal(out.checkedAssignments, 32);
+  assert.equal(out.overlaps.length, 200);
+  assert.equal(out.overlaps[0].other, files[0]);
+  assert.match(out.issues.join(" "), /PR limit.*files limit.*Overlap output limit/s);
+  assert.match(out.issues.join(" "), /assignments limit/);
+  const paths = comparePaths({ complete: true, owned: Array.from({ length: 129 }, () => "fixture-race/"),
+    forbidden: ["x".repeat(513)], prs: [] });
+  assert.equal(paths.complete, false);
+  assert.match(paths.issues.join(" "), /owned limit.*Unsupported forbidden path/s);
+});
+
+test("pr-wait: oversized fixture inventories retain observed failures with incomplete coverage", () => {
+  const pr = { number: 7, head: { sha: SHA } };
+  const out = explainPrWait({ complete: true, pr, jobsRunId: 8,
+    runs: [{ id: 8, name: "CI", head_sha: SHA, status: "in_progress" }],
+    jobs: Array.from({ length: 301 }, (_, i) => ({ id: i, name: "fixture-job", status: "completed", conclusion: "failure" })) });
+  assert.equal(out.state, "ci-failed");
+  assert.equal(out.complete, false);
+  assert.equal(out.reasons.length, 200);
+  assert.match(out.issues.join(" "), /jobs limit.*Reason output limit/s);
+});
+
+test("advisory CLIs reject oversized JSON files before parsing and refuse unknown or missing flags", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-advisory-bounds-"));
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  try {
+    const fixture = path.join(dir, "oversized.json"), brief = path.join(dir, "brief.json");
+    fs.writeFileSync(fixture, "x".repeat(1024 * 1024 + 1));
+    fs.writeFileSync(brief, JSON.stringify({ owned: ["fixture-race/"] }));
+    for (const [tool, args] of [["pr-wait", ["--fixture", fixture]],
+      ["path-overlap", ["--brief", brief, "--fixture", fixture]], ["path-overlap", ["--brief", fixture]]]) {
+      const result = spawnSync(process.execPath, [path.join(root, "tools/ci", tool + ".mjs"), ...args], { encoding: "utf8" });
+      assert.equal(result.status, 2);
+      assert.equal(result.stderr, "JSON input must be a regular file of at most 1048576 bytes\n");
+      assert.equal(result.stdout, "");
+    }
+    for (const tool of ["pr-wait", "path-overlap"]) {
+      const script = path.join(root, "tools/ci", tool + ".mjs");
+      assert.equal(spawnSync(process.execPath, [script, "--typo"], { encoding: "utf8" }).stderr, "Unknown argument --typo\n");
+      assert.equal(spawnSync(process.execPath, [script, "--fixture", "--json"], { encoding: "utf8" }).stderr, "Missing value for --fixture\n");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
