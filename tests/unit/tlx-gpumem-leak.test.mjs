@@ -22,7 +22,7 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 vm.runInThisContext(read("js/render/three/tlx-shadow.js"), { filename: absSrc("js/render/three/tlx-shadow.js") });
 

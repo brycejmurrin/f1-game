@@ -236,6 +236,61 @@ async function randomiseGreen(page, seed) {
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("pending START FROM preserves a real map drag before pointer release", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+    await page.evaluate(() => { TrackDesigner.setMode("edit"); TrackDesigner.setSelectionMode("point"); });
+    const before = await page.evaluate(() => TrackDesigner.state());
+    expect(await page.evaluate(() => !!Tracks.LIST.find(d => d.id === "monza")._metaOnly)).toBe(true);
+    let release, requested;
+    const gate = new Promise(resolve => { release = resolve; }), request = new Promise(resolve => { requested = resolve; });
+    await page.route("**/js/circuits/monza.js*", async route => { requested(); await gate; await route.continue(); });
+    await page.evaluate(() => {
+      window.__tdPendingResult = null;
+      TrackDesigner.startFrom("monza").then(result => { window.__tdPendingResult = result; });
+    });
+    await request;
+    const at = await page.evaluate(() => {
+      const p = TrackDesigner.state().design.pts, r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
+      const x0 = Math.min(...p.map(q => q[0])), x1 = Math.max(...p.map(q => q[0])), z0 = Math.min(...p.map(q => q[1])), z1 = Math.max(...p.map(q => q[1]));
+      const scale = Math.min(Math.round(r.width) / Math.max(60, x1 - x0), Math.round(r.height) / Math.max(60, z1 - z0)) * 0.82;
+      return { x: r.x + Math.round(r.width) / 2 + (p[4][0] - (x0 + x1) / 2) * scale, y: r.y + Math.round(r.height) / 2 + (p[4][1] - (z0 + z1) / 2) * scale };
+    });
+    await page.mouse.move(at.x, at.y); await page.mouse.down();
+    await page.mouse.move(at.x + 30, at.y - 15, { steps: 4 });
+    release();
+    await expect.poll(() => page.evaluate(() => window.__tdPendingResult)).toBe(false);
+    const live = await page.evaluate(() => TrackDesigner.state());
+    expect(live.design).toEqual(before.design); expect(live.undo).toBe(before.undo);
+    await page.mouse.up();
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.design.name).toBe(before.design.name); expect(after.design.pts).not.toEqual(before.design.pts);
+    expect(after.undo).toBe(before.undo + 1);
+    await page.screenshot({ path: testInfo.outputPath("pending-hydration-map-drag.png") });
+    expect(await page.evaluate(() => { TrackDesigner.undo(); return TrackDesigner.state().design.pts; })).toEqual(before.design.pts);
+    await page.unroute("**/js/circuits/monza.js*");
+  });
+
+  test("START FROM hydrates an unvisited circuit and saves a reloadable remix", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page);
+    const before = await page.evaluate(() => ({ ids: Tracks.LIST.map((d) => d.id), stub: !!Tracks.LIST.find((d) => d.id === "monza")._metaOnly }));
+    expect(before.stub, "Monza has not been selected or raced").toBe(true);
+    expect(await page.evaluate(() => TrackDesigner.startFrom("monza"))).toBe(true);
+    const saved = await page.evaluate(() => {
+      const verdict = TrackDesigner.preview(), result = TrackDesigner.save();
+      return { ok: verdict.ok, result, ids: Tracks.LIST.filter((d) => !d.custom).map((d) => d.id), design: TrackDesigner.state().design };
+    });
+    expect(saved.ok).toBe(true); expect(saved.result.ok).toBe(true);
+    expect(saved.ids).toEqual(before.ids);
+    expect(saved.design.name).toBe("MONZA REMIX");
+    await page.screenshot({ path: testInfo.outputPath("hydrated-monza-remix.png") });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
+    await openDesigner(page);
+    expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(saved.result.id);
+    const reloaded = await page.evaluate(() => { TrackDesigner.preview(); return TrackDesigner.state(); });
+    expect(reloaded.ok).toBe(true); expect(reloaded.design.pts).toEqual(saved.design.pts);
+  });
+
   for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
     test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);

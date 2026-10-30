@@ -433,15 +433,18 @@
      --tap-paint only there. Livery ⧉ chips (.cs-liv-edit) stay on
      --chip-h / the WCAG-min rung — not this rule. */
   flex: 0 0 auto; white-space: nowrap;
-  min-inline-size: var(--tap-paint, var(--tap));
-  min-block-size: var(--tap-paint, var(--tap));
-  min-width: var(--tap-paint, var(--tap));
-  min-height: var(--tap-paint, var(--tap));
-  padding: 0 calc(var(--gap) * 0.9);
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 calc(var(--gap) * 0.5);
   justify-content: center; align-items: center; text-align: center;
   scroll-snap-align: start;
   scroll-snap-stop: normal;
 }
+/* One line per compact tab: the fitted part is named in the list below and the cyan
+   underline still marks an upgrade (design pass 3d). */
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-cur { display: none; }
 @media (orientation: landscape) {
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
     grid-column: 2; grid-row: 1;

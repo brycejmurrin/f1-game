@@ -206,3 +206,55 @@ test("both radio slots size the card to the slot, not to the dock lane announceL
   assert.deepEqual(widths("body.hud-radio-top #announce"), [want], "tower-row slot: width follows the slot");
   assert.deepEqual(widths("body[data-radio-corner]"), [want], "corner slot: width follows the slot, so the base rule's lane width cannot squeeze it");
 });
+
+test("landscape radio prefers a readable outer lane and preserves a crowded fallback", () => {
+  const dom = makeDom(), root = dom.documentElement;
+  const R = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const tower = dom.document.createElement("div"), dock = dom.document.createElement("div"), group = dom.document.createElement("div");
+  tower._rect = R(250, 8, 300, 54); group._rect = R(0, 300, 100, 90); dock.appendChild(group);
+  const els = { announce: dom.byId("announce"), flag: dom.byId("hud-flag"), hudSectors: dom.byId("hud-sectors"), minimap: dom.byId("minimap") };
+  for (const el of [els.flag, els.hudSectors, els.minimap]) el.hidden = true;
+  const sb = { document: dom.document, Map, Math, Object, parseFloat, getComputedStyle: () => ({ getPropertyValue: () => "47" }) };
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js") + ";this.lane=HudRadioLane;", sb, { filename: absSrc("js/ui/hud-radio-lane.js") });
+  const lane = sb.lane.create({ els }, { vpW: () => 844, vpH: () => 390, top: () => tower, docks: () => [dock], fitKey: () => "",
+    hStyle: (el, key, value) => el.style.setProperty(key, value), hUnstyle: (el, key) => el.style.removeProperty(key), hToggle() {} });
+  lane.announceLane(root);
+  const x = () => parseFloat(root.style.getPropertyValue("--announce-lane-x")), w = () => parseFloat(root.style.getPropertyValue("--announce-lane-w"));
+  assert.ok(w() >= 160, "outer lane remains readable");
+  assert.ok(x() + w() <= 844 * 0.4 + 0.1 || x() >= 844 * 0.6, "outer lane clears the centre 20% driving corridor");
+  els.minimap.hidden = false; els.minimap._rect = R(47, 70, 253, 96);
+  els.hudSectors.hidden = false; els.hudSectors._rect = R(544, 70, 253, 96);
+  lane.invalidateLaneRects(); lane.announceLane(root);
+  assert.equal(x(), 308); assert.equal(w(), 228, "crowded case retains the original usable full lane");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the message is not discarded");
+  dom.body.setAttribute("data-radio-placed", ""); root.style.setProperty("--announce-lane-x", "123px");
+  lane.announceLane(root);
+  assert.equal(root.style.getPropertyValue("--announce-lane-x"), "123px", "manual placement stays under player control");
+  dom.body.removeAttribute("data-radio-placed");
+  els.announce.hidden = false; els.announce._rect = R(350, 220, 200, 50);
+  for (const key of ["flag", "hudLimits", "tyre"]) {
+    const obstacle = els[key] || (els[key] = dom.byId(key));
+    obstacle.hidden = false; obstacle._rect = R(360, 230, 60, 24);
+    els.announce.toggleAttribute("data-lane-collapsed", false);
+    root.style.setProperty("--announce-lane-w", "200px");
+    lane.radioPaintedCollapse(root);
+    assert.equal(els.announce.hasAttribute("data-lane-collapsed"), true, `${key} stays readable when messages compete`);
+    obstacle.hidden = true;
+  }
+  // Current tracked-export cockpit at844×390: BUTTON245 enlarges the steer
+  // pair into the outer card's actual row, below the lane's predicted band.
+  group._rect = R(59, 159.8, 365.9, 176.4);
+  els.hudSectors._rect = R(542, 64, 255, 72);
+  const pedals = dom.document.createElement("div"); pedals._rect = R(599, 80, 188, 256); dock.appendChild(pedals);
+  els.announce.getBoundingClientRect = () => w() < 200 ? R(x(), 151.9, w(), 75) : R(55, 151.9, 282.4, 50.7);
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  els.announce.toggleAttribute("data-lane-collapsed", false);
+  lane.radioPaintedCollapse(root);
+  assert.ok(x() >= 425 && x() + w() <= 599, "painted steering bounds recover the free central lane");
+  assert.ok(Math.abs(w() - 158.1) < 0.2, "sectors ending above the card do not steal its 158px central fallback");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the pit call stays visible in the available gap");
+  dom.body.setAttribute("data-radio-placed", "");
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  lane.radioPaintedCollapse(root);
+  assert.equal(w(), 282.4, "explicit manual radio placement bypasses automatic control recovery");
+});

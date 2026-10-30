@@ -357,6 +357,8 @@
     "// ...and the race engineer's ladder: it ADVISES and never arms a stop,",
     "// graining and blistering say different things (one heals, one does not),",
     "// the axle call names an end of the car, and it does not nag. ~0.1 s.",
+    "// #1580 EnergyPlan: manual per-sector ERS policy; MANUAL ×3 is byte-identical, DEPLOY/SAVE flip BOOST on sector entry.",
+    "tests/unit/energy-plan.test.mjs",
     "tests/unit/engineer.test.mjs",
     "tests/unit/evaluate-scope-lint.test.mjs",
     "tests/unit/extra-rigs.test.mjs",

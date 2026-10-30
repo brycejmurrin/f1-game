@@ -54,15 +54,29 @@ test("sw.js's required-lazy list is GENERATED from LAZY_CAREER_UI (no hand-edite
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
-const protect = (command) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }), encoding: "utf8", cwd: ROOT });
+const protect = (command, cwd) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd }), encoding: "utf8", cwd });
 
 test("protect-files: a branch switch is not a generated-file edit; a file checkout still is", () => {
-  for (const c of ["git checkout -B cursor/x origin/claude/f1-game-project-26h3ng", "git switch -c cursor/x origin/y", "git checkout -B version.json origin/x", "git checkout -fB cursor/x HEAD"])
-    assert.equal(protect(c).status, 0, c + "\n" + protect(c).stderr);
-  for (const c of ["git checkout -- version.json", "git checkout HEAD -- js/roster.js"]) {
-    const r = protect(c);
-    assert.ok(r.status === 2 && r.stderr.includes("GENERATED"), c);
-  }
+  // Other hook suites create synthetic live-browser processes under ROOT.
+  // Use a separate repository so their sibling fixtures cannot change which
+  // guard answers this generated-file classification test.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const fixture = fs.mkdtempSync(path.join(ROOT, "artifacts", "checkout-hook-"));
+  try {
+    const init = spawnSync("git", ["init", "-q"], { cwd: fixture, encoding: "utf8" });
+    assert.equal(init.status, 0, init.stdout + init.stderr);
+    fs.mkdirSync(path.join(fixture, "js"));
+    fs.writeFileSync(path.join(fixture, "version.json"), "{}\n");
+    fs.writeFileSync(path.join(fixture, "js/roster.js"), "// generated fixture\n");
+    for (const c of ["git checkout -B cursor/x origin/claude/f1-game-project-26h3ng", "git switch -c cursor/x origin/y", "git checkout -B version.json origin/x", "git checkout -fB cursor/x HEAD"]) {
+      const r = protect(c, fixture);
+      assert.equal(r.status, 0, `${c}\nstatus=${r.status}\n${r.stderr}`);
+    }
+    for (const c of ["git checkout -- version.json", "git checkout HEAD -- js/roster.js"]) {
+      const r = protect(c, fixture);
+      assert.ok(r.status === 2 && r.stderr.includes("GENERATED"), `${c}\nstatus=${r.status}\n${r.stderr}`);
+    }
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });
 
 test("protect-files: MAIN may edit shared-contract files under a subdirectory; linked worktrees remain protected", () => {
@@ -70,6 +84,7 @@ test("protect-files: MAIN may edit shared-contract files under a subdirectory; l
   // from tools/gen/; the text compare read that as a linked worktree (2026-10-30).
   // ROOT itself may be linked: create both identities without touching the
   // real main checkout or depending on another session's worktree layout.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const fixture = fs.mkdtempSync(path.join(ROOT, "artifacts", "shared-contract-hook-"));
   const main = path.join(fixture, "main"), linked = path.join(fixture, "linked");
   fs.mkdirSync(main);
@@ -96,7 +111,7 @@ test("protect-files: MAIN may edit shared-contract files under a subdirectory; l
           input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: target, old_string: "fixture original", new_string: "changed" } }),
           encoding: "utf8", cwd: root });
         observed.push({ checkout, file, status: r.status,
-          sharedContract: r.stderr.includes("shared-contract file"),
+          sharedContract: /shared-contract file.*owned by the main/.test(r.stderr),
           unchanged: fs.readFileSync(target, "utf8") === "fixture original\n" });
       }
     }
