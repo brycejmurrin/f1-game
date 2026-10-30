@@ -1,7 +1,7 @@
 # Upstream three.js issues to file — drafts (2026-09-22)
 
 Apex 26 vendors three.js r186 with three local patches
-(`vendor/three-0.186.1/PATCHES.md`, `vendor/three-patches/patches.mjs`). None of
+(`vendor/three-0.187.0/PATCHES.md`, `vendor/three-patches/patches.mjs`). None of
 the three has an upstream issue or PR as of 2026-09-22 (searched mrdoob/three.js
 issues and PRs semantically and by code search; each needle still matches `dev`
 verbatim; no r187 exists). This session's GitHub access is scoped to this
@@ -46,7 +46,7 @@ like on every browser today that ignores it.
 
 Any `WebGPURenderer` scene on Chromium 141 (Windows/macOS/Android) — the first
 `renderer.render()` throws from `createView`. Downstream reference:
-Apex 26 (`brycejmurrin/f1-game`), `vendor/three-0.186.1/PATCHES.md` §1.
+Apex 26 (`brycejmurrin/f1-game`), `vendor/three-0.187.0/PATCHES.md` §1.
 
 **three.js version:** r185, r186, `dev` (2026-09-22).
 
@@ -94,7 +94,7 @@ do, and our diff is three string edits against `dev`.
 Any `MeshStandardNodeMaterial`/`MeshPhysicalNodeMaterial` graph large enough to
 declare >8 KiB of node vars, opened in Safari 26 on iOS 26 with WebGPU on.
 Downstream reference: Apex 26 (`brycejmurrin/f1-game`),
-`vendor/three-0.186.1/PATCHES.md` §4 (WGSL dumps from the affected iPhone,
+`vendor/three-0.187.0/PATCHES.md` §4 (WGSL dumps from the affected iPhone,
 2026-09-03).
 
 **three.js version:** r185, r186, `dev` (2026-09-22).
@@ -149,7 +149,7 @@ why it is not the proposal.
 
 `renderer.compileAsync( scene, camera )` on a scene with ~300 meshes in Safari,
 with the tab backgrounded before the call resolves. Downstream reference:
-Apex 26 (`brycejmurrin/f1-game`), `vendor/three-0.186.1/PATCHES.md` §5.
+Apex 26 (`brycejmurrin/f1-game`), `vendor/three-0.187.0/PATCHES.md` §5.
 
 **three.js version:** r184–r186, `dev` (2026-09-22).
 

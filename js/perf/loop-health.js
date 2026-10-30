@@ -90,10 +90,14 @@ const LoopHealth = (() => {
   }
   function watching() {
     if (watchOn !== null) return watchOn;
-    let forced = false, auto = true;
+    let forced = false, off = false, auto = true;
     try { forced = /[?&]stallwatch=1\b/.test(location.search) || localStorage.getItem("apex26.stallWatch") === "1"; } catch (_) { /* no location/storage */ }
+    // The OFF switch: a probe browser that is not flagged as automation (the
+    // Playwright MCP host browser) on software GL reloaded mid-race and read as
+    // a crash (UI hunt 2026-10-29 row 16). An explicit 0 beats the auto default.
+    try { off = /[?&]stallwatch=0\b/.test(location.search) || localStorage.getItem("apex26.stallWatch") === "0"; } catch (_) { /* no location/storage */ }
     try { auto = !(typeof navigator !== "undefined" && (navigator.webdriver || /apex-game-vm/.test(navigator.userAgent || ""))); } catch (_) { /* no navigator */ }
-    return (watchOn = forced || auto);
+    return (watchOn = forced || (!off && auto));
   }
   try {
     if (typeof document !== "undefined" && document.addEventListener) {

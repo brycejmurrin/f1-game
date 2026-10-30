@@ -876,3 +876,17 @@ test("reflection fade preserves each room's authored floor colours and markings"
     assert.equal(meshes.length, count, look + ': stable frames reuse the fade mesh');
   }
 });
+
+test("departure exterior has supported lane ground and an open outward doorway", () => {
+  const { GarageScene, meshes, draws } = harness();
+  GarageScene.draw(TEAM, LIV, [0, 2, 12], null, 0, { ambient: false });
+  const floor = meshes[draws[0].mesh.id - 1], p = floor.pos, n = floor.nrm;
+  const ground = [], facade = [];
+  for (let i = 0; i < p.length; i += 3) {
+    if (n[i + 1] > .99 && Math.abs(p[i + 1] + .036) < .001 && p[i + 2] >= 6.45) ground.push(p[i]);
+    if (n[i + 2] > .99 && Math.abs(p[i + 2] - 6.425) < .001) facade.push([p[i], p[i + 1]]);
+  }
+  assert.ok(Math.min(...ground) <= -22 && Math.max(...ground) >= 22, "lane extends under the exterior follow");
+  assert.ok(facade.length > 16, "near frontage has outward-facing surfaces");
+  assert.ok(facade.every(([x, y]) => Math.abs(x) >= 2.7 - .001 || y >= 4.8 - .001), "central aperture stays clear");
+});
