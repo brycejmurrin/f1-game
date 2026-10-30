@@ -312,13 +312,17 @@ test.describe("results-flow — desktop cooldown ownership", () => {
   test.setTimeout(240_000);
   test("a naturally finished car takes native throttle without changing classification", async ({ page }) => {
     await startGp(page, false); await crossFlag(page);
-    await page.waitForFunction(() => window.__apex.ceremony().inputOwner === "player", null,
-      { polling: 100, timeout: 5000 });
+    const diag = () => page.evaluate(() => JSON.stringify({ ceremony: window.__apex.ceremony(),
+      car: window.__apex.carAt(), active: document.activeElement && (document.activeElement.id || document.activeElement.tagName),
+      layers: !!(window.UiLayers && window.UiLayers.anyOpen()), state: window.__apex.info().state }));
+    const step = (name, wait) => wait.catch(async e => { throw new Error(`${name}: ${e.message}\n${await diag()}`); });
+    await step("cooldown hands input to the player", page.waitForFunction(
+      () => window.__apex.ceremony().inputOwner === "player", null, { polling: 100, timeout: 5000 }));
     const before = await page.evaluate(() => window.__apex.carAt());
     await page.keyboard.down("ArrowUp");
     try {
-      await page.waitForFunction(prog => window.__apex.carAt().prog > prog + 1, before.prog,
-        { polling: 100, timeout: 5000 });
+      await step("held ArrowUp advances the finished car", page.waitForFunction(
+        prog => window.__apex.carAt().prog > prog + 1, before.prog, { polling: 100, timeout: 5000 }));
     } finally { await page.keyboard.up("ArrowUp"); }
     const after = await page.evaluate(() => window.__apex.carAt());
     expect(after.finished).toBe(true);
