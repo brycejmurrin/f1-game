@@ -107,7 +107,7 @@ async function evalInVm() {
   const g = await createGame({ track });
   try {
     // eslint-disable-next-line no-new-func
-    const v = await new Function("a", "g", "return (async()=>(" + expr + "))()")(g.apex, g);
+    const v = await new Function("a", "g", "__apex", "return (async()=>(" + expr + "))()")(g.apex, g, g.apex);
     console.log(JSON.stringify(raw ? v : shapeOf(v), null, 2));
   } catch (e) {
     console.log(JSON.stringify({ err: String((e && e.message) || e) }, null, 2));

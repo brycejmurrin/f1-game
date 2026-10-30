@@ -13,9 +13,9 @@ const SRC = readFileSync(join(ROOT, "js/perf/gpu-test-run.js"), "utf8");
 const load = () => vm.runInNewContext(SRC + "\n;GpuTestRun", { performance: { now: () => 0 } }, { filename: absSrc("js/perf/gpu-test-run.js") });
 const J = (x) => JSON.parse(JSON.stringify(x));   // the VM's arrays and objects carry its realm's prototypes
 
-test("gpu-test-run: the plan is default, the 0.5/0.75/1.0 sweep, mirror off, default again, under 3 min", () => {
+test("gpu-test-run: the plan is default, the first boost, the 0.5/0.75/1.0 sweep, mirror off, default again, under 3 min", () => {
   const G = load();
-  assert.deepEqual(J(G.PHASES.map((p) => p.id)), ["default", "s50", "s75", "s100", "mirrorOff", "again"]);
+  assert.deepEqual(J(G.PHASES.map((p) => p.id)), ["default", "boost", "s50", "s75", "s100", "mirrorOff", "again"]);
   assert.deepEqual(J(G.PHASES.filter((p) => p.scale).map((p) => p.scale)), [0.5, 0.75, 1.0]);
   assert.ok(G.PHASES.length * (G.SETTLE_MS + G.MEASURE_MS) <= 180000);
   assert.equal(G.active(), false);
@@ -70,7 +70,7 @@ test("gpu-test-run fillSlope: frame p50 against scale squared; flat when the fra
 });
 
 const CAPTURE_SRC = readFileSync(join(ROOT, "js/perf/bench-capture.js"), "utf8");
-function lifecycle({ supported = true, initiallyOn = false, queryThrows = false, start = () => true } = {}) {
+function lifecycle({ supported = true, initiallyOn = false, queryThrows = false, start = () => true, boost = null, gpuDevice = null } = {}) {
   let now = 1000, next = 0, live = false, timerOn = initiallyOn;
   const callbacks = new Map(), writes = [], store = new Map();
   let samples = 0, sampleAt = -1, gpuMs = 4;
@@ -88,7 +88,9 @@ function lifecycle({ supported = true, initiallyOn = false, queryThrows = false,
     SoakRun: {
       active: () => live, status: () => ({ state: live ? "racing" : "done" }),
       start: () => { live = true; return start(); }, stop: () => { live = false; },
+      ...(boost ? { boost } : {}),
     },
+    ...(gpuDevice ? { GPUDevice: gpuDevice } : {}),
     requestAnimationFrame: (fn) => { callbacks.set(++next, fn); return next; },
     cancelAnimationFrame: (id) => callbacks.delete(id),
     setInterval: () => ++next, clearInterval() {},
@@ -210,3 +212,33 @@ for (const mode of ["unsupported", "inactive", "missing-serial"]) {
       : mode === "inactive" ? "timer inactive" : "freshness unavailable");
   });
 }
+
+test("GPU TEST boost phase: the session's first deploy, its worst frame and the pipelines built in its window", async () => {
+  // Bryce, 2026-10-30: "anytime I hit the boost the first time the game stalls for a second" (TLX WebGPU, iPhone).
+  // No container can run that path, so the phone's own GPU TEST reads it. The base tree has no boost phase.
+  const calls = [];
+  let deploying = false;
+  class FakeDevice { createRenderPipeline() { return {}; } createRenderPipelineAsync() { return Promise.resolve({}); } }
+  const h = lifecycle({ gpuDevice: FakeDevice, boost: (on) => { if (typeof on === "boolean") { calls.push(on); deploying = on; } return deploying; } });
+  let result = null;
+  assert.equal(await h.G.start({ onDone: (r) => { result = r; } }), true);
+  h.frame();
+  h.frame(h.G.SETTLE_MS + 1); h.frame(h.G.MEASURE_MS + 1);    // default
+  assert.deepEqual(calls, [], "the default phase never boosts");
+  h.frame(h.G.SETTLE_MS + 1); h.frame(16);                      // boost: settled, the measure window opens, BOOST goes on
+  assert.deepEqual(calls, [true]);
+  new FakeDevice().createRenderPipeline();                        // the first deploy builds one pipeline...
+  h.frame(16); h.frame(940); h.frame(16);                         // ...and stalls one frame
+  h.frame(h.G.BOOST_WINDOW_MS);                                   // past the window: its counts are fixed
+  new FakeDevice().createRenderPipeline();                        // a later build is the phase's, not the first deploy's
+  h.frame(h.G.MEASURE_MS);
+  assert.deepEqual(calls, [true, false], "BOOST goes off when the phase ends");
+  for (let i = 2; i < h.G.PHASES.length; i++) { h.frame(h.G.SETTLE_MS + 1); h.frame(h.G.MEASURE_MS + 1); }
+  assert.equal(result.reason, "complete");
+  const row = result.phases.find((p) => p.id === "boost");
+  assert.deepEqual(J(row.boost), { deployed: true, firstMaxMs: 940, windowMs: h.G.BOOST_WINDOW_MS, links: 0, pipes: 1 });
+  assert.equal(row.pipes, 2, "the whole phase still counts every build");
+  assert.deepEqual(J(result.firstBoost), J(row.boost));
+  assert.deepEqual(calls, [true, false], "no other phase touches BOOST");
+});
+

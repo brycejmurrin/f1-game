@@ -5696,6 +5696,11 @@
         "tests/unit/share-code.test.mjs"
       ]
     },
+    "js/data/garage-departure-motion.js": {
+      "sample": [
+        "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
     "js/data/hub.js": {
       "buildPicker": [
         "tests/unit/real-race-script.test.mjs"
@@ -7723,6 +7728,20 @@
         "tests/unit/garage-crew.test.mjs"
       ]
     },
+    "js/garage/departure-wheels.js": {
+      "create": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "prepare": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "release": [
+        "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
     "js/garage/experience.js": {
       "buildFacility": [
         "tests/unit/garage-mesh.test.mjs"
@@ -7847,6 +7866,7 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "release": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "saveData": [
@@ -8049,6 +8069,7 @@
         "tests/unit/scene-live.test.mjs"
       ],
       "draw": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-looks.test.mjs",
@@ -8100,6 +8121,7 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "prepare": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -8124,6 +8146,7 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "release": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -10750,6 +10773,9 @@
       "active": [
         "tests/unit/render-rate.test.mjs"
       ],
+      "draw": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "force": [
         "tests/unit/render-rate.test.mjs"
       ],
@@ -13341,6 +13367,7 @@
       ],
       "gapText": [
         "tests/unit/race-radio.test.mjs",
+        "tests/unit/radio-lines.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "pick": [
@@ -14921,7 +14948,9 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "drawWarm": [
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "ensureGR": [
         "tests/unit/tlx-hunt4b.test.mjs"
@@ -15012,7 +15041,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
@@ -15664,14 +15694,19 @@
       ]
     },
     "js/render/three/tsl-sky.js": {
+      "cacheDrawWarm": [
+        "tests/unit/tlx-webgpu-perf.test.mjs"
+      ],
       "cacheState": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "cacheStep": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cacheWarm": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "derive": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -15680,7 +15715,8 @@
       "dispose": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "update": [
         "tests/unit/gfx-backend-canary.test.mjs",
