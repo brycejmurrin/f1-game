@@ -292,7 +292,9 @@ const NetSession = (function () {
     return {
       pump,
       sendState: (bytes) => transport.send(CH_STATE, bytes),
-      sendEvent(type, data) {
+      // dataJson: `data` already serialised by a caller that fans one payload out to many sessions.
+      sendEvent(type, data, dataJson) {
+        if (typeof dataJson === "string") return transport.send(CH_EVENT, '{"t":' + JSON.stringify(type) + ',"d":' + dataJson + "}");
         return transport.send(CH_EVENT, JSON.stringify({ t: type, d: data === undefined ? null : data }));
       },
       onState(fn) { stateHandlers.push(fn); return this; },

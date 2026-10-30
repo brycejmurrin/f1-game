@@ -92,11 +92,20 @@ const I18n = (function () {
     return forms;
   }
 
+  // One PluralRules per language: construction is ~25 µs (desktop Node) and the
+  // HUD's tyre chip formats a plural label every 10 Hz tick (perf hunt 6).
+  const _plural = new Map();
+  function pluralRules(lang) {
+    const key = baseLang(lang);
+    let pr = _plural.get(key);
+    if (!pr) { pr = new Intl.PluralRules(key); _plural.set(key, pr); }
+    return pr;
+  }
   function resolvePlural(msg, lang, vars) {
     return String(msg).replace(/\{(\w+),\s*plural,\s*((?:\w+\s+\{[^}]*\}\s*)+)\}/g, (full, anchor, body) => {
       const n = Number(vars && vars[anchor] != null ? vars[anchor] : 0);
       const forms = parsePluralForms(body);
-      const cat = new Intl.PluralRules(baseLang(lang)).select(n);
+      const cat = pluralRules(lang).select(n);
       let pick = forms[cat];
       if (pick == null) pick = forms.other;
       if (pick == null) pick = forms.one || "";

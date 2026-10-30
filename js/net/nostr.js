@@ -11,6 +11,11 @@ const NetNostr = (function () {
   // (apex-sha 3faf59d9 / build 14296). Not a relay event TTL.
   const JOIN_TIMEOUT_MS = 12000;
   const HOST_TIMEOUT_MS = 120000;
+  // A `listen` exchange (transport.js ICE-restart answerer) holds ONE socket
+  // set for this long. On JOIN_TIMEOUT it re-dialled all relays every 12 s for
+  // the whole race: ~1,000 TLS handshakes and 300 PBKDF2 topics in 30 min
+  // (perf hunt 6). onclose and the foreground return still reopen a dead socket.
+  const LISTEN_TIMEOUT_MS = 300000;
   const REPLY_TIMEOUT_MS = 20000;   // guest: offer found -> answer published (build + ICE gather)
   const RELAY_CHECK_MS = 6000;
   const REPOST_MS = 5000;
@@ -223,7 +228,7 @@ const NetNostr = (function () {
    * use SEPARATE topics, so neither side ever reads its own message back.
    */
   async function directExchange(opts) {
-    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
+    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail, listen } = opts;
     Log.info("net", "nostr start");
     if (!available()) {
       return nostrLog({ ok: false, error: "unsupported",
@@ -392,8 +397,9 @@ const NetNostr = (function () {
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
-      const startedAt = Date.now(), deadlineAt = startedAt + (hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
-      expireTimer = later(expire, hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
+      const windowMs = listen && !hosting ? LISTEN_TIMEOUT_MS : (hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
+      const startedAt = Date.now(), deadlineAt = startedAt + windowMs;
+      expireTimer = later(expire, windowMs);
 
       let opened = 0;
       // ONE SOCKET PER RELAY, REOPENED WHEN IT DIES. A phone host switches to
@@ -412,6 +418,7 @@ const NetNostr = (function () {
         socketUrl.set(w, url);
         w.onopen = () => {
           opened++;
+          attempt = 0;   // a socket that opened earns the short backoff again (a 300 s listen sees idle closes)
           if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
           try {
             // Trystero stamps the REQ with `since: now()` — THIS device's clock,
@@ -526,7 +533,7 @@ const NetNostr = (function () {
   // directExchange is the public room API (not a full Trystero joinRoom /
   // makeAction / onPeerJoin — that path dies when our PC starts; see the
   // directExchange header). RELAY_CHECK_MS / load / validRelay stay module-local.
-  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, available, directExchange,
+  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, LISTEN_TIMEOUT_MS, available, directExchange,
     RELAYS, relayUrls,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE, OFFER_CREATED_SLACK_S,
     readRelayFrame, createBoundedInbox };
