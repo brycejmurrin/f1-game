@@ -2274,11 +2274,11 @@ function scheduleFlybyTrack(settle) {
   const prepare = async () => {
     if (!current()) return;
     try {
+      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // start optional garage assets alongside circuit/scenery downloads
       // Download independently of the old world's compilation; only replacing
       // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
-      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // picker/sheet up: RACE! is next (not the title warm)
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first

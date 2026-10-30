@@ -626,7 +626,7 @@ function getSetupPreviewMesh() {
   return _spMesh;
 }
 // Optional, detached circuit slice shared by every garage camera/animation.
-let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0;
+let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
 function exteriorPick(ctx) {
@@ -670,7 +670,7 @@ function exteriorLighting() {
   return exteriorLight = light;
 }
 function releaseExterior() {
-  exteriorEpoch++; exteriorBoot = null; exteriorBootKey = "";
+  exteriorEpoch++; exteriorBoot = null; exteriorBootKey = ""; exteriorDrawn = false;
   if (exterior) exterior.release();
   exteriorRequested = null; exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; exteriorLight = null; exteriorAnchor = null;
 }
@@ -817,6 +817,7 @@ function drawDepartureReflection(matrix, material) {
     -.45 * Math.sin(2 * (driveOut.motion.yaw || 0)), material);
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
+  exteriorDrawn = false;
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
   // before the first garage present. Measured on tip a52e9108 at 4× CPU: tapping
   // #mb-garage while Assets.createTextureArray was still uploading produced one
@@ -1010,7 +1011,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return false;
-  if (context.realExterior) exterior.draw();
+  if (context.realExterior) exteriorDrawn = exterior.draw();
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Paint stays the race dry-day material. The old matte override (clearcoat 0.1,
@@ -1298,7 +1299,7 @@ return {
   get effFit() { return _spEffFit; },
   get effPanel() { return _spEffPanel; },
   prewarmExterior() { if (typeof prepareExterior === "function") prepareExterior(garageCtx(true), null); },
-  exteriorState: () => exterior ? exterior.state() : { status: exteriorBoot ? "loading" : "idle" },
+  exteriorState: () => exterior ? Object.assign(exterior.state(), { visible: exteriorDrawn }) : { status: exteriorBoot ? "loading" : "idle", visible: false },
   // GaragePrebuild (js/garage/prebuild.js): the setup garage's car and room,
   // built ahead of the GARAGE tap — keyed exactly as the first garage frame keys them.
   previewKey, prebuildKey: () => previewKey() + "|" + GarageScene.ctxKey(garageCtx(true)),
