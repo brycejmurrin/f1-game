@@ -60,7 +60,7 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
      Same contract as `.sheet`: zoom on the card, not the full-bleed overlay,
      so safe-area insets on `.dh-overlay` stay in viewport px. Heights below
      use --svhz / --vwz so they stay a constant fraction of the screen. */
-  /* var(--sheet-scale, …): the card is fit-managed (js/game/sheetshape.js
+  /* var(--sheet-scale, …): the card is fit-managed (js/ui/sheet-shape.js
      scans .fit-managed alongside .sheet), so a short window at high UI SIZE
      shrinks the card instead of leaving header+tabs ~45% of a 196px local
      box. The overlays layer beats components, so the sheet's own zoom rule
@@ -175,6 +175,35 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   color: var(--text);
   font-weight: 800;
 }
+/* ONE BAR (design pass #2d, #4241): hub.js puts the tab strip and the ⋯ developer
+   menu inside .sheet-head, so title, destinations and ✕ share one row and the
+   panel gets the height (844x390: 56 % -> 86 % of the card, standings 5 -> 9 rows).
+   Tabs read as broadcast underline tabs, not a second row of plates. The strip
+   still WRAPS: where the row cannot hold it (narrow phones, big UI SIZE) it drops
+   under the title, which is the old two-row layout. */
+.dh-card > .sheet-head { flex-wrap: wrap; gap: 0 calc(var(--gap) * 0.5); }
+.dh-card > .sheet-head > h2 { flex: 0 0 auto; white-space: nowrap; }
+.dh-card > .sheet-head > .dh-tabs {
+  flex: 1 1 0; align-self: stretch; align-items: stretch;
+  padding: 0; gap: 0; border-bottom: 0;
+}
+.sheet-head > .dh-tabs .dh-tab {
+  background: none; border: 0; border-radius: 0; box-shadow: none;
+  padding: 0 calc(var(--gap) * 0.75); letter-spacing: var(--ls-1);
+  border-bottom: 3px solid transparent; color: var(--dim);
+}
+.sheet-head > .dh-tabs .dh-tab.active { background: none; border-bottom-color: var(--red); color: var(--text); }
+/* ⋯ holds GPS TRACE EXPORT. !important: menu-destinations.css (responsive layer,
+   outranks this one) pads the old full-width row. */
+.sheet-head > .dh-developer-tools { position: relative; flex: 0 0 auto; padding: 0 !important; align-self: center; }
+.sheet-head > .dh-developer-tools > summary {
+  list-style: none; display: grid; place-items: center;
+  width: var(--tap-paint); font-size: var(--fs-4); line-height: 1;
+}
+.sheet-head > .dh-developer-tools > summary::-webkit-details-marker { display: none; }
+.sheet-head > .dh-developer-tools > button { position: absolute; right: 0; top: 100%; z-index: 2; white-space: nowrap; }
+/* Narrow: destinations take their own row under the title (the tall grid below still lays them out). */
+body[data-width="narrow"] .dh-card > .sheet-head > .dh-tabs { flex-basis: 100%; order: 3; }
 /* UI SIZE can turn a physically short screen into a very short LOCAL card.
    body[data-density] is measured in those same zoom-adjusted units; compact
    chrome keeps the destination strip and loading state from consuming the
@@ -384,6 +413,8 @@ body[data-density="compact"] .dh-footnote {
 /* Localized date/time + timezone can exceed a five-column phone cell. Wrap
    within that session instead of painting across the next session's time. */
 [data-nextgp="session-time"] { color: var(--text); font-size: var(--fs-1); white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+/* Wide: five session cells hold "Sat, 05:30 PM UTC" on one line; wrapping left a lone "UTC" row. */
+body[data-shape="wide"] [data-nextgp="session-time"] { white-space: nowrap; font-variant-numeric: tabular-nums; }
 body[data-width="narrow"] [data-nextgp="tile"] { grid-template-columns: 1fr; }
 body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: auto; }
 /* schedule: ADD TO CALENDAR bar (iCalendar file) — touch-sized, wraps on a 390px-tall phone */

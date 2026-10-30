@@ -87,6 +87,7 @@
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important; /* a staggered row (.res-row) must not wait its delay either */
     scroll-behavior: auto !important;
   }
 }
@@ -481,6 +482,7 @@
      band above was named; naming it lets the sweep converge on two edges
      (control 0.16, card 0.12) instead of forty ad-hoc alphas. */
   --card-line: rgba(255, 255, 255, 0.12);
+  --hairline: color-mix(in oklab, var(--text) 8%, transparent); /* row rules, quiet dividers; follows the theme */
   --plate-hover: color-mix(in oklab, var(--carbon) 78%, #fff 8%);
   --plate-press: color-mix(in oklab, var(--carbon) 84%, #fff 12%);
   --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
@@ -877,6 +879,7 @@ body:not(.desktop) {
   --plate-opaque: color-mix(in oklab, var(--carbon) 98%, transparent);
   --plate-line: color-mix(in oklab, var(--text) 55%, transparent);
   --card-line: color-mix(in oklab, var(--text) 40%, transparent);
+  --hairline: color-mix(in oklab, var(--text) 30%, transparent);
   --hc-hud-plate: color-mix(in oklab, #000 92%, transparent);
   --hc-hud-line: rgba(255, 255, 255, 0.55);
   --hud-panel-a-eff: 1;   /* PANEL OPACITY never thins a HIGH CONTRAST plate */
