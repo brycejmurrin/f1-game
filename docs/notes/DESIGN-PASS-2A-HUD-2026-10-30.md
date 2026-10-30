@@ -63,11 +63,25 @@ Pixel diff of the picks against the live build: tower 23.4 % day / 15.4 % night,
 - OT idle label on its disc is low contrast (by design while OT is unavailable); worth an APCA check on the
   real frame next pass.
 
+## Against the pass-2 research note (`UI-DESIGN-RESEARCH-2026-10-30.md`, relayed by the parent)
+- Tabular digits: every HUD figure already sets `font-variant-numeric: tabular-nums`, and `css/fonts-hud.css`
+  pins the digit advances; the new speed size keeps both.
+- Red and dim as TEXT on the HUD (APCA Lc 40 and 48 on `--bg`, under the Lc 60 / 75 bars): `--slower` inks the
+  POS loss flash (now on the dark pill), the slow DELTA, `#hud-limits.limits-hot` and the hot tyre letter;
+  `--dim` inks the idle OT / AERO chips. Not changed here (tokens are lane 2d's); proposal below.
+- Gaps: the on-track readout keeps its adaptive decimals (`gapDecimals`, EMA-smoothed); a one-decimal glance
+  readout is a fair follow-up but changes a pinned behaviour (`hud-gap-decimals.test.mjs`), so not in this pass.
+- Toggles: `HudElements` already switches 18 readouts (POS, LAP, TIME, BEST, DELTA, sectors, speed, gear, energy,
+  tyre, OT, aero, BB, limits, damage, relative, strategy, inputs).
+
 ## Token proposals for lane 2d (`css/tokens.css` is theirs)
 - Promote `--hud-strip-bg` (`color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent)`)
   to `tokens.css` as the HUD's one panel token; `.hud-box`, `#hud-sectors`, `#hud-limits`, `#hud-gearbox` and
   `.hud-gaps` still each spell their own `rgb(8 8 14 / calc(0.9x * …))`.
-- A `--hud-divider` alias for `--plate-line` inside the HUD scope, so a hairline means one thing.
+- A `--hud-divider` alias for `--plate-line` inside the HUD scope, so a hairline means one thing (or 2d's
+  `--hairline` once #4244 lands, if its 8 % reads on the HUD plate).
+- A HUD-scope `--slower-ink` lifted to Lc ≥ 60 on the HUD plate for red-as-text (POS loss, slow DELTA, limits),
+  keeping `--slower` for fills; and the idle chips' `--dim` raised to the same floor.
 
 ## Research
 Reused from pass #1 (timing colours, contrast and target-size criteria, APCA). No new sources this lane.
