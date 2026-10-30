@@ -19,7 +19,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
 function ctx2d(calls) {
-  const grad = { addColorStop() {} };
+  const grad = { addColorStop(at,color) { if (calls.atlasStops) calls.atlasStops.push([at,color]); } };
   return {
     globalAlpha: 1, fillStyle: "",
     clearRect: () => { calls.clear++; if (calls.frameDraws) calls.frameDraws.length = 0; },
@@ -33,14 +33,17 @@ function ctx2d(calls) {
   };
 }
 
-function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", recordDraws = false, seed = 0xd809 } = {}) {
-  const calls = { clear: 0, draw: 0, rotate: 0, ...(recordDraws ? { frameDraws: [] } : {}) };
+function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", recordDraws = false, recordAtlas = false, seed = 0xd809 } = {}) {
+  const calls = { clear: 0, draw: 0, rotate: 0, ...(recordDraws ? { frameDraws: [] } : {}), ...(recordAtlas ? { atlasStops: [], atlasBuilds: 0 } : {}) };
   const el = { id: "fx-droplets", hidden: true, width: 0, height: 0, getContext: () => ctx2d(calls), setAttribute() {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } } };
   const document = {
     body: { hasAttribute: () => helmet },
     getElementById: (id) => (id === "fx-droplets" ? (staticEl ? el : null) : id === "game" ? game : null),
-    createElement: () => ({ width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls) }),
+    createElement: () => {
+      if (recordAtlas) { calls.atlasBuilds++; calls.atlasStops.length = 0; }
+      return { width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls) };
+    },
   };
   const rng = makeRng(seed);
   const ctx = vm.createContext({
@@ -51,7 +54,7 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet
   });
   seedLog(ctx);
   const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", ctx, { filename: absSrc("js/fx/droplets.js") });
-  return { D, el, calls };
+  return { D, el, calls, setHelmet: v => { helmet = v; } };
 }
 
 // 5 s of 60 Hz frames.
@@ -254,6 +257,29 @@ test("helmet impact: reduced motion and other onboard cameras keep the bead-only
       assert.deepEqual([after.x,after.y,calls.rotate],[before.x,before.y,0],"reduced water stays still without streaks");
     }
   }
+});
+
+test("helmet rain: atlas follows helmet camera changes even paused, and stays cached between changes", () => {
+  const {D,calls,setHelmet} = makeDroplets({helmet:true,recordAtlas:true});
+  D.tick(0.06,true,1,false,0,false);
+  const helmetStops = structuredClone(calls.atlasStops), initialBuilds = calls.atlasBuilds;
+  const hit = D.stats().first.hitAge;
+  for (let i=0;i<3;i++) D.tick(0.01,true,1,false,0,false);
+  assert.equal(calls.atlasBuilds,initialBuilds,"ordinary helmet ticks reuse the atlas");
+  setHelmet(false);
+  D.tick(0,true,1,false,0,false);
+  const classicStops = structuredClone(calls.atlasStops);
+  assert.notDeepEqual(classicStops,helmetStops,"classic onboard water has its original shading");
+  assert.equal(calls.atlasBuilds,initialBuilds+1,"paused helmet exit rebuilds once");
+  for (let i=0;i<3;i++) D.tick(0,true,1,false,0,false);
+  assert.equal(calls.atlasBuilds,initialBuilds+1,"paused classic ticks reuse their atlas");
+  setHelmet(true);
+  D.tick(0,true,1,false,0,false);
+  assert.deepEqual(calls.atlasStops,helmetStops,"helmet re-entry restores stronger helmet shading");
+  assert.equal(calls.atlasBuilds,initialBuilds+2,"paused helmet re-entry rebuilds once");
+  assert.ok(Math.abs(D.stats().first.hitAge-hit-0.03)<1e-6,"paused atlas swaps never advance the impact clock");
+  D.tick(0.01,true,1,false,0,false);
+  assert.equal(calls.atlasBuilds,initialBuilds+2,"resumed helmet rendering remains cached");
 });
 
 // ── spray ────────────────────────────────────────────────────────────────────

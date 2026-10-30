@@ -25,7 +25,7 @@ const Droplets = (function () {
 
   let _cv = null, _ctx = null, _sprite = null, _looked = false;
   let _w = 0, _h = 0, _dpr = 1, _shown = false, _mobile = null;
-  let _n = 0, _acc = 0, _spriteReflection = 1;
+  let _n = 0, _acc = 0, _spriteReflection = 1, _spriteHelmet = false;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
   const _r = new Float32Array(CAP_DESK);                                       // radius, fraction of min(w, h)
@@ -86,7 +86,7 @@ const Droplets = (function () {
 
   // Three noncircular menisci. The interior stays transparent; only a thin,
   // incomplete edge catches light. The atlas is rebuilt only on a settings change.
-  function _paintSprite(reflection = 1) {
+  function _paintSprite(reflection = 1, helmet = false) {
     if (typeof document === "undefined" || !document.createElement) return null;
     const s = document.createElement("canvas");
     if (!s || !s.getContext) return null;
@@ -96,16 +96,16 @@ const Droplets = (function () {
     for (let v = 0; v < 3; v++) {
       g.save(); g.translate(v * 64, 0);
       const edge = g.createLinearGradient(10, 8, 48, 58);
-      edge.addColorStop(0, "rgba(210,222,232," + 0.28 * reflection + ")");
+      edge.addColorStop(0, "rgba(210,222,232," + (helmet ? 0.42 : 0.28) * reflection + ")");
       edge.addColorStop(0.28, "rgba(160,180,198,0)");
-      edge.addColorStop(0.72, "rgba(8,15,23,0.32)");
-      edge.addColorStop(1, "rgba(196,211,224," + 0.16 * reflection + ")");
+      edge.addColorStop(0.72, "rgba(8,15,23," + (helmet ? 0.55 : 0.32) + ")");
+      edge.addColorStop(1, "rgba(196,211,224," + (helmet ? 0.28 : 0.16) * reflection + ")");
       g.beginPath(); g.moveTo(29, 9 + v * 2);
       g.bezierCurveTo(13 - v, 10, 12, 29, 16 + v, 42);
       g.bezierCurveTo(20, 58, 44, 59 - v, 48, 43);
       g.bezierCurveTo(55, 25, 44 - v * 2, 7, 29, 9 + v * 2);
       g.closePath();
-      g.fillStyle = "rgba(10,18,26,0.045)"; g.fill();
+      g.fillStyle = "rgba(10,18,26," + (helmet ? 0.09 : 0.045) + ")"; g.fill();
       g.strokeStyle = edge; g.lineWidth = 3.5; g.stroke();
       // A narrow, soft crescent, not a white circular specular dot.
       g.beginPath(); g.moveTo(21, 16 + v);
@@ -137,7 +137,7 @@ const Droplets = (function () {
     const i = _n++;
     _x[i] = 0.04 + Math.random() * 0.92;
     _y[i] = 0.04 + Math.random() * 0.80;   // not the very bottom: the cockpit/HUD sits there
-    _r[i] = (helmet ? 0.004 : 0.0025) + Math.random() * Math.random() * (helmet ? 0.012 : 0.009);
+    _r[i] = (helmet ? 0.005 : 0.0025) + Math.random() * Math.random() * (helmet ? 0.018 : 0.009);
     _variant[i] = Math.floor(Math.random() * 3);
     _age[i] = _hit[i] = 0;
     _life[i] = reduced ? 1.8 + Math.random() * 1.6 : helmet ? 12 + Math.random() * 10 : 2.5 + Math.random() * 3.5;
@@ -168,7 +168,7 @@ const Droplets = (function () {
         // Surface tension pins small beads more strongly than large beads.
         // Gravity and aerodynamic pressure compete; pressure scales with v².
         const release = Math.min(1, _r[i] / 0.010);
-        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.016, _r[i] + dt * rain * 0.00035);
+        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.023, _r[i] + dt * rain * 0.00035);
         const push = air * (0.18 + 0.82 * release) * runoff;
         const tx = (_x[i] - 0.5) * 2.8 * push;
         const ty = helmet ? ((0.025 + 0.085 * release) * (1 - 0.8 * air) - 0.035 * air) * runoff
@@ -243,8 +243,8 @@ const Droplets = (function () {
     const resized = _resize();
     const reflection = helmet ? CockpitOpts.visorReflections() : "light";
     const strength = reflection === "off" ? 0 : reflection === "medium" ? 1.4 : reflection === "strong" ? 1.8 : 1;
-    const changed = strength !== _spriteReflection;
-    if (changed) { _spriteReflection = strength; _sprite = _paintSprite(strength); }
+    const changed = strength !== _spriteReflection || helmet !== _spriteHelmet;
+    if (changed) { _spriteReflection = strength; _spriteHelmet = helmet; _sprite = _paintSprite(strength, helmet); }
     if (!(dt > 0)) { if (resized || changed) _draw(!!reduced, helmet); return; }   // paused: the last frame stays on the glass
     if (dt > 0.1) dt = 0.1;
     _step(dt, vs || 0, !!reduced, runoff, helmet, rain);
