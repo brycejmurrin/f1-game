@@ -7791,6 +7791,7 @@
     },
     "js/garage/exterior-geometry.js": {
       "*": [
+        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
       ]
