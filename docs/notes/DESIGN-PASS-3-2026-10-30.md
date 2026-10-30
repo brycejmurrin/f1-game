@@ -11,12 +11,12 @@ branch, and this table links them.
 
 | lane | issue | scope | owner | PR | status |
 |---|---|---|---|---|---|
-| A | #4258 | contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | launched by this session | — | launched |
-| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | launched by this session | — | launched |
+| A | #4258 | contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | — | launched 17:05–17:08Z |
+| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | — | launched 17:05–17:08Z |
 | C | #4257 | ratchet tooling: a topic branch can lower a slack-0 tree metric | Bryce's own session (claimed 17:00Z, first claimant) | — | not launched here |
-| D | #4281 | career header red ink, disclaimer border, garage tab strip | launched by this session | — | launched |
+| D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | — | launched 17:05–17:08Z |
 | D2 | #4282 | layout-audit: the 8 harness-timeout cells | waits for #4225 (owns `tools/ui/layout-audit.mjs`) | — | blocked |
-| E | #4284 | motion and feel: transitions, press feedback, results reveal, tabular numerals; one living gallery | launched by this session | — | launched |
+| E | #4284 | motion and feel: transitions, press feedback, results reveal, tabular numerals; one living gallery | session_01BEw9UGgCHVAFkn5Wwj63iT (Opus) | — | launched 17:05–17:08Z |
 
 ## Coordination decisions
 - **#4257 is not relaunched.** A session Bryce started from his phone claimed it at 17:00Z; the first claimant
