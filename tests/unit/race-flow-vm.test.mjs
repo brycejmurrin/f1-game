@@ -128,3 +128,28 @@ for (const flow of ["season", "career"]) {
     SeasonCal.engage(false);
   });
 }
+
+test("career simulation forgets the prior driven round's unclassified DNF", async () => {
+  const simGame = await createGame({ track: ID });
+  try {
+    const { G, apex: A } = simGame;
+    const { Career, SeasonCal } = simGame.sandbox;
+    Career.start({ flavour: "driver", teamId: G.player.team.id, seed: 7 });
+    Career.engage(true); SeasonCal.engage("career");
+    G.flow = "career"; G.season = Career.data().season;
+    for (const c of G.cars) {
+      c.lap = 4; c.prog = 3 * G.track.total; c.finished = true;
+      c.finishT = 300 + G.cars.indexOf(c); c.tyreLog = [{ code: "S" }, { code: "M" }]; c.best = 90;
+    }
+    G.player.finished = false; G.player.retired = true; G.player.lap = 1;
+    G.player.prog = 100; G.player.dnf = "mechanical"; G.raceT = 350;
+    G.endRace();
+    assert.equal(G.player.classified, false);
+    G.raceReliability = "off";
+    A.careerSim(1);
+    const row = Career.data().results.at(-1);
+    assert.equal(G.player.retired, false);
+    assert.ok(row.p <= 10, "the seeded next-round finish earns points");
+    assert.ok(row.pts > 0, "a previous unclassified DNF cannot erase the new finish's points");
+  } finally { simGame.close(); }
+});

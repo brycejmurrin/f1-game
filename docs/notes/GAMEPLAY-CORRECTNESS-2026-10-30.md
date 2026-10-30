@@ -13,6 +13,8 @@ Session entry resolves configuration and builds the grid; qualifying supplies th
 
 Rule grounding: FIA 2026 Sporting Regulations Section B Issue 07, article B6.3.6: https://api.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_07_-_2026-06-25.pdf (retrieved and text checked this session). Suspended races that cannot restart receive 30 seconds instead of disqualification for this breach.
 
+- Agent-only careerSim after a driven unclassified DNF retained `classified=false`: a fresh simulated P6 earned 0 points/bonus. A twin with stale classification cleared gave the same P6, 8 points and bonus 160. The integration regression fails before and passes after resetting classified/dsq for each simulated round. Ordinary driven next-race entry was not implicated.
+
 ## Investigation limits
 
 Physics worker: 53 existing tests passed; poisoning curvature to -0.5/0/+0.5 over 30 identical seeded unassisted ticks produced bit-identical own-state outputs. AI worker: initial 42 strategy/pass/queue tests passed. No new handling or AI defect reproduced. The track-frame comment before updateCarBicycle is stale; actual integration is world-space. No balance, assists, PACE, fixed stepping, garage or shared G-contract changes.

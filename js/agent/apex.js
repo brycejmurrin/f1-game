@@ -143,7 +143,7 @@ function simCareerRound() {
   for (let i = 0; i < rows.length; i++) {
     const car = byId.get(rows[i].driverId);
     if (!car) continue;
-    car.gridPos = i + 1;
+    car.gridPos = i + 1; delete car.classified; delete car.dsq;   // this simulated round owns its result
     if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
     const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
     // Race day is not qualifying. Pace order is a strong prior; craft is how much
