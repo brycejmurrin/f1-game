@@ -235,13 +235,17 @@ function swOptionalBlock() {
   const groups = [
     ["ROOT PAGES — answered offline under their own URL, never by the game shell", SW_ROOT_PAGES],
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
-    ["LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
+    // ORDER IS INSTALL DOWNLOAD PRIORITY (sw.js install walks this Set in order):
+    // every race needs the race-entry bundles, a player needs ~2 of the ~100
+    // circuit + scenery files, so the race-entry groups go first (#4219 A).
+    ["LAZY_RACE — race payload every race needs", MANIFEST.LAZY_RACE],
     ["LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)", MANIFEST.LAZY_RACE_SESSION || []],
     ["LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build", MANIFEST.LAZY_TRACK_BUILD || []],
     ["LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start", MANIFEST.LAZY_AUDIO || []],
+    ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
+    ["LAZY_CIRCUIT + LAZY_SCENERY — per-circuit payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
     ["LAZY_DATA — the data hub bundle behind the DATA button", MANIFEST.LAZY_DATA],
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
-    ["LAZY_WORKER — worker entry scripts (new Worker, never a page tag)", MANIFEST.LAZY_WORKER],
     ["LAZY_EDITOR — the track designer behind the TRACK DESIGNER door", MANIFEST.LAZY_EDITOR],
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
