@@ -275,3 +275,12 @@ test("W7: the sky cache bake is warmed by a draw keyed like cacheStep's (depth o
   assert.ok(warmed.has(false), `the warm built the bake's no-depth pipeline (warm saw depth ${[...warmed]})`);
 });
 
+
+test("W8: the production draw warm awaits the queued canvas compiles before it settles and opens the live present", () => {
+  // drawWarm only QUEUES the SGSR/FXAA canvas compiles (serialised); _gpuSettled waits on submitted GPU work, not on them.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("_warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);");
+  assert.ok(i > 0, "the entry draw warm call is where the test expects it");
+  const after = src.slice(i, src.indexOf("_gpuSettled(5000)", i));
+  assert.match(after, /await post\.warmSettled\(\)/, "warmSettled is awaited between drawWarmStage and _gpuSettled");
+});

@@ -3648,6 +3648,7 @@ const TLX = (function () {
           try {
             _gpuLastOperation = "warm-draw";
             _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
+            if (post && post.warmSettled) await post.warmSettled();   // the queued canvas compiles, before the live present can race them
             await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
           } catch (e) {
             _warmStages.drawn = { error: String((e && e.message) || e) };
