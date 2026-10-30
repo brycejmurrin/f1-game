@@ -36,6 +36,21 @@
       "presentation": "shared-levels",
       "preserve": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility."
     },
+    "tools/agent/inbox-store.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/agent/inbox.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exit status and bounded JSON, source identity, cache freshness/errors, generation/body cursors and claimed identity; no provider delivery or ACK inference."
+    },
+    "tools/agent/message.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/agent/output.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

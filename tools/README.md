@@ -49,6 +49,9 @@ Bounded agent-output helpers: private artifact retention, subprocess ownership, 
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **agent/inbox-store.mjs** | Rebuildable SQLite projection of GitHub thread comments; bounded inbox queries and atomic refreshes. | — |
+| **agent/inbox.mjs** | Read GitHub thread comments into a rebuildable SQLite inbox; bounded sync, list, get and status JSON. | worker |
+| **agent/message.mjs** | Validate and encode untrusted versioned GitHub agent-message envelopes. | — |
 | **agent/output.mjs** | Shared bounded agent output with private, retrievable original artifacts. | — |
 | **agent/process.mjs** | Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts. | — |
 

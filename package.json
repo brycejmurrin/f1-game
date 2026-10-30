@@ -81,7 +81,7 @@
     "memory:list": "node tools/env/apex-memory.mjs list",
     "memory:show": "node tools/env/apex-memory.mjs show",
     "memory:retire": "node tools/env/apex-memory.mjs retire",
-    "test:agent-output": "node --test --test-timeout=900000 tests/unit/agent-experiment.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs",
+    "test:agent-output": "node --test --test-timeout=900000 tests/unit/agent-experiment.test.mjs tests/unit/agent-inbox.test.mjs tests/unit/agent-message-contract.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs",
     "test:perf-budget": "node tools/ci/run-playwright.mjs tests/specs/perf-boost-press-pipelines-gl.spec.js tests/specs/perf-boost-press-pipelines.spec.js tests/specs/perf-sw-cache-hit.spec.js",
     "test:perf-idle-churn": "node tools/ci/run-playwright.mjs tests/specs/perf-idle-pipeline-churn.spec.js",
     "test:stall-reload-sw": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js"

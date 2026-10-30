@@ -26,8 +26,10 @@
     "// gen-cursor-rules, the hooks — asserted instead of described; under a second.",
     "tests/unit/agent-config.test.mjs",
     "tests/unit/agent-experiment.test.mjs",
+    "tests/unit/agent-inbox.test.mjs",
     "// Generated agent index, hook page, coverage page and per-hook help. No browser.",
     "tests/unit/agent-indexes.test.mjs",
+    "tests/unit/agent-message-contract.test.mjs",
     "tests/unit/agent-output-config.test.mjs",
     "tests/unit/agent-output.test.mjs",
     "tests/unit/agent-surface.test.mjs",
@@ -1338,6 +1340,8 @@
     "test:agent-output": {
       "files": [
         "tests/unit/agent-experiment.test.mjs",
+        "tests/unit/agent-inbox.test.mjs",
+        "tests/unit/agent-message-contract.test.mjs",
         "tests/unit/agent-output-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/output-level-mcp.test.mjs",
