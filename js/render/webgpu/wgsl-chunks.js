@@ -1796,11 +1796,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
       }
     }
-    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent).
-    let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
-    let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
-          * F.params7.y * shadow * keyMul;
+    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent); glint 0
+    // (the mirror pass) adds exactly 0, so skip it on that uniform.
+    if (F.params7.y != 0.0) {
+      let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+      let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+      envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
+            * F.params7.y * shadow * keyMul;
+    }
     ccTrans = 1.0 - envW * 0.94;
     color = color * ccTrans;
     var addCC = envCC * envW;
