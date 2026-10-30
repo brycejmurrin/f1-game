@@ -778,7 +778,8 @@
     ]
   ],
     LAZY_UI_PRESETS: [
-    "js/ui/layout-presets.js"
+    "js/ui/layout-presets.js",
+    "js/ui/screen-looks-ui.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],
     LAZY_TRACK_BUILD: [

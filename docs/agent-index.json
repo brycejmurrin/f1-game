@@ -4857,6 +4857,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/screen-looks-ui.js",
+      "global": "ScreenLooksUi",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/screen-looks.js",
       "global": "ScreenLooks",
       "roster": "tag"

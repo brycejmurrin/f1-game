@@ -1,0 +1,1 @@
+Fixed: the game no longer parses the per-screen appearance fold builder on every boot. Those folds, the PEEK button and the "changes nothing on this screen" notes still appear when you open SETTINGS › APPEARANCE, and a saved screen look still applies as soon as the page loads.

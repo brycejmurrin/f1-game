@@ -78,7 +78,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false, win = null 
   sb.window = sb;
   if (win) Object.assign(sb, win);   // innerWidth / innerHeight: the availability checks read the viewport
   const ctx = vm.createContext(sb);
-  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js"];
+  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js", "js/ui/screen-looks-ui.js"];
   for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("ScreenLooks", ctx);
   const P = withPause ? vm.runInContext("PauseOpts", ctx) : null;

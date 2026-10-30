@@ -63,17 +63,19 @@ const SettingsNav = (function () {
     }
   }
 
-  // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
-  // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
+  // LAZY_UI_PRESETS: the LAYOUT PRESET row and the per-screen look folds
+  // (js/ui/layout-presets.js, js/ui/screen-looks-ui.js) load on the first
+  // APPEARANCE enter; a failed load logs and the next enter retries.
   let presetsLoad = null;
   const presetsLoaded = new Set();
   enterFns.push((id) => {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
-    if (id !== "appearance" || presetsLoad || typeof LayoutPresets !== "undefined" || !R || !R.LAZY_UI_PRESETS
+    const ready = typeof LayoutPresets !== "undefined" && typeof ScreenLooksUi !== "undefined";
+    if (id !== "appearance" || presetsLoad || ready || !R || !R.LAZY_UI_PRESETS
         || typeof ScriptLoader === "undefined") return;
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); };
     presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
-      .then((ok) => { if (!ok || typeof LayoutPresets === "undefined") fail(); }, fail);
+      .then((ok) => { if (!ok || typeof LayoutPresets === "undefined" || typeof ScreenLooksUi === "undefined") fail(); }, fail);
   });
 
   function panels() {

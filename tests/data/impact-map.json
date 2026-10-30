@@ -18174,6 +18174,17 @@
         "tests/unit/test-groups.test.mjs"
       ]
     },
+    "js/ui/screen-looks-ui.js": {
+      "build": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
+      "whyKnob": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs"
+      ]
+    },
     "js/ui/screen-looks.js": {
       "apply": [
         "tests/unit/layout-presets.test.mjs",

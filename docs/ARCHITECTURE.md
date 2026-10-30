@@ -286,6 +286,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `screen-looks-ui.js` | `ScreenLooksUi` | LAZY_UI_PRESETS | ScreenLooksUi: the SETTINGS › APPEARANCE folds, the PEEK button and the dead-knob marks. |
 
 **`js/track/core/`**
 

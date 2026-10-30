@@ -427,7 +427,7 @@ const FULL = [
   "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
-  "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
+  "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; peek engine. Folds are LAZY_UI_PRESETS (screen-looks-ui.js)
   "js/ui/debris-opts.js",
   "js/ui/post-fx-opts.js",   // PostFxOpts: GRAPHICS › AMBIENT OCCLUSION / GOD-RAYS (game.js reads them per frame)
   "js/perf/metrics-overlay.js",
@@ -1286,12 +1286,15 @@ const LAZY_CAREER_UI = [
 ];
 const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
 
-// LAYOUT PRESET row (G9, ~14 KB): SETTINGS › APPEARANCE's one-tap whole-UI
-// layout. js/ui/settings-tabs.js loads it on the first APPEARANCE enter; every
-// global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
-// is FULL and read at call time, so it has no edges and no boot stub.
+// APPEARANCE extras behind the first APPEARANCE enter. js/ui/settings-tabs.js
+// loads the group once. layout-presets.js is the one-tap LAYOUT PRESET row;
+// screen-looks-ui.js is the per-screen folds, the PEEK button and the
+// dead-knob marks. ScreenLooks.apply() stays eager (screen-looks.js) so a
+// stored look stamps before any screen opens. Every global they read is FULL
+// and read at call time, so the group has no edges and no boot stub.
 const LAZY_UI_PRESETS = [
   "js/ui/layout-presets.js", // LayoutPresets
+  "js/ui/screen-looks-ui.js", // ScreenLooksUi
 ];
 const LAZY_UI_PRESETS_EDGES = [];
 
