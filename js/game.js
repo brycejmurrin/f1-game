@@ -5046,7 +5046,7 @@ function updateCar(c, dt, ranked) {
 
   // --- electric deploy ---
   let deploy = 0;
-  const boostToggle = c.isPlayer && Input.consumeBoostToggle();
+  const boostToggle = c.isPlayer && !!(EnergyPlan.toggleFor(c, isTimeTrial()) | Input.consumeBoostToggle());   // #1580: the sector plan asks for the same toggle a press makes
   if (S.recordInput) S.recordInput.boost = !!boostToggle;
   if (boostToggle) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.

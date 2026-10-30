@@ -178,6 +178,37 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   min-height: 44px;
   pointer-events: auto;
 }
+/* THE PREVIEW TRANSPORT (js/garage/setup-camera.js transport()) wraps STOP once
+   the first preview builds it: a bottom bar over the room, every control a
+   44px touch target, the scrub taking the spare width. Under EDIT it stops at
+   the docked panel's painted edge (--dock-px), so the panel and the bar share
+   the screen and the held frame stays in view to their left. */
+#ga-transport {
+  position: fixed;
+  left: calc(var(--sal) + 8px);
+  right: calc(var(--sar) + 8px);
+  bottom: calc(var(--sab) + 8px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--gap) / 2);
+  padding: calc(var(--gap) / 2);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  pointer-events: auto;
+}
+#ga-transport[hidden] { display: none; }
+#ga-transport[data-editing] { right: calc(var(--dock-px) + 16px); }
+#ga-transport > button { min-height: 44px; min-width: 44px; margin: 0; }
+#ga-transport > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
+#ga-scrub { flex: 1 1 140px; min-width: 120px; min-height: 44px; margin: 0; }
+#ga-time { flex: 0 1 auto; min-width: 0; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* STOP keeps its primary paint but sits in the row at the row's height: the
+   .bigbtn block width, margins and type would push it to a row of its own. */
+#ga-transport #ga-preview-stop {
+  position: static; display: inline-block; width: auto; max-width: none; margin: 0;
+  min-height: 44px; padding: 0 var(--gap); font-size: var(--fs-3);
+}
 #lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */

@@ -71,14 +71,17 @@ window.UiLayers = (function () {
 
   const LAYER_IDS = DEFS.map((d) => d.id);
 
-  /* `:not([hidden])` belongs IN the selector rather than in a filter after it.
-     Every one of these is opened and closed with the hidden attribute, so
-     mid-race the query matches nothing and no element is ever measured. That is
-     the hot path: a held arrow key repeats keydown ~30x a second, and the
-     version that measured them all first forced a style recalc on every
-     repeat. */
-  const sel = (defs) => defs.map((d) => `#${d.id}:not([hidden])`).join(",");
-  const ALL_SEL = sel(DEFS);
+  /* Open layers by id (0.01 ms) — a 36-id comma querySelectorAll walks the whole
+     tree (3.6 ms at 5.3k nodes, uihunt4 #6) — in DOCUMENT order, which breaks
+     z-index ties (the later element paints on top) and DEFS order does not promise. */
+  function byIds(ids) {
+    const out = [];
+    for (const id of ids) { const el = document.getElementById(id); if (el) out.push(el); }
+    return out;
+  }
+  function layerEls() {
+    return byIds(LAYER_IDS).filter((el) => !el.hidden).sort((a, b) => (a.compareDocumentPosition ? (a.compareDocumentPosition(b) & 4 ? -1 : 1) : 0));
+  }
 
   function shown(el) {
     if (!el || el.hidden) return false;
@@ -187,8 +190,8 @@ window.UiLayers = (function () {
      Rank a :modal layer even at 0×0: Chromium can drop its box after the
      hidden→showModal seam, and shownLayer would then pick the screen behind. */
   /* MEMOISED like navOpen() (audit4 UB2): pad-menu's padNavPoll asks top() EVERY
-     FRAME while a pad is in a menu, and each live call is a 36-selector
-     querySelectorAll plus :modal plus a getComputedStyle per open layer. The same
+     FRAME while a pad is in a menu, and each live call is layerEls()
+     plus a :modal query plus a getComputedStyle per open layer. The same
      observer drops the memo (navDirty), a second one sees any `open` attribute in
      the document (showModal on a dynamic dialog), and a detached answer is never
      returned. Drain BEFORE computing, and return the local: draining after it
@@ -211,7 +214,7 @@ window.UiLayers = (function () {
     let bestModal = false;
     // Dynamic nested dialogs (telemetry) own focus, arrows and paging too.
     // Keep the native selector separate for engines without :modal support.
-    let layers = Array.from(document.querySelectorAll(ALL_SEL));
+    let layers = layerEls();
     try { layers = layers.concat(Array.from(document.querySelectorAll(":modal"))); } catch (_) { /* older engine */ }
     const uniq = Array.from(new Set(layers));
     // A live :modal always wins ranking. Skip non-modals entirely then so
@@ -247,12 +250,7 @@ window.UiLayers = (function () {
      instead. `#id:not([hidden])` is exactly `getElementById(id)` plus an
      `el.hidden` test, so 24 map lookups give the identical answer without the
      walk. Cached lazily and re-resolved whenever an entry is missing, so a
-     layer that has not been created yet is picked up as soon as it exists.
-
-     top() deliberately keeps its querySelectorAll: it ranks by z-index and
-     relies on DOCUMENT ORDER to break ties ("the LATER element, which is the
-     one painted on top"), which DEFS order does not promise. The pad poll asks it
-     every frame, so it is memoised behind navDirty (see top()). */
+     layer that has not been created yet is picked up as soon as it exists. top() walks the same ids (layerEls). */
   let _gateEls = null;
   function gateEls() {
     if (_gateEls) {
@@ -260,8 +258,7 @@ window.UiLayers = (function () {
     }
     if (!_gateEls) {
       const ids = DEFS.filter((d) => d.gate !== false).map((d) => d.id);
-      const els = [];
-      for (const id of ids) { const el = document.getElementById(id); if (el) els.push(el); }
+      const els = byIds(ids);
       // Only cache once every gated layer exists; before that, re-resolve each
       // call so a late-built layer is never permanently missed.
       if (els.length === ids.length) _gateEls = els;

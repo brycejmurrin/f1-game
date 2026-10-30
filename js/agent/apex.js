@@ -706,6 +706,13 @@ const api = {
     else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
     return Damage.state(c);
   },
+  // The manual sector ERS plan (#1580, js/race/energy-plan.js): ["manual"|"deploy"|"save"] × 3.
+  // ersPlan() reads it; ersPlan([...]) sets it for this session (not persisted) and returns
+  // {plan, ok} — ok false keeps the old plan. MANUAL ×3 is the neutral, shipped plan.
+  ersPlan(p) {
+    const ok = p === undefined ? true : EnergyPlan.setPlan(p);
+    return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() };
+  },
   setPhysics(o) {
     o = o || {};
     // Reject a poisoned patch atomically; existing finite floors remain compatible.

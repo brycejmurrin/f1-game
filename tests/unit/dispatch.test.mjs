@@ -12,7 +12,7 @@ import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, waitingWhy, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
   titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, distanceOnlyRefusal, recordToken, recordComment, main, claimedSessionIds,
-  renderPlan, PITFALL_LINES, launchRecheck, fetchAll, childrenMain,
+  renderPlan, openChildSessionIds, PITFALL_LINES, launchRecheck, fetchAll, childrenMain,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-10-27T12:00:00Z");
@@ -857,4 +857,12 @@ test("finding 8: --children --recent skips old work and reads the rest through t
   assert.equal(log[1].includes("last 24 h"), true);
   assert.equal(calls.some((c) => c.includes("pages.yml") || c.includes("/commits") || c.includes("check-runs")), false, "light mode reads no CI state");
   assert.equal(main(["--children", "--recent", "0"], { api, log: () => {}, read: () => "{}", now: () => NOW }), 1);
+});
+
+test("finding 8: the stale-claims cap counts children on OPEN work, not finished ones on recently closed PRs", () => {
+  const claim = (id) => [{ body: `claims #1 — claude:${id}`, created_at: ISO }];
+  const st = state({ prs: [pr(5, { comments: claim("session_01OPENAAAAAA") })],
+    closedPrs: [{ number: 6, merged: true, closed_at: ISO, comments: claim("session_01CLOSEDAAAAA") }] });
+  assert.deepEqual(childSessionIds(st), ["session_01CLOSEDAAAAA", "session_01OPENAAAAAA"]);
+  assert.deepEqual(openChildSessionIds(st), ["session_01OPENAAAAAA"]);
 });

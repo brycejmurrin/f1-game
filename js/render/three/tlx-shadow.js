@@ -98,11 +98,10 @@
     };
 
     /** Depth target: a compare-mode DepthTexture the lit pass samples.
-     * r186 sizes a RenderTarget from textures[0], so every non-PCSS map still
-     * carries an R8 colour attachment (1 B/px; discardColor / apexDiscardColor
-     * drop its store). three r187 (#34782) adds `count: 0` for a depth-only
-     * target — gated below so a vendor bump enables it without a second edit
-     * (docs/notes/TLX-SHADOW-DEPTHONLY-R187-2026-10-28.md, #2649). Only the
+     * three r187 (#34782, both backends) builds a depth-only target with
+     * `count: 0`, so a non-PCSS map carries no colour attachment; on r186 it
+     * was an R8 one (1 B/px) whose store discardColor / apexDiscardColor
+     * dropped (docs/notes/TLX-SHADOW-DEPTHONLY-R187-2026-10-28.md, #2649). Only the
      * desktop-WebGL2 sun's R32F PCSS copy (hdrColor) is ever read as colour.
      * LinearFilter + LessEqualCompare = hardware 2x2 PCF per tap on ES 3.0,
      * exactly GLX's setup (js/render/glx/shadow.js). */
@@ -116,8 +115,8 @@
       depthTexture.minFilter = THREE.LinearFilter;
       depthTexture.magFilter = THREE.LinearFilter;
       // wrap defaults to ClampToEdge — matches GLX
-      // r187 (#34782): depth-only when count:0 is real. REVISION is "186" today;
-      // do not construct count:0 on 0.186.1 (undefined). PCSS still needs colour.
+      // r187 (#34782): depth-only. The REVISION gate keeps an older three (count:0
+      // undefined there) on the R8 attachment. PCSS still needs colour.
       if (!hdrColor && +(THREE.REVISION || 0) >= 187) {
         return new THREE.RenderTarget(size, size, { depthTexture, count: 0 });
       }
@@ -191,7 +190,7 @@
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
     // #2649 counted oracle: colour attachment bytes of the phone sun map.
-    // r186: R8 at SUN_SIZE² (1 B/px). r187 depth-only: 0. PCSS (desktop) keeps R32F.
+    // r187 depth-only: 0 (r186 carried R8 at SUN_SIZE², 1 B/px). PCSS (desktop) keeps R32F.
     S.depthOnly = !!(sunRT && +(THREE.REVISION || 0) >= 187 && !colorPcss);
     S.sunColorBytes = !sunRT ? 0 : S.depthOnly ? 0 : SUN_SIZE * SUN_SIZE * (colorPcss ? 4 : 1);
 
@@ -687,6 +686,7 @@
     let _invColor0 = null;
     function discardColor(rt) {
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (rt.textures && rt.textures.length === 0) return false;   // depth-only (r187): no colour to drop
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
       if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;

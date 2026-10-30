@@ -17,7 +17,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const TLX = read("js/render/three/tlx.js");
-const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
 
 const mk = () => new Proxy(function () {}, {
   get: (t, k) => (k === Symbol.toPrimitive ? () => 0 : k === "then" ? undefined : mk()),
