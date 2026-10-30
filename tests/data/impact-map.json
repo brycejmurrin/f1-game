@@ -2604,6 +2604,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/field-lod.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-race-geom-warm.test.mjs"
       ],
@@ -2752,7 +2753,6 @@
       ],
       "*": [
         "tests/specs/quali.spec.js",
-        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -4139,6 +4139,9 @@
       "offerPreview": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-settle.test.mjs"
+      ],
+      "owned": [
+        "tests/unit/career-round2.test.mjs"
       ],
       "paceMult": [
         "tests/unit/career-settle.test.mjs",
@@ -7637,6 +7640,7 @@
       ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "crewFor": [
@@ -7725,6 +7729,9 @@
       ]
     },
     "js/garage/crew-motion.js": {
+      "create": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "draw": [
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
@@ -7739,6 +7746,9 @@
     },
     "js/garage/crew-service.js": {
       "actors": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "create": [
         "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "draw": [
@@ -8089,6 +8099,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
       ],
+      "dropPreviewMeshes": [
+        "tests/unit/setup-preview-hull.test.mjs"
+      ],
       "framingHull": [
         "tests/unit/garage-mesh.test.mjs"
       ],
@@ -8170,7 +8183,6 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
-        "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
@@ -8231,6 +8243,9 @@
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
+      "previewKey": [
+        "tests/unit/setup-preview-hull.test.mjs"
+      ],
       "renderSetupPreview": [
         "tests/unit/garage-arrival.test.mjs"
       ],
@@ -8249,6 +8264,9 @@
       ],
       "setupZoom": [
         "tests/unit/garage-aero-no-camera.test.mjs"
+      ],
+      "spMeshBust": [
+        "tests/unit/setup-preview-hull.test.mjs"
       ],
       "startArrivalPreview": [
         "tests/unit/garage-arrival.test.mjs"
@@ -12738,6 +12756,7 @@
         "tests/unit/pit-lane.test.mjs"
       ],
       "create": [
+        "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane.test.mjs",
