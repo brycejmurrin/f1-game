@@ -1899,6 +1899,12 @@
       "interpreter": "python3"
     },
     {
+      "path": "tools/garage/author-departure.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/assets.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",

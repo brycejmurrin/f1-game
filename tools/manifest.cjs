@@ -1079,6 +1079,8 @@ const LAZY_RACE = [
 // Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
 // Hub WATCH / Director eval SHOTS).
 const LAZY_RACE_SESSION = [
+  "js/data/garage-departure-motion.js",
+  "js/garage/departure-wheels.js",
   "js/race/reliability.js",
   "js/race/damage.js",
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
