@@ -1724,6 +1724,10 @@ function redFlagRestart() {
   seedPlayerPose();
   raceCtl.rewound();   // the leader re-runs its lap: a pending Overtake hold follows it (#2166)
   feel.restartPending = true; replayBuf.breakTimeline();   // same clock, every car teleported: a scrub must not blend track position into the grid box
+  // takeRestart() returns before the results clock, and state "count" never ticks it, so a countdown already in hand
+  // (the 2.2 s all-done arm, or the 0.1 s cap) would classify the restart a second after the lights. postFinish.since
+  // is the moment the human was done: raceT keeps running under the flag, and the 75 s cap would already be expired.
+  resultT = 0; postFinish.since = -1;
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; feel.startHold = 0;
   els.lights.hidden = false;
   for (const l of els.lights.children) l.classList.remove("on");
@@ -4691,7 +4695,13 @@ function update(dt) {
   // human race an AI/other player crossing first must NOT start a 3.5 s result
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
-  if (resultT === 0) {
+  // A red flag that can still restart (nobody has finished; redFlagRestart
+  // declines otherwise) stays state "race" for RED_STOP+RED_HOLD, 14 s. The
+  // countdown below would hit zero in that window and endRace() would run
+  // before takeRestart() ever asked. Once anyone has finished the restart is
+  // off the table and the countdown stands.
+  if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
+  else if (resultT === 0) {
     postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
