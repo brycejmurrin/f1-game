@@ -29,8 +29,8 @@ alwaysApply: true
   or Auto. Dispatcher: `hosts.cursor.model` in `tools/ci/dispatch.json`. Namespaces:
   `cursor*` plus six repo
   servers after Bootstrap §3; bare `cursor*` only → CLI fallbacks, re-Save when
-  `environment-info` shows nameless `bash` rows. A `lane:cursor` run does not
-  call `subscribe_github_*` (`docs/WORKERS.md` §Per vendor). AGENTS.md and the skills win.
+  `environment-info` shows nameless `bash` rows. For subscriptions and drafter/steward endings, follow
+  `docs/WORKERS.md` §Per vendor; discover the actual host tools before calling them.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Bootstrap / Cloud
   MCP: `docs/AGENT-SURFACE.md` §Bootstrap.

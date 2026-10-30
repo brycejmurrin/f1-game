@@ -146,7 +146,7 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */
 #hud-pos[data-delta="up"] { color: var(--faster); }
-#hud-pos[data-delta="down"] { color: var(--slower); }
+#hud-pos[data-delta="down"] { color: var(--slower-ink); }
 @media (prefers-reduced-motion: no-preference) {
   #hud-pos[data-delta] { animation: pos-flash 0.5s ease-out; }
 }
@@ -160,9 +160,25 @@ body:not(.hud-prof-broadcast) .hud-top > .hud-box { --hud-box-stripe: 0px; backg
 body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-ink-light); box-shadow: inset 3px 0 0 var(--accent);
   border-radius: var(--r-xs) 0 0 var(--r-xs); }
 body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-dark); text-shadow: none; }
+/* HIGH CONTRAST (the shipped default) gives every .hud-box its dark plate at (1,2,0), which turned the light POS
+   cell dark under its dark ink: "22/22" at ~1.06:1 (UI hunt #3). The hero cell keeps its light plate. */
+:root[data-ui-contrast="high"]:has(> body:not(.hud-prof-broadcast)) #hud-box-pos { background: var(--hud-ink-light); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
-body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower); }
+body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower-ink); }
+/* Progress first, timing second. LAP closes the progress group with an inset
+   rule; BEST is reference ink. Paint only: keep fitHud's measured slots and
+   the player's scale/arrangement unchanged. */
+body:not(.hud-prof-broadcast) #hud-box-lap {
+  box-shadow: inset 1px 0 0 var(--plate-line), inset 0 -2px 0 var(--hud-glance);
+}
+body:not(.hud-prof-broadcast) #hud-box-lap .hud-label { color: var(--text); }
+body:not(.hud-prof-broadcast) #hud-best { color: var(--hud-glance); }
+/* An inset ring stays visible at a safe-area edge over either sky or asphalt. */
+:is(#btn-cam, #pausebtn):focus-visible {
+  outline: 3px solid var(--hud-ink-light); outline-offset: -4px;
+  box-shadow: inset 0 0 0 6px var(--hud-ink-dark);
+}
 @media (orientation: landscape) {
   body:not(.desktop) .hud-bottom { background: var(--hud-strip-bg); border-radius: var(--r-xs);
     padding: calc(var(--gap) / 3) calc(var(--gap) * 5 / 6); box-shadow: inset 0 2px 0 var(--accent); }
@@ -562,7 +578,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
    COLOUR VISION (data-cvd) remaps them. Declared before the pit rules below,
    which win at equal specificity while the car is in the lane or the box. */
 #hud-tyre[data-temp="cold"] #hud-tyre-code { color: var(--sec-best); }
-#hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower); }
+#hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower-ink); }
 /* …and the SAME state in a channel that is not colour: blue vs red is the one
    pair a colour-vision deficiency and a bright sky both erase. */
 #hud-tyre[data-temp="cold"] #hud-tyre-code::after { content: "\2744"; font-style: normal; font-size: 0.8em; margin-left: 0.1em; }
@@ -570,7 +586,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 /* Live lap DELTA chip (static #hud-delta in .hud-top, index.html). */
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
-#hud-delta[data-sign="slow"] .hud-value { color: var(--slower); }
+#hud-delta[data-sign="slow"] .hud-value { color: var(--slower-ink); }
 #hud-delta[hidden] { display: none !important; }
 /* Ghost reference is a hollow ring, not only the faster/slower ink. */
 #hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
@@ -1261,7 +1277,7 @@ body:not(.desktop) #hud-sectors {
   color: var(--text);
 }
 #hud-limits.limits-warn { border-left-color: var(--flag-amber); color: var(--sec-slow); }
-#hud-limits.limits-hot { border-left-color: var(--slower); color: var(--slower); animation: pulse var(--hud-pulse) infinite; }
+#hud-limits.limits-hot { border-left-color: var(--slower); color: var(--slower-ink); animation: pulse var(--hud-pulse) infinite; }
 .limits-dots { letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
 
 /* Short local height (UI SIZE included): tighten HUD clusters so 200% HUD on
@@ -1572,7 +1588,7 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
    and never the plate, which is the team's and stays put. */
 #announce[data-kind="warning"] #announce-who,
 #announce[data-kind="penalty-warn"] #announce-who { color: var(--sec-slow); }
-#announce[data-kind="penalty-hit"] #announce-who { color: var(--slower); }
+#announce[data-kind="penalty-hit"] #announce-who { color: var(--slower-ink); }
 #announce[data-kind="coach"] #announce-who,
 #announce[data-kind="practice"] #announce-who { color: var(--faster); }
 /* The broadcaster (js/race/race-radio.js commentary): gold, the TV graphic's
@@ -2097,11 +2113,18 @@ body.lt-open #btn-cam,
 body.lt-open #pausebtn,
 body.lt-open .touchbtn { display: none !important; }
 /* HIGH CONTRAST (Settings › Appearance): the see-through boxes go solid and
-   take a real outline, so the readouts hold against a sunlit track. */
-:root[data-ui-contrast="high"] :is(.hud-box, #announce) {
+   take a real outline, so the readouts hold against a sunlit track. Two
+   selectors, not :is(): :is() took #announce's id weight onto .hud-box and
+   painted the POS light cell dark under its dark ink (#4300). */
+:root[data-ui-contrast="high"] .hud-box, :root[data-ui-contrast="high"] #announce {
   background: var(--hc-hud-plate);
   outline: 1px solid var(--hc-hud-line);   /* outline leaves the inset team stripe intact */
 }
+/* …except the timing strip's POS cell, which keeps its light plate: its ink is --hud-ink-dark
+   (design pass 2a), and the solid dark plate above (#announce in :is() outranks the POS rule)
+   painted the player's rank dark on dark (Bryce, iPhone, 2026-10-30). */
+/* (1,3,0) over the plate's (1,2,0); outside BROADCAST, whose tower has its own POS. */
+:root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *) { background: var(--hud-ink-light); }
 @media (forced-colors: active) { .hud-box { --hud-box-stripe: 0px; } } /* tokens.css supplies the system border */
 /* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
    A REAL RACE WATCH / HIGHLIGHTS run (body.bc-on). The picture is a
@@ -2164,7 +2187,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-row.out { opacity: 0.5; }
 /* A place won or lost in the last few seconds: the colour is state (kept under reduced motion). */
 #bc-tower .bc-row[data-delta="up"] .bc-pos { color: var(--faster); }
-#bc-tower .bc-row[data-delta="down"] .bc-pos { color: var(--slower); }
+#bc-tower .bc-row[data-delta="down"] .bc-pos { color: var(--slower-ink); }
 /* A short phone screen: the top ten and the car on camera. */
 body[data-density="compact"] #bc-tower .bc-row:nth-child(n+11):not(.on) { display: none; }
 /* THE PICTURE-IN-PICTURE (js/render/shared/mirror-pass.js paints the second
@@ -2354,7 +2377,7 @@ body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { displ
 #hud-rel [data-k="lap"] { font-weight: 800; }
 #hud-rel > div[data-self] { background: color-mix(in oklab, var(--you) 26%, transparent); font-weight: 800; }
 /* A lap UP (lapping you) reads red, a lap DOWN blue — the "+1L" / "-1L" text says it first. */
-#hud-rel > div[data-lap="up"] { color: var(--slower); }
+#hud-rel > div[data-lap="up"] { color: var(--slower-ink); }
 #hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
 #hud-strat {
   left: calc(10px + var(--sal) / var(--hud-z));
@@ -2368,7 +2391,7 @@ body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { displ
 #hud-strat > div > span { color: var(--dim); letter-spacing: 0.06em; }
 #hud-strat [data-k="uc"] { color: var(--faster); font-weight: 800; }
 #hud-strat [data-k="uc"] > span { color: inherit; }
-#hud-strat [data-k="cov"] { color: var(--slower); font-weight: 800; }
+#hud-strat [data-k="cov"] { color: var(--slower-ink); font-weight: 800; }
 #hud-strat [data-k="cov"] > span { color: inherit; }
 #hud-inputs {
   left: calc(10px + var(--sal) / var(--hud-z));

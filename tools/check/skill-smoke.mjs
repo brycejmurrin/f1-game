@@ -49,6 +49,14 @@ export async function checkRecipe(r,root=ROOT,runner=execute) {
   try { const result=await runner(planned.argv[0],planned.argv.slice(1),{cwd:root,env,timeout:r.timeoutMs,maxBuffer:512*1024,killSignal:'SIGTERM'});stdout=result.stdout||'';stderr=result.stderr||''; }
   catch(error) { stdout=error.stdout||'';stderr=error.stderr||'';failure=error.killed?'timeout':String(error.message); }
   const pass=Number(stdout.match(/^# pass (\d+)$/m)?.[1]||0),fail=Number(stdout.match(/^# fail (\d+)$/m)?.[1]||0);
+  // Node 24 can report one passing file wrapper after a zero-test selection
+  // (TAP `1..0`). Require a named selected subtest, not only that wrapper.
+  const selection=new RegExp(r.pattern);
+  const selectedSubtests=stdout.split('\n').filter(line=>{
+    const name=line.match(/^\s*# Subtest: (.*)$/)?.[1];
+    return name!==undefined&&name!==r.fixture&&name!==path.resolve(root,r.fixture)&&selection.test(name);
+  }).length;
+  if(!failure&&!selectedSubtests) failure='No named subtest matched the recipe pattern';
   const ok=!failure&&pass>=r.expected.minPass&&fail===0;
   return {...planned,status:ok?'offline_pass':'failed',performed:true,counts:{pass,fail},failure:failure||(!ok?'No passing selected contract or test failures':null),evidence:{stdout,stderr},followups:r.followups};
 }

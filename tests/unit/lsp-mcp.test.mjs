@@ -157,6 +157,39 @@ test("MCP client: pipeline isolation and freeze/assign exports", { timeout: 6000
   }
 });
 
+// Field test 2026-10-30 regressions on the real tree (scratch/mcp-field-lsp-debugger-gateway.md A).
+// Rows are parsed, not regex-pinned: the checker's own answers are the ground truth.
+test("MCP client: wrapS callers keep same-file uses, bounds-checked positions, Tracks.curvature [def]", { timeout: 60000 }, async () => {
+  const c = await sharedMcp();
+  // The game-loop wrapS (exported as G.wrapS), located through the checker, not a source read.
+  const sym = (await c.call("lsp_symbols", { query: "wrapS", limit: 50 })).content[0].text;
+  const decl = /^wrapS {2}function {2}(js\/game\.js):(\d+):(\d+)$/m.exec(sym);
+  assert.ok(decl, sym);
+  const at = { file: decl[1], line: +decl[2], column: +decl[3] };
+  const hudLines = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8").replace(/\n$/, "").split("\n");
+  const [callers, inFile, past, beyond, refs] = await Promise.all([
+    c.call("lsp_callers", { ...at, limit: 2000 }),
+    c.call("lsp_references", { ...at, includeDeclaration: false, format: "concise", limit: 2000 }),
+    c.call("lsp_hover", { file: "js/ui/hud.js", line: 1, column: hudLines[0].length + 50 }),
+    c.call("lsp_definition", { file: "js/ui/hud.js", line: 999999 }),
+    c.call("lsp_references", { symbol: "Tracks.curvature", limit: 2000 }),
+  ]);
+  const rows = r => r.content[0].text.split("\n").slice(1).map(l => /^(\S+?):\d+(?::\d+)? {2}(?:\[(\w+)\])?/.exec(l)).filter(Boolean).map(m => ({ file: m[1], tag: m[2] }));
+  const uses = rows(inFile).filter(r => r.file === at.file && r.tag === "use").length;
+  const total = +/^(\d+) uses/.exec(callers.content[0].text)?.[1], callerFiles = new Set(rows(callers).map(r => r.file));
+  assert.ok(uses >= 10, `lsp_references finds the in-file uses (${uses})`);
+  assert.ok(callerFiles.has(at.file), `same-file callers survive the G.wrapS re-anchor: ${callers.content[0].text.slice(0, 300)}`);
+  assert.ok(callerFiles.size > 1 && total > uses, `${total} uses: the ${uses} in ${at.file} plus the exported G.wrapS uses elsewhere`);
+  assert.equal(past.isError, true);
+  assert.equal(past.content[0].text, `line 1 of js/ui/hud.js has ${hudLines[0].length} characters; column ${hudLines[0].length + 50} is past its end`);
+  assert.equal(beyond.isError, true);
+  assert.equal(beyond.content[0].text, `js/ui/hud.js has ${hudLines.length} lines; line 999999 is out of range`);
+  // The declaration behind Tracks' destructured re-export is a row, and the header names it
+  // (never presenting the use-site anchor as the answer).
+  assert.deepEqual(rows(refs).filter(r => r.tag === "def").map(r => r.file), ["js/track/core/spline.js"]);
+  assert.equal(/; declared at (\S+):\d+:\d+\)$/.exec(refs.content[0].text.split("\n")[0])?.[1], "js/track/core/spline.js");
+});
+
 test("tsc --lsp starts on the first call, exits when idle, and restarts on demand", { timeout: 60000 }, async () => {
   const lsp = new Lsp({ idleMs: 300 });
   try {

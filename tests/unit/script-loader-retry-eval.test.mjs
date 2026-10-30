@@ -8,6 +8,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import * as espree from "espree";
+import * as eslintScope from "eslint-scope";
+import { fnSource } from "../helpers/fn-source.mjs";
 import { readFileSync } from "node:fs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -105,4 +108,85 @@ test("concurrent strict loads insert one classic script and both await it", asyn
   finish();
   assert.deepEqual(await Promise.all([first, second]), [true, true]);
   assert.equal(appended.length, 1);
+});
+
+// Manually dispatched browser events make policy/event ordering observable without
+// wall-clock sleeps. Each rig owns one tab's evaluation registry.
+function lifecycleRig() {
+  const scripts = [], links = [], timers = new Map();
+  let nextTimer = 0;
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED_EDGES: [] }, Log: { warn() {} },
+    window: { __APEX_BUILD: 'life', setTimeout(fn) { timers.set(++nextTimer, fn); return nextTimer; }, clearTimeout(id) { timers.delete(id); } },
+    document: {
+      createElement: tag => ({ tag, dataset: {}, remove() {} }),
+      head: { appendChild(el) { (el.tag === 'script' ? scripts : links).push(el); } },
+    },
+  });
+  vm.runInContext(loader + '\nthis.ScriptLoader = ScriptLoader;', ctx);
+  return { api: ctx.ScriptLoader, scripts, links, timers, flush: () => new Promise(r => setImmediate(r)) };
+}
+
+test('shared strict insertion retains each caller readiness and partial-success ownership', async () => {
+  const r = lifecycleRig(), accepted = new Set(), refused = new Set(), ready = [];
+  const a = r.api.create().load(['shared.js'], [], { strict: true, loaded: accepted, ready: src => { ready.push('owner:' + src); return true; } });
+  const b = r.api.create().load(['shared.js'], [], { strict: true, loaded: refused, ready: src => { ready.push('waiter:' + src); return false; } });
+  await r.flush();
+  assert.equal(r.scripts.length, 1);
+  r.scripts[0].onload();
+  assert.deepEqual(ready, ['owner:shared.js'], 'insertion owner checks readiness inside the load event');
+  assert.deepEqual(await Promise.all([a, b]), [true, false]);
+  assert.deepEqual(ready, ['owner:shared.js', 'waiter:shared.js']);
+  assert.deepEqual([...accepted], ['shared.js']); assert.equal(refused.size, 0);
+  assert.equal(r.timers.size, 0, 'shared insertion releases both responsive timers');
+});
+
+test('strict failure drains started siblings, retains their success and does not start successors', async () => {
+  const r = lifecycleRig(), loaded = new Set(), settled = [];
+  let finished = false;
+  const p = r.api.create().load(['bad.js', 'good.js', 'dependent.js'], [['good.js', 'dependent.js']],
+    { strict: true, loaded, onSettled: src => settled.push(src) }).then(ok => { finished = true; return ok; });
+  await r.flush();
+  assert.deepEqual(r.scripts.map(s => s.src), ['bad.js?v=life', 'good.js?v=life']);
+  r.scripts[0].onerror(); await r.flush();
+  assert.equal(finished, false, 'failure waits for already-started sibling');
+  r.scripts[1].onload(); assert.equal(await p, false);
+  assert.deepEqual([...loaded], ['good.js']); assert.deepEqual(settled, ['good.js']);
+  assert.equal(r.scripts.length, 2); assert.equal(r.timers.size, 0);
+  const retry = r.api.create().load(['bad.js', 'good.js', 'dependent.js'], [['good.js', 'dependent.js']], { strict: true, loaded });
+  await r.flush();
+  assert.deepEqual(r.scripts.slice(2).map(s => s.src), ['bad.js?v=life', 'dependent.js?v=life']);
+  r.scripts[2].onload(); r.scripts[3].onload(); assert.equal(await retry, true);
+  assert.equal(r.timers.size, 0);
+});
+
+test('non-strict failed predecessor permits successor while readiness failure does not transient-retry', async () => {
+  const r = lifecycleRig(), loaded = new Set(), events = [];
+  const p = r.api.create().load(['not-ready.js', 'after.js'], [['not-ready.js', 'after.js']], {
+    loaded, ready: src => { events.push(src); return src !== 'not-ready.js'; },
+  });
+  await r.flush(); r.scripts[0].onload();
+  assert.deepEqual(events, ['not-ready.js']);
+  assert.equal(r.scripts.length, 1, 'successor is scheduled after the event settles');
+  await r.flush();
+  assert.deepEqual(r.scripts.map(s => s.src), ['not-ready.js?v=life', 'after.js?v=life']);
+  r.scripts[1].onload(); assert.equal(await p, false);
+  assert.deepEqual([...loaded], ['after.js']); assert.equal(r.timers.size, 0);
+});
+
+// Check lexical authority, not source layout: the graph may call its injected
+// attempt function, but cannot quietly reach into the browser or page registry.
+function ambientReads(source) {
+  const ast = espree.parse(source, { ecmaVersion: 2022, range: true });
+  return [...new Set(eslintScope.analyze(ast, { ecmaVersion: 2022 }).globalScope.through.map(ref => ref.identifier.name))];
+}
+
+test('graph and browser attempt retain separate lexical authority', () => {
+  const graphAllowed = new Set(['Promise', 'Log']);
+  const browserAllowed = new Set(['Promise', 'document', 'window', 'SLOW_MS', 'DEADLINE_MS', 'Math', 'Date', 'Log']);
+  const denied = (source, allowed) => ambientReads(source).filter(name => !allowed.has(name));
+  assert.deepEqual(denied(fnSource(loader, 'function runLoadGraph('), graphAllowed), []);
+  assert.deepEqual(denied(fnSource(loader, 'function browserAttempt('), browserAllowed), []);
+  assert.deepEqual(denied('function graph() { document.head.appendChild(script); }', graphAllowed), ['document', 'script']);
+  assert.deepEqual(denied('function attempt() { evaluated.add(src); }', browserAllowed), ['evaluated', 'src']);
 });

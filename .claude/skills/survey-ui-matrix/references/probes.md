@@ -65,7 +65,9 @@ function truncIn(root) {
   return out;
 }
 
-// (c) TAP TARGETS.
+// (c) TAP TARGETS. The tools share ONE floor + measure: tools/ui/tap-floor.mjs
+//   (WCAG 24 + body --tap, label union, ÷ currentCSSZoom, min(w,h), 0.5 px slack)
+//   — layout-audit, menu-mock and fit-audit findings compare. Below, by hand:
 // TRAP 1: read --tap off <body>, NOT :root. The touch ladder is declared
 //   `body:not(.desktop) { --tap: 52px }`. Asking documentElement returns the
 //   44px DESKTOP floor on every device and undercounts every phone cell.
@@ -131,17 +133,26 @@ await new Promise((r,reject) => { const deadline=Date.now()+15000; const t = set
 
 Reach a screen **through the app's own controls**, never by unhiding its element —
 forcing `hidden = false` desyncs the screen's internal state and poisons every
-later cell in the sweep. Reset between cells:
+later cell in the sweep. **Leave it the same way: through its door.** Hiding a
+layer is not closing it — `DataHub` keeps its own `openFlag`, so after a
+`hidden = true` reset the next `#mb-data` click never opens the hub.
+
+ONE reset serves every tool: `tools/ui/ui-reset.mjs` (`resetToTitleState(page)`
+from a script; `resetOverlays` is the page function). While `UiLayers.top()` is
+not `#overlay` it takes a title exit (`#pausemenu` → QUIT, `#results` → MENU),
+else `TopModal.escapeTop()`, else the layer's `data-esc-close` button, else a
+module close (`DataHub.close()`); only what is still open after that gets
+`hidden = true`, and those ids come back as `fallbackIds` (logged — each is a
+door the reset could not use). `#rotate-device` is never hidden (CSS-gated on
+`body.in-race`). Then verify the title is hittable (`titleUsable`) and reload
+on failure. By hand in `evaluate_script`, the door half is:
 
 ```js
-// Paste the LIVE list — never a copy (a stale copy missed photo-studio, which poisons every later cell):
+for (let i = 0; i < 8; i++) { const t = UiLayers.top();
+  if (!t || t.id === 'overlay' || !TopModal.escapeTop()) break;
+  await new Promise((r) => setTimeout(r, 60)); }
+// anything still open: the hidden=true fallback over the LIVE OVERLAY_IDS
 //   node -e 'import("./tools/ui/menu-screens.mjs").then((m) => console.log(JSON.stringify(m.OVERLAY_IDS)))'
-const OV = /* OVERLAY_IDS from tools/ui/menu-screens.mjs */ [];
-for (const id of OV) { const e = document.getElementById(id);
-  if (e) { if (e.tagName === 'DIALOG' && e.open) e.close(); e.hidden = true; } }
-const o = document.getElementById('overlay');
-if (o) { o.hidden = false; o.style.removeProperty('display'); }
-document.body.classList.remove('in-race');
 ```
 
 **The screen-root inventory DRIFTS — enumerate it, don't trust this list.**

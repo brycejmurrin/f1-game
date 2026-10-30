@@ -303,9 +303,9 @@ async function precacheAssetLists() {
     // because it is reached through the importmap, not a <script> tag, so
     // the parser below cannot see it. OPTIONAL: an install must not fail
     // over a backend most sessions never select.
-    "vendor/three-0.186.1/three.webgpu.min.js",
-    "vendor/three-0.186.1/three.core.min.js",
-    "vendor/three-0.186.1/three.tsl.min.js",
+    "vendor/three-0.187.0/three.webgpu.min.js",
+    "vendor/three-0.187.0/three.core.min.js",
+    "vendor/three-0.187.0/three.tsl.min.js",
     // jsQR / Rapier / trystero are NOT install-precached. Each is default-off
     // or path-only (QR scan, apex26.debris==="1", room code): ~2.5 MB that a
     // title/garage/race session never needs. Fetch-miss still cache.put on
@@ -462,6 +462,8 @@ async function precacheAssetLists() {
     "js/circuits/scenery/mont_tremblant.js",
     "js/circuits/scenery/mosport.js",
     // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
+    "js/data/garage-departure-motion.js",
+    "js/garage/departure-wheels.js",
     "js/race/reliability.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
@@ -601,6 +603,7 @@ async function precacheAssetLists() {
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     // LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter
+    "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
@@ -797,7 +800,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets)\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/departure-wheels\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail)\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.

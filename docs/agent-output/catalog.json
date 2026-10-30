@@ -1899,6 +1899,12 @@
       "interpreter": "python3"
     },
     {
+      "path": "tools/garage/author-departure.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/assets.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -4125,6 +4131,25 @@
       ]
     },
     {
+      "path": "tools/ui/flows.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/ui/flows/core.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/ui/flows/probes.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/layout-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -4137,6 +4162,23 @@
         "ui:audit",
         "ui:gallery",
         "ui:survey"
+      ]
+    },
+    {
+      "path": "tools/ui/look-diff.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "artifact-first",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/ui/look-diff/core.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--out"
       ]
     },
     {
@@ -4175,10 +4217,35 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/reach-score.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ui/review-captures.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/ui/tap-floor.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/theme-axis.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/ui-reset.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/ui/ui-scale-axis.mjs",
