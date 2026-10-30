@@ -1315,7 +1315,7 @@ test('every camera, preset and sequence keeps the eye inside the bay and ends wh
     for (let t = 0; t <= end + 0.5; t += 0.05) {
       const p = fn(t, cfg, calm), tag = `${angle} ${dir}${result ? ':' + result : ''} t${t.toFixed(2)}`;
       assert.ok(p.eye[0] > -5.4 && p.eye[0] < 5.4 && p.eye[2] > -6.4 && p.eye[2] < 6.4, tag + ': eye inside the walls');
-      assert.ok(p.eye[1] > 0.25 && p.eye[1] < 4.75, tag + ': eye between the floor and the truss');
+      assert.ok(p.eye[1] > 0.25 && p.eye[1] < 3.65, tag + ': eye above the floor and under the overhead rig');
       assert.ok(p.aim.every(Number.isFinite) && [p.x, p.z, p.yaw].every(Number.isFinite), tag + ': finite');
       assert.ok(p.camera in Arrival.CAMS, tag + ': a known camera');
     }
@@ -1432,6 +1432,8 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   const angle = row('ga-angle', 'select');
   for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
   row('ga-crew-in', 'select'); row('ga-fov', 'input'); row('ga-crew-out', 'select');
+  const foot = add(doc.getElementById('garrival-inner'), 'div');
+  for (const id of ['ga-preview-in', 'ga-preview-out', 'ga-reset']) add(foot, 'button', id);
   const $ = (id) => doc.getElementById(id);
   A.bindSettings($, { get: () => null, set() {} });
   A.bindSettings($, { get: () => null, set() {} });
@@ -1445,7 +1447,7 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   assert.deepEqual(shots.querySelectorAll('select').map((e) => e.id), ['ga-shot1', 'ga-shot2', 'ga-shot3']);
   assert.deepEqual($('ga-shot2').children.map((o) => o.value), [...A.CAM_IDS]);
   assert.equal($('ga-after').type, 'checkbox');
-  assert.equal($('ga-preview-home').parentNode, $('ga-result').parentNode, 'PREVIEW AFTER RACE sits with its result picker');
+  assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview-in', 'ga-preview-out', 'ga-preview-home', 'ga-reset'], 'PREVIEW AFTER RACE joins the other previews');
   assert.equal(rows.querySelector('label[for="ga-carspeed"]').textContent, 'CAR SPEED');
 });
 test('endRace notes the result; the next non-pit garage visit plays it once (gated, never for the harness)', () => {

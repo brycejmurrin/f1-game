@@ -8,13 +8,14 @@ const GarageArrival = (function () {
     afterRace: true, homeCrew: "auto", result: "win" });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
    * z +6.4): LEFT / RIGHT are the two shipped interior eyes; HIGH a ceiling
-   * corner over the back-left, LOW a floor-level eye off the right rear wheel,
+   * corner over the back-left (under the ceiling truss, whose 4.6 m beam filled
+   * half the frame from 4.3 m), LOW a floor-level eye off the right rear wheel,
    * DOOR just inside the left jamb. All stay inside the walls (scene.js culls a
    * wall's furniture by the eye's side of it). A PRESET is one camera per SHOT:
    * shot 1 the shutter, shot 2 the car on the move (approach / roll-out), shot 3
    * the finish (back-in and park / leaving down the lane). CUT is the shipped
    * left-then-right in and left out; CUSTOM reads config.shots. */
-  const CAMS = Object.freeze({ left: [-3.8, 2.1, -4.8], right: [4.1, 2.25, -4.9], high: [-4.4, 4.3, -5.6], low: [2.7, 0.45, -3.9], door: [-2.3, 1.35, 5.7] });
+  const CAMS = Object.freeze({ left: [-3.8, 2.1, -4.8], right: [4.1, 2.25, -4.9], high: [-4.6, 3.5, -5.7], low: [2.7, 0.45, -3.9], door: [-2.3, 1.35, 5.7] });
   const CAM_IDS = Object.freeze(Object.keys(CAMS));
   const PRESETS = Object.freeze({
     cut: { in: ["left", "right", "right"], out: ["left", "left", "left"] },
@@ -122,7 +123,7 @@ const GarageArrival = (function () {
   const CAM_NAMES = Object.freeze({ left: "left of the bay", right: "right of the bay", high: "high corner", low: "floor level", door: "door jamb" });
   /* THE ROWS BEYOND THE SHIPPED FORM, built from these tables into #ga-rows once
    * (index.html's node budget is shrink-only: tests/data/ratchets.json shellNodes).
-   * A row: [id, label, options as [value, text] | "check", optional button [id, text]];
+   * A row: [id, label, options as [value, text] | "check"];
    * a string is a help line; { group, rows } a block CUSTOM shows and hides. The
    * extra GARAGE ANGLE presets join #ga-angle's shipped three the same way. */
   const CAM_TEXT = Object.freeze({ left: "LEFT BAY", right: "RIGHT BAY", high: "HIGH CORNER", low: "FLOOR LEVEL", door: "DOOR JAMB" });
@@ -142,7 +143,7 @@ const GarageArrival = (function () {
     "AFTER THE RACE: a winner idles up the lane to a welcome and a longer hold, a podium or points finish gets its own caption and beat, a retired car is pushed in by the crew with the engine off.",
     ["ga-after", "PLAY AFTER A RACE", "check"],
     ["ga-crew-home", "AFTER-RACE CREW", crewOpts(["auto", "BY RESULT"])],
-    ["ga-result", "PREVIEW RESULT", [["win", "WIN"], ["podium", "PODIUM"], ["points", "POINTS"], ["finish", "FINISHED"], ["dnf", "RETIRED"]], ["ga-preview-home", "PREVIEW AFTER RACE"]],
+    ["ga-result", "PREVIEW RESULT", [["win", "WIN"], ["podium", "PODIUM"], ["points", "POINTS"], ["finish", "FINISHED"], ["dnf", "RETIRED"]]],
   ];
   const ANGLE_TEXT = Object.freeze({ high: "HIGH CORNER", low: "FLOOR LEVEL", door: "DOOR JAMB", director: "DIRECTOR · THREE CAMERAS", custom: "CUSTOM · PICK EACH SHOT" });
   function buildRows($) {
@@ -154,13 +155,12 @@ const GarageArrival = (function () {
     const node = (r) => {
       if (typeof r === "string") return make("p", "adv-help", r);
       if (!Array.isArray(r)) { const g = make("div"); g.id = r.group; g.hidden = true; r.rows.forEach((x) => g.appendChild(node(x))); return g; }
-      const [id, text, options, button] = r, row = make("div", "set-row"), label = make("label", "tune-label", text), cell = make("div");
+      const [id, text, options] = r, row = make("div", "set-row"), label = make("label", "tune-label", text), cell = make("div");
       label.setAttribute("for", id);
       const input = make(options === "check" ? "input" : "select"); input.id = id;
       if (options === "check") input.type = "checkbox";
       else for (const [v, t] of options) { const o = make("option", "", t); o.value = v; input.appendChild(o); }
       cell.appendChild(input);
-      if (button) { const b = make("button", "", button[1]); b.id = button[0]; b.type = "button"; cell.appendChild(b); }
       row.appendChild(label); row.appendChild(cell);
       return row;
     };
@@ -172,6 +172,14 @@ const GarageArrival = (function () {
     };
     after(angle.closest(".set-row"), AFTER_ANGLE);
     after(fov.closest(".set-row"), AFTER_FOV);
+    // PREVIEW AFTER RACE joins PREVIEW PIT STOP / RACE START wherever they are
+    // (EditorWorkspace moves the foot's actions into its tools fold).
+    const out = $("ga-preview-out");
+    if (out && out.parentNode) {
+      const b = make("button", "", "PREVIEW AFTER RACE"), kids = Array.from(out.parentNode.children);
+      b.id = "ga-preview-home"; b.type = "button";
+      out.parentNode.insertBefore(b, kids[kids.indexOf(out) + 1] || null);
+    }
   }
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
@@ -271,10 +279,12 @@ const GarageArrival = (function () {
   const EYE_L = CAMS.left, EYE_R = CAMS.right;
   // HANDHELD: a slow, small sway on both shots, as if someone were filming from
   // the back of the bay. Off when `calm` (reduce motion); timing never changes.
-  // CAMERA HEIGHT lifts or drops every eye, kept between the floor and the truss.
+  // CAMERA HEIGHT lifts or drops every eye, kept above the floor and at most
+  // 3.6 m up: the overhead rig hangs from ~4 m and filled half the frame of an
+  // eye at 4.0-4.3 m (2026-10-30 captures, HIGH CORNER +0.5 m).
   function shot(out, eye, aim, t, calm, lift = 0) {
     out.eye = eye.slice(); out.aim = aim;
-    if (lift) out.eye[1] = Math.max(0.3, Math.min(4.6, out.eye[1] + lift));
+    if (lift) out.eye[1] = Math.max(0.3, Math.min(3.6, out.eye[1] + lift));
     if (calm) return out;
     out.eye[0] += 0.022 * Math.sin(1.3 * t) + 0.010 * Math.sin(3.1 * t + 1);
     out.eye[1] += 0.014 * Math.sin(1.7 * t + 2);

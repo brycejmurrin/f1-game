@@ -1279,10 +1279,6 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
 #ga-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
 /* Room for TWO CAMERA CUT: the settings page's fixed 8rem select clipped it. */
 #ga-rows .set-row > div > select { flex: 0 1 12rem; width: 12rem; }
-/* PREVIEW RESULT: the result picker and its PREVIEW AFTER RACE button share a
-   row; on a phone the button wraps under the picker instead of clipping it. */
-#ga-rows .set-row > div:has(> #ga-preview-home) { flex-wrap: wrap; justify-content: flex-end; gap: calc(var(--gap) * 0.5); }
-#ga-preview-home { min-height: var(--tap-min); }
 /* Opened from the TITLE screen there is no race behind to preview, only the
    menu's own buttons showing through the docked panel: fade the menu out the
    way css/components.css does under any open dialog. */
