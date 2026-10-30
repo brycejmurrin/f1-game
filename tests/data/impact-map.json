@@ -16509,7 +16509,6 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
-        "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-foundation.test.mjs"
       ],
       "*": [
