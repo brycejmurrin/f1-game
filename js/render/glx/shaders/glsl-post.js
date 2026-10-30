@@ -1179,8 +1179,10 @@ void main() {
   // film. Driven by the blurred bright-pass, so it only appears where the frame
   // actually carries bright energy (sun, floodlights, neon) — a dark scene
   // stays clean. The dirt value is reused by the flare modulation below.
+  // Exact gate (uniform): dirt feeds only bloomSample (vec3(0) with bloom off) and the on-screen flare.
   float dirt = 0.0;
-  if (uLensDirt > 0.001) {
+  if (uLensDirt > 0.001 && (uBloomAmt > 0.001 || (uFlareStr > 0.0 && uSunUV.x >= 0.0 && uSunUV.x <= 1.0
+      && uSunUV.y >= 0.0 && uSunUV.y <= 1.0))) {
     dirt = texture(uDirt, vUV).r;
     c += bloomSample * uExposure * dirt * uLensDirt * 2.2;
   }
