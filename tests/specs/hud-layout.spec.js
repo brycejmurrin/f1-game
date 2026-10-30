@@ -85,6 +85,8 @@ const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors",
 // (settings-defaults) change HUD zoom and onboard chrome. This file measures
 // the previous look (cockpit + normal type). Putting the spec in the diff
 // also ranks it 0 so select-specs cannot drop it as over-budget overflow.
+// uiContrast "off" here hid a HIGH CONTRAST colour bug (the POS cell); the
+// "POS cell ink follows its plate" test below switches HC on live to cover it.
 const PIN_PREVIOUS_LOOK = () => {
   try {
     localStorage.setItem("apex26.textSize", '"normal"');
@@ -1573,35 +1575,53 @@ test.describe("POS cell ink follows its plate", () => {
   test("HIGH CONTRAST on/off x broadcast/standard x rank flash up/down/none", async ({ page }) => {
     await race(page, "buttons", false, { sal: 0, sar: 0, sat: 0, sab: 0 });
     const rows = await page.evaluate(() => {
-      const cv = document.createElement("canvas"); cv.width = cv.height = 1;
-      const cx = cv.getContext("2d", { willReadFrequently: true });
-      const rgba = (c) => { cx.clearRect(0, 0, 1, 1); cx.fillStyle = "#000"; cx.fillStyle = c; cx.fillRect(0, 0, 1, 1);
-        const d = cx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
+      // Computed colours come back as rgb()/rgba(), oklab() (a color-mix) or color(srgb …).
+      const rgba = (c) => {
+        const n = (c.match(/-?[\d.]+(?:e-?\d+)?%?/g) || []).map((x) => (x.endsWith("%") ? parseFloat(x) / 100 : parseFloat(x)));
+        if (c.startsWith("rgb")) return [n[0], n[1], n[2], n.length > 3 ? n[3] : 1];
+        if (c.startsWith("color(srgb")) return [n[0] * 255, n[1] * 255, n[2] * 255, n.length > 3 ? n[3] : 1];
+        if (c.startsWith("oklab")) {
+          const [Lk, A, B] = n, l = (Lk + 0.3963377774 * A + 0.2158037573 * B) ** 3,
+            m = (Lk - 0.1055613458 * A - 0.0638541728 * B) ** 3, s = (Lk - 0.0894841775 * A - 1.291485548 * B) ** 3;
+          const g = (v) => 255 * Math.min(1, Math.max(0, v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055));
+          return [g(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s), g(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+            g(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s), n.length > 3 ? n[3] : 1];
+        }
+        throw new Error("unparsed colour " + c);
+      };
       // The ground an element paints on: its own and its ancestors' backgrounds over a black scene.
       const ground = (el) => { const stack = []; for (let e = el; e && e !== document.body; e = e.parentElement) stack.push(rgba(getComputedStyle(e).backgroundColor));
         let g = [0, 0, 0]; for (const [r, gg, b, a] of stack.reverse()) g = [r * a + g[0] * (1 - a), gg * a + g[1] * (1 - a), b * a + g[2] * (1 - a)]; return g; };
       const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
       const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
       const ratio = (a, b) => (Math.max(L(a), L(b)) + 0.05) / (Math.min(L(a), L(b)) + 0.05);
+      // A running race animates colour and background: a sync read right after a change
+      // returns the transition's START value, so the probe freezes them first.
+      const still = document.createElement("style");
+      still.textContent = "#hud, #hud * { transition: none !important; animation: none !important; }";
+      document.head.appendChild(still);
       const pos = document.getElementById("hud-pos"), label = document.querySelector("#hud-box-pos .hud-label");
       const out = [];
       for (const hc of [true, false]) for (const bc of [false, true]) for (const delta of [null, "up", "down"]) {
-        if (hc) document.documentElement.dataset.uiContrast = "high"; else delete document.documentElement.dataset.uiContrast;
+        AppearanceOpts.setContrast(hc ? "high" : "off");   // the settings row's own path
+        if ((document.documentElement.dataset.uiContrast === "high") !== hc) throw new Error("HIGH CONTRAST did not switch");
         document.body.classList.toggle("hud-prof-broadcast", bc);
         if (delta) pos.dataset.delta = delta; else delete pos.dataset.delta;
-        pos.style.animation = "none";
         for (const [what, el] of [["value", pos], ["label", label]]) {
           if (!el || !el.getClientRects().length) continue;
           const ink = rgba(getComputedStyle(el).color), g = ground(el);
           const inkOn = ink.slice(0, 3).map((c, i) => c * ink[3] + g[i] * (1 - ink[3]));
-          out.push({ hc, bc, delta, what, ratio: +ratio(inkOn, g).toFixed(2) });
+          out.push({ hc, bc, delta, what, ratio: +ratio(inkOn, g).toFixed(2), ink: getComputedStyle(el).color, ground: g.map(Math.round) });
         }
       }
+      still.remove();
       return out;
     });
     expect(rows.length, "the POS value and label must both be probed").toBeGreaterThanOrEqual(24);
+    // Anti-vacuity: the cells must not all measure alike (a broken colour read did, at 18.05:1).
+    expect(new Set(rows.map((r) => r.ratio)).size, `the probe must see different inks/plates: ${JSON.stringify(rows)}`).toBeGreaterThan(2);
     const bad = rows.filter((r) => r.ratio < 4.5);
-    expect(bad, "every POS ink must clear 4.5:1 on the plate it actually paints on").toEqual([]);
+    expect(bad, `every POS ink must clear 4.5:1 on the plate it actually paints on: ${JSON.stringify(bad)}`).toEqual([]);
   });
 });
 
