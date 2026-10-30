@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2277,
-      "lines": 2519
+      "codeLines": 2328,
+      "lines": 2582
     },
     "js/agent/agentview.js": {
-      "lines": 2316
+      "lines": 2321
     },
     "js/agent/apex.js": {
-      "codeLines": 1668,
-      "lines": 2483
+      "codeLines": 1680,
+      "lines": 2506
     },
     "js/car/car3d.js": {
-      "lines": 2330
+      "lines": 2910
     },
     "js/game.js": {
-      "codeLines": 5189,
-      "gMembers": 296,
-      "lines": 9351,
-      "topLets": 125
+      "codeLines": 5383,
+      "gMembers": 297,
+      "lines": 9576,
+      "topLets": 128
     },
     "js/net/lobby.js": {
-      "lines": 2342
+      "lines": 2311
     },
     "js/render/glx/glx.js": {
-      "lines": 3002
+      "lines": 2893
     },
     "js/track/tracks.js": {
-      "lines": 800
+      "lines": 869
     },
     "js/ui/hud.js": {
-      "codeLines": 1495,
-      "lines": 2481
+      "codeLines": 1438,
+      "lines": 2345
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -44,11 +44,11 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8420,
+      "ceiling": 8223,
       "slack": 200
     },
     "assertPinsAll": {
-      "ceiling": 10580,
+      "ceiling": 10351,
       "slack": 200
     },
     "bareCatches": {
@@ -60,7 +60,7 @@
       "slack": 5
     },
     "dynamicIdReads": {
-      "ceiling": 74,
+      "ceiling": 73,
       "slack": 5
     },
     "implicitAsserts": {
@@ -68,20 +68,20 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 336,
+      "ceiling": 334,
       "slack": 0
     },
     "rawColorDistinct": {
       "ceiling": 180,
       "slack": 0
     },
-    "rawGameReads": 308,
+    "rawGameReads": 299,
     "rawSpacing": {
       "ceiling": 306,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2189,
+      "ceiling": 2233,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -92,10 +92,10 @@
       "ceiling": 0,
       "slack": 0
     },
-    "vmSrcLoads": 599,
+    "vmSrcLoads": 594,
     "waitForTimeout": 75,
     "waitNoPolling": {
-      "ceiling": 42,
+      "ceiling": 41,
       "slack": 39
     },
     "zeroRefModules": {
