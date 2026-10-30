@@ -172,6 +172,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
+| `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
@@ -560,6 +561,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
 | `livery-design-editor.js` | `GarageLiveryDesignEditor` | tag | Livery editing tools. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
+| `entrance-motion.js` | `GarageEntranceMotion` | LAZY_RACE | Blender-authored entrance motion. |
 
 **`js/fx/`**
 

@@ -3157,6 +3157,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/garage-entrance-motion.js",
+      "global": "GarageEntranceMotionData",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/data/hub.js",
       "global": "DataHub",
       "roster": "LAZY_DATA"
@@ -3410,6 +3415,11 @@
       "path": "js/garage/crew-service.js",
       "global": "GarageCrewService",
       "roster": "tag"
+    },
+    {
+      "path": "js/garage/entrance-motion.js",
+      "global": "GarageEntranceMotion",
+      "roster": "LAZY_RACE"
     },
     {
       "path": "js/garage/experience.js",

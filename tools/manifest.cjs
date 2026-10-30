@@ -1069,6 +1069,8 @@ const LAZY_EDGES = [
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
 // defaults rather than throwing, and game.js re-applies once it lands.
 const LAZY_RACE = [
+  "js/data/garage-entrance-motion.js", // optional authored bay motion, warmed with presets
+  "js/garage/entrance-motion.js",
   "js/lighting/presets.js",
 ];
 

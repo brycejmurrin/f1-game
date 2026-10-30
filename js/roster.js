@@ -204,6 +204,8 @@
     ]
   ],
     LAZY_RACE: [
+    "js/data/garage-entrance-motion.js",
+    "js/garage/entrance-motion.js",
     "js/lighting/presets.js"
   ],
     LAZY_RACE_SESSION: [

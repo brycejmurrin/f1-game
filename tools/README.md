@@ -237,6 +237,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/blender/crew-body.py** | Blender-authors the pit crew body (overalls, full-face helmet, gloves, pit shoes) into js/garage/crew-draw.js. | — |
 | **gen/blender/crew-choreo.py** | Blender-authors garage enter/leave crew variants and the in-race pit crew into js/garage/crew-choreo.js. | — |
 | **gen/blender/garage-camera-rigs.py** | Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track) into js/garage/arrival.js. | — |
+| **gen/blender/garage-entrance.py** | Author and export the entrance car rig from evaluated Blender scenes. | — |
 | **gen/blender/garage-light-cues.py** | Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out) into js/garage/scene.js. | — |
 | **gen/blender/garage-previz.py** | Editable Blender previz of the garage arrival / drive-out (bay, shutter, car, keyed camera) from arrival-poses JSON. | — |
 | **gen/compress-audio.mjs** | Cap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames. | — |

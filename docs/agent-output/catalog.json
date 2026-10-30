@@ -1938,6 +1938,12 @@
       ]
     },
     {
+      "path": "tools/gen/blender/garage-entrance.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/blender/garage-light-cues.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

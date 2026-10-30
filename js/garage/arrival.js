@@ -461,6 +461,7 @@ const GarageArrival = (function () {
     const extra = service ? (dir === "out" ? 3 : 6) : typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.extra(crew) : 0;
     return timeline(config, dir).base + extra;
   }
+  const entranceSources = new WeakMap();
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
     const rig = RIGS[config.angle] ? config.angle : null;
@@ -470,8 +471,12 @@ const GarageArrival = (function () {
     const u = Math.max(0, Math.min(1, (t - T.door) / T.lane));
     const lane = IN_LANE_M * (r && r.pushed ? ease(u) : 1 - (1 - u) * (1 - u));
     const back = ease((t - T.door - T.lane - T.pause) / T.back);
-    const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
-      : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
+    if (dir === "in" && !entranceSources.has(config)) entranceSources.set(config,
+      config._entranceAuthored !== false && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available());
+    const authored = dir === "in" && entranceSources.get(config)
+      ? GarageEntranceMotion.pose(t, T, side) : null;
+    const p = authored || (back > 0 ? pathAt(OUT_PATH * (1 - back), side)
+      : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN });
     const label = t < T.door ? "OPENING GARAGE"
       : r ? (t < T.door + T.lane + T.pause ? r.arrive : t < T.park ? r.park
         : (Number.isFinite(config.pos) && config.pos > 0 && dir === "home" && config.result !== "dnf" ? "P" + (config.pos | 0) + " · " : "") + r.title)
@@ -636,6 +641,8 @@ const GarageArrival = (function () {
       const home = opts && opts.home;
       dir = home ? "home" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
+      // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
+      config._entranceAuthored = typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos });
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }

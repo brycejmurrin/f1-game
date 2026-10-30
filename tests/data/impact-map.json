@@ -5696,6 +5696,11 @@
         "tests/unit/share-code.test.mjs"
       ]
     },
+    "js/data/garage-entrance-motion.js": {
+      "*": [
+        "tests/unit/garage-entrance-motion.test.mjs"
+      ]
+    },
     "js/data/hub.js": {
       "buildPicker": [
         "tests/unit/real-race-script.test.mjs"
@@ -7604,10 +7609,12 @@
         "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "cancel": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "crewFor": [
@@ -7618,6 +7625,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7642,7 +7652,8 @@
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "shotsFor": [
         "tests/unit/garage-arrival.test.mjs"
@@ -7651,14 +7662,17 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "start": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "step": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "timeline": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs"
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "wallLeft": [
         "tests/unit/garage-arrival.test.mjs"
@@ -7692,7 +7706,8 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ]
     },
     "js/garage/crew-motion.js": {
@@ -7721,6 +7736,14 @@
       ],
       "layout": [
         "tests/unit/garage-crew.test.mjs"
+      ]
+    },
+    "js/garage/entrance-motion.js": {
+      "pose": [
+        "tests/unit/garage-entrance-motion.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/garage-entrance-motion.test.mjs"
       ]
     },
     "js/garage/experience.js": {
