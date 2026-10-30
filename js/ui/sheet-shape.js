@@ -659,11 +659,14 @@ window.SheetShape = (function () {
     const el = document.activeElement, UL = window.UiLayers;
     const layer = el && el.scrollIntoView && UL && UL.top && UL.top();
     if (!layer || el === layer || !layer.contains(el)) return;
+    // Either axis: the career guide's contents rail is a SIDEWAYS strip at 844x390 (uihunt4 #5).
+    const sc = (v) => v === "auto" || v === "scroll";
     for (let p = el.parentElement; p; p = p === layer ? null : p.parentElement) {
-      const oy = p.scrollHeight - p.clientHeight > 1 && getComputedStyle(p).overflowY;
-      if (oy !== "auto" && oy !== "scroll") continue;
+      const h = p.scrollHeight - p.clientHeight > 1, w = p.scrollWidth - p.clientWidth > 1;
+      const cs = (h || w) && getComputedStyle(p);
+      if (!cs || !((h && sc(cs.overflowY)) || (w && sc(cs.overflowX)))) continue;
       const a = el.getBoundingClientRect(), b = p.getBoundingClientRect();
-      if (a.top < b.top - 1 || a.bottom > b.bottom + 1) el.scrollIntoView({ block: "nearest" });
+      if (a.top < b.top - 1 || a.bottom > b.bottom + 1 || a.left < b.left - 1 || a.right > b.right + 1) el.scrollIntoView({ block: "nearest", inline: "nearest" });
       return;
     }
   }
@@ -671,9 +674,7 @@ window.SheetShape = (function () {
     reclassify();
     applyKeyboard();
     keepFocusVisible();
-    /* ScrollFade's own settle is 120/400 ms — shorter than iOS's rotation
-       animation — so a late shape flip would leave sf-* / thumb tokens on
-       the pre-rotation boxes. Poke it whenever we re-ask. */
+    // ScrollFade settles in 120/400 ms, inside iOS's rotation: re-poke it with every re-ask.
     if (window.ScrollFade && typeof window.ScrollFade.refresh === "function") {
       window.ScrollFade.refresh();
     }
