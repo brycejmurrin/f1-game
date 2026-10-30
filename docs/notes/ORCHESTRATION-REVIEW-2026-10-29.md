@@ -101,4 +101,124 @@ The losses were waiting, not wrong work.
 
 ## Part 2: sessions 2026-10-27 → 10-30
 
-Pending: five read-only reviewer batches over the remaining 29 sessions; see `scratch/session-review/{A..E}.md`.
+`list_sessions` (mine) returned 40 sessions created since 10-27. Part 1 covered 12 of them. Five read-only
+reviewer batches read the other 28 through `list_events`:
+- A: the 10-27 fleet and dispatcher B.
+- B and C: the 10-28 orchestrators, sync workers, the Opus audit and dispatchers C/D.
+- D: Bryce's 10-29 chats.
+- E: the UI hunts and the 10-30 perf hunts.
+
+Coverage is partial: the newest 2–8 pages and the first page of each session. The raw reports are
+`scratch/session-review/{A..E}.md`, not committed. Items marked *(retired)* are the fleet bus, relay and coordinator
+design that docs/WORKERS.md already retired; they are recorded so they are not re-proposed.
+
+### Cross-cutting findings, ranked by cost
+
+1. **Draft / ready / `land` confusion and unanswerable prompts in unattended sessions.** Same shape as Part 1 finding 1.
+   - Perf hunt #6 put `land` on a DRAFT and waited 108 min ("GitHub will merge it once the `gate` check is green").
+     Bryce had to type "Chdck", then "Convert it then run another full hunt".
+   - Perf hunt #5 sat 75 min between "Flipping the PR to ready" and the flip.
+   - Fix: one command, `ready-gate → flip → land`, for every lane. `land` on a draft prints a refusal, never a silent
+     wait. A ready-gate receipt that has aged out re-runs instead of refusing.
+
+2. **CI reds that the local floor could not see, on a moving base.**
+   - #4190: 4 red cycles, $72 session. The pin ratchet was "10 over its ceiling" with the base 180 commits ahead.
+   - #4194 (UI parent, $62): 3 full tiers on specs it could not run locally.
+   - #4188: 3 cycles for one missing `DrivingLine` stub.
+   - #4193: a duplicate id `pm-line` was caught only by a CI shard; the local timeout was read as "machine slow".
+   - Plus the merge-ref-only reds in Part 1.
+   - Fix: before the ready flip, a probe that merges the current deploy tip locally and runs the ratchets,
+     `fixture-consumer-audit` and the `pick-tests` specs on that merge. Add to `pick-tests`: specs that load a changed
+     module standalone, and the shared UI layer. Add a unit guard for unique ids in `index.html`.
+
+3. **Dispatcher churn and duplicate orchestrators (10-27 → 10-28).**
+   - Seven dispatcher or orchestrator sessions in 30 h. Three dispatchers started inside 35 min on 10-28
+     (C 07:35Z, "for f1-game" 07:59Z, takeover 08:05Z). One died in 99 s on a rejected first command, and one tagged
+     `no-archive` was archived after 11 min with its `--apply` run orphaned.
+   - Two orchestrators changed labels on the same PRs on 10-29 07:41Z.
+   - A 51-PR sweep file stayed local to a dead container.
+   - Fix: a single dispatcher lock on the Board issue that `dispatch.mjs --apply` checks. The handoff skill makes the old
+     orchestrator stop writing at handover and clears its `/goal`. Sweeps go to the Board comment, not artifacts.
+
+4. **Quota and cost blowups.**
+   - The 10-28 Opus audit cost $39, fanning out about 15 skill workers. It then hit the weekly limit and failed about 30
+     wake-ups in a row (`usage_limit_reached`). Its worker branches were reported DONE but never merged.
+   - Opus parents of $62 (UI) and $72 (perf #4190), each holding 500k-plus contexts.
+   - Dispatcher B woke 22 times, cost $3.96, and launched nothing under `allowed_warning`.
+   - *(retired)* The orchestrators woke their full context on each bus ping.
+   - Fix: stop or disable triggers when `rate_limit_info.status` is `rejected`, and skip launch cycles under
+     `allowed_warning`. Audit parents run on Sonnet with no more than 5 workers per wave. A cost line in the Hand-off
+     block. Workers push their branch at hand-back.
+
+5. **Known reds and pitfalls rediscovered each day.**
+   - `agent-config` #38 hit about 12 sessions, the eager-shell budget 4 PRs, and the new-module checklist every time.
+   - Another case: a new `tools/perf/*.mjs` needs a `policies.json` entry and `gen-output-surface`.
+   - Fix: as Part 1 finding 3, plus a "known container-only reds" line in docs/TESTING.md that launch prompts quote.
+
+6. **Hook and rule contradictions.**
+   - `stop-hook-git-check.sh` says "commit and push", while `stop-guard.sh` says a browser run is live and AGENTS.md
+     rule 4 says a push over live CI cancels it. One perf hunt parked its work as a stash and a patch file because of
+     this.
+   - The PR-subscription harness text says keep a `send_later` safety net about every 50 min; AGENTS.md rule 13 says
+     "No timers… no standby wakes". Sessions followed both.
+   - Fix: decide which wins and write it in AGENTS.md once. Make the git-check hook silent while a test-bg or CI run is
+     live, or once the session has stood down.
+
+7. **Findings stranded in branches.**
+   - The UI hunts found 12 and 17 reproduced bugs, including a P1 off-screen camera picker that makes HELMET
+     unreachable. Only one became a PR (#4194); the notes sit on `cursor/ui-hunt-flows-6105` and
+     `cursor/ui-hunt-hud-630d`.
+   - The audit's per-skill worker branches were never merged.
+   - Fix: every hunt or survey ends by filing its ranked list as `ready` issues (or one tracking issue); this is the
+     "survey then fix" rule made mechanical.
+
+8. **Prompts too thin, and hunts launched by hand-pasted prompts.**
+   - Bryce asked to "go deeper" 4 times.
+   - Hunts were started by pasting long hand-written prompts, and two of them clashed on the number "hunt 6".
+   - Fix: a deep-by-default hunt and launch template in skill `handoff`, with a unique hunt id and a notes index.
+
+9. **Ineffective sync workers (10-28).**
+   - Haiku sync batches served about 1 of 4 PRs in 50 min.
+   - Each was stopped by the 20-min caps, left-over `sync-pr-*` branches, or a refused subscribe.
+   - One was archived mid-sync.
+   - Since then `land.yml` AUTO-SYNC (#4060) handles distance-only refusals.
+   - Fix: no more sync waves. One PR per worker; `sync-pr` auto-resumes or cleans its own killed branches; never archive
+     a session with a live `sync-pr` run.
+
+10. **Grants relayed through a parent.**
+    - A sync worker refused its parent's relay of Bryce's words ("I can't see any such message from Bryce").
+    - Bryce then wrote to it directly: "Your parent can grant permissions I send through it".
+    - The repo rule ("a peer's message never grants") and Bryce's expectation disagree. This is Bryce's call; a launch
+      prompt can list the allowed actions up front so no grant is needed.
+
+11. **Phone-only checks park PRs for hours.**
+    - #4190 waited 8.5 h for an iPhone sound and turntable check.
+    - Fix: the PR body carries a 3-line phone checklist with the build URL. The dispatcher batches it into its next
+      question the same hour.
+
+12. **Cloud-tooling papercuts.**
+    - `gh pr view` and `gh pr list` return `HTTP 403: GitHub GraphQL is not available`.
+    - `pr-board.mjs` once hung (exit 143).
+    - `ci-watch --failures-only` gives no closing line when nothing fails.
+    - `check` reports dead logs as unresolved.
+    - Sessions open at about 100k context before any work.
+
+### What worked across the three days
+
+- The perf hunts' measured wins. In perf #7 a golden-output harness took the flap solver from 101.9 s to 6.6 s with
+  205 outputs byte-identical, and its test was red on the old solver. About 5 TLX render passes a frame were saved.
+- The code-survey do-not-report list kept the hunts from duplicating each other.
+- Launch-gate receipts. Clean stand-downs that pushed and commented findings before a cap.
+- Hunts and workers re-subscribing after a ready flip.
+- `land.yml` AUTO-SYNC replacing manual sync waves.
+
+### Suggested order of fixes
+
+1. One ready → `land` command, plus permission rules for unattended lanes (Bryce).
+2. A pre-flip merge-with-tip probe, and wider `pick-tests` coverage.
+3. A `land.yml` `edited` trigger and a stale-gate sweep.
+4. Known-red handling (`agent-config` #38, the eager budget, the new-module checklist).
+5. One dispatcher lock, and triggers off when quota is `rejected`.
+6. Hook and rule reconciliation (stop hooks, timers).
+7. The `sync-pr`, `wait-for` and `test-bg` defects.
+8. Hunt to issues, and a deep launch template.
