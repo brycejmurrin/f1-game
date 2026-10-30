@@ -140,10 +140,20 @@ Test: `webgpu-lifecycle.test.mjs` "perf hunt 5 W1/W3" drives six env faces throu
 
 On the old code it fails (expected 4 levels, got 7).
 
-Gates: `wgx-validate.mjs --static` clean. `webgpu-lifecycle` + `renderer-soft-lifecycle` pass 165 / 0. The census
-re-run on the PR head reads the WGX leg's row.
+Gates: `wgx-validate.mjs --static` clean. `webgpu-lifecycle` + `renderer-soft-lifecycle` pass 165 / 0.
 
-CENSUS2-PLACEHOLDER
+Census on the PR head (macos-latest, same inputs), WGX leg:
+
+| run | head | `64x64/rgba16float:clear>store` per frame | wide-frame add for that row | passes per frame, max | submits median | gpuErrors (4 legs) |
+|---|---|---|---|---|---|---|
+| 40868057244 / 40838027433 | base | 0.78 | 4.24× | 70 | 3 | 0 |
+| 41005913372 | `bf2a21d9` (F1 only) | 0.95 | 4.98× | 68 | 3 | 0 |
+| **41008210504** | **`4fd8b966` (F1 + F2)** | **0.42** | **1.91×** | **50** | 3 | **0** |
+
+- The row halves, as the 36 → 18 ladder predicts, and the worst frame loses 18 passes.
+- The median submit count is unchanged, because the saved submit happens once per cube, not once per frame.
+- The same run keeps TLX WebGPU at 22 passes per frame (median), with the mirror at 4 levels (glassLod 2.38).
+- meanLuma for WGX: 73.5, against 73.2 and 73.8 on the earlier runs, within run-to-run spread.
 
 
 ## Hunt
