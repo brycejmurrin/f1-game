@@ -11493,6 +11493,9 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "parkedAhead": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
       "pushVelocity": [
         "tests/unit/contact-geometry.test.mjs"
       ],
