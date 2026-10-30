@@ -285,6 +285,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `condition-cue-controls.js` | `ConditionCueControls` | tag | Cue targets that account for current driving conditions: ON by default since the #2177 calibration (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md); the… |
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
+| `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
 
 **`js/track/core/`**
 
@@ -701,6 +702,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
+| `apex-bridge.js` | `ApexBridge` | LAZY_AGENT | ApexBridge: drive the live game on a real phone from a Claude session, through one GitHub issue. |
 
 **`js/circuits/`**
 

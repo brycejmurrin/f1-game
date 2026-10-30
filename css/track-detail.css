@@ -112,6 +112,19 @@
   background: currentColor;
 }
 #track-detail-legend [data-leg="sector"] { color: var(--silver); }
+/* Landscape: the legend is a KEY on the map, not a row under it (design pass #2d,
+   #4241). The map is height-limited in its wrap, so a row under it cost map
+   height and overran the wrap by 2px at 844x390 (UI-HUNT-2026-10-29 L2), while
+   the wrap's side margins sat empty. */
+@media (orientation: landscape) {
+  #track-detail-canvas-wrap { position: relative; }
+  #track-detail-legend {
+    position: absolute; left: 0; bottom: 0; align-self: auto;
+    flex-direction: column; gap: calc(var(--gap) / 6); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
+    background: var(--look-hud-bg); border: 1px solid var(--hairline); border-radius: var(--r-sm);
+    font-size: var(--fs-micro);
+  }
+}
 /* ☆ FAVOURITE (js/ui/select-screen.js openTrackDetail builds it): a chip, not a
    full-width bar, in the panel's column. */
 #track-detail-fav { align-self: flex-start; margin-top: calc(var(--gap) * 0.5); }

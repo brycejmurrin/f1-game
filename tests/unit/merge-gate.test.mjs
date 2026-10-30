@@ -18,7 +18,8 @@ import {
   untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, touchesGame,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
+import { planHash } from "../../tools/ci/ready-gate.mjs";
+import { BOUND_MAX_AGE_MIN, receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scratch = (prefix) => { const d = path.join(ROOT, "artifacts", "tmp"); fs.mkdirSync(d, { recursive: true }); return fs.mkdtempSync(path.join(d, prefix)); };
@@ -433,6 +434,42 @@ test("audit 4: the hashed gate set is the static import closure, recorded in the
     assert.equal(gateFilesVerdict(ROOT, { ...rc, gateRoot: ROOT, gateFiles: seeds }).why,
       `the receipt does not record ${unrec.slice(0, 4).join(", ")}${unrec.length > 4 ? ", ..." : ""} of the gate's import closure in ${ROOT} (an older gate or an edited import): re-run the gate`);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("ready receipt keyed to head + Plan: valid past 10 min while both match; a push, a Plan edit or the 24 h backstop invalidates it", () => {
+  const dir = scratch("gate-receipt-bound-");
+  try {
+    const now = Date.parse("2026-10-30T12:00:00Z");
+    const at = (minAgo) => new Date(now - minAgo * 60000).toISOString();
+    const PLAN = planHash("## Plan\n- [x] a\n- [ ] land: x\n");
+    const NEW = "b".repeat(40);
+    const both = (head, plan, expectPy = true) => {
+      const js = receiptVerdict(readReceipt(dir, "ready", 7), { kind: "ready", pr: 7, head, plan, now });
+      const [pok, pwhy] = PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, ${JSON.stringify(head)}, now=${now / 1000}, require_head=True, plan=${JSON.stringify(plan)})))`);
+      assert.equal(pok, js.ok, `python and js disagree: js=${js.why} py=${pwhy}`);
+      if (!js.ok && !/PR head/.test(js.why)) assert.equal(pwhy, js.why, "same refusal text");
+      return js;
+    };
+    const row = (head, plan) => { const v = both(head, plan); return v.ok ? "ok" : v.why.replace(/ \(max.*/, ""); };
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, planHash: PLAN, at: at(30) }, { main: null });
+    const rows = [row(HEAD, PLAN), row(NEW, PLAN), row(HEAD, planHash("## Plan\n- [x] a\n- [x] b\n")).slice(0, 26), row(HEAD, "").slice(0, 20)];
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, planHash: PLAN, at: at(BOUND_MAX_AGE_MIN + 1) }, { main: null });
+    rows.push(both(HEAD, PLAN).why.replace(/^.*(max \d+, the backstop).*$/, "$1"));
+    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(1) }, { main: null });
+    rows.push(both(HEAD, PLAN).why.replace(/^.*(records no Plan hash).*$/, "$1"));
+    assert.deepEqual(rows, ["ok", "the PR head is bbbbbbbbbbbb, but ready-gate passed on aaaaaaaaaaaa: re-run ready-gate on the current head",
+      "the PR's Plan section chan", "the ready-gate recei", "max 1440, the backstop", "records no Plan hash"],
+    "same head+Plan after 30 min ok; new head; Plan edited; no live Plan hash falls back to the 10 min window; past the backstop; old receipt");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("planHash: JS and Python agree; CRLF, trailing blanks and edits outside the Plan do not change it", () => {
+  const bodies = ["", "no plan", "## Goal\nx\n## Plan\n- [x] a  \n\n- [ ] land: y\n## Verified\nz", "## Plan\r\n- [x] a\r\n- [ ] land: y\r\n",
+    "## Plan\n- [ ] outer\n<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\n## Plan\n- [x] agent\n<!-- CURSOR_AGENT_PR_BODY_END -->", "<!-- c -->\n## Plan\n- [x] é"];
+  const same = (x, y) => planHash(x) === planHash(y);
+  assert.deepEqual([...bodies.map((b) => PY(`print(json.dumps(P.plan_hash(json.loads(${JSON.stringify(JSON.stringify(b))}))))`) === planHash(b)),
+    same(bodies[2], "## Goal\nchanged\n## Plan\n- [x] a\n- [ ] land: y\n## Verified\nother"), same(bodies[3], "## Plan\n- [x] a\n- [ ] land: y"), same(bodies[3], "## Plan\n- [x] a\n- [x] land: y")],
+  [true, true, true, true, true, true, true, true, false]);
 });
 
 test("audit 4: a future-dated receipt is refused; a ready receipt is pinned to the PR's current head", () => {

@@ -278,6 +278,7 @@ export const RULES = [
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
   [/^js\/ui\/screen-looks\.js/, ["state-unit"], "screen-looks.test.mjs (also run title-layout + pause-opts: both peek through it)"],
+  [/^js\/ui\/layout-presets\.js/, ["state-unit"], "layout-presets.test.mjs (VM-loads screen-looks, pause-opts and title-layout too)"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it
@@ -374,7 +375,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
     ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }

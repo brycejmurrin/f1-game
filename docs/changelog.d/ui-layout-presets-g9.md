@@ -1,0 +1,1 @@
+New: SETTINGS › APPEARANCE › LAYOUT PRESET — one tap applies a whole-UI layout live, no reload: SHIPPED, THUMB (two-thumb phone grip: pause strip on the right edge, pop-ups and the circuit strip low, taller buttons), COMPACT (denser) and BIG (larger buttons and tiles). It reads CUSTOM once any knob moves, and UNDO puts back the layout it replaced.

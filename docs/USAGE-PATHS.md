@@ -210,7 +210,7 @@ Sources: [`js/game.js`](../js/game.js), [`pause-opts.js`](../js/ui/pause-opts.js
 | E04 | Home/Garage/paused race/WATCH → Photo Studio → subject/framing/capture → save/download/background → DONE | Restore the actual caller. Home can switch between garage and circuit subjects; photo background can then be selected for Home. |
 | E05 | Settings → Controls / Driving / Display / Appearance / Steering & Assists / Music & Sound | Back follows settings navigation to index/caller. Include Spotify panel (`#spotifypanel`) close and settings import/export/reset. |
 | E06 | Display → Advanced Visuals → Lighting (`#lighting`) / Camera (`#camtune`) / Flyby (`#flyby`) → done | Race-only doors are disabled outside a session. Flyby → Free Camera (`#freecam`, `#photo-controls`) → set shot start/end → done returns to editor. |
-| E07 | Display → Garage Arrival (`#garrival`) → PREVIEW IN/OUT → finish/skip → DONE | Preview returns to tuner, DONE to Settings. Refused while Garage/drive-out owns the room. |
+| E07 | Display → Garage Arrival (`#garrival`) → PREVIEW PIT STOP / RACE START / AFTER RACE → finish/skip → DONE | Preview returns to tuner, DONE to Settings. Refused while Garage/drive-out owns the room. |
 | E08 | Appearance → title layout editor (`#tl-editor`) or screen PEEK → done | Layout editor is title-only; PEEK/Escape restores settings without committing a navigation jump. |
 
 Sources: [`real-race-tab.js`](../js/data/real-race-tab.js),

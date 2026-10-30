@@ -1001,6 +1001,16 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/gen/blender/garage-camera-rigs.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-light-cues.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/blender/garage-previz.py": {
       "action": "keep-native",
       "presentation": "native",

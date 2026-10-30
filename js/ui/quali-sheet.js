@@ -58,7 +58,6 @@ function create(G) {
     if (me && me.pos === 1 && me.human && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
     if (poleNew) {
       const card = document.createElement("div"); card.className = "res-personal";
-      card.setAttribute("role", "status");
       const head = document.createElement("strong"); head.textContent = I18n.t("results.badgeUnlocked", null, "BADGE UNLOCKED");
       card.append(head, span("", Badges.labelOf("pole")));
       body.appendChild(card);
@@ -71,6 +70,8 @@ function create(G) {
     build(rows);
     $("quali").hidden = false;
     ScrollFade.refresh();
+    // Say the pole badge (see results-sheet.js sayCards).
+    if (poleNew && typeof LiveRegion !== "undefined") setTimeout(() => LiveRegion.say(I18n.t("results.badgeUnlocked", null, "BADGE UNLOCKED") + " " + Badges.labelOf("pole"), "save"), 0);
   }
   function close() {
     Log.info("ui", "QualiSheet.close");

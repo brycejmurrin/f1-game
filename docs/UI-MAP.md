@@ -324,11 +324,20 @@ Other in-race roots are:
   editor, and resume/quit close it.
 - `#garrival` — the GARAGE ARRIVAL TUNER dock (`#pm-garrival` under Display →
   Advanced Visuals; `js/garage/arrival.js`). Opens outside a race too; DONE or
-  Escape returns to Settings. PREVIEW IN / PREVIEW OUT (`#ga-preview-in` /
-  `#ga-preview-out`) play the saved arrival or RACE! drive-out once in the garage
-  room (`js/garage/setup-camera.js` startArrivalPreview) with `#garrival-inner`
-  hidden; it ends by itself, on DONE or on Escape, and a paused race redraws its
-  own frame after. Refused while the GARAGE or the drive-out owns the room.
+  Escape returns to Settings. Three sequences: PIT STOP (WORK ON CAR), RACE START
+  (the RACE! drive-out) and AFTER THE RACE (the next non-pit garage visit after a
+  race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS / FINISHED / RETIRED).
+  GARAGE ANGLE picks a camera or a preset (DIRECTOR, or CUSTOM's `#ga-shots-row`
+  per-shot pickers); CAMERA HEIGHT, CAMERA MOVE (still / push in / pull out /
+  drift), HANDHELD and FINAL SHOT ZOOM shape the shots; SHUTTER SHOT, HOLD BEAT,
+  CAR SPEED and END BEAT set their lengths; SEQUENCE LIGHTING (a garage lighting
+  mood held while it plays; AFTER-RACE LIGHTING picks one by result), DOOR GLOW,
+  CAPTIONS and CINEMA BARS (`body[data-ga-bars]`) set the look; REAR LIGHT, SLOW-MO AT THE DOOR and ENGINE SOUND ON ARRIVAL round it off. PREVIEW PIT STOP / RACE START / AFTER RACE
+  (`#ga-preview-in` / `#ga-preview-out` / `#ga-preview-home`) play the saved
+  settings once in the garage room (`js/garage/setup-camera.js`
+  startArrivalPreview) with `#garrival-inner` hidden; it ends by itself, on DONE
+  or on Escape, and a paused race redraws its own frame after. Refused while the
+  GARAGE or the drive-out owns the room.
 - `#tl-editor` — the TITLE LAYOUT editor's docked bar (`#pm-tl-edit`, EDIT ON
   TITLE SCREEN…, under Appearance → TITLE SCREEN → TITLE LAYOUT;
   `js/ui/title-layout.js`).

@@ -236,6 +236,8 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
 | **gen/blender/crew-body.py** | Blender-authors the pit crew body (overalls, full-face helmet, gloves, pit shoes) into js/garage/crew-draw.js. | — |
 | **gen/blender/crew-choreo.py** | Blender-authors garage enter/leave crew variants and the in-race pit crew into js/garage/crew-choreo.js. | — |
+| **gen/blender/garage-camera-rigs.py** | Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track) into js/garage/arrival.js. | — |
+| **gen/blender/garage-light-cues.py** | Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out) into js/garage/scene.js. | — |
 | **gen/blender/garage-previz.py** | Editable Blender previz of the garage arrival / drive-out (bay, shutter, car, keyed camera) from arrival-poses JSON. | — |
 | **gen/compress-audio.mjs** | Cap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames. | — |
 | **gen/ensure-built.mjs** | Builds missing or stale gitignored site outputs (BUILT_PATHS) for serve, test and deploy entries. | check-changes |
@@ -473,7 +475,7 @@ Blender authoring and deterministic runtime motion exports for the garage crew.
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **garage/arrival-poses.mjs** | Samples the real GarageArrival.pose / poseOut (garage in and out) to JSON frames for the Blender previz. | — |
+| **garage/arrival-poses.mjs** | Samples the real GarageArrival poses (pit stop, race start, after-race home) to JSON frames for the Blender previz. | — |
 | **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
 
 ### `tools/ui/`
