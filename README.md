@@ -3,9 +3,11 @@
 **[Play live on GitHub Pages &rarr;](https://brycejmurrin.github.io/f1-game/)**
 
 An unofficial Formula 1 fan game and data hub in pure JS/CSS/HTML — no app
-framework, no build step. WebGL2 and optional WebGPU renderers (default
-renderer vendors [three.js](https://threejs.org/) under `vendor/`; a few other
-libraries sit there too). Runs in any modern browser on desktop or mobile. A
+framework, no build step. The default renderer is [three.js](https://threejs.org/)
+(vendored under `vendor/`), which draws with WebGPU where the browser has it —
+iPhone Safari included — and three's WebGL2 backend where it does not; a
+hand-written WebGL2 renderer is the universal fallback, and a raw WebGPU renderer
+is opt-in (Settings → Graphics → RENDERER). Runs in any modern browser on desktop or mobile. A
 sibling of [Neon Drift](https://github.com/brycejmurrin/driving-game): same
 static-site spirit, this time in true 3D.
 
@@ -189,8 +191,8 @@ sensors require a secure context.
 ## Project layout
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
-Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
-renderers + shaders), `js/track/` (the spline → mesh track engine),
+Plain script-tag IIFE modules, grouped by domain: `js/render/` (three.js TLX default,
+WebGL2 GLX fallback, WebGPU WGX + shaders), `js/track/` (the spline → mesh track engine),
 `js/circuits/` (the 52 circuit data files: 24 season rounds + 28 retired), `js/car/` (procedural car geometry,
 liveries, the 12-category upgrade catalog), `js/data/` (the 2026 grid,
 Jolpica/OpenF1 clients + the data hub UI), `js/input/`, `js/audio/`, `js/ui/`,

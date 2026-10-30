@@ -696,6 +696,11 @@
       "presentation": "native",
       "preserve": "Fail-safe unmatched and any_node/driving values; plan is not execution"
     },
+    "tools/ci/preflip-probe.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Conflict versus red step versus pass verdict line; receipt per PR; exit 0/1/2/3"
+    },
     "tools/ci/playwright-occupancy.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -980,6 +985,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
+    },
+    "tools/gen/blender/crew-body.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/gen/blender/crew-choreo.py": {
       "action": "keep-native",

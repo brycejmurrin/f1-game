@@ -1582,7 +1582,12 @@ const TLX = (function () {
       // that latches it still reads the capped chain once (a camera cut into a
       // cockpit view). An explicit apex26.tlxMirMips=N caps under the glass too
       // (the A/B lever for that look); "0" = the full chain always (the old way).
-      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false;
+      // Perf hunt 5 F1: the glass no longer latches the FULL chain (helmet is the
+      // default camera, so the cap never applied: 9 levels, 8 passes a frame).
+      // drawMirrorGlass bounds its true LOD each frame (PostCommon.mipFootprintLod)
+      // and _mirGlassLod keeps the session max; unbounded (a triangle straddling the
+      // eye plane, no CPU arrays) latches the full chain as before; tlxMirMips=0 is the A/B.
+      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;
       try {
         const v = localStorage.getItem("apex26.tlxMirMips");
         if (v !== null && v !== "" && +v >= 0) { _mirMipCap = Math.floor(+v); _mirMipPinned = true; }
@@ -1590,8 +1595,9 @@ const TLX = (function () {
       const _mirFull = (w, h) => Math.floor(Math.log2(Math.max(w, h, 1))) + 1;
       function _mirLevels(w, h) {
         const full = _mirFull(w, h);
-        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned)) return full;
+        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity))) return full;
         let need = _mirMipCap;
+        if (_mirGlassSeen && !_mirMipPinned) need = Math.max(need, Math.ceil(_mirGlassLod + 0.25) + 1);
         if (_mirRect) {
           const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
           const r = Math.max(w / Math.max(1, Math.round(_mirRect[2] * cw)), h / Math.max(1, Math.round(_mirRect[3] * ch)));
@@ -1896,6 +1902,7 @@ const TLX = (function () {
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
             releaseGeometry,
+            releaseAttribute,
           });
         }
       } catch (e) {
@@ -2096,6 +2103,7 @@ const TLX = (function () {
       // build-time merge in tlx-chunked.js and leave this draw path on.
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
+      const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
       function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
         const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
@@ -4148,6 +4156,11 @@ const TLX = (function () {
         _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
       }
 
+      // A merge slot's outgrown index (tlx-chunked mergeVisible): three's Attributes.delete destroys its GPU buffer.
+      function releaseAttribute(attr) {
+        try { if (renderer._attributes) renderer._attributes.delete(attr); } catch (_) { /* the GC frees it */ }
+      }
+
       function disposeGeometry(geo) {
         if (!geo) return;
         if (geo.__tlxSplit) { for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); } geo.__tlxSplit = null; }
@@ -5389,6 +5402,10 @@ const TLX = (function () {
           const S = shadowSys.S;
           if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
             const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, reach || null, reach ? reach[3] : 0);
+            // The main pass's merged draw (slot 0/1) for the depth passes: ONE caster for the visible chunks, not
+            // a pool slot, RenderObject and bind group each. One slot for sun and lamps: an unchanged set reuses it.
+            const g = _chunkMerge && n > 1 ? chunkedSys.mergeVisible(mesh, n, 2) : null;
+            if (g) { _shMergeWrap.geo = g; shadowSys.castShadow(_shMergeWrap, model); _shMergeWrap.geo = null; return; }
             const vis = chunkedSys.visList;
             for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
             return;
@@ -5729,7 +5746,7 @@ const TLX = (function () {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
-            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
+            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
@@ -5742,7 +5759,17 @@ const TLX = (function () {
               || !mesh || !mesh.geo || !model) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
-          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the target to the full chain
+          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
+          if (_mirGlassLod < Infinity && (_frameVP[11] !== 0 || _frameVP[15] !== 0)) {   // no frame camera yet: no bound
+            const g = mesh.geo, pa = g.attributes && g.attributes.position, ua = g.attributes && g.attributes.uv, st = post && post.sceneTarget ? post.sceneTarget() : null;
+            const l = !pa || !pa.array || !ua || !ua.array || typeof PostCommon === "undefined" ? Infinity
+              : PostCommon.mipFootprintLod(pa.array, ua.array, g.index && g.index.array, model, _frameVP,
+                Math.min(W, st ? st.width : W), Math.min(H, st ? st.height : H), mirRT.width, mirRT.height);
+            // One unbounded frame is the camera and car out of step (measured: the frame after a jump()
+            // teleport); it does not latch. Two in a row, or no arrays at all, latch the full chain.
+            if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
+            else if (++_mirGlassInf >= 2 || !(l === l) || !pa || !ua) _mirGlassLod = Infinity;
+          }
           return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop

@@ -2887,7 +2887,7 @@
     // material, one color target.
     let _ssrOn = false;
     function setSsrMrt(on) {
-      if (!SSR_TAG) return;
+      if (!SSR_TAG || _ssrOn === !!on) return;   // a repeated state walks nothing (materials minted later take _ssrOn)
       _ssrOn = !!on;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];

@@ -5716,7 +5716,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "tlx.js buildGeometry must pass fmt24 to every _pk call — the non-chunked meshes refused on Metal too");
   assert.match(tlxSrc, /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/,
     "buildGeometry's fmt24 must read the live backend");
-  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,\s*\}\)/,
+  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,(?:\s*\w+,)*\s*\}\)/,
     "tlx.js must hand the chunked factory its format rule and geometry-owner release callback");
 });
 
@@ -7203,6 +7203,8 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     const recs = [];
     const make = new Function("st", "recs", `
       let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
+      const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
       const draw = function (mesh, model, opts) {${body}};
       return { draw, glass: () => _mirGlass };`);

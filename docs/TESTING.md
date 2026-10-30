@@ -198,11 +198,19 @@ serializes the agent behind SwiftShader several times over.
 | When | Run |
 |---|---|
 | in the edit loop | `node tools/ci/verify-change.mjs --fast` (or `node tools/ci/tooling-fast.mjs --changed --jobs=3`) selects only the structural files owned by the diff and reports an estimated critical path; this is the quick local loop and, with ONE relevant spec, a worker's whole local floor ([WORKERS.md](WORKERS.md) §3). The full `npm run test:tooling-fast` is optional locally (a green run writes the stamp `ready-gate` accepts); in CI the same full suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2 --bail` and `2/2 --bail`: since 2026-10-16 a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
+| generated files in the diff | `--changed` does not widen on generator output (`index.html`/`sw.js` `@gen-shell` blocks, `js/roster.js`, `impact-map.json`, `ratchets.json`, `agent-index.json`, `version.json`, …): it runs `npm run gen:check` plus the tests that pin the file. A HEAD that is a pure deploy-tip merge selects `gen:check` plus docs-integrity. `--quiet` ends a red run with `failing files:` and `log:` lines |
+| before the ready flip | `node tools/ci/preflip-probe.mjs --pr <n>` merges the current deploy tip into the PR head in a temp worktree and runs the ratchets, `fixture-consumer-audit`, the assert-pin ratchet and the diff's unit files: the reds GitHub's merge ref shows and the branch alone cannot (#4108, #4190). `ready-gate --pr` prints its receipt as an `advisory:` line, never a block |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | a worker runs ONE relevant spec; the groups `pick-tests` names run on the PR (`run-ci`, `remote-group.mjs`). A Bryce-attended session may run `node tools/ci/test-bg.mjs tiny` (page loads, `__apex` responds) and then up to two named groups locally |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
+
+**Known container-only reds.** `tests/unit/agent-config.test.mjs` "claude plugin validate …" used to fail in every cloud
+container: the container's `claude` CLI (2.1.314, 2026-10-30) accepts malformed skill frontmatter, so it cannot validate.
+It now SKIPS with that reason (an environment precondition, not a quarantine); where the CLI rejects the malformed control
+the assertion still runs. A skipped #38 is not a red. The eager-shell budget (`boot-load-budget.test.mjs`) is not
+container-only: a new module goes in a lazy list (`.claude/rules/game-code.md` §New module checklist).
 
 While a browser batch runs in the background, do work that does not touch
 `js/`/`css/` (docs, tools, unit tests) or end the turn — idle-watching the
@@ -499,7 +507,8 @@ tools directly.)
 The `tooling-fast` renderer contracts also include `three-shared-binding-update`
 (shared group invalidation and side effects), `webgpu-uint16-index` (mapped bytes
 and aligned partial writes), `tlx-mirror-inset` (WGSL/GLSL derivative safety), and
-`tlx-smith-root` (generated lamp-root control-flow nesting), and
+`tlx-smith-root` (generated lamp-root control-flow nesting), `tlx-webgpu-perf` (merged-chunk index
+uploads on WebGPU, merged shadow casts and skipped uniform writes, by count), and
 `tlx-glow-instancing` (packed light records, instance layout, growth and isolated
 warm-probe ownership). `tlx-viewport` covers texture rebinds and post-chain reader
 retirement; `tlx-post-orient-cover-webgpu` keeps the phone orientation cover

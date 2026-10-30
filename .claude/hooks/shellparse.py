@@ -986,6 +986,15 @@ def api_endpoint(url):
     return u.split("?", 1)[0].split("#", 1)[0].strip("/")
 
 
+def _api_ready_pr(ep, hit):
+    """The PR number when `hit` is a REST draft→ready flip (`…/pulls/<n>/ccr/ready_for_review`, or a
+    `pulls/<n>` PATCH with draft=false); None for GraphQL or an opaque `X` segment, which stay a plain ask."""
+    if not hit or hit[1] is None or not hit[1].startswith("Marking a draft ready"):
+        return None
+    m = re.search(r"(^|/)pulls/(\d+)(/|$)", ep)
+    return int(m.group(2)) if m else None
+
+
 def api_classify(method, endpoint, blob):
     """(decision, ask-text, endpoint) for one GitHub API call, or None to pass. ONE policy for every door
     (gh api, curl, wget, node -e fetch, python -c; 2026-10-26 system audit §10 — user grant, Bryce 2026-10-26
@@ -1172,8 +1181,10 @@ def http_issues(text, cwd=None):
         for method, url, blob in calls:
             hit = api_classify(method, url, blob)
             if hit:
-                out.append({"cmd": " ".join(argv)[:200], "decision": hit[0], "ask": hit[1],
-                            "why": f"{b} {method} {hit[2]}"})
+                row = {"cmd": " ".join(argv)[:200], "decision": hit[0], "ask": hit[1], "why": f"{b} {method} {hit[2]}"}
+                if _api_ready_pr(hit[2], hit):
+                    row["api_ready_pr"] = _api_ready_pr(hit[2], hit)
+                out.append(row)
     return out
 
 
@@ -1293,7 +1304,10 @@ def gh_issues(text, cwd=None):
             method = method or ("POST" if fields else "GET")
             hit = api_classify(method, endpoint or "", blob)
             if hit:
-                out.append({"cmd": cmd, "decision": hit[0], "ask": hit[1], "why": f"gh api {method} {hit[2]}"})
+                row = {"cmd": cmd, "decision": hit[0], "ask": hit[1], "why": f"gh api {method} {hit[2]}"}
+                if _api_ready_pr(hit[2], hit):
+                    row["api_ready_pr"] = _api_ready_pr(hit[2], hit)
+                out.append(row)
     return out
 
 
@@ -1732,7 +1746,20 @@ def guard(payload, root):
             return 0
     # 2026-10-26: no APEX_MERGE_DESK silent pass here any more (system audit §10: the env was set for EVERY session,
     # so a worker's GraphQL/REST merge-by-id or ready flip never asked). An ask asks whoever runs the session.
-    rest = [x for x in gh if x.get("kind") != "ready"]
+    # A REST ready flip (`gh api …/ccr/ready_for_review`, curl, …) passes with the same fresh ready-gate receipt
+    # as `gh pr ready` and the MCP door; without one it still asks, with the DENY_GATE_READY text.
+    rest = []
+    for x in gh:
+        if x.get("kind") == "ready":
+            continue
+        n = x.get("api_ready_pr")
+        if n and x.get("decision") == "ask":
+            live = P.live_head(receipts, n)
+            ok, why = P.receipt_check(receipts, "ready", n, live, verify_files=True, require_head=True)
+            if ok:
+                continue
+            x = dict(x, ask=P.DENY_GATE_READY + " (" + why + ")")
+        rest.append(x)
     if rest:
         P.emit("ask", (rest[0].get("ask") or P.ASK_MERGE) + " (" + rest[0]["why"] + ")", ctx)
     elif ctx:

@@ -85,7 +85,7 @@
     let _ssrTagNode = null;
     let _ssrOn = false;
     function setSsrMrt(on) {
-      if (typeof mrt !== "function") return;
+      if (typeof mrt !== "function" || _ssrOn === !!on) return;   // as tsl-lit: fxMaterial takes _ssrOn at birth
       _ssrOn = !!on;
       if (on && !_ssrTagNode) _ssrTagNode = mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep);
       const node = on ? _ssrTagNode : null;

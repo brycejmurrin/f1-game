@@ -104,6 +104,17 @@
       "signature": "^livery atlas textures seen across the picks",
       "expires": "2026-11-09",
       "review": "By 2026-11-09, make the livery pick reuse its atlas texture (the TLX texture pool, as in the garage-livery-churn row); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/session-quit-memory.spec.js",
+      "since": "2026-10-30",
+      "owner": "brycejmurrin",
+      "why": "Passed only on retry on Metal (three.js WebGL2, tlxForceGL). Platform Merge Desk flake report 2026-10-30. Pages run 40931179057 job 123650110839 (deploy tip aac01b648e) and PR #4207 run 41017277471 attempt 1 job 123936489004: spa: previous circuit chunk geometries are still in the render-object set, Expected 0 leaked, Received 78. Stopgap until the chunk-draw release race is fixed. Exempts only this assertion message.",
+      "title": "quit to menu then another track drops the previous circuit's chunk draws",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/40931179057/job/123650110839",
+      "signature": "^spa: previous circuit chunk geometries are still in the render-object set",
+      "expires": "2026-11-13",
+      "review": "By 2026-11-13, remove this row once the exact test passes without retry on three Metal runs. Platform removes it after a clean week. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
     }
   ]
 }

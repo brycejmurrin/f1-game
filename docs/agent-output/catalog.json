@@ -1104,6 +1104,16 @@
       ]
     },
     {
+      "path": "tools/ci/preflip-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--quiet"
+      ]
+    },
+    {
       "path": "tools/ci/process-dashboard.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -1896,6 +1906,12 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/gen/blender/crew-body.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
     },
     {
       "path": "tools/gen/blender/crew-choreo.py",
