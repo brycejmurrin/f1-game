@@ -112,6 +112,11 @@ test('compact and diagnostic retain artifacts; full is exact; reading never repe
   const a = (await h.call('read', 'output_read', { artifact, limit: 101 })).result.structuredContent;
   const b = (await h.call('read2', 'output_read', { artifact, offset: a.nextOffset, limit: 101, outputLevel: 'full' })).result.structuredContent;
   assert.equal(a.bytes, 101); assert.equal(b.offset, 101); assert.equal(b.bytes, 101);
+  // The page text goes out raw after a one-line header, not re-escaped inside a JSON string.
+  const raw = (await h.call('read3', 'output_read', { artifact, limit: 4096 })).result.content[0].text;
+  const [header, ...body] = raw.split('\n');
+  assert.equal(JSON.parse(header).bytes, 4096);
+  assert.equal(body.join('\n'), fs.readFileSync(path.join(h.root, artifact), 'utf8').slice(0, 4096));
   assert.equal((await h.call('count', 'plain', { outputLevel: 'full' })).result.structuredContent.calls, 4);
   assert.ok(fs.readdirSync(path.join(h.root, 'artifacts/agent-output')).length >= 4);
   assert.equal((await h.call('invalid', 'plain', { outputLevel: 'bogus' })).error.code, -32602);

@@ -25,6 +25,8 @@ let raceSessionLoad = null;
 // (PitLane) called a group whose later file failed complete: the retry saw the
 // real PitLane, loaded nothing, and the race ran on stub engineer / radio.
 const RACE_SESSION_READY = {
+  "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
+  "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/damage-handling.js": () => typeof DamageHandling !== "undefined" && !!DamageHandling && !DamageHandling._stub,
@@ -54,7 +56,7 @@ function ensureRaceSession() {
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
   // Real before THIS loader ran anything (an eager shell / a spec that evaluated
   // the group itself): nothing to fetch and nobody to notify.
-  if (!raceSessionLoaded.size && RACE_SESSION_READY["js/race/pit-lane.js"]()) {
+  if (!raceSessionLoaded.size && RACE_SESSION_FILES.every((f) => !RACE_SESSION_READY[f] || RACE_SESSION_READY[f]())) {
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }

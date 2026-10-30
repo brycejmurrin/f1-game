@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import * as THREE from '../../vendor/three-0.186.1/three.webgpu.min.js';
+import * as THREE from '../../vendor/three-0.187.0/three.webgpu.min.js';
 import {fnSource} from '../helpers/fn-source.mjs';
 import {absSrc} from '../helpers/abs-src.mjs';
 import {makeFakeGL, installThreeGlobals} from '../helpers/fake-webgl2.mjs';

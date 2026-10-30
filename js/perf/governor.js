@@ -667,7 +667,9 @@ function _ageClocks(stepMs) {
   return true;   // was cooling: no evaluation this frame
 }
 
+let _ticks = 0;
 function tick(dtMs, drawn) {
+  _ticks++;   // ticks(): game.js calls tick() only on race/count frames past every hold (paused, restart, mirror prep, program warm)
   // First race/count sample: the session existed. Menu loadTrackStepped arms
   // SENT_ACTIVE but never reaches here (game.js gates tick on race/count).
   if (!_raceTicked && _gfx && _gfx.isMobile) {
@@ -1073,7 +1075,7 @@ function clearStrikes() {
 }
 
 return {
-  init, tick, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
+  init, tick, ticks: () => _ticks, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Crash + measured only — no GRAPHICS user floor. Wet-road SSR and the
   // lighting-tuner "why off" path still read this: a healthy LOW must keep a
