@@ -52,8 +52,8 @@ to a third. It is not addressed here (render lane, prior art 66eb0f2b / #3713).
   path only: phones stream music through `<audio>` (`soundtrack.js` `streamMusic`, M-4).
 - **macOS real GPU** (census 41003652401, `game-memcycles-webgpu`, menu after each quit): textures
   149.5 / 158.2 / 151.8 MB, buffers 48.8 / 53.1 / 48.1 MB, render objects 417 / 413 / 366. GPU memory
-  plateaus. The WebGL2 control's heap reads 162 / 186 / **322 MB**, which is not post-GC; three cycles is
-  "too-few-cycles" for the tool's verdict. **Open**: re-run with `mem_cycles=6` before calling it a leak.
+  plateaus. The WebGL2 control's heap reads 162 / 186 / **322 MB**, which is not post-GC; the after run read
+  185 / 183 / 177 MB (below), so it was GC timing, not a leak.
 
 ## Hunt (six code-hunter slices, read-only)
 
@@ -80,6 +80,47 @@ to a third. It is not addressed here (render lane, prior art 66eb0f2b / #3713).
    (`tests/unit/build-steps.test.mjs`; `verify-track` montreal / silverstone / monaco).
 4. `js/audio/radio-voice.js` — `packsInUse` wants the announcer pack only when the announcer is on. Guard:
    `tests/unit/voice-pack.test.mjs` "the announcer pack is fetched only while the announcer speaks".
+
+## Before / after on real GPU (macOS gpu-census, `entry=menu mem_cycles=3 relaunch`)
+
+Before: run 41003652401 on the deploy tip `2220af2c`. After: run 41020574623 on `87a5cfab`
+(https://github.com/brycejmurrin/f1-game/actions/runs/41020574623). Both conclude `success`
+("Verdict — fail the job on what the game reported" step green). Montreal, helmet cam, noon.
+
+| leg (TLX / WebGPU unless named) | before | after | read |
+|---|---:|---:|---|
+| **selector car assets CPU, first launch** | 1,767 ms (max step 106) | **831 ms** | −53 %, the flap-solve fix |
+| **selector car assets CPU, warm relaunch** | 1,885 ms (max step 115) | **894 ms** | −53 % |
+| selector car assets CPU, WGX | — | 1,006 ms (max step 79) | — |
+| RACE SETTINGS → prepared, first launch | 21,369 ms | 16,146 | includes the driver program warm (13,826 → 10,311): GPU-compile variance, not attributed |
+| RACE SETTINGS → prepared, relaunch cold / warm | 11,092 / 10,850 | 7,233 / 7,262 | same caveat; garage prewarm 3,387 → 2,170 |
+| RACE SETTINGS → prepared, WGX | 3,996 | 3,169 | −21 % |
+| race entry after START: window / blocked | 1,156 / 211 ms | 977 / **0 ms** | no long task left in TLX race entry |
+| race entry, relaunch cold: window / blocked | 979 / 209 ms | 838 / 0 ms | |
+| LoAF in race entry (frames / ms) | 5 / 2,424 | 4 / 1,772 | |
+| WGX track build (cpuTotal, props/geo) | — | 553.6 ms, props/geo 230.7 | the census's lead was 1,083 / 478 on run 40838027433 |
+| worst rAF gap, WGX | 5,463 ms (before race()) | 4,008 ms (before race()) | the remaining gap is pipeline creation (`createRenderPipeline=24 createShaderModule=21`) |
+
+WGX job summary rows, after (quoted from the job log):
+
+```
+marks: 1 long task(s) (61 ms) + 1 rAF gap(s) in 1322 ms of race entry; programWarm 61 ms/1
+entry: window=1178ms longestBlock=0ms otherBlock=0ms tasks=0
+loaf:  5 LoAF(s), 1652 ms in 1322 ms of race entry; ... longest 870.4 ms at +416 ms in flyby
+menu:  entry=menu ok=true prepReady=true waited=3169ms ... cars=22 steps=65 lod=true cpu=1006ms max=79ms
+```
+
+Memory, menu after each quit (TLX/WebGPU live GPU objects; WebGL2 control heap):
+
+| cycle | before tex / buf / heap | after tex / buf / heap | WebGL2 heap before → after |
+|---|---|---|---|
+| 1 | 149.5 / 48.8 / 166.8 MB | 147.0 / 49.9 / 216.1 | 162.2 → 185.1 |
+| 2 | 158.2 / 53.1 / 207.2 | 146.8 / 50.4 / 166.6 | 186.1 → 182.6 |
+| 3 | 151.8 / 48.1 / 184.1 | 146.8 / 48.1 / 185.2 | 322.2 → **176.8** |
+
+GPU memory plateaus on both. The WebGL2 control's 322 MB cycle-3 reading did not repeat (177 MB after):
+these heap reads are not post-GC, so it was a collection-timing sample, not a leak. The local post-GC census
+(above) is the leak verdict.
 
 ## Live site (deploy-research, 2026-10-30, apex-sha `2220af2c`)
 
@@ -114,4 +155,3 @@ concurrency, 63.6 s serial (network only, no parse/execute).
 - Release the TLX/WGX mirror target on quit (menu memory).
 - The circuit's `scenery(api)` closure as one build step: an emitter queue is needed to split it.
 - Car warm: build one body per team, not per seat (slice c: 22 builds where 11 would do, ~0.5 s Node).
-- The WebGL2 control's cycle-3 heap reading (above).
