@@ -533,7 +533,10 @@ function hlKey() {
 // cost depends on a tree this box does not reproduce.
 let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
 function syncComputedRootVars() {
-  const k = vpW() + "x" + vpH() + "|" + document.body.className;
+  // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
+  // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
+  const rs = document.documentElement.style;
+  const k = vpW() + "x" + vpH() + "|" + document.body.className + "|" + rs.getPropertyValue("--hud-scale") + "|" + rs.getPropertyValue("--hud-btn-scale");
   if (k === _cssRootKey) return;
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
@@ -949,8 +952,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
-  let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
-  let zDockPubS = +root.style.getPropertyValue("--hud-z-dock-l") || zDockPub;   // #dock-left (steer) paints at its own cap
+  // The CSS paints min(cap, max(floor, slider)) (css/touch-controls.css): a cap a fit wrote at a larger
+  // BUTTON SIZE never paints a smaller one bigger, so measure with the same min (UI-HUNT-2-HUD).
+  let zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));
+  let zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));   // #dock-left (steer) paints at its own cap
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el || manualHud(el)) return 0;
@@ -996,8 +1001,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
   // harness without rects takes every tick, so the bail stays free of computed-style passes.
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
-  zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
-  zDockPubS = +root.style.getPropertyValue("--hud-z-dock-l") || zDockPub;
+  zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));   // the CSS min()
+  zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));
   const half = window.innerWidth / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
@@ -1426,7 +1431,9 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
-      const cap = Math.max(1 / 1.4, (roomL - gL.h * zDL) / Math.max(1, height));
+      // Floor at 11 painted px over --fs-micro 14 (Apple HIG's 11 pt minimum; the
+      // 10 px READABLE_Z floor painted POS / LAP / TIME at 10.1 px, UI-HUNT-2-HUD).
+      const cap = Math.max(11 / 14, (roomL - gL.h * zDL) / Math.max(1, height));
       capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
     }
 
@@ -1512,7 +1519,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
   // Earlier tower/sector budgets saw the old CAM/PAUSE footprint. Refit on
   // the next HUD tick only when their clamped, published zoom changed.
-  const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  const dockAfter = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));
   if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
     _fitKey = ""; _fitWait = 0; _fitPending = true;
   }
