@@ -690,3 +690,12 @@ API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-pr
 automated accessibility, offline screenshot review, existing interactive viewers,
 procedural room drafts and local glTF validation. Reuse the existing skills and
 agent roles; the parent owns browser work and publication follows its review gates.
+
+## Messaging between hosts
+
+Each host's inbound/outbound channels (Claude `send_message`, subagent `SendMessage`, Cursor run follow-ups, Codex
+subagents, GitHub labels and the PR body) are compared in
+[notes/AGENT-MESSAGING-2026-10-30.md](notes/AGENT-MESSAGING-2026-10-30.md). Two facts to keep in mind when wiring a
+hook or tool: Codex runs a project's `.codex/hooks.json` only after the project is trusted and re-reviews a hook
+whose hash changed (`/hooks`), and a Cursor follow-up to a running agent needs `delivery: "steer"` (a plain one is
+`BUSY`; `tools/ci/cursor-agents.mjs followup` does not send it yet).
