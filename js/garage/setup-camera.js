@@ -661,7 +661,7 @@ function prepareExterior(ctx, pose) {
 }
 function exteriorLighting() {
   if (exteriorLight) return exteriorLight;
-  const light = GarageExterior.lighting(exteriorHeld || exteriorSelection), yaw = exteriorAnchor ? exteriorAnchor.yaw : 0;
+  const light = exterior.lighting(), yaw = exteriorAnchor ? exteriorAnchor.yaw : 0;
   const c = Math.cos(yaw), s = Math.sin(yaw), x = light.sunDir[0], z = light.sunDir[2];
   light.sunDir[0] = x * c - z * s; light.sunDir[2] = x * s + z * c;
   light.sky.sunDir = light.sunDir;

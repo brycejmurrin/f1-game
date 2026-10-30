@@ -228,7 +228,7 @@ const GarageExteriorGeometry = (function () {
     const scenery = yield* clipSteps(TrackModels.sealGeometry(dressing.out), anchor, outward, budget);
     const glass = yield* clipSteps(dressing.glass, anchor, outward, budget);
     const water = yield* clipSteps(dressing.water, anchor, outward, budget);
-    return { supported: true, trackId: def.id, road, props, ground, terrain, scenery, glass, water, surface, anchor,
+    return { supported: true, trackId: def.id, road, props, ground, terrain, scenery, glass, water, palette: def.palette, surface, anchor,
       stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, contextScale: options.contextScale, groundBounds: floorLimits, night: track._night, terrainVertices: terrain.pos.length / 3, sceneryVertices: scenery.pos.length / 3, glassVertices: glass.pos.length / 3, waterVertices: water.pos.length / 3, region: track.sceneryRegion, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
   }
   function* buildSteps(def, options = {}) {

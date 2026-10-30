@@ -168,6 +168,10 @@ const GarageExterior = (function () {
     function state() { return { status, key, generation, error, attempts, retryAt, stats: readySet ? readySet.stats : null,
       trackId: selected ? selected.trackId : null, weather: selected ? selected.weather : null, tod: selected ? selected.tod : null, rain: !!rainMesh, anchor: readySet ? readySet.anchor : null }; }
     function ready(s) { return !!readySet && status === "ready" && (!s || selectionKey(snapshot(s)) === key); }
+    function viewLighting() {
+      const palette = readySet && readySet.palette;
+      return lighting(palette ? Object.assign({}, selected, { def: Object.assign({}, selected.def, { pal: palette, palette }) }) : selected);
+    }
     function discard() { free(readySet); readySet = null; freeWeather(); }
     function cancel() { generation++; selected = null; key = ""; if (job) job.cancel(); job = null; discard(); status = "idle"; error = null; attempts = 0; retryAt = 0; notify(); }
     function request(value, opts) {
@@ -222,7 +226,7 @@ const GarageExterior = (function () {
             if (!current()) return false;
           }
           if (!current()) return false;
-          readySet = Object.assign({}, owned, { surface: data.surface || null, stats: Object.assign({}, data.stats,
+          readySet = Object.assign({}, owned, { palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
             { maxSliceMs, uploadMs, buildWallMs: Math.max(0, now() - buildAt) }), anchor: data.anchor || null });
           for (const name of MESHES) delete owned[name];
           status = "ready"; weatherMesh(); return ready();
@@ -251,7 +255,7 @@ const GarageExterior = (function () {
       gfx.draw(rainMesh, rainMatrix, rainOpts);
       return true;
     }
-    return { request, ready, draw, drawWeather, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
+    return { request, ready, draw, drawWeather, lighting: viewLighting, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
   }
   return Object.freeze({ create, lighting, fitPose, groundPose, poseMatrix });
 })();

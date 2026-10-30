@@ -764,6 +764,17 @@ test('exterior owns terrain, surrounding scenery, glass and water across draws, 
   h.ext.release(); assert.equal(h.freed.length, 14);
 });
 
+test('scenery-authored atmosphere uses its owned palette without changing the selected circuit', async () => {
+  const palette = { zenith: [.42,.48,.52], fogDensity: .0032 };
+  const geo = () => ({ pos: [0,0,7,1,0,7,0,1,7] });
+  const h = exteriorHarness({ geometry: () => ({ ground: geo(), road: geo(), props: geo(), palette }) });
+  const def = { id: 'a', pal: { zenith: [.1,.2,.3], fogDensity: .001 } };
+  assert.equal(await h.ext.request({ ...h.selection(), def }), true);
+  const lit = h.ext.lighting();
+  assert.deepEqual(Array.from(lit.sky.zenith), palette.zenith); assert.equal(lit.fogDensity, .0032);
+  assert.deepEqual(def.pal.zenith, [.1,.2,.3]); assert.equal(def.pal.fogDensity, .001);
+});
+
 test('exterior replacement cancels a suspended load without blocking the new selected circuit', async () => {
   let settleOld;
   const old=new Promise(resolve=>{settleOld=resolve;});
