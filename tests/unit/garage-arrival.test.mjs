@@ -1620,7 +1620,7 @@ test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, t
           assert.ok(Math.abs(p.aim[0] - Math.max(-8, Math.min(8, p.x))) < 1e-9 && Math.abs(p.aim[2] - Math.max(-3, Math.min(14, p.z))) < 1e-9, `${id} ${dir} t${t}: aimed at the car`);
       }
     }
-    assert.ok(Arrival.angleMap(id).includes('<polyline'), id + ': the map draws the rig\'s path');
+    assert.equal(Arrival.angleMap(id).split('<polyline').length, 2, id + ': the map draws the rig\'s path, once');
   }
   assert.ok(Math.abs(Arrival.pose(5, Arrival.settings({ angle: 'crane', fov: 64 })).fov - Arrival.rigSample('crane', 'in', Arrival.rigU(Arrival.settings({ angle: 'crane' }), 'in', 5)).fov - 10) < 1e-6, 'FIELD OF VIEW offsets the rig lens');
 });

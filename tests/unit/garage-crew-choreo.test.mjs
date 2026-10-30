@@ -72,7 +72,7 @@ test("MIX rotates every crew each way and never repeats a crew on consecutive vi
       assert.notEqual(id, Choreo.pick(dir, n + 1), `${dir} visit ${n}`);
     }
     assert.equal(seen.size, list.length, dir);
-    for (const id of Choreo.IDS[dir]) assert.equal(list.includes(id), Choreo.CLIPS[id].mix !== false, `${id} in the ${dir} rotation unless mix is false`);
+    for (const id of Choreo.IDS[dir]) assert.equal(new Set(list).has(id), Choreo.CLIPS[id].mix !== false, `${id} in the ${dir} rotation unless mix is false`);
     assert.equal(Choreo.pick(dir, -1), list[list.length - 1], "a negative count wraps");
   }
 });
