@@ -3455,7 +3455,7 @@ const TLX = (function () {
         return out;
       }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
-        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
+        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0, sky: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
         const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
         const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
@@ -3486,6 +3486,7 @@ const TLX = (function () {
           if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
           if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
           if (shadowSys && shadowSys.drawWarm) drawn.casts = shadowSys.drawWarm();
+          if (typeof sky !== "undefined" && sky && sky.cacheDrawWarm) drawn.sky = sky.cacheDrawWarm(renderer);   // cacheWarm's compile keys depth on; the bake has none
         } finally {
           _mirWarmUnswap();
           sRT.scissor.copy(sSc);

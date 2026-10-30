@@ -6155,6 +6155,7 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
   // than a snapshot per job, so the sandbox owns one — the pairing assertion below
   // (target === q.material) is unchanged and now checks the live object.
   const quad = new THREE.QuadMesh(null);
+  const setQuadMat = (m) => { quad.material = m; };   // tlx-post's vertex-node pin, inert here
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
@@ -7043,6 +7044,7 @@ test("TLX mirror composite warm holds its destination and real texture across aw
   let target = "mirrorWorld", active = 0;
   const realTex = {}, previousTex = {}, P = { mirror: { mat: {}, tex: { value: previousTex } } }, viz = null;
   const quad = { material: null, camera: {} }, ctx = { softDest: () => "present" };
+  const setQuadMat = (m) => { quad.material = m; };
   const renderer = {
     getRenderTarget: () => target, setRenderTarget: v => { target = v; },
     compileAsync: async q => {

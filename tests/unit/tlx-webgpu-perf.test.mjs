@@ -7,7 +7,10 @@
  *   W2  a widening view regrows the merge index O(log) times with headroom and releases each outgrown one
  *   W3  the sun/lamp passes cast a chunked record's visible chunks as ONE merged caster (tlx.js castShadowChunked)
  *   W4  setSsrMrt with an unchanged state walks no material (tsl-lit, tsl-fx)
- *   W5  frame-varying uniforms nothing reads skip their write: hazeTime with no haze, godray time on a clear sky */
+ *   W5  frame-varying uniforms nothing reads skip their write: hazeTime with no haze, godray time on a clear sky
+ *   (round 3, three r187, docs/notes/TLX-WEBGPU-PERF-3-2026-10-30.md)
+ *   W6  the draw warm compiles the canvas passes, both sides of the upscale switch: the live present builds none
+ *   W7  the sky cache's bake pipeline is warmed by a draw keyed like cacheStep's (no depth), not only by a compile */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -170,17 +173,19 @@ test("W4: setSsrMrt with an unchanged state walks no material", () => {
   assert.ok(born.mrtNode, "and the next change arms it");
 });
 
-// The post chain on three r186 (forceWebGL over the no-op context), its uniform set captured from TLXShaders.post.
+// The post chain on three r187 (forceWebGL over the no-op context), its uniform set captured from TLXShaders.post.
 function withStore(ls, fn) {
   const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true,
     value: { getItem: (k) => (k in ls ? ls[k] : null), setItem() {}, removeItem() {} } });
   try { return fn(); } finally { if (had) Object.defineProperty(globalThis, "localStorage", had); else delete globalThis.localStorage; }
 }
-async function postRig(t) {
+async function postRig(t, { up = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
+  // As tlx.js sets it: the post chain tone-maps, so three draws the canvas directly (no frame-buffer target).
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.toneMapping = THREE.NoToneMapping;
   const identity = new THREE.Matrix4().elements;
   const shadow = { sunTex: new THREE.DepthTexture(1, 1), S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
   const T = globalThis.TLXShaders, orig = T.post;
@@ -190,13 +195,14 @@ async function postRig(t) {
   try {
     post = withStore({ "apex26.tlxAoFold": "0" }, () => T.postChain(THREE, TSL, { renderer, isMobile: true,
       chunks: T.chunks(THREE, TSL), shadow, viz: null, ssrTag: false, softDest: () => null,
-      wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+      wantSpatialUpscale: () => up, getPresentSize: () => [320, 180], sceneSamples: 0 }));
   } finally { T.post = orig; }
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity,
     eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], time: 0, cloud: 0 };
-  return { P, frame, present: (opts) => post.present(opts, frame) };
+  return { P, frame, post, renderer, present: (opts) => post.present(opts, frame),
+    setUpscale(v) { up = v; post.resize(320, 180); } };
 }
 
 test("W5: a clear sky and no exhaust haze leave the frame-varying time uniforms unwritten; both write once read", async (t) => {
@@ -213,3 +219,59 @@ test("W5: a clear sky and no exhaust haze leave the frame-varying time uniforms 
   assert.equal(h.P.godray.U.time.value, 5, "clouds: the march reads the current time");
   assert.equal(h.P.composite.U.hazeTime.value, 5, "haze: the plume reads the current time");
 });
+
+// Every render pipeline three builds from here on, named by material: the backend call itself.
+function pipelineBuilds(renderer) {
+  const built = [], be = renderer.backend, orig = be.createRenderPipeline;
+  be.createRenderPipeline = function (ro, ...rest) {
+    built.push((ro.material.name || ro.material.type) + "#" + ro.material.id);
+    return orig.call(this, ro, ...rest);
+  };
+  return built;
+}
+const settle = () => new Promise((r) => setTimeout(r, 300));   // compileAsync yields per object
+
+test("W6: the draw warm compiles the canvas passes on both sides of the upscale switch; the live presents build none", async (t) => {
+  // Census 41021224706 (Dawn/Metal): createShaderModule x2 mid-race from runPass, FXAA into the canvas. The draw warm
+  // skipped every canvas pass (a draw there presents) and the WebGPU post warm() is off. Warm at scale < 1 (SGSR to the
+  // canvas), then race across 1.0 (FXAA to the canvas). A canvas compile alone is not enough: QuadMesh.render() swaps
+  // three's quad vertex node in for the draw only, so compileAsync(quad) built a different program (tlx-post setQuadMat).
+  const h = await postRig(t, { up: true });
+  const opts = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };
+  h.post.drawWarm(opts, h.frame);
+  await settle();
+  const built = pipelineBuilds(h.renderer);
+  h.present(opts);                  // SGSR -> canvas
+  h.setUpscale(false);
+  h.present(opts);                  // FXAA -> canvas
+  await settle();
+  assert.deepEqual(built, [], "no pipeline is built by a live present after the draw warm");
+});
+
+test("W7: the sky cache bake is warmed by a draw keyed like cacheStep's (depth off), not only by compileAsync (depth on)", async (t) => {
+  // r187 compileAsync keys the render context's depth from renderer.depth; render() from the target's depthBuffer,
+  // and the cache targets have none. Census 41021224706 built the bake's pipeline mid-race from cacheStep.
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
+  const fg = makeFakeGL(64, 64);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const sky = globalThis.TLXShaders.sky(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), cache: true, cacheSize: 64 });
+  t.after(() => { sky.dispose(); renderer.dispose(); });
+  let into = null;
+  const getForRender = renderer._pipelines.getForRender;
+  renderer._pipelines.getForRender = function (ro, ...rest) {
+    if (into && ro.material.customProgramCacheKey && ro.material.customProgramCacheKey() === "tlx-sky-cache") into.add(ro.context.depth);
+    return getForRender.call(this, ro, ...rest);
+  };
+  const warmed = new Set(), live = new Set();
+  into = warmed;
+  await sky.cacheWarm(renderer);                                   // the compile stage (tlx.js runProgramWarmStages)
+  if (sky.cacheDrawWarm) sky.cacheDrawWarm(renderer);              // the draw stage (drawWarmStage)
+  into = live;
+  sky.uniforms.cloud.value = 0.5;
+  sky.cacheStep(renderer);                                          // the race's first bake band
+  into = null;
+  assert.deepEqual([...live], [false], "the bake renders with no depth attachment");
+  assert.ok(warmed.has(false), `the warm built the bake's no-depth pipeline (warm saw depth ${[...warmed]})`);
+});
+
