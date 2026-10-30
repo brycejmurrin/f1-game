@@ -120,7 +120,8 @@ function mixOklab(A, pA, B, pB) {
  *  resolves inside a scope that re-declares some of them (section 4). */
 function resolve(value, seen = new Set(), get = token) {
   if (value && typeof value === "object") return value;   // already computed (an inherited value)
-  const v = String(value).trim();
+  // A plate's PANEL OPACITY factor resolves at 1, as panelAt1 below (the panel token carries it inside).
+  const v = String(value).trim().replace(/calc\(([\d.]+%?) \* var\(--hud-panel-a-eff\)\)/g, "$1");
   let m;
   if (v === "transparent") return TRANSPARENT;
   if (v === "black") return { rgb: [0, 0, 0], a: 1 };
@@ -145,8 +146,8 @@ function resolve(value, seen = new Set(), get = token) {
     const pB = B.p != null ? B.p : 1 - pA;
     if (m[1].toLowerCase() === "oklab") return mixOklab(A.c, pA, B.c, pB);
     // sRGB with `transparent`: premultiplied, so the colour keeps its channels
-    // and only the alpha scales (the damage chip's black plate).
-    if (B.c.a === 0 && A.c.a === 1) return { rgb: A.c.rgb, a: pA };
+    // and only the alpha scales (the damage chip's black plate, --hud-strip-bg).
+    if (B.c.a === 0) return { rgb: A.c.rgb, a: A.c.a * pA };
     // sRGB: only the opaque-operand case is used (the damage chip's level 2).
     assert.ok(A.c.a === 1 && B.c.a === 1 && pA + pB === 1, `srgb mix with alpha is not modelled: ${v}`);
     return { rgb: A.c.rgb.map((x, i) => x * pA + B.c.rgb[i] * pB), a: 1 };
@@ -420,7 +421,8 @@ function cascade(rules, match, flags) {
 }
 /** A token getter for an element directly under the root that is `id` (or inside it). */
 function themeGetter(flags, id, { keep = null } = {}) {
-  const root = cascade(tokens, (it) => rootSpec(it, flags), flags);
+  // hud.css declares the HUD panel token (--hud-strip-bg) on :root, after tokens.css.
+  const root = cascade(tokens.concat(hud), (it) => rootSpec(it, flags), flags);
   const rootGet = (n) => { assert.ok(root.has(n), `${n} is not declared on :root`); return root.get(n); };
   const scope = cascade(tokens, (it) => scopeSpec(it, flags, id), flags);
   if (keep) for (const n of [...scope.keys()]) if (!keep(id, n)) scope.delete(n);
@@ -518,7 +520,8 @@ test("anti-vacuity: the scope as it shipped before fails LIGHT the way it was re
   const INK_ONLY = new Set(["--text", "--dim", "--bg", "--hud-halo", "--plate-line", "--card-line"]);
   const keep = (id, n) => id === "#hud" && INK_ONLY.has(n);
   const rows = Object.fromEntries(measure(["light"], { keep }).map((r) => [r.what, r.r]));
-  assert.ok(rows["RELATIVE / STRATEGY / INPUTS"] < 1.2, `RELATIVE without the scope measures ${rows["RELATIVE / STRATEGY / INPUTS"].toFixed(2)}:1; expected the shipped ~1.05:1`);
+  // RELATIVE / STRATEGY / INPUTS left this check in design pass 3a: their plate is --hud-strip-bg now, built
+  // from the fixed --look-hud-bg, so no theme can lighten it (it was --plate-opaque, ~1.05:1 under LIGHT).
   assert.ok(rows["radio card words"] < 1.6, `the radio card without the scope measures ${rows["radio card words"].toFixed(2)}:1; expected the shipped 1.03-1.49:1`);
   assert.ok(rows["metrics panel"] < 1.6, `the metrics panel without the scope measures ${rows["metrics panel"].toFixed(2)}:1; expected the shipped ~1.46:1`);
 });
