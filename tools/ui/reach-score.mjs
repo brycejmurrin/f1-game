@@ -70,7 +70,14 @@ export const ZONE_FILL = { easy: "#2e9e5b", ok: "#c9a227", hard: "#c0392b" };
 export const VERDICT = { maxHardShare: 0.2, maxDead: 0.5, sparseDead: 0.65 };
 
 /** Per-screen primary overrides: screen id (menu-screens.mjs) → selector or id. Empty until Bryce's picks land. */
-export const PRIMARY_OVERRIDES = {};
+export const PRIMARY_OVERRIDES = {
+  // The heuristics picked RACE MESSAGES (pause) and SAVE CAREER FILE (career):
+  // the screens' real first actions are RESUME and the first career slot.
+  pause: "#pm-resume", hudpause: "#pm-resume", career: "button.cr-slot-main",
+};
+/* LIST screens have no single primary action — a menu of pages or a table.
+   Judge them on where their taps sit and on dead space only. */
+export const LIST_SCREENS = /^(settings|data|advanced|audioset|howtoplay|standings|careerhistory|careerguide)/;
 
 export const ACTION_WORDS = /^(go|start|race|apply|done|continue|save|confirm|play|resume|ok|next)\b/i;
 
@@ -146,7 +153,11 @@ export function fromDomDump(dom, meta = {}) {
   const missing = [];
   let taps, content;
   if (Array.isArray(dom.taps)) {
-    taps = dom.taps.map((t) => ({ ...t, ...rectOf(t) }));
+    // collectDomInfo() has no `sel`: name each tap by id, else tag.class, and
+    // flatten multi-line labels so they do not break the markdown table.
+    taps = dom.taps.map((t) => ({ ...t, ...rectOf(t),
+      sel: t.sel || (t.id ? "#" + t.id : (t.tag || "?") + (t.cls ? "." + String(t.cls).split(/\s+/)[0] : "")),
+      text: String(t.text || "").replace(/\s+/g, " ").trim() }));
   } else {
     missing.push("taps");
     taps = (dom.root?.kids || []).filter((k) => TAP_TAGS.test(k.tag) && !k.hidden && k.box?.w > 0 && k.box?.h > 0)
@@ -183,13 +194,15 @@ export function scoreScreen(s, { viewport = DEFAULT_VIEWPORT, overrides = {} } =
   const taps = s.taps.map((t) => { const z = zoneOf(...centre(t), vp); counts[z]++; return { ...t, zone: z }; });
   const n = taps.length || 1;
   const share = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, taps.length ? +(v / n).toFixed(3) : null]));
-  const { tap: primary, by } = pickPrimary(s.screen, taps, overrides);
+  const isList = LIST_SCREENS.test(String(s.screen || "")) && !(overrides[s.screen] || PRIMARY_OVERRIDES[s.screen]);
+  const { tap: primary, by } = isList ? { tap: null, by: "list" } : pickPrimary(s.screen, taps, overrides);
   const dead = s.root ? deadSpace(s.root, s.content, vp) : null;
   const under = s.tapFloor ? taps.filter((t) => !t.disabled && Math.min(t.w, t.h) < s.tapFloor - 0.5).length
     : s.smallTapsFromAudit != null ? s.smallTapsFromAudit : null;
   const notes = [];
   let verdict = "good";
-  if (!primary) { verdict = "no-primary"; notes.push("no primary control found: add a PRIMARY_OVERRIDES entry"); }
+  if (isList) { /* judged on tap spread and dead space below */ }
+  else if (!primary) { verdict = "no-primary"; notes.push("no primary control found: add a PRIMARY_OVERRIDES entry"); }
   else if (primary.zone === "hard") { verdict = "move-primary"; notes.push("primary sits top-centre"); }
   else if (primary.zone === "ok") { verdict = "fair"; notes.push("primary in the middle, not under a thumb"); }
   if (share.hard != null && share.hard > VERDICT.maxHardShare) { notes.push(`${Math.round(share.hard * 100)}% of taps top-centre`); if (verdict === "good") verdict = "fair"; }
@@ -200,6 +213,7 @@ export function scoreScreen(s, { viewport = DEFAULT_VIEWPORT, overrides = {} } =
   return {
     screen: s.screen, viewport: s.viewportName || `${vp.w}x${vp.h}`, size: `${vp.w}x${vp.h}`, viewportMismatch: !!mismatch,
     source: s.source, partial: s.missing.length > 0, missing: s.missing,
+    list: isList,
     primary: primary ? { sel: primary.sel, text: String(primary.text || "").slice(0, 40), zone: primary.zone, by } : null,
     taps: taps.length, share, deadSpace: dead == null ? null : +dead.toFixed(3), tapFloor: s.tapFloor, underFloor: under,
     verdict, notes,
@@ -250,7 +264,7 @@ export function renderMarkdown(results, viewport) {
   ];
   for (const r of results) {
     const p = r.primary;
-    lines.push(`| ${r.screen} | ${r.viewport}${r.viewportMismatch ? " (≠)" : ""} | ${p ? (p.sel + (p.text ? ` "${p.text}"` : "")).replace(/\|/g, "\\|") : "—"} | ${p ? p.zone : "—"} | ${p ? p.by : "—"} | ${pct(r.share.easy)} | ${pct(r.share.ok)} | ${pct(r.share.hard)} | ${pct(r.deadSpace)} | ${r.underFloor ?? "—"} | ${r.verdict}${r.partial ? " (partial)" : ""} | ${r.notes.join("; ").replace(/\|/g, "\\|")} |`);
+    lines.push(`| ${r.screen} | ${r.viewport}${r.viewportMismatch ? " (≠)" : ""} | ${p ? (p.sel + (p.text ? ` "${p.text}"` : "")).replace(/\|/g, "\\|") : r.list ? "(list screen)" : "—"} | ${p ? p.zone : "—"} | ${p ? p.by : "—"} | ${pct(r.share.easy)} | ${pct(r.share.ok)} | ${pct(r.share.hard)} | ${pct(r.deadSpace)} | ${r.underFloor ?? "—"} | ${r.verdict}${r.partial ? " (partial)" : ""} | ${r.notes.join("; ").replace(/\|/g, "\\|")} |`);
   }
   const partial = results.filter((r) => r.partial);
   if (partial.length) lines.push("", `Partial rows (${partial.length}) lack: ${[...new Set(partial.flatMap((r) => r.missing))].join(", ")}.`);

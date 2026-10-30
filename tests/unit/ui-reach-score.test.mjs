@@ -75,7 +75,8 @@ test("audit dir: proposed-shape dumps score fully, today's shape is partial, ski
   assert.equal(settings.viewportMismatch, true);
   assert.equal(settings.size, "852x393");
   assert.equal(settings.taps, 1); // hidden kid excluded
-  assert.equal(settings.primary.zone, "easy");
+  assert.equal(settings.list, true);      // a menu of pages: no single primary judged
+  assert.equal(settings.primary, null);
   assert.equal(settings.tapFloor, 52);
   assert.ok(settings.deadSpace > 0.25 && settings.deadSpace < 0.35, String(settings.deadSpace));
 });
@@ -85,8 +86,11 @@ test("explorer inspection: controls as taps, root from layoutContexts, focus as 
   const r = R.scoreScreen(s, { viewport: VP });
   assert.equal(r.screen, "datahub");
   assert.equal(r.taps, 3); // zero-size control dropped
-  assert.deepEqual(r.primary, { sel: "#dh-close", text: "Close", zone: "ok", by: "focus" });
-  assert.equal(r.verdict, "fair");
+  assert.equal(r.list, true);              // the data hub is a list screen
+  assert.equal(r.primary, null);
+  assert.equal(r.verdict, "fair");         // > maxHardShare of taps top-centre
+  const { tap, by } = R.pickPrimary("popup", s.taps);   // the focus rule itself still holds
+  assert.deepEqual([tap.sel, by], ["#dh-close", "focus"]);
   assert.equal(r.partial, true);
   assert.deepEqual(r.missing.slice(0, 1), ["content"]);
   assert.ok(r.share.hard > 0.6);
