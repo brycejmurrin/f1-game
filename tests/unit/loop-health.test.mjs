@@ -227,6 +227,17 @@ test("stall: off under automation unless ?stallwatch=1 forces it", () => {
   assert.deepEqual(on.calls.tier, [4]);
 });
 
+test("stall: ?stallwatch=0 turns it off for a probe browser that is not flagged as automation", () => {
+  const off = loadStall({ search: "?stallwatch=0" });
+  off.frames(20, 3000);
+  assert.deepEqual(off.calls.tier, []);
+  assert.equal(off.calls.reload, 0);
+  assert.equal(off.LoopHealth.state().stall.watching, false);
+  const forced = loadStall({ search: "?stallwatch=1&stallwatch=0" });
+  forced.frames(5, 3000);
+  assert.deepEqual(forced.calls.tier, [4], "an explicit force-on still wins");
+});
+
 test("stall: under the loading cover the shed waits and the reload needs a 30-frame run", () => {
   const h = loadStall();
   h.cover.hidden = false;
