@@ -343,7 +343,7 @@ Load a circuit and start a **Time Trial** session (solo, no AI, `timeTrial: true
 Same `trackRef` and `timeOfDay` semantics as `race()`. Use this instead of `race()`
 when testing TT-specific behaviour (ghost delta, TT results, sector splits).
 
-### `info() → {state, track, n, total, timeTrial, seasonMode, raceQuali, lapsTarget, sectors, turns}`
+### `info() → {state, track, n, total, timeTrial, seasonMode, raceQuali, lapsTarget, sectors, turns, warming, liveTicks}`
 Snapshot of state: `state` is the state-machine value
 (`menu｜count｜race｜results`), `track` the loaded circuit id, `n` the
 sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
@@ -351,6 +351,12 @@ active game mode. `sectors` is `[s1End, s2End]` racing-lap fractions from the
 def's curated markings (or `null`); `turns` is the curated FIA turn count (or `null`).
 Returns `track: null` if no circuit is loaded — poll this to know when a track
 has finished building.
+`warming` is true while a rendered page holds `tickBody` (a program or rig warm
+pending or queued, or the mirror prep): real frames then charge neither
+the countdown nor physics. `liveTicks` counts the frames let past those holds.
+`go()` skips the lights, which in play wait out the race-entry warm, so a rendered
+spec that drives after `go()` first waits for `liveTicks >= t + 3 && !warming`
+(`t` read at `go()`). `step()` is never held (#4253).
 
 ### `go() → state`
 Skip the countdown but leave the grid intact, so the whole field races and packs

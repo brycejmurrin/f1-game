@@ -22,18 +22,18 @@ async function startGp(page, headless = true) {
   await page.waitForFunction(() => !!window.__apex.info().track
     && ["count", "race"].includes(window.__apex.info().state), null,
   { polling: 100, timeout: RACE_BUILD_MS });
-  const frame = await page.evaluate(() => {
+  const ticks = await page.evaluate(() => {
     window.__apex.setPhysics({ pace: 1 }); window.__apex.go();
-    return window.__apex.cameraState().renderFrame;
+    return window.__apex.info().liveTicks;
   });
   // A rendered page holds tickBody while the race-entry program warm compiles
   // (~30 s on SwiftShader). Stepping the race inside it left the cooldown's first
-  // real frames held, so held throttle never moved the car (#4253). renderFrame
-  // counts only frames past that gate: three drawn frames and no warm pending
-  // mean the warm has started and settled, as the lights wait for it in play.
+  // real frames held, so held throttle never moved the car (#4253). liveTicks
+  // counts only frames past those holds: three of them and nothing warming mean
+  // the warm has started and settled, as the lights wait for it in play.
   if (!headless) {
-    await page.waitForFunction(f => window.__apex.cameraState().renderFrame >= f + 3
-      && !(GLX.warming && GLX.warming()), frame, { polling: 100, timeout: RACE_BUILD_MS });
+    await page.waitForFunction(t => window.__apex.info().liveTicks >= t + 3
+      && !window.__apex.info().warming, ticks, { polling: 100, timeout: RACE_BUILD_MS });
   }
   expect(await page.evaluate(() => window.__apex.info().lapsTarget)).toBe(1);
 }
