@@ -26,10 +26,10 @@ def material(name,color):
 def box(name,loc,size,mat,parent=None):
  bpy.ops.mesh.primitive_cube_add(size=1); o=bpy.context.object; o.name=name; o.location=loc; o.scale=size
  bpy.ops.object.transform_apply(location=False,rotation=False,scale=True); o.data.materials.append(mat); o.parent=parent; return o
-def channel_driver(o,index,rig,channel):
+def channel_driver(o,index,rig,channel,sign=1):
  d=o.driver_add('rotation_euler',index).driver; d.type='SCRIPTED'
  v=d.variables.new(); v.name='channel'; v.type='SINGLE_PROP'; v.targets[0].id=rig; v.targets[0].data_path='["'+channel+'"]'
- d.expression='channel'
+ d.expression='-channel' if sign<0 else 'channel'
 def key(o,frame,x,z,yaw,roll,steer,heave,pitch):
  o.location=xyz(x,heave,z); o.rotation_euler=(0,0,yaw)
  o.keyframe_insert('location',frame=frame); o.keyframe_insert('rotation_euler',frame=frame)
@@ -40,14 +40,18 @@ def build(phase):
  scene.render.fps=FPS; scene.frame_start=1; scene.frame_end=LENGTH+1
  rig=bpy.data.objects.new('CarRoot-'+phase,None); scene.collection.objects.link(rig)
  red=material('Proxy team red',(.6,.025,.02)); grey=material('Concrete',(.22,.24,.27)); black=material('Rubber',(.02,.02,.025))
- body=box('Body-'+phase,(0,0,.48),(1.7,4.8,.4),red,rig)
- nose=box('Nose-'+phase,(0,-2.4,.35),(.5,1.1,.25),red,rig)
- channel_driver(body,0,rig,'pitch'); channel_driver(nose,0,rig,'pitch')
+ # One rigid body pivot matches entranceBodyLocal at game(0,.34,.05).
+ # Wheels remain directly under CarRoot; the authored heave channel is zero.
+ pivot=bpy.data.objects.new('BodyPivot-'+phase,None); scene.collection.objects.link(pivot)
+ pivot.parent=rig; pivot.location=xyz(0,.34,.05); pivot.empty_display_type='PLAIN_AXES'
+ body=box('Body-'+phase,(0,.05,.14),(1.7,4.8,.4),red,pivot)
+ nose=box('Nose-'+phase,(0,-2.35,.01),(.5,1.1,.25),red,pivot)
+ channel_driver(pivot,0,rig,'pitch')
  for x in [-.9,.9]:
   for z in [-1.7,1.7]:
    bpy.ops.mesh.primitive_cylinder_add(vertices=WHEEL_SEGMENTS,radius=WHEEL_VERTEX_RADIUS,depth=.32,location=(x,z,WHEEL_RADIUS),rotation=(0,math.pi/2,0))
    w=bpy.context.object; bpy.ops.object.transform_apply(location=False,rotation=True,scale=True); w.name='Wheel-'+phase; w.parent=rig; w.data.materials.append(black); channel_driver(w,0,rig,'wheelRoll')
-   if z<0: channel_driver(w,2,rig,'steer')
+   if z<0: channel_driver(w,2,rig,'steer',-1)  # runtime X mirror makes physical world steer=-parameter
  box('Floor-'+phase,(0,-6.4,-.05),(10.8,25,.1),grey)
  for x in [-4.05,4.05]: box('Door jamb-'+phase,(x,-6.4,1.8),(2.7,.2,3.6),grey)
  box('Header-'+phase,(0,-6.4,4.1),(10.8,.2,1),grey)

@@ -976,6 +976,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-departure.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/assets.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -1002,6 +1007,21 @@
       "preserve": "@c2"
     },
     "tools/gen/blender/garage-camera-rigs.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/assemble-entrance-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-entrance-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage_entrance_camera_export.py": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"

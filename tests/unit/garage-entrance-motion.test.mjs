@@ -162,3 +162,47 @@ test('only authored entrance exposes articulation, with body channels separate f
     for (const key of ['articulated', 'wheelDistance', 'steer', 'bodyPitch', 'bodyHeave']) assert.equal(Object.hasOwn(p, key), false, key + ' absent outside authored entrance');
   }
 });
+
+test('camera uses live source and fit endpoints, including an aliased destination buffer', () => {
+  const motion = load(source), from = [5.4, 2.9, -3.8], to = [5.6, 2.2, 7.8];
+  assert.equal(motion.cameraAvailable(), true);
+  const out = new Float64Array(3);
+  assert.equal(motion.camera(0, from, to, out), true);
+  assert.deepEqual(Array.from(out), from);
+  assert.equal(motion.camera(1, from, to, out), true);
+  assert.deepEqual(Array.from(out), to);
+  for (const fit of [to, [-6, 3.2, 8.4]]) {
+    const separate = new Float64Array(3), alias = new Float64Array(fit);
+    assert.equal(motion.camera(.51, from, fit, separate), true);
+    assert.equal(motion.camera(.51, from, alias, alias), true);
+    assert.deepEqual(Array.from(alias), Array.from(separate), 'fitted endpoint may share the output buffer');
+  }
+  for (const target of [[5, 1.69, 8], [5, 2, 6.79], [NaN, 2, 8]]) {
+    out.set([7, 8, 9]);
+    assert.equal(motion.camera(.5, from, target, out), false);
+    assert.deepEqual(Array.from(out), [7, 8, 9], 'unsupported fit leaves the existing camera intact');
+  }
+});
+
+test('invalid camera exports preserve usable car motion and refuse camera ownership', () => {
+  const original = JSON.parse(vm.runInNewContext(source + ';JSON.stringify(GarageEntranceMotionData)', {}, {
+    filename: absSrc('js/data/garage-entrance-motion.js'),
+  }));
+  const breakCamera = [
+    d => { delete d.camera; },
+    d => { d.camera.segments[0].points[1][0] += 1; },
+    d => { d.camera.segments[0].u0 = .1; },
+    d => { d.camera.segments.at(-1).fitEndpoint = false; },
+    d => { d.camera.segments[1].points[0][0] += 1; },
+  ];
+  for (const corrupt of breakCamera) {
+    const data = structuredClone(original); corrupt(data);
+    const motion = load('const GarageEntranceMotionData=' + JSON.stringify(data) + ';');
+    assert.equal(motion.available(), true, 'car channels remain independently usable');
+    assert.ok(motion.pose(4, T));
+    assert.equal(motion.cameraAvailable(), false);
+    const out = [7, 8, 9];
+    assert.equal(motion.camera(.5, [5.4, 2.9, -3.8], [5.6, 2.2, 7.8], out), false);
+    assert.deepEqual(out, [7, 8, 9]);
+  }
+});
