@@ -2561,6 +2561,21 @@
       "presentation": "shared-levels",
       "preserve": "@c5"
     },
+    "tools/ui/flows.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
+    "tools/ui/flows/core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/flows/probes.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",

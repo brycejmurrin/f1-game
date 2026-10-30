@@ -4095,6 +4095,25 @@
       ]
     },
     {
+      "path": "tools/ui/flows.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/ui/flows/core.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/ui/flows/probes.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/layout-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",

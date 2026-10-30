@@ -73,6 +73,7 @@ truncation and tap targets on longer labels before translating real locales.
 | `fit-audit.mjs` | type/spacing floors (`--sizes=`, `--scale=`; no exit code) |
 | `menu-fit.mjs` | `--safe=` notch insets only (deprecated otherwise) |
 | `test:baseline` | 6 pixel PNGs, identity check |
+| `flows.mjs` | interaction FLOWS, not layout: door/Escape, double-tap bleed, focus, Back, persistence, search, rotation, D-pad; `--diff=<old flows.json>` exits 1 on a pass → fail |
 
 ## menu-mock: the fastest look at the menus
 
