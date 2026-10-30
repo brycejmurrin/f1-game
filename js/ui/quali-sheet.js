@@ -70,8 +70,7 @@ function create(G) {
     build(rows);
     $("quali").hidden = false;
     ScrollFade.refresh();
-    // A card built already filled is not announced (results-sheet.js sayCards):
-    // say the new pole badge once the sheet is up.
+    // Say the pole badge (see results-sheet.js sayCards).
     if (poleNew && typeof LiveRegion !== "undefined") setTimeout(() => LiveRegion.say(I18n.t("results.badgeUnlocked", null, "BADGE UNLOCKED") + " " + Badges.labelOf("pole"), "save"), 0);
   }
   function close() {

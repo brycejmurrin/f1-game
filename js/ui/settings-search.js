@@ -255,10 +255,7 @@ const SettingsSearch = (function () {
       input,
     });
   }
-  // Escape in a non-empty FIND A SETTING clears the query first, like the
-  // circuit search (select-screen.js): TopModal's document-capture Escape
-  // otherwise closed the whole sheet. Window capture runs ahead of it. A pad's
-  // B reaches a dialog as `cancel` (pad-menu.js padEscape), not a keydown.
+  // Escape / pad B (`cancel`) in a non-empty FIND A SETTING clears it first, like the circuit search.
   function onEscape(e) {
     const cancel = e.type === "cancel";
     if ((!cancel && e.key !== "Escape") || e.isComposing || e.defaultPrevented) return;

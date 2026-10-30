@@ -26,11 +26,7 @@ const LiveRegion = (function () {
   const queue = [];
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
-  // AN OPEN MODAL MAKES #announce-live INERT. showModal() hides everything
-  // outside the dialog from assistive tech, so a line said while Settings,
-  // the results sheet or any dialog is up went nowhere (UI hunt 3). The line
-  // goes to a polite twin INSIDE the topmost modal, made on first use; the
-  // clear-then-write beat means it is in the tree, empty, before it speaks.
+  // An open modal makes #announce-live inert: speak through a polite twin inside the topmost one (UI hunt 3).
   function modalRegion() {
     let top = null;
     try { const open = document.querySelectorAll(":modal"); top = open.length ? open[open.length - 1] : null; } catch (_) { return null; }

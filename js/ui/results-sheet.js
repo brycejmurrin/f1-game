@@ -136,15 +136,8 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
   return row;
 }
 
-// SPOKEN ONCE PER RESULT. The earnings, badge and winner-time cards were
-// role=status regions built already filled, then shown: a live region that
-// appears with its text is not announced, so a screen-reader player never
-// heard the round's money or a new badge (UI hunt 3). Their text is said
-// through LiveRegion once the sheet is up (inside its dialog, so not inert);
-// a rebuild of the same classification (CLEAR GHOST, a tab) stays quiet.
+// [data-say] cards are spoken once per result after the sheet shows (a pre-filled role=status is silent).
 let saidFor = null;
-// The words of a card: its leaves joined by spaces (textContent ran a heading
-// and its value together, "BADGE UNLOCKEDPole").
 function spokenText(n) {
   const kids = n.children ? Array.from(n.children) : [];
   return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
@@ -463,7 +456,6 @@ function buildResults(order, race) {
   if (st) {
     const box = document.createElement("div");
     box.className = "res-settle";
-    // The balance moved: say so to a screen reader too (sayCards, below).
     box.setAttribute("data-say", "");
     const h = document.createElement("div");
     h.className = "res-settle-head";

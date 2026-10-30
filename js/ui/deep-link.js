@@ -32,15 +32,10 @@ function pushSentinel() {
     history.pushState(Object.assign({}, history.state, { [MARK]: 1 }), "");
   } catch (_) { /* sandboxed page */ }
 }
-// BACK ASKS ESCAPE FIRST. Inner handlers take Escape ahead of the layer's door
-// (circuit search clears, the garage camera panel shuts, a peek ends); pressing
-// the door straight away closed the whole screen instead (UI hunt 3). So a
-// layer that is up hears a synthetic Escape at the focused element; only when
-// nobody claims it does escapeTop() run (a nested modal ignores a synthetic key).
+// BACK ASKS ESCAPE FIRST, so inner Escape handlers win; unclaimed falls to escapeTop (UI hunt 3).
 let synthEsc = false;
 function escapeFirst() {
-  // REPOSITION TOUCH CONTROLS is no layer (it hides SETTINGS and PAUSED), but
-  // it ends on Escape and marks body[data-dock-edit] (js/ui/dock-layout.js).
+  // Dock edit (dock-layout.js) is no layer but ends on Escape.
   const docking = typeof document !== "undefined" && !!(document.body && document.body.hasAttribute && document.body.hasAttribute("data-dock-edit"));
   if (typeof KeyboardEvent === "undefined" || !(docking || (UiLayers.top && UiLayers.top()))) return false;
   const ev = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
@@ -56,17 +51,11 @@ function onBack($) {
   if (!took && UiLayers.inRace()) { const p = $("pausebtn"); if (p) { p.click(); took = true; } }
   if (took) pushSentinel();
 }
-// SECTION LINKS ARE NO HISTORY. Each HOW TO PLAY / guide contents link was a
-// fragment navigation, a new entry the back gesture then spent silently (one
-// dead back per section visited) before it closed the sheet (UI hunt 3). The
-// jump scrolls in place and REPLACES the URL's hash; AriaState repaints
-// aria-current, which hashchange (not fired by replaceState) used to do.
+// SECTION LINKS ADD NO HISTORY (each cost a silent BACK): scroll, replace the hash, repaint aria-current.
 const SECTION_NAVS = "#htp-contents, #cg-contents, #ch-contents";
 function onSectionLink(e) {
   const a = e.target && e.target.closest ? e.target.closest("a[href^='#']") : null;
   if (!a || !a.closest(SECTION_NAVS) || e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
-  // The section is looked up inside the link's own sheet: a contents link never
-  // jumps out of it, and the ids stay static (no dynamic getElementById).
   const href = a.getAttribute("href"), sheet = a.closest("dialog, .sheet");
   const target = sheet && Array.from(sheet.querySelectorAll("[id]")).find((n) => "#" + n.id === href);
   if (!target) return;
@@ -107,9 +96,7 @@ function create(G) {
     }
     const btn = go === "race" ? $("mb-race") : go === "daily" ? $("mb-daily") : go === "nextgp" ? $("mb-data") : $("mb-garage");   // literal ids: the dynamic-id ratchet is shrink-only
     if (!btn || btn.hidden || btn.disabled) { Log.info("game", "deep link dropped: door unavailable (" + go + ")"); return; }
-    // NEXT GP always means the schedule (the hub remembers its last tab). The
-    // door opens ON it once its bundle lands: polling 10 s for the tab missed a
-    // slow first load and opened the remembered tab instead (UI hunt 3).
+    // NEXT GP means the schedule: the door opens the hub ON it (a 10 s tab poll missed slow loads).
     if (go === "nextgp") btn.dataset.openTab = "schedule";
     btn.click();
   }
