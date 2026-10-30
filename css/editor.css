@@ -699,7 +699,7 @@
 #trackdesigner [data-role="workspace-status"] { grid-column: 1 / -1; align-items: center; min-width: 0; }
 #trackdesigner [data-role="workspace-status"] .td-msg { grid-column: auto; flex: 1 1 12em; }
 #trackdesigner [data-role="checks-summary"] { flex: none; font-size: var(--fs-micro); }
-#trackdesigner [data-role="checks-summary"][data-level="red"] { border-color: var(--slower); color: var(--slower); }
+#trackdesigner [data-role="checks-summary"][data-level="red"] { border-color: var(--slower); color: var(--slower-ink); }
 #trackdesigner [data-role="checks-summary"][data-level="amber"] { border-color: var(--sec-slow); }
 @media (max-width: 760px) {
   #trackdesigner [data-role="mode-bar"] { flex-wrap: wrap; }

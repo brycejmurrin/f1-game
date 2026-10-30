@@ -10,7 +10,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -332,8 +332,10 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
   const scrubGate = game.indexOf("if (replayBuf.isScrubbing())");
   const score = game.indexOf("Career.scoreRound");
   assert.ok(scrubGate >= 0 && score > scrubGate, "scrub gate precedes career score");
-  // Ghost.flush still leads endRace (ghost.test pin); scrub return follows it.
-  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
+  // A valid completion flushes before the scrub gate; the session guard may lead.
+  const end = symbolSource("function endRace(forcedOrder)");
+  const flush = end.indexOf("Ghost.flush();"), scrub = end.indexOf("if (replayBuf.isScrubbing())");
+  assert.ok(flush >= 0 && scrub > flush, "ghost flush precedes the scrub return");
   api.endScrub();
 });
 
@@ -668,7 +670,7 @@ test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport c
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8"), /style\.cssText/);
 });
 
-for (const outcome of ["success", "error", "cancel"]) test("contact sheet restores scrub and camera on " + outcome, async () => {
+for (const outcome of ["success", "error", "cancel"]) test(`contact sheet restores scrub and camera on ${outcome}`, async () => {
   let api, release, active = 0, maximum = 0; const times = [], resets = [];
   const R = boot(undefined, { CamFeel: { resetFollow() { resets.push("follow"); }, resetFreeLook() {}, resetLatch() {} }, GameCams: { resetSmoothing() { resets.push("smooth"); } },
     PhotoStudio: { async contactSheet(ts, seek, cancelled) {
@@ -688,7 +690,7 @@ for (const outcome of ["success", "error", "cancel"]) test("contact sheet restor
   assert.equal(field[0].px, 3); assert.equal(resets.filter((s) => s === "smooth").length, 4);
 });
 
-for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test("pending contact sheet respects newer " + change + " ownership", async () => {
+for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test(`pending contact sheet respects newer ${change} ownership`, async () => {
   let resolve, check, lateSeek; const R = boot(undefined, { PhotoStudio: { contactSheet(_times, seek, cancelled) {
     seek(1); check = cancelled; lateSeek = seek; return new Promise((r) => { resolve = r; });
   } } });

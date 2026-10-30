@@ -254,20 +254,39 @@ function driveOutSound(pose, gap) {
 // leaving. A scrubbed or paused show holds its frame at the end instead of closing.
 // Built here, once, around the shell's STOP, as arrival.js builds its angle map
 // (index.html's DOM is at its shellNodes ceiling).
+// THE PHASE MARKS: ticks under the scrub at each beat of the sequence (shutter,
+// lane run, pause, back-in, parked, crew; going out: shutter, hold or crew clear,
+// roll-out, empty lane), from GarageArrival.timeline, so a timing setting changed
+// in EDIT moves them. In EDIT, JUMP TO seeks to a phase and names the held one.
+// Safari draws no <datalist> ticks on a range, hence the drawn ones.
 const FRAME_S = 1 / 24;
 let preview = null;
 const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
 const previewPose = (p) => GarageArrival.poseFor(p.dir)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
+/** The phases of a preview's sequence: [{ id, name, t }] by start time, inside its length. */
+function previewPhases(p) {
+  const T = GarageArrival.timeline(p.cfg, p.dir), len = previewLen(p), extra = len - T.base;
+  const marks = p.dir === "out"
+    ? [["door", "SHUTTER", 0], ["hold", extra > 0 ? "CREW CLEAR" : "HOLD", T.door], ["run", "ROLL OUT", T.door + T.hold + extra], ["gone", "EMPTY LANE", T.settle + extra]]
+    : [["door", "SHUTTER", 0], ["lane", "LANE RUN", T.door], ["pause", "PAUSE", T.door + T.lane], ["back", "BACK IN", T.door + T.lane + T.pause],
+      ["park", "PARKED", T.park], ["crew", "CREW", T.base]];
+  // A zero-length phase (HOLD BEAT 0, no crew) gives way to the one that starts with it.
+  return marks.map(([id, name, t]) => ({ id, name, t }))
+    .filter((m, i, a) => m.t < len - 1e-3 && !(a[i + 1] && a[i + 1].t - m.t < 1e-3));
+}
+const phaseAt = (marks, t) => marks.reduce((on, m) => (m.t <= t + 1e-6 ? m : on), marks[0]);
 function transport() {
   const stop = $("ga-preview-stop");
   if (typeof document === "undefined" || !stop || !stop.insertAdjacentHTML || $("ga-transport")) return;
   stop.insertAdjacentHTML("beforebegin", '<div id="ga-transport" role="group" aria-label="Preview playback" hidden>'
     + '<button id="ga-play" type="button" aria-pressed="false">PAUSE</button>'
     + '<button id="ga-back" type="button" aria-label="Back one frame">&lsaquo;</button>'
-    + '<input id="ga-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Preview time">'
+    + '<span id="ga-scrubber"><input id="ga-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Preview time">'
+    + '<span id="ga-marks" aria-hidden="true"></span></span>'
     + '<button id="ga-fwd" type="button" aria-label="Forward one frame">&rsaquo;</button>'
     + '<output id="ga-time"></output>'
+    + '<select id="ga-phase" aria-label="Jump to phase" hidden></select>'
     + '<button id="ga-loop" type="button" aria-pressed="false">LOOP</button>'
     + '<button id="ga-edit" type="button" aria-pressed="false">EDIT</button></div>');
   $("ga-transport").appendChild(stop);
@@ -275,10 +294,12 @@ function transport() {
   $("ga-back").onclick = () => previewSeek(preview ? preview.t - FRAME_S : 0);
   $("ga-fwd").onclick = () => previewSeek(preview ? preview.t + FRAME_S : 0);
   $("ga-scrub").oninput = (e) => previewSeek(preview ? Number(e.target.value) / 1000 * previewLen(preview) : 0);
+  $("ga-phase").onchange = (e) => previewPhase(e.target.value);
   $("ga-loop").onclick = () => { if (preview) { preview.loop = !preview.loop; previewSync(); } };
   $("ga-edit").onclick = () => previewEdit(!(preview && preview.editing));
 }
-// The bar's readout: the play state, the scrub position, the time and the caption.
+// The bar's readout: the play state, the scrub position, the time and the caption,
+// and the phase marks (rebuilt only when the sequence's beats move).
 function previewSync() {
   const p = preview;
   if (!p) return;
@@ -289,7 +310,22 @@ function previewSync() {
   press($("ga-loop"), p.loop); press($("ga-edit"), p.editing);
   set($("ga-scrub"), "value", String(Math.round(t / (len || 1) * 1000)));
   set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + previewPose(p).label);
+  const marks = previewPhases(p), on = phaseAt(marks, t), key = p.dir + marks.map((m) => m.id + m.t.toFixed(3)).join();
+  if (p.marked !== key) {
+    p.marked = key;
+    set($("ga-marks"), "innerHTML", marks.map((m) => '<i data-phase="' + m.id + '" style="left:'
+      + (m.t / (len || 1) * 100).toFixed(2) + '%"></i>').join(""));
+    set($("ga-phase"), "innerHTML", marks.map((m) => '<option value="' + m.id + '">' + m.name + " \u00b7 " + m.t.toFixed(1) + " s</option>").join(""));
+  }
+  set($("ga-phase"), "value", on.id);
+  set($("ga-phase"), "hidden", !p.editing);
   const bar = $("ga-transport"); if (bar && bar.toggleAttribute) bar.toggleAttribute("data-editing", p.editing);
+}
+/** JUMP TO: hold the first frame of a phase (by id). */
+function previewPhase(id) {
+  if (!preview) return;
+  const m = previewPhases(preview).find((x) => x.id === id);
+  if (m) previewSeek(m.t);
 }
 function previewPause(on) {
   if (!preview) return;
@@ -332,7 +368,7 @@ function startArrivalPreview(dir, btn) {
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   transport();
-  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false };
+  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");

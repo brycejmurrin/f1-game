@@ -82,8 +82,11 @@
    faded in after ~3 s: long enough that it does not compete with the card
    arriving, soon enough that a player who wants to skip learns how. Run phase
    only — the no-world card is gone in 700 ms and the editor's hold is not
-   skippable. Under reduced motion the tokens.css backstop makes the fade
-   instant; the delay stays, so the hint still waits its turn. */
+   skippable. Under reduced motion both backstops (tokens.css for the OS,
+   responsive.css for MOTION: REDUCED) make the fade instant and zero every
+   delay; this one delay is a wait, not motion, so it is pinned !important
+   here. A layered !important outranks the unlayered tokens.css one and the
+   later `layout` layer, so the hint still waits its turn under both gates. */
 #loading[data-phase="run"] #ld-card::after {
   content: "PRESS ANY KEY TO RACE";
   position: absolute;
@@ -96,7 +99,8 @@
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  animation: ld-hint var(--dur-4) var(--ease-out) 3s both;
+  animation: ld-hint var(--dur-4) var(--ease-out) both;
+  animation-delay: 3s !important;
 }
 @media (hover: none) and (pointer: coarse) {
   #loading[data-phase="run"] #ld-card::after { content: "TAP TO RACE"; }
