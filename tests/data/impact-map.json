@@ -685,6 +685,7 @@
         "tests/unit/audio-recovery.test.mjs"
       ],
       "windFromSpeed": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/wind-speed.test.mjs"
       ],
       "*": [
@@ -1045,6 +1046,15 @@
       ],
       "findStableLoop": [
         "tests/unit/audio-sample-upgrade.test.mjs"
+      ],
+      "hiss": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
+      "noise": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
+      "scrapeNoise": [
+        "tests/unit/audio-tune.test.mjs"
       ],
       "*": [
         "tests/unit/crowd-ctx-rebuild.test.mjs",

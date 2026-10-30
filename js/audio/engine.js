@@ -320,10 +320,14 @@ var GameAudio = (function () {
     };
   }
   const WIND_GATE = 0.04;
-  function windFromSpeed(s01) {
+  // `out` (optional) is filled and returned: setEngine passes _windScratch per frame.
+  const _windScratch = { gain: 0, hz: 0 };
+  function windFromSpeed(s01, out) {
     const s = clamp01(s01);
     const u = s <= WIND_GATE ? 0 : (s - WIND_GATE) / (1 - WIND_GATE);
-    return { gain: 0.036 * u * u, hz: 450 + u * 1450 };
+    const r = out || {};
+    r.gain = 0.036 * u * u; r.hz = 450 + u * 1450;
+    return r;
   }
 
   /* ---------------- iOS audio session ----------------
@@ -1987,7 +1991,7 @@ var GameAudio = (function () {
     // rain hisses, a hard lift gusts (harvLevel). Peak ~0.036, an order under
     // the engine core. lastSpeed is overwritten above, so the gust is the
     // harvest smoother, not a re-diff of speed.
-    const wf = windFromSpeed(s);
+    const wf = windFromSpeed(s, _windScratch);
     const windOpen = s > WIND_GATE ? 1 : 0;
     const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
