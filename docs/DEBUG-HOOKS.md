@@ -1057,7 +1057,7 @@ Opt-in official three.js Inspector (Performance / Memory / Timeline / Viewer / P
 renderer. DEFAULT ON on dev/agent hosts (`localhost`, `127.0.0.1`, `::1`, `file:`) unless `navigator.webdriver`
 (the Playwright harness) is set; DEFAULT OFF on the deployed site. `?inspector=0|1` overrides and is remembered in
 `apex26.inspector` (0/1); `inspector(true|false)` toggles (and remembers); `inspector()` reads. The files
-(`vendor/three-0.186.1/addons/inspector/`) load by dynamic `import()` only on enable and are never precached, so a
+(`vendor/three-0.187.0/addons/inspector/`) load by dynamic `import()` only on enable and are never precached, so a
 player on the deployed site pays nothing. GLX/WGX answer `supported:false, reason:"TLX only…"`. While on, `gpuTimer()`
 is held off (the Inspector resolves timestamp queries). GPU times need WebGPU `timestamp-query`; the WebGL2 path and
 SwiftShader keep CPU/Memory/Timeline/Viewer. Phone: the panel root is `pointer-events:none` outside its controls; the

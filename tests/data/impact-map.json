@@ -14948,7 +14948,9 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "drawWarm": [
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "ensureGR": [
         "tests/unit/tlx-hunt4b.test.mjs"
@@ -15039,7 +15041,8 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-recovery-lifecycle.test.mjs"
+        "tests/unit/tlx-recovery-lifecycle.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
@@ -15691,14 +15694,19 @@
       ]
     },
     "js/render/three/tsl-sky.js": {
+      "cacheDrawWarm": [
+        "tests/unit/tlx-webgpu-perf.test.mjs"
+      ],
       "cacheState": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "cacheStep": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cacheWarm": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "derive": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -15707,7 +15715,8 @@
       "dispose": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "update": [
         "tests/unit/gfx-backend-canary.test.mjs",
