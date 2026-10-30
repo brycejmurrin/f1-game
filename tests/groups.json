@@ -453,6 +453,8 @@
     "tests/unit/garage-crew.test.mjs",
     "tests/unit/garage-finish-remap.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
+    "// The Blender garage light cues (ctx.cue in GarageScene.live) and the podium / rain / neon moods.",
+    "tests/unit/garage-light-cues.test.mjs",
     "// Garage room LOOKS (design preview): every look builds a valid bay and changes the room.",
     "tests/unit/garage-looks.test.mjs",
     "tests/unit/garage-perf-mesh-free.test.mjs",
