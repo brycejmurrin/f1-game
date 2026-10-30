@@ -114,3 +114,41 @@ test('direct preview pose latches its source before a lazy asset load and a fres
   assert.deepEqual(xyz(next), xyz(motion.pose(5, arrival.timeline(fresh), 1)), 'fresh preview adopts ready Blender samples');
   assert.ok(Math.abs(next.z - continued.z) > .001 || Math.abs(next.x - continued.x) > .001, 'test distinguishes the two paths');
 });
+test('wheel distance is signed metres and follows forward and reverse travel on both mirrored axes', () => {
+  const motion = load(source);
+  assert.equal(motion.WHEEL_RADIUS, .34);
+  for (const side of [-1, 1]) {
+    for (const phase of ['lane', 'back']) {
+      let previous = motion.sample(phase, 0, side);
+      for (let i = 1; i <= 64; i++) {
+        const p = motion.sample(phase, i / 64, side);
+        const distance = p.wheelDistance - previous.wheelDistance;
+        const alongNose = (p.x - previous.x) * Math.sin(p.yaw) + (p.z - previous.z) * Math.cos(p.yaw);
+        assert.ok(phase === 'lane' ? distance > 0 && alongNose > 0 : distance < 0 && alongNose < 0, phase + ': wheel and nose axes agree');
+        assert.equal(p.wheelDistance, p.wheelRoll * .34);
+        previous = p;
+      }
+    }
+    assert.ok(Math.abs(motion.sample('lane', 1, side).wheelDistance - 22) < 2e-6, '22 metre lane travel, not 22 radians');
+  }
+});
+test('only authored entrance exposes articulation, with body channels separate from the grounded root', () => {
+  const { ctx, arrival } = arrivalContext(), motion = vm.runInContext('GarageEntranceMotion', ctx);
+  const config = arrival.settings({ angle: 'left', enterCrew: 'current', sway: 0 });
+  for (const t of [0, 3, 5.5, 7, 100]) {
+    const p = arrival.pose(t, config), channels = motion.pose(t, arrival.timeline(config), 1);
+    assert.equal(p.articulated, true);
+    assert.equal(p.wheelDistance, channels.wheelDistance);
+    assert.equal(p.steer, channels.steer);
+    assert.equal(p.bodyPitch, channels.pitch);
+    assert.equal(p.bodyHeave, channels.heave);
+    for (const key of ['wheelDistance', 'steer', 'bodyPitch', 'bodyHeave']) assert.ok(Number.isFinite(p[key]), key + ' finite');
+    assert.equal(p.y, undefined, 'body heave does not lift the grounded wheel/root transform');
+  }
+  const parked = arrival.pose(100, config);
+  assert.deepEqual([parked.steer, parked.bodyPitch, parked.bodyHeave], [0, 0, 0]);
+  const legacy = arrivalContext(false).arrival;
+  for (const p of [legacy.pose(3, config), arrival.pose(3, { ...config, _entranceAuthored: false }), arrival.poseHome(3, config), arrival.poseOut(3, config)]) {
+    for (const key of ['articulated', 'wheelDistance', 'steer', 'bodyPitch', 'bodyHeave']) assert.equal(Object.hasOwn(p, key), false, key + ' absent outside authored entrance');
+  }
+});

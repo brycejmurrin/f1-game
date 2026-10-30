@@ -2,6 +2,7 @@
 const GarageEntranceMotion = (function () {
   "use strict";
   const FIELDS = Object.freeze(["x", "z", "yaw", "wheelRoll", "steer", "heave", "pitch"]);
+  const WHEEL_RADIUS = 0.34;   // fitted CarWheels tyre radius, matched in the Blender source
   const MIRROR = new Set(["x", "yaw", "steer"]);
   let checked = null, usable = false;
   function data() {
@@ -24,6 +25,7 @@ const GarageEntranceMotion = (function () {
       const key = FIELDS[c], a = rows[i][c], b = rows[i + 1][c];
       out[key] = (a + (b - a) * k) * (side < 0 && MIRROR.has(key) ? -1 : 1);
     }
+    out.wheelDistance = out.wheelRoll * WHEEL_RADIUS;   // signed metres: decreases while backing
     return out;
   }
   // Timeline comes from GarageArrival: all tuner/result timing stays at its
@@ -35,5 +37,5 @@ const GarageEntranceMotion = (function () {
     return t <= backAt ? sample("lane", (t - timeline.door) / timeline.lane, side, out)
       : sample("back", (t - backAt) / timeline.back, side, out);
   }
-  return Object.freeze({ sample, pose, available: () => !!data() });
+  return Object.freeze({ sample, pose, WHEEL_RADIUS, available: () => !!data() });
 })();

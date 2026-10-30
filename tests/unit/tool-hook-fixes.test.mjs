@@ -64,16 +64,46 @@ test("protect-files: a branch switch is not a generated-file edit; a file checko
   }
 });
 
-test("protect-files: the MAIN checkout may edit shared-contract files under a subdirectory", () => {
+test("protect-files: MAIN may edit shared-contract files under a subdirectory; linked worktrees remain protected", () => {
   // git prints --git-dir absolute but --git-common-dir relative ("../../.git")
   // from tools/gen/; the text compare read that as a linked worktree (2026-10-30).
-  const edit = (file) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], {
-    input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, file), old_string: "a", new_string: "b" } }),
-    encoding: "utf8", cwd: ROOT });
-  for (const f of ["tools/gen/gen-shell.mjs", "tools/manifest.cjs"]) {
-    const r = edit(f);
-    assert.equal(r.status, 0, `${f} refused in the main checkout:\n${r.stderr}`);
-  }
+  // ROOT itself may be linked: create both identities without touching the
+  // real main checkout or depending on another session's worktree layout.
+  const fixture = fs.mkdtempSync(path.join(ROOT, "artifacts", "shared-contract-hook-"));
+  const main = path.join(fixture, "main"), linked = path.join(fixture, "linked");
+  fs.mkdirSync(main);
+  const git = (...args) => {
+    const r = spawnSync("git", ["-c", "user.name=Hook fixture", "-c", "user.email=fixture@example.invalid", ...args], { cwd: main, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    return r.stdout.trim();
+  };
+  const files = ["tools/gen/gen-shell.mjs", "tools/manifest.cjs"];
+  try {
+    git("init", "-q");
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(main, file)), { recursive: true });
+      fs.writeFileSync(path.join(main, file), "fixture original\n");
+    }
+    git("add", "tools");
+    git("commit", "-qm", "fixture");
+    git("worktree", "add", "--quiet", "--detach", linked, "HEAD");
+    const observed = [];
+    for (const [checkout, root] of [["main", main], ["linked", linked]]) {
+      for (const file of files) {
+        const target = path.join(root, file);
+        const r = spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], {
+          input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: target, old_string: "fixture original", new_string: "changed" } }),
+          encoding: "utf8", cwd: root });
+        observed.push({ checkout, file, status: r.status,
+          sharedContract: r.stderr.includes("shared-contract file"),
+          unchanged: fs.readFileSync(target, "utf8") === "fixture original\n" });
+      }
+    }
+    assert.deepEqual(observed, ["main", "linked"].flatMap((checkout) => files.map((file) => ({
+      checkout, file, status: checkout === "main" ? 0 : 2,
+      sharedContract: checkout === "linked", unchanged: true,
+    }))), "only MAIN permits the proposed Edit; every fixture file stays unchanged");
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });
 
 test("stop-guard stays silent while a `test-bg --wait` task is live; nudges (exit 2) over a bare live run", async () => {

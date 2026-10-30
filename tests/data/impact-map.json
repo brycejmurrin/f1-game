@@ -7631,7 +7631,8 @@
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "rate": [
         "tests/unit/garage-arrival.test.mjs"
