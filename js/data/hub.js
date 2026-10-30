@@ -195,7 +195,7 @@ const DataHub = (function () {
     tabs.setAttribute("aria-label", I18n.t("hub.sections", null, "Data hub sections"));
     developerTools = el("details", "dh-developer-tools");
     const developerLabel = el("summary", "", "⋯");
-    developerLabel.setAttribute("aria-label", "Developer tools");
+    developerLabel.setAttribute("aria-label", I18n.t("hub.developerTools", null, "Developer tools"));
     developerTools.appendChild(developerLabel);
     TABS.forEach(function (t) {
       const b = el("button", "dh-tab", t.label);
