@@ -18,7 +18,7 @@ One CLI owns the menu matrix: `tools/ui/layout-audit.mjs`. The race HUD has its 
 - **Sizes are catalog names, scale is a percent.** `--scale=125` (`1.25` throws, range 40-200); viewports are
   `VIEWPORTS` names in `tools/ui/menu-screens.mjs` only. A free-form size (568x320) needs a new `VIEWPORTS`
   row. `menu-fit.mjs` is DEPRECATED except `--safe=` notch insets.
-- **A run MERGES into `artifacts/layout-audit/audit.json`** by screen|viewport: copy it to `audit.before.json`
+- **A run MERGES into `artifacts/layout-audit/audit.json`** by screen|viewport(|theme, `--theme=dark,light`): copy it to `audit.before.json`
   BEFORE the edit, or the regression baseline is gone.
 - **Zero findings is not green.** `ui-audit.spec.js` asserts nothing; thumbnails and an empty inspector are
   insufficient. A skipped or timed-out cell is unmeasured, never a pass.
