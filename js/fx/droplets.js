@@ -98,7 +98,7 @@ const Droplets = (function () {
       const edge = g.createLinearGradient(10, 8, 48, 58);
       edge.addColorStop(0, "rgba(210,222,232," + (helmet ? 0.42 : 0.28) * reflection + ")");
       edge.addColorStop(0.28, "rgba(160,180,198,0)");
-      edge.addColorStop(0.72, "rgba(8,15,23," + (helmet ? 0.55 : 0.32) + ")");
+      edge.addColorStop(0.72, "rgba(8,15,23," + (helmet ? 0.7 : 0.32) + ")");
       edge.addColorStop(1, "rgba(196,211,224," + (helmet ? 0.28 : 0.16) * reflection + ")");
       g.beginPath(); g.moveTo(29, 9 + v * 2);
       g.bezierCurveTo(13 - v, 10, 12, 29, 16 + v, 42);
@@ -106,12 +106,12 @@ const Droplets = (function () {
       g.bezierCurveTo(55, 25, 44 - v * 2, 7, 29, 9 + v * 2);
       g.closePath();
       g.fillStyle = "rgba(10,18,26," + (helmet ? 0.09 : 0.045) + ")"; g.fill();
-      g.strokeStyle = edge; g.lineWidth = 3.5; g.stroke();
+      g.strokeStyle = edge; g.lineWidth = helmet ? 7 : 3.5; g.stroke();
       // A narrow, soft crescent, not a white circular specular dot.
       g.beginPath(); g.moveTo(21, 16 + v);
       g.bezierCurveTo(17, 21, 16, 25, 17, 30);
-      g.strokeStyle = "rgba(222,232,240," + 0.25 * reflection + ")";
-      g.lineWidth = 2.5; g.stroke(); g.restore();
+      g.strokeStyle = "rgba(222,232,240," + (helmet ? 0.55 : 0.25) * reflection + ")";
+      g.lineWidth = helmet ? 4.5 : 2.5; g.stroke(); g.restore();
     }
     return s;
   }
