@@ -174,6 +174,8 @@ Proposed enforceable rules:
 - The composition root supplies ports. A port is capability access, not a second
   state owner. Keep live getter semantics where values change between calls.
 - Simulation owns player/world mutation during the established simulation phase.
+  Session initialization, replay/WATCH restore, network authority and debug commands
+  retain explicit phase-specific entry points through the owning transition API.
   Career retains save ownership; GameStore retains IO. Rendering owns GPU handles
   and frees them through their creating backend. UI owns DOM state, not race state.
 - Legacy G remains intact for unmigrated consumers. No bidirectional mirroring.
@@ -229,7 +231,7 @@ fallbacks worked. No browser or GPU claim follows from those checks.
 
 | Representative change | Today: edit/verification path | With proposed boundaries: edits that remain and edits avoided |
 |---|---|---|
-| Wet-weather caution policy | RaceControl mixes decision, persistence, host gating, network reporting and announcement (`race-control.js:282–385`); new inputs can grow G/game wiring | Pure policy takes weather/hazards/session/previous caution and explicit elapsed time; returns next state and bounded decision records. Existing adapter checks host authority and emits ordered effects. Decision unit tests plus one race-control scenario. Network schema/UI changes remain real work if behavior requires them. |
+| Wet-weather caution policy | RaceControl mixes decision, persistence, host gating, network reporting and announcement (`race-control.js:282–385`); new inputs can grow G/game wiring | Pure policy takes weather/hazards/session/previous caution and explicit elapsed time; returns next state and bounded decision records. Existing adapter preserves local reset/announcement effects before host gating (`race-control.js:372–385`), then gates authoritative transitions/publication. Separate local and host effects explicitly. Decision unit tests plus one race-control scenario. Network schema/UI changes remain real work if behavior requires them. |
 | New renderer puddle/effect control | Shared Puddles/input data, GLX GLSL, TLX TSL, WGX WGSL, settings/store and seam/parity tests can all change | Declare backend-neutral input units/defaults and capability/lifecycle first; each backend implements it. Presentation command changes quality state through owner. Three backend implementations and real GPU checks remain necessary; physics gains no shader dependency. |
 | New session variant | game.js flow/session and phase paths, title DOM/UI, result paths, lazy readiness and fixtures; G views may change | Coordinator validates a policy/configuration and awaits required bundles before session activation. Keep flow×session axes. Legacy G projections read the same owner; no second enum/store. Loader retry tests and start/end/re-entry browser scenario remain mandatory. |
 | Manual sector ERS plan (real open work: #3981) | Race policy, input/settings, persistence, HUD and integration all participate | Pure sector selection/deploy decision; settings commands update owned plan, HUD receives scalar view. Input, persistence and UI still change but cannot directly mutate physics state. Implement only after existing owner agrees; this report claims no inspection of unmerged implementation. |
