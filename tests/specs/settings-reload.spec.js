@@ -73,6 +73,10 @@ test("each driving and HUD SettingRow choice is stored and live again after a re
 // other row must come back exactly as it was left. XR MODE is not touched: switching it reloads into the XR path.
 const NAVIGATES = new Set(["pm-xr-mode-sel"]);
 const TRANSIENT = {
+  "pm-fullscreen-sel": "fullscreen cannot re-enter without a user gesture (a browser rule)",
+  "pm-hl-set-sel": "the HUD-layout editor's picker: which set is being edited",
+  "pm-hl-el-sel": "the HUD-layout editor's picker: which element is being edited",
+  "pm-hl-visibility-sel": "the HUD-layout editor's picker, follows the edited element",
   "pm-drill-sel": "the practice drill is the running session's (driving-coach drillMode starts free)",
   "practice-goal": "the practice goal is the running session's, same as the drill",
   "ps-tod": "Photo Studio restores the race's time of day on close",
