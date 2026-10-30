@@ -14,9 +14,9 @@ branch, and this table links them.
 | A | #4258 | **priority: POS ink under HIGH CONTRAST** (below); contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | #4300 | launched 17:05–17:08Z |
 | B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | #4303 | launched 17:05–17:08Z |
 | C | #4257 | ratchet tooling: a topic branch can lower a slack-0 tree metric | Bryce's own session (claimed 17:00Z, first claimant) | #4305 | not launched here |
-| D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | — | launched 17:05–17:08Z |
+| D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | #4315 | launched 17:05–17:08Z |
 | D2 | #4282 | layout-audit: the 8 harness-timeout cells | waits for #4225 (owns `tools/ui/layout-audit.mjs`) | — | blocked |
-| E | #4284 | motion and feel: transitions, press feedback, results reveal, tabular numerals; one living gallery | session_01BEw9UGgCHVAFkn5Wwj63iT (Opus) | #4299 | launched 17:05–17:08Z |
+| E | #4284 | motion and feel: exit easing, press feedback, results reveal, tabular numerals; one living gallery | session_01BEw9UGgCHVAFkn5Wwj63iT (Opus), capped 17:54Z | #4299 | built + verified; `needs-owner`: sync, CI, land |
 
 ## Coordination decisions
 - **#4257 is not relaunched.** A session Bryce started from his phone claimed it at 17:00Z; the first claimant
@@ -53,3 +53,14 @@ branch, and this table links them.
   Home baselines on the merged tree.
 - **#4257:** the fix is draft PR #4305 by the claimant session, which will report when it merges. Lane A then
   does `--upgrade` and the rawColor-lowering swaps.
+- **Lane D:** the career header (`css/career.css:63`, white ink plus a team stripe) and the disclaimer border
+  (`css/menus.css:279`, transparent with the plate kept) were already fixed by pass #2; the coordinator checked
+  both on the tip. Only the garage tabs were built: variant A, one line of 44 px tabs, 4.78 % pixel diff, which
+  frees 56 px for the parts list. B (fade, 0.04 %) was indistinguishable; C (two rows, 6.83 %) broke reading order.
+  Gallery: https://claude.ai/artifact/MzZzAt6iqW5KMrQRZVZdxD
+- **Lane A vs #4320** (`claude/hud-pass-3a-i4aspa`, another session's HUD round on Bryce's real settings):
+  #4320 moves the hand-written HUD plates onto tokens, so lane A drops its `--hud-strip-bg` swaps. Lane A
+  keeps the colour tokens, `--slower-ink`, `--dim`, the 11 px floor, `--upgrade`, and the HIGH CONTRAST POS
+  fix as its own small PR.
+- **Quota:** at 17:57Z the seven-day limit read `allowed_warning`, so no further sessions launch (the #4299
+  takeover, and D2 once #4225 merges, wait for `allowed`). #4299 carries `needs-owner` for the dispatcher.
