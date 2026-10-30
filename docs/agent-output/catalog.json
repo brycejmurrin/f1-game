@@ -4145,6 +4145,16 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/reach-score.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ui/review-captures.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

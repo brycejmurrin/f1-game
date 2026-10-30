@@ -2656,6 +2656,11 @@
       "presentation": "native",
       "preserve": "Exact local capture metadata, automated findings and incomplete checks, computed-token coverage, containment and comparison controls."
     },
+    "tools/ui/reach-score.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One summary line (screens scored / not good / partial -> reach.md), the --json report bytes, and exit status (2 bad argument or unreadable input); no browser, offline over existing DOM/inspection artifacts."
+    },
     "tools/ui/review-captures.mjs": {
       "action": "keep-native",
       "presentation": "native",

@@ -72,6 +72,7 @@ truncation and tap targets on longer labels before translating real locales.
 | `layout-audit.mjs` | numbers of record: geometry matrix, gallery, diff |
 | `fit-audit.mjs` | type/spacing floors (`--sizes=`, `--scale=`; no exit code) |
 | `menu-fit.mjs` | `--safe=` notch insets only (deprecated otherwise) |
+| `reach-score.mjs` | offline (no browser): two-thumb reach zone of each screen's primary, tap share per zone, dead space, from `--dom` dumps or an inspection (`--in DIR --svg`) |
 | `test:baseline` | 6 pixel PNGs, identity check |
 
 ## menu-mock: the fastest look at the menus
