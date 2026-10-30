@@ -44,7 +44,8 @@ const GarageArrival = (function () {
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
-   *  one was playing (js/garage/setup-camera.js startArrivalPreview). */
+   *  one was playing (js/garage/setup-camera.js startArrivalPreview).
+   *  opts.changed(): after every saved edit, so a running preview re-poses. */
   /* THE ANGLE MAP: a plan of the bay under GARAGE ANGLE — walls, the door, the
    * pit lane, the parked car and the two interior eyes (EYE_L / EYE_R) with a
    * cone toward the door — the chosen one(s) lit, so LEFT / RIGHT / CUT are a
@@ -67,6 +68,7 @@ const GarageArrival = (function () {
   }
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
+    const changed = typeof opts.changed === "function" ? opts.changed : null;   // a running preview re-poses
     const read = () => settings(store.get("garageArrival", null));
     const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out") };
@@ -105,8 +107,9 @@ const GarageArrival = (function () {
       const el = fields[key], value = read();
       value[key] = key === "enabled" ? el.checked : key === "speed" || key === "fov" ? Number(el.value) : el.value;
       store.set("garageArrival", settings(value)); refresh();
+      if (changed) changed();
     };
-    $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); };
+    $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); if (changed) changed(); };
     // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
     // it takes the settings page's place while open and gives it back on DONE.
     const page = (on) => {

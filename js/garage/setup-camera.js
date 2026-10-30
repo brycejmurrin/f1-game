@@ -149,7 +149,7 @@ const reducedMotion = () => {
   if (mv === "reduce") return true;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 };
-const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview }));
+const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview, changed: () => refreshPreview() }));
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
 // the circuit builds. Its pose stays "active" until stopDriveOut(), so the camera
@@ -220,33 +220,119 @@ function driveOutSound(pose, gap) {
   } catch (_) { /* audio is decoration here */ }
 }
 // THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
-// played once in this room, from the settings page — the title screen or a paused
+// played in this room, from the settings page — the title screen or a paused
 // race — so a speed, angle or lens is judged by eye. An explicit click, so it plays
 // with PLAY ARRIVAL off or reduced motion on. Its own clock on the render dt, as the
 // WORK ON CAR arrival runs; it never calls arrival.start()/chrome(), whose sheet is
-// not up. It ends by itself, on STOP PREVIEW or on Escape. The playback stop is
-// outside the hidden panel so touch and keyboard users retain an exit.
+// not up. Played straight through it ends by itself, or on STOP PREVIEW or Escape.
+// The playback controls are outside the hidden panel so touch and keyboard users
+// retain an exit.
+// THE EDITING TRANSPORT around STOP: PAUSE / PLAY, a frame back and forward, a
+// SCRUB over the whole show with its time and caption, LOOP (play it again rather
+// than end), and EDIT, which holds the frame and brings the panel back over the
+// room: a setting changed there (angle, lens, crew, speed) re-poses the held frame
+// at once (bindSettings' `changed`), and PREVIEW IN / OUT switch direction without
+// leaving. A scrubbed or paused show holds its frame at the end instead of closing.
+// Built here, once, around the shell's STOP, as arrival.js builds its angle map
+// (index.html's DOM is at its shellNodes ceiling).
+const FRAME_S = 1 / 24;
 let preview = null;
+const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
+const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
+const previewPose = (p) => (p.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
+function transport() {
+  const stop = $("ga-preview-stop");
+  if (typeof document === "undefined" || !stop || !stop.insertAdjacentHTML || $("ga-transport")) return;
+  stop.insertAdjacentHTML("beforebegin", '<div id="ga-transport" role="group" aria-label="Preview playback" hidden>'
+    + '<button id="ga-play" type="button" aria-pressed="false">PAUSE</button>'
+    + '<button id="ga-back" type="button" aria-label="Back one frame">&lsaquo;</button>'
+    + '<input id="ga-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Preview time">'
+    + '<button id="ga-fwd" type="button" aria-label="Forward one frame">&rsaquo;</button>'
+    + '<output id="ga-time"></output>'
+    + '<button id="ga-loop" type="button" aria-pressed="false">LOOP</button>'
+    + '<button id="ga-edit" type="button" aria-pressed="false">EDIT</button></div>');
+  $("ga-transport").appendChild(stop);
+  $("ga-play").onclick = () => previewPause(!(preview && preview.paused));
+  $("ga-back").onclick = () => previewSeek(preview ? preview.t - FRAME_S : 0);
+  $("ga-fwd").onclick = () => previewSeek(preview ? preview.t + FRAME_S : 0);
+  $("ga-scrub").oninput = (e) => previewSeek(preview ? Number(e.target.value) / 1000 * previewLen(preview) : 0);
+  $("ga-loop").onclick = () => { if (preview) { preview.loop = !preview.loop; previewSync(); } };
+  $("ga-edit").onclick = () => previewEdit(!(preview && preview.editing));
+}
+// The bar's readout: the play state, the scrub position, the time and the caption.
+function previewSync() {
+  const p = preview;
+  if (!p) return;
+  const len = previewLen(p), t = Math.min(p.t, len), set = (el, k, v) => { if (el && el[k] !== v) el[k] = v; };
+  const press = (el, on) => { if (el && el.setAttribute) el.setAttribute("aria-pressed", String(on)); };
+  const play = $("ga-play");
+  set(play, "textContent", p.paused ? "PLAY" : "PAUSE"); press(play, p.paused);
+  press($("ga-loop"), p.loop); press($("ga-edit"), p.editing);
+  set($("ga-scrub"), "value", String(Math.round(t / (len || 1) * 1000)));
+  set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + previewPose(p).label);
+  const bar = $("ga-transport"); if (bar && bar.toggleAttribute) bar.toggleAttribute("data-editing", p.editing);
+}
+function previewPause(on) {
+  if (!preview) return;
+  preview.paused = !!on;
+  if (!on) { if (preview.t >= previewLen(preview)) preview.t = 0; if (preview.editing) previewEdit(false); }
+  previewSync();
+}
+function previewSeek(t) {
+  if (!preview) return;
+  preview.paused = true;
+  preview.t = Math.max(0, Math.min(previewLen(preview), Number.isFinite(t) ? t : 0));
+  previewSync();
+}
+// EDIT: hold the frame and show the panel over the room; off hides it again.
+function previewEdit(on) {
+  if (!preview) return;
+  preview.editing = !!on;
+  if (on) preview.paused = true;
+  const inner = $("garrival-inner");
+  if (inner) inner.hidden = !on;
+  previewSync();
+}
+/** bindSettings' `changed`: a setting edited mid-preview re-poses the held frame. */
+function refreshPreview() {
+  if (!preview) return;
+  preview.cfg = previewCfg();
+  preview.t = Math.min(preview.t, previewLen(preview));
+  previewSync();
+}
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
+  const d = dir === "out" ? "out" : "in";
+  // From EDIT, PREVIEW IN / OUT switch the running preview's direction.
+  if (preview && preview.editing) {
+    Object.assign(preview, { dir: d, t: 0, btn: btn || preview.btn });
+    previewEdit(false); previewPause(false);
+    return true;
+  }
   endHome();
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
-  const cfg = Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
-  preview = { t: 0, cfg, dir: dir === "out" ? "out" : "in", was: G.setupPreviewOn, btn };
+  transport();
+  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
   if (inner) inner.hidden = true;
+  const bar = $("ga-transport");
+  if (bar) bar.hidden = false;
   const stop = $("ga-preview-stop");
   if (stop) { stop.hidden = false; if (stop.focus) stop.focus(); }
+  previewSync();
   return true;
 }
 function stepPreview(dt) {
-  preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed;
-  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg, reducedMotion());
+  const p = preview;
+  if (!p.paused) p.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * p.cfg.speed;
+  if (p.loop && !p.paused && p.t >= previewLen(p)) p.t = 0;
+  const pose = previewPose(p);
+  previewSync();
   if (pose.active) return pose;
-  stopPreview();
+  if (!p.paused) stopPreview();   // a paused or scrubbed show holds its last frame
   return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
 }
 function stopPreview() {
@@ -258,6 +344,8 @@ function stopPreview() {
   if (inner) inner.hidden = false;
   const stop = $("ga-preview-stop");
   if (stop) stop.hidden = true;
+  const bar = $("ga-transport");
+  if (bar) bar.hidden = true;
   if (p.btn && p.btn.focus) p.btn.focus();
   // A PAUSED RACE renders nothing while no tuner is open, so the garage would
   // stay on the canvas: one more frame, outside the render this may be called from.
@@ -267,8 +355,13 @@ function stopPreview() {
 const previewStop = $("ga-preview-stop");
 if (previewStop) previewStop.onclick = stopPreview;
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !preview) return;
-  stopPreview();
+  if (!preview) return;
+  // Space plays / pauses and the arrows step a frame, unless a control has the key.
+  const own = e.target && /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.target.tagName || "");
+  if (e.key === " " && !own) previewPause(!preview.paused);
+  else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !own && !preview.editing) previewSeek(preview.t + (e.key === "ArrowLeft" ? -FRAME_S : FRAME_S));
+  else if (e.key === "Escape") stopPreview();
+  else return;
   e.preventDefault();
   e.stopPropagation();   // not the settings page's door as well
 }, true);
