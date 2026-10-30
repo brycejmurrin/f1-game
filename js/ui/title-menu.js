@@ -14,9 +14,16 @@ const TitleMenu = (function () {
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
+  // The shell ships the organized end state (index.html, data-destinations):
+  // then this only wires the two settings shortcuts. The build path below stays
+  // for repairDestinations() and for a shell that predates it.
   function organize(doc) {
     const menu = doc && doc.getElementById("menu-buttons");
-    if (!menu || menu.dataset.destinations) return;
+    if (!menu) return;
+    if (menu.dataset.destinations) {
+      wireShortcuts(doc, doc.getElementById("menu-create"), doc.getElementById("menu-secondary"));
+      return;
+    }
     menu.dataset.destinations = "true";
     const group = (id, label, buttons) => {
       let row = doc.getElementById(id);
@@ -40,16 +47,23 @@ const TitleMenu = (function () {
     group(...DESTINATION_GROUPS[2]);
     const create = group(...DESTINATION_GROUPS[3]);
     const utilities = group(...DESTINATION_GROUPS[4]);
+    wireShortcuts(doc, create, utilities);
+  }
+
+  function wireShortcuts(doc, create, utilities) {
     const shortcut = (row, id, label, page) => {
-      if (doc.getElementById(id)) return;
-      const button = doc.createElement("button"); button.id = id; button.type = "button";
-      button.className = "bigbtn alt minibtn"; button.textContent = label;
+      let button = doc.getElementById(id);
+      if (!button) {
+        if (!row) return;
+        button = doc.createElement("button"); button.id = id; button.type = "button";
+        button.className = "bigbtn alt minibtn"; button.textContent = label;
+        row.appendChild(button);
+      }
       button.onclick = () => {
         const settings = doc.getElementById("mb-settings");
         if (settings) settings.click();
         if (typeof SettingsNav !== "undefined") (SettingsNav.showDirect || SettingsNav.show)(page, true);
       };
-      row.appendChild(button);
     };
     shortcut(create, "mb-visual", "VISUAL STUDIO", "visual");
     shortcut(utilities, "mb-saves", "SAVES & DATA", "files");
@@ -136,6 +150,10 @@ const TitleMenu = (function () {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
     organize(typeof document !== "undefined" ? document : null);
+    // The doors paint from the shell seconds before game.js wires them (Slow 4G:
+    // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
+    // does something; game.js wires the handlers in this same task.
+    if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
 
     function refresh() {
       const btn = $("mb-career");

@@ -89,6 +89,12 @@ jobs:
       # docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md §Docker.
       - name: Playwright Chromium (cached)
         uses: ./.github/actions/playwright-chromium
+      # The webkit group needs Playwright's WebKit build and its OS libraries; the
+      # cached step above is Chromium only (webkit-boot died: "Executable doesn't
+      # exist at …/webkit-NNNN/pw_run.sh"). https://playwright.dev/docs/browsers
+      - name: Playwright WebKit (webkit group only)
+        if: inputs.group == 'webkit'
+        run: npx playwright install --with-deps webkit
       - name: Mesa llvmpipe + Xvfb
         if: inputs.gl != 'swiftshader'
         uses: ./.github/actions/mesa-xvfb

@@ -395,7 +395,7 @@ function csLabel(text) {
 // skipped. Crew and mood tables are bare ids, so their names live here.
 const CREW_NAMES = { classic: "CLASSIC", sculpted: "SCULPTED", pitstop: "PIT STOP", workshop: "WORKSHOP", welcome: "WELCOME" };
 const MOOD_NAMES = { shipped: "STANDARD", broadcast: "BROADCAST", night: "NIGHT", showroom: "SHOWROOM", daylight: "DAYLIGHT",
-  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE" };
+  inspection: "INSPECTION", goldenhour: "GOLDEN HOUR", endurance: "ENDURANCE", podium: "PODIUM", rain: "RAIN DAY", neon: "NEON NIGHT" };
 function lookRowSpecs() {
   const out = [];
   if (typeof GaragePrims !== "undefined" && GaragePrims.LOOK_IDS)

@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -133,4 +134,26 @@ test("HudTyres.paint: 10 paints query the chip at most once; a detached chip is 
   chip.isConnected = false; chip = { dataset: {}, textContent: "M", isConnected: true };
   ctx.HudTyres.paint(el, { tempS: 90, tempOpt: 90, tempWindow: 15 }, { code: "M", spent: 0.1 });
   assert.equal(q, 2, "a chip that left the tree is re-queried");
+});
+
+
+test("hlKey: a chip the touch-cockpit CSS hides keys as hidden, so its words never move the fit key (perf hunt 8)", () => {
+  // The real hlKey and its id set, run against a stub body. A changed key is a full fit
+  // (30-116 ms on a phone); an ERS glyph or AERO countdown changed it ~0.5/s for a chip
+  // css/track-detail.css hides on touch cockpit.
+  const HUD = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const ids = HUD.slice(HUD.indexOf("const _HL_CSS_HID"), HUD.indexOf("\n", HUD.indexOf("const _HL_CSS_HID")) + 1);
+  const chip = (id, text, attrs = []) => ({ id, hidden: false, textContent: text, hasAttribute: (a) => attrs.includes(a) });
+  const run = ({ set, desktop, aero, user = [] }) => {
+    const body = { dataset: set ? { hlSet: set } : {}, classList: { contains: (c) => c === "desktop" && desktop } };
+    const ctx = vm.createContext({ document: { body }, Set });
+    vm.runInContext(ids + "let _hlEls = [];\n" + fnSource(HUD, "function hlKey()") + "\nthis.k = (els) => { _hlEls = els; return hlKey(); };", ctx, { filename: absSrc("js/ui/hud.js") });
+    return ctx.k([chip("hud-aero", aero, user), chip("hud-gear", "4")]);
+  };
+  const words = ["AERO 899m", "99m", "9m", "STRAIGHT MODE"];   // four distinct lengths
+  const keys = (o) => new Set(words.map((aero) => run({ ...o, aero })));
+  assert.equal(keys({ set: "cockpit", desktop: false }).size, 1, "touch cockpit: the hidden AERO chip's words never change the key");
+  assert.equal(keys({ set: "cockpit", desktop: true }).size, words.length, "desktop cockpit shows the chip: its length is still keyed");
+  assert.equal(keys({ set: "chase", desktop: false }).size, words.length, "another layout set shows it: still keyed");
+  assert.equal(keys({ set: "cockpit", desktop: false, user: ["data-hl-user"] }).size, words.length, "a player-placed chip is shown (the CSS excludes it): still keyed");
 });

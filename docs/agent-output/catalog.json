@@ -633,6 +633,9 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
+      ],
+      "npmScripts": [
+        "precommit:fix"
       ]
     },
     {
@@ -1921,6 +1924,21 @@
     },
     {
       "path": "tools/gen/blender/crew-choreo.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
+      "path": "tools/gen/blender/garage-camera-rigs.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/gen/blender/garage-light-cues.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "python3"
@@ -4225,6 +4243,10 @@
     {
       "name": "memory:show",
       "command": "node tools/env/apex-memory.mjs show"
+    },
+    {
+      "name": "precommit:fix",
+      "command": "node tools/check/ratchets.mjs --update --lower-only && npm run gen"
     },
     {
       "name": "prepare",

@@ -170,7 +170,8 @@
     "js/agent/apex-lobby.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
-    "js/agent/apex.js"
+    "js/agent/apex.js",
+    "js/agent/apex-bridge.js"
   ],
     LAZY_EDGES: [
     [

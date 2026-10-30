@@ -12,7 +12,7 @@ draft → ready → `land` steps; steward §12 points here.
 The user's "push" / "ship" IS the grant to push the branch and open or update a
 PR into `claude/f1-game-project-26h3ng` (never pushed directly: branch protection refuses it). It is not a grant
 to merge or arm: `land.yml` posts the `gate` COMMIT STATUS (not a check run; the ruleset's one required check) and
-arms auto-merge once `land` is on a ready PR; `gate` itself requires `CI` green on the head (docs/WORKERS.md §5).
+arms auto-merge once `land` is on a ready PR; `gate` itself requires `CI` green on the head (skill `worker` `references/land.md`).
 
 1. **Draft PR first** (AGENTS.md rule 12; docs/WORKERS.md §2): no PR yet → commit, `git push -u origin
    cursor/<topic>-<hash>`, open a DRAFT PR (`draft: true`, template body: Goal, Plan with exactly one `now:` item and
@@ -36,7 +36,7 @@ arms auto-merge once `land` is on a ready PR; `gate` itself requires `CI` green 
    it), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`. The script flips and labels nothing.
    `land` on a DRAFT does nothing (`gate` says "draft: flip ready first"); a stale `gate` re-gates on removing and
    re-adding `land`, on a body edit, or at the next stale-gate sweep.
-   Then follow docs/WORKERS.md §5 and AGENTS.md rule 13 for what happens after `land` — the session stays
+   Then follow skill `worker` contract item 5 and AGENTS.md rule 13 for what happens after `land` — the session stays
    subscribed (re-subscribe after the ready flip) until the dispatcher archives it; read their wording there.
 
 "Skip the gate" / "skip the tests": do it, and record it in the PR body under

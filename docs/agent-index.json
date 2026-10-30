@@ -2016,6 +2016,11 @@
       "roster": "LAZY_AGENT"
     },
     {
+      "path": "js/agent/apex-bridge.js",
+      "global": "ApexBridge",
+      "roster": "LAZY_AGENT"
+    },
+    {
       "path": "js/agent/apex-cam.js",
       "global": "ApexCam",
       "roster": "LAZY_AGENT"

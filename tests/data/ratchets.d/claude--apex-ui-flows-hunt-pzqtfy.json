@@ -1,8 +1,8 @@
 {
   "files": {
     "js/game.js": {
-      "codeLines": -5,
-      "lines": 1,
+      "codeLines": -4,
+      "lines": 2,
       "topLets": -1
     },
     "js/net/lobby.js": {
