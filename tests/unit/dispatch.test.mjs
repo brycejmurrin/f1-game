@@ -12,7 +12,7 @@ import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, waitingWhy, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
   titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, distanceOnlyRefusal, recordToken, recordComment, main, claimedSessionIds,
-  renderPlan,
+  renderPlan, PITFALL_LINES, launchRecheck, fetchAll, childrenMain,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-10-27T12:00:00Z");
@@ -34,6 +34,7 @@ const COMMON = (n = "it") => ["Read docs/WORKERS.md and follow it.",
   "Labels: add with `gh api -X POST repos/brycejmurrin/f1-game/issues/<n>/labels -f 'labels[]=<name>'`, remove with `gh api -X DELETE repos/brycejmurrin/f1-game/issues/<n>/labels/<name>`; never MCP issue_write `labels` (it REPLACES the whole list).",
   "Known container-only red: agent-config.test.mjs #38 (`claude plugin validate`) fails in every cloud container, on the untouched tip too; it is not yours.",
   "`gh pr view` and `gh pr list` return HTTP 403 (no GraphQL): read a PR with `gh api repos/brycejmurrin/f1-game/pulls/<n>`.",
+  ...PITFALL_LINES,
   "Lane label: lane:claude. Model: claude-sonnet-5-5. Base: claude/f1-game-project-26h3ng (branch cursor/<topic>-<hash> from it; draft PR into it at the first commit).",
   "STOP AT: 300k",
   "At the STOP AT cap, the cost cap ($10 soft) or stuck: push, refresh the PR Plan and ```handoff block, add `needs-owner`, send_message `@parent` one line naming the PR, end.",
@@ -306,7 +307,9 @@ test("apply (M4): labels and the Board edit go through the client; NO launch com
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { updated_at: ago(3) })] }), cfg(), NOW);
   p.archives.push({ id: "session_01DONE000000", why: "test" });   // exercise the print path directly
   const writes = applyPlan(p, { api, config: cfg(), log: (s) => out.push(s) });
-  assert.deepEqual(calls, ["POST issues/20/labels", "GET issues/1/comments?per_page=100&page=1", "PATCH issues/comments/9"]);
+  // the re-check (finding 7) reads the PR, its commits and the issue right before each CREATE_SESSION line
+  assert.deepEqual(calls, ["POST issues/20/labels", "GET issues/1/comments?per_page=100&page=1", "PATCH issues/comments/9",
+    "GET pulls/20", "GET pulls/20/commits?per_page=30", "GET issues/10"]);
   assert.equal(writes, 2);
   const line = (s, tag) => [s.slice(0, tag.length), JSON.parse(s.slice(tag.length))];
   assert.deepEqual(line(out[0], "CREATE_SESSION ")[1].source_url, "https://github.com/brycejmurrin/f1-game");
@@ -751,4 +754,107 @@ test("prompts: claude workers get the AskUserQuestion line naming the dispatcher
   assert.equal(text.split("\n").includes(`Do not use AskUserQuestion; send questions to the dispatcher with send_message session_id ${ME}.`), true);
   const p = planDispatch(state({ self: ME, issues: [board(), issue(10, ["ready"])] }), cfg(), NOW);
   assert.equal(p.launches[0].spec.prompt.includes(`session_id ${ME}.`), true);
+});
+
+// ---- efficiency review 2026-10-30: findings 2, 7, 8, 9 ----------------------------------------------------------
+const recheckApi = (pull, commits = [], issueState = "open") => (p) =>
+  p.startsWith("pulls/20/commits") ? { json: commits } : p.startsWith("pulls/") ? { json: pull } : { json: { state: issueState } };
+const cont = { kind: "continue", number: 20 }, iss = { kind: "issue", number: 10 };
+const commitBy = (author, h) => ({ author: { login: author }, commit: { committer: { date: ago(h) } } });
+
+test("finding 7: a merged or closed PR, or a closed issue, is refused right before the launch line", () => {
+  const t0 = { now: NOW };
+  assert.equal(launchRecheck(cont, { api: recheckApi({ state: "closed", merged_at: ISO }), ...t0 }), "PR #20 is merged");
+  assert.equal(launchRecheck(cont, { api: recheckApi({ state: "closed" }), ...t0 }), "PR #20 is closed");
+  assert.equal(launchRecheck(iss, { api: recheckApi({}, [], "closed"), ...t0 }), "#10 is closed");
+  assert.equal(launchRecheck(cont, { api: recheckApi({ state: "open", user: { login: "brycejmurrin" } }), ...t0 }), "");
+  assert.equal(launchRecheck({ kind: "deploy-red", number: 0 }, { api: () => assert.fail("no read"), ...t0 }), "");
+  assert.equal(launchRecheck(cont, { api: () => ({ error: "boom" }), ...t0 }), "", "an unreadable PR never blocks a launch");
+});
+
+test("finding 7: a non-Claude author's push inside 60 min refuses a CONTINUE; Claude, the PR author, bots and older pushes do not", () => {
+  const open = { state: "open", user: { login: "brycejmurrin" } };
+  assert.equal(launchRecheck(cont, { api: recheckApi(open, [commitBy("cursoragent", 0.5)]), now: NOW }),
+    "cursoragent pushed PR #20 30 min ago (a non-Claude author, last 60 min)");
+  for (const [who, h] of [["cursoragent", 2], ["claude", 0.1], ["brycejmurrin", 0.1], ["dependabot[bot]", 0.1]])
+    assert.equal(launchRecheck(cont, { api: recheckApi(open, [commitBy(who, h)]), now: NOW }), "", who);
+});
+
+test("finding 7: applyPlan prints no CREATE_SESSION or RECORD_LAUNCH for a refused launch, and says why", () => {
+  const p = planDispatch(state({ prs: [pr(20, { updated_at: ago(3) })] }), cfg(), NOW);
+  const out = [];
+  applyPlan(p, { api: (path, o) => (o ? { json: {} } : path.startsWith("pulls/20") ? { json: { state: "closed", merged_at: ISO } } : { json: [] }), config: cfg(), log: (x) => out.push(x), now: NOW });
+  assert.equal(out.some((x) => x.startsWith("CREATE_SESSION") || x.startsWith("RECORD_LAUNCH")), false);
+  const skipLine = out.includes("= launch skipped for continue #20: PR #20 is merged");
+  assert.equal(skipLine, true);
+});
+
+test("finding 2: only holds, needs-decision and a land PR waiting on CI make the plan idle, and apply prints PAUSE_TRIGGER + RESUME", () => {
+  const waitingOnly = state({ prs: [pr(30, { labels: ["hold"], updated_at: ago(9) }), pr(31, { labels: ["needs-decision"], updated_at: ago(9) })] });
+  const p = planDispatch(waitingOnly, cfg(), NOW);
+  assert.equal(p.idle, true);
+  const out = [];
+  applyPlan(p, { api: () => ({ json: [] }), config: cfg({ triggerId: "trig_abc" }), log: (x) => out.push(x), now: NOW });
+  const pauseLine = out.includes("PAUSE_TRIGGER trig_abc");
+  assert.equal(pauseLine, true);
+  assert.equal(out.some((x) => x.startsWith("RESUME: ")), true);
+  const bare = [];
+  applyPlan(p, { api: () => ({ json: [] }), config: cfg(), log: (x) => bare.push(x), now: NOW });
+  const barePause = bare.includes("PAUSE_TRIGGER <trigger_id>");
+  assert.equal(barePause, true);
+});
+
+test("finding 2: anything a later wake could act on keeps the dispatcher awake", () => {
+  const idle = (on) => planDispatch(state(on), cfg(), NOW).idle;
+  assert.equal(idle({ prs: [pr(30)] }), false, "an ordinary open PR may go stale");
+  assert.equal(idle({ issues: [board(), dispatchIssue(), issue(10, ["ready"])] }), false, "a ready issue");
+  assert.equal(idle({ deployRed: true }), false);
+  assert.equal(idle({ quota: "allowed_warning" }), false);
+  assert.equal(idle({ sessionsComplete: false }), false);
+  assert.equal(idle({ issues: [board(), dispatchIssue(["dispatch:pause"])] }), false, "no wake would follow a Bryce pause");
+  assert.equal(idle({}), true, "an empty board is idle");
+  const redLand = pr(30, { labels: ["land"], mergeable_state: "dirty", checks: [], statuses: [] });
+  assert.equal(idle({ prs: [redLand] }), false, "a conflicting land PR may need a takeover");
+});
+
+test("finding 8: not-found get_session results are dropped and counted; other bad pages still throw", () => {
+  const good = JSON.stringify({ ccr: { id: "session_01AAAAAAAAAA", status: "idle", tags: [] } });
+  const r = readSessionPages([good, '{"error":"Session not found"}', "404 Not Found"]);
+  assert.equal(r.notFound, 2);
+  assert.deepEqual(r.sessions.map((x) => x.id), ["session_01AAAAAAAAAA"]);
+  assert.throws(() => readSessionPages(["garbage"]), (e) => e.message === "no JSON object in the page");
+});
+
+test("finding 8: fetchAll runs at most `cap` reads at once and skips a rejected one", async () => {
+  let live = 0, peak = 0;
+  const got = await fetchAll([1, 2, 3, 4, 5, 6, 3], async (n) => {
+    live++; peak = Math.max(peak, live);
+    await new Promise((r) => setTimeout(r, 5));
+    live--;
+    if (n === 4) throw new Error("x");
+    return [`c${n}`];
+  }, 3);
+  assert.equal(peak, 3);
+  assert.deepEqual([...got.keys()].sort(), [1, 2, 3, 5, 6]);
+});
+
+test("finding 8: --children --recent skips old work and reads the rest through the cache", async () => {
+  const calls = [];
+  const claim = { id: 1, user: { login: "x" }, body: "claims #7 — claude:session_01RECENT00001", created_at: ISO };
+  const api = (p) => {
+    calls.push(p);
+    if (p.startsWith("issues?state=open")) return { json: [{ number: 7, title: "t", labels: [{ name: "claimed" }], updated_at: ago(1) }, { number: 8, title: "old", labels: [{ name: "claimed" }], updated_at: ago(80) }] };
+    if (p.startsWith("issues/7/comments")) return { json: [claim] };
+    return { json: [] };
+  };
+  const log = [];
+  const fetched = [];
+  const rc = await childrenMain(["--children", "--recent", "24"], { api, log: (x) => log.push(x), read: () => "{}", now: () => NOW,
+    fetchOne: async (n) => (fetched.push(n), [claim]) });
+  assert.equal(rc, 0);
+  assert.deepEqual(fetched, [7], "the old issue is never read");
+  assert.equal(log[0], "GET_SESSION session_01RECENT00001");
+  assert.equal(log[1].includes("last 24 h"), true);
+  assert.equal(calls.some((c) => c.includes("pages.yml") || c.includes("/commits") || c.includes("check-runs")), false, "light mode reads no CI state");
+  assert.equal(main(["--children", "--recent", "0"], { api, log: () => {}, read: () => "{}", now: () => NOW }), 1);
 });
