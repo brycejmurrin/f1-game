@@ -1,5 +1,6 @@
 /* tool-hook-fixes.test.mjs — orchestration review 2026-10-29 fix 4: sync-pr/deploy merge staging, leftover sync branch,
    test-bg --grep, the stop-guard and protect-files hook papercuts, the generated sw.js required-lazy list. */
+import "../helpers/git-fixture-env.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
