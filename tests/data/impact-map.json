@@ -12450,6 +12450,26 @@
         "tests/unit/mechanics-integration-vm.test.mjs"
       ]
     },
+    "js/race/energy-plan.js": {
+      "fromStore": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "isNeutral": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "plan": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "setPlan": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "toggleFor": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "wantsFlip": [
+        "tests/unit/energy-plan.test.mjs"
+      ]
+    },
     "js/race/engineer.js": {
       "callFor": [
         "tests/unit/engineer.test.mjs",
