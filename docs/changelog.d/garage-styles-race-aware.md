@@ -1,0 +1,2 @@
+New: GARAGE ENTER & LEAVE has three STYLE quick-picks at the top: BROADCAST, CINEMA and DOCUMENTARY. Each one sets the cameras, movement, lighting and captions in one tap and keeps your crew and timing choices.
+New: The AFTER THE RACE return now reflects the race. A wet race comes home under RAIN DAY lighting and a night race under NEON NIGHT. The final caption shows your place, your name and FASTEST LAP when you set it, for example "P3 · NORRIS · PODIUM FINISH · FASTEST LAP". PREVIEW RACE in the tuner shows each look.

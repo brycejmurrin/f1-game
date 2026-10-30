@@ -1646,3 +1646,73 @@ test('BLENDER rigs keep their beats: a slow RETIRED push or a long shutter shot 
   assert.equal(Arrival.rigU(Arrival.settings({}), 'out', 3, 6), 0.5, 'the drive-out keeps t / duration');
 });
 
+
+// ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
+test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
+  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary']);
+  for (const id of Object.keys(Arrival.STYLES)) {
+    const v = Arrival.applyStyle({ enterCrew: 'current', speed: 2, door: 3.5 }, id);
+    assert.deepEqual([v.enterCrew, v.speed, v.door], ['current', 2, 3.5], `${id}: crews and timing stay the player's`);
+    for (const [k, want] of Object.entries(Arrival.STYLES[id].look)) if (k !== 'cue' && k !== 'light') assert.deepEqual(v[k], want, `${id}.${k}`);
+  }
+  for (const id of ['cinema', 'documentary']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
+  assert.equal(Arrival.styleOf(null), null, 'the shipped look is no style');
+  assert.deepEqual(Arrival.applyStyle(null, 'nope'), Arrival.settings(null), 'an unknown style is the saved settings');
+  assert.equal(Arrival.settings(null).race, 'dry', 'PREVIEW RACE defaults to the shipped dry look');
+});
+test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
+  const dom = makeDom(), doc = dom.document;
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {} }, CUES: ['lightsup'] } });
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
+  const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
+  const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
+  row('ga-enabled', 'input').type = 'checkbox';
+  const angle = row('ga-angle', 'select');
+  for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
+  row('ga-fov', 'input');
+  let saved = null;
+  const $ = (id) => doc.getElementById(id);
+  A.bindSettings($, { get: () => saved, set: (k, v) => { saved = v; } });
+  const bar = $('ga-styles');
+  assert.ok(bar, 'built in JS (index.html is at its shellNodes ceiling)');
+  const kids = rows.children;
+  assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
+  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY']);
+  $('ga-style-cinema').onclick();
+  assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
+  assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
+  $('ga-style-broadcast').onclick();
+  assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
+  assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
+});
+test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
+  const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });
+  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), ctx);
+  const A = vm.runInContext('GarageArrival', ctx);
+  const held = (extra) => { const c = Object.assign(A.settings({ result: 'podium' }), extra); return A.poseFor('home')(A.duration(c, 'home') - 0.01, c, false).label; };
+  assert.equal(held({ pos: 3, driver: 'Norris', fastest: true }), 'P3 · NORRIS · PODIUM FINISH · FASTEST LAP');
+  assert.equal(held({ pos: 3 }), 'P3 · PODIUM FINISH', 'no name known: the shipped title');
+  assert.equal(held({ result: 'dnf', pos: 14, driver: 'Norris', fastest: true }), 'NORRIS · RETIRED', 'a retirement has no place and no fastest lap');
+  const light = (race, result = 'win') => A.lightFor(Object.assign(A.settings({ result }), { race }), 'home');
+  assert.deepEqual([light('dry'), light('wet'), light('night'), light('wet', 'dnf')], ['showroom', 'rain', 'neon', 'rain']);
+  assert.equal(A.lightFor(A.settings({ result: 'win', race: 'wet', homeLight: 'broadcast' }), 'home'), 'broadcast', 'a picked mood wins');
+  assert.equal(A.lightFor(A.settings({ race: 'wet' }), 'in'), null, 'the pit-stop arrival keeps its own lighting');
+  assert.equal(A.settings({ race: 'storm' }).race, 'dry');
+});
+test('noteResult carries the race to the way home: driver, fastest lap, wet, night', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// AFTER THE RACE: endRace notes'), cam.indexOf('const arrivalCar'));
+  const player = { name: 'Lando Norris', best: 81.2 }, rival = { best: 81.9 }, out = { best: 80.1, retired: true };
+  const G = { player, trackIdx: 0, raceWeather: 'rain', raceTimeOfDay: 'default', store: { get: () => null } };
+  const c = vm.createContext({ GarageArrival: Arrival, G, endHome() {}, performance: { now: () => 1 }, Tracks: { LIST: [{ night: true }] },
+    RaceCeremony: { eligible: () => true }, LoadingScreen: { isAutomation: () => false }, arrival: { start() {} } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const note = vm.runInContext('noteResult', c);
+  const n = note([rival, player, out], {});
+  assert.deepEqual([n.driver, n.fastest, n.wet, n.night], ['Lando Norris', true, true, true], 'a retired car\'s quicker lap does not count');
+  G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
+  const d = note([rival, player], {});
+  assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
+});

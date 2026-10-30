@@ -6,7 +6,8 @@ const GarageArrival = (function () {
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
     afterRace: true, homeCrew: "auto", result: "win",
-    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto", slowmo: 0, sound: true, cue: "none", homeCue: "auto" });
+    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto", slowmo: 0, sound: true, cue: "none", homeCue: "auto",
+    race: "dry" });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
    * z +6.4): LEFT / RIGHT are the two shipped interior eyes; HIGH a ceiling
    * corner over the back-left (under the ceiling truss, whose 4.6 m beam filled
@@ -66,17 +67,60 @@ const GarageArrival = (function () {
     if (dir === "home" && (!v || v === "auto")) v = (RESULTS[c.result] || RESULTS.finish).cue || "none";
     return v && v !== "none" && v !== "auto" ? v : null;
   }
+  /* THE RACE'S LOOK, AFTER THE RACE: BY RESULT lighting reads the race first: a
+   * wet race comes home to RAIN DAY, a night race to NEON NIGHT, else the
+   * result's own mood. config.race is the real race's (start({ home })) or
+   * PREVIEW RACE's; DRY is the shipped look. */
+  const RACES = Object.freeze(["dry", "wet", "night"]);
+  const RACE_LIGHT = Object.freeze({ wet: "rain", night: "neon" });
   /** The mood a sequence plays under, or null for the garage's own. */
   function lightFor(config, dir) {
     const c = config || DEFAULT;
     let v = dir === "home" ? c.homeLight : c.light;
-    if (dir === "home" && (!v || v === "auto")) v = (RESULTS[c.result] || RESULTS.finish).light || "asset";
+    const raced = RACE_LIGHT[c.race];
+    if (dir === "home" && (!v || v === "auto")) v = raced && moodIds().includes(raced) ? raced : (RESULTS[c.result] || RESULTS.finish).light || "asset";
     return v && v !== "asset" && v !== "auto" ? v : null;
   }
   function resultKind(pos, out, sprint) {
     if (out) return "dnf";
     const p = Number(pos) | 0;
     return p === 1 ? "win" : p > 1 && p <= 3 ? "podium" : p > 3 && p <= (sprint ? 8 : 10) ? "points" : "finish";
+  }
+  /** The held AFTER THE RACE title: "P3 · NORRIS · PODIUM FINISH · FASTEST LAP".
+   *  The place and name only when start({ home }) knew them (never retired). */
+  function homeTitle(config, r) {
+    const parts = [];
+    if (Number.isFinite(config.pos) && config.pos > 0 && config.result !== "dnf") parts.push("P" + (config.pos | 0));
+    if (config.driver) parts.push(String(config.driver).toUpperCase());
+    parts.push(r.title);
+    if (config.fastest && config.result !== "dnf") parts.push("FASTEST LAP");
+    return parts.join(" · ");
+  }
+  /* STYLE: a whole look in one tap, above the rows (phone UX: 33 rows is a lot
+   * to scroll). Each is a partial settings object laid over the saved one, so
+   * crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
+   * BROADCAST: the TV pit-lane coverage — three locked-off cameras, broadcast
+   * light, captions. CINEMA: the Blender crane, a push and a slow door, the
+   * showroom mood under bars, no captions. DOCUMENTARY: a heavy handheld
+   * drifting through three cameras under the garage's own light. */
+  const STYLES = Object.freeze({
+    broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
+    cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "push", sway: 0.5, zoom: 12, fov: 48, light: "showroom", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
+    documentary: Object.freeze({ label: "DOCUMENTARY", look: { angle: "custom", shots: ["door", "low", "left"], move: "drift", sway: 2, zoom: 6, fov: 58, light: "asset", cue: "none", captions: true, bars: false, slowmo: 0 } }),
+  });
+  /** The saved settings with style `id`'s look laid over them. */
+  function applyStyle(value, id) {
+    const s = STYLES[id];
+    return settings(s ? Object.assign({}, settings(value), s.look, s.look.shots ? { shots: s.look.shots.slice() } : null) : value);
+  }
+  /** The style whose look the settings carry, or null. */
+  function styleOf(value) {
+    const v = settings(value);
+    for (const id of Object.keys(STYLES)) {
+      const want = applyStyle(v, id);   // normalized: a mood or cue this build lacks reads as settings() keeps it
+      if (Object.keys(STYLES[id].look).every((k) => k === "shots" ? want.shots.every((c, i) => v.shots[i] === c) : v[k] === want[k])) return id;
+    }
+    return null;
   }
   // THE CREWS each way: the shipped five, MIX (a different one every visit) and
   // the Blender-authored variants (GarageCrewChoreo.IDS, js/garage/crew-choreo.js).
@@ -142,7 +186,8 @@ const GarageArrival = (function () {
       slowmo: typeof v.slowmo === "number" && v.slowmo > 0 && v.slowmo < 1 ? Math.max(0.1, v.slowmo) : 0,
       sound: v.sound !== false,
       cue: v.cue === "none" || cueIds().includes(v.cue) ? v.cue : DEFAULT.cue,
-      homeCue: v.homeCue === "auto" || v.homeCue === "none" || cueIds().includes(v.homeCue) ? v.homeCue : DEFAULT.homeCue };
+      homeCue: v.homeCue === "auto" || v.homeCue === "none" || cueIds().includes(v.homeCue) ? v.homeCue : DEFAULT.homeCue,
+      race: RACES.includes(v.race) ? v.race : DEFAULT.race };
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
@@ -218,6 +263,7 @@ const GarageArrival = (function () {
     ["ga-light-home", "AFTER-RACE LIGHTING", () => [["auto", "BY RESULT"], ["asset", "AS THE GARAGE"]].concat(moodOpts())],
     ["ga-cue-home", "AFTER-RACE LIGHT CUE", () => [["auto", "BY RESULT"], ["none", "NONE"]].concat(cueOpts())],
     ["ga-result", "PREVIEW RESULT", [["win", "WIN"], ["podium", "PODIUM"], ["points", "POINTS"], ["finish", "FINISHED"], ["dnf", "RETIRED"]]],
+    ["ga-race", "PREVIEW RACE", [["dry", "DRY DAY"], ["wet", "WET · RAIN DAY LIGHT"], ["night", "NIGHT · NEON LIGHT"]]],
   ];
   const MOOD_TEXT = Object.freeze({ shipped: "STANDARD", goldenhour: "GOLDEN HOUR", rain: "RAIN DAY", neon: "NEON NIGHT" });
   const moodOpts = () => moodIds().map((id) => [id, MOOD_TEXT[id] || id.toUpperCase()]);
@@ -250,6 +296,19 @@ const GarageArrival = (function () {
     };
     after(angle.closest(".set-row"), AFTER_ANGLE);
     after(fov.closest(".set-row"), AFTER_FOV);
+    // STYLE: the quick-picks head the rows, before PLAY ANIMATIONS.
+    const first = $("ga-enabled") && $("ga-enabled").closest ? $("ga-enabled").closest(".set-row") : null;
+    if (first && first.parentNode) {
+      const bar = make("div", "ga-styles");
+      bar.id = "ga-styles"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Style");
+      bar.appendChild(make("span", "tune-label", "STYLE"));
+      for (const id of Object.keys(STYLES)) {
+        const b = make("button", "", STYLES[id].label);
+        b.type = "button"; b.id = "ga-style-" + id; b.setAttribute("aria-pressed", "false");
+        bar.appendChild(b);
+      }
+      first.parentNode.insertBefore(bar, first);
+    }
     // PREVIEW AFTER RACE joins PREVIEW PIT STOP / RACE START wherever they are
     // (EditorWorkspace moves the foot's actions into its tools fold).
     const out = $("ga-preview-out");
@@ -267,8 +326,11 @@ const GarageArrival = (function () {
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
       carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
       move: $("ga-move"), sway: $("ga-sway"), zoom: $("ga-zoom"), light: $("ga-light"), swell: $("ga-swell"),
-      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo"), sound: $("ga-sound"), cue: $("ga-cue"), homeCue: $("ga-cue-home") };
+      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo"), sound: $("ga-sound"), cue: $("ga-cue"), homeCue: $("ga-cue-home"),
+      race: $("ga-race") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
+    // STYLE quick-picks: one tap lays a look over the saved settings (save() is below; a click comes after).
+    for (const id of Object.keys(STYLES)) { const b = $("ga-style-" + id); if (b) b.onclick = () => save(applyStyle(read(), id)); }
     const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell", "slowmo"], CHECK = ["enabled", "afterRace", "captions", "bars", "sound"];
     // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
     // their own table, once: the static five stay index.html's.
@@ -289,6 +351,8 @@ const GarageArrival = (function () {
         else el.value = key === "hold" && value.hold === null ? "auto" : String(value[key]);
       }
       shotEls.forEach((el, i) => { if (el) el.value = value.shots[i]; });
+      const style = styleOf(value);
+      for (const id of Object.keys(STYLES)) { const b = $("ga-style-" + id); if (b && b.setAttribute) b.setAttribute("aria-pressed", String(id === style)); }
       // CUSTOM's three per-shot pickers only show under CUSTOM.
       const row = $("ga-shots-row");
       if (row) row.hidden = value.angle !== "custom";
@@ -486,7 +550,7 @@ const GarageArrival = (function () {
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
     const label = t < T.door ? "OPENING GARAGE"
       : r ? (t < T.door + T.lane + T.pause ? r.arrive : t < T.park ? r.park
-        : (Number.isFinite(config.pos) && config.pos > 0 && dir === "home" && config.result !== "dnf" ? "P" + (config.pos | 0) + " · " : "") + r.title)
+        : dir === "home" ? homeTitle(config, r) : r.title)
       : t < T.park ? "BRINGING CAR IN" : end > T.base && t < end - .5 ? "CREW SERVICING CAR" : "READY FOR WORK";
     // The shipped LEFT / RIGHT eyes keep their own framing; the new ones aim by aimAt.
     const aim = cam === "left" || cam === "right"
@@ -648,7 +712,8 @@ const GarageArrival = (function () {
       const home = opts && opts.home;
       dir = home ? "home" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
-      if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos });
+      if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
+        driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry" });
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
@@ -720,5 +785,5 @@ const GarageArrival = (function () {
     return m === "auto" && !!wet;
   }
   return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
-    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

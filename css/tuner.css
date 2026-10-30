@@ -1466,6 +1466,11 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 /* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
+/* STYLE quick-picks (js/garage/arrival.js buildRows): three 44px buttons over the rows; the active look is pressed. */
+#ga-styles { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin: 0 0 var(--gap); }
+#ga-styles > .tune-label { flex: 0 0 100%; }
+#ga-styles > button { flex: 1 1 0; min-height: 44px; min-width: 0; margin: 0; }
+#ga-styles > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
 }
 

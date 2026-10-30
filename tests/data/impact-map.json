@@ -7603,6 +7603,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "applyStyle": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "bindSettings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs"
@@ -7622,6 +7625,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "lightFor": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7661,6 +7667,9 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "step": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "styleOf": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "timeline": [
