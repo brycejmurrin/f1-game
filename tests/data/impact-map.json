@@ -5700,6 +5700,11 @@
         "tests/unit/share-code.test.mjs"
       ]
     },
+    "js/data/garage-departure-motion.js": {
+      "sample": [
+        "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
     "js/data/hub.js": {
       "buildPicker": [
         "tests/unit/real-race-script.test.mjs"
@@ -7739,6 +7744,20 @@
         "tests/unit/garage-crew.test.mjs"
       ]
     },
+    "js/garage/departure-wheels.js": {
+      "create": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "prepare": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "release": [
+        "tests/unit/garage-arrival.test.mjs"
+      ]
+    },
     "js/garage/experience.js": {
       "buildFacility": [
         "tests/unit/garage-mesh.test.mjs"
@@ -7871,6 +7890,7 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "release": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "saveData": [
@@ -8073,6 +8093,7 @@
         "tests/unit/scene-live.test.mjs"
       ],
       "draw": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-looks.test.mjs",
@@ -8124,6 +8145,7 @@
         "tests/unit/garage-personality.test.mjs"
       ],
       "prepare": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -8148,6 +8170,7 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "release": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -10773,6 +10796,9 @@
     "js/perf/render-rate.js": {
       "active": [
         "tests/unit/render-rate.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "force": [
         "tests/unit/render-rate.test.mjs"

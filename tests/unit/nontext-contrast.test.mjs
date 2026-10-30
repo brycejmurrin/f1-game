@@ -432,7 +432,7 @@ function themeGetter(flags, id, { keep = null } = {}) {
 // player's own choice of see-through, not a theme, so it is not modelled.
 const panelAt1 = (v) => v.replace(/calc\(([\d.]+%?) \* var\(--hud-panel-a-eff\)\)/g, "$1");
 const SCENES = { black: "#000000", asphalt: "#3a3a40", "mid-grey": "#808080" };
-const HC_PLATE = [hud, ':root[data-ui-contrast="high"] :is(.hud-box, #announce)', "background"];
+const HC_PLATE = [hud, ':root[data-ui-contrast="high"] .hud-box, :root[data-ui-contrast="high"] #announce', "background"];
 const SCOPE_SEL = ":is(#hud, #announce, #game-metrics)";
 const CASES = [
   { what: "radio card words", id: "#announce", ink: [hud, "#announce", "color"], plate: [hud, "#announce", "background"], hc: HC_PLATE },
