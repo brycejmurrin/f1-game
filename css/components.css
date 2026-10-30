@@ -124,10 +124,10 @@ dialog.screen[open] { display: grid; }
    hidden attribute, so they come back from `display: none`, which restarts an
    animation by itself and needs no allow-discrete plumbing. */
 @media (prefers-reduced-motion: no-preference) {
-  .screen.dim { animation: scrim-in 0.16s ease-out; }
+  .screen.dim { animation: scrim-in var(--dur-1) var(--ease-out); }
     /* no fill-mode: nothing may hold a dialog at zero opacity if the animation
      never runs — the sheet must be visible either way. */
-  .screen.dim > .sheet { animation: sheet-in 0.19s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  .screen.dim > .sheet { animation: sheet-in var(--dur-3) var(--ease-out); }
 }
 @keyframes scrim-in { from { opacity: 0; } }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }

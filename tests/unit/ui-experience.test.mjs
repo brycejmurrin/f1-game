@@ -55,7 +55,8 @@ test('pause context carries the career brief line from CareerExperience', () => 
 test('task doors retain canonical close and settings destinations', () => {
   const html=fs.readFileSync(new URL('../../index.html',import.meta.url),'utf8');
   for(const id of ['mb-watch','mb-practice','mb-photo','menu-explore','pm-strategy','pm-review','pm-photo','pm-checkpoint-save']) assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"[\s\S]*id="mb-garage"/);
+  // The shell ships TitleMenu.organize()'s groups (design pass 2c, #4240).
+  assert.match(html,/id="menu-primary"[\s\S]*id="mb-practice"[\s\S]*id="menu-garage"[\s\S]*id="mb-garage"[\s\S]*id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="menu-create"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-garage"/);
   assert.match(html,/id="mb-photo"[\s\S]*CAPTURE/);
