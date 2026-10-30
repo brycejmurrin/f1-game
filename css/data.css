@@ -383,7 +383,7 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 .dh-retry { padding: calc(var(--gap) * 2 / 3) var(--pad); min-height: var(--tap); }
 .dh-empty { padding: 30px var(--gap); text-align: center; color: var(--dim); font-size: var(--fs-4); }
 /* Meta ink: #6a6a75 / #7a7a85 were WCAG AA fails on the hub panel (~3.7:1 and
-   ~4.1–4.4:1 on --panel composites). --dim (#9a9aa8) clears 4.5:1 — same
+   ~4.1–4.4:1 on --panel composites). --dim clears 4.5:1 — same
    migration as --steel (steel-role.test.mjs). */
 .dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: var(--dim); text-align: right; }
 body[data-density="compact"] .dh-footnote {
@@ -858,7 +858,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
    driver green and the leading one red — while the lane-board pair fifty lines
    down, keyed on the identical expression, had it right. Keep them matched;
    delta-sign-colour asserts it. */
-.dh-gdelta.dh-pos { color: var(--slower); }   /* behind the compare reference */
+.dh-gdelta.dh-pos { color: var(--slower-ink); }   /* behind the compare reference */
 .dh-gdelta.dh-neg { color: var(--faster); }   /* ahead of it */
 
 /* ---------- live controls + sortable classification ---------- */
@@ -909,7 +909,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--dim);
 }
-.dh-laneboard-dl.dh-pos { color: var(--slower); }   /* behind the reference */
+.dh-laneboard-dl.dh-pos { color: var(--slower-ink); }   /* behind the reference */
 .dh-laneboard-dl.dh-neg { color: var(--faster); }   /* ahead of the reference */
 .dh-live-updated { font-size: var(--fs-2); color: var(--steel); margin-left: auto; }
 .dh-class-head { gap: 10px; }

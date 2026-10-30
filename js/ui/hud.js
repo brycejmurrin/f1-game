@@ -2086,7 +2086,7 @@ function updateHud(force, dtMs) {
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
         hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + signedFixed(delta) + "s");
-        hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower)");
+        hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower-ink)");
       } else {
         hText(els.gapA, player.lastLap ? "LAST " + G.fmtTime(player.lastLap) : "");
         hStyle(els.gapA, "color", "");

@@ -146,7 +146,7 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */
 #hud-pos[data-delta="up"] { color: var(--faster); }
-#hud-pos[data-delta="down"] { color: var(--slower); }
+#hud-pos[data-delta="down"] { color: var(--slower-ink); }
 @media (prefers-reduced-motion: no-preference) {
   #hud-pos[data-delta] { animation: pos-flash 0.5s ease-out; }
 }
@@ -162,7 +162,7 @@ body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: 
 body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-dark); text-shadow: none; }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
-body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower); }
+body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower-ink); }
 @media (orientation: landscape) {
   body:not(.desktop) .hud-bottom { background: var(--hud-strip-bg); border-radius: var(--r-xs);
     padding: calc(var(--gap) / 3) calc(var(--gap) * 5 / 6); box-shadow: inset 0 2px 0 var(--accent); }
@@ -562,7 +562,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
    COLOUR VISION (data-cvd) remaps them. Declared before the pit rules below,
    which win at equal specificity while the car is in the lane or the box. */
 #hud-tyre[data-temp="cold"] #hud-tyre-code { color: var(--sec-best); }
-#hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower); }
+#hud-tyre[data-temp="hot"] #hud-tyre-code { color: var(--slower-ink); }
 /* …and the SAME state in a channel that is not colour: blue vs red is the one
    pair a colour-vision deficiency and a bright sky both erase. */
 #hud-tyre[data-temp="cold"] #hud-tyre-code::after { content: "\2744"; font-style: normal; font-size: 0.8em; margin-left: 0.1em; }
@@ -570,7 +570,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 /* Live lap DELTA chip (static #hud-delta in .hud-top, index.html). */
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
-#hud-delta[data-sign="slow"] .hud-value { color: var(--slower); }
+#hud-delta[data-sign="slow"] .hud-value { color: var(--slower-ink); }
 #hud-delta[hidden] { display: none !important; }
 /* Ghost reference is a hollow ring, not only the faster/slower ink. */
 #hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
@@ -1261,7 +1261,7 @@ body:not(.desktop) #hud-sectors {
   color: var(--text);
 }
 #hud-limits.limits-warn { border-left-color: var(--flag-amber); color: var(--sec-slow); }
-#hud-limits.limits-hot { border-left-color: var(--slower); color: var(--slower); animation: pulse var(--hud-pulse) infinite; }
+#hud-limits.limits-hot { border-left-color: var(--slower); color: var(--slower-ink); animation: pulse var(--hud-pulse) infinite; }
 .limits-dots { letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
 
 /* Short local height (UI SIZE included): tighten HUD clusters so 200% HUD on
@@ -1572,7 +1572,7 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
    and never the plate, which is the team's and stays put. */
 #announce[data-kind="warning"] #announce-who,
 #announce[data-kind="penalty-warn"] #announce-who { color: var(--sec-slow); }
-#announce[data-kind="penalty-hit"] #announce-who { color: var(--slower); }
+#announce[data-kind="penalty-hit"] #announce-who { color: var(--slower-ink); }
 #announce[data-kind="coach"] #announce-who,
 #announce[data-kind="practice"] #announce-who { color: var(--faster); }
 /* The broadcaster (js/race/race-radio.js commentary): gold, the TV graphic's
@@ -2164,7 +2164,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-row.out { opacity: 0.5; }
 /* A place won or lost in the last few seconds: the colour is state (kept under reduced motion). */
 #bc-tower .bc-row[data-delta="up"] .bc-pos { color: var(--faster); }
-#bc-tower .bc-row[data-delta="down"] .bc-pos { color: var(--slower); }
+#bc-tower .bc-row[data-delta="down"] .bc-pos { color: var(--slower-ink); }
 /* A short phone screen: the top ten and the car on camera. */
 body[data-density="compact"] #bc-tower .bc-row:nth-child(n+11):not(.on) { display: none; }
 /* THE PICTURE-IN-PICTURE (js/render/shared/mirror-pass.js paints the second
@@ -2351,7 +2351,7 @@ body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { displ
 #hud-rel [data-k="lap"] { font-weight: 800; }
 #hud-rel > div[data-self] { background: color-mix(in oklab, var(--you) 26%, transparent); font-weight: 800; }
 /* A lap UP (lapping you) reads red, a lap DOWN blue — the "+1L" / "-1L" text says it first. */
-#hud-rel > div[data-lap="up"] { color: var(--slower); }
+#hud-rel > div[data-lap="up"] { color: var(--slower-ink); }
 #hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
 #hud-strat {
   left: calc(10px + var(--sal) / var(--hud-z));
@@ -2363,7 +2363,7 @@ body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { displ
 #hud-strat > div > span { color: var(--dim); letter-spacing: 0.06em; }
 #hud-strat [data-k="uc"] { color: var(--faster); font-weight: 800; }
 #hud-strat [data-k="uc"] > span { color: inherit; }
-#hud-strat [data-k="cov"] { color: var(--slower); font-weight: 800; }
+#hud-strat [data-k="cov"] { color: var(--slower-ink); font-weight: 800; }
 #hud-strat [data-k="cov"] > span { color: inherit; }
 #hud-inputs {
   left: calc(10px + var(--sal) / var(--hud-z));
