@@ -632,16 +632,34 @@
         const src = vis[0].geo;
         for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
       }
-      // Perf hunt 7 (census 41021778161: index 82 KB/f, a 1.18 MB createBuffer mid-race): an exact-size array
-      // re-created the index buffer at every new high-water set. Grow by half again, capped at the mesh's whole
-      // index, so a race reaches its peak in a few steps. Only a fresh array rewrites from 0; otherwise the
-      // leading chunks that did not change keep their bytes and the upload range starts at the first change.
+      // Perf hunt 7 (census 41021778161: index 82 KB/f of TLX WebGPU's uploads): only a fresh array rewrites from
+      // 0; otherwise the leading chunks that did not change keep their bytes and the upload range starts at the
+      // first change.
       let keep = 0;
       if (!s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor) {
-        let total = mesh._tlxMvTotal | 0;
-        if (!total) { for (const ch of mesh.chunks) { const ix = ch && ch.geo && ch.geo.index; if (ix) total += ix.count != null ? ix.count : ix.array.length; } mesh._tlxMvTotal = total; }
-        s.arr = new Ctor(Math.max(cnt, Math.min(total, Math.ceil((s.arr ? s.arr.length : 0) * 1.5))));
-        g.setIndex(new THREE.BufferAttribute(s.arr, 1));
+        // A regrowth takes 1.5x headroom (capped at the record's whole index count),
+        // so a widening view replaces the buffer O(log) times, not on every new high.
+        let cap = cnt;
+        if (s.arr && s.arr.constructor === Ctor) {
+          let tot = mesh._tlxIdxTotal;
+          if (!(tot > 0)) {
+            tot = 0;
+            for (const ch of mesh.chunks) { const ix = ch.geo && ch.geo.index; if (ix) tot += ix.count; }
+            mesh._tlxIdxTotal = tot;
+          }
+          cap = Math.max(cnt, Math.min(tot, Math.ceil(s.arr.length * 1.5)));
+        }
+        const old = g.index;
+        s.arr = new Ctor(cap);
+        const ia = new THREE.BufferAttribute(s.arr, 1);
+        // The vendor's narrow-index opt-in (PATCHES §20), as packIndex marks every
+        // chunk's own index: unmarked, three's WebGPU backend swaps ia.array for a
+        // Uint32 copy at creation, every later write below lands in the orphaned
+        // s.arr, and each changed visible set re-uploads the FIRST set's indices.
+        if (s.arr instanceof Uint16Array) ia.__apexUint16Index = true;
+        g.setIndex(ia);
+        // The replaced index's GPU buffer, now held by nothing but the GC.
+        if (old && ctx && ctx.releaseAttribute) ctx.releaseAttribute(old);
       } else for (const m = Math.min(s.n, n); keep < m && s.ids[keep] === vis[keep];) keep++;
       let o = 0, from = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       const dst = s.arr;

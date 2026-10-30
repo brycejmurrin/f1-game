@@ -8,7 +8,7 @@ Read when a CI notification or "N checks failing" banner arrives, `ci-watch` pri
 On every CI `system_notification` or native "N checks failing" banner, re-read the **current** tip, not the
 notification commit (two commands):
 
-    gh pr view <N> --json headRefOid -q .headRefOid   # no gh: pr-board.mjs --pr <N>, or MCP pull_request_read
+    gh api repos/brycejmurrin/f1-game/pulls/<N> -q .head.sha   # no gh: pr-board.mjs --pr <N>, or MCP pull_request_read
     node tools/ci/ci-watch.mjs --sha <that sha> --once
 
 After every push list all check runs on the head (ready-state jobs included) and read every failed log; on red name

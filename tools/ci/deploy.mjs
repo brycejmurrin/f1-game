@@ -521,6 +521,19 @@ export async function regenerateDerived(cwd = ROOT) {
   return dirty.split("\n").filter(Boolean).map((l) => l.slice(3));
 }
 
+/** Commit the merge in progress with EVERY regenerated file staged (the cures re-run generators after their own
+ *  `git add`, and the git pre-commit hook reads the working tree against the index: "guards: cache miss"). A failed
+ *  commit leaves the merge IN PROGRESS (MERGE_HEAD kept) and says how to finish it by hand. `g` is injectable. */
+export function commitMerge({ cwd = ROOT, g = git } = {}) {
+  must(g(["add", "-A"], { cwd }), "stage the regenerated files");
+  const r = g(["commit", "--no-edit", "-q"], { cwd });
+  if (r.code === 0) return;
+  const e = new Error(`merge commit failed (${(r.err || r.out || `exit ${r.code}`).split("\n")[0]}) — the merge is still in progress (MERGE_HEAD kept). ` +
+    "Recover: fix what the hook named, then `git add -A && git commit --no-edit` (timeout 300000); or `git merge --abort` to start over");
+  e.keepMerge = true;
+  throw e;
+}
+
 export async function mergeDeployTip() {
   assertMergeable("HEAD", `${REMOTE}/${DEPLOY_BRANCH}`);
   const before = git(["rev-parse", "HEAD"]).out.trim();
@@ -622,7 +635,7 @@ export async function mergeDeployTip() {
     must(git(["rm", "-q", "--cached", "--", ...builtF]), "untrack the built files (they stay gitignored)");
     did.push(`built files kept out of git (${builtF.join(", ")})`);
   }
-  must(git(["commit", "--no-edit", "-q"]), "merge commit");
+  commitMerge();
   await installIfLockMoved(before);
   // The cures above re-derive only the files that CONFLICTED; a derived file
   // that merged clean can be stale all the same (see regenerateDerived).
