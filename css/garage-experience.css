@@ -26,6 +26,20 @@
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) .cs-inspection > button {
     grid-column: 2; grid-row: 1 / span 2;
   }
+  /* Short landscape (design pass #3): the part list goes two-up, so 4 parts show where 1
+     did and wheels drops from 8.3 screens to 3.7. Any other child (the inspection card,
+     a heading, a note) spans both columns; the badge (name row > span) wraps rather than clipping. */
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options:not([aria-labelledby="cs-tab-livery"]):has(> [data-cs-opt]) {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--gap) * 0.5); align-content: start;
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options:not([aria-labelledby="cs-tab-livery"]):has(> [data-cs-opt]) > :not([data-cs-opt]) { grid-column: 1 / -1; }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options > [data-cs-opt] {
+    margin: 0; padding-block: calc(var(--gap) * 0.5);
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-options > [data-cs-opt] > div > div:first-child > span {
+    white-space: normal; max-width: 100%;
+  }
   #cs-options .cs-opt:focus-visible { outline-color: var(--red); outline-offset: calc(var(--gap) * 0.25); }
   /* Paint editor: ONE greyed look for every dependent row (pill and colour rows dimmed to
      0.38, pattern sliders to tuner.css's 0.75 — two looks for one state, audit D8), with the

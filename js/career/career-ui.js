@@ -43,6 +43,9 @@ function create(G) {
     root.querySelectorAll(".sel-label[id]").forEach((h) => {
       const a = el("a", "", h.textContent);
       a.href = `#${h.id}`;
+      // A guide heading is a fold's summary: the jump opens what it lands on.
+      const fold = h.closest("details");
+      if (fold) a.addEventListener("click", () => { fold.open = true; });
       nav.appendChild(a);
     });
   }
@@ -446,16 +449,21 @@ function create(G) {
   // BUDGET_MULT, OBJ_BONUS, Career.SLOTS, the free-agent asks), never typed out.
   // A guide that quotes the economy is a guide that goes stale the first time
   // the economy is tuned, and a wrong number here is worse than no number.
+  // Each section is a fold (design pass #3): its heading is the summary and the
+  // folds share a name, so one reads at a time and the guide opens as a list of
+  // its own contents — 4.5 screens at 844x390 where the open document was 19.
   function guideSection(title, paras) {
-    const frag = document.createDocumentFragment();
-    frag.appendChild(head(title, "cg-" + slug(title)));
+    const fold = el("details", "cr-card");
+    fold.setAttribute("name", "cg-fold");
+    const sum = el("summary", "sel-label", title);
+    sum.id = "cg-" + slug(title);
     const card = el("div", "cr-card cg-card");
     for (const p of paras) {
       if (Array.isArray(p)) card.appendChild(row(p[0], p[1]));
       else card.appendChild(el("p", "cg-p", p));
     }
-    frag.appendChild(card);
-    return frag;
+    fold.append(sum, card);
+    return fold;
   }
 
   const cr = (n) => `${I18n.n(n)} cr`;
@@ -751,6 +759,7 @@ function create(G) {
       "Your career car and your free-play car are separate builds. Nothing you do "
       + "here changes a Grand Prix or a Time Trial, and nothing there changes this.",
     ]));
+    if (body.firstElementChild) body.firstElementChild.open = true;
     fillContents("cg-contents", body);
     ScrollFade.refresh();
   }
