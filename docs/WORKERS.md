@@ -64,6 +64,12 @@ owner's relationship merely to make an issue launchable. Evidence and reproducib
    progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
    red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
 
+   The route, in this order: `node tools/ci/ship-pr.mjs --pr <n>` (runs ready-gate; on a pass prints the next two calls),
+   the GitHub MCP `update_pull_request` with `draft:false` (the hook allows it within 10 min of the receipt; older: re-run
+   ready-gate), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`. `land` on a draft does nothing
+   until the flip (`gate` reads "draft: flip ready first", with one comment per head). Removing and re-adding `land`
+   re-gates a stale `gate` by hand; `land.yml` also re-gates on a PR-body edit and on a schedule (the stale-gate sweep).
+
    How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
    job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
    `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
