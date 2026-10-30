@@ -227,10 +227,12 @@ function driveOutEngine(on) {
   }
 }
 function driveOutSound(pose, gap) {
-  if (!_outEngine || !(gap > 0)) { _outPrev = pose; return; }
-  const p = _outPrev; _outPrev = pose;
-  if (!p) return;
-  const v = Math.hypot(pose.x - p.x, pose.z - p.z) / Math.min(0.1, gap);   // m/s along the path
+  const p = _outPrev, dx = p ? pose.x - p.x : 0, dz = p ? pose.z - p.z : 0;
+  // The renderer fits this pose to the selected lane after audio samples it.
+  if (!p) _outPrev = { x: pose.x, z: pose.z };
+  else { p.x = pose.x; p.z = pose.z; }
+  if (!_outEngine || !(gap > 0) || !p) return;
+  const v = Math.hypot(dx, dz) / Math.min(0.1, gap);   // m/s along the path
   const s01 = Math.min(1, v / 12), rolling = v > 0.2;
   try {
     GameAudio.setEngine(rolling ? 0.22 + 0.35 * s01 : 0.12, 0, false, s01 * 0.2, 1,
@@ -798,6 +800,7 @@ let _seqMoodWas = null, _seqBars = false, _seqSound = false, _seqSoundAt = 0;
 const _seqCue = { id: null, t: 0 };   // the ctx.cue record, reused every frame
 function sequenceLook(p) {
   const on = !!(p && p.active), want = on && p.mood;
+  if (!on) { exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; }
   const sound = on && !!p.sound && p.engine !== false && !driveOut && !(preview && G.state === "race");
   if (sound && !_seqSound && !_outEngine) { driveOutEngine(true); _seqSound = _outEngine; _seqSoundAt = 0; }
   else if (!sound && _seqSound) { _seqSound = false; driveOutEngine(false); }
