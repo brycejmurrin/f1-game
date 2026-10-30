@@ -120,6 +120,7 @@ export function rosterOf() {
   add(MANIFEST.LAZY_XR || [], "LAZY_XR");
   add(MANIFEST.LAZY_CAM_EDITOR || [], "LAZY_CAM_EDITOR");
   add(MANIFEST.LAZY_CAREER_UI || [], "LAZY_CAREER_UI");
+  add(MANIFEST.LAZY_UI_PRESETS || [], "LAZY_UI_PRESETS");
   return out;
 }
 

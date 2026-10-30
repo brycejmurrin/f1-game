@@ -222,6 +222,7 @@ export function swOptionalFiles() {
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
+    ...(MANIFEST.LAZY_UI_PRESETS || []),
   ];
 }
 
@@ -250,6 +251,7 @@ function swOptionalBlock() {
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
+    ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -287,6 +289,7 @@ function rosterSource() {
     ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
+    ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
     ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
     // The build Worker's importScripts list, "@circuits" expanded in page order
     // so the worker's Tracks.LIST indexes exactly as the page's does.

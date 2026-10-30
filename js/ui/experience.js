@@ -16,7 +16,9 @@ const UiExperience = (function () {
 
   function raceBrief(G) {
     const p = G.player, t = G.track && G.track.def;
-    if (!p || !t) return { title: "SESSION PAUSED", detail: "Your session is held here." };
+    // Not "SESSION PAUSED": the sheet's own PAUSED heading sits right above it,
+    // and on a short landscape phone this line IS the card's visible header.
+    if (!p || !t) return { title: "NO RACE", detail: "Your session is held here." };
     const real = typeof RealRace !== "undefined" ? RealRace.status() : null;
     if (real && real.watch) {
       const replay = real.replay;

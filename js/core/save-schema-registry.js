@@ -85,6 +85,7 @@ const SaveSchemaRegistry = (function () {
     "gfxBackendProbe": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxDebug": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "inspector": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "bridgeToken": entry("js/agent/apex-bridge.js (device-only GitHub token for the phone bridge; never exported)", "raw", 1, "rawScalar"),
     "gpuCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag, #2964 Spector/webgl-lint)", "raw", 1, "rawScalar"),
     "gfxTlxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "gfxWgxFail": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

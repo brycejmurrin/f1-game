@@ -24,6 +24,11 @@ export const KINDS = ["merge", "ready"];
 export const WRITABLE_KINDS = Object.freeze(["ready"]);
 /** A receipt older than this is stale: the tip, CI or the body may have moved. 10 min (was 30, 2026-10-21 defect hunt rows 2+3): the hook has no API, so a MERGE-HOLD added after the gate, or a push after a ready-gate, is only caught by the receipt aging out. */
 export const MAX_AGE_MIN = 10;
+/** A ready receipt the hook can tie to the PR's LIVE head AND the hash of its Plan section (`planHash`, written by
+ *  ready-gate) stays valid while both are unchanged: a push or a Plan edit invalidates it, so the clock is only a
+ *  backstop (24 h). One worker's flip was denied at 11 min on an unchanged head (efficiency review 2026-10-30 #6).
+ *  Without a live head or Plan hash the receipt cannot be tied to anything, so MAX_AGE_MIN still applies. */
+export const BOUND_MAX_AGE_MIN = 24 * 60;
 /** A receipt dated further ahead than this is refused (audit 4 redteam-gates G5/G7, redteam-hooks R3: one dated 2099
  *  never aged out). Clock skew between a gate and its hook is seconds; launch-gate.py already allows the same 60 s. */
 export const MAX_FUTURE_S = 60;
@@ -132,7 +137,7 @@ const hex = (s) => String(s || "").trim().toLowerCase();
  * Either kind: `at` no more than MAX_FUTURE_S ahead of `now`.
  * @returns {{ ok: boolean, why: string }}
  */
-export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(), maxAgeMin = MAX_AGE_MIN } = {}) {
+export function receiptVerdict(receipt, { kind, pr, head = "", plan = "", now = Date.now(), maxAgeMin = MAX_AGE_MIN } = {}) {
   const tool = kind === "merge" ? "merge-gate" : "ready-gate";
   const n = Number(pr);
   if (!Number.isInteger(n) || n < 1) return { ok: false, why: "no PR number in the call" };
@@ -142,10 +147,19 @@ export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(),
   const at = Date.parse(receipt.at || "");
   if (!at) return { ok: false, why: `the ${tool} receipt for #${n} has no timestamp; re-run the gate` };
   if (at - now > MAX_FUTURE_S * 1000) return { ok: false, why: `the ${tool} receipt for #${n} is dated ${Math.round((at - now) / 1000)} s in the future (max ${MAX_FUTURE_S}): a receipt is written by the gate, never by hand; re-run the gate` };
-  const ageMin = (now - at) / 60000;
-  if (ageMin > maxAgeMin) return { ok: false, why: `the ${tool} receipt for #${n} is ${Math.round(ageMin)} min old (max ${maxAgeMin}); re-run the gate on the current head` };
+  // A ready receipt is tied to the live head and Plan (`plan` = planHash of the PR body now): which of head / Plan /
+  // age failed is named, in that order.
   const pin = headPinProblem(head, receipt.head);
   if (kind === "ready" && hex(head) && pin) return { ok: false, why: `the PR head is ${hex(head).slice(0, 12)}, but ready-gate passed on ${hex(receipt.head).slice(0, 12)}: re-run ready-gate on the current head` };
+  const live = hex(plan);
+  const bound = kind === "ready" && hex(head) && live && receipt.planHash;
+  if (kind === "ready" && hex(head) && live) {
+    if (!receipt.planHash) return { ok: false, why: `the ready-gate receipt for #${n} records no Plan hash (written by an older gate): re-run ready-gate` };
+    if (hex(receipt.planHash) !== live) return { ok: false, why: `the PR's Plan section changed since ready-gate passed on it (Plan ${hex(receipt.planHash).slice(0, 12)} then, ${live.slice(0, 12)} now): re-run ready-gate` };
+  }
+  const limit = bound ? BOUND_MAX_AGE_MIN : maxAgeMin;
+  const ageMin = (now - at) / 60000;
+  if (ageMin > limit) return { ok: false, why: `the ${tool} receipt for #${n} is ${Math.round(ageMin)} min old (max ${limit}${bound ? ", the backstop for an unchanged head and Plan" : ""}); re-run the gate on the current head` };
   if (kind === "merge") {
     if (!hex(head)) return { ok: false, why: `pin expectedHeadSha to the gated head ${hex(receipt.head).slice(0, 12)} (a merge is pinned to the sha the gate passed)` };
     if (pin) return { ok: false, why: `expectedHeadSha ${hex(head).slice(0, 12)} is not the gated head ${hex(receipt.head).slice(0, 12)}; re-run merge-gate on the head you merge` };

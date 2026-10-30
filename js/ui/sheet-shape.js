@@ -641,9 +641,36 @@ window.SheetShape = (function () {
      settle ask below is what closes that half; the unit test pins it. */
   const SETTLE_MS = [250, 700, 1500];
   let settleTimers = [];
+  /* FOCUS FOLLOWS THE ROTATION (UI hunt 2026-10-29 #12). A layer's scroller
+     keeps its scrollTop while a resize reflows it (CAREER 844x390 → portrait:
+     #cr-body grew 765→1374 px at scrollTop 25), stranding the focused control
+     outside the scroller. Here, not per screen: this settle runs on every
+     resize/rotation AND at the iOS late-settle times; TopModal has no resize
+     hook and ScrollFade's settle ends before iOS's rotation does. Only the
+     nearest scroller moves, and only when focus is outside its box.
+     ONCE PER VIEWPORT SIZE: the late settles land at a size already handled,
+     and by then the player may have scrolled on purpose — snapping focus back
+     fought that scroll (photo-studio-conditions retried on exactly this). */
+  let focusKeptAt = "";
+  function keepFocusVisible() {
+    const size = innerWidth + "x" + innerHeight;
+    if (size === focusKeptAt) return;
+    focusKeptAt = size;
+    const el = document.activeElement, UL = window.UiLayers;
+    const layer = el && el.scrollIntoView && UL && UL.top && UL.top();
+    if (!layer || el === layer || !layer.contains(el)) return;
+    for (let p = el.parentElement; p; p = p === layer ? null : p.parentElement) {
+      const oy = p.scrollHeight - p.clientHeight > 1 && getComputedStyle(p).overflowY;
+      if (oy !== "auto" && oy !== "scroll") continue;
+      const a = el.getBoundingClientRect(), b = p.getBoundingClientRect();
+      if (a.top < b.top - 1 || a.bottom > b.bottom + 1) el.scrollIntoView({ block: "nearest" });
+      return;
+    }
+  }
   function settleViewport() {
     reclassify();
     applyKeyboard();
+    keepFocusVisible();
     /* ScrollFade's own settle is 120/400 ms — shorter than iOS's rotation
        animation — so a late shape flip would leave sf-* / thumb tokens on
        the pre-rotation boxes. Poke it whenever we re-ask. */
