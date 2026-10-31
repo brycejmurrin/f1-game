@@ -271,17 +271,20 @@ test("profile child modes preserve numeric exits and reject signal or spawn fail
     const invoke = (mode, arg, env = process.env) => spawnSync(process.execPath,
       [cli, arg, "--mode", mode], { cwd: dir, env, encoding: "utf8", timeout: 3000 });
     for (const mode of ["cpu", "hitch"]) {
+      const script = mode === "cpu" ? "tools/shot/profile-gameloop.mjs" : "tools/gfx/frame-hitch.mjs";
       for (const code of [0, 7]) {
         const r = invoke(mode, String(code));
-        assert.equal(r.status, code, `${mode} numeric exit: ${r.stderr}`);
-        assert.match(r.stderr, /inert profiler diagnostic/, "child stderr remains inherited");
+        assert.deepEqual({ status: r.status, stderr: r.stderr },
+          { status: code, stderr: "inert profiler diagnostic\n" }, `${mode} preserves the complete numeric-exit outcome`);
       }
       const signalled = invoke(mode, "signal");
-      assert.notEqual(signalled.status, 0, `${mode}: a signalled child must not report success`);
-      assert.match(signalled.stderr, /SIGTERM/, "the terminal diagnostic names the signal");
+      assert.deepEqual({ status: signalled.status, stderr: signalled.stderr },
+        { status: 1, stderr: `inert profiler diagnostic\nprofile child ${script} terminated by SIGTERM\n` },
+        `${mode} reports the complete signalled-child outcome`);
       const missing = invoke(mode, "0", { ...process.env, PATH: dir });
-      assert.notEqual(missing.status, 0, `${mode}: failed node spawn must not report success`);
-      assert.match(missing.stderr, /ENOENT/, "spawn failure is visible in the terminal diagnostic");
+      assert.deepEqual({ status: missing.status, stderr: missing.stderr },
+        { status: 1, stderr: `profile child ${script} failed: spawnSync node ENOENT\n` },
+        `${mode} reports the complete failed-spawn outcome`);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

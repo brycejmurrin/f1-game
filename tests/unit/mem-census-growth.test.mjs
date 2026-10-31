@@ -35,7 +35,7 @@ test("race-cycle slope requires finite post-warm heap and audio observations", (
       rows[cycle][field] = value;
       const result = postWarmSlope(rows);
       assert.equal(result.ok, false, `${cycle}:${field}=${String(value)} is unavailable, not a pass`);
-      assert.match(result.reason, /finite.*heap.*audio/i);
+      assert.equal(result.reason, "finite nonnegative post-warm heap and audio observations required");
     }
   }
 });
