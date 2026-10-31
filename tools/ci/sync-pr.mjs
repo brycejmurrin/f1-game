@@ -10,7 +10,7 @@
 //   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
 //   node tools/ci/sync-pr.mjs <branch> --stop                    # stop that branch's running sync (whole process tree; no pkill -f)
-//   --wait-load=<min>  wait up to N min (default 10) for loadavg < 2.8 instead of refusing at once (0 = refuse at once)
+//   --wait-load=<min>  wait up to N min (default 9, max 590 s) for loadavg < 2.8 (0 = refuse at once)
 //
 // STAGED, TIMED, DIFF-AWARE VERIFY (#2186, 2026-10-15). It ran tooling-fast at
 // --jobs=1 and EVERY ci.yml node suite (game-vm-a/b1/b2, vm-page, node-slow …)
@@ -60,6 +60,7 @@ import { needsSync, verdictLine } from "./needs-sync.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 import { gitRun, gitMust } from "../lib/git-run.mjs";
 import { register, release, stop as stopRun } from "../lib/run-pid.mjs";
+import { capForeground, FOREGROUND_CAP_SEC } from "./wait-for.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -68,6 +69,27 @@ const opt = (n) => { const a = argv.find((x) => x.startsWith(`${n}=`)); return a
 const branch = argv.find((a) => !a.startsWith("--"));
 const REMOTE = "origin";
 const log = (m) => process.stderr.write(`[sync-pr] ${m}\n`);
+
+/** Keep the synchronous wait inside wait-for's foreground safety cap. Never clamp an explicit duration. */
+export function loadWaitMinutes(value = null) {
+  const minutes = value === null ? Math.floor(FOREGROUND_CAP_SEC / 60) : Number(value);
+  if (value === "" || !Number.isFinite(minutes) || minutes < 0)
+    throw new Error("--wait-load needs a finite non-negative number of minutes (0 refuses at once)");
+  const cap = capForeground(minutes, false);
+  if (cap.error) throw new Error(`--wait-load exceeds the ${FOREGROUND_CAP_SEC} s foreground cap; choose a shorter duration (nothing waited)`);
+  return minutes;
+}
+
+/** No fetch or verification may follow a waiter that failed, was refused, or timed out. */
+export function waitForLoad(waitMin, { load = () => os.loadavg()[0], run = spawnSync, report = log } = {}) {
+  const current = load();
+  if (waitMin === 0 || current < 2.8) return { ok: true };
+  report(`loadavg ${current.toFixed(2)} >= 2.8 — waiting up to ${waitMin} min for it to drop`);
+  const r = run(process.execPath, ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
+  if (r.status === 0 && !r.error && !r.signal) return { ok: true };
+  return { ok: false, error: r.status === 124 ? `load did not drop below 2.8 within ${waitMin} min` :
+    `load waiter failed (${r.error?.message || r.signal || `exit ${r.status ?? "unknown"}`}); nothing synced` };
+}
 
 // The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
 function git(args, opts = {}) { return gitRun(args, { cwd: ROOT, ...opts }); }
@@ -131,7 +153,7 @@ export const USAGE = [
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
-    "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 10) for loadavg < 2.8, 0 refuses at once",
+    "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 9, max 590 s) for loadavg < 2.8, 0 refuses at once",
     "  An unknown --flag prints this usage and exits 2, before any fetch.",
   ].join("\n");
 
@@ -204,15 +226,13 @@ export async function main() {
   if (flag("--stop")) {
     return stopRun(lockName).then((r) => { log(r.state === "stopped" ? `stopped pid ${r.pid} (${r.killed} processes)` : r.state === "stale" ? `the registered sync (pid ${r.pid}) is already gone` : `no registered sync for ${branch}`); return 0; });
   }
+  const waitMin = loadWaitMinutes(opt("--wait-load"));
   const lock = register(lockName);
   if (!lock.ok) { log(`REFUSED: another sync of ${branch} is running here (pid ${lock.pid}); wait, or stop it with: node tools/ci/sync-pr.mjs ${branch} --stop`); return 3; }
   process.on("exit", () => release(lockName));
   // A busy box is a reason to wait, not to refuse (#2663: refused at 4.14 on a box that was idle seconds later).
-  const waitMin = opt("--wait-load") === null ? 10 : Math.max(0, +opt("--wait-load") || 0);
-  if (waitMin > 0 && os.loadavg()[0] >= 2.8) {
-    log(`loadavg ${os.loadavg()[0].toFixed(2)} >= 2.8 — waiting up to ${waitMin} min for it to drop`);
-    spawnSync("node", ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
-  }
+  const loadWait = waitForLoad(waitMin);
+  if (!loadWait.ok) { log(`REFUSED: ${loadWait.error}`); return 3; }
 
   let resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");

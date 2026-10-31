@@ -24,6 +24,10 @@
   },
   "tools": [
     "apex_claude_agents",
+    "apex_inbox_sync",
+    "apex_inbox_list",
+    "apex_inbox_get",
+    "apex_inbox_status",
     "apex_diagnostics",
     "apex_garage_plan",
     "apex_ui_mission_plan",
