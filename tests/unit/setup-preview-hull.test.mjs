@@ -23,6 +23,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -199,4 +200,33 @@ test("the hull key ignores the livery id and keeps every input that can move a v
   assert.notEqual(k("ferrari", "x", "16", { finShape: "swept" }), k("ferrari", "x", "16", { finShape: "stub" }), "an enum outline");
   const src = readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
   assert.match(src, /const hullKey = hullKeyOf\(/, "getSetupPreviewMesh keys the hull through hullKeyOf");
+});
+
+// previewKey runs 2x per Home frame; its partsVisualKey resolves the whole setup.
+// Executes the real previewKey/spMeshBust with a counting resolver (perf hunt 9).
+test("previewKey resolves the setup once across unchanged frames; a store write or a bust recomputes", () => {
+  const source = readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
+  const team = { id: "haas", engine: "ferrari", drivers: [{ num: 20, code: "MAG" }] };
+  let resolves = 0, parts = { aero: "medium", engine: "stock" };
+  const store = { rev: 1 };
+  const G = { teamIdx: 0, driverIdx: 0, livDraftOverride: null, getLiveryId: () => "default" };
+  const Parts = { legalityKey: () => "" };
+  const partsVisualKey = (id) => { resolves++; return Object.values(parts).join("|") + "|L:" + G.getLiveryId(id); };
+  const make = new Function("Teams", "G", "garageSeat", "seatTag", "partsVisualKey", "Parts", "GameStore", "Career", "getTeamParts", "GarageScene", "performance",
+    "let _spMeshKey = '', _flapBustAt = 0; const _pk = { now: [], was: [], val: null };\n"
+    + fnSource(source, "function previewKey()") + "\n" + fnSource(source, "function spMeshBust()") + "\nreturn { previewKey, spMeshBust };");
+  const cam = make({ LIST: [team] }, G, () => team.drivers[0], (t, seat) => String(seat && seat.num), partsVisualKey, Parts,
+    { store }, { inCareer: () => false, data: () => null }, () => parts, { dropPreviewMeshes() {} }, { now: () => 0 });
+  let key = "";
+  for (let i = 0; i < 60; i++) key = cam.previewKey();
+  assert.ok(resolves <= 1, `60 frames resolved the setup ${resolves} times`);
+  assert.equal(key, "haas:medium|stock|L:default:20");
+  store.rev++;   // a GameStore write (store.set) bumps the revision
+  cam.previewKey();
+  assert.equal(resolves, 2, "a store write recomputes");
+  parts = { ...parts, aero: "high" };
+  assert.equal(cam.previewKey(), "haas:high|stock|L:default:20", "a new part id recomputes even without a store write");
+  const n = resolves;
+  cam.spMeshBust(); cam.previewKey();
+  assert.equal(resolves, n + 1, "spMeshBust clears the memo");
 });

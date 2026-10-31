@@ -298,12 +298,14 @@ function flapRig() {
     draw: (mesh, mat, opts) => draws.push({ mesh, mat: Array.from(mat), opts }),
   };
   M.CarMesh.init(gfx);
-  const st = { col: [0.8, 0.1, 0.1], finish: null };
-  const draw = new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarMaterials",
+  const st = { col: [0.8, 0.1, 0.1], finish: null }, calls = { resolves: 0 };
+  // The helpers as CustomLiveries ships them: wingColorOf resolves the livery itself, wingColorOfLivery takes one.
+  const resolveLivery = () => { calls.resolves++; return { finish: st.finish, wingFinish: st.wingFinish }; };
+  const draw = new Function("wingColorOf", "wingColorOfLivery", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarMaterials",
     symbolSource("function drawAeroFlaps(") + "\nreturn drawAeroFlaps;")(
-    () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), () => ({ finish: st.finish, wingFinish: st.wingFinish }),
+    (team) => (resolveLivery(team), st.col), () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), resolveLivery,
     M.Car3D, M.CarMesh, gfx, new Float32Array(16), M.CarMaterials);
-  return { M, made, draws, freed, draw, st };
+  return { M, made, draws, freed, draw, st, calls };
 }
 const FLAP_TEAM = { id: "t" }, FLAP_PAINT = { paint: 1 }, FLAP_LVL = 2;
 const yaw = 0.7, FLAP_MAT = new Float32Array([Math.cos(yaw), 0, -Math.sin(yaw), 0, 0, 1, 0, 0,
@@ -600,4 +602,20 @@ test("farBody: the decimated silhouette body past FAR_BODY_M, sticky, never when
   // a 18 deg tele lens makes the same camera distance look nearer: 300 m there is ~100 m at the reference lens
   assert.equal(L.farBody(at(300), 18 * Math.PI / 180), false);
   assert.equal(loadLod(0).FieldLod.farBody(at(900), 1.05), false, "apex26.fieldLod = 0 restores the legacy draw");
+});
+
+// ---- perf hunt 9 (#4270 §7 survey): one livery resolve and no key string per drawn car -------------------------
+test("drawAeroFlaps resolves the livery once per car, and a warm flap-set hit builds no `finish|surface` key string", () => {
+  const r = flapRig();
+  r.draw(FLAP_TEAM, FLAP_LVL, 0, FLAP_MAT, FLAP_PAINT, null, null, true);   // warm: the set and its keys are built
+  r.calls.resolves = 0;
+  const RealmMap = new (r.M.Car3D.aeroFlaps.constructor)("return Map.prototype")();
+  const get = RealmMap.get;
+  let finKeys = 0;
+  // Counts lookups by the bare `finish|surface` key form (the memoised base and rear keys carry more fields).
+  RealmMap.get = function (k) { if (typeof k === "string" && /^[^|]*\|(paint|carbon)$/.test(k)) finKeys++; return get.call(this, k); };
+  try { for (let i = 0; i < 100; i++) r.draw(FLAP_TEAM, FLAP_LVL, 0, FLAP_MAT, FLAP_PAINT, null, null, true); }
+  finally { RealmMap.get = get; }
+  assert.equal(r.calls.resolves, 100, "one resolveLivery per draw (was 2: wingColorOf resolved it again)");
+  assert.equal(finKeys, 0, "no per-call `finish|surface` lookup key (was 2 per draw: base and rear-paint keys)");
 });

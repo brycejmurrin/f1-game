@@ -4062,7 +4062,7 @@ pair is a new RenderObject, and building its pipeline calls
 _getVertexFormat(e){const{itemSize:t,normalized:r}=e,s=e.array.constructor, ...
 ```
 
-— the r185 vendored `three.webgpu.min.js` (now `vendor/three-0.186.1/`), no null guard.
+— the r185 vendored `three.webgpu.min.js` (now `vendor/three-0.187.0/`), no null guard.
 `createShaderVertexBuffers` reads `s.array.constructor` on the same object.
 So `null.constructor` throws, both rungs burn in one frame, and the ladder
 lands on `refuseTab()`.
@@ -5181,7 +5181,7 @@ Investigation only — no game code changed. Web research (utsubo "100 tips" r18
 three.js #30560, the BundleGroup docs, threejsroadmap "Profiling WebGPU") checked
 against the vendored r186 and `js/render/three/`.
 
-**Facts established from the r186 source** (`vendor/three-0.186.1/three.webgpu.min.js`):
+**Facts established from the r186 source** (`vendor/three-0.187.0/three.webgpu.min.js`):
 
 - Outside `compileAsync()` the WebGPU backend calls the blocking
   `device.createRenderPipeline`; `createRenderPipelineAsync` is reached only with a

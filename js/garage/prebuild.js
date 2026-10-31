@@ -294,10 +294,16 @@ const GaragePrebuild = (function () {
     if (typeof MenuSheetGate !== "undefined" && MenuSheetGate.watch) {
       unwatch = MenuSheetGate.watch(gate, { noisy }) || unwatch;
     }
+    // Away from the menu (a race, the results) the 1 s poll does no work: no
+    // DOM reads, no sheet query. It stamps the quiet clock once on leaving and
+    // once on coming back, so the title's first seconds still count as noisy.
+    let away = false;
     function tick() {
       timer = setTimeout(tick, POLL_MS);
+      if (G.state !== "menu") { if (!away) { away = true; noisy(); } return; }
+      if (away) { away = false; noisy(); }
       if (surface() !== "title" || sheetOpenNow()) noisy();
-      if (running || G.state !== "menu" || sheetOpenNow()) return;
+      if (running || sheetOpenNow()) return;
       // Phones: never start a title prebuild, and free one already held so the
       // idle menu does not keep ~11 MB (PERF item 13). Race settings still runs.
       if (env("title").phoneHold) {

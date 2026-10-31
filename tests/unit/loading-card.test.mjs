@@ -558,7 +558,11 @@ test("the skip hint is a run-phase pseudo-element that waits ~3 s — no new she
   assert.ok(rule, "the hint rule is keyed on the run phase");
   assert.match(rule[1], /content:\s*"[^"]*RACE[^"]*"/i);
   assert.match(rule[1], /opacity:\s*0\b/, "hidden until its fade");
-  assert.match(rule[1], /animation:[^;]*\b3s\b/, "fades in after ~3 s");
+  // The delay is pinned !important: both reduced-motion backstops (tokens.css,
+  // responsive.css) zero animation-delay, and the hint must still wait its turn.
+  assert.ok(/animation-delay:\s*3s\s*!important/.test(rule[1])
+    && /:root\[data-motion="reduce"\][^{]*\{[^}]*animation-delay:\s*0s\s*!important/.test(read("css/responsive.css")),
+    "fades in after ~3 s under reduced motion too, while MOTION: REDUCED zeroes every other delay like the OS backstop");
   assert.ok(!/data-phase="(card|hold)"\] #ld-card::after/.test(css), "no hint on the card fallback or the editor's hold");
   assert.ok(!/id="ld-(skip|hint)"/.test(read("index.html")), "the hint must not be a DOM node — shellNodes is at its ceiling");
 });

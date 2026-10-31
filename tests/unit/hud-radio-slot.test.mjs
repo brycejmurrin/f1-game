@@ -198,6 +198,79 @@ test("LiveRegion speaks inside the topmost open modal, through an empty polite t
   assert.equal(settings.kids.length, 1, "the twin is made once per modal");
 });
 
+// RESTART from the pause dialog calls LiveRegion.reset while #pausemenu is still
+// :modal (clearMenuScreens runs later). region() then owns the twin, so the
+// last race call stayed in #announce-live for browse mode. A dialog that opens
+// or closes during the 60 ms beat must not leave the line on the node that
+// just became inert.
+function liveModalHarness() {
+  const timers = [];
+  let seq = 0;
+  const node = (tag) => ({ tagName: tag, attrs: {}, kids: [], textContent: "",
+    setAttribute(k, v) { this.attrs[k] = v; }, appendChild(n) { this.kids.push(n); return n; },
+    querySelector(sel) { return sel === ":scope > [data-announce-modal]" ? this.kids.find((k) => "data-announce-modal" in k.attrs) || null : null; } });
+  const page = node("div");
+  const dialogs = [];
+  let modals = [];
+  const sb = {
+    document: {
+      getElementById: (id) => (id === "announce-live" ? page : null),
+      querySelectorAll: (sel) => {
+        if (sel === ":modal") return modals.slice();
+        if (sel === "[data-announce-modal]") return dialogs.map((d) => d.querySelector(":scope > [data-announce-modal]")).filter(Boolean);
+        return [];
+      },
+      createElement: (t) => node(t),
+    },
+    setTimeout: (fn) => { timers.push({ id: ++seq, fn }); return seq; },
+    clearTimeout: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); },
+    performance: { now: () => 0 },
+  };
+  vm.runInNewContext(read("js/ui/live-region.js") + ";this.LiveRegion=LiveRegion;", sb, { filename: absSrc("js/ui/live-region.js") });
+  const fire = () => { const t = timers.shift(); if (t) t.fn(); };
+  return { L: sb.LiveRegion, page, dialogs, timers, fire, node, setModals: (m) => { modals = m; } };
+}
+
+test("LiveRegion.reset clears the page region while a dialog still owns the twin", () => {
+  const h = liveModalHarness();
+  const pause = h.node("dialog");
+  h.dialogs.push(pause);
+  h.setModals([pause]);
+  h.L.say("Gears is unavailable", "save");
+  h.fire();
+  const twin = pause.querySelector(":scope > [data-announce-modal]");
+  assert.equal(twin.textContent, "Gears is unavailable");
+  h.page.textContent = "RACE CONTROL: SAFETY CAR";
+  h.L.reset();
+  assert.equal(h.page.textContent, "", "the race call is gone from #announce-live, not only from the dialog twin");
+  assert.equal(twin.textContent, "", "the twin does not keep the settings line for the next open");
+  assert.equal(h.timers.length, 0, "a beat still in flight cannot rewrite the region after reset");
+  h.setModals([]);
+  const closed = h.node("dialog");
+  h.dialogs.push(closed);
+  const stale = h.node("div");
+  stale.setAttribute("data-announce-modal", "");
+  stale.textContent = "P3, gap 1.2 seconds";
+  closed.appendChild(stale);
+  h.L.reset();
+  assert.equal(stale.textContent, "", "a twin inside a dialog that has already closed is cleared too");
+});
+
+test("LiveRegion retargets a line when a dialog opens during the clear-then-write beat", () => {
+  const h = liveModalHarness();
+  const settings = h.node("dialog");
+  h.dialogs.push(settings);
+  h.L.say("RACE CONTROL: SAFETY CAR", "flag");
+  assert.equal(h.page.textContent, "", "the beat starts on the page region");
+  h.setModals([settings]);
+  h.fire();
+  h.fire();
+  const twin = settings.querySelector(":scope > [data-announce-modal]");
+  assert.ok(twin, "the open dialog gets a twin");
+  assert.equal(twin.textContent, "RACE CONTROL: SAFETY CAR", "the line is spoken where the reader can hear it");
+  assert.equal(h.page.textContent, "", "it is not left on the now-inert page region");
+});
+
 test("both radio slots size the card to the slot, not to the dock lane announceLane still publishes (UI-HUNT-2-HUD)", () => {
   const rules = cssRules(read("css/hud.css"));
   const slotRules = (prefix) => rules.filter((r) => r.selector.startsWith(prefix) && String(r.decls.get("max-width") || "").includes("--radio-top-w"));
@@ -205,4 +278,56 @@ test("both radio slots size the card to the slot, not to the dock lane announceL
   const want = "min(max-content, calc(var(--radio-top-w) / var(--hud-z)))";
   assert.deepEqual(widths("body.hud-radio-top #announce"), [want], "tower-row slot: width follows the slot");
   assert.deepEqual(widths("body[data-radio-corner]"), [want], "corner slot: width follows the slot, so the base rule's lane width cannot squeeze it");
+});
+
+test("landscape radio prefers a readable outer lane and preserves a crowded fallback", () => {
+  const dom = makeDom(), root = dom.documentElement;
+  const R = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const tower = dom.document.createElement("div"), dock = dom.document.createElement("div"), group = dom.document.createElement("div");
+  tower._rect = R(250, 8, 300, 54); group._rect = R(0, 300, 100, 90); dock.appendChild(group);
+  const els = { announce: dom.byId("announce"), flag: dom.byId("hud-flag"), hudSectors: dom.byId("hud-sectors"), minimap: dom.byId("minimap") };
+  for (const el of [els.flag, els.hudSectors, els.minimap]) el.hidden = true;
+  const sb = { document: dom.document, Map, Math, Object, parseFloat, getComputedStyle: () => ({ getPropertyValue: () => "47" }) };
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js") + ";this.lane=HudRadioLane;", sb, { filename: absSrc("js/ui/hud-radio-lane.js") });
+  const lane = sb.lane.create({ els }, { vpW: () => 844, vpH: () => 390, top: () => tower, docks: () => [dock], fitKey: () => "",
+    hStyle: (el, key, value) => el.style.setProperty(key, value), hUnstyle: (el, key) => el.style.removeProperty(key), hToggle() {} });
+  lane.announceLane(root);
+  const x = () => parseFloat(root.style.getPropertyValue("--announce-lane-x")), w = () => parseFloat(root.style.getPropertyValue("--announce-lane-w"));
+  assert.ok(w() >= 160, "outer lane remains readable");
+  assert.ok(x() + w() <= 844 * 0.4 + 0.1 || x() >= 844 * 0.6, "outer lane clears the centre 20% driving corridor");
+  els.minimap.hidden = false; els.minimap._rect = R(47, 70, 253, 96);
+  els.hudSectors.hidden = false; els.hudSectors._rect = R(544, 70, 253, 96);
+  lane.invalidateLaneRects(); lane.announceLane(root);
+  assert.equal(x(), 308); assert.equal(w(), 228, "crowded case retains the original usable full lane");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the message is not discarded");
+  dom.body.setAttribute("data-radio-placed", ""); root.style.setProperty("--announce-lane-x", "123px");
+  lane.announceLane(root);
+  assert.equal(root.style.getPropertyValue("--announce-lane-x"), "123px", "manual placement stays under player control");
+  dom.body.removeAttribute("data-radio-placed");
+  els.announce.hidden = false; els.announce._rect = R(350, 220, 200, 50);
+  for (const key of ["flag", "hudLimits", "tyre"]) {
+    const obstacle = els[key] || (els[key] = dom.byId(key));
+    obstacle.hidden = false; obstacle._rect = R(360, 230, 60, 24);
+    els.announce.toggleAttribute("data-lane-collapsed", false);
+    root.style.setProperty("--announce-lane-w", "200px");
+    lane.radioPaintedCollapse(root);
+    assert.equal(els.announce.hasAttribute("data-lane-collapsed"), true, `${key} stays readable when messages compete`);
+    obstacle.hidden = true;
+  }
+  // Current tracked-export cockpit at844×390: BUTTON245 enlarges the steer
+  // pair into the outer card's actual row, below the lane's predicted band.
+  group._rect = R(59, 159.8, 365.9, 176.4);
+  els.hudSectors._rect = R(542, 64, 255, 72);
+  const pedals = dom.document.createElement("div"); pedals._rect = R(599, 80, 188, 256); dock.appendChild(pedals);
+  els.announce.getBoundingClientRect = () => w() < 200 ? R(x(), 151.9, w(), 75) : R(55, 151.9, 282.4, 50.7);
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  els.announce.toggleAttribute("data-lane-collapsed", false);
+  lane.radioPaintedCollapse(root);
+  assert.ok(x() >= 425 && x() + w() <= 599, "painted steering bounds recover the free central lane");
+  assert.ok(Math.abs(w() - 158.1) < 0.2, "sectors ending above the card do not steal its 158px central fallback");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the pit call stays visible in the available gap");
+  dom.body.setAttribute("data-radio-placed", "");
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  lane.radioPaintedCollapse(root);
+  assert.equal(w(), 282.4, "explicit manual radio placement bypasses automatic control recovery");
 });

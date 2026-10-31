@@ -17,7 +17,7 @@ Section-label and secondary-plate ink — the role d02d19bd4 standardised
   headings and #howtoplay dt. Those are read, not scanned past.
 
   IT IS NOT LIGHTENED TO SOME NEW VALUE, because there is no room for one.
-  --dim does this job at Lc 48.0, and the two are the SAME INK: identical
+  --dim does this job at Lc 48.0 (#9a9aa8; lifted to #bdbdca, Lc 67.2, by #4258), and the two are the SAME INK: identical
   OKLab hue angle (-74.1deg), chroma 0.0178 vs 0.0203, differing only in
   lightness (0.637 vs 0.691). Sweeping this token's lightness with a and b
   held fixed, every value that clears a defensible floor on the worst ground

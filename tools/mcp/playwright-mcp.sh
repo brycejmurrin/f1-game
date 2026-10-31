@@ -88,7 +88,9 @@ cmd_run() {
   #     and DPR on the context. Without it browser_resize is viewport-only,
   #     page.touchscreen throws ("hasTouch must be enabled") and GLX.isMobile
   #     stays false (the mobile tier is UA-driven).
-  local extra=()
+  # --codegen none: drop the "Ran Playwright code" block every result carries (a TypeScript echo of the
+  # call just made; nothing reads it). README of the pinned 0.0.79, "--codegen <lang>"; MCP-REFINE-2026-10-30.
+  local extra=(--codegen "${APEX_PW_CODEGEN:-none}")
   [[ -n "${APEX_PW_DEVICE:-}" ]] && extra+=(--device "$APEX_PW_DEVICE")
   if [[ -n "${APEX_PW_CDP:-}" ]]; then
     exec npx --yes --prefer-offline "$MCP_NPM_PACKAGE" \

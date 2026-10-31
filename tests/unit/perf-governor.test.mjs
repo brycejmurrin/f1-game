@@ -203,6 +203,14 @@ test("a device capped at 30 fps (Low Power Mode) settles at full quality, not th
   assert.ok(Math.abs(PerfGov.floorMs() - 33.3) < 0.5, `floorMs should converge near 33.3, got ${PerfGov.floorMs()}`);
 });
 
+test("ticks() counts every tick() — __apex.info().liveTicks, the live race frames", () => {
+  const { PerfGov } = makeGov();
+  assert.equal(PerfGov.ticks(), 0);
+  feed(PerfGov, () => 16, 5);
+  PerfGov.tick(0);   // a zero-length interval still was a live frame
+  assert.equal(PerfGov.ticks(), 6);
+});
+
 test("a healthy 60 Hz device never enters the degrade branches", () => {
   const { PerfGov, scale } = makeGov();
   feed(PerfGov, (i) => 15 + (i % 3), 1200);   // small jitter around vsync, never a real miss
@@ -590,7 +598,7 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
 
 test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /let DPR_CAP = mobileTier \? 1\.5 : 2;/, "the cap is mutable");
+  assert.match(tlx, /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/, "the cap is mutable (B8: the ?lab=tlxLite tier seeds it lower)");
   assert.match(tlx, /capDpr\(n\) \{\s*if \(!\(n >= 1\) \|\| n >= DPR_CAP\) return false;\s*DPR_CAP = n; resizeNow\(\); return true;/);
 });
 

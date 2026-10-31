@@ -304,19 +304,19 @@ export function parseTestBgArgv(argv) {
   };
 }
 
-async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {}) {
+export async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {},
+  { running = () => readState().runs.filter((r) => alive(r)) } = {}) {
   const dl = deadline ?? waitDeadlineFromMin(waitTimeoutMin);
   const t0 = Date.now();
   // Re-read the registry every poll: a group another shell starts while this
   // waits is part of "everything still running" (it used to be read once).
-  const running = () => readState().runs.filter((r) => alive(r));
   while (running().length) {
     if (Date.now() > dl) {
       process.stderr.write("\r" + " ".repeat(80) + "\r");
       const mins = waitTimeoutMin > 0 ? waitTimeoutMin : Math.max(1, Math.round((Date.now() - t0) / 60_000));
       say(`WAIT TIMEOUT after ${mins} min — still running: ${running().map((r) => r.group).join(", ")} (left alive; --status later, --stop to end)`);
       process.exitCode = 124;
-      return;
+      return 124;
     }
     const live = running();
     const line = `waiting on ${live.map((r) => r.group).join(", ")} ${loadavgLine()}`;
@@ -347,6 +347,7 @@ async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {}) {
   status();
   const bad = final.runs.filter((r) => !/^passed/.test(outcome(r)));
   process.exitCode = bad.length ? 1 : 0;
+  return process.exitCode;
 }
 
 // KILL THE PROCESS GROUP, NOT THE npm WRAPPER. `process.kill(pid)` reached only
@@ -722,10 +723,11 @@ async function settleLoad(maxMs, pollMs = 15_000) {
 }
 
 /** Start each group, wait for it to finish, then start the next. */
-async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}) {
+export async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}, deps = {}) {
+  const io = { loadPkg, start, waitForRunning, outcome, readState, settleLoad, ...deps };
   const deadline = waitDeadlineFromMin(waitTimeoutMin);
   const remainingMs = () => (deadline === Infinity ? CHAIN_SETTLE_MS : Math.max(0, deadline - Date.now()));
-  const pkg = loadPkg();
+  const pkg = io.loadPkg();
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
     console.error(`[test-bg] no such group: ${unknown.join(", ")}`);
@@ -742,16 +744,19 @@ async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}) {
     // Wait (bounded) for the load to settle; give up cleanly, naming the rest.
     if (!force) {
       const settleCap = Math.min(CHAIN_SETTLE_MS, remainingMs());
-      if (settleCap <= 0 || !(await settleLoad(settleCap))) {
+      if (settleCap <= 0 || !(await io.settleLoad(settleCap))) {
       say(`chain stopped: loadavg ${os.loadavg()[0].toFixed(2)} still >= ${LOAD_LIMIT} — not started: ${groups.slice(i).join(" ")}`);
       process.exitCode = 3;
       return;
       }
     }
     // Cap is 1 in sequential; force still allows starting when something else is live.
-    start([g], { force, parallel: false });
-    await waitForRunning({ deadline, waitTimeoutMin });
-    const o = outcome(readState().runs.find((r) => r.group === g) || { pid: -1, log: "" });
+    io.start([g], { force, parallel: false });
+    const waitCode = await io.waitForRunning({ deadline, waitTimeoutMin });
+    // A deadline leaves the owned runner alive. Keep its 124 verdict and do
+    // not classify it as a failed test or launch another group beside it.
+    if (waitCode === 124) return;
+    const o = io.outcome(io.readState().runs.find((r) => r.group === g) || { pid: -1, log: "" });
     say(`── chain ${i + 1}/${groups.length} ${g}: ${o}`);
     if (!/^passed/.test(o)) {
       allOk = false;

@@ -207,3 +207,20 @@ test("on GLX the overlay prints the post chain's verdict, so a dark-frame report
   assert.equal(post(["EXT_color_buffer_float"]).hdr, "true");
   assert.equal(post([]).hdr, "false", "an 8-bit device says the tonemapped chain is off instead of saying nothing");
 });
+
+test("on TLX the overlay names the ?lab=tlxLite tier when the backend reports it (perf hunt 9, B8)", () => {
+  const lineFor = (liteLab) => {
+    const store = { getItem: () => null };
+    const sandbox = {
+      document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "webgl2", getContext: () => null } : null, querySelector: () => null },
+      location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+      GLX: { gpuErrors: () => 0, __tlx: { backendState: () => ({ api: "webgl2", isMobile: true, mobileTier: true, liteGpu: false, liteLab }) } },
+    };
+    sandbox.window = sandbox;
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: path.join(ROOT, "js/perf/gfx-debug-overlay.js") });
+    return vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-tlx-lite" }).split("\n").find((l) => l.startsWith("mobile="));
+  };
+  assert.equal(lineFor(true), "mobile=true tier=true lite=false LAB:tlxLite");
+  assert.equal(lineFor(false), "mobile=true tier=true lite=false", "no lab: the line is unchanged");
+});
