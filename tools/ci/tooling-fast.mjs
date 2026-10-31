@@ -57,12 +57,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 import { changedPaths } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
+import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
 import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
 // Cycle-safe: node-plan reads TOOLING_FAST_FILES only inside functions, and this
@@ -227,6 +229,34 @@ export function tapFailureDetail(text) {
   return out;
 }
 
+/** Workflow commands use different escaping for data and properties.
+ * https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message */
+const workflowEscape = (value, property = false) => {
+  const escaped = String(value).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  return property ? escaped.replace(/:/g, "%3A").replace(/,/g, "%2C") : escaped;
+};
+
+/** Only structured terminal failures become commands; TAP remains ordinary log data.
+ * Nine file errors leave one of Actions' ten per-step errors for the omission count. */
+export function workflowFailureAnnotations(results, env = process.env) {
+  if (env.GITHUB_ACTIONS !== "true") return [];
+  const failed = results.filter((r) => r.ok === false);
+  const annotation = (file, message) => `::error file=${workflowEscape(file, true)},title=Tooling-fast failure::${workflowEscape(message.slice(0, 1024))}`;
+  const commands = failed.slice(0, 9).map((r) => {
+    const safe = typeof r.file === "string" && r.file.length <= 256
+      && /^(?:[A-Za-z0-9_.%, -]+\/)*[A-Za-z0-9_.%, -]+$/.test(r.file)
+      && r.file.split("/").every((part) => part !== "." && part !== "..");
+    const file = safe ? r.file : "tools/ci/tooling-fast.mjs";
+    const exit = Number.isInteger(r.exit) ? r.exit : "unknown";
+    const signal = typeof r.signal === "string" && /^[A-Z0-9]{1,24}$/.test(r.signal) ? r.signal : "none";
+    const duration = Number.isFinite(r.durationMs) && r.durationMs >= 0 ? Math.round(r.durationMs) : "unknown";
+    const reason = r.missing ? "missing-file" : r.timedOut ? "timeout" : r.empty ? "empty-run" : "exit";
+    return annotation(file, `${safe ? r.file : "Unavailable or unsafe test path"}: ${reason}; exit=${exit}; signal=${signal}; durationMs=${duration}`);
+  });
+  if (failed.length > 9) commands.push(annotation("tools/ci/tooling-fast.mjs", `${failed.length - 9} additional failed files omitted from annotations; see the tooling-fast log.`));
+  return commands;
+}
+
 /* A HUNG FILE FAILS BY NAME. Without a bound a file that never exits (an open
  * handle, a never-settled await) runs until the CI job's timeout-minutes, and
  * the job reports `cancelled` with every START line but no verdict — the shape
@@ -273,7 +303,7 @@ const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 
 /**
  * Run the structural suites one file at a time.
  * @param {string[]} [files]
- * @param {{ logPath?: string, isolatedFiles?: string[] }} [opts]
+ * @param {{ logPath?: string, isolatedFiles?: string[], workflowAnnotations?: boolean }} [opts]
  * @returns {{ ok: boolean, passed: number, failed: number, results: object[], notStarted: number }}
  */
 export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
@@ -295,7 +325,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // The ready stamp names the tree this run MEASURED (tools/lib/work-tree-id.mjs),
   // not HEAD read afterwards: the edit loop runs the suite on a dirty tree, and
   // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
-  // Only a full suite stamps, so only a full suite pays for the tree hash.
+  // CLI subset runs also retain source-bound evidence; only a full suite stamps.
   const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
   // car-shade's unchanged CPU benchmark measured 1875 ms alongside other
   // files versus 293–562 ms alone. game-vm's unchanged 12 s boot/race wall
@@ -306,8 +336,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   files = [...isolatedFiles, ...files.filter((file) => !isolated.has(rel(file)))];
   const ran = new Set(files.map(rel));
   const fullSuite = ran.size === TOOLING_FAST_FILES.length && TOOLING_FAST_FILES.every((f) => ran.has(f));
-  const startHead = fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "";
-  const startTree = fullSuite ? workTreeId(ROOT) : null;
+  const source = opts.verification ? verificationIdentity(ROOT) : null;
+  const evidenceLog = opts.verification ? path.join(path.dirname(logPath), `verification-${randomUUID()}.log`) : null;
+  const evidence = evidenceLog ? beginVerification({ logPath: evidenceLog, files: files.map(rel), source }) : null;
+  if (evidence) emit(verificationMarker(evidence).replace(/^\[tooling-fast\] /, ""));
+  const startHead = source?.head || (fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "");
+  const startTree = source?.tree || (fullSuite ? workTreeId(ROOT) : null);
 
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
@@ -405,7 +439,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
         for (const L of tail) emit(`  | ${L}`);
       }
     }
-    results.push({ file: rel, ok, durationMs: dur, exit: r.status });
+    results.push({ file: rel, ok, durationMs: dur, exit: r.status,
+      ...(signal ? { signal } : {}), ...(timedOut ? { timedOut: true } : {}), ...(empty ? { empty: true } : {}) });
       resolve();
     });
   });
@@ -450,7 +485,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // The tree must be the same before and after the run: an edit made while
   // the suite ran (the edit hook blocks only a live BROWSER run) means the
   // verdict is about neither tree.
-  const endTree = fullSuite && startTree ? workTreeId(ROOT) : null;
+  const endSource = opts.verification ? verificationIdentity(ROOT) : null;
+  const endTree = endSource?.tree || (fullSuite && startTree ? workTreeId(ROOT) : null);
   const stampTree = ok && fullSuite && startTree && startTree === endTree ? startTree : null;
   if (stampTree) emit(`= tree ${stampTree} head ${startHead}`);
   // --quiet drops PASS lines, so a red run names its files and its log here, always, before the verdict.
@@ -458,11 +494,20 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     const bad = results.filter((r) => !r.ok).map((r) => r.file);
     emit(`failing files: ${bad.join(" ") || "(none finished)"}`);
     emit(`log: ${path.relative(ROOT, logPath) || logPath}`);
+    // Imported runners often exercise intentional failure fixtures inside a
+    // passing unit suite. Only the CLI opts into publishing their outcomes.
+    if (opts.workflowAnnotations === true) for (const command of workflowFailureAnnotations(results)) console.log(command);
   }
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
+  if (evidenceLog) {
+    fs.writeFileSync(evidenceLog, lines.join("\n") + "\n");
+    if (!finishVerification(evidence, { logPath: evidenceLog, source: endSource, ok, notStarted })) {
+      console.warn("[tooling-fast] source receipt unavailable; verdict remains historical evidence only");
+    } else console.log(`[tooling-fast] source receipt: ${path.relative(ROOT, evidenceLog)}.receipt.json`);
+  }
   // Full-suite green on an UNCHANGED tree → stamp it for ready-gate.mjs
   // (draft→ready must not flip without tooling-fast evidence; #1111
   // designer-canvas). The stamp is the START head plus the tree hash the suite
@@ -907,6 +952,18 @@ export function topicalPool(groups = loadGroups().groups, floor = TOOLING_FAST_F
   return [...out].sort();
 }
 
+const TESTS_DATA_RE = /^tests\/data\//;
+
+/** tests/helpers/ files whose source names `rel`, as repo-relative paths. */
+function helpersNaming(rel, root = ROOT) {
+  const dir = path.join(root, "tests/helpers");
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch (_) { return []; }
+  return names.filter((n) => {
+    try { return fs.readFileSync(path.join(dir, n), "utf8").includes(rel); } catch (_) { return false; }
+  }).map((n) => `tests/helpers/${n}`);
+}
+
 /** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
@@ -972,7 +1029,22 @@ export function selectToolingFastChanged(changed, opts = {}) {
     return r;
   };
 
-  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  // tests/data/ is TRACKED for the CI browser selector ("no import graph sees these"), but the unit floor has the
+  // pin index: a data file widens only when NO unit file names it (fail-safe), else exactly those files run. A
+  // one-line flaky-quarantine.json edit selected all 733 files and timed the pre-flip probe out at 900 s.
+  const dataPinned = new Map();
+  for (const f of changed) {
+    const norm = f.replace(/\\/g, "/");
+    if (!TESTS_DATA_RE.test(norm) || circ.dataResolved.includes(f)) continue;
+    const idx = opts.pinIndex || pinIndex();
+    const hits = new Set(idx.get(norm) || []);
+    // A helper that names the file (tests/helpers/flaky-policy.mjs) is imported by relative path: its importers read it too.
+    for (const h of helpersNaming(norm, opts.root)) for (const t of (idx.get(h) || [])) hits.add(t);
+    if (!hits.size) return full("tests-data-unpinned", { because: norm });
+    dataPinned.set(norm, hits);
+  }
+  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f)
+    && !dataPinned.has(f.replace(/\\/g, "/")));
   const tracked = [];
   for (const f of trackedRaw) {
     const norm = f.replace(/\\/g, "/");
@@ -1018,6 +1090,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
     if (benignNarrow.has(norm)) continue;
+    if (dataPinned.has(norm)) { for (const t of dataPinned.get(norm)) selected.add(t); continue; }
     if (tfSet.has(norm) || poolSet.has(norm)) selected.add(norm);
     // A file edit has a precise dependency key and may also inherit its
     // nearest directory pins. Do not fall through to the bare top-level
@@ -1256,6 +1329,8 @@ if (isMain) {
     console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
   }
   const { ok, failed: nFailed } = await runToolingFast(files, {
+    verification: true,
+    workflowAnnotations: true,
     jobs: parsed.jobs,
     bail: parsed.bail,
     quiet: parsed.quiet,

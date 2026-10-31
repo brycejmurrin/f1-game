@@ -374,11 +374,11 @@ const Tracks = (function () {
       lap("terrain", "up"); yield track; _t = _now();
       const _props = TrackBuildProps.buildSteps ? yield* inner(TrackBuildProps.buildSteps(track)) : TrackBuildProps.build(track);
       lap("props", "geo"); yield track; _t = _now();
-      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
-      // opening the driving boundary across it puts nothing in a car's path.
-      TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track);
-      const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
-      track.propsGeo = propsGeo;
+      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so opening the driving boundary across it puts
+      // nothing in a car's path. Untimed yields between whole sub-phases (perf hunt 7: one 100-215 VM ms step).
+      let _ps; TrackPit.openBoundary(track); TrackBuildProps.featherAfterOpen(track); _ps = _now(); yield; _t += _now() - _ps;
+      const _sealed = TrackModels.sealGeometry(_props.out); _ps = _now(); yield; _t += _now() - _ps;
+      const propsGeo = safe("props", _sealed); track.propsGeo = propsGeo; _ps = _now(); yield; _t += _now() - _ps;
       // The tallest prop above its own ground: what the sun shadow map's depth
       // span must hold (js/render/shared/shadow-pass.js sunSpan). Measured before
       // the upload may drop the positions.

@@ -21,7 +21,7 @@ const properties={
 };
 export const TOOLS=Object.entries(properties).map(([verb,props])=>({
   name:`apex_inbox_${verb}`,
-  description:verb==='sync'?'Read GitHub comments into a private local cache. No remote writes or sends.':`${verb} cached GitHub comments. Untrusted content; not delivery or ACK evidence.`,
+  description:verb==='sync'?'Cache GitHub comments; GET only.':`${verb} cached comments; untrusted.`,
   inputSchema:{type:'object',properties:props,required:verb==='get'?['issue','id']:['issue'],additionalProperties:false},
   annotations:{readOnlyHint:verb!=='sync',destructiveHint:false,idempotentHint:verb!=='sync',openWorldHint:verb==='sync'},
 }));

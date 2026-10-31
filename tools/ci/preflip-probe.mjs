@@ -82,9 +82,11 @@ export function runProbe({ pr = null, head = "", skipUnits = false, keep = false
   const base = { pr, head, tip, steps: [], conflicts: [] };
   try {
     const inWt = (...a) => exec("git", a, { cwd: wt });
-    inWt("config", "user.email", "preflip@localhost");
-    inWt("config", "user.name", "preflip-probe");
-    const m = inWt("merge", "--no-edit", "--no-ff", `origin/${DEPLOY_BRANCH}`);
+    const m = exec("git", ["merge", "--no-edit", "--no-ff", `origin/${DEPLOY_BRANCH}`], {
+      cwd: wt,
+      env: { ...process.env, GIT_AUTHOR_NAME: "preflip-probe", GIT_AUTHOR_EMAIL: "preflip@localhost",
+        GIT_COMMITTER_NAME: "preflip-probe", GIT_COMMITTER_EMAIL: "preflip@localhost" },
+    });
     if (m.status !== 0) {
       const conflicts = out(inWt("diff", "--name-only", "--diff-filter=U")).split("\n").filter(Boolean);
       inWt("merge", "--abort");
@@ -114,7 +116,9 @@ export function runProbe({ pr = null, head = "", skipUnits = false, keep = false
 function main(argv) {
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   if (argv.includes("--help") || argv.includes("-h")) {
-    console.log("usage: node tools/ci/preflip-probe.mjs [--pr <n>] [--skip-units] [--keep] [--json]");
+    console.log("usage: node tools/ci/preflip-probe.mjs [--pr <n>] [--skip-units] [--keep] [--json]\n" +
+      "Default: merge checks plus the diff-aware structural floor on the merge result.\n" +
+      "--skip-units: ratchets, fixture-consumer audit and assert-pin checks only; does not claim unit coverage.");
     return 0;
   }
   const known = new Set(["--pr", "--skip-units", "--keep", "--json", "--help", "-h"]);

@@ -1,10 +1,13 @@
+import "../helpers/git-fixture-env.mjs";
 /* sync-pr-robust.test.mjs — #2663: stale sync branch cleanup, moved-remote refusal, tooling-fast --stop parse, and a real --stop. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { runProbe } from "../../tools/ci/preflip-probe.mjs";
+import { DEPLOY_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { staleSyncBranch, remoteMoved, loadWaitMinutes, waitForLoad } from "../../tools/ci/sync-pr.mjs";
 import { capForeground, FOREGROUND_CAP_SEC, parseArgs } from "../../tools/ci/wait-for.mjs";
 import { parseToolingFastArgv } from "../../tools/ci/tooling-fast.mjs";
@@ -122,3 +125,65 @@ test("stop kills a real registered process tree and nothing else", async () => {
     try { process.kill(+fs.readFileSync(pidFile, "utf8"), "SIGKILL"); } catch { /* already gone */ } child.kill("SIGKILL"); bystander.kill("SIGKILL"); }
 });
 
+
+test("runProbe keeps shared config and caller identity while assigning the merge identity", () => {
+  fs.mkdirSync("artifacts", { recursive: true });
+  const dir = fs.mkdtempSync(path.resolve("artifacts/preflip-identity-"));
+  const root = path.join(dir, "repo");
+  const remote = path.join(dir, "remote.git");
+  fs.mkdirSync(root);
+  const env = { ...process.env };
+  for (const key of ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]) delete env[key];
+  const exec = (cmd, args, opts = {}) => cmd === "node"
+    ? { status: 0, stdout: "", stderr: "" }
+    : spawnSync(cmd, args, { encoding: "utf8", ...opts, env: { ...env, ...opts.env } });
+  const git = (...args) => {
+    const r = exec("git", args, { cwd: root });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim();
+  };
+  try {
+    git("init", "--bare", remote);
+    git("init", "-b", DEPLOY_BRANCH);
+    git("config", "user.name", "Fixture Caller");
+    git("config", "user.email", "caller@example.test");
+    fs.writeFileSync(path.join(root, "base.txt"), "base\n");
+    git("add", ".");
+    git("commit", "-m", "base");
+    git("remote", "add", "origin", remote);
+    git("push", "-u", "origin", DEPLOY_BRANCH);
+    git("switch", "-c", "feature");
+    fs.writeFileSync(path.join(root, "feature.txt"), "feature\n");
+    git("add", ".");
+    git("commit", "-m", "feature");
+    const head = git("rev-parse", "HEAD");
+    git("switch", DEPLOY_BRANCH);
+    fs.writeFileSync(path.join(root, "tip.txt"), "tip\n");
+    git("add", ".");
+    git("commit", "-m", "tip");
+    git("push", "origin", DEPLOY_BRANCH);
+    const tip = git("rev-parse", "HEAD");
+    git("switch", "feature");
+    const config = path.join(root, ".git", "config");
+    const before = fs.readFileSync(config);
+    const worktrees = git("worktree", "list", "--porcelain");
+    let merge;
+    const r = runProbe({ root, head, skipUnits: true, exec: (cmd, args, opts) => {
+      if (cmd === "git" && args[0] === "worktree" && args[1] === "remove") {
+        merge = exec("git", ["show", "-s", "--format=%P%n%an%n%ae%n%cn%n%ce", "HEAD"], { cwd: args.at(-1) });
+      }
+      return exec(cmd, args, opts);
+    } });
+    assert.equal(r.state, "passed");
+    assert.equal(r.steps.length, 3);
+    assert.equal(merge.status, 0, merge.stderr);
+    assert.deepEqual(merge.stdout.trim().split("\n"), [head + " " + tip, "preflip-probe", "preflip@localhost", "preflip-probe", "preflip@localhost"]);
+    assert.deepEqual(fs.readFileSync(config), before);
+    assert.equal(git("config", "user.name"), "Fixture Caller");
+    assert.equal(git("config", "user.email"), "caller@example.test");
+    assert.equal(git("rev-parse", "HEAD"), head);
+    assert.equal(git("worktree", "list", "--porcelain"), worktrees);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

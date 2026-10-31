@@ -219,6 +219,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_bump_cache_check",
     "apex_car_audit",
     "apex_catalog",
+    "apex_claude_agents",
     "apex_cursor_agents",
     "apex_debug_chrome",
     "apex_diagnostics",
@@ -1016,7 +1017,7 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
     "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs",
     "apex_status", "apex_track_audit", "apex_viewer"], "exactly the tools with a measured result shape");
   assert.deepEqual(destructive, ["apex_cursor_agents", "apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_cursor_agents", "apex_inbox_sync"]);
+  assert.deepEqual(openWorld.sort(), ["apex_claude_agents", "apex_cursor_agents", "apex_inbox_sync"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
@@ -1710,6 +1711,7 @@ const MIN_ARGS = {
   apex_inbox_status: { issue: 4387, dryRun: true },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
   apex_cursor_agents: { verb: "digest" },
+  apex_claude_agents: { verb: "capabilities" },
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD~1", id: "monza" },
   apex_frame_report: { track: "monza" },
@@ -2737,6 +2739,27 @@ const cursorBad = (args) => {
   assert.equal(cursorBody(r).error, "bad_args", JSON.stringify(args));
   return cursorBody(r);
 };
+
+test("apex_claude_agents discovery, mock followup and refusals use the existing MCP server", () => {
+  const tool = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools.find((t) => t.name === "apex_claude_agents");
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ["verb", "id", "options", "dryRun"]);
+  assert.ok(Buffer.byteLength(JSON.stringify(tool)) < 800);
+  const id = "cse_contract123";
+  const result = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_claude_agents", arguments: { verb: "followup", id, options: { text: "never send during mock" } } } }])[0].result;
+  assert.equal(result.structuredContent.delivery, "not_attempted");
+  assert.equal(result.structuredContent.replyRetrieved, false);
+  assert.deepEqual(result.structuredContent, JSON.parse(result.content[0].text));
+  assert.ok(!JSON.stringify(result).includes("never send during mock"));
+  const refused = JSON.parse(callCli("apex_claude_agents", { verb: "launch" }).stdout);
+  assert.equal(refused.error, "unsupported_verb");
+  const share = JSON.parse(callCli("apex_claude_agents", { verb: "followup", id: "cshk_share", options: { text: "status" } }).stdout);
+  assert.equal(share.error, "bad_args");
+  const snapshot = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { refresh: true, maxChars: 500 }, dryRun: true }).stdout);
+  assert.equal(snapshot.dryRun, true);
+  assert.equal(snapshot.verb, "transcript");
+  const unpinned = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { offset: 500 } }).stdout);
+  assert.equal(unpinned.error, "bad_args");
+});
 
 test("apex_cursor_agents publishes four properties and stays inside the tools/list byte budget", () => {
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result;

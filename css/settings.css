@@ -50,16 +50,16 @@
    what tools/check/class-usage.mjs now looks for. */
 .pm-group, .pm-pad-tools { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  /* Steel section chrome — red is reserved for the rule under the label. */
-  color: var(--steel);
+  /* Upright section labels separate navigation from adjustable values. */
+  color: var(--text);
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
-  font-weight: 700; font-style: italic;
-  letter-spacing: var(--ls-5);
+  font-weight: 700; font-style: normal;
+  letter-spacing: var(--ls-2);
   line-height: 1.2;
   text-transform: uppercase;
   box-sizing: border-box;
   margin: 0; padding-bottom: 4px;
-  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
+  border-bottom: 1px solid var(--card-line);
 }
 .pm-group button { margin: 0; width: 100%; }
 /* This is one action page, not independent preferences to auto-place in
@@ -84,12 +84,10 @@
   flex-basis: max-content;
   overflow-wrap: anywhere;
 }
-/* Every interactive settings row is exactly --tap tall. The label overlays
-   the top of the track (pointer-events: none) so the grab target stays the
-   full row. */
+/* Action rows grow with their labels; the tap ladder remains their floor. */
 #pmsettings-inner .pm-group button,
 #pmsettings-inner .pm-doors button {
-  height: var(--tap);
+  height: auto;
   min-height: var(--tap);
   box-sizing: border-box;
   display: inline-flex;
@@ -98,7 +96,11 @@
   gap: 0.35em;
   text-align: left;
   width: 100%;
-  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+  padding: calc(var(--gap) * 0.5) calc(var(--pad) * 0.75);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  border-radius: var(--r-sm);
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   font-weight: 600;
@@ -280,18 +282,17 @@
   text-transform: none;
 }
 
-/* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
-   used to be the two plain-grey labels on a sheet of steel italics. */
+/* Property labels use the same readable upright type as navigation. */
 #pmsettings-inner .pm-group .tune-label {
-  color: var(--steel);
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: var(--ls-5);
+  color: var(--text);
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: var(--ls-2);
   text-transform: uppercase;
 }
 #pmsettings-inner .pm-group .tune-label b {
   color: inherit;
-  font-style: italic;
+  font-style: normal;
 }
 /* OVERRIDDEN vs INHERITED, borrowed wholesale rather than invented. Unity's
    editor puts an "override bar" on the left of a modified property's label and
@@ -342,24 +343,46 @@
 @media (hover: hover) and (pointer: fine) {
   .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
 }
+/* Navigation doors are quiet, solid panels. Opaque semantic surfaces keep
+   the same hierarchy over a live background and in the light theme. */
 #pmsettings-inner .pm-doors button {
   width: auto;
   height: auto;
   flex-direction: column;
   align-items: flex-start;
-  /* A door, not a key/value row. */
   justify-content: center;
-  text-align: left;
-  /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
-     settings grain the same way #overlay alts sit on the title grain. */
+  gap: calc(var(--gap) * 0.35);
+  padding: calc(var(--gap) * 0.75) var(--pad);
+  text-align: start;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  line-height: 1.35;
+  border-radius: var(--r-sm);
   background: var(--plate-opaque);
-  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+  border-color: var(--plate-line);
+  box-shadow: none;
 }
 #pm-settings-index small {
+  display: block;
   font-size: var(--fs-micro); font-weight: 400; letter-spacing: normal;
-  /* --dim sits near 4.5:1 on a carbon door; pull it toward the
-     label so the one-line note is readable at arm's length. */
-  color: color-mix(in oklab, var(--text) 78%, transparent);
+  line-height: 1.4;
+  color: var(--text);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (hover: hover) and (pointer: fine) {
+  #pmsettings-inner #pm-settings-index > button:not(:disabled):hover {
+    background: var(--plate-hover);
+    border-color: var(--text);
+  }
+}
+#pmsettings-inner #pm-settings-index > button:not(:disabled):active {
+  background: var(--plate-press);
+  border-color: var(--text);
+}
+#pmsettings-inner #pm-settings-index > button:focus-visible {
+  border-color: var(--text);
 }
 @media (min-width: 1680px) {
   #pmsettings { --sheet-w: min(var(--menu-fit-sheet, 1180px), calc(var(--safe-w) - var(--pad) * 2)); }

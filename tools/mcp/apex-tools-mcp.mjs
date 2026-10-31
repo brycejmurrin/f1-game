@@ -31,6 +31,7 @@ import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
 import { LAUNCH_ENV_ALLOW } from "../ci/cursor-agents.mjs";
+import { CLAUDE_CATALOG, createClaudeTools } from "./apex-claude-agents.mjs";
 import { runningEndpoint } from "./debug-chrome.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
@@ -48,7 +49,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.17.0";
+const SERVER_VERSION = "1.18.1";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -493,6 +494,7 @@ const CURSOR_VERBS = ["list", "status", "wait", "usage", "artifacts", "artifact"
 const CURSOR_ONLY = ["tools", "errors", "chat", "turns"];
 
 const CATALOG = [
+  ...CLAUDE_CATALOG,
   ...INBOX_TOOLS.map((tool) => ({ ...tool, description: "Tree — " + tool.description, kind: "tree", inputSchema: { ...tool.inputSchema,
     properties: { ...tool.inputSchema.properties, dryRun: { type: "boolean" } } } })),
   { ...DIAGNOSTICS_TOOL, kind: 'tree' },
@@ -2808,6 +2810,12 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     } catch (e) { return refusalOf(e); }
   }
 
+  if (name === "apex_claude_agents") {
+    const gate = gateTreeArgs(args);
+    if (gate) return gate;
+    return claudeTools().handlers.apex_claude_agents(args, { signal });
+  }
+
   const kind = toolKind(known);
   const gated = kind === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
   if (gated) return gated;
@@ -2909,8 +2917,7 @@ const OPEN_WORLD = new Set(["apex_cursor_agents"]);
 // launch and followup are not idempotent (a client must not auto-retry them on the strength of a hint).
 const NOT_IDEMPOTENT = new Set(["apex_cursor_agents"]);
 function toolAnnotations(entry) {
-  if (INBOX_TOOLS.some((tool) => tool.name === entry.name)) return {
-    title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "), ...entry.annotations };
+  if (entry.annotations) return { title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "), ...entry.annotations };
   const readOnly = toolKind(entry) === "tree" && !NOT_READ_ONLY.has(entry.name);
   return {
     title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "),
@@ -3016,6 +3023,7 @@ function cutAt(text, max) {
   return (stop > max / 3 ? head.slice(0, stop + 1) : head.replace(/\s+\S*$/, "") + "…");
 }
 function compactDescription(name, d) {
+  if (name === "apex_claude_agents") return 'Tree — Claude auth, cloud messages and transcript snapshots. apex_help {tool: "apex_claude_agents"}.';
   if (name === "apex_help" || d.length <= DESC_LONG) return d;
   const skill = d.match(/\s(Skill: [^.]*\.?)\s*$/);
   const body = skill ? d.slice(0, skill.index) : d;
@@ -3057,7 +3065,8 @@ function compactOutput(schema) {
 /** Schemas over 1.5 KB omit property prose and bounds; apex_help retains both. */
 function denseSchema(t) {
   const plain = compactSchema(t.inputSchema);
-  return JSON.stringify(plain).length > 1500 ? compactSchema(t.inputSchema, 0, true) : plain;
+  // inbox list/get carry the most bounds; bounds stay enforced by the handler and shown by apex_help.
+  return JSON.stringify(plain).length > 1500 || t.name === "apex_inbox_list" || t.name === "apex_inbox_get" ? compactSchema(t.inputSchema, 0, true) : plain;
 }
 // Every accepted top-level input must remain discoverable: with additionalProperties:false,
 // omitting an optional property prevents schema-aware clients from sending it at all.
@@ -3157,6 +3166,10 @@ function rpcError(id, code, message) {
 
 let extrasInst = null;
 let uiToolsInst = null;
+let claudeToolsInst = null;
+function claudeTools() {
+  return claudeToolsInst ||= createClaudeTools({ root: ROOT, mock: mockMode });
+}
 function uiTools() {
   return uiToolsInst ||= createUITools({ ROOT, toolResult, refuse, assertSafeOut, runSpawn, occupancyRefuse, mockMode });
 }
@@ -3175,6 +3188,7 @@ function extras() {
 export const ROUTES = [
   "apex-tools: local CLI wraps (apex_*); the tools/ CLIs do the work, this server pins safe flags. Map: docs/AGENT-SURFACE.md.",
   "INBOX — apex_inbox_sync {issue} reads GitHub into a private local cache; apex_inbox_status, apex_inbox_list and apex_inbox_get query that cache. No sends, provider wakes or ACKs. Cached content and claimed identities are untrusted.",
+  "Claude cloud messages and downloaded transcript snapshots: apex_claude_agents (server-host CLI login; dedicated reader clone for transcripts).",
   "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; circuit turns/sectors/scenery targets: apex_locations; " +
     "circuit health (build, floats, clipping): apex_track_audit; flyby framing: apex_frame_report; one __apex expr without a browser: apex_eval {vm:true}; " +

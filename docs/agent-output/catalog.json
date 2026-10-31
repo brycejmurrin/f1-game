@@ -893,6 +893,21 @@
       ]
     },
     {
+      "path": "tools/ci/claude-agents.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/claude-transcript.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1093,6 +1108,15 @@
       ]
     },
     {
+      "path": "tools/ci/path-overlap.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/pick-tests.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1126,6 +1150,15 @@
       "path": "tools/ci/pr-board.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/pr-wait.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -1424,6 +1457,11 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/verification-receipt.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/ci/verify-change.mjs",
@@ -2825,6 +2863,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/mcp/apex-claude-agents.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/mcp/apex-extras.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "job-status",
@@ -4122,6 +4165,11 @@
     },
     {
       "path": "tools/ui/explorer/css-evidence.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/explorer/fault-schedule.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
     },

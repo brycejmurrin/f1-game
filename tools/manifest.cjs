@@ -1050,7 +1050,7 @@ const LAZY_AGENT = [
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/agent/apex.js",
-  "js/agent/apex-bridge.js", // ApexBridge: postMessage commands from a framing claude.ai page (?bridge=1), reads __apex at call time
+  "js/agent/apex-bridge.js", // ApexBridge: apex-cmd comments on one GitHub issue (?bridge=<n> + device token), reads __apex at call time
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
@@ -1069,8 +1069,14 @@ const LAZY_EDGES = [
 // is js/lighting/profiles.js, and that reads window.LightPresets at CALL time
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
 // defaults rather than throwing, and game.js re-applies once it lands.
+// js/garage/garage-data.js (~48 KB) is the garage's Blender tables: the camera
+// rigs' samples and the crew clips' keys. Their ids and labels stay eager
+// (arrival.js / crew-choreo.js index blocks); LazyBundles.ensureGarageData loads
+// it alone (idle, garage entry, SETTINGS, RACE!) and until then a rig angle
+// plays the "cut" cameras and a Blender crew the shipped one.
 const LAZY_RACE = [
   "js/lighting/presets.js",
+  "js/garage/garage-data.js",
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,

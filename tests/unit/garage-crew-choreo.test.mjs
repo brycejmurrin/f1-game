@@ -23,29 +23,31 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const FILES = ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js",
-  "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/crew-choreo.js", "js/garage/scene-crew.js", "js/garage/pit-crew.js", "js/garage/arrival.js"];
-function load(extra = {}) {
+  "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/garage-data.js", "js/garage/crew-choreo.js", "js/garage/scene-crew.js", "js/garage/pit-crew.js", "js/garage/arrival.js"];
+function load(extra = {}, files = FILES) {
   const draws = [], meshes = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length }; meshes.push(mesh); return mesh; }, freeMesh() {}, draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, WeakMap, Map, String, Log: { info() {}, warn() {} }, ...extra });
-  for (const f of FILES) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of files) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const get = (n) => vm.runInContext(n, ctx, { filename: "garage-crew-choreo:get" });
   get("GarageCrew").init(gfx);
-  return { Choreo: get("GarageCrewChoreo"), Crew: get("GarageCrew"), Arrival: get("GarageArrival"), Pit: get("PitCrewAnim"), gfx, draws, meshes };
+  // CLIPS: the lazy key tables (js/garage/garage-data.js) when loaded, the eager index's entries otherwise.
+  const Data = get("typeof GarageData !== 'undefined' ? GarageData : null");
+  return { Choreo: get("GarageCrewChoreo"), Data, CLIPS: Data ? Data.CLIPS : {}, Crew: get("GarageCrew"), Arrival: get("GarageArrival"), Pit: get("PitCrewAnim"), gfx, draws, meshes };
 }
 
 test("runtime key tables match the current Blender authoring source", () => {
   const digest = createHash("sha256").update(read("tools/gen/blender/crew-choreo.py")).digest("hex");
-  assert.ok(read("js/garage/crew-choreo.js").includes("Source SHA256: " + digest),
+  assert.ok(read("js/garage/garage-data.js").includes("Source SHA256: " + digest),
     "regenerate: blender -b --python tools/gen/blender/crew-choreo.py -- --output-dir artifacts/crew-choreo --write-runtime");
 });
 
 test("three or more new crews each way, a pit clip, and well-formed key tables", () => {
-  const { Choreo } = load();
+  const { Choreo, CLIPS } = load();
   assert.ok(Choreo.IDS.in.length >= 3, "enter variants: " + Choreo.IDS.in);
   assert.ok(Choreo.IDS.out.length >= 3, "leave variants: " + Choreo.IDS.out);
   assert.deepEqual(Array.from(Choreo.IDS.pit), ["pit"]);
-  for (const [id, clip] of Object.entries(Choreo.CLIPS)) {
+  for (const [id, clip] of Object.entries(CLIPS)) {
     assert.ok(clip.actors.length > 0 && clip.len > 0 && clip.label, id);
     for (const a of clip.actors) for (const [k, keys] of Object.entries(a.ch)) {
       assert.ok(keys.length >= 2 && keys.length % 2 === 0, `${id}.${k}`);
@@ -160,9 +162,9 @@ const RESULT_CREWS = { celebrate: "win", applause: "podium", recover: "dnf", con
 // Horizontal metres from an eye to a body standing at (x, z), the body a 0-1.8 m upright segment.
 const eyeGap = (e, x, z) => Math.hypot(e[0] - x, e[2] - z, Math.max(0, e[1] - 1.8));
 test("AFTER THE RACE crews: in-direction, result-timed, inside the bay, off the car and clear of every eye", () => {
-  const { Arrival, Choreo } = load(), out = Choreo.actors(12);
+  const { Arrival, Choreo, CLIPS } = load(), out = Choreo.actors(12);
   for (const [id, result] of Object.entries(RESULT_CREWS)) {
-    const clip = Choreo.CLIPS[id];
+    const clip = CLIPS[id];
     assert.ok(clip && clip.dir === "in" && clip.result === result && clip.mix === false && clip.label, id);
     assert.ok(Choreo.IDS.in.includes(id), `${id} reads through the "in" path`);
     for (const angle of ["left", "right", "cut"]) {
@@ -252,6 +254,25 @@ test("PitCrewAnim draws the player's stop, deterministically, and leaves AI cars
   assert.equal(Pit.draw({ ...G, pits: { stopAnim: () => ({ u: -1, lift: 0, off: 0 }) } }, c, base, {}), false);
 });
 
+test("PitCrewAnim frees the evicted rigs' meshes when a third team colour arrives (perf hunt 9)", () => {
+  const { Pit, gfx } = load();
+  let made = 0, freed = 0;
+  const create = gfx.createMesh;
+  gfx.createMesh = (d) => { made++; return create(d); };
+  gfx.freeMesh = () => { freed++; };
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 4, 1]);
+  const { c, G } = raceCtx(Pit, 0.5); G.gfx = gfx;
+  const colour = (col) => ({ ...c, team: { color: col, color2: [1, 1, 1] } });
+  assert.equal(Pit.draw(G, colour([0.8, 0.1, 0.1]), base, {}), true);
+  const perRig = made;
+  assert.ok(perRig > 0, "a rig builds meshes");
+  Pit.draw(G, colour([0.1, 0.8, 0.1]), base, {});
+  assert.equal(freed, 0, "two colours fit the cache");
+  Pit.draw(G, colour([0.1, 0.1, 0.8]), base, {});
+  assert.equal(made, perRig * 3, "three rigs built");
+  assert.equal(freed, perRig * 2, "the third colour frees both evicted rigs' meshes");
+});
+
 test("without the garage modules the stop falls back to the static crew", () => {
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Map });
   vm.runInContext(read("js/garage/pit-crew.js"), ctx, { filename: absSrc("js/garage/pit-crew.js") });
@@ -261,13 +282,13 @@ test("without the garage modules the stop falls back to the static crew", () => 
 });
 
 test("the garage draws a Blender crew without rebuilding meshes mid-playback", () => {
-  const { Crew, Arrival, Choreo, draws, meshes } = load();
+  const { Crew, Arrival, Choreo, CLIPS, draws, meshes } = load();
   for (const d of ["in", "out"]) for (const id of Choreo.IDS[d]) {
     const r = Choreo.CLIPS[id].result, dir = r ? "home" : d;   // a result clip plays after the race
     const cfg = Arrival.settings(r ? { homeCrew: id, result: r } : { [d === "in" ? "enterCrew" : "leaveCrew"]: id }), end = Arrival.duration(cfg, dir);
     const pose = (t) => Arrival.poseFor(dir)(t, cfg, false);
     draws.length = 0; Crew.draw({ c1: [1, 0, 0], c2: [1, 1, 1] }, [-3, 2, -4], pose(0.5), {});
-    assert.ok(draws.length > 12 * Choreo.CLIPS[id].actors.length, `${id}: every member drawn`);
+    assert.ok(draws.length > 12 * CLIPS[id].actors.length, `${id}: every member drawn`);
     const n = meshes.length;
     for (let t = 0; t < end; t += 0.5) Crew.draw({ c1: [1, 0, 0], c2: [1, 1, 1] }, [-3, 2, -4], pose(t), {});
     assert.equal(meshes.length, n, `${id}: no mesh built during playback`);
@@ -306,4 +327,71 @@ test("Blender camera rigs keep clear of every result crew without snapping (crew
       prev = p.eye.slice();
     }
   }
+});
+
+// LAZY: the key tables ride js/garage/garage-data.js (LAZY_RACE); the index stays in crew-choreo.js.
+test("lazy key tables: the index lists every clip at boot, and until the tables land the shipped crews play", () => {
+  const { Choreo, Arrival, Pit } = load({}, FILES.filter((f) => f !== "js/garage/garage-data.js"));
+  assert.deepEqual([...Choreo.IDS.in, ...Choreo.IDS.out, ...Choreo.IDS.pit].sort(), Object.keys(Choreo.CLIPS).sort(), "every clip is pickable");
+  assert.equal(Choreo.label("marshal"), "MARSHAL CREW");
+  assert.equal(Choreo.has("marshal"), false); assert.equal(Choreo.extra("marshal"), 0); assert.equal(Choreo.sample("marshal", 1), 0);
+  for (const dir of ["in", "out"]) {
+    const key = dir === "out" ? "leaveCrew" : "enterCrew";
+    for (const id of Choreo.IDS[dir].filter((x) => !Choreo.CLIPS[x].result)) {   // result crews are AFTER THE RACE's
+      const c = Arrival.settings({ [key]: id });
+      assert.equal(c[key], id, "a saved Blender crew survives boot");
+      assert.equal(Arrival.poseFor(dir)(1, c, false).crew, "current", id + " plays the shipped crew until the tables land");
+      assert.equal(Arrival.duration(c, dir), Arrival.duration(Arrival.settings({ [key]: "current" }), dir), id + " keeps the shipped timing");
+    }
+  }
+  assert.notEqual(Arrival.poseFor("home")(1, Arrival.settings({ result: "win" }), false).crew, "celebrate", "a result crew waits for its tables");
+  const G = { gfx: {}, pits: { stopAnim: () => ({ u: 0.5 }) } };
+  assert.equal(Pit.draw(G, { isPlayer: true, pitState: "box" }, new Float32Array(16)), false, "the in-race stop keeps the static crew mesh");
+  const index = JSON.parse(read("js/garage/crew-choreo.js").split("// @blender-choreo-index:start")[1].split("const CLIPS = ")[1].split(";\n")[0]);
+  const data = load().Choreo, full = JSON.parse(read("js/garage/garage-data.js").split("// @blender-choreo:start")[1].split("const CLIPS = ")[1].split(";\n")[0]);
+  assert.deepEqual(index, Object.fromEntries(Object.entries(full).map(([id, c]) => { const { actors, ...rest } = c; return [id, rest]; })), "rerun crew-choreo.py --write-runtime");
+  assert.ok(data.has("marshal"));
+});
+
+// The lazy tables can land mid-sequence: a held t on the SAME config keeps its camera family and crew;
+// the next playback's fresh config adopts what has landed (PR #4310 review, 2026-10-31).
+test("a late GarageData load never swaps a playing sequence's camera or crew; the next playback adopts it", () => {
+  // V8 shares compiled code across vm contexts by source text, and code compiled where GarageData was
+  // already a script const keeps reading that slot; a browser has one realm. A unique source suffix gives
+  // this fixture its own compile, the same as a page where garage-data.js lands after arrival.js.
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, WeakMap, Map, String, Log: { info() {}, warn() {} } });
+  for (const f of FILES.filter((x) => x !== "js/garage/garage-data.js"))
+    vm.runInContext(read(f) + (f === "js/garage/arrival.js" ? "\n// late-load fixture\n" : ""), ctx, { filename: absSrc(f) });
+  const Arrival = vm.runInContext("GarageArrival", ctx, { filename: "garage-crew-choreo:get" });
+  const cases = [["in", { angle: "crane", enterCrew: "marshal" }, 6], ["out", { angle: "crane", leaveCrew: "sendoff" }, 4],
+    ["home", { angle: "crane", result: "dnf" }, 6]];
+  const held = cases.map(([dir, v, t]) => { const c = Arrival.settings(v); return [dir, c, t, Arrival.poseFor(dir)(t, c, true)]; });
+  vm.runInContext(read("js/garage/garage-data.js"), ctx, { filename: absSrc("js/garage/garage-data.js") });
+  for (const [dir, c, t, before] of held) {
+    const after = Arrival.poseFor(dir)(t, c, true);
+    assert.deepEqual([after.camera, after.crew, after.eye, after.x, after.yaw], [before.camera, before.crew, before.eye, before.x, before.yaw], dir + ": the held frame is unchanged");
+    assert.notEqual(before.camera, "crane", dir + ": before the tables, the shipped cameras");
+    const fc = Arrival.settings(cases.find((k) => k[0] === dir)[1]);
+    const fresh = Arrival.poseFor(dir)(t, fc, true);
+    assert.equal(fresh.camera, "crane", dir + ": the next playback plays the rig");
+  }
+});
+
+// carryPlayback: a preview refresh (FOV / speed edit) builds a fresh config; it keeps the playback's
+// camera family, crew deal, path and timing, while an angle or crew edit may choose again.
+test("carryPlayback keeps a refreshed preview's family, MIX deal and timing; angle and crew edits re-choose", () => {
+  const { Arrival } = load();
+  const a = Arrival.settings({ angle: "crane", leaveCrew: "mix" });
+  const crew = Arrival.crewFor(a, "out"), len = Arrival.duration(a, "out"), held = Arrival.poseFor("out")(4, a, true);
+  const b = Arrival.carryPlayback(a, Arrival.settings({ angle: "crane", leaveCrew: "mix", fov: 70, speed: 2 }));
+  assert.equal(Arrival.crewFor(b, "out"), crew, "the MIX deal is not re-rolled");
+  assert.equal(Arrival.duration(b, "out"), len, "nor the timing");
+  const now = Arrival.poseFor("out")(4, b, true);
+  assert.deepEqual([now.camera, now.crew, now.x, now.z, now.yaw], [held.camera, held.crew, held.x, held.z, held.yaw], "same family, crew and path");
+  assert.equal(now.fov !== held.fov, true, "the lens edit itself applies");
+  const c = Arrival.carryPlayback(a, Arrival.settings({ angle: "orbit", leaveCrew: "mix" }));
+  assert.equal(Arrival.poseFor("out")(4, c, true).camera, "orbit", "an angle edit picks its own family");
+  const d = Arrival.carryPlayback(a, Arrival.settings({ angle: "crane", leaveCrew: "pushout" }));
+  assert.equal(Arrival.crewFor(d, "out"), "pushout", "an explicit crew edit re-chooses");
+  assert.equal(Arrival.carryPlayback(a, null), null);
 });

@@ -353,6 +353,26 @@ test("phoneHold: title skips / releases on mobile; desktop and settings keep the
   assert.ok(hold.logs.includes("game: garage released for the race"));
 });
 
+test("the title poll does no work during a race; back on the title the quiet clock restarts (perf hunt 9)", async () => {
+  const timers = [];
+  const h = page({ timers });
+  let reads = 0;
+  for (const id of ["overlay", "race-settings"]) {   // create() bound G.$ already: count the element lookups it makes
+    const el = h.els[id];
+    Object.defineProperty(h.els, id, { get: () => { reads++; return el; } });
+  }
+  h.G.state = "race";
+  h.pre.start();
+  for (let i = 0; i < 60; i++) { h.advance(1000); timers.shift()(); }
+  assert.equal(reads, 0, "60 s of race ticks read no DOM");
+  assert.equal(timers.length, 1, "the poll stays armed for the return to the menu");
+  h.G.state = "menu";
+  timers.shift()();
+  assert.ok(reads > 0, "the title poll works again on the menu");
+  assert.deepEqual(h.built, [], "the first menu tick after a race is not quiet: no prebuild yet");
+  assert.ok([...h.pre.state().blockers].includes("input-recent"), "the quiet clock restarted at the return");
+});
+
 test("blocked runs build nothing: Save-Data on the title, a race start anywhere", async () => {
   const h = page();
   h.ctx.navigator = { connection: { saveData: true } };
@@ -450,7 +470,11 @@ function sceneHarness(textures = false, { crew = false } = {}) {
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
-  return { GarageScene, made, live, handles, freed, gfx };
+  // toFixed calls made inside this VM realm (the room-key builders' kc()).
+  vm.runInContext("(() => { const P = (0).constructor.prototype, f = P.toFixed; globalThis.__toFixed = 0;"
+    + " P.toFixed = function (d) { globalThis.__toFixed++; return f.call(this, d); }; })()", ctx, { filename: "garage-prebuild:toFixed" });
+  const countToFixed = () => vm.runInContext("__toFixed", ctx, { filename: "garage-prebuild:count" });
+  return { GarageScene, made, live, handles, freed, gfx, countToFixed };
 }
 const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
                drivers: [{ name: "A", code: "AAA", num: 4 }, { name: "B", code: "BBB", num: 81 }] };
@@ -470,6 +494,31 @@ test("a prepared room is the one the first garage draw uses: no rebuild on the t
   assert.equal(GarageScene.prepared(TEAM, LIV, null, 0, { ...setupCtx, studio: true }), false);
   assert.equal(GarageScene.ctxKey(setupCtx), GarageScene.ctxKey({ ...setupCtx, sceneNow: 123, ambient: true }),
     "the scene clock and ambient motion never move the room's key");
+});
+
+test("an unchanged garage frame skips the room-key strings; a paint change still rebuilds (perf hunt 9)", () => {
+  const h = sceneHarness(), { GarageScene, made } = h;
+  const count = h.countToFixed;   // toFixed calls inside the VM realm: the key builders' kc()
+  const setupCtx = { track: { id: "monza" }, weather: "dry", tod: "default", night: false,
+                     achievements: { active: true, facility: 2, wins: 1, podiums: 3, titles: 0 } };
+  const liv = { c1: [0.95, 0.45, 0.05], c2: [0.05, 0.05, 0.06], accent: [0.1, 0.7, 0.9] };
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  const meshes = () => made.filter((m) => m === "mesh").length, built = meshes();
+  const t0 = count();
+  for (let i = 0; i < 100; i++) GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, { ...setupCtx, sceneNow: i });
+  assert.equal(count() - t0, 0, "100 unchanged frames build no key strings");
+  assert.equal(meshes(), built, "and rebuild nothing");
+  liv.c1 = [0.10, 0.45, 0.95];
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  assert.ok(meshes() > built, "a new liv.c1 rebuilds the room");
+  const rebuilt = meshes();
+  liv.c1[0] = 0.5;   // an in-place edit is caught too
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  assert.ok(meshes() > rebuilt, "an in-place liv.c1 edit rebuilds the room");
+  const again = meshes();
+  setupCtx.achievements = { ...setupCtx.achievements, facility: 6 };
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  assert.ok(meshes() > again, "a career facility change rebuilds the room");
 });
 
 test("the A/B switch: apex26.garagePrewarm=\"off\" at boot, or setEnabled(false), stops the TITLE prebuild only", async () => {

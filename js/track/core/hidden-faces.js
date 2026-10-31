@@ -48,6 +48,7 @@ const TrackHiddenFaces = (function () {
   // and then the coarse one is the same answer as one grid holding all boxes.
   const BIG_CELLS = 1024, CELL_BIG = 128;
   const MAT_GLASS = 3, MAT_FLAG = 15;
+  const CLASSIFY_SLICE = 4096;   // triangles per stripSteps yield in the classify pass (any size: same keep[])
 
   const now = () => (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   const arr = (a) => (a && a._data) ? a._data : a;
@@ -158,7 +159,7 @@ const TrackHiddenFaces = (function () {
   // vertex y of every terrain triangle whose AABB touches the cell. A prop
   // vertex above it cannot be buried (nor resting under a down face), so the
   // exact groundY lookups only run on the few that pass. -Infinity = no terrain.
-  // Returns the raw grid; classify() does the lookup inline.
+  // Returns the raw grid; classifier() does the lookup inline.
   function terrainCeil(terrain) {
     const tp = terrain && arr(terrain.pos), ti = terrain && arr(terrain.idx);
     if (!tp || !ti || !ti.length) return null;
@@ -400,8 +401,12 @@ const TrackHiddenFaces = (function () {
   }
 
   // The per-triangle pass: enclosed, else buried, else bottom. Fills keep[]
-  // and returns [kept, enclosed, buried, bottom].
-  function classify(pos, idx, mat, T, G, B, enc, ceil, groundY, keep) {
+  // and counts into n = [kept, enclosed, buried, bottom]. RESUMABLE by triangle
+  // range (perf hunt 7): run(t0, t1) classifies [t0, t1) with the groundY memo
+  // kept in this closure, so stripSteps can yield between ranges. Each triangle's
+  // test reads only pos/idx/mat/enc and the memo, never another triangle's keep,
+  // so any split classifies exactly what one pass did.
+  function classifier(pos, idx, mat, G, B, enc, ceil, groundY, keep) {
     // terrain ceiling over vertex v (recomputed: a vertex is shared by ~1.5
     // triangles here, too few to pay for a per-vertex cache)
     let cTop = null, cMnx = 0, cMnz = 0, cNx = 0, cNz = 0;
@@ -461,36 +466,40 @@ const TrackHiddenFaces = (function () {
       return true;
     };
 
-    let kept = 0, nEnc = 0, nBur = 0, nBot = 0;
-    for (let t = 0; t < T; t++) {
-      const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2];
-      let hide = 0;
-      if (!(mat && (isFlag(mat[a]) || isFlag(mat[b]) || isFlag(mat[c])))) {
-        const A = a * 3, Bq = b * 3, C = c * 3;
-        if (G) {
-          const e = enc[t];
-          if (e === 1 || (e === 0 && enclosedTri(G, B, pos, A, Bq, C))) { hide = 1; nEnc++; }
-        }
-        if (!hide && ceil) {
-          const ya = pos[A + 1], yb = pos[Bq + 1], yc = pos[C + 1];
-          const ca = cAt(a);
-          if (ya < ca - BURY && yb < cAt(b) - BURY && yc < cAt(c) - BURY &&
-              ya < gAt(a) - BURY && yb < gAt(b) - BURY && yc < gAt(c) - BURY &&
-              interiorUnder(A, Bq, C, -BURY)) { hide = 1; nBur++; }
-          else if (ya <= ca + BOTTOM && yb <= cAt(b) + BOTTOM && yc <= cAt(c) + BOTTOM) {
-            const e1x = pos[Bq] - pos[A], e1y = yb - ya, e1z = pos[Bq + 2] - pos[A + 2];
-            const e2x = pos[C] - pos[A], e2y = yc - ya, e2z = pos[C + 2] - pos[A + 2];
-            const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
-            const L2 = nx * nx + ny * ny + nz * nz;
-            if (L2 > 1e-24 && ny < 0 && ny * ny > BOTTOM_NY * BOTTOM_NY * L2 &&
-                ya <= gAt(a) + BOTTOM && yb <= gAt(b) + BOTTOM && yc <= gAt(c) + BOTTOM &&
-                interiorUnder(A, Bq, C, BOTTOM + 1e-9)) { hide = 1; nBot++; }
+    const n = [0, 0, 0, 0];
+    const run = (tFrom, tTo) => {
+      let kept = n[0], nEnc = n[1], nBur = n[2], nBot = n[3];
+      for (let t = tFrom; t < tTo; t++) {
+        const a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2];
+        let hide = 0;
+        if (!(mat && (isFlag(mat[a]) || isFlag(mat[b]) || isFlag(mat[c])))) {
+          const A = a * 3, Bq = b * 3, C = c * 3;
+          if (G) {
+            const e = enc[t];
+            if (e === 1 || (e === 0 && enclosedTri(G, B, pos, A, Bq, C))) { hide = 1; nEnc++; }
+          }
+          if (!hide && ceil) {
+            const ya = pos[A + 1], yb = pos[Bq + 1], yc = pos[C + 1];
+            const ca = cAt(a);
+            if (ya < ca - BURY && yb < cAt(b) - BURY && yc < cAt(c) - BURY &&
+                ya < gAt(a) - BURY && yb < gAt(b) - BURY && yc < gAt(c) - BURY &&
+                interiorUnder(A, Bq, C, -BURY)) { hide = 1; nBur++; }
+            else if (ya <= ca + BOTTOM && yb <= cAt(b) + BOTTOM && yc <= cAt(c) + BOTTOM) {
+              const e1x = pos[Bq] - pos[A], e1y = yb - ya, e1z = pos[Bq + 2] - pos[A + 2];
+              const e2x = pos[C] - pos[A], e2y = yc - ya, e2z = pos[C + 2] - pos[A + 2];
+              const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+              const L2 = nx * nx + ny * ny + nz * nz;
+              if (L2 > 1e-24 && ny < 0 && ny * ny > BOTTOM_NY * BOTTOM_NY * L2 &&
+                  ya <= gAt(a) + BOTTOM && yb <= gAt(b) + BOTTOM && yc <= gAt(c) + BOTTOM &&
+                  interiorUnder(A, Bq, C, BOTTOM + 1e-9)) { hide = 1; nBot++; }
+            }
           }
         }
+        if (!hide) { keep[t] = 1; kept++; }
       }
-      if (!hide) { keep[t] = 1; kept++; }
-    }
-    return [kept, nEnc, nBur, nBot];
+      n[0] = kept; n[1] = nEnc; n[2] = nBur; n[3] = nBot;
+    };
+    return { n, run };
   }
 
   function keptIndices(idx, keep, kept, T) {
@@ -528,10 +537,13 @@ const TrackHiddenFaces = (function () {
     const enc = G ? boxEnclosure(G, S.B, S.BV, S.NB, firstTri, pos, idx, T) : null;
     active += now() - t0; yield; t0 = now();
     const keep = new Uint8Array(T);
-    const n = classify(pos, idx, mat, T, G, S.B, enc, ceil, groundY, keep);
-    const kept = n[0];
+    const C = classifier(pos, idx, mat, G, S.B, enc, ceil, groundY, keep);
+    for (let t = 0; t < T; t += CLASSIFY_SLICE) {
+      C.run(t, Math.min(T, t + CLASSIFY_SLICE));
+      active += now() - t0; yield; t0 = now();
+    }
+    const n = C.n, kept = n[0];
     stats.enclosed = n[1]; stats.buried = n[2]; stats.bottom = n[3];
-    active += now() - t0; yield; t0 = now();
     if (kept !== T) geo.idx = keptIndices(idx, keep, kept, T);
     stats.trisAfter = kept;
     stats.ms = active + (now() - t0);

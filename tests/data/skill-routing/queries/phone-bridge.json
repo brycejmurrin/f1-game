@@ -1,0 +1,10 @@
+[
+{"query":"Measure the real fps on my iPhone on the live site through the GitHub issue bridge and record the numbers.","expect":"phone-bridge"},
+{"query":"I linked my phone to issue 4265. Send it an apex-cmd for frames and read back the apex-result.","expect":"phone-bridge"},
+{"query":"Run WebGPU vs WebGL2 on my actual iPhone, the live game, and tell me which path is faster.","expect":"phone-bridge"},
+{"query":"Start a BENCHMARK quick paths run on my phone over the bridge and fetch the result when it finishes.","expect":"phone-bridge"},
+{"query":"Grab a small canvas snapshot from the live game on my iPhone through the bridge issue.","expect":"phone-bridge"},
+{"query":"I only have my iPhone. Start whatever public browser server the repo has so my Grok connector can drive the game.","expect":"phone-browser"},
+{"query":"Profile the game loop CPU in headless Chromium with a flame chart and compare GLX vs TLX frame times.","expect":"playwright-probe"},
+{"query":"Pairing my phone as a controller for VS FRIEND fails at the QR code step and the WebRTC connection never opens.","expect":"multiplayer-debug"}
+]

@@ -576,6 +576,16 @@
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
     },
+    "tools/ci/claude-agents.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, queued versus unknown delivery, replyRetrieved and retrySafe. Never expose message stdin or credentials."
+    },
+    "tools/ci/claude-transcript.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON retrieval verdict; no terminal transcript or credentials in diagnostics. Dedicated reader checkout, confirmed export, deadline and no model prompts. Helper for cloud transcript snapshots, never a general shell runner."
+    },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1661,6 +1671,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/mcp/apex-claude-agents.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Existing-server descriptor and handler exports; MCP text must mirror structuredContent and preserve isError and dryRun. Not a standalone server."
+    },
     "tools/mcp/apex-extras.mjs": {
       "action": "job-status",
       "presentation": "shared-levels",
@@ -2581,6 +2596,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/explorer/fault-schedule.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Validated bounded fault scenarios, exact held-request terminal transfers, failure evidence and unconditional owned-route cleanup; application readiness remains an explicit oracle."
+    },
     "tools/ui/explorer/inspector.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -3045,6 +3065,21 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/ci/pr-wait.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Versioned snapshot, source head, all observed wait reasons, unknown/incomplete coverage and exit2; GET-only, no queue position or landing authority."
+    },
+    "tools/ci/path-overlap.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Versioned advisory inventory, observed overlaps, rename paths, incomplete/truncated coverage and exit2; no claim or path reservation."
+    },
+    "tools/ci/verification-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Source and selected-file fingerprints, log identity, historical verdict versus current/stale/unknown applicability; advisory evidence, never permission."
     }
   }
 }
