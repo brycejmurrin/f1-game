@@ -867,8 +867,11 @@
         });
 
         // LENS DIRT veil js/render/glx/shaders/glsl-post.js: grime scatters the bright-pass.
+        // TLX-P5-3 exact gate (uniform): dirt feeds only bloomSample (0 with bloom off) and the on-screen flare.
         const dirt = float(0.0).toVar();
-        If(C.lensDirt.greaterThan(0.001), () => {
+        If(C.lensDirt.greaterThan(0.001).and(C.bloomAmt.greaterThan(0.001).or(C.flareStr.greaterThan(0.0)
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)))), () => {
           dirt.assign(dirtT.sample(TL(vUV)).r);
           c.addAssign(bloomSample.mul(C.exposure).mul(dirt).mul(C.lensDirt).mul(2.2));
         });

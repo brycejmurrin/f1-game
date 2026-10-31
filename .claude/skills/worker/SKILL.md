@@ -22,7 +22,7 @@ Load order: this skill, then `steward` once the PR has a head to drive, `ship` a
 2. **Branch and draft PR.** `cursor/<topic>-<hash>` from the deploy tip. Open a DRAFT PR into
    `claude/f1-game-project-26h3ng` at the first commit, from `.github/pull_request_template.md`: Goal, Plan (live
    checklist), Verified / Not run, Hand-off. Add `lane:<host>`, `run-ci` (a draft without it runs only skip jobs and
-   idles) and `Closes #<n>`.
+   idles) and `Closes #<n>`; add labels with item 1's `gh api` recipe, never the MCP `labels` field.
 3. **Work.** AGENTS.md §The loop: all edits first, then verify once to the pre-push floor (AGENTS.md rule 3 is its one
    home). `run-ci` runs the fast tier on the draft; the full tier runs once ready; `gate` runs on the merge result.
    `ready-gate` needs `Structural guards` green on your head, so let the fast tier finish once before landing.

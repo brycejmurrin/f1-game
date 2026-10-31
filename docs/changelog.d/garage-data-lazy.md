@@ -1,0 +1,1 @@
+Improved: The game starts with about 48 KB less script. The garage's camera rigs and crew animations now load in the background after the title screen appears. Until they arrive, an arrival uses the standard cameras and crew.

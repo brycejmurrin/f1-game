@@ -734,8 +734,20 @@
 /* Sections are a heading plus one card, and the heading owns the space above it
    — so the gap between a card and the NEXT heading is set once here rather than
    fought over by two margins. */
-#cg-body .sel-label { margin-top: 14px; }
-#cg-body .sel-label:first-child { margin-top: 0; }
+/* Each section is a <details> fold (js/career/career-ui.js guideSection): the
+   outer .cr-card is the plate, the summary its 52px heading row with a ▾/▴
+   second cue beside the red slash, the inner card loses its own frame. */
+#cg-body { gap: 6px; }
+#cg-body > details { padding: 0; gap: 0; }
+#cg-body > details > summary {
+  list-style: none; cursor: pointer; margin: 0;
+  display: flex; align-items: center; gap: calc(var(--gap) * 0.5);
+  min-height: var(--tap-paint); padding-block: 0; padding-inline: calc(var(--pad) * 0.7);
+}
+#cg-body > details > summary::-webkit-details-marker { display: none; }
+#cg-body > details > summary::after { content: "\25BE"; margin-left: auto; color: var(--red); }
+#cg-body > details[open] > summary::after { content: "\25B4"; }
+#cg-body > details > .cg-card { border: 0; background: transparent; padding-top: 0; }
 .cg-card { gap: 9px; }
 /* Prose, not a data row: this is the one place in career that runs sentences, so
    it gets the line-height and measure they need. .cr-row pairs sit alongside it
@@ -979,8 +991,10 @@ body[data-density="compact"][data-shape="wide"] #results .sheet[data-density="co
   }
   #quali .sheet[data-density="compact"]:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
 }
-#career-guide .sheet[data-density="compact"] #cg-body { gap: calc(var(--gap) * 0.2); }
-#career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: calc(var(--gap) * 0.65); }
+/* Compact wide: the fold headings ARE the contents, so the jump strip folds
+   away and the body takes its row (design pass #3, 2026-10-30). */
+#career-guide .sheet[data-density="compact"]:not([data-shape="tall"]):has(> #cg-contents) { grid-template-rows: auto minmax(0, 1fr) auto; }
+#career-guide .sheet[data-density="compact"]:not([data-shape="tall"]) > #cg-contents { display: none; }
 #career-guide .sheet[data-density="compact"] .cg-card { gap: calc(var(--gap) * 0.35); }
 #career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
 /* BACK / DRIVE MY LAP / SIMULATE painted 285x26 on a landscape iPhone

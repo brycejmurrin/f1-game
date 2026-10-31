@@ -69,6 +69,12 @@ does not discover, install or validate hosted tools.
    not as "NEVER" lines agents can forget.
 5. **Path-scoped rules** (`.cursor/rules/*.mdc` with globs) for renderer
    backends; keep always-on rules thin.
+6. **Server instructions are the MCP router.** They are the only per-server
+   text a deferring client loads before it searches (Claude Code keeps 4,096
+   chars), so apex-tools' `instructions` is the question → tool map, also
+   served as resource `apex://start-here`; `apex://debug-hooks/{section}` serves
+   the `__apex` reference a section at a time
+   ([MCP-REFINE-2026-10-30](notes/MCP-REFINE-2026-10-30.md)).
 
 **One-time Dashboard (not inventable from git):**
 
@@ -337,6 +343,7 @@ and report comparison do not launch Chromium.
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
 | `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
+| `apex_claude_agents` | `ci/claude-agents.mjs` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
 | `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |

@@ -9,6 +9,17 @@
   ],
   "quarantine": [
     {
+      "spec": "tests/specs/race-cycle-memory.spec.js",
+      "since": "2026-10-31",
+      "owner": "brycejmurrin",
+      "why": "Post-warm menu heap pair cycle6-cycle5 over the 10 MiB bound on one odd forced-GC reading: Pages #4577 (cdd6bd53, macOS Metal) cycle 5 dipped 148.1 -> 134.9 (pair 14.3); PR #4316 failed first try on all three heads with a cycle-6 step 146.9 -> 162.4. Passes on retry. Only the heap-slope message is exempt; track-identity assertions stay blocking.",
+      "title": "racing circuit after circuit keeps at most one world in memory",
+      "signature": "^post-warm menu heap cycle\\d+.cycle\\d+=",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41158673444",
+      "expires": "2026-11-14",
+      "review": "By 2026-11-14 the robust-slope fix (PR #4426) lands and removes this row; do not extend without fresh failed-run evidence and a new deadline."
+    },
+    {
       "spec": "tests/specs/hud-mirror.spec.js",
       "since": "2026-10-02",
       "owner": "brycejmurrin",
@@ -115,6 +126,17 @@
       "signature": "^spa: previous circuit chunk geometries are still in the render-object set",
       "expires": "2026-11-13",
       "review": "By 2026-11-13, remove this row once the exact test passes without retry on three Metal runs. Platform removes it after a clean week. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/garage-livery-churn.spec.js",
+      "since": "2026-10-30",
+      "owner": "brycejmurrin",
+      "why": "One retry-pass on #4212 (run 41059864671 attempt 1, job 124077512835): the post-pause 7th edit created one 1024x1280 GPU texture (the player decal-atlas preview, js/car/car-draw.js) in three's _renderTransparents. Same family as the #3505 rows; the 10-27 exit fixed the bay atlases, this is the draft-spare path (takeDraftSpare / parkDraftAtlas). uihunt4-flows-1030 #7.",
+      "title": "Garage livery churn \u203a N paint edits in the garage leave GPU textures, flap meshes, flap runs, textures and settled geoLive flat (TLX)",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41059864671/job/124077512835",
+      "signature": "^GPU textures created by 7 edits after the warm-up",
+      "expires": "2026-11-13",
+      "review": "By 2026-11-13, read the next failure's created[].v and .img (logged since uihunt4-flows-1030): v > 1 means a parked draft spare reached its first draw without a GPU texture (refill before first upload), v = 1 means takeDraftSpare missed (spares freed or evicted during the 2.5 s pause). Fix that path in car-draw.js, then remove this row after three cold llvmpipe runs pass first try (APEX_FAIL_ON_FLAKY=1), as the #3505 exit did."
     }
   ]
 }

@@ -183,12 +183,20 @@ const ApexBridge = (function () {
 
   async function pollOnce() {
     const run = _run;
-    const r = await gh("/comments?per_page=100&since=" + encodeURIComponent(run.cutoff), { etag: run.etag });
+    // `since` (run.since) walks forward; `cutoff` stays the hello's time, the floor a command must be created after.
+    const r = await gh("/comments?per_page=100&since=" + encodeURIComponent(run.since), { etag: run.etag });
     if (r.status === 304) return 0;
     if (r.status === 401) { stop("token rejected"); setToken(""); return -1; }
     if (!r.ok) { run.backoff = Date.now() + BACKOFF_MS; say("poll " + r.status + ", backing off"); return -1; }
     run.etag = r.headers.get("etag") || null;
-    const cmds = pickCommands(await r.json(), run.cutoff, run.seen);
+    const page = await r.json();
+    // Advance the window to the newest comment on this page, so the next poll reads PAST it: a fixed `since` served
+    // page 1 (100 comments) forever and re-parsed the whole thread. The newest CREATED time is the safe bound — every
+    // comment not yet listed was created after it (the list is oldest first), so its updated_at is too, while an
+    // edited old comment's updated_at could jump past them. `since` is inclusive: the boundary comment comes back once
+    // more and `seen` drops it.
+    for (const c of page || []) if (c && c.created_at > run.since) run.since = c.created_at;
+    const cmds = pickCommands(page, run.cutoff, run.seen);
     for (const c of cmds) {
       if (_run !== run) break;
       run.seen.add(c.id);
@@ -215,12 +223,12 @@ const ApexBridge = (function () {
 
   async function start(issue, tok) {
     if (_run) return false;
-    _run = { issue, token: tok, cutoff: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting" };
+    _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting" };
     paintBadge();
     try {
       const hello = await post({ hello: true, facts: facts() });
       if (!_run) return false;
-      _run.cutoff = hello.created_at;
+      _run.cutoff = _run.since = hello.created_at;
       _run.state = "live";
       paintBadge();
       say("linked to issue #" + issue);

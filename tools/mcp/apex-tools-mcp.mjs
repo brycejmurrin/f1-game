@@ -31,6 +31,7 @@ import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
 import { LAUNCH_ENV_ALLOW } from "../ci/cursor-agents.mjs";
+import { CLAUDE_CATALOG, createClaudeTools } from "./apex-claude-agents.mjs";
 import { runningEndpoint } from "./debug-chrome.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
@@ -47,7 +48,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.17.0";
+const SERVER_VERSION = "1.18.1";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -492,6 +493,7 @@ const CURSOR_VERBS = ["list", "status", "wait", "usage", "artifacts", "artifact"
 const CURSOR_ONLY = ["tools", "errors", "chat", "turns"];
 
 const CATALOG = [
+  ...CLAUDE_CATALOG,
   { ...DIAGNOSTICS_TOOL, kind: 'tree' },
   {
     name: "apex_garage_plan",
@@ -536,7 +538,7 @@ const CATALOG = [
   {
     name: "apex_pick_tests",
     week: 1,
-    description: "Tree — which test GROUPS this change needs (--json). Never --bg (that would start test-bg). Skill: check-changes.",
+    description: "Tree — which test GROUPS a change needs: the working tree, since a ref, staged, or files you name (--json). Groups, not the one pre-push spec: that is apex_select_specs files → floor. Never --bg (that would start test-bg). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -595,8 +597,8 @@ const CATALOG = [
   {
     name: "apex_help",
     kind: "tree",
-    description: "Tree — full description and full input schema (every nested property and its prose) of one apex_* tool; tools/list carries only a short form. Read-only, no browser.",
-    inputSchema: { type: "object", required: ["tool"], properties: { tool: { type: "string", description: "Tool name, e.g. apex_shot_survey." } } },
+    description: "Tree — full description and full input schema (every nested property and its prose) of one apex_* tool; tools/list carries only a short form. Without tool: every tool name plus the question → tool map. Read-only, no browser.",
+    inputSchema: { type: "object", properties: { tool: { type: "string", description: "Tool name, e.g. apex_shot_survey. Omit for the list." } } },
   },
   {
     name: "apex_locations",
@@ -800,11 +802,12 @@ const CATALOG = [
   {
     name: "apex_select_specs",
     week: 3,
-    description: "Tree — which SPECS fit the budget since a git ref. Requires since. Never starts tests. Skill: check-changes.",
+    description: "Tree — which SPECS a change needs, ranked and fit to the CI budget: since a git ref, or for files you name (a hypothetical edit, any tree). `floor` is AGENTS.md rule 3's ONE pre-push spec, or null with floorReason. Never starts tests. Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
         since: { type: "string" },
+        files: { type: "array", items: { type: "string", minLength: 1, maxLength: 4096 }, maxItems: 200, description: "Repo paths of a change to plan for, instead of since." },
         budgetMin: { type: "number" },
         full: { type: "boolean", description: "Keep each shard's spec list (default: specCount; `selected` already lists every spec)." },
         dryRun: { type: "boolean" },
@@ -1360,7 +1363,7 @@ for (const key of ['tracks', 'visits', 'backend', 'mode', 'cycles', 'settle', 'w
   else if (props[key].enum && spec.enum) props[key].enum = [...new Set([...props[key].enum, ...spec.enum])];
 }
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
-schemaFor("apex_select_specs").required = ["since"];
+schemaFor("apex_select_specs").anyOf = [{ required: ["since"] }, { required: ["files"] }];
 schemaFor("apex_graph_parity").required = ["base"];
 schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
 schemaFor("apex_frame_report").required = ["track"];
@@ -1936,10 +1939,12 @@ function buildArgv(name, args) {
       return argv;
     }
     case "apex_select_specs": {
-      if (!args.since) {
-        badArgs("apex_select_specs needs since", 'Pass {"since":"HEAD~1"} or a git ref.');
+      const files = Array.isArray(args.files) ? args.files.map(String) : [];
+      if (!args.since && !files.length) {
+        badArgs("apex_select_specs needs since or files", 'Pass {"since":"HEAD~1"} or {"files":["js/ui/hud.js"]}.');
       }
-      const argv = [...nodeTool("ci/select-specs.mjs"), "--since", String(args.since), "--json"];
+      if (files.some((f) => f.includes(",") || path.isAbsolute(f) || f.split(/[\\/]/).includes(".."))) badArgs("apex_select_specs: files are repo-relative paths without commas", 'e.g. {"files":["js/ui/hud.js"]}.');
+      const argv = [...nodeTool("ci/select-specs.mjs"), ...(args.since ? ["--since", String(args.since)] : []), ...(files.length ? ["--files", files.join(",")] : []), "--json"];
       if (args.budgetMin != null) argv.push("--budget-min", String(args.budgetMin));
       return argv;
     }
@@ -2244,9 +2249,19 @@ function statusNext(lock, playwright, loadavg) {
 }
 /** apex_help: the uncompacted description + inputSchema that tools/list shortens (see compactTool). */
 function handleHelp(args = {}) {
+  if (args.tool === undefined) return toolResult({ ok: true, tools: CATALOG.map((c) => c.name), routes: ROUTES });
   const t = CATALOG.find((c) => c.name === args.tool);
   if (!t) return refuse("unknown_tool", `unknown tool ${args.tool}`, `Pick one of: ${CATALOG.map((c) => c.name).join(", ")}.`);
   return toolResult({ ok: true, tool: t.name, description: t.description, inputSchema: t.inputSchema });
+}
+function lowerCircuitIds(args) {
+  if (!isObject(args)) return args;
+  const ids = new Set(knownCircuits());
+  const fix = (v) => (typeof v === "string" && v !== v.toLowerCase() && ids.has(v.toLowerCase()) ? v.toLowerCase() : v);
+  const out = { ...args };
+  for (const k of ["track", "id"]) if (Object.hasOwn(out, k)) out[k] = fix(out[k]);
+  if (Array.isArray(out.tracks)) out.tracks = out.tracks.map(fix);
+  return out;
 }
 /** apex_catalog: ids come from the tool schemas and the UI audit's own catalogs, so they cannot drift from what the tools accept. */
 async function handleCatalog(args = {}) {
@@ -2261,13 +2276,17 @@ async function handleCatalog(args = {}) {
     const m = await import("../ui/menu-screens.mjs");
     ui = { screens: m.listScreenIds(), viewports: m.VIEWPORTS.map((v) => v[0]) };
   } catch (e) { ui.error = String(e.message || e); }
+  // filter without section narrows every list (it used to be ignored and return the whole catalog).
+  const needle = args.filter ? String(args.filter).toLowerCase() : "";
+  const keep = (list) => (needle ? list.filter((x) => String(x).toLowerCase().includes(needle)) : list);
   return toolResult({
     ok: true,
-    tracks: enumOf("apex_shot", "track"), cams: enumOf("apex_shot", "cam"), tods: enumOf("apex_shot", "tod"),
-    shotPresets: enumOf("apex_shot_survey", "preset"),
-    hudDevices: enumOf("apex_hud_shot", "device"), hudCams: enumOf("apex_hud_shot", "cam"),
-    jobKinds: JOB_KINDS,
-    uiScreens: ui.screens, uiViewports: ui.viewports, ...(ui.error ? { uiError: ui.error } : {}),
+    ...(needle ? { filter: needle } : {}),
+    tracks: keep(enumOf("apex_shot", "track")), cams: keep(enumOf("apex_shot", "cam")), tods: keep(enumOf("apex_shot", "tod")),
+    shotPresets: keep(enumOf("apex_shot_survey", "preset")),
+    hudDevices: keep(enumOf("apex_hud_shot", "device")), hudCams: keep(enumOf("apex_hud_shot", "cam")),
+    jobKinds: keep(JOB_KINDS),
+    uiScreens: keep(ui.screens), uiViewports: keep(ui.viewports), ...(ui.error ? { uiError: ui.error } : {}),
     hint: "apex_locations {track} lists named shot targets; apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices.",
   });
 }
@@ -2404,11 +2423,11 @@ export function pinOk(name, argv) {
     );
   }
   if (name === "apex_select_specs") {
-    if (!argv.includes("--json") || !argv.includes("--since") || argv.includes("--bg")) {
+    if (!argv.includes("--json") || !(argv.includes("--since") || argv.includes("--files")) || argv.includes("--bg")) {
       return refuse(
         "pin_violated",
-        "apex_select_specs must be --since <ref> --json and never --bg",
-        "Pass since. Run test-bg yourself after reading the selected spec list.",
+        "apex_select_specs must be --since <ref> or --files <paths>, --json, and never --bg",
+        "Pass since or files. Run test-bg yourself after reading the selected spec list.",
       );
     }
   }
@@ -2682,10 +2701,12 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     return refuse(
       "unknown_tool",
       `unknown tool ${name}`,
-      "list-tools for the apex_* catalog.",
+      "apex_help lists every apex_* tool; the server instructions map questions to them.",
     );
   }
 
+  // Circuit ids are lowercase; "Monza" is a typo with one meaning, so take it rather than refuse it.
+  args = lowerCircuitIds(args);
   // layout-audit viewport ids are accepted and rewritten to HUD device ids before schema enum checks.
   if (name === "apex_hud_shot" || name === "apex_hud_survey") args = aliasHudDevice(args);
   args = aliasImageArgs(name, args);
@@ -2704,7 +2725,8 @@ function dispatch(name, args = {}, { signal = null } = {}) {
       all = listSurveyLocations(args.track, custom);
     } catch (e) {
       if (e.refuse) return e.refuse;
-      return refuse("bad_args", String(e.message || e), "Pass designs as a readable custom-survey designs JSON path, or omit it.");
+      const msg = String(e.message || e);
+      return refuse("bad_args", msg, /^Unknown track/.test(msg) ? "Circuit ids are lowercase (apex_catalog tracks), e.g. monza." : "Pass designs as a readable custom-survey designs JSON path, or omit it.");
     }
     const search = args.search?.trim().toLowerCase();
     const exact = search && all.filter(l => l.id === search || l.aliases.includes(search));
@@ -2760,6 +2782,12 @@ function dispatch(name, args = {}, { signal = null } = {}) {
       const r = extras().handlers[name](args, { signal });
       return r && typeof r.then === "function" ? r.catch(refusalOf) : r;
     } catch (e) { return refusalOf(e); }
+  }
+
+  if (name === "apex_claude_agents") {
+    const gate = gateTreeArgs(args);
+    if (gate) return gate;
+    return claudeTools().handlers.apex_claude_agents(args, { signal });
   }
 
   const kind = toolKind(known);
@@ -2863,6 +2891,7 @@ const OPEN_WORLD = new Set(["apex_cursor_agents"]);
 // launch and followup are not idempotent (a client must not auto-retry them on the strength of a hint).
 const NOT_IDEMPOTENT = new Set(["apex_cursor_agents"]);
 function toolAnnotations(entry) {
+  if (entry.annotations) return { title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "), ...entry.annotations };
   const readOnly = toolKind(entry) === "tree" && !NOT_READ_ONLY.has(entry.name);
   return {
     title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "),
@@ -2959,7 +2988,7 @@ function toolOutputSchema(entry) {
 // first sentences + the "Skill:" pointer, long property prose is cut, and object schemas nested below the
 // top level collapse to their type. apex_help {tool} returns the full text and schema. Validation always
 // uses the full CATALOG schema; only the published copy is compact.
-const DESC_LONG = 240, DESC_KEEP = 60, PROP_KEEP = 60, REQUIRED_ENUM_INLINE_MAX = 24;
+const DESC_LONG = 400, DESC_KEEP = 400, PROP_KEEP = 60, REQUIRED_ENUM_INLINE_MAX = 24, ENUM_INLINE_CHARS = 240;
 function cutAt(text, max) {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
@@ -2967,6 +2996,7 @@ function cutAt(text, max) {
   return (stop > max / 3 ? head.slice(0, stop + 1) : head.replace(/\s+\S*$/, "") + "…");
 }
 function compactDescription(name, d) {
+  if (name === "apex_claude_agents") return 'Tree — Claude auth, cloud messages and transcript snapshots. apex_help {tool: "apex_claude_agents"}.';
   if (name === "apex_help" || d.length <= DESC_LONG) return d;
   const skill = d.match(/\s(Skill: [^.]*\.?)\s*$/);
   const body = skill ? d.slice(0, skill.index) : d;
@@ -2986,8 +3016,10 @@ function compactSchema(spec, depth = 0, dense = false, required = false) {
     else if (dense && BOUND_KEYS.has(k)) continue;   // bounds stay enforced by validateArgs; apex_help shows them
     // 53 circuit ids / 16 devices / 20 cams repeat across tools: apex_catalog lists them. A required enum stays
     // inline unless it is the circuit-id list (Bryce 2026-10-20: point `track` at apex_catalog); validateArgs still enforces it.
-    else if (k === "enum" && Array.isArray(v) && v.length > (required ? REQUIRED_ENUM_INLINE_MAX : 6)) {
-      out.description = cutAt(`${out.description || spec.description || "Id"} Allowed values: apex_catalog / apex_help.`, PROP_KEEP + 20);
+    // Size, not count, decides: a 12-value op enum inline is cheaper than the apex_help round trip its pointer
+    // forced, and apex_catalog never held op/command values (field test 2026-10-30).
+    else if (k === "enum" && Array.isArray(v) && JSON.stringify(v).length > ENUM_INLINE_CHARS && v.length > (required ? REQUIRED_ENUM_INLINE_MAX : 6)) {
+      out.description = cutAt(`${v.length} ids: apex_catalog. ${out.description || spec.description || ""}`.trim(), PROP_KEEP + 20);
     }
     else if ((k === "maxLength" && v === 4096) || (k === "maxItems" && v === 256)) continue;   // wrapper-wide defaults, enforced server-side
     else if (k === "required" && depth >= 1) continue;
@@ -3106,6 +3138,10 @@ function rpcError(id, code, message) {
 
 let extrasInst = null;
 let uiToolsInst = null;
+let claudeToolsInst = null;
+function claudeTools() {
+  return claudeToolsInst ||= createClaudeTools({ root: ROOT, mock: mockMode });
+}
 function uiTools() {
   return uiToolsInst ||= createUITools({ ROOT, toolResult, refuse, assertSafeOut, runSpawn, occupancyRefuse, mockMode });
 }
@@ -3118,13 +3154,54 @@ function extras() {
   return extrasInst;
 }
 
-// MCP resources: the references an agent reads before calling __apex hooks,
-// served without booting anything.
+// Server instructions are the one per-server text every client loads before it searches (Claude Code keeps
+// 4,096 chars, code.claude.com/docs/en/mcp), so they carry the question → tool map a cold agent lacked
+// (MCP-REFINE-2026-10-30: it skipped apex_locations and apex_track_audit, and read pick_tests' groups as specs).
+export const ROUTES = [
+  "apex-tools: local CLI wraps (apex_*); the tools/ CLIs do the work, this server pins safe flags. Map: docs/AGENT-SURFACE.md.",
+  "Claude cloud messages and downloaded transcript snapshots: apex_claude_agents (server-host CLI login; dedicated reader clone for transcripts).",
+  "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
+    "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; circuit turns/sectors/scenery targets: apex_locations; " +
+    "circuit health (build, floats, clipping): apex_track_audit; flyby framing: apex_frame_report; one __apex expr without a browser: apex_eval {vm:true}; " +
+    "car parts/crests: apex_car_audit; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; saved profiles: apex_profile_query; " +
+    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor.",
+  "BROWSER (apex_status first; one browser at a time; holds the lock) — scene shots: apex_shot, apex_shot_survey; race HUD: apex_hud_mock (fastest), " +
+    "apex_hud_shot, apex_hud_survey; menu screens: apex_ui_shot, apex_ui_fit, apex_ui_inspect; live __apex: apex_eval, apex_agent, or a persistent apex_track session; " +
+    "garage: apex_garage; frame budget: apex_profile. Minutes-long work: apex_job_start, then apex_job_status {wait}.",
+  "Resources: apex://start-here (this map), apex://debug-hooks (the __apex reference by section). Never github.io (deploy-research subagent). " +
+    "chrome_* is the chrome-devtools MCP. HTTP 127.0.0.1:3713 only.",
+].join("\n");
+
+// MCP resources: the references an agent reads before calling __apex hooks, served without booting anything.
+// DEBUG-HOOKS.md is ~310 KB, past every client's result cap in one read, so it is served by `## ` section
+// through a template (the largest section is ~46 KB, under Claude Code's 50,000-char spill threshold).
+const DEBUG_HOOKS = "docs/DEBUG-HOOKS.md";
+const slug = (heading) => heading.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function hookSections() {
+  const text = fs.readFileSync(path.join(ROOT, DEBUG_HOOKS), "utf8");
+  const parts = text.split(/^(?=## )/m);
+  return [{ slug: "intro", title: "Introduction", text: parts[0] },
+    ...parts.slice(1).map((part) => { const title = part.slice(3, part.indexOf("\n")).trim(); return { slug: slug(title), title, text: part }; })];
+}
 const RESOURCES = [
-  ["docs/DEBUG-HOOKS.md", "__apex dev API reference: every hook, its arguments and return shape."],
-  ["docs/AGENT-SURFACE.md", "Which CLIs are wrapped as apex_*, their pins, and what stays CLI-only."],
-  ["docs/research/APEX-TOOLS-MCP.md", "apex-tools MCP design, refuse table and measured history."],
-].map(([rel, description]) => ({ uri: `file:///${rel}`, name: path.basename(rel), description, mimeType: "text/markdown", rel }));
+  { uri: "apex://start-here", name: "start-here", title: "apex-tools: which tool for which question", description: "The question → tool map (the server instructions, as a readable resource).", mimeType: "text/markdown", read: () => ROUTES },
+  { uri: "apex://debug-hooks", name: "debug-hooks", title: "__apex reference: section index", description: "Every section of docs/DEBUG-HOOKS.md with its size; read one as apex://debug-hooks/{section}.", mimeType: "text/markdown",
+    read: () => ["# __apex reference (docs/DEBUG-HOOKS.md) by section", "", "Read one: apex://debug-hooks/<slug>. Live manifest: __apex.agentHelp().", "",
+      ...hookSections().map((x) => `- ${x.slug} — ${x.title} (${Math.round(x.text.length / 1024)} KB)`)].join("\n") },
+  ...[["docs/AGENT-SURFACE.md", "Which CLIs are wrapped as apex_*, their pins, and what stays CLI-only."],
+    ["docs/research/APEX-TOOLS-MCP.md", "apex-tools MCP design, refuse table and measured history."],
+  ].map(([rel, description]) => ({ uri: `file:///${rel}`, name: path.basename(rel), description, mimeType: "text/markdown", read: () => fs.readFileSync(path.join(ROOT, rel), "utf8") })),
+];
+const RESOURCE_TEMPLATES = [
+  { uriTemplate: "apex://debug-hooks/{section}", name: "debug-hooks-section", title: "__apex reference: one section", description: "One `## ` section of docs/DEBUG-HOOKS.md by slug (index: apex://debug-hooks), e.g. apex://debug-hooks/cameras.", mimeType: "text/markdown" },
+];
+function readResource(uri) {
+  const fixed = RESOURCES.find((r) => r.uri === uri);
+  if (fixed) return { uri, mimeType: fixed.mimeType, text: fixed.read() };
+  const m = /^apex:\/\/debug-hooks\/([a-z0-9-]+)$/.exec(uri || "");
+  const section = m && hookSections().find((x) => x.slug === m[1]);
+  return section ? { uri, mimeType: "text/markdown", text: section.text } : null;
+}
 
 /** tools/call requests still running, by JSON-RPC id, for notifications/cancelled. */
 const inflight = new Map();
@@ -3161,12 +3238,7 @@ async function handleRpc(msg) {
         protocolVersion: PROTOCOL,
         capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
-        instructions:
-          "Local CLI wrap (apex_*). Skills say when; tools/ CLIs do the work; " +
-          "this server pins safe flags. Map: docs/AGENT-SURFACE.md. " +
-          "Tree = TRACK_VM / static, no lock. Browser = harness Chromium after " +
-          "apex_status + lock. Never github.io (deploy-research subagent). " +
-          "chrome_* is the chrome-devtools MCP. HTTP 127.0.0.1:3713 only.",
+        instructions: ROUTES,
       },
     };
   }
@@ -3193,12 +3265,16 @@ async function handleRpc(msg) {
     }
   }
   if (method === "resources/list") {
-    return { jsonrpc: "2.0", id: mid, result: { resources: RESOURCES.map(({ rel, ...r }) => r) } };
+    return { jsonrpc: "2.0", id: mid, result: { resources: RESOURCES.map(({ read, ...r }) => r) } };
+  }
+  if (method === "resources/templates/list") {
+    return { jsonrpc: "2.0", id: mid, result: { resourceTemplates: RESOURCE_TEMPLATES } };
   }
   if (method === "resources/read") {
-    const res = RESOURCES.find((r) => r.uri === (msg.params && msg.params.uri));
-    if (!res) return rpcError(mid, -32002, `Resource not found: ${msg.params && msg.params.uri}`);
-    return { jsonrpc: "2.0", id: mid, result: { contents: [{ uri: res.uri, mimeType: res.mimeType, text: fs.readFileSync(path.join(ROOT, res.rel), "utf8") }] } };
+    const content = readResource(msg.params && msg.params.uri);
+    // -32002 is 2025-06-18's resource-not-found code (2026-07-28 moves it to -32602).
+    if (!content) return rpcError(mid, -32002, `Resource not found: ${msg.params && msg.params.uri}. Index: apex://debug-hooks; all: resources/list.`);
+    return { jsonrpc: "2.0", id: mid, result: { contents: [content] } };
   }
   if (method === "ping") {
     return { jsonrpc: "2.0", id: mid, result: {} };

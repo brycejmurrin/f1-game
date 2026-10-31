@@ -80,7 +80,9 @@ const CamAvoid = (function () {
         const lat = (eye[0] - frame.p[0]) * frame.r[0] + (eye[2] - frame.p[2]) * frame.r[2];
         const abs = Math.abs(lat);
         if (abs <= hw + IN_MIN) break;   // already at the road edge — lift instead
-        const step = Math.min(STEP, abs - hw);
+        // Stop AT the keep-out. Capping at hw let this last step (STEP === IN_MIN)
+        // land on the white line, inside the band the break above is there to hold.
+        const step = Math.min(STEP, abs - (hw + IN_MIN));
         eye[0] += (dx / len) * step;
         eye[2] += (dz / len) * step;
         // Lost width → a little crane height (street corr does the same trade).

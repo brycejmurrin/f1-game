@@ -1366,6 +1366,8 @@ const Input = (function () {
   }
 
   function buttonSteering() {
+    // Resting arrows at centre: the keyboardSteer short-circuit. This runs per physics substep on the phone path.
+    if (!btnSteerLeft && !btnSteerRight && btnSteerVal === 0) { btnSteerT = nowMs(); return 0; }
     const t = nowMs();
     const dt = rampDtSince(btnSteerT, t);
     btnSteerT = t;

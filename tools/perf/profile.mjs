@@ -213,7 +213,11 @@ function withWorktree(ref, fn) {
 
 function wrap(script, args) {
   const r = spawnSync("node", [join(ROOT, script), ...args], { cwd: ROOT, stdio: "inherit" });
-  process.exitCode = r.status || 0;
+  // spawnSync has no numeric status when launch fails or a signal ends the
+  // child. Neither outcome establishes a completed profile.
+  if (r.error) console.error(`profile child ${script} failed: ${r.error.message}`);
+  else if (r.signal) console.error(`profile child ${script} terminated by ${r.signal}`);
+  process.exitCode = r.status ?? 1;
 }
 
 async function runTrace() {

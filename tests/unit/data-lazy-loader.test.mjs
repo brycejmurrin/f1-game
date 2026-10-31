@@ -152,6 +152,48 @@ test("a failed lighting-presets fetch is retried at the next race start, then no
   assert.equal(attempts.length, 2, "resident: nothing more to fetch");
 });
 
+// The garage's Blender tables (js/garage/garage-data.js) ride LAZY_RACE but load alone,
+// strict: the lighting presets never pull them, a dropped request is asked again, and
+// once resident nothing more is fetched (a second <script> would redeclare the const).
+test("ensureGarageData: loads garage-data.js alone, retries a dropped request, never twice once resident", async () => {
+  const attempts = [], idle = [];
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: manifest.LAZY_RACE, SCENERY_DIR: "", LAZY_DATA: [] },
+    window: { __APEX_BUILD: "test" },
+    els: {},
+    Log: { warn() {}, info() {} },
+    Tracks: { LIST: [{ id: "t0", scenery() {} }], circuitPayloadResident: () => true },
+    Assets: { modelsReady: async () => {} },
+    requestIdleCallback: (fn, o) => { idle.push({ fn, timeout: o && o.timeout }); },
+    document: {
+      createElement() { return { dataset: {}, remove() {} }; },
+      head: { appendChild(node) {
+        if (node.rel === "preload") return;
+        const file = node.src.split("?")[0];
+        attempts.push(file);
+        const n = attempts.filter((f) => f === file).length;
+        queueMicrotask(() => {
+          if (file === "js/garage/garage-data.js" && n === 1) { node.onerror(); return; }
+          if (file === "js/garage/garage-data.js") vm.runInContext("var GarageData = { RIGS: {}, CLIPS: {} };", ctx);
+          else ctx.window.LightPresets = {};
+          node.onload();
+        });
+      } },
+    },
+  });
+  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__lb = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load, getContext: () => ({ trackIdx: 0 }), applyLightTuneIfReady() {} });", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+  ctx.__lb.raceAssets();
+  await flush();
+  assert.deepEqual(idle.map((i) => i.timeout), [8000, 9000, 12000, 6000], "an idle prefetch of its own");
+  assert.equal(await ctx.__lb.ensureLightPresets(), true);
+  assert.deepEqual(attempts, ["js/lighting/presets.js"], "the presets never pull the garage tables");
+  assert.equal(await ctx.__lb.ensureGarageData(), false, "the first request is dropped");
+  assert.equal(await ctx.__lb.ensureGarageData(), true, "and asked for again");
+  assert.equal(await ctx.__lb.ensureGarageData(), true);
+  assert.deepEqual(attempts.filter((f) => f === "js/garage/garage-data.js").length, 2, "resident: nothing more to fetch");
+});
+
 test("ensureDataHub: one transient script failure retries with cache-bust and then opens", async () => {
   const urls = [];
   let tabUtilsLoads = 0;

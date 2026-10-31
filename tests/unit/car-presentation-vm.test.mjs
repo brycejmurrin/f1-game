@@ -262,8 +262,8 @@ test("a career field and MY TEAM's hire: after the menu prep, race entry builds 
     v.G.teamIdx = 3; v.G.driverIdx = 0;
     await v.carDraw.prepareMenuCarAssets(() => true);
     const bodies = count(v, "body") - 1, casters = count(v, "sh");
-    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 21, 13],
-      "21 rival bodies (2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build + shared LOD silhouette (D·DP3)");
+    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 11, 13],
+      "21 rival seats on 11 body builds, a teammate derived from its team's (#4219; 2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build + shared LOD silhouette (D·DP3)");
     assert.ok(bodies <= cap && casters <= cap);
     raceEntry(v, v.rec.builds.length, "career");
   }
@@ -427,9 +427,10 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
       // Bodies: playerBodyMesh (its own cache) + teamBodyMesh per rival seat the
       // menu lists: 21 real; LEGENDS preps ONLY the picked legend, as the race
       // grids one seat (game.js seatsFor): 21 + the picked legend's key = 22.
+      // A teammate's body is derived from its team's one build (#4219): 11 builds.
       const teamBodies = count("body") - 1, casters = count("sh");
       assert.deepEqual([pick, count("whole"), teamBodies, casters],
-        pick === "legends" ? [pick, 0, 22, 13] : [pick, 0, 21, 13],
+        [pick, 0, 11, 13],
         "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
       assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
       const menu = v.rec.builds.length;
@@ -648,7 +649,7 @@ test("A-H3: drawAeroFlaps draws through CarDraw.coOpt — coalesced on TLX, the 
   const CarMesh = { getAeroFlapSet: () => ({ set: true }), getAeroFlap: () => ({ flap: true }) };
   const Car3D = { aeroFlaps: () => [{ wing: "front", zAngle: 0, xAngle: 0.3, y: 0.2, z: 1 }, { wing: "rear", zAngle: 0, xAngle: 0.4, y: 0.8, z: -1.5 }] };
   const CarMaterials = vm.runInNewContext(read("js/car/car-materials.js") + "\nCarMaterials");
-  const run = (CarDraw) => new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw", "CarMaterials",
+  const run = (CarDraw) => new Function("wingColorOfLivery", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw", "CarMaterials",
     src + "\nreturn drawAeroFlaps;")(() => [1, 0, 0], (x, a, b) => Math.min(b, Math.max(a, x)), () => ({}), Car3D, CarMesh, gfx, new Float32Array(16), CarDraw, CarMaterials);
   const paint = { roughness: 0.3, metalness: 0.1, specular: 0.5, clearcoat: 0.4, emissive: 0, carPaint: 1, sparkle: 1, doubleSided: true };
   const I = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -737,8 +738,9 @@ test("team meshes: painted and body-only key per seat, the caster per team, and 
   assert.notEqual(v.carDraw.teamMesh(team, a, false), sa, "silhouette:false is the painted mesh");
   v.rec.builds.length = 0;
   const ba = v.carDraw.teamBodyMesh(team, a), bb = v.carDraw.teamBodyMesh(team, b);
-  assert.deepEqual(seen(), ["body:" + a.num, "body:" + b.num], "body-only: one build per seat, numbered");
-  assert.notEqual(ba, bb);
+  assert.deepEqual(seen(), ["body:" + a.num], "body-only: one build per team, the teammate's body derived from it (#4219)");
+  assert.notEqual(ba, bb, "…into its own mesh");
+  assert.deepEqual([ba.num, bb.num, bb.seated], [a.num, b.num, a.num], "each mesh carries its own seat's number");
   assert.equal(v.carDraw.teamBodyMesh(team, b), bb, "a repeat is a hit");
   v.rec.builds.length = 0;
   const qa = v.carDraw.playerBodyMesh(team, a), qb = v.carDraw.playerBodyMesh(team, b);
@@ -923,4 +925,65 @@ test("shared rival cache: a failed far upload keeps its source and retries on th
   assert.equal(r.idle.length, 1, "the next far draw schedules a retry");
   r.idle.shift()();
   assert.equal(cd.farRivalBodyReady(), true);
+});
+
+// TEAMMATES SHARE ONE BODY BUILD (#4219). The race-entry / menu warm built the
+// field body once per SEAT (22 Car3D builds, ~58 ms each in Node) where the two
+// seats differ only in the lid's colours. Car3D.build({ seats }) derives each
+// teammate from the one build. (1) The REAL Car3D (Node VM): every team's
+// derived second seat is deepStrictEqual to that seat's own full build, the
+// first seat unchanged, with CarShade smoothing off (the shipped default) and on
+// ("*"); an "auto" T-cam (seat-coloured housing) is refused, never approximated.
+function realCar3d(smooth) {
+  const quiet = { log() {}, info() {}, warn() {}, error() {}, debug() {} };
+  const ctx = vm.createContext({ console: quiet, Math, Object, Array, Float32Array, Float64Array, Int32Array, Uint16Array, Uint32Array,
+    JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-design.js", "js/car/livery-graphics.js",
+    "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js",
+    "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/liveries.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const all = vm.runInContext("({ CarShade, Car3D, Teams, Parts, Liveries })", ctx);
+  all.CarShade.set(smooth);
+  return { Car3D: all.Car3D, Teams: all.Teams, Parts: all.Parts, Liveries: all.Liveries };
+}
+test("a teammate's derived field body is byte-identical to its own full build, every team, smoothing off and on", () => {
+  for (const smooth of ["", "*"]) {
+    const { Car3D, Teams, Parts, Liveries } = realCar3d(smooth);
+    // car-draw.js buildCarData's opts for a body-only (field) mesh.
+    const opts = (team, liv, num) => ({ livery: liv, teamId: team.id, num, parts: Parts.getVisualTiers(Parts.getFactorySetup(team), team), noWheels: true, field: true });
+    const teams = Teams.LIST.filter((t) => Teams.isReal(t));
+    assert.equal(teams.length, 11);
+    for (const team of teams) {
+      const liv = Liveries.forTeam(team)[0], [a, b] = team.drivers, seats = new Map([[b.num, null]]);
+      const first = Car3D.build(liv.c1, liv.c2, Object.assign(opts(team, liv, a.num), { seats }));
+      const derived = seats.get(b.num), label = `${team.id} smooth=${smooth || "off"}`;
+      assert.ok(derived, label + ": the second seat is derived");
+      const own = Car3D.build(liv.c1, liv.c2, opts(team, liv, b.num));
+      assert.deepStrictEqual(derived, own, label + ": derived seat == its own build (pos, nrm, col, mat, idx, flapInfo)");
+      assert.deepStrictEqual(first, Car3D.build(liv.c1, liv.c2, opts(team, liv, a.num)), label + ": the first seat is unchanged");
+      assert.notDeepStrictEqual(derived.col, first.col, label + ": the lids differ");
+      assert.notEqual(derived.pos, first.pos, label + ": own arrays, not shared ones");
+      if (team === teams[0] && !smooth) {
+        const auto = Object.assign({}, liv, { tcam: "auto" }), refused = new Map([[b.num, null]]);
+        Car3D.build(auto.c1, auto.c2, Object.assign(opts(team, auto, a.num), { seats: refused }));
+        assert.equal(refused.get(b.num), null, "an \"auto\" T-cam differs per seat: no derivation, the caller builds it");
+      }
+    }
+  }
+});
+
+// (2) THE WARM: a 22-car race entry builds the field's bodies once per TEAM
+// (+ the player's own), and every rival still draws its own mesh and number.
+test("race entry's warm builds one field body per team, each seat its own mesh", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 3; v.G.driverIdx = 0;
+  const cars = v.field((c, i) => 3000 - 9 * i);
+  assert.equal(cars.length, 22);
+  v.carDraw.warmCarAssets();
+  const bodies = v.rec.builds.filter((b) => b.kind === "body");
+  assert.ok(bodies.length <= 11 + 1, `${bodies.length} body builds for 22 cars (one per team + the player's)`);
+  const rivals = cars.filter((c) => !c.isPlayer), meshes = rivals.map((c) => v.carDraw.teamBodyMesh(c.team, c));
+  assert.equal(new Set(meshes).size, rivals.length, "21 rivals, 21 distinct meshes");
+  assert.deepEqual(meshes.map((m) => m.num), rivals.map((c) => c.num), "each mesh is its own seat's");
+  assert.equal(v.rec.builds.filter((b) => b.kind === "body").length, bodies.length, "and the draws are all hits");
 });

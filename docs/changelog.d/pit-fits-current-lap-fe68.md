@@ -1,0 +1,1 @@
+Fixed: An AI safety-car or virtual-safety-car stop no longer pulls forward onto a tyre set that is one lap short of the flag. On the plan's own stop lap the free stop still stands when that set covers the final stint.

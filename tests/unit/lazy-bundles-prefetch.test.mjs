@@ -352,12 +352,12 @@ test("ensureScenery asks for baked models while the track-build toolkit is still
 
 const ROOT_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readPath = (rel) => fs.readFileSync(path.join(ROOT_PATH, rel), "utf8");
-function boot({ agent = false, lazyV = null } = {}) {
-  const idles = [], workers = [], links = [];
+function boot({ agent = false, lazyV = null, audio = ["js/audio/engine.js"] } = {}) {
+  const idles = [], workers = [], links = [], fetches = [];
   const ctx = vm.createContext({
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
-      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
+      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: audio, LAZY_AUDIO_EDGES: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
       LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
@@ -374,6 +374,7 @@ function boot({ agent = false, lazyV = null } = {}) {
     queueMicrotask: (fn) => queueMicrotask(fn),
     requestIdleCallback(fn, opts) { idles.push({ fn, opts }); return idles.length; },
     setTimeout, clearTimeout,
+    fetch(url, init) { fetches.push({ url, init }); return Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }); },
     localStorage: { getItem: () => null, setItem() {} },
     location: { href: "https://apex.example/index.html", hostname: "apex.example", search: "" },
     navigator: { hardwareConcurrency: 8, userAgent: "phone" },
@@ -392,7 +393,7 @@ function boot({ agent = false, lazyV = null } = {}) {
       bindAgent() {}, createNetwork() { return { wire() {} }; }, onAudioReady() {},
     });
   `, ctx);
-  return { ctx, idles, workers, links };
+  return { ctx, idles, workers, links, fetches };
 }
 async function drain(idles) {
   await new Promise((r) => setTimeout(r, 0));   // the scenery microtask
@@ -418,13 +419,29 @@ test("the idle audio prefetch asks for the content-hash key the loader will inje
   const hashed = boot({ lazyV: { "js/audio/engine.js": "abcdef012345" } });
   hashed.ctx.__lb.raceAssets();
   await drain(hashed.idles);
-  assert.deepEqual(hashed.links.filter((l) => l.rel === "prefetch").map((l) => l.href), ["js/audio/engine.js?v=abcdef012345"]);
+  assert.deepEqual(hashed.fetches.map((f) => f.url), ["js/audio/engine.js?v=abcdef012345"]);
   assert.equal(vm.runInContext('ScriptLoader.url("js/audio/engine.js")', hashed.ctx), "js/audio/engine.js?v=abcdef012345");
   assert.equal(vm.runInContext('ScriptLoader.url("js/audio/panel.js")', hashed.ctx), "js/audio/panel.js?v=4100", "a file the map does not name keeps the build");
   const dev = boot();
   dev.ctx.__lb.raceAssets();
   await drain(dev.idles);
-  assert.deepEqual(dev.links.filter((l) => l.rel === "prefetch").map((l) => l.href), ["js/audio/engine.js?v=4100"], "no map (dev shell): the build, as before");
+  assert.deepEqual(dev.fetches.map((f) => f.url), ["js/audio/engine.js?v=4100"], "no map (dev shell): the build, as before");
+});
+
+// iOS Safari ships <link rel=prefetch> disabled (caniuse link-rel-prefetch), so the idle
+// warm is a low-priority CORS fetch: the request a <script crossorigin=anonymous> makes.
+test("the idle audio prefetch is one low-priority fetch per LAZY_AUDIO file, no rel=prefetch link (#4219)", async () => {
+  const files = ["js/audio/engine.js", "js/audio/panel.js", "js/audio/announcer.js"];
+  const w = boot({ audio: files });
+  w.ctx.__lb.raceAssets();
+  await drain(w.idles);
+  w.ctx.__lb.raceAssets();   // a second title idle: no second download
+  await drain(w.idles);
+  assert.deepEqual(w.fetches.map((f) => f.url), files.map((f) => f + "?v=4100"));
+  for (const f of w.fetches) {
+    assert.deepEqual({ ...f.init }, { priority: "low", credentials: "same-origin", mode: "cors" }, f.url);
+  }
+  assert.deepEqual(w.links.filter((l) => l.rel === "prefetch"), [], "iOS ignores rel=prefetch");
 });
 
 test("a malformed or hostile map falls back to the build key", () => {

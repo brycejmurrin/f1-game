@@ -6,7 +6,8 @@ const GarageArrival = (function () {
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
     afterRace: true, homeCrew: "auto", result: "win",
-    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto", slowmo: 0, sound: true, cue: "none", homeCue: "auto" });
+    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto", slowmo: 0, sound: true, cue: "none", homeCue: "auto",
+    race: "dry" });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
    * z +6.4): LEFT / RIGHT are the two shipped interior eyes; HIGH a ceiling
    * corner over the back-left (under the ceiling truss, whose 4.6 m beam filled
@@ -66,17 +67,63 @@ const GarageArrival = (function () {
     if (dir === "home" && (!v || v === "auto")) v = (RESULTS[c.result] || RESULTS.finish).cue || "none";
     return v && v !== "none" && v !== "auto" ? v : null;
   }
+  /* THE RACE'S LOOK, AFTER THE RACE: BY RESULT lighting reads the race first: a
+   * wet race comes home to RAIN DAY, a night race to NEON NIGHT, else the
+   * result's own mood. config.race is the real race's (start({ home })) or
+   * PREVIEW RACE's; DRY is the shipped look. */
+  const RACES = Object.freeze(["dry", "wet", "night"]);
+  const RACE_LIGHT = Object.freeze({ wet: "rain", night: "neon" });
   /** The mood a sequence plays under, or null for the garage's own. */
   function lightFor(config, dir) {
     const c = config || DEFAULT;
     let v = dir === "home" ? c.homeLight : c.light;
-    if (dir === "home" && (!v || v === "auto")) v = (RESULTS[c.result] || RESULTS.finish).light || "asset";
+    const raced = RACE_LIGHT[c.race];
+    if (dir === "home" && (!v || v === "auto")) v = raced && moodIds().includes(raced) ? raced : (RESULTS[c.result] || RESULTS.finish).light || "asset";
     return v && v !== "asset" && v !== "auto" ? v : null;
   }
   function resultKind(pos, out, sprint) {
     if (out) return "dnf";
     const p = Number(pos) | 0;
     return p === 1 ? "win" : p > 1 && p <= 3 ? "podium" : p > 3 && p <= (sprint ? 8 : 10) ? "points" : "finish";
+  }
+  /** The held AFTER THE RACE title: "P3 · NORRIS · PODIUM FINISH · FASTEST LAP".
+   *  The place and name only when start({ home }) knew them (never retired). */
+  function homeTitle(config, r) {
+    const parts = [];
+    if (Number.isFinite(config.pos) && config.pos > 0 && config.result !== "dnf") parts.push("P" + (config.pos | 0));
+    if (config.driver) parts.push(String(config.driver).toUpperCase());
+    parts.push(r.title);
+    if (config.fastest && config.result !== "dnf") parts.push("FASTEST LAP");
+    return parts.join(" · ");
+  }
+  /* STYLE: a whole look in one tap, above the rows (phone UX: 33 rows is a lot
+   * to scroll). Each is a partial settings object laid over the saved one, so
+   * crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
+   * BROADCAST: the TV pit-lane coverage — three locked-off cameras, broadcast
+   * light, captions. CINEMA: the Blender crane (no CAMERA MOVE on top: a push
+   * carried the lens into a crew member and the car past the frame edge,
+   * 2026-10-30 844x390 capture), slow-mo at the door, GOLDEN HOUR under bars (the
+   * showroom mood blacked the room out while the car was still in the lane),
+   * no captions. DOCUMENTARY: a heavy handheld
+   * drifting through three cameras under the garage's own light. */
+  const STYLES = Object.freeze({
+    broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
+    cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
+    documentary: Object.freeze({ label: "DOCUMENTARY", look: { angle: "custom", shots: ["door", "low", "left"], move: "drift", sway: 2, zoom: 6, fov: 58, light: "asset", cue: "none", captions: true, bars: false, slowmo: 0 } }),
+  });
+  /** The saved settings with style `id`'s look laid over them. */
+  function applyStyle(value, id) {
+    const s = STYLES[id];
+    return settings(s ? Object.assign({}, settings(value), s.look, s.look.shots ? { shots: s.look.shots.slice() } : null) : value);
+  }
+  /** The style whose look the settings carry, or null. */
+  function styleOf(value) {
+    const v = settings(value);
+    for (const id of Object.keys(STYLES)) {
+      const want = applyStyle(v, id);   // normalized: a mood or cue this build lacks reads as settings() keeps it
+      if (Object.keys(STYLES[id].look).every((k) => k === "shots" ? want.shots.every((c, i) => v.shots[i] === c) : v[k] === want[k])) return id;
+    }
+    return null;
   }
   // THE CREWS each way: the shipped five, MIX (a different one every visit) and
   // the Blender-authored variants (GarageCrewChoreo.IDS, js/garage/crew-choreo.js).
@@ -102,19 +149,56 @@ const GarageArrival = (function () {
     try { if (typeof localStorage !== "undefined") localStorage.setItem("apex26.crewVisit", String(_visit)); } catch (_) { /* private mode */ }
     return n;
   }
-  function crewFor(config, dir) {
+  // A Blender crew whose key tables have not landed (js/garage/garage-data.js, lazy) plays the shipped crew.
+  const playable = (v) => typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.known(v) && !GarageCrewChoreo.has(v) ? "current" : v;
+  /* PINNED PER PLAYBACK: the lazy tables can land mid-sequence, and a held t on
+   * the same config must keep its camera family and crew (a late load swapped
+   * the "cut" eye for the crane, and the pushed car's path side with it). The
+   * first read of a config object decides; the next playback's fresh object
+   * adopts whatever has landed by then. */
+  const _pinned = new WeakMap();
+  function pinned(config, key, fn) {
+    if (!config || typeof config !== "object") return fn();
+    let m = _pinned.get(config);
+    if (!m) { m = {}; _pinned.set(config, m); }
+    if (!(key in m)) m[key] = fn();
+    return m[key];
+  }
+  const rigFor = (config) => pinned(config, "rig", () => rigData(config.angle) ? config.angle : null);
+  const crewFor = (config, dir) => pinned(config, "crew:" + dir, () => crewNow(config, dir));
+  /** A preview re-reading its settings mid-playback (a FOV or speed edit) builds a fresh config: carry
+   *  the playback's pins and MIX deal over, so it keeps its camera family, crew, path and timing. The
+   *  rig moves only while ANGLE is unchanged, and each crew only while its own pick is unchanged; an
+   *  explicit angle or crew edit may choose again. Returns `next`. */
+  const CREW_KEY = { in: "enterCrew", out: "leaveCrew", home: "homeCrew" };
+  function carryPlayback(prev, next) {
+    if (!prev || !next || typeof prev !== "object" || typeof next !== "object" || prev === next) return next;
+    const from = _pinned.get(prev), deal = _picked.get(prev);
+    const to = {}, dealTo = {};
+    if (from && "rig" in from && prev.angle === next.angle) to.rig = from.rig;
+    for (const dir of Object.keys(CREW_KEY)) {
+      const k = CREW_KEY[dir];
+      if (prev[k] !== next[k] || (dir === "home" && prev.result !== next.result)) continue;
+      if (from && ("crew:" + dir) in from) to["crew:" + dir] = from["crew:" + dir];
+      if (deal && deal[k]) dealTo[k] = deal[k];
+    }
+    if (Object.keys(to).length) _pinned.set(next, Object.assign(_pinned.get(next) || {}, to));
+    if (Object.keys(dealTo).length) _picked.set(next, Object.assign(_picked.get(next) || {}, dealTo));
+    return next;
+  }
+  function crewNow(config, dir) {
     const key = dir === "out" ? "leaveCrew" : dir === "home" ? "homeCrew" : "enterCrew";
     let v = config && config[key];
     if (dir === "home" && (!v || v === "auto")) {
       const r = RESULTS[config && config.result] || RESULTS.finish;
       v = typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has(r.crew) ? r.crew : r.crewAlt;
     }
-    if (v !== "mix") return v || "current";
+    if (v !== "mix") return playable(v || "current");
     if (typeof GarageCrewChoreo === "undefined") return "current";
     let memo = _picked.get(config);
     if (!memo) { memo = {}; _picked.set(config, memo); }
     if (!memo[key]) memo[key] = GarageCrewChoreo.pick(dir === "out" ? "out" : "in", nextVisit());
-    return memo[key];
+    return playable(memo[key]);
   }
   function settings(value) {
     const v = value && typeof value === "object" ? value : {};
@@ -140,11 +224,13 @@ const GarageArrival = (function () {
       slowmo: typeof v.slowmo === "number" && v.slowmo > 0 && v.slowmo < 1 ? Math.max(0.1, v.slowmo) : 0,
       sound: v.sound !== false,
       cue: v.cue === "none" || cueIds().includes(v.cue) ? v.cue : DEFAULT.cue,
-      homeCue: v.homeCue === "auto" || v.homeCue === "none" || cueIds().includes(v.homeCue) ? v.homeCue : DEFAULT.homeCue };
+      homeCue: v.homeCue === "auto" || v.homeCue === "none" || cueIds().includes(v.homeCue) ? v.homeCue : DEFAULT.homeCue,
+      race: RACES.includes(v.race) ? v.race : DEFAULT.race };
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
-   *  one was playing (js/garage/setup-camera.js startArrivalPreview). */
+   *  one was playing (js/garage/setup-camera.js startArrivalPreview).
+   *  opts.changed(): after every saved edit, so a running preview re-poses. */
   /* THE ANGLE MAP: a plan of the bay under GARAGE ANGLE — walls, the door, the
    * pit lane, the parked car and the five eyes (CAMS) with a cone toward the
    * door — the ones the arrival uses lit and, when it cuts, numbered by shot, so
@@ -167,7 +253,7 @@ const GarageArrival = (function () {
       + `<rect x="4" y="96" width="112" height="16" fill="currentColor" opacity="0.12"/>`
       + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`;
     // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
-    if (RIGS[angle]) {
+    if (rigData(angle)) {
       const pts = [];
       for (let i = 0; i <= 16; i++) { const e = rigSample(angle, "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
       const a = pts[0].split(" "), b = pts[16].split(" ");
@@ -216,6 +302,7 @@ const GarageArrival = (function () {
     ["ga-light-home", "AFTER-RACE LIGHTING", () => [["auto", "BY RESULT"], ["asset", "AS THE GARAGE"]].concat(moodOpts())],
     ["ga-cue-home", "AFTER-RACE LIGHT CUE", () => [["auto", "BY RESULT"], ["none", "NONE"]].concat(cueOpts())],
     ["ga-result", "PREVIEW RESULT", [["win", "WIN"], ["podium", "PODIUM"], ["points", "POINTS"], ["finish", "FINISHED"], ["dnf", "RETIRED"]]],
+    ["ga-race", "PREVIEW RACE", [["dry", "DRY DAY"], ["wet", "WET · RAIN DAY LIGHT"], ["night", "NIGHT · NEON LIGHT"]]],
   ];
   const MOOD_TEXT = Object.freeze({ shipped: "STANDARD", goldenhour: "GOLDEN HOUR", rain: "RAIN DAY", neon: "NEON NIGHT" });
   const moodOpts = () => moodIds().map((id) => [id, MOOD_TEXT[id] || id.toUpperCase()]);
@@ -248,6 +335,19 @@ const GarageArrival = (function () {
     };
     after(angle.closest(".set-row"), AFTER_ANGLE);
     after(fov.closest(".set-row"), AFTER_FOV);
+    // STYLE: the quick-picks head the rows, before PLAY ANIMATIONS.
+    const first = $("ga-enabled") && $("ga-enabled").closest ? $("ga-enabled").closest(".set-row") : null;
+    if (first && first.parentNode) {
+      const bar = make("div", "ga-styles");
+      bar.id = "ga-styles"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Style");
+      bar.appendChild(make("span", "tune-label", "STYLE"));
+      for (const id of Object.keys(STYLES)) {
+        const b = make("button", "", STYLES[id].label);
+        b.type = "button"; b.id = "ga-style-" + id; b.setAttribute("aria-pressed", "false");
+        bar.appendChild(b);
+      }
+      first.parentNode.insertBefore(bar, first);
+    }
     // PREVIEW AFTER RACE joins PREVIEW PIT STOP / RACE START wherever they are
     // (EditorWorkspace moves the foot's actions into its tools fold).
     const out = $("ga-preview-out");
@@ -259,14 +359,18 @@ const GarageArrival = (function () {
   }
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
+    const changed = typeof opts.changed === "function" ? opts.changed : null;   // a running preview re-poses
     const read = () => settings(store.get("garageArrival", null));
     buildRows($);
     const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
       carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
       move: $("ga-move"), sway: $("ga-sway"), zoom: $("ga-zoom"), light: $("ga-light"), swell: $("ga-swell"),
-      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo"), sound: $("ga-sound"), cue: $("ga-cue"), homeCue: $("ga-cue-home") };
+      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo"), sound: $("ga-sound"), cue: $("ga-cue"), homeCue: $("ga-cue-home"),
+      race: $("ga-race") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
+    // STYLE quick-picks: one tap lays a look over the saved settings (save() is below; a click comes after).
+    for (const id of Object.keys(STYLES)) { const b = $("ga-style-" + id); if (b) b.onclick = () => save(applyStyle(read(), id)); }
     const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell", "slowmo"], CHECK = ["enabled", "afterRace", "captions", "bars", "sound"];
     // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
     // their own table, once: the static five stay index.html's.
@@ -287,6 +391,8 @@ const GarageArrival = (function () {
         else el.value = key === "hold" && value.hold === null ? "auto" : String(value[key]);
       }
       shotEls.forEach((el, i) => { if (el) el.value = value.shots[i]; });
+      const style = styleOf(value);
+      for (const id of Object.keys(STYLES)) { const b = $("ga-style-" + id); if (b && b.setAttribute) b.setAttribute("aria-pressed", String(id === style)); }
       // CUSTOM's three per-shot pickers only show under CUSTOM.
       const row = $("ga-shots-row");
       if (row) row.hidden = value.angle !== "custom";
@@ -307,7 +413,7 @@ const GarageArrival = (function () {
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
       }
     }
-    const save = (value) => { store.set("garageArrival", settings(value)); refresh(); };
+    const save = (value) => { store.set("garageArrival", settings(value)); refresh(); if (changed) changed(); };
     for (const key of Object.keys(fields)) if (fields[key]) fields[key].onchange = () => {
       const el = fields[key], value = read();
       value[key] = CHECK.includes(key) ? el.checked : NUM.includes(key) ? Number(el.value)
@@ -315,7 +421,7 @@ const GarageArrival = (function () {
       save(value);
     };
     shotEls.forEach((el, i) => { if (el) el.onchange = () => { const value = read(); value.shots[i] = el.value; save(value); }; });
-    $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); };
+    $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); if (changed) changed(); };
     // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
     // it takes the settings page's place while open and gives it back on DONE.
     const page = (on) => {
@@ -356,17 +462,27 @@ const GarageArrival = (function () {
     return { x: side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)), z, yaw: side * th };
   }
   const EYE_L = CAMS.left, EYE_R = CAMS.right;
-  // @blender-rigs:start
-  // Blender 5.2.3 LTS (bpy module); tools/gen/blender/garage-camera-rigs.py; 49 samples over u: eye, aim (cm), fov (0.1 deg), two base64url chars each (+2048).
-  // Source SHA256: 01dd82bea5ab83cac0790997226192b2f09affebded7283cf9d613a76e50d33f
-  const RIGS = {"crane":{"label":"CRANE","n":49,"in":"kEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkFgtlUgAhupspYkFgtlUgAhupspYkFgtlUf5htpxpYkGgtlTfZhnqGpYkGgtlTeshfqkpYkHgtlTd0hVrKpYkHgtlSc1hKrzpYkIgtlSb2g_sdpYkIgtlRa-g0tEpYkJgulRaGgrtkpYkJgulQZxglt7pYkKgulPamgjuEpYkKgulOcxgjuEpYkLgulMfLgjuEpYkMgvlLhDgjuEpYkMgvlJisgjuEpYkMgvlHkDgjuEpYkNgvlFlHgjuEpYkNgwlDl6gjuEpYkNgwlBmdgjuEpYkOgxk-mkgjuEpYkOgxk7mkgjuEpYkOgyk4mkgjuEpYkOgyk1mjgjuEpYkOg2kvmUgjuEpWkNg9kolugjuEpTkMhGkfk6gjuEpOkLhTkUj9gjuEpJkJhhkIi6gjuEpCkIhxj7h4gjuEo6kGiDjsg_gjt2oykEiWjegVgjs0oqkCiqjOgCgjrLohkAi-i_gAgjpmoZj-jSiwgAgjoCoQj8jmihgAgjmgoIj5j5iSgAgjlFoBj4kMiFgAgjjwn6j2kdh4gAgjiln0j0kshtgAgjhmnujzk6hjgAgjg0npjylFhbgAgjgRnljxlNhVgAgjgCnijwlShRgAgjgAnhjwlUhQgAgjgAng","out":"jSlKhagAhupsn0jSlKhagAhupsn0jSlKhZgAhupsn0jSlKhYgAhupsn0jSlKhWgAhupsn0jSlKhUgAhspfn0jSlKhSgAhloin0jSlKhQgAhanIn0jSlKhNgAhNlcn0jSlKhLgAg_jrn0jSlKhKgAgziDn0jSlKhIgAgpgyn0jSlKhHgAgkgGn0jSlKhGgAgjgAn0jSlJhHgAgjgEn0jQk_hUgAgjgUn3jMkshvgAgjgxn9jGkRiTgAgjhaoGi_jwi_gAgjiPoQi4jNjvgAgjjQociwiokhgAgjkUopioiFlSgAgjlXo2iihll_gAgjmapCichKmlgAgjnepMiYg3nDgAgjohpUiWgunUgAgjpkpYiWgtnagAgjqopYiWgtnegFgjrrpYiXgtnjgVgjsqpYiYgtnngvgjtxpYiZgunqhTgjuEpYibgunth-gjuEpYicgunwiygjuEpYiegunyjsgjuEpYiggvn1kqgjuEpYiigvn2ltgjuEpYikgvn4mfgjuEpYimgwn5mkgjuEpYiogwn7mkgjuEpYiqgwn8mkgjuEpYirgxn8mkgjuEpYitgxn9mkgjuEpYivgxn9mkgjuEpYiwgxn-mkgjuEpYiygyn-mkgjuEpYizgyn-mkgjuEpYizgyn-mkgjuEpYi0gyn-mkgjuEpYi0gyn-mkgjuEpY","home":"kEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkEgtlUgAhupspYkFgtlUf8htpupYkFgtlUfShmqLpYkFgtlUeKhZq7pYkGgtlUcxhJr2pYkGgtlTbYg5sxpYkHgtlTaOgstjpYkHgtlTZigkuApYkIgtlSZggjuEpYkIgtlSbLgjuEpYkJgulRd7gjuEpYkJgulQgFgjuEpYkKgulPh_gjuEpYkKgulOjkgjuEpYkLgulNk0gjuEpYkLgulMlvgjuEpYkMgvlKmWgjuEpYkMgvlImkgjuEpYkNgvlHmkgjuEpYkNgwlFmkgjuEpYkNgwlCmkgjuEpYkOgwlAmkgjuEpYkOgxk9mkgjuEpYkOgxk7mkgjuEpYkOgyk4mkgjuEpYkOgzk0mhgjuEpYkOg6kulvgjuEpUkNhHknkjgjuEpNkNhYkdjFgjuEpFkMhtkShogjuEo6kLiFkGgggjtYovkKifj4gBgjq5ojkJi7jqgAgjosoXkIjWjbgAgjmeoLkGjxjLgAgjkdoAkEkKi8gAgjisn3kCkgisgAgjhUnukAkzidgAgjgYnoj-lCiOgAgjgBnjj8lMiAgAgjgAngj5lQhzgAgjgAngj2lShogAgjgAngj0lThegAgjgAngjylUhXgAgjgAngjxlUhSgAgjgAngjwlUhQgAgjgAng"},"orbit":{"label":"ORBIT","n":49,"in":"j8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmaf5htpxowj8iMmafZhpqGowj8iMmaeshkqkowj8iMmad0hdrKowj8iMmac1hWrzowj8iMmab2hOsdowj8iMmaa-hHtEowj8iMmaaGhCtkowj8iMmaZxg-t7owj8iMmaamg8uEowj8iMmacxg8uEowj8iMmafLg8uEowj8iMmahDg8uEowj8iMmaisg8uEowj8iMmakDg8uEowj8iMmalHg8uEowj8iMmal6g8uEowj8iMmamdg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj9iMmamjg8uEowkDiNmWmUg8uEowkPiOmMlug8uEovkhiQl-k6g8uEotk3iSlpj9g8uEorlPiVlQi6g8uEoplniYkwh4g8uEonl_ibkLg_g8t2olmTifjigVg8s0oimkiii0gCg8rLofmwimiDgAg8pmocm3iqhSgAg8oCoZm4iugggAg8mgoXmziyfwgAg8lFoUmqi1fEgAg8jwoSmdi4ebgAg8iloPmPi7d4gAg8hmoNl_i-dagAg8g0oLlxjAdCgAg8gRoKlljCcxgAg8gCoJlejDcngAg8gAoIlbjDcjgAg8gAoI","out":"loi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhupsoIloi-c2gAhtpfoIloi-c2gAhooioIloi-c2gAhhnIoIloi-c2gAhYlcoIloi-c2gAhPjroIloi-c2gAhHiDoIloi-c2gAhAgyoIloi-c2gAg8gGoIloi-c2gAg8gAoIlpi-c3gAg8gEoIl2i8dJgAg8gUoJmLi5dwgAg8gxoMmii1eogAg8haoPmzivfugAg8iPoTm4ipg_gAg8jQoYmtijiTgAg8kUodmTidjigAg8lXoiluiXkmgAg8maomlFiTlbgAg8neoqkfiPmAgAg8ohoukEiNmVgAg8pkowj8iMmbgAg8qoowj5iMmdgFg8rrowj3iMmegVg8sqowj1iMmfgvg8txowjziMmhhTg8uEowjyiMmih-g8uEowjwiMmjiyg8uEowjviMmjjsg8uEowjuiMmkkqg8uEowjtiMmlltg8uEowjsiMmlmfg8uEowjsiMmmmkg8uEowjriMmmmkg8uEowjqiMmmmkg8uEowjqiMmnmkg8uEowjqiMmnmkg8uEowjqiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEowjpiMmnmkg8uEow","home":"j8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmagAhupsowj8iMmaf8hupuowj8iMmafShoqLowj8iMmaeKhgq7owj8iMmacxhVr2owj8iMmabYhLsxowj8iMmaaOhCtjowj8iMmaZig9uAowj8iMmaZgg8uEowj8iMmabLg8uEowj8iMmad7g8uEowj8iMmagFg8uEowj8iMmah_g8uEowj8iMmajkg8uEowj8iMmak0g8uEowj8iMmalvg8uEowj8iMmamWg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj8iMmamkg8uEowj-iMmZmhg8uEowkLiNmQlvg8uEovkjiPl8kjg8uEotlBiSlfjFg8uEoqliiVk3hog8uEonmCiZkGggg8tYojmcidjMgBg8q5ofmvihiLgAg8osobm3imhJgAg8meoXm2iqgHgAg8kdoTmsivfLgAg8isoQmbizeWgAg8hUoNmIi3drgAg8gYoKl3i7dMgAg8gBoJlqi9c4gAg8gAoIlkjAcvgAg8gAoIlfjBcpgAg8gAoIldjCcmgAg8gAoIlbjDckgAg8gAoIlbjDcjgAg8gAoIlbjDcjgAg8gAoI"},"dolly":{"label":"DOLLY","n":49,"in":"iqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSf5htpxpEirh9oRfZhqqGpEirh9oReshmqkpEirh9oQd0hhrKpEish9oQc1hbrzpEish9oPb2hVsdpEith9oOa-hPtEpEith9oNaGhLtkpEiuh9oMZxhHt7pEivh9oLamhGuEpEiwh9oJcxhGuEpEiyh9oIfLhGuEpEizh9oGhDhGuEpEi1h9oEishGuEpEi3h9oBkDhGuEpEi5h9n-lHhGuEpEi7h9n8l6hGuEpEi9h9n4mdhGuEpEjAh9n1mkhGuEpEjDh9nxmkhGuEpEjGh9ntmkhGuEpEjJh9nomjhGuEpEjNh9nhmUhGuEpDjSh9nYluhGuEpCjXh9nLk6hGuEpBjch8m8j9hGuEo_jih8mri6hGuEo8joh8mYh4hGuEo6juh7mDg_hGt2o3j0h7lsgVhGs0o0j6h7lUgChGrLoxkAh6k6gAhGpmoukGh6kfgAhGoCorkLh6kDgAhGmgookQh5jngAhGlFolkVh5jKgAhGjwojkZh5isgAhGilohkch4iOgAhGhmofkfh4hwgAhGg0oekhh4hSgAhGgRodkih4g1gAhGgCockih4gYgAhGgAockih4gKgAhGgAoc","out":"kih4eIgAhupsockih4eIgAhupsockih4eIgAhupsockih4eIgAhupsockih4eJgAhupsockih4eJgAhtpfockih4eKgAhpoiockih4eLgAhjnIockih4eMgAhclcockih4eOgAhVjrockih4eQgAhOiDockih4eSgAhJgyockih4eWgAhGgGockih4eZgAhGgAockih4efgAhGgEockih4e2gAhGgUodkih4ffgAhGgxofkih5gXgAhGhaojkih5hagAhGiPonkih6ikgAhGjQorkih7jwgAhGkUowkih7k9gAhGlXo0kih8mFgAhGmao5kih8nFgAhGneo9kih9n5gAhGohpBkih9oegAhGpkpDkih9ovgAhGqopEkih9oxgFhGrrpEkih9oygVhGsqpEkih9ozgvhGtxpEkhh9o0hThGuEpEkhh9o1h-hGuEpEkgh9o2iyhGuEpEkgh9o3jshGuEpEkfh9o3kqhGuEpEkeh9o4lthGuEpEkeh9o4mfhGuEpEkdh9o5mkhGuEpEkch9o5mkhGuEpEkch9o5mkhGuEpEkbh9o6mkhGuEpEkah9o6mkhGuEpEkah9o6mkhGuEpEkZh9o6mkhGuEpEkZh9o6mkhGuEpEkZh9o6mkhGuEpEkYh9o6mkhGuEpEkYh9o6mkhGuEpEkYh9o6mkhGuEpE","home":"iqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSgAhupspEiqh9oSf8hupupEiqh9oSfShqqLpEiqh9oSeKhjq7pEiqh9oRcxhar2pEirh9oRbYhSsxpEirh9oRaOhLtjpEirh9oQZihHuApEish9oPZghGuEpEish9oPbLhGuEpEith9oOd7hGuEpEiuh9oNgFhGuEpEivh9oMh_hGuEpEiwh9oKjkhGuEpEixh9oJk0hGuEpEiyh9oHlvhGuEpEi0h9oFmWhGuEpEi2h9oDmkhGuEpEi3h9oAmkhGuEpEi5h9n-mkhGuEpEi8h9n7mkhGuEpEi-h9n3mkhGuEpEjBh9n0mkhGuEpEjDh9nwmkhGuEpEjGh9nsmkhGuEpEjKh9nmmhhGuEpEjPh9nXlvhGuEpDjVh9nAkjhGuEpAjdh8mgjFhGuEo9jmh8l7hohGuEo5jvh7lRgghGtYo1j4h7klgBhGq5oxkBh6j4gAhGososkKh6jLgAhGmeookRh5iggAhGkdokkYh5h5gAhGisohkdh4hXgAhGhUoekhh4g8gAhGgYodkih4gpgAhGgBockih4gegAhGgAockih4gVgAhGgAockih4gQgAhGgAockih4gMgAhGgAockih4gLgAhGgAockih4gKgAhGgAockih4gKgAhGgAoc"},"rear":{"label":"REAR TRACK","n":49,"in":"fEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0f5htpxoIfEiCY0fZhrqGoIfEiCY0eshnqkoIfEiCY0d0hirKoIfEiCY0c1hdrzoIfEiCY0b2hYsdoIfEiCY0a-hTtEoIfEiCY0aGhPtkoIfEiCY0ZxhMt7oIfEiCY0amhLuEoIfEiCY0cxhLuEoIfEiCY0fLhLuEoIfEiCY0hDhLuEoIfEiCY0ishLuEoIfEiCY0kDhLuEoIfEiCY0lHhLuEoIfEiCY0l6hLuEoIfEiCY0mdhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mjhLuEoIfEiCYzmUhLuEoHfDiDYxluhLuEoEfCiEYuk6hLuEoBfAiGYqj9hLuEn9e_iIYmi6hLuEn4e9iKYgh4hLuEnye7iMYag_hLt2nse5iPYUgVhLs0nme2iSYNgChLrLnge0iWYGgAhLpmnaeyiZX_gAhLoCnUewidX4gAhLmgnPetihXwgAhLlFnKesilXpgAhLjwnFeqiqXigAhLilnBeoiuXbgAhLhmm-enizXUgAhLg0m7emi3XOgAhLgRm5emi8XIgAhLgCm4emjBXDgAhLgAm4emjDXBgAhLgAm4","out":"ewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhupsnMewi0XQgAhtpfnMewi0XRgAhqoinMewi0XRgAhlnInMewi0XSgAhflcnMewi0XTgAhYjrnMewi0XUgAhSiDnMewi0XVgAhOgynMewi0XXgAhLgGnMewi0XZgAhLgAnMewi0XdgAhLgEnMeyixX0gAhLgUnPe0isYggAhLgxnUe4ilZcgAhLhance9icalgAhLiPnmfDiTb1gAhLjQnxfJiJdJgAhLkUn9fPh_edgAhLlXoKfUh2fsgAhLmaoWfZhvgygAhLneohfdhphqgAhLohopfhhliRgAhLpkovfihkijgAhLqoowfkhkitgFhLrrowflhki2gVhLsqowfmhli-gvhLtxowfnhljGhThLuEowfohljMh-hLuEowfohmjSiyhLuEowfphmjXjshLuEowfqhnjckqhLuEowfqhojglthLuEowfqhojjmfhLuEowfrhpjmmkhLuEowfrhqjpmkhLuEowfrhqjrmkhLuEowfshrjsmkhLuEowfshsjumkhLuEowfshsjumkhLuEowfshtjvmkhLuEowfshtjwmkhLuEowfshujwmkhLuEowfshujwmkhLuEowfshujwmkhLuEowfshujwmkhLuEow","home":"fEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0gAhupsoIfEiCY0f8hupuoIfEiCY0fShqqLoIfEiCY0eKhkq7oIfEiCY0cxhdr2oIfEiCY0bYhVsxoIfEiCY0aOhPtjoIfEiCY0ZihMuAoIfEiCY0ZghLuEoIfEiCY0bLhLuEoIfEiCY0d7hLuEoIfEiCY0gFhLuEoIfEiCY0h_hLuEoIfEiCY0jkhLuEoIfEiCY0k0hLuEoIfEiCY0lvhLuEoIfEiCY0mWhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mkhLuEoIfEiCY0mhhLuEoIfDiEYxlvhLuEoFfBiHYrkjhLuEoAe_iKYjjFhLuEn5e8iPYahohLuEnxe5iVYPgghLtYnoe2ibYEgBhLq5nfezihX4gAhLosnXevinXtgAhLmenPetitXigAhLkdnHeqiyXYgAhLisnBeoi3XQgAhLhUm8eni7XKgAhLgYm5emi-XGgAhLgBm4emjAXEgAhLgAm4emjBXDgAhLgAm4emjCXCgAhLgAm4emjDXBgAhLgAm4emjDXBgAhLgAm4emjDXBgAhLgAm4emjDXBgAhLgAm4"}};
-  // @blender-rigs:end
+  // @blender-rigs-index:start
+  // tools/gen/blender/garage-camera-rigs.py: each rig's label and sample count; the samples are js/garage/garage-data.js (lazy).
+  const RIGS = {"crane":{"label":"CRANE","n":49},"orbit":{"label":"ORBIT","n":49},"dolly":{"label":"DOLLY","n":49},"rear":{"label":"REAR TRACK","n":49},"drone":{"label":"DRONE","n":49},"steadicam":{"label":"STEADICAM","n":49}};
+  // @blender-rigs-index:end
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-  for (const rig of Object.values(RIGS)) for (const d of ["in", "out", "home"]) {
-    const s = rig[d];
-    if (typeof s !== "string") continue;
-    const a = rig[d] = new Array(s.length / 2);
-    for (let i = 0; i < a.length; i++) a[i] = B64.indexOf(s[2 * i]) * 64 + B64.indexOf(s[2 * i + 1]) - 2048;
+  // The samples ride js/garage/garage-data.js (LAZY_RACE), unpacked on first use. Until it lands a
+  // rig is not ready (null) and its angle plays the "cut" cameras (shotsFor's fallback).
+  const _rigs = {};
+  function rigData(id) {
+    if (typeof id !== "string" || !Object.prototype.hasOwnProperty.call(RIGS, id)) return null;
+    if (_rigs[id]) return _rigs[id];
+    const src = typeof GarageData !== "undefined" && GarageData.RIGS ? GarageData.RIGS[id] : null;
+    if (!src) return null;
+    const rig = { label: src.label, n: src.n };
+    for (const d of ["in", "out", "home"]) {
+      const s = src[d];
+      if (typeof s !== "string") continue;
+      const a = rig[d] = new Array(s.length / 2);
+      for (let i = 0; i < a.length; i++) a[i] = B64.indexOf(s[2 * i]) * 64 + B64.indexOf(s[2 * i + 1]) - 2048;
+    }
+    return (_rigs[id] = rig);
   }
   /* MOVING RIGS (tools/gen/blender/garage-camera-rigs.py): Blender cameras whose eye, aim and fov are
    * sampled at RIGS[id].n points of a sequence's progress u = t / duration (0..1; a missing dir falls
@@ -376,7 +492,7 @@ const GarageArrival = (function () {
   const RIG_LABEL = Object.freeze(Object.fromEntries(RIG_IDS.map((id) => [id, RIGS[id].label])));
   const ALL_ANGLES = Object.freeze(ANGLES.concat(RIG_IDS));   // GARAGE ANGLE: presets, then the Blender rigs
   function rigSample(id, dir, u, side = 1) {
-    const rig = typeof id === "string" && Object.prototype.hasOwnProperty.call(RIGS, id) ? RIGS[id] : null;
+    const rig = rigData(id);
     if (!rig) return null;
     const s = rig[dir] || rig.in, n = rig.n, f = Math.max(0, Math.min(1, Number.isFinite(u) ? u : 0)) * (n - 1);
     const i = Math.min(n - 2, Math.floor(f)), k = f - i, m = side < 0 ? -1 : 1, v = [0, 0, 0, 0, 0, 0, 0];
@@ -463,7 +579,7 @@ const GarageArrival = (function () {
   }
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
-    const rig = RIGS[config.angle] ? config.angle : null;
+    const rig = rigFor(config);
     const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
     const n = t < T.door ? 0 : t < s2 ? 1 : 2, cam = cams[n];
     const look = { config, last: n === 2, k: n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2) };
@@ -474,7 +590,7 @@ const GarageArrival = (function () {
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
     const label = t < T.door ? "OPENING GARAGE"
       : r ? (t < T.door + T.lane + T.pause ? r.arrive : t < T.park ? r.park
-        : (Number.isFinite(config.pos) && config.pos > 0 && dir === "home" && config.result !== "dnf" ? "P" + (config.pos | 0) + " · " : "") + r.title)
+        : dir === "home" ? homeTitle(config, r) : r.title)
       : t < T.park ? "BRINGING CAR IN" : end > T.base && t < end - .5 ? "CREW SERVICING CAR" : "READY FOR WORK";
     // The shipped LEFT / RIGHT eyes keep their own framing; the new ones aim by aimAt.
     const aim = cam === "left" || cam === "right"
@@ -582,7 +698,7 @@ const GarageArrival = (function () {
   function poseOut(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, "out"), end = duration(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
-    const rig = RIGS[config.angle] ? config.angle : null;
+    const rig = rigFor(config);
     const cams = shotsFor(config, "out"), side = rig ? 1 : sideFor(cams[1]);
     const opening = t < T.door;
     const d = outDistance(Math.min(t, settle) - go, Object.assign({}, T, { settle: T.run + OUT_EXIT_M / T.v }));
@@ -636,7 +752,8 @@ const GarageArrival = (function () {
       const home = opts && opts.home;
       dir = home ? "home" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
-      if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos });
+      if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
+        driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry" });
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
@@ -707,6 +824,6 @@ const GarageArrival = (function () {
     if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
     return m === "auto" && !!wet;
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
-    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
+    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

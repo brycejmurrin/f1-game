@@ -511,9 +511,7 @@ test("mergeVisible concatenates chunk indices once and reuses the geometry while
   assert.ok(g, "two visible chunks become one geometry");
   assert.deepEqual(Array.from(g.index.array.subarray(0, g.drawRange.count)), [0, 1, 2, 3, 4, 5]);
   assert.equal(g.drawRange.count, 6);
-  assert.equal(g.index.needsUpdate, true);
-  assert.equal(g.index.updateRanges.length, 1);
-  assert.equal(g.index.updateRanges[0].count, 6);
+  assert.equal(g.index.updateRanges.length, 0, "a new attribute queues no range: three's create uploads it whole");
   assert.ok(g.boundingSphere.radius > 5, "the sphere covers both chunk boxes");
   assert.equal(g.attributes.position, a.geo.attributes.position, "vertex attributes stay shared");
   g.index.needsUpdate = false;
@@ -536,7 +534,7 @@ test("mergeVisible concatenates chunk indices once and reuses the geometry while
 // Perf hunt 7 (census 41021778161): the merged index was 82 KB/f of TLX WebGPU's uploads, with a 1.18 MB
 // createBuffer mid-race. `upload` stands in for three: it copies the queued ranges (or the whole array on a fresh
 // attribute) into a GPU mirror and clears the ranges, as both backends do.
-test("mergeVisible grows by half, uploads from the first changed chunk, and keeps a range three never uploaded", () => {
+test("mergeVisible grows by half, uploads only the chunks that changed, and keeps a range three never uploaded", () => {
   const sys = factory([]);
   const ch = [0, 1, 2, 3, 4].map((k) => visChunk(new Uint16Array([3 * k, 3 * k + 1, 3 * k + 2]), [k, 0, 0], [k + 1, 1, 1]));
   const mesh = { chunks: ch };
@@ -548,7 +546,7 @@ test("mergeVisible grows by half, uploads from the first changed chunk, and keep
     a.updateRanges.length = 0; a.needsUpdate = false;
   };
   const merge = (ids) => { ids.forEach((k, i) => { sys.visList[i] = ch[k]; }); return sys.mergeVisible(mesh, ids.length, 0); };
-  const drawn = (g) => Array.from(gpu.subarray(0, g.drawRange.count));
+  const drawn = (g) => Array.from(gpu.subarray(g.drawRange.start, g.drawRange.start + g.drawRange.count));
   const want = (ids) => ids.flatMap((k) => [3 * k, 3 * k + 1, 3 * k + 2]);
 
   let g = merge([0, 1]); upload(g);
@@ -560,17 +558,60 @@ test("mergeVisible grows by half, uploads from the first changed chunk, and keep
   assert.equal(g, null);
   g = merge([0, 2, 3]); upload(g);
   assert.deepEqual(drawn(g), want([0, 2, 3]));
-  assert.equal(fresh, 2, "6 -> 9 indices: one regrow, to 9 (= max(needed, 1.5 x 6))");
+  assert.equal(fresh, 1, "6 -> 9 indices fits the 1.5 x 6 = 9 taken at creation: no regrow");
   g = merge([0, 2]);
   assert.equal(g.index.needsUpdate, false, "a set that only lost its tail moves the draw range alone");
   assert.deepEqual(drawn(g), want([0, 2]));
   // A change the pass never drew (no upload), then another: the second range must cover the first.
   merge([1, 2]);
   g = merge([1, 3]);
-  assert.equal(g.index.updateRanges[0].start, 0, "the queued range from [1,2] is still owed");
+  assert.deepEqual(g.index.updateRanges.map((r) => [r.start, r.count]), [[0, 3], [3, 3]], "the queued range from [1,2] is still owed");
   upload(g); assert.deepEqual(drawn(g), want([1, 3]));
   g = merge([0, 1, 2, 3, 4]); upload(g);
   assert.deepEqual(drawn(g), want([0, 1, 2, 3, 4]));
   assert.equal(g.index.array.length, 15, "capped at the mesh's whole index (15), never past it");
-  assert.equal(fresh, 3, "9 -> 15: one more regrow");
+  assert.equal(fresh, 2, "9 -> 15: one regrow");
+});
+
+// GPU hunt 3 (#4272 item 3; census 41030658536): with the range starting at the first change, a head chunk
+// leaving or entering re-sent the whole set (200-920 KB rows). `bytes` mirrors the vendor's Uint16 path: one
+// writeBuffer per queued range, widened to whole 4-byte pairs; a fresh attribute uploads its whole array.
+test("mergeVisible: the set sliding along the arc by one chunk uploads that chunk, not the set after it", () => {
+  const sys = factory([]);
+  const C = 40, T = 600, W = 20;   // chunks, triangles each, visible window
+  const ch = Array.from({ length: C }, (_, k) => {
+    const idx = new Uint16Array(3 * T);
+    for (let i = 0; i < idx.length; i++) idx[i] = (k * 1543 + i * 7) % 60000;
+    return visChunk(idx, [k, 0, 0], [k + 1, 1, 1]);
+  });
+  const mesh = { chunks: ch };
+  let gpu = null, gpuOf = null, bytes = 0;
+  const upload = (g) => {
+    const a = g.index;
+    if (a !== gpuOf) { gpuOf = a; gpu = Uint16Array.from(a.array); bytes += a.array.byteLength; }
+    else for (const r of a.updateRanges) {
+      const lo = r.start & ~1, hi = (r.start + r.count + 1) & ~1;
+      gpu.set(a.array.subarray(lo, hi), lo); bytes += 2 * (hi - lo);
+    }
+    a.updateRanges.length = 0; a.needsUpdate = false;
+  };
+  const step = (lo, hi) => {
+    let n = 0;
+    for (let k = lo; k < hi; k++) sys.visList[n++] = ch[k];
+    const g = sys.mergeVisible(mesh, n, 0), b0 = bytes;
+    upload(g);
+    const want = [];
+    for (let k = lo; k < hi; k++) want.push(...ch[k].geo.index.array);
+    assert.deepEqual(Array.from(gpu.subarray(g.drawRange.start, g.drawRange.start + g.drawRange.count)), want,
+      `the GPU copy draws exactly chunks ${lo}..${hi - 1}, in record order`);
+    return bytes - b0;
+  };
+  const chunkB = 2 * 3 * T, setB = W * chunkB;   // 3600 B, 72000 B
+  step(5, 5 + W);
+  assert.equal(step(6, 6 + W), chunkB, "head leaves, chunk 25 enters: one chunk (the old rule: all 72000 B)");
+  assert.equal(step(5, 5 + W), 0, "the head returns while still resident: nothing uploads");
+  assert.equal(step(4, 4 + W), chunkB, "a head chunk never held: that chunk alone");
+  // A steady drive: 16 one-chunk steps. Each rewrite restarts the set at the far end of its 1.5x slack.
+  let drive = 0;
+  for (let k = 5; k <= 20; k++) drive += step(k, k + W);  assert.ok(drive <= 16 * chunkB + 2 * setB, `16 steps uploaded ${drive} B, the old rule ${16 * setB} B`);
 });
