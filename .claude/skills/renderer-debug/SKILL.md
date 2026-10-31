@@ -15,8 +15,8 @@ DEFAULT), **GLX** (`js/render/glx/`, explicit WebGL2 and the universal fallback)
 - Container probes pin `apex26.tlxForceGL=1`, so they never run the phone's TLX
   WebGPU path; a software probe is no GPU verdict (AGENTS.md §Verification).
   A phone report → [references/phone-reports.md](references/phone-reports.md).
-- A `GLX.*()` / `WGX.*()` apex-eval expression silently answers for TLX unless you
-  pass `--backend webgl2|webgpu`.
+- A `GLX.*()` / `WGX.*()` apex-eval expression answers for TLX unless you
+  pass `--backend webgl2|webgpu` (apex-eval now prints a WARNING when it sees the trap).
 - Both TLX legs report `env.backend` `three`: read `backendState().forceWebGL` /
   `pin` before picking a leg.
 - A black `#game` on a software adapter is the `#game-soft` blit gap

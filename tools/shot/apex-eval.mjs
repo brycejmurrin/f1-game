@@ -67,6 +67,9 @@ if (!BACKENDS.includes(backend)) {
 }
 const track = rest[0] || "monza";
 const expr = rest[1] || "a.info()";
+if (!vmRoute && !backendPinned && /\b(GLX|WGX)\b/.test(expr)) {
+  console.error("apex-eval: WARNING the expr names GLX/WGX but no --backend is pinned, so TLX (three) answers it; pass --backend webgl2|webgpu");
+}
 if (vmRoute && backendPinned) {
   console.error("apex-eval: --vm has no renderer, so --backend means nothing there; drop one of them");
   process.exit(2);
