@@ -2996,6 +2996,7 @@ function cutAt(text, max) {
   return (stop > max / 3 ? head.slice(0, stop + 1) : head.replace(/\s+\S*$/, "") + "…");
 }
 function compactDescription(name, d) {
+  if (name === "apex_claude_agents") return 'Tree — Claude auth, cloud messages and transcript snapshots. apex_help {tool: "apex_claude_agents"}.';
   if (name === "apex_help" || d.length <= DESC_LONG) return d;
   const skill = d.match(/\s(Skill: [^.]*\.?)\s*$/);
   const body = skill ? d.slice(0, skill.index) : d;
@@ -3158,6 +3159,7 @@ function extras() {
 // (MCP-REFINE-2026-10-30: it skipped apex_locations and apex_track_audit, and read pick_tests' groups as specs).
 export const ROUTES = [
   "apex-tools: local CLI wraps (apex_*); the tools/ CLIs do the work, this server pins safe flags. Map: docs/AGENT-SURFACE.md.",
+  "Claude cloud messages and downloaded transcript snapshots: apex_claude_agents (server-host CLI login; dedicated reader clone for transcripts).",
   "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; circuit turns/sectors/scenery targets: apex_locations; " +
     "circuit health (build, floats, clipping): apex_track_audit; flyby framing: apex_frame_report; one __apex expr without a browser: apex_eval {vm:true}; " +
