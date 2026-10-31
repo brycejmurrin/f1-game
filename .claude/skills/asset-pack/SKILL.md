@@ -31,7 +31,7 @@ write the exact command into the PR body for Bryce, or ask him for a grant (in a
 ## When to Use
 
 - Planning a pack regeneration (`bake-synthetic`, Bryce runs it) or adding CC0 scan layers.
-- Validate local glTF/GLB assets or create zero-spend procedural Blender room drafts.
+- Validate a room spec or draft a procedural Blender room: `python3 tools/assets/procedural-room.py validate tools/assets/procedural-room.example.json --out artifacts/unused` (full flow: `docs/DESIGN-TOOLS.md` §Zero-spend room adapter).
 - Licence/hash/size guards (`verify`).
 - Invisible / wrong / not-loading baked materials.
 - Tuning `matTexMix` / `__apex.matTex` or tier (`high`/`low`; `off` = the pack failed or the backend is unsupported, read `error`; `browser-bake` = layers baked in the browser by `adopt()` in `assets.js`, not the shipped PNGs).

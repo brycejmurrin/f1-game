@@ -1035,3 +1035,15 @@ test("claude plugin validate accepts project skills and rejects malformed skill 
   if (invalid.status === 0) return t.skip("claude CLI cannot validate here: it accepted malformed skill frontmatter (exit 0)");
   assert.equal(invalid.status, 1, "malformed frontmatter must fail validation (not an unexpected validator error)");
 });
+
+test("season-mode references quote only unit-test names that exist", () => {
+  // `name…` in backticks is a test-title prefix; a renamed test would leave the skill pointing at nothing.
+  const walk = (d) => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walk(`${d}/${e.name}`) : [`${d}/${e.name}`]));
+  const corpus = walk("tests/unit").filter((f) => /\.(mjs|js|cjs)$/.test(f)).map(read).join("\n");
+  const missing = [];
+  for (const f of walk(".claude/skills/season-mode").filter((x) => x.endsWith(".md"))) {
+    for (const m of read(f).matchAll(/`([^`\n]{12,}?)…`/g)) if (!corpus.includes(m[1])) missing.push(`${f}: ${m[1]}`);
+  }
+  assert.deepEqual(missing, []);
+});

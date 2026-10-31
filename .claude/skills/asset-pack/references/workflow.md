@@ -15,10 +15,10 @@ mismatch.
 (`js/track/core/geom.js`) and `MAT_LAYERS` in both `tools/gen/assets.mjs` and
 `js/render/shared/assets.js`. The count `17` is also hardcoded in every backend's
 shader/uniform sizing; `tests/unit/assets-pack.test.mjs` ("the shader's layer count
-matches the MAT table size") pins only GLSL `uMatTexScale[17]`, GLX/WGX `MAT_TEX_LAYERS` and the TLX
-uniform array/loop. NOT pinned (edit by hand, grep the literal `16`/`17`): `matTexLayer`'s
-`clamp(mid, 0, 16)` in `tsl-lit.js`, WGSL `mid > 16` and the `MatScaleU` array size in `wgsl-chunks.js`,
-and `MAT_LAYERS` in `js/render/shared/assets.js`. Miss one and the extra layer's scale silently reads
+matches the MAT table size") pins GLSL `uMatTexScale[17]`, GLX/WGX `MAT_TEX_LAYERS`, the TLX uniform array/loop, `matTexLayer`'s
+`clamp(mid, 0, 16)` in `tsl-lit.js`, the `mid > 16` bounds in `glsl-lit.js` and `wgsl-chunks.js`, and the
+`MatScaleU` size (all derived from the MAT table size). NOT pinned (edit by hand): `MAT_LAYERS` in
+`js/render/shared/assets.js`. Miss one and the extra layer's scale silently reads
 `0.0` (GLX) or is dropped (TLX/WGX).
 
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are

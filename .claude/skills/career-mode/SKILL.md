@@ -58,7 +58,7 @@ Gotchas: `careerState().owned` is a COUNT (part ids: `__apex.career().owned` / `
 save is refused) and needs a loaded track/grid first; each row returns `sponsorPay` and `sponsorVerdict`.
 
 Sponsor "just paid" / double pay, and research or facility credits that do not add up: traces in
-[references/workflow.md](references/workflow.md) (`careerSim(n)` rows carry `sponsorPay`; a driven race
+[references/traces.md](references/traces.md) (`careerSim(n)` rows carry `sponsorPay`; a driven race
 stashes it in `G.careerSettlement`).
 
 Commands:
@@ -82,4 +82,5 @@ Deep reference: `docs/CAREER.md`.
 ## Load on demand
 
 - Active-save gate, weekend/quali/reliability flow, settlement, common mistakes → [references/workflow.md](references/workflow.md).
+- Sponsor / research / facility money traces → [references/traces.md](references/traces.md).
 - Lost upgrades / save not surviving reload → [references/persistence.md](references/persistence.md).

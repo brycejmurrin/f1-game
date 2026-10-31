@@ -16039,6 +16039,7 @@
     "js/render/webgpu/wgsl-chunks.js": {
       "*": [
         "tests/specs/parts-physics.spec.js",
+        "tests/unit/assets-pack.test.mjs",
         "tests/unit/car-materials.test.mjs",
         "tests/unit/comment-citations.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",

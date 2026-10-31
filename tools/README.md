@@ -448,6 +448,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/survey-gallery-lib.cjs** | Shared helpers for build-gallery / pr-survey-panel: survey branch list, raw GitHub URLs, git blobs. | — |
 | **track/survey-gallery-page.cjs** | Offline circuit gallery: pre-rendered captures, native circuit navigation and recipe downloads. | — |
 | **track/survey-track.mjs** | One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`. | survey-track |
+| **track/surveyor-scope.mjs** | Hand-back scope check: lists files a track-surveyor branch changed outside its circuit pair (exit 1 if any). | survey-track |
 | **track/track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **track/track-verts.cjs** | Per-circuit vertex + model-diagnostics dump for exact before/after diffing (`--diff before.json`). | agent-view |
 | **track/tumftm-import.mjs** | Converts TUMFTM racetrack-database CSV centrelines into track-designer apex26.track envelopes (LGPL-attributed). | new-track |

@@ -9,32 +9,7 @@ Hand-written `sw.js`, no build step. Discover essentials from `index.html`,
 embed the build number in the cache name, network-first for the shell guard,
 cache-first for immutable `?v=<sha256>` assets.
 
-**Precache.** Install fetches `index.html` and parses every `<script src>` and
-`<link rel="stylesheet">` into the **essential** set (plus `./`,
-`index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
-**optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
-**DEFERRED** backends, `vendor/three-0.187.0`, other vendors, self-hosted fonts.
-The GLX files and the career UI (`career-ui.js`, `career-planning-ui.js`) in it are promoted to
-REQUIRED at install (`isRequiredLazy` in `sw.js`: offline without GLX is "graphics unavailable",
-without the career UI there is no career); TLX and its vendor dependency are the critical optional pool,
-WGX/scenery/fonts the background pool after it, then SETTLED, then skipWaiting (the flag is read only once install settles). Required failures abort
-install; optional failures are recorded without making install incomplete.
-
-**Shell version guard.** Inline script at the top of `index.html` ("SHELL VERSION GUARD"):
-reads `<meta name="apex-build">`, fetches `version.json` no-store, and if the
-deployed build is newer reloads once with `?b=<build>` (hash and query kept;
-`sessionStorage` `apex26.shellReloadedTo` stops loops). It also registers
-`sw.js?v=<build>` after load+idle, so a new build is a new registration URL.
-The guard runs ONCE, at boot.
-
-**In-session update (`UpdateCheck`, `js/ui/update-check.js`; contract `docs/ARCHITECTURE.md`).** An
-installed iOS PWA usually RESUMES instead of cold-booting, so the boot guard never runs: UpdateCheck
-re-reads `version.json` when the tab is foregrounded (at most every `THROTTLE_MS`, a failed read
-retried after `FAIL_BACKOFF_MS`), shows the UPDATE READY chip (hidden during a race), and `apply()`
-reloads. Stale installed app = compare the PHONE's booted build with the live `version.json`
-(diagnose: workflow.md), never the live meta with the live json.
-The deploy stamps the build (`2000 + commit count`, `pages.yml`) into `version.json` and the meta; the
-committed numbers are not what is live. Live check: `bash tools/ci/pages-live-sha.sh <url>` / **deploy-research**.
+**Internals** (precache pools, the shell version guard, `UpdateCheck` in-session updates): [references/sw-internals.md](references/sw-internals.md) §Install, guard and update.
 
 **Fetch.** Per-class policy is the table below; dev-host `?v=dev`, the generation
 handshake, cache retention and fetch races → [references/sw-internals.md](references/sw-internals.md).
@@ -45,9 +20,8 @@ numerically OLDER caches, after `INSTALL_SETTLED`), the `install` / `activate` l
 `fetch` listener's `isVersion` branch (`version.json` network-first; precached at install and served
 from that key offline, never written at runtime).
 
-**Generated parts.** The `@gen-shell:sw-optional` block in `sw.js` and the `@gen-shell` blocks of
-`index.html` are GENERATED (AGENTS.md rule 11; `protect-files` refuses a hand edit): edit
-`tools/manifest.cjs`, run `npm run gen`, and `npm run gen:check` names drift.
+**Generated parts.** The `@gen-shell` blocks of `sw.js` and `index.html` are generated: AGENTS.md rule 11, and
+`references/workflow.md` step 1 has the manifest edit.
 
 **CSP.** `<meta http-equiv="Content-Security-Policy">` is a gen-shell block
 (`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party

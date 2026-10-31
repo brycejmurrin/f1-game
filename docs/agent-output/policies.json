@@ -2526,6 +2526,11 @@
       "presentation": "shared-levels",
       "preserve": "All imagery, original scene/camera coordinates, missing shots and no false visual sign-off."
     },
+    "tools/track/surveyor-scope.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c6"
+    },
     "tools/track/track-accuracy-validator.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
