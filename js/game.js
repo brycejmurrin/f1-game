@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2280,11 +2280,11 @@ function scheduleFlybyTrack(settle) {
   const prepare = async () => {
     if (!current()) return;
     try {
+      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // start optional garage assets alongside circuit/scenery downloads
       // Download independently of the old world's compilation; only replacing
       // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
-      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // picker/sheet up: RACE! is next (not the title warm)
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first
@@ -2746,7 +2746,7 @@ const _customTrackStarts = new WeakSet();
 // Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
 // startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
 // LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
-function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
+function kickRaceBundles(audio) { if (typeof setupCam !== "undefined" && setupCam.prewarmExterior) setupCam.prewarmExterior(); for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -3549,6 +3549,11 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 // panels further down: CustomTeam.create() takes spMeshBust as a value, so
 // the module has to exist by then.
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
+  prepareExterior: async (id) => {
+    const idx = Tracks.LIST.findIndex((t) => t.id === id); if (idx < 0) return null;
+    const ok = await Promise.all([ensureGarageExterior(), ensureScenery(idx)]);
+    return ok[0] && ok[1] && Tracks.LIST[idx].id === id ? Tracks.LIST[idx] : null;
+  },
   teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render,
   previewDecalMesh: (team) => { const decal = teamDecalState(team, true), liv = resolveLivery(team);
     return getCarDecalMesh(decal.val, decal.parts, !!carDraw.modelBuf, team.id, liv.finShape, liv.spineHeight, liv.bodyStyle); } });

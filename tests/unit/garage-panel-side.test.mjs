@@ -132,7 +132,7 @@ test("the fit takes the magnitude; the lens shift and recentre keep the sign", (
 test("a Home photo uses manual distance and aim while the background retains automatic framing", () => {
   const src = read("js/garage/setup-camera.js");
   const start = src.indexOf('  const canvasEl = $("game"), panelEl =');
-  const end = src.indexOf('  const context = garageCtx(), sceneTime', start);
+  const end = src.indexOf('  const outside = context.realExterior', start);
   assert.ok(start > 0 && end > start, 'the real camera framing segment must be available');
   const frame = src.slice(start, end);
   for (const aspect of [1440 / 900, 900 / 1440]) {

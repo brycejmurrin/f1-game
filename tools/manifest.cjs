@@ -641,6 +641,7 @@ const TRACK_VM = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -1085,6 +1086,8 @@ const LAZY_RACE = [
 // menus from throwing until ensureRaceSession() reinjects via `var`.
 // Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
 // Hub WATCH / Director eval SHOTS).
+// Optional selected-circuit pit slice for every garage view. Never gates a race.
+const LAZY_GARAGE_EXTERIOR = ["js/garage/exterior-geometry.js", "js/garage/exterior.js"];
 const LAZY_RACE_SESSION = [
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
@@ -1328,9 +1331,11 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
+  ["js/track/scenery/region.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/scenery/landforms.js", "js/track/scenery/nature.js"],
   ["js/track/scenery/stands.js", "js/track/scenery/structures.js"],
@@ -1782,7 +1787,7 @@ module.exports = {
   SW_LOCALES,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES,
+  LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,

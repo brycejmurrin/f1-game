@@ -14,10 +14,72 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+function boundedScenery(maxVertices = 1000) {
+  const ctx = vm.createContext({ Log: { info() {} } });
+  for (const file of ['js/track/core/geom.js', 'js/track/scenery/graph.js', 'js/track/scenery/region.js'])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8'), ctx, { filename: absSrc(file) });
+  const api = vm.runInContext('({ geo: TrackGeom, region: TrackSceneryRegion, graph: TrackGraph })', ctx);
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  const region = api.region.create({ intersects: (p, r) => Math.abs(p[0]) <= 10 + r && Math.abs(p[2]) <= 10 + r,
+    maxVertices, maxIndices: 3000 }, [out], api.geo);
+  return { out, region, graph: api.graph.create({ raw: api.geo }) };
+}
+
+test('bounded scenery rejects distant primitives before emission but retains intersecting objects whole', () => {
+  const h = boundedScenery();
+  h.region.raw.addBox(h.out, [1000, 1, 0], [2, 2, 2], [1, 1, 1]);
+  assert.equal(h.out.pos.length, 0, 'remote objects allocate no geometry');
+  h.region.raw.addBox(h.out, [12, 1, 0], [4, 2, 4], [1, 1, 1]);
+  assert.ok(h.out.pos.some((v, i) => i % 3 === 0 && v > 10), 'admission retains the complete intersecting box');
+  assert.equal(h.out.idx.length, 36); assert.equal(h.region.stats().rejected, 1);
+});
+
+test('bounded scenery admission follows packed mesh scale, rotation and translation', () => {
+  const h = boundedScenery(), mesh = { pos: [0,0,0, 1,0,0, 0,1,0], nrm: [0,0,1,0,0,1,0,0,1], col: [1,1,1,1,1,1,1,1,1], idx: [0,1,2], mat: [4,4,4] };
+  assert.equal(h.region.addMesh(h.out, mesh, { x: 1000, scale: 2, rotY: Math.PI / 2 }), false);
+  assert.equal(h.out.idx.length, 0);
+  h.region.addMesh(h.out, mesh, { x: 1, scale: 2, rotY: Math.PI / 2 });
+  assert.equal(h.out.idx.length, 3); assert.equal(h.out.mat.length, 3);
+  assert.ok(h.out.pos.every(Number.isFinite));
+});
+
+test('an admitted composite scenery model keeps its distant constituents and restores admission afterward', () => {
+  const h = boundedScenery();
+  h.region.whole({ center: [9,1,0], size: [18,2,2] }, () => {
+    h.region.raw.addBox(h.out, [16,1,0], [2,2,2], [1,1,1]);
+    h.region.raw.addBox(h.out, [2,1,0], [2,2,2], [1,1,1]);
+  });
+  assert.equal(h.out.idx.length, 72, 'both parts of the intersecting model survive');
+  const size = h.out.pos.length;
+  assert.throws(() => h.region.whole({ center: [0,1,0], size: [2,2,2] }, () => { throw Error('abandon'); }), /abandon/);
+  h.region.raw.addBox(h.out, [1000,1,0], [2,2,2], [1,1,1]);
+  assert.equal(h.out.pos.length, size, 'a throwing composite cannot disable later spatial admission');
+});
+
+test('regional graph admission reads recipes without baking unbounded canonical geometry', () => {
+  const h = boundedScenery(), build = rec => rec.box([0,0,0], [2,2,2], [1,1,1]);
+  const model = h.graph.model('region-box', build);
+  for (const name of ['geo', 'aabb', 'verts']) Object.defineProperty(model, name, { get() { throw Error('canonical bake forbidden'); } });
+  const place = x => ({ o: [x,0,0], r: [1,0,0], u: [0,1,0], t: [0,0,1] });
+  let calls = 0;
+  h.region.instance(h.graph, 'region-box', place(1000), build, () => { calls++; });
+  assert.equal(calls, 0, 'remote graph models are rejected without geometry');
+  h.region.instance(h.graph, 'region-box', place(0), build, () => { calls++; h.region.raw.addBox(h.out, [0,0,0], [2,2,2], [1,1,1]); });
+  assert.equal(calls, 1); assert.equal(h.out.idx.length, 36);
+});
+
+test('bounded scenery budget remains failed even if a model emitter catches the first error', () => {
+  const h = boundedScenery(3);
+  assert.throws(() => h.region.raw.addBox(h.out, [0, 1, 0], [2, 2, 2], [1, 1, 1]), /budget exceeded/);
+  assert.throws(() => h.region.check(), /budget exceeded/, 'a caught emitter exception cannot publish partial scenery as ready');
+});
 
 const counts = (Tracks, id) => {
   const def = Tracks.LIST.find((d) => d.id === id);
