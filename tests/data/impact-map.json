@@ -5110,7 +5110,11 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "ensureGarageData": [
+        "tests/unit/data-lazy-loader.test.mjs"
+      ],
       "ensureLightPresets": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureNet": [
@@ -7666,6 +7670,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "applyStyle": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "bindSettings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs"
@@ -7673,19 +7680,21 @@
       "cancel": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "carryPlayback": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
-      "crewFor": [
-        "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs"
-      ],
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "lightFor": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7699,6 +7708,9 @@
       ],
       "resultKind": [
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "rigData": [
+        "tests/unit/garage-camera-rigs.test.mjs"
       ],
       "rigSample": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7722,6 +7734,9 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "step": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "styleOf": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "timeline": [
@@ -7851,6 +7866,14 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
+      ]
+    },
+    "js/garage/garage-data.js": {
+      "*": [
+        "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-camera-rigs.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/livery-design-editor.js": {
@@ -11600,6 +11623,9 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "parkedAhead": [
+        "tests/unit/contact-geometry.test.mjs"
+      ],
       "pushVelocity": [
         "tests/unit/contact-geometry.test.mjs"
       ],
@@ -12344,7 +12370,8 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/share-card.test.mjs"
+        "tests/unit/share-card.test.mjs",
+        "tests/unit/title-menu-even.test.mjs"
       ],
       "current": [
         "tests/unit/daily-challenge.test.mjs"
@@ -12401,8 +12428,7 @@
         "tests/unit/loading-card.test.mjs"
       ],
       "*": [
-        "tests/unit/start-race-latch.test.mjs",
-        "tests/unit/title-menu-even.test.mjs"
+        "tests/unit/start-race-latch.test.mjs"
       ]
     },
     "js/race/damage-handling.js": {
@@ -14323,6 +14349,7 @@
         "tests/unit/puddles.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
+        "tests/unit/sw-build-meta.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
@@ -18871,7 +18898,8 @@
     },
     "js/ui/title-menu.js": {
       "create": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/title-menu-even.test.mjs"
       ],
       "organize": [
         "tests/unit/title-menu-even.test.mjs"

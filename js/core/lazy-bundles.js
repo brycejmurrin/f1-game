@@ -12,8 +12,11 @@ const ctxOrNull = () => {
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
-// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed.
-const RACE_FILES = ApexRoster.LAZY_RACE;
+// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed,
+// and the garage's Blender tables (js/garage/garage-data.js), each loaded by its own ensure.
+const isGarageData = (f) => /^js\/garage\//.test(f);
+const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
+const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
 // LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
@@ -763,6 +766,22 @@ function ensureLightPresets() {
   });
   return lightLoad;
 }
+// THE GARAGE'S BLENDER TABLES (GarageData): asked for at idle, on garage entry,
+// SETTINGS and RACE!; strict, so a second ask never re-evaluates the const. A
+// failed load is forgotten and the next ask fetches again; until it lands the
+// rigs play the "cut" cameras and the crews the shipped crew.
+let garageLoad = null;
+const garageReady = () => typeof GarageData !== "undefined" && !!GarageData;
+function ensureGarageData() {
+  if (garageReady() || !GARAGE_FILES.length) return Promise.resolve(garageReady());
+  if (garageLoad) return garageLoad;
+  garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
+    garageLoad = null;
+    if (!garageReady()) Log.warn("game", "the garage's Blender tables did not load — the next garage visit asks again");
+    return garageReady();
+  });
+  return garageLoad;
+}
 /** Save-Data on, or a 2G link: the title skips its idle lighting, race-session and
  *  audio prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
  *  Firefox) reads as a normal link. */
@@ -835,6 +854,7 @@ function raceAssets() {
     scheduleIdle(() => { ensureLightPresets(); }, 8000);
     scheduleIdle(() => { ensureRaceSession(); }, 9000);
     scheduleIdle(() => { prefetchAudio(); }, 12000);
+    if (GARAGE_FILES.length) scheduleIdle(() => { ensureGarageData(); }, 6000);   // WORK ON CAR can be the first tap
   }
   bootDesktopAudio();
 }
@@ -858,7 +878,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

@@ -44,7 +44,7 @@ const PitCrewAnim = (function () {
    *  leaves the stop to the static crew mesh. */
   function draw(G, c, base, opts) {
     if (!on || !c || !c.isPlayer || c.pitState !== "box" || !G || !G.gfx || !G.pits || !G.pits.stopAnim) return false;
-    if (typeof GarageCrewChoreo === "undefined" || typeof GarageCrewMotion === "undefined" || typeof GarageCrew === "undefined" || !GarageCrew.helmet) return false;
+    if (typeof GarageCrewChoreo === "undefined" || !GarageCrewChoreo.has("pit") || typeof GarageCrewMotion === "undefined" || typeof GarageCrew === "undefined" || !GarageCrew.helmet) return false;
     const eye = G.camEye;
     if (eye) {
       const dx = base[12] - eye[0], dy = base[13] - eye[1], dz = base[14] - eye[2];
