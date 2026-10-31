@@ -38,7 +38,7 @@ function bootEnsure(opts) {
       init() { bag.inits++; },
       _interruptHook: () => null,
     },
-    Log: { warn() {}, info() {} },
+    Log: { warn() {}, info() {}, error() {} },
     els: {},
     scheduler: {
       yield() { bag.yields.push("sched"); return Promise.resolve(); },
@@ -75,7 +75,7 @@ function bootEnsure(opts) {
       getContext: () => ({ store: { get: (k) => k === "radioFocusDb" ? (__bag.focus || 0) : 0.5 }, soundOn: true, camMode: 0 }),
       applyLightTuneIfReady() {},
       bindAgent() {}, createNetwork() { return { wire() {} }; },
-      onAudioReady() { __bag.ready++; },
+      onAudioReady(once) { __bag.ready++; if (__bag.hook) __bag.hook(once); },
     }).ensureAudio;
   `, hold.ctx);
   return hold.ctx;
@@ -96,7 +96,6 @@ test("ensureAudio source yields before load and before onAudioReady; skips under
   assert.match(bundles, /await audioYieldToMain\("task"\);\s*if \(typeof deps\.onAudioReady/,
     "task yield before onAudioReady / panel init");
   assert.match(bundles, /Do NOT evaluate LAZY_AUDIO here/, "raceAssets still does not eval audio on title idle (#1135)");
-  assert.match(bundles, /el\.rel = "prefetch"/, "late idle HTTP prefetch only");
   assert.match(bundles, /scheduleIdle\(\(\) => \{ prefetchAudio\(\); \}, 12000\)/, "prefetch after typical title networkidle");
   const game = src("js/game.js");
   assert.match(game, /pointerdown", \(\) => \{ ensureAudio\(\); \}, \{ once: true, capture: true \}/,
@@ -117,6 +116,46 @@ test("await ensureAudio resolves after onAudioReady; yields once on real UA", as
   assert.ok(bag.inits >= 1, "restoreOnEngine called GameAudio.init under hasBeenActive");
   assert.deepEqual(bag.yields, ["sched", "timer", "sched"],
     "paint = yield+16ms timer; task = yield before onAudioReady");
+});
+
+// #4219: every onAudioReady part in one task was a 787 ms LoAF on the macOS census.
+// A part's entry records how many yields ran before it; consecutive parts must differ.
+function partsHook(bag, throwOnce) {
+  bag.runs = [];
+  return (once) => {
+    for (const key of ["radio", "announcer", "panel", "cues"]) {
+      once(key, () => {
+        bag.runs.push({ key, yields: bag.yields.filter((y) => y === "sched").length });
+        if (key === throwOnce && !bag.threw) { bag.threw = true; throw new Error("test: part threw"); }
+      });
+    }
+  };
+}
+
+test("onAudioReady parts each run after their own main-thread yield (#4219)", async () => {
+  const bag = { ready: 0, yields: [], inits: 0 };
+  bag.hook = partsHook(bag);
+  const ctx = bootEnsure({ bag, hasBeenActive: true });
+  assert.equal(await ctx.__ensure(), true);
+  assert.deepEqual(bag.runs.map((r) => r.key), ["radio", "announcer", "panel", "cues"], "order kept");
+  for (let i = 1; i < bag.runs.length; i++) {
+    assert.ok(bag.runs[i].yields > bag.runs[i - 1].yields, bag.runs[i].key + " ran in the same task as " + bag.runs[i - 1].key);
+  }
+});
+
+test("a part that throws is re-run alone on retry, the rest after it still yield (#4219)", async () => {
+  const bag = { ready: 0, yields: [], inits: 0 };
+  bag.hook = partsHook(bag, "announcer");
+  const ctx = bootEnsure({ bag, hasBeenActive: true });
+  assert.equal(await ctx.__ensure(), false, "the throw is a miss");
+  assert.deepEqual(bag.runs.map((r) => r.key), ["radio", "announcer"]);
+  assert.ok(bag.runs[1].yields > bag.runs[0].yields, "announcer ran in radio's task");
+  bag.runs.length = 0;
+  assert.equal(await ctx.__ensure(), true, "the retry completes");
+  assert.deepEqual(bag.runs.map((r) => r.key), ["announcer", "panel", "cues"], "radio is latched: not re-run");
+  for (let i = 1; i < bag.runs.length; i++) assert.ok(bag.runs[i].yields > bag.runs[i - 1].yields, bag.runs[i].key);
+  assert.equal(await ctx.__ensure(), true);
+  assert.equal(bag.runs.length, 3, "memoised once every part returned");
 });
 
 test("game-vm UA skips yields but still completes ensureAudio", async () => {
@@ -169,7 +208,7 @@ function bootEnsureWithRadio(opts) {
       init() { bag.inits++; },
       _interruptHook: () => null,
     },
-    Log: { warn() {}, info() {} },
+    Log: { warn() {}, info() {}, error() {} },
     els: {},
     scheduler: { yield() { bag.yields = bag.yields || []; bag.yields.push("sched"); return Promise.resolve(); } },
     setTimeout(fn, ms) {

@@ -234,25 +234,30 @@ async function mirrorRig(t, ls = {}) {
   let mips = 0;
   fg.gl.texStorage2D = (...a) => { storage.push(a[1]); };
   fg.gl.generateMipmap = () => { mips++; };
+  const deleted = { tex: 0 }, hooks = { post: 0, fx: [] };
+  fg.gl.deleteTexture = () => { deleted.tex++; };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
   t.after(() => renderer.dispose());
-  const mk = new Function("THREE", "localStorage", `"use strict";
-    let mirRT = null, mirCam = null, _mirRect = null;
+  const mk = new Function("THREE", "localStorage", "hooks", `"use strict";
+    let mirRT = null, mirCam = null, _mirRect = null, _mirActive = false, _warmPending = null, _mirRenders = 0;
     const W = 1280, H = 720, presentW = 1280, presentH = 720;
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
-    const post = { hdrOk: () => true };
+    const post = { hdrOk: () => true, releaseMirror: () => { hooks.post++; } };
+    const fx = { releaseTexture: (tex) => { hooks.fx.push(tex); } };
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; },
+    const api = { ${tslice("        releaseMirror() {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
+    return { prepareMirrorTarget, rt: () => mirRT, cam: () => mirCam, rect(r) { _mirRect = r; }, release: api.releaseMirror,
+      busy(active, warm) { _mirActive = active; _warmPending = warm; }, rendered() { _mirRenders++; }, renders: () => _mirRenders,
       glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);
-  const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) });
+  const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) }, hooks);
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
   // One mirror frame: mirrorBegin's prepareMirrorTarget(w, h), then mirrorEnd's render into the target.
   const frame = (w, h) => {
     M.prepareMirrorTarget(w, h);
     renderer.setRenderTarget(M.rt()); renderer.render(scene, cam); renderer.setRenderTarget(null);
   };
-  return { M, frame, storage, mipCount: () => mips };
+  return { M, frame, storage, mipCount: () => mips, deleted, hooks };
 }
 // The census's helmet-cam mirror: a 461 x 132 target (SS 2) over its 230 x 66 px HUD rect — ratio 2.004, LOD ~1.
 const RECT = [0.4, 0.02, 230.4 / 1280, 66 / 720];
@@ -318,6 +323,38 @@ test("A-H5: an UNBOUNDED glass latches the full chain; apex26.tlxMirMips=0 is th
   assert.equal(pin.M.rt().texture.mipmaps.length, 3, "a pinned cap below the inset's need is raised to it");
   pin.M.glass(); pin.frame(461, 132);
   assert.equal(pin.M.rt().texture.mipmaps.length, 3, "pinned: the glass does not latch the full chain (the A/B lever)");
+});
+
+// #4219 (perf hunt 7): quit-to-menu frees the mirror target (colour + depth + mips) and its node / glass references;
+// the next mirror frame re-allocates through prepareMirrorTarget, the existing lazy path.
+test("#4219: releaseMirror frees mirRT and drops its references; the next mirror frame allocates a new one", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132); h.M.rendered();
+  const old = h.M.rt(), n0 = h.storage.length;
+  let disposed = 0;
+  old.addEventListener("dispose", () => { disposed++; });
+  h.M.busy(true, null);
+  assert.equal(h.M.release(), false, "never while a mirror pass records");
+  h.M.busy(false, Promise.resolve());
+  assert.equal(h.M.release(), false, "never while a warm draws into it");
+  assert.equal(h.M.rt(), old);
+  h.M.busy(false, null);
+  assert.equal(h.M.release(), true);
+  assert.equal(h.M.rt(), null, "the backend holds no mirror target");
+  assert.equal(h.M.cam(), null);
+  assert.equal(h.M.renders(), 0, "mirrorState().ready is false until the next mirror render");
+  assert.equal(disposed, 1, "the target was disposed");
+  assert.ok(h.deleted.tex >= 1, "its GL textures were deleted");
+  assert.equal(h.hooks.post, 1, "the post chain's mirror texture nodes were reset");
+  assert.deepEqual(h.hooks.fx, [old.texture], "the glass material naming the texture was retired");
+  assert.equal(h.M.release(), true, "a second release is a safe no-op");
+  assert.equal(disposed, 1); assert.equal(h.hooks.post, 1);
+  h.frame(461, 132);
+  assert.ok(h.M.rt() && h.M.rt() !== old, "the next mirror frame allocates a new target");
+  assert.ok(h.M.cam(), "and its camera");
+  assert.ok(h.storage.length > n0, "with fresh storage");
+  assert.equal(h.M.rt().texture.mipmaps.length, 3, "the same capped chain");
 });
 
 test("A-H5: tlx.js wiring — the glass latch in drawMirrorGlass, mirrorState reports the levels", () => {
