@@ -77,7 +77,10 @@ export function judgeHot(row, baseline, { strict = STRICT, spreadRatio = SPREAD_
   const base = baseline && Number.isFinite(baseline.msPerCall) ? baseline.msPerCall : null;
   const factor = strict ? strictRatio : generousRatio;
   const cap = base != null ? round3(base * factor) : null;
-  const overCap = cap != null && row.msPerCall > cap;
+  // The cap judges the FASTEST window: a hang slows every window, a noisy neighbour only some (Pages #4559: median
+  // 0.069 vs cap 0.066 with windows 13.871/12.058/24.743 ms; #4225 saw the same physState bench red twice).
+  const best = row.minMs > 0 && row.iters > 0 ? row.minMs / row.iters : row.msPerCall;
+  const overCap = cap != null && best > cap;
   const overSpread = !(row.ratio <= spreadRatio);
   const pass = base != null && cap != null && row.msPerCall > 0 && !overCap && !overSpread;
   return { pass, cap, factor, overCap, overSpread, base, strict };

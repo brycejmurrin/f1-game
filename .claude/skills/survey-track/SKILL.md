@@ -1,7 +1,7 @@
 ---
 name: survey-track
 argument-hint: "<circuit ids…> [target year]"
-description: "Use when a circuit doesn't match the real place: an accuracy pass against satellite, photos, onboards or OSM, layout or elevation, terrain over the road, or a multi-circuit campaign. Not for: a new circuit → new-track; props → scenery-dress; geometry readouts → agent-view."
+description: "Use when a circuit doesn't match the real place (wrong corners, floating props, re-survey): an accuracy pass against satellite, photos, onboards or OSM, layout or elevation, terrain over the road, or a multi-circuit campaign. Not for: a new circuit → new-track; props → scenery-dress; geometry readouts → agent-view."
 ---
 
 # Survey & update a track

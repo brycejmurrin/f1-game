@@ -787,7 +787,13 @@ export class Lsp {
   // then a member symbol in Head's file; file+line → that position alone.
   async candidates({ symbol, file, line, column }) {
     if (file) {
-      const f = this.inRoot(file);
+      const f = this.inRoot(file), { text, lines } = this.textOf(f);
+      // An out-of-range position must fail, never answer for another name
+      // (an overlong column used to overflow into a later line).
+      const count = lines.length - (lines.length > 1 && text.endsWith("\n") ? 1 : 0);
+      if (line > count) throw Error(`${f} has ${count} line${count === 1 ? "" : "s"}; line ${line} is out of range`);
+      const len = lines[line - 1].replace(/\r$/, "").length;
+      if ((column || 1) > len + 1) throw Error(`line ${line} of ${f} has ${len} character${len === 1 ? "" : "s"}; column ${column} is past its end`);
       return { cands: [{ file: f, line0: line - 1, col0: (column || 1) - 1 }], parts: [] };
     }
     if (!symbol) throw Error("pass symbol (Name or Head.member) or file+line[+column]");
@@ -1101,14 +1107,21 @@ export class Lsp {
     const seen = new Set(locs.map(key));
     // Pipeline definition hops: each export/alias row is independent, and under
     // a contended CI runner serial round-trips dominate the MCP client case.
-    const hops = await Promise.all([...locs].map(async l => {
-      const uri = l.uri || l.targetUri, start = (l.range || l.targetSelectionRange).start, file = this.rel(uri);
-      if (!["export", "alias"].includes(this.tag(file, start.line, start.character))) return [];
-      this.ensureOpen(file);
-      return (await this.request("textDocument/definition", { textDocument: { uri }, position: start })) || [];
-    }));
-    for (const n of hops.flat()) {
-      if (!seen.has(key(n))) { seen.add(key(n)); locs.push(n); }
+    // A chain needs more than one hop: `Tracks.curvature` exports a local that
+    // destructures `TrackSpline.curvature` (export → alias → spline.js [def]).
+    // Follow only the rows each round added, a bounded number of rounds.
+    let frontier = [...locs];
+    for (let round = 0; round < 4 && frontier.length; round++) {
+      const hops = await Promise.all(frontier.map(async l => {
+        const uri = l.uri || l.targetUri, start = (l.range || l.targetSelectionRange).start, file = this.rel(uri);
+        if (!["export", "alias"].includes(this.tag(file, start.line, start.character))) return [];
+        this.ensureOpen(file);
+        return (await this.request("textDocument/definition", { textDocument: { uri }, position: start })) || [];
+      }));
+      frontier = [];
+      for (const n of hops.flat()) {
+        if (!seen.has(key(n))) { seen.add(key(n)); locs.push(n); frontier.push(n); }
+      }
     }
   }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
@@ -1236,7 +1249,9 @@ export async function callTool(lsp, name, a = {}) {
           const f = lsp.rel(loc.uri), s = loc.range.start;
           return lsp.tag(f, s.line, s.character) === "export" ? lsp.exportedMemberAt(f, s.line, s.character) : null;
         }).find(Boolean);
-        if (exported) result = (await lsp.at({ symbol: exported }, method, extra)).result;
+        // MERGE, never replace: the declaration's own same-file uses (wrapS in
+        // game.js) are not uses of the exported member. Rows dedupe below.
+        if (exported) result = [...result, ...((await lsp.at({ symbol: exported }, method, extra)).result || [])];
       }
       if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
@@ -1318,7 +1333,12 @@ export async function callTool(lsp, name, a = {}) {
         if (viaAlias) notes.push(`${viaAlias} of them through a destructure or alias (\`const { x } = Head\`, \`const K = Head\`) — grep would not count those`);
         const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
         const count = isDef && extraRows && defs ? `${defs} definition${defs === 1 ? "" : "s"} (+${extraRows} export/alias row${extraRows === 1 ? "" : "s"})` : `${r.total} ${isDef ? "definition" : "reference"}${r.total === 1 ? "" : "s"}`;
-        text = `${count}${!isDef ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} ${head.replace("%SELF%", self ? "at the declaration" : `query at ${p ? pos(p) : "—"}`)}${summary}${a.files ? "" : `\n${r.rows.join("\n")}${more(r.total, r.rows.length)}`}`;
+        // A symbol query anchors at a USE; never let that position read as the answer.
+        const defAt = r.tags.indexOf("def"), defLoc = defAt >= 0 && r.list[defAt], anchorTag = p && lsp.tag(p.file, p.line0, p.col0);
+        const anchor = self || (a.symbol && anchorTag === "def") ? "at the declaration"
+          : !a.symbol || !p ? `query at ${p ? pos(p) : "—"}`
+          : `${a.symbol} resolved from a use at ${pos(p)}${defLoc ? `; declared at ${lsp.rel(defLoc.uri)}:${defLoc.range.start.line + 1}:${defLoc.range.start.character + 1}` : ""}`;
+        text = `${count}${!isDef ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} ${head.replace("%SELF%", anchor)}${summary}${a.files ? "" : `\n${r.rows.join("\n")}${more(r.total, r.rows.length)}`}`;
         if (isDef && a.body) {
           const d = r.list.find(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "def") || r.list[0];
           const src = d && await lsp.bodyAt(lsp.rel(d.uri), d.range.start.line, a.maxLines || BODY_LINES);

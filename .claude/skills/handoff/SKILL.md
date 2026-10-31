@@ -12,15 +12,16 @@ cold clone cannot see it.
 
 Every session hands off at 300k context, attended, dispatcher or worker alike (PR #4230 efficiency review
 finding 1: every wake re-reads the whole context). Before idling, write the follow-up prompts into the PR's Hand-off
-block, and give read-only reviewer subagents `model: sonnet`.
+block. Model names and messaging routes are host-specific; use only exposed host capabilities.
 
 Two audiences, two endings (steps 1–2 are shared):
 
 - **Attended** (the user asked, or `context-cap.py` names your live context near its stop): steps 1–3, then
   output the prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
 - **Unattended worker at its cap or stuck** (skill `worker`, contract item 6): steps 1–2, then add
-  `needs-owner` (`gh api -X POST repos/<owner>/<repo>/issues/<n>/labels -f 'labels[]=needs-owner'`, never MCP
-  `issue_write` `labels`), send `@parent` one line naming the PR, and end. No chat prompt: nobody reads it; the
+  `needs-owner` using the route allowed for the vendor (docs/WORKERS.md §Per vendor), notify the parent
+  through an exposed messaging tool, and end. `@parent` is the Claude dispatcher route, not a native Codex
+  child ID. A native child returns its result to its actual parent; it does not adopt the PR. No chat prompt: the
   takeover reads only the Hand-off block and the Plan. The dispatcher's next cycle launches the takeover once no
   RUNNING or WORKING worker names the PR (skill `dispatcher`, rule 2).
 
@@ -43,9 +44,12 @@ Two audiences, two endings (steps 1–2 are shared):
    - Goal in one sentence; Plan: the done / now / next items from the PR body
    - what is not run, unverified or red, with the exact command to reproduce
    - accessible evidence links; ignored `artifacts/` or `scratch/` paths are
-     local to the old workspace unless separately transferred or published
-   - first commands: `git fetch origin <branch> && git checkout <branch>`, `git status`, then
-     `node tools/ci/session-status.mjs --summary --pr`
+     local to the old workspace unless separately transferred or published. Read back the updated PR body;
+     a successful update records the hand-off, but does not prove a successor was launched or acknowledged it
+   - first commands: inspect `git status` and read `AGENTS.md`; fetch `origin <branch>`, resolve
+     `FETCH_HEAD` and compare it with the recorded pushed head. Create an isolated worktree from that SHA
+     when another session owns the checkout; never switch its branch. Run
+     `node tools/ci/session-status.mjs --summary --pr` from the resolved checkout
    - skills to load (`.claude/skills/README.md`), and the user's grants quoted
      with their time; no merge grant is implied
    - the rest of AGENTS.md `# Compact instructions` that applies: the `hold`,
