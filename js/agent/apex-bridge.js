@@ -382,7 +382,8 @@ const ApexBridge = (function () {
   // inside it, and PASTE reads the clipboard directly (iOS asks once) for when typing still fails.
   function askToken(issue) {
     if (typeof document === "undefined" || !document.body || document.getElementById("apex-bridge-token")) return;
-    const dlg = document.createElement("dialog");
+    const el = (tag, cls) => { const n = document.createElement(tag); n.className = cls; return n; };
+    const dlg = el("dialog", "apex-bridge-link");
     dlg.id = "apex-bridge-token";
     dlg.style.cssText = "z-index:99999;width:min(92vw,420px);padding:14px;border:0;border-radius:12px;background:#1b1d22;"
       + "color:#eee;font:13px/1.45 system-ui,sans-serif;-webkit-user-select:text;user-select:text";
