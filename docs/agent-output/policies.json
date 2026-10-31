@@ -976,6 +976,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-departure.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/assets.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -3015,6 +3020,21 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/ci/pr-wait.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Versioned snapshot, source head, all observed wait reasons, unknown/incomplete coverage and exit2; GET-only, no queue position or landing authority."
+    },
+    "tools/ci/path-overlap.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Versioned advisory inventory, observed overlaps, rename paths, incomplete/truncated coverage and exit2; no claim or path reservation."
+    },
+    "tools/ci/verification-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Source and selected-file fingerprints, log identity, historical verdict versus current/stale/unknown applicability; advisory evidence, never permission."
     }
   }
 }

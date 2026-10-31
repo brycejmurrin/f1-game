@@ -29,7 +29,7 @@ Owners in `js/camera/` (locate symbols with apex-lsp, skill code-nav; when `ls j
 
 Recipe for "cut jumps" (e.g. at a hairpin when switching to TV):
 1. Read the target mode's `cut` in `mode-switch.js`; a 0 means a hard cut by design.
-2. Stage race, `go`, seeded reset (see `game.md`); sample `camState()` each frame across the switch.
+2. Stage race (`__apex.race(id)`), `go()`, seeded reset (prose in `game.md`); sample `camState()` each frame across the switch.
 3. `__apex.previewCam(mode, frac, speed, lat)` frames a mode at a track point without driving there.
 4. Fixtures: `tests/unit/director.test.mjs` (cuts), `camera-ride.test.mjs` (rig math), `cam-avoid.test.mjs`.
 Do not hide a jump with a compensating snap (see `game.md`).

@@ -1576,6 +1576,48 @@ const AiDrive = (function () {
     return hold ? clamp(base - hold * 0.06, 0.7, 0.95) : base;
   }
 
+  // C10 FAR-CAR AI LOD — an OPT-IN LAB (`?lab=aiLod`, Bryce 2026-10-30; docs/notes/CPU-HUNT-2026-10-24.md C10).
+  // A far AI car re-plans its corner brake target (the look-ahead + brakeDecision) at 30 Hz: on alternate steps,
+  // phase-staggered by grid slot, it reuses its last step's decision. Only that pure decision is reused: traffic,
+  // queue, squeeze, steering, integration and collisions still run every step. game.js builds this only when the
+  // lab is on, so with it off nothing here runs. Conservative gates — a car re-plans every step unless ALL hold:
+  // a green race session (no caution for LOD_GREEN_S, not netplay, at most one human), lap 1 completed, launch
+  // over, never the player / a human / a local car, not pitting (lane, armed, any pitState), no contact,
+  // collision, mistake, stuck timer or trail yield, no blocker within LOD_TRAFFIC_M, more than LOD_RANK places
+  // from the player and more than LOD_FAR_M from the player along the track.
+  const LOD_FAR_M = 250, LOD_RANK = 3, LOD_GREEN_S = 3, LOD_TRAFFIC_M = 40, LOD_N = 64;
+  function lodLab() {
+    const at = new Int32Array(LOD_N).fill(-2), brk = new Uint8Array(LOD_N), lvl = new Float64Array(LOD_N), kmx = new Float64Array(LOD_N);
+    let n = 0, open = false, pS = 0, pRank = 0, L = 1, greenAt = Infinity;
+    const slot = (c) => { const i = c.gridPos | 0; return i > 0 && i < LOD_N ? i : 0; };
+    return {
+      // Once per physics step, before the field's updateCar loop.
+      step(cars, racing, level, raceT, player, total) {
+        n++;
+        if (!racing || level !== 0) greenAt = Infinity; else if (greenAt === Infinity) greenAt = raceT;
+        let humans = 0;
+        for (let i = 0; i < cars.length; i++) if (cars[i].human && !cars[i].retired) humans++;
+        open = racing && raceT - greenAt >= LOD_GREEN_S && !!player && !player.retired && humans <= 1 && total > 0;
+        if (open) { pS = player.s; pRank = player.rank; L = total; }
+      },
+      // true: this step reuses the car's last decision (braking / level / kMax below).
+      skip(c, player, inLane, blockerGap, unstuck) {
+        const i = slot(c);
+        if (!open || !i || c === player || c.human || c.local || ((n + i) & 1) === 0 || at[i] !== n - 1) return false;
+        if (!(c.lap >= 2) || c.launchOn || inLane || c.pitArmed || (c.pitState && c.pitState !== "none")) return false;
+        if (c.contactT > 0 || c.collideT > 0 || c.errT || c.stuckT > 0 || unstuck || c._trYT || blockerGap < LOD_TRAFFIC_M) return false;
+        if (!(Math.abs(c.rank - pRank) > LOD_RANK)) return false;
+        let d = Math.abs(c.s - pS) % L;
+        if (L - d < d) d = L - d;
+        return d > LOD_FAR_M;
+      },
+      put(c, braking, brakeLvl, kMax) { const i = slot(c); if (i) { at[i] = n; brk[i] = braking ? 1 : 0; lvl[i] = brakeLvl; kmx[i] = kMax; } },
+      braking: (c) => brk[slot(c)] === 1,
+      level: (c) => lvl[slot(c)],
+      kMax: (c) => kmx[slot(c)],
+    };
+  }
+
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
@@ -1591,7 +1633,7 @@ const AiDrive = (function () {
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
-    tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
+    tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll, lodLab,
     // Internals pinned only by tests/unit/ai-drive.test.mjs — no game caller (audit4 P4/F8). Not API.
     _t: Object.freeze({ isMate, ordersMul, followTime, followBase, streetOtScale, defendWindowT, queuePatience, trailCase, trailTime, trailPush, trailYield }),
     get STRAT() { bindStrat(); return AiStrategy.STRAT; },

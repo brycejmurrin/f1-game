@@ -69,9 +69,6 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(.6rem, calc(1.25*var(--vwz)), var(--fs-micro)); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
-.dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
-.dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-paint); }
-.dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
 /* Dense Home: portrait, desktop and tablet (any viewport 520px tall or more, or portrait) share the landscape shape. Groups dissolve into one 2-column grid, so every door is one
    tile; pairs/threes/utilities are flex rows. Compact-wide (phone landscape) keeps its own rules above. */
 @media (min-height: 520px), (max-aspect-ratio: 1/1) {
@@ -92,6 +89,7 @@ body #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #m
 body #overlay #menu-buttons .btn-ico { flex: none; margin: 0; width: .8em; height: .8em; }
 body #overlay #menu-buttons .mb-sub { display: none; }
 body #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body:not([data-density="compact"]) #overlay #menu-buttons #mb-career .mb-sub { white-space: normal; text-wrap: balance; }
 body #overlay #menu-buttons #menu-secondary > .bigbtn { font-size: var(--fs-micro); min-height: max(44px, var(--tap-paint)); font-weight: 700; overflow-wrap: anywhere; /* #3304 */ }
 body #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
 body[data-shape="wide"] #overlay { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
@@ -221,11 +219,6 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
     letter-spacing: 0.02em;
     max-width: 100%;
     color: color-mix(in oklab, var(--text) 82%, transparent);
-  }
-  @media (max-width: 1679px) {
-    body #overlay #menu-buttons #mb-vs .mb-sub {
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
   }
   body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) {
     height: auto;

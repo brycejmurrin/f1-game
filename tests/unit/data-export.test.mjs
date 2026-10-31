@@ -468,3 +468,24 @@ test("export keeps one Sakhir trace: skips a second Testing weekend and prefers 
   assert.equal(parsed.circuits.Sakhir.circuit, "Sakhir");
   assert.equal(/fromTesting|testingKeys/.test(JSON.stringify(parsed.circuits.Sakhir)), false);
 });
+
+test("export instances keep independent UI state while producing identical archives", async () => {
+  const h = boot(openF1Fetch(() => ({ body: [] })));
+  const views = await Promise.all([0, 1].map(() => h.context.DataExport.create({
+    el: (tag, cls, text) => new El(tag, cls, text), clear() {}, isOpen: () => true,
+  }).loadExport()));
+  const archives = [];
+  for (const [i, view] of views.entries()) {
+    const [gather, download] = find(view, "dh-export-row").children;
+    assert.equal(download.disabled, true, "another instance must not unlock Download");
+    gather.click();
+    await h.pump(() => !download.disabled && gather.textContent === "Gather");
+    download.click();
+    await h.pump(() => download.textContent === "Download");
+    const bytes = Buffer.from(await h.blob().arrayBuffer());
+    assert.equal(unzip(bytes).length, 1);
+    archives.push(bytes);
+    assert.equal(find(views[1 - i], "dh-export-row").children[0].textContent, "Gather");
+  }
+  assert.deepEqual(archives[0], archives[1]);
+});

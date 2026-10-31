@@ -605,7 +605,7 @@ function buildTTResults() {
       const gl = document.createElement("span"); gl.className = "res-name";
       gl.textContent = guestGhost ? tr("results.rivalGhost", null, "RIVAL GHOST") : tr("results.yourPB", null, "YOUR PB");
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
-      gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
+      gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower-ink)";
       const shown = +delta.toFixed(3);   // sign from the rounded value: -0.0003 reads +0.000, not -0.000
       gv.textContent = `${shown >= 0 ? "+" : ""}${shown.toFixed(3)}s`;
       gr.append(gl, gv);

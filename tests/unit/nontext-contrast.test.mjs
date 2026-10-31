@@ -432,7 +432,7 @@ function themeGetter(flags, id, { keep = null } = {}) {
 // player's own choice of see-through, not a theme, so it is not modelled.
 const panelAt1 = (v) => v.replace(/calc\(([\d.]+%?) \* var\(--hud-panel-a-eff\)\)/g, "$1");
 const SCENES = { black: "#000000", asphalt: "#3a3a40", "mid-grey": "#808080" };
-const HC_PLATE = [hud, ':root[data-ui-contrast="high"] :is(.hud-box, #announce)', "background"];
+const HC_PLATE = [hud, ':root[data-ui-contrast="high"] .hud-box, :root[data-ui-contrast="high"] #announce', "background"];
 const SCOPE_SEL = ":is(#hud, #announce, #game-metrics)";
 const CASES = [
   { what: "radio card words", id: "#announce", ink: [hud, "#announce", "color"], plate: [hud, "#announce", "background"], hc: HC_PLATE },
@@ -443,6 +443,11 @@ const CASES = [
   { what: "blue flag", id: "#hud", ink: [hud, '#hud-flag[data-flag="blue"]', "color"], plate: [hud, '#hud-flag[data-flag="blue"]', "background"] },
   { what: "red flag", id: "#hud", ink: [hud, "#hud-flag.flag-red", "color"], plate: [hud, "#hud-flag.flag-red", "background"] },
   { what: "broadcast tower (inherited ink)", id: "#hud", ink: [tokens, SCOPE_SEL, "color"], plate: [hud, "body.hud-prof-broadcast .hud-top", "background"] },
+  // The timing strip's light POS cell (design pass 2a). HIGH CONTRAST's solid plate outranked its background and
+  // left dark ink on a dark plate (Bryce's iPhone, 2026-10-30), so HC names the cell's own restatement.
+  { what: "timing strip POS cell", id: "#hud", ink: [hud, "body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos)", "color"],
+    plate: [hud, "body:not(.hud-prof-broadcast) #hud-box-pos", "background"],
+    hc: [hud, ':root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *)', "background"] },
   { what: "metrics panel", id: "#game-metrics", ink: [hud, "#game-metrics", "color"], plate: [hud, "#game-metrics", "background"] },
   { what: "metrics bar buttons", id: "#game-metrics", ink: [hud, "#game-metrics-bar > button", "color"], plate: [hud, "#game-metrics", "background"] },
   // NON-TEXT (1.4.11, 3:1): the parts of a chip that carry its state.

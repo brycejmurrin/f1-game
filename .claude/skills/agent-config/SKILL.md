@@ -67,8 +67,7 @@ The figures live in `tests/data/agent-config-budgets.json` (the test reads them 
 4. A/B the routing. It needs the `claude` CLI on PATH, logged in, and spends
    real model calls: one `claude -p` per query per run per side, so
    `--only <skill>,<neighbour> --runs 3` on 8-row files is 2 × 8 × 3 × 2 = 96
-   calls, and each call boots every `.mcp.json` server and hook (the eval passes
-   no `--strict-mcp-config` yet), so run it as one background task, never beside
+   calls, and each call boots every `.mcp.json` server and hook, so run it as one background task, never beside
    a Playwright run. Run it after a fold, a rename or a description rewrite that
    moves trigger words; skip it for body-only edits. A NEW skill: run the head side
    only and read its per-skill hit rate (the base has nothing to compare):

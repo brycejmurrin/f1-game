@@ -35,8 +35,8 @@ fallback is `bash tools/env/cloud-agent-install.sh`.
 The pre-push floor is AGENTS.md rule 3 → docs/WORKERS.md §3 (its one home). In practice, two commands:
 
 ```sh
-node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fast (when warranted), verify-track, graph-parity, bump-cache; no browsers
-node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # the ONE spec, background; pick it: select-specs.mjs --since <base>
+node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fast (the pre-push floor is `--changed --jobs=3 --quiet` plus the ONE spec, AGENTS.md rule 3), verify-track, graph-parity, bump-cache; no browsers
+node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # the ONE spec, background; pick it: select-specs.mjs --since <base> (or --files <paths>): its FLOOR SPEC line (null = none evidenced; pick by name)
 ```
 
 (a circuit edit swaps the spec for `node tools/track/verify-track.cjs <id>`). The PR's tiers run the rest of the

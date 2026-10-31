@@ -2,7 +2,7 @@
 //
 // #2693: on monza's first revisit the heap stepped ~13 MB because monaco's props vertex set (position, colour,
 // normal, mat; the shared array behind its chunks) was still reachable from a RenderObject while monza was on
-// screen. Exact assertion, no heap noise: every `chunk`-kind vertex array drawn for circuit A (a WeakRef taken
+// screen. Exact assertion, no heap noise: every chunk-backed vertex array drawn for circuit A (a WeakRef taken
 // while A is on screen) is collected once circuit B has drawn and the GC has run twice.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, pickTrack, settle, waitUntilDrawn } from "../../tools/lib/mem-census.mjs";
@@ -18,20 +18,34 @@ test("a picked circuit's chunk vertex data is gone from the render objects after
   await page.goto("/?three-devtools=1");
   await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
 
-  // Weak handles on the vertex arrays of every chunk-kind geometry a render object holds right now.
+  // Merged draws have no __tlxKind, but reuse the canonical chunks' exact
+  // BufferAttributes (tlx-chunked mergeVisible). Match that identity rather
+  // than admitting every untagged geometry, including unrelated road splits.
+  // The track and identity set must stay LOCAL: persisting them would retain
+  // the very arrays whose collection this test checks.
   const watch = (tag) => {
+    const entry = window.__memCensus.tracks.filter(([id]) => id === tag).at(-1);
+    const track = entry && entry[1].deref();
+    if (!track) throw new Error(`memory census has no live ${tag} track`);
+    const chunkPositions = new Set();
+    for (const mesh of Object.values(track.meshes || {})) {
+      for (const chunk of (mesh && mesh.chunks) || []) {
+        const position = chunk.geo && chunk.geo.attributes.position;
+        if (position) chunkPositions.add(position);
+      }
+    }
     const list = window.renderer && window.renderer._objects && window.renderer._objects._renderObjects;
     window.__relWatch = window.__relWatch || {};
     const out = (window.__relWatch[tag] = []);
     const seen = new Set();
     if (list) for (const ro of list.values ? list.values() : list) {
       const g = ro.geometry;
-      if (!g || g.__tlxKind !== "chunk") continue;
+      if (!g || !g.attributes || !chunkPositions.has(g.attributes.position)) continue;
       for (const n in g.attributes) {
         const a = g.attributes[n];
-        if (!a || !a.array || seen.has(a.array.buffer)) continue;
+        if (!a || !a.array || a.array.byteLength < 262144 || seen.has(a.array.buffer)) continue;
         seen.add(a.array.buffer);
-        if (a.array.byteLength >= 262144) out.push(new WeakRef(a.array));
+        out.push(new WeakRef(a.array));
       }
     }
     return out.length;

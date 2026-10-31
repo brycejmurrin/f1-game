@@ -20,7 +20,9 @@
  * mechanism's promise, not a fit to a run: a pass is "beside or past", a
  * resolved pair is "clear laterally or one car ahead".
  *
- * Run: node --test tests/unit/ai-racecraft-vm.test.mjs   (~15 s, one boot)
+ * Plus the C10 far-car AI LOD lab (`?lab=aiLod`) at the end: bit-identical off, half-rate far planning on.
+ *
+ * Run: node --test tests/unit/ai-racecraft-vm.test.mjs   (~15 s plus ~2 min for the two aiLod races)
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -457,4 +459,87 @@ test("a human whose pace is never stamped (a net-owned rival) still has a pace: 
     assert.ok(seen.length > 20, "AIs came up behind the parked human and judged him as a blocker: " + seen.length);
     assert.ok(seen.every((v) => v > 0), "blockerVmax = paceVmax(remote human) is never 0: min " + Math.min(...seen));
   } finally { g2.close(); }
+});
+
+// ---- C10 far-car AI LOD, the opt-in `?lab=aiLod` (AiDrive.lodLab; Bryce 2026-10-30) ------------------------------
+// A far AI car re-plans its corner brake target at 30 Hz. OFF (no lab) the sim must be bit-identical, so the guard
+// below compares a whole field's state with the lab absent, with another lab named and with it on during lap 1
+// (every gate closed). ON, brakeDecision calls are counted per car: the player and every near car still decide
+// every step; a far car decides about half the time. The race still runs to results: no NaN, every car laps, the
+// field's mean lap within a few % of the lab-off run.
+async function lodGame(search, laps) {
+  const g2 = await createGame({ search, storage: { tyreWear: "real", reliability: "off" } });
+  await g2.race("monza", "day", "dry", { laps });
+  g2.apex.carRole(g2.G.cars.indexOf(g2.G.player), { human: false });   // the player drives (AI), so the field races round it
+  return g2;
+}
+function lodDigest(G) { return G.cars.map((c) => [c.s, c.x, c.speed, c.lap, c.prog, c.rpm, c.energy].join(",")).join(";"); }
+
+test("aiLod lab: off, or on with its gates closed (lap 1), the field's state is bit-identical over 900 steps", async () => {
+  const runs = [];
+  for (const search of ["?seed=1", "?seed=1&lab=other", "?seed=1&lab=aiLod"]) {
+    const g2 = await lodGame(search, 3);
+    try {
+      let chain = "";
+      for (let i = 1; i <= 900; i++) { g2.step(1, 1 / 60); if (i % 100 === 0) chain += lodDigest(g2.G) + "|"; }
+      runs.push(chain);
+    } finally { g2.close(); }
+  }
+  assert.ok(runs[0].length > 1000, "the digest holds the field");
+  assert.equal(runs[1], runs[0], "another lab name moved the sim");
+  assert.equal(runs[2], runs[0], "the aiLod lab moved the sim on lap 1, where every gate is closed");
+});
+
+async function lodRace(search) {
+  const g2 = await lodGame(search, 3);
+  try {
+    const G = g2.G, P = G.player, AD = vm.runInContext("AiDrive", g2.ctx), orig = AD.brakeDecision;
+    const byTeam = new Map();
+    for (const c of G.cars) { if (!byTeam.has(c.team)) byTeam.set(c.team, new Map()); byTeam.get(c.team).set(c.seat, c); }
+    let called = new Set();
+    AD.brakeDecision = function (o) { called.add(byTeam.get(o.team).get(o.seat)); return orig.apply(this, arguments); };
+    let warm = 0;
+    while (warm < 20000 && !G.cars.every((c) => c.retired || c.lap >= 2)) { g2.step(1, 1 / 60); warm++; }
+    const L = G.track.total, n = { far: 0, farC: 0, near: 0, nearC: 0, player: 0 };
+    for (let i = 0; i < 600; i++) {
+      const cls = new Map();
+      for (const c of G.cars) {
+        if (c === P || c.retired) continue;
+        let d = Math.abs(c.s - P.s) % L; if (L - d < d) d = L - d;
+        const rd = Math.abs(c.rank - P.rank);
+        cls.set(c, d > 300 && rd > 4 ? "far" : d < 240 || rd <= 2 ? "near" : "mid");   // margins round the lab's 250 m / 3 places
+      }
+      called = new Set();
+      g2.step(1, 1 / 60);
+      if (called.has(P)) n.player++;
+      for (const [c, k] of cls) if (k !== "mid") { n[k]++; if (called.has(c)) n[k + "C"]++; }
+    }
+    AD.brakeDecision = orig;
+    let steps = 0, nan = 0;
+    const lapT = [], seen = new Map(G.cars.map((c) => [c, c.lap]));
+    while (G.state !== "results" && steps < 40000) {
+      g2.step(1, 1 / 60); steps++;
+      for (const c of G.cars) if (c.lap !== seen.get(c)) { seen.set(c, c.lap); if (c.lastLap) lapT.push(c.lastLap); }
+      if (steps % 60 === 0) for (const c of G.cars) if (![c.s, c.x, c.speed, c.prog].every(Number.isFinite)) nan++;
+    }
+    return { warm, n, nan, state: G.state, laps: G.cars.filter((c) => !c.retired).map((c) => c.lap),
+      meanLap: lapT.reduce((a, b) => a + b, 0) / lapT.length, lapN: lapT.length };
+  } finally { g2.close(); }
+}
+
+test("aiLod lab: far cars plan about half the steps, near cars and the player every step; the race still finishes sanely", async () => {
+  const on = await lodRace("?seed=1&lab=x,aiLod"), off = await lodRace("?seed=1");
+  for (const r of [on, off]) {
+    assert.ok(r.n.far > 500 && r.n.near > 500, `the window saw far and near car-steps: ${JSON.stringify(r.n)}`);
+    assert.equal(r.n.player, 600, "the player plans every step");
+    assert.equal(r.n.nearC, r.n.near, `every near car plans every step: ${JSON.stringify(r.n)}`);
+    assert.equal(r.state, "results", "the race reaches results");
+    assert.equal(r.nan, 0, "no NaN in the field's state");
+    assert.ok(r.laps.every((l) => l >= 3), `every running car completed two laps: ${r.laps.join("")}`);
+  }
+  assert.equal(off.n.farC, off.n.far, "lab off: a far car plans every step");
+  const rate = on.n.farC / on.n.far;
+  assert.ok(rate >= 0.45 && rate <= 0.8, `lab on: a far car plans about half the steps (${rate.toFixed(3)}, ${JSON.stringify(on.n)})`);
+  const dLap = on.meanLap / off.meanLap - 1;
+  assert.ok(Math.abs(dLap) < 0.02, `field mean lap on ${on.meanLap.toFixed(3)} s vs off ${off.meanLap.toFixed(3)} s (${(dLap * 100).toFixed(2)} %)`);
 });

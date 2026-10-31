@@ -1874,9 +1874,8 @@ const AgentView = (function () {
             "SHOW IT — the one optional raster, APPROXIMATE. "
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
           "awaitPresent(timeoutMs)?":
-            "WAIT FOR THE PIXELS — resolve once the next real frame has "
-            + "reached the screen; a screenshot taken before this "
-            + "resolves can read a stale or black canvas under HeadlessChrome",
+            "WAIT FOR THE PIXELS — resolves once a real frame is on screen; "
+            + "screenshot after it (before: stale or black canvas)",
         },
         detail: {
           "describe(id)":
@@ -1909,7 +1908,8 @@ const AgentView = (function () {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest instead of every frame",
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
-          "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once",
+          "ersPlan(plan?)": "sector ERS plan, 3× manual|deploy|save; get/set",
+          "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once",
           // agentHelp() itself is deliberately absent: it is not an act, and an
           // entry describing the call whose output you are already reading is
           // the one line in here that can never tell anybody anything.

@@ -32,6 +32,7 @@ const SIZE_KEY = "apex26.metricsSize";
 const LOG_NS_KEY = "apex26.metricsLogNs";
 const LOG_LVL_KEY = "apex26.metricsLogLvl";
 const PAINT_MS = 250;
+const LITE = Object.freeze({ lite: true });   // __apex.perf / physState without the fields this panel never reads
 const PAGES = ["gov", "car", "phys", "log"];
 const POSITIONS = ["auto", "left", "right"];
 const SIZES = ["s", "m", "l"];
@@ -253,7 +254,7 @@ function snapshot() {
   } catch (_) { /* governor not booted */ }
   try {
     if (typeof __apex !== "undefined" && __apex.perf) {
-      const p = __apex.perf();
+      const p = __apex.perf(LITE);
       if (p && p.ok !== false) {
         if (p.fps != null) out.fps = p.fps;
         if (p.floorMs != null) out.budget = p.floorMs;
@@ -366,7 +367,7 @@ function snapshot() {
   } catch (_) { /* probe needs player + track */ }
   try {
     if (wantPhys && typeof __apex !== "undefined" && __apex.physState) {
-      const p = __apex.physState();
+      const p = __apex.physState(LITE);
       if (p && p.ok !== false) {
         if (p.slipDeg != null) out.slipDeg = p.slipDeg;
         if (p.vLat != null) out.vLat = p.vLat;

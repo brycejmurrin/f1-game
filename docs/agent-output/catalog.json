@@ -1074,6 +1074,15 @@
       ]
     },
     {
+      "path": "tools/ci/path-overlap.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/pick-tests.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1107,6 +1116,15 @@
       "path": "tools/ci/pr-board.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/pr-wait.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
@@ -1405,6 +1423,11 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/verification-receipt.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/ci/verify-change.mjs",
@@ -1894,6 +1917,12 @@
     },
     {
       "path": "tools/garage/author-crew-motion.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
+      "path": "tools/garage/author-departure.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "python3"
