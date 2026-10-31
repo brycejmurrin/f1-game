@@ -6861,6 +6861,9 @@
       "sparks": [
         "tests/unit/car-fx.test.mjs"
       ],
+      "spawn": [
+        "tests/unit/droplets-spray.test.mjs"
+      ],
       "spray": [
         "tests/unit/car-fx.test.mjs",
         "tests/unit/droplets-spray.test.mjs"
