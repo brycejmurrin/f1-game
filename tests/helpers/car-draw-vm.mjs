@@ -81,6 +81,8 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       build: (_c1, _c2, o) => {
         const kind = o.silhouette ? "sh" : o.noWheels ? "body" : "whole";
         rec.builds.push({ kind, team: o.teamId, num: o.num });
+        // opts.seats (#4219): the real build derives each teammate's body from this one.
+        if (o.seats) for (const n of o.seats.keys()) o.seats.set(n, { kind, team: o.teamId, num: n, seated: o.num });
         return { kind, team: o.teamId, num: o.num };
       },
       buildWheelLayers: () => { rec.wheels++; return { rotating: { kind: "wheel" }, fixed: { kind: "wheelFixed" } }; },

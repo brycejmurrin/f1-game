@@ -120,6 +120,9 @@
  *     false: straight — the broadcast PiP reuses the target) and tone-mapped with
  *     the frame's exposure. mirrorState() -> {ready,dead,w,h,renders,composites,glass,flip}.
  *     js/render/shared/mirror-pass.js is the one caller.
+ *     releaseMirror() -> bool   quit-to-menu (mirror-pass releaseTrack(true)):
+ *     free the target and any bind group / material naming it; the next
+ *     mirrorBegin re-allocates. false = a mirror pass (or TLX warm) is open.
  *     drawMirrorGlass(mesh, model, opts) -> bool   the cockpit's LIVE GLASS, inside
  *     the main pass: that target on a createTexMesh mesh whose uv addresses the
  *     RAW image, v = 0 its bottom (car-mesh.js getMirrorGlass bakes the glass

@@ -796,6 +796,26 @@ test('hidden garage prewarming records readiness only after a successful present
   assert.equal(h.c.canvas.style.visibility, 'hidden');
 });
 
+test('a regular garage preview stays veiled while shader warm blocks present()', async () => {
+  const h = garageEntryRegressionHarness();
+  h.c.setupPreviewOn = true;
+  h.c._studio = null;
+  h.c.canvas.style.visibility = 'hidden';
+  h.c._softEl.style.visibility = 'hidden';
+  h.eval('renderSetupPreview = () => { gfx.present(); return !gfx.warming(); };');
+  await h.advance(16);
+  assert.equal(h.c.gfx.warming(), true);
+  let veiledWhileWarm = true;
+  for (let i = 0; i < 200 && h.c.gfx.warming(); i++) {
+    if (h.c.canvas.style.visibility !== 'hidden') veiledWhileWarm = false;
+    await h.advance(100);
+  }
+  assert.ok(veiledWhileWarm, 'warming must not reveal #game');
+  await h.advance(16);
+  assert.ok(h.presents() >= 1);
+  assert.equal(h.c.canvas.style.visibility, '', 'first successful present reveals #game');
+});
+
 test('a refused garage begin returns false and cannot reveal the unpresented frame', async () => {
   // Execute the real begin/refusal boundary with its frame inputs; geometry
   // after this boundary must not run when the backend refuses the frame.

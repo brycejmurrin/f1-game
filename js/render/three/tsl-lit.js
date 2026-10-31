@@ -710,8 +710,9 @@
             });
             // Dynamic CAR map min-combine (js/render/glx/shaders/glsl-lit.js): ortho, so no
             // perspective divide; same bias; fixed tight 4-tap PCF.
+            // S2 exact-zero gate: csh >= 0, so min(0, csh) == 0 — no car taps when every static tap read 0.
             if (carShadowOn) {
-              If(U.carShadowOn.greaterThan(0.5), () => {
+              If(U.carShadowOn.greaterThan(0.5).and(sh.greaterThan(0.0)), () => {
                 const cc = U.carLightVP.mul(vec4(wp, 1.0));
                 const cs = cc.xyz.mul(0.5).add(0.5).toVar();
                 If(cs.x.greaterThan(0.0).and(cs.x.lessThan(1.0))
@@ -1883,8 +1884,10 @@
         // shades on Ngeo. Skip the taps when the result cannot contribute.
         const shadow = float(1.0).toVar();
         If(NoL.greaterThan(0.0).or(clearcoat.greaterThan(0.001)), () => {
-          const sunSh = sampleShadow ? sampleShadow(wp, Nvary) : float(1.0);
-          shadow.assign(sunSh.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()));
+          if (!sampleShadow) { shadow.assign(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()); return; }
+          // S1 exact-zero gate: sunSh (>= 0) == 0 makes the product 0 whatever the cloud FBM returns.
+          shadow.assign(sampleShadow(wp, Nvary));
+          If(shadow.greaterThan(0.0), () => { shadow.assign(shadow.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus())); });
         });
         const litNoL = NoL.mul(shadow).mul(U.keyMul).toVar();
 

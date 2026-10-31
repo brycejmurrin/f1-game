@@ -43,12 +43,21 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     async open(name) {
       const store = storeFor(name);
       return {
+        // A put replaces any matching entry and appends the new one, so
+        // keys() lists a re-put key last (w3c.github.io/ServiceWorker/#cache-keys).
         async put(request, response) {
           if (putImpl) await putImpl(name, request, response);
+          store.delete(requestKey(request));
           store.set(requestKey(request), response.clone());
         },
         async match(request) {
           return store.get(requestKey(request));
+        },
+        async keys() {
+          return Array.from(store.keys(), (k) => new Request(k));
+        },
+        async delete(request) {
+          return store.delete(requestKey(request));
         },
       };
     },
@@ -281,6 +290,25 @@ test("GLX fallback is required and deferred scripts use the runtime build pin", 
   } });
   await assert.rejects(broken.lifecycleEvent("install").done(), /essential|cache|precache|fetch/i);
   assert.equal(broken.skipped, 0, "missing offline fallback must not activate a new worker");
+});
+
+test("the background install pool fetches race-entry bundles before circuits + scenery, at low priority (#4219 A)", async () => {
+  const ordinary = installFetch(), calls = [];
+  const h = createHarness({ fetchImpl: async (request, init) => {
+    const u = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    calls.push({ path: u.pathname, priority: init && init.priority });
+    return ordinary(request);
+  } });
+  await h.lifecycleEvent("install").done();
+  const first = (prefix) => calls.findIndex((c) => c.path.startsWith(prefix));
+  const scenery = first("/js/circuits/scenery/");
+  const circuit = first("/js/circuits/");
+  const order = ["/js/race/", "/js/track/build-worker.js", "/js/track/scenery/", "/js/audio/"].map((p) => [p, first(p)]);
+  assert.equal(scenery > 0, true, "scenery is still install-precached");
+  assert.deepEqual(order.filter(([, at]) => at < 0 || at > circuit || at > scenery), [],
+    `race-entry bundles start before the first circuit (#${circuit}) / scenery (#${scenery}) fetch`);
+  const background = calls.filter((c) => c.path.startsWith("/js/circuits/") || c.path.startsWith("/js/race/"));
+  assert.deepEqual([...new Set(background.map((c) => c.priority))], ["low"], "optional install fetches ask for low priority");
 });
 
 test("default-off vendors are omitted from the optional precache seed", () => {
@@ -1464,6 +1492,21 @@ test("a voice response whose ETag matches the cached copy is not re-written (aud
   assert.equal(await (await ev.responsePromise).text(), "same-bytes");
   await Promise.all(ev.lifetimes);
   assert.deepEqual(puts.filter((p) => p.includes("/assets/voice/")), [], "an unchanged pack costs no CacheStorage write");
+});
+
+test("the voice cache keeps the 6 most recently written ids, evicting the oldest id's bin and json together (#4219 B)", async () => {
+  const h = voiceHarness({ net: async () => new Response("fresh", { status: 200 }) });
+  const ids = Array.from({ length: 8 }, (_, i) => `seed${i}-radio`);
+  h.stores.set("apex26-voice", new Map(ids.flatMap((id) => ["json", "bin"].map((ext) =>
+    [`${ORIGIN}/assets/voice/${id}.${ext}`, new Response(`${id}.${ext}`, { status: 200 })]))));
+  const ev = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/newest-coach.json`));
+  assert.equal(await (await ev.responsePromise).text(), "fresh");
+  await Promise.all(ev.lifetimes);
+  const kept = [...h.stores.get("apex26-voice").keys()].map((k) => k.slice(`${ORIGIN}/assets/voice/`.length));
+  assert.deepEqual(kept, [
+    ...ids.slice(3).flatMap((id) => [`${id}.json`, `${id}.bin`]),
+    "newest-coach.json",
+  ], "9 ids written, cap 6: seed0..seed2 lose bin AND json; the read path never prunes");
 });
 
 test("pack routing is unchanged when voice is network-first", async () => {

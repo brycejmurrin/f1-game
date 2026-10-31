@@ -4403,7 +4403,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4465,8 +4465,8 @@ function rankFinishers() {
 }
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
-function releaseFieldScratch() {
-  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+function releaseFieldScratch(quit) {
+  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -7292,16 +7292,15 @@ function render(dt) {
     if (typeof GfxEscalation !== "undefined" && GfxEscalation.maybeRecoverRaceEntry) GfxEscalation.maybeRecoverRaceEntry(gfxContextLost, quitToMenuAfterCtxLost);
     return;
   }
-  // Warming used to return before the visibility pass. openGarage's Home→bay
-  // gap hides #game via menuBlank; if a program warm then latched, the lid
-  // stayed up until an unrelated present (a panel click) cleared warming.
-  // Intro staging (_studio.cardUp) must keep both canvases hidden under
-  // PREPARING until the first successful garage present (garage-arrival).
+  // Warming returns before the visibility pass. A latched program warm keeps
+  // #game hidden until present() completes — an early unhide showed a half-written
+  // default-FB frame for tens of seconds on software GL while _warmPending held
+  // present(). Re-veil each garage-preview frame; intro _studio.cardUp unchanged.
   if ((gfx.warming && gfx.warming()) || _carWarm.busy) {
     if (setupPreviewOn && !(_studio && _studio.cardUp)) {
-      if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
+      if (canvas.style.visibility !== "hidden") canvas.style.visibility = "hidden";
       if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
-      if (_softEl && _softEl.style.visibility === "hidden") _softEl.style.visibility = "";
+      if (_softEl && _softEl.style.visibility !== "hidden") _softEl.style.visibility = "hidden";
     }
     return;
   }
@@ -7314,7 +7313,9 @@ function render(dt) {
   const homeTrack = !!(uiExperience && uiExperience.trackActive());
   const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld() || (typeof MenuTeardown !== "undefined" && MenuTeardown.cover && MenuTeardown.cover())))
     || ((loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
-  const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
+  const garageWarmVeil = setupPreviewOn && !(_studio && _studio.cardUp) &&
+    ((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
+  const vis = menuBlank || (_studio && _studio.cardUp) || garageWarmVeil ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
   // its visibility in lockstep with #game or a blank menu still shows the last blit.
@@ -7346,7 +7347,10 @@ function render(dt) {
     if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
       _menuGate.garageReady = true;
       if (!_studio || _studio.softReady !== false) studioShown();
-      if (_studio && !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
+      if (!_studio || !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
+    } else if (setupPreviewOn && !(_studio && _studio.cardUp) &&
+      ((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()))) {
+      canvas.style.visibility = "hidden"; if (_softEl) _softEl.style.visibility = "hidden";
     }
     return;
   }
@@ -9119,18 +9123,17 @@ function openGarage(from) {
   // the module cannot hold the helper itself. The build runs inside the
   // transition callback — vt's 60 ms drop-safety applies it directly if the
   // page is not compositing.
-  // ENTRY FRAME: endHome() runs before setupPreviewOn flips, so render()'s
-  // menuBlank path can hide #game for the Home→garage gap. startViewTransition
-  // then defers the game loop; the bay stayed black until a panel click pumped
-  // another present. Unhide and draw one garage frame inside the same vt
-  // callback as openSetup — not a timer mask, the frame entry owes the player.
-  const enterGarage = () => {
-    openSetup(); setupCam.startHome(from);   // AFTER THE RACE (never from a pit stop): its first frame is this one
+  // ENTRY FRAME: endHome() hides #game for the Home→garage gap; draw in the vt
+  // callback but reveal only after renderSetupPreview succeeds (not while warming).
+  const revealGarageCanvas = () => {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";
+  };
+  const enterGarage = () => {
+    openSetup(); setupCam.startHome(from);   // AFTER THE RACE (never from a pit stop): its first frame is this one
     try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
-    try { renderSetupPreview(0); } catch (_) { /* mesh/warm may still be settling */ }
+    try { if (renderSetupPreview(0)) revealGarageCanvas(); } catch (_) { /* mesh/warm may still be settling */ }
   };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
   else vt(enterGarage);

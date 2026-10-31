@@ -537,24 +537,30 @@ async function loadBackendScripts(files, edges, opts) {
   }
   return loadScripts(files, edges, opts);
 }
+// One warm per file per session (a second raceAssets() must not re-download).
+const audioPrefetched = new Set();
 function prefetchAudio() {
   // HTTP-cache only — do not evaluate. Evaluating at idle would create no
   // AudioContext (restoreOnEngine still gates on userActivation) but would
   // still compete with title paint; #1135 forbids putting these 449 KB on
   // the title networkidle wall, so this runs on a late idle timeout.
-  if (audioIsGameVm() || audioLoad) return;
-  if (typeof document === "undefined" || !document.createElement) return;
+  // A low-priority fetch(), not <link rel=prefetch>: iOS Safari ships prefetch
+  // disabled (https://caniuse.com/link-rel-prefetch), so the hint was a no-op on
+  // iPhone. mode cors + credentials same-origin is the request a
+  // <script crossorigin=anonymous> makes, so inject() hits this HTTP-cache (or SW)
+  // entry; its SRI check runs on the bytes, not the cache key. The body is read:
+  // an unobserved, unread fetch may be terminated (https://fetch.spec.whatwg.org/#garbage-collection).
+  if (audioIsGameVm() || audioLoad || typeof fetch !== "function") return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
+    if (audioPrefetched.has(src)) continue;
+    audioPrefetched.add(src);
     // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
     const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
-    if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
-    const el = document.createElement("link");
-    el.rel = "prefetch";
-    el.as = "script";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    document.head.appendChild(el);
+    try {
+      fetch(href, { priority: "low", credentials: "same-origin", mode: "cors" })
+        .then((r) => r.arrayBuffer()).catch(() => {});
+    } catch (_) { /* a throwing fetch shim: the gesture load still works */ }
   }
 }
 function restoreOnEngine() {
@@ -664,9 +670,20 @@ function ensureAudio() {
     // onAudioReady is counted as fired only once it returns: a throw clears the
     // memo so the next call retries it, and audioReadyOnce latches each part that
     // already returned so the retry re-runs only the part that threw.
+    // Each part runs in its own task (a yield between parts): one task for all of
+    // them was the 787 ms LoAF on the macOS census (#4219). The hook only QUEUES
+    // parts here; the latch and order are unchanged.
     await audioYieldToMain("task");
     if (typeof deps.onAudioReady === "function") try {
-      deps.onAudioReady(audioReadyOnce);
+      const parts = [];
+      deps.onAudioReady((key, fn) => { parts.push([key, fn]); });
+      let ran = false;
+      for (const [key, fn] of parts) {
+        if (audioReadyDone.has(key)) continue;
+        if (ran) await audioYieldToMain("task");
+        ran = true;
+        audioReadyOnce(key, fn);
+      }
     } catch (e) {
       Log.error("audio", "the audio ready hook threw: " + (e && e.message));
       audioLoad = null;
