@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Forty `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. The `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -319,7 +319,7 @@ scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) an
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
 saved report queries). Browser diagnostics use the existing job lock; planning
 and report comparison do not launch Chromium.
-`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) is in the table below; `apex_who_is_on_it` left it when it was retired on 2026-10-27 with the claims board (40 → 39). The table is the count's source: 39 rows on 2026-10-27, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
+`apex_cursor_agents` wraps Cursor agent operations under the owner contract. The inbox tools wrap cached GitHub reads; they do not send to providers. The wrap table is the current roster; use `tools/list` for current counts.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -327,6 +327,10 @@ and report comparison do not launch Chromium.
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
 | `apex_help` | built-in | tree | check-changes |
+| `apex_inbox_sync` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_list` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_get` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_status` | `agent/inbox.mjs` | tree | worker |
 | `apex_diagnostics` | `perf/diagnostics.mjs` | tree | renderer-debug |
 | `apex_garage_plan` | `shot/garage-angles.mjs` | tree | garage-parts-livery |
 | `apex_ui_mission_plan` | `ui/explorer.mjs` | tree | survey-ui-matrix |

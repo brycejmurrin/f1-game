@@ -49,6 +49,9 @@ Bounded agent-output helpers: private artifact retention, subprocess ownership, 
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **agent/inbox-store.mjs** | Rebuildable SQLite projection of GitHub thread comments; bounded inbox queries and atomic refreshes. | — |
+| **agent/inbox.mjs** | Read GitHub thread comments into a rebuildable SQLite inbox; bounded sync, list, get and status JSON. | worker |
+| **agent/message.mjs** | Validate and encode untrusted versioned GitHub agent-message envelopes. | — |
 | **agent/output.mjs** | Shared bounded agent output with private, retrievable original artifacts. | — |
 | **agent/process.mjs** | Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts. | — |
 
@@ -104,6 +107,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
 | **lib/pr-snapshot.mjs** | Shared per-PR GitHub reads (list, PR, files, checks, runs, jobs, comments) behind one ETag cache on disk. | — |
 | **lib/presentation.mjs** | Bounded presentation diagnostics, late-resource cleanup, and scene-specific picker receipts for probes. | — |
+| **lib/proc-stat-reader.mjs** | Bound shared Linux proc-stat descriptors while reading fresh process metadata on every sample. | — |
 | **lib/process-tree.mjs** | Process-tree shutdown shared by Apex jobs and bounded diagnostic supervisors. | — |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/road-position-checks.cjs** | Position-based road-ribbon checks (running width/advance, skirt depth+attachment, vertical continuity) for verify-track. | — |
@@ -572,6 +576,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
 | **mcp/doctor-catalog.mjs** | Doctor catalog: canonical F1 environment and plugin support. | — |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
+| **mcp/inbox-mcp.mjs** | Stdio MCP inbox reads and bounded GitHub-to-private-cache refreshes; no sends or provider actions. | — |
 | **mcp/ios-console.mjs** | CLI: tail the console of an iPhone Safari tab via ios-webkit-debug-proxy (status, tabs, console); needs phone and cable. | — |
 | **mcp/job-admission.mjs** | Atomic cross-owner admission and complete manifests for durable Apex jobs. | — |
 | **mcp/js-debugger-boot.cjs** | Child-process auto-attach bootloader for debugger_node_test (NODE_OPTIONS=--require): every Node | — |

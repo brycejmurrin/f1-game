@@ -8,7 +8,8 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { runProbe } from "../../tools/ci/preflip-probe.mjs";
 import { DEPLOY_BRANCH } from "../../tools/ci/pick-tests.mjs";
-import { staleSyncBranch, remoteMoved } from "../../tools/ci/sync-pr.mjs";
+import { staleSyncBranch, remoteMoved, loadWaitMinutes, waitForLoad } from "../../tools/ci/sync-pr.mjs";
+import { capForeground, FOREGROUND_CAP_SEC, parseArgs } from "../../tools/ci/wait-for.mjs";
 import { parseToolingFastArgv } from "../../tools/ci/tooling-fast.mjs";
 import { register, stop } from "../../tools/lib/run-pid.mjs";
 
@@ -16,6 +17,60 @@ import { register, stop } from "../../tools/lib/run-pid.mjs";
 const calls = [];
 const exact = (map) => (args) => { calls.push(args); const hit = Object.entries(map).find(([k]) => k === args.join(" ")); return hit ? hit[1] : { code: 1, out: "", err: "" }; };
 const git = (map) => (args) => { const k = args.join(" "); const hit = Object.keys(map).find((m) => k.includes(m)); return hit ? map[hit] : { code: 1, out: "", err: "" }; };
+
+test("load wait: default and explicit durations obey the foreground contract without clamping", () => {
+  assert.equal(loadWaitMinutes(), 9);
+  assert.equal(capForeground(loadWaitMinutes(), false).error, undefined);
+  for (const value of ["0", "0.25", "9", String(FOREGROUND_CAP_SEC / 60)])
+    assert.equal(loadWaitMinutes(value), Number(value));
+  for (const value of ["10", "Infinity", "NaN", "oops", "-1", ""])
+    assert.throws(() => loadWaitMinutes(value), /--wait-load/);
+});
+
+test("load wait: busy box invokes a valid foreground waiter and reports the actual duration", () => {
+  const messages = [];
+  let called = 0;
+  const result = waitForLoad(loadWaitMinutes(), { load: () => 4.56, report: (m) => messages.push(m), run: (cmd, args, opts) => {
+    called++;
+    assert.equal(cmd, process.execPath);
+    assert.deepEqual(args, ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", "9"]);
+    const parsed = parseArgs(args.slice(1));
+    assert.equal(parsed.background, false);
+    assert.equal(capForeground(parsed.timeoutMin, parsed.background).error, undefined);
+    assert.equal(opts.stdio, "inherit");
+    return { status: 0 };
+  } });
+  assert.deepEqual(result, { ok: true });
+  assert.equal(called, 1);
+  assert.deepEqual(messages, ["loadavg 4.56 >= 2.8 — waiting up to 9 min for it to drop"]);
+});
+
+test("load wait: idle and explicit zero avoid waiting; threshold still starts the waiter", () => {
+  const unexpected = () => assert.fail("no waiter should run");
+  assert.equal(waitForLoad(9, { load: () => 2.79, run: unexpected }).ok, true);
+  assert.equal(waitForLoad(0, { load: () => 4.56, run: unexpected }).ok, true);
+  let called = 0;
+  assert.equal(waitForLoad(0.25, { load: () => 2.8, report: () => {}, run: (_cmd, args) => {
+    called++;
+    assert.equal(args.at(-1), "0.25");
+    return { status: 0 };
+  } }).ok, true);
+  assert.equal(called, 1);
+});
+
+test("load wait: timeout, refusal, spawn error and signal all stop the sync", () => {
+  const cases = [
+    [{ status: 124 }, "load did not drop below 2.8 within 9 min"],
+    [{ status: 2 }, "load waiter failed (exit 2); nothing synced"],
+    [{ status: 1 }, "load waiter failed (exit 1); nothing synced"],
+    [{ status: null, error: new Error("spawn failed") }, "load waiter failed (spawn failed); nothing synced"],
+    [{ status: null, signal: "SIGTERM" }, "load waiter failed (SIGTERM); nothing synced"],
+  ];
+  for (const [outcome, error] of cases) {
+    const result = waitForLoad(9, { load: () => 4.56, report: () => {}, run: () => outcome });
+    assert.deepEqual(result, { ok: false, error });
+  }
+});
 
 test("staleSyncBranch: a leftover with no commits of its own is stale; one with commits is kept and says why", () => {
   assert.deepEqual(staleSyncBranch("sync-pr-x", "x", git({ "rev-list --count": { code: 0, out: "0", err: "" } })), { stale: true, why: "no commits of its own" });
