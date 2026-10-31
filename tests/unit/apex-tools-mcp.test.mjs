@@ -220,6 +220,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_car_audit",
     "apex_catalog",
     "apex_codex_agents",
+    "apex_codex_control",
     "apex_cursor_agents",
     "apex_debug_chrome",
     "apex_diagnostics",
@@ -1012,10 +1013,10 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
   assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_car_audit", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
     "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs",
     "apex_status", "apex_track_audit", "apex_viewer"], "exactly the tools with a measured result shape");
-  assert.deepEqual(destructive, ["apex_cursor_agents", "apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_codex_agents", "apex_cursor_agents"]);
+  assert.deepEqual(destructive, ["apex_codex_control", "apex_cursor_agents", "apex_job_cancel"]);
+  assert.deepEqual(openWorld.sort(), ["apex_codex_agents", "apex_codex_control", "apex_cursor_agents"]);
   for (const n of ["apex_codex_agents", "apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  for (const n of ["apex_codex_control", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });

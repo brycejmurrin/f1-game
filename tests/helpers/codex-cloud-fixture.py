@@ -5,8 +5,9 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('codex_cloud', ROOT / 'tools/ci/codex-cloud.py')
 module = importlib.util.module_from_spec(spec)
@@ -17,6 +18,147 @@ def entry(text, kind='agentMessage'):
     return {'turnId': 'turn1', 'item': {'id': 'item1', 'type': kind, 'text': text}}
 
 class Contracts(unittest.IsolatedAsyncioTestCase):
+    def control_reader(self, account='account-a', failure=None, gate=None):
+        calls = []
+        class Reader:
+            async def __aenter__(self):
+                self.account = account
+                return self
+            async def __aexit__(self, *_):
+                pass
+            async def call(self, method, params):
+                calls.append((method, params))
+                if gate and method == 'thread/start':
+                    await gate.wait()
+                if method == (failure[0] if isinstance(failure, tuple) else failure):
+                    if isinstance(failure, tuple):
+                        raise module.Failure(failure[1])
+                    raise TimeoutError()
+                if method in {'thread/start', 'thread/resume'}:
+                    return {'thread': {'id': ID}}
+                if method == 'turn/start':
+                    return {'turn': {'id': 'turn-1', 'status': 'inProgress'}}
+                raise AssertionError(method)
+        return Reader, calls
+
+    def test_control_validation_is_closed_and_text_is_byte_bounded(self):
+        for value in [None, {'verb': 'delete'}, {'verb': 'start', 'id': ID, 'options': {'requestId': ID}},
+                      {'verb': 'start', 'options': {}}, {'verb': 'message', 'id': ID, 'options': {'requestId': ID}},
+                      {'verb': 'message', 'id': ID, 'options': {'requestId': ID, 'text': ' '}},
+                      {'verb': 'start', 'options': {'requestId': ID, 'approvalPolicy': 'never'}},
+                      {'verb': 'start', 'options': {'requestId': ID, 'text': '🏎' * 2049}}]:
+            with self.assertRaises(module.Failure):
+                module.validate_control(value)
+
+    async def test_control_start_and_replay_never_duplicate_writes(self):
+        factory, calls = self.control_reader()
+        request = {'verb': 'start', 'options': {'requestId': ID, 'text': 'private prompt'}}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+            first = await module.control_route(request, factory, directory)
+            second = await module.control_route(request, factory, directory)
+            self.assertTrue(first['accepted'])
+            self.assertFalse(first['out']['completed'])
+            self.assertTrue(second['replayed'])
+            self.assertEqual([m for m, _ in calls], ['thread/start', 'turn/start'])
+            self.assertEqual(calls[0][1], {'ephemeral': False})
+            self.assertEqual(calls[1][1]['clientUserMessageId'], ID)
+            receipt = next(Path(directory).rglob('*.json'))
+            self.assertNotIn('private prompt', receipt.read_text())
+            self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+            with self.assertRaises(module.Failure) as failure:
+                await module.control_route({'verb': 'start', 'options': {'requestId': ID, 'text': 'changed'}}, factory, directory)
+            self.assertEqual(failure.exception.code, 'request_id_conflict')
+            self.assertEqual(len(calls), 2)
+
+    async def test_control_message_preserves_settings_and_account_scopes_receipts(self):
+        request = {'verb': 'message', 'id': ID, 'options': {'requestId': ID, 'text': 'hello'}}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+            for account in ['account-a', 'account-b']:
+                factory, calls = self.control_reader(account)
+                self.assertTrue((await module.control_route(request, factory, directory))['ok'])
+                self.assertEqual(calls[0], ('thread/resume', {'threadId': ID, 'excludeTurns': True}))
+                self.assertEqual(set(calls[1][1]), {'threadId', 'input', 'clientUserMessageId'})
+            self.assertEqual(len(list(Path(directory).rglob('*.json'))), 2)
+
+    async def test_control_ambiguous_delivery_retains_created_id_and_does_not_retry(self):
+        factory, calls = self.control_reader(failure='turn/start')
+        request = {'verb': 'start', 'options': {'requestId': ID, 'text': 'hello'}}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+            result = await module.control_route(request, factory, directory)
+            replay = await module.control_route(request, factory, directory)
+            self.assertFalse(result['ok'])
+            self.assertTrue(result['outcomeUnknown'])
+            self.assertEqual(result['out']['threadId'], ID)
+            self.assertEqual(result['out']['stage'], 'sending')
+            self.assertTrue(replay['replayed'])
+            self.assertEqual(len(calls), 2)
+
+    async def test_control_concurrent_same_request_observes_pending_receipt(self):
+        gate = asyncio.Event()
+        factory, calls = self.control_reader(gate=gate)
+        request = {'verb': 'start', 'options': {'requestId': ID}}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+            first = asyncio.create_task(module.control_route(request, factory, directory))
+            await asyncio.sleep(0)
+            second = await module.control_route(request, factory, directory)
+            self.assertTrue(second['outcomeUnknown'])
+            self.assertTrue(second['replayed'])
+            gate.set()
+            self.assertTrue((await first)['ok'])
+            self.assertEqual([m for m, _ in calls], ['thread/start'])
+
+    async def test_control_invalid_request_is_rejected_before_auth(self):
+        factory = AsyncMock()
+        with self.assertRaises(module.Failure):
+            await module.control_route({'verb': 'message'}, factory)
+        factory.assert_not_called()
+
+    async def test_control_only_parse_rejections_are_known_not_admitted(self):
+        for code, unknown in [('-32601', False), ('-32602', False), ('-32603', True)]:
+            factory, _ = self.control_reader(failure=('turn/start', 'rpc_rejected_' + code))
+            with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+                result = await module.control_route({'verb': 'start', 'options': {'requestId': ID, 'text': 'hi'}}, factory, directory)
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['outcomeUnknown'], unknown)
+                self.assertEqual(result['out']['threadId'], ID)
+
+    async def test_control_cancelled_claim_is_not_redispatched(self):
+        gate = asyncio.Event()
+        factory, calls = self.control_reader(gate=gate)
+        request = {'verb': 'start', 'options': {'requestId': ID}}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+            task = asyncio.create_task(module.control_route(request, factory, directory))
+            await asyncio.sleep(0)
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            replay = await module.control_route(request, factory, directory)
+            self.assertTrue(replay['outcomeUnknown'])
+            self.assertTrue(replay['replayed'])
+            self.assertEqual(len(calls), 1)
+
+    async def test_control_final_receipt_failure_never_returns_contradictory_success(self):
+        factory, calls = self.control_reader()
+        original = module.save_receipt
+        failed = False
+        def failing_save(file, record):
+            nonlocal failed
+            if record['result']['ok'] and not failed:
+                failed = True
+                raise OSError('fixture transient receipt write failure')
+            return original(file, record)
+        request = {'verb': 'start', 'options': {'requestId': ID, 'text': 'hi'}}
+        with tempfile.TemporaryDirectory(dir=ROOT / 'scratch') as directory:
+            with patch.object(module, 'save_receipt', failing_save):
+                result = await module.control_route(request, factory, directory)
+            self.assertFalse(result['ok'])
+            self.assertNotIn('accepted', result)
+            self.assertEqual(result['out']['turnId'], 'turn-1')
+            replay = await module.control_route(request, factory, directory)
+            self.assertFalse(replay['ok'])
+            self.assertTrue(replay['replayed'])
+            self.assertEqual(len(calls), 2)
+
     def test_closed_arguments_and_bounds(self):
         for request in [None, [], {'verb': []}, {'verb': 'send'}, {'verb': 'list', 'id': ID}, {'verb': 'status'},
                         {'verb': 'status', 'id': '../../auth.json'}, {'verb': 'list', 'options': None},

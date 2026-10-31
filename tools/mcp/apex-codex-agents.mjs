@@ -1,4 +1,4 @@
-// @doc Bounded read-only Codex Cloud session history in the existing Apex MCP server.
+// @doc Codex Cloud history and separate start/message controls with replay receipts.
 // @skill steward
 import path from 'node:path';
 import { spawnAgentProcess } from '../agent/process.mjs';
@@ -41,10 +41,11 @@ export const CODEX_CAPABILITIES = {
   limits: { itemsPerPage: 20, transcriptBytes: 8192, requestMs: 60000 },
   transcript: 'UTF-8 JSONL fragments; continue with the returned cursor and unchanged id/limit/only. Changed pages return stale_cursor. Reads do not resume tasks. Active histories are snapshots.',
   unsupported: ['launch', 'resume', 'send', 'cancel', 'archive', 'delete', 'attachment file downloads'],
+  controlTool: 'apex_codex_control',
 };
-export async function runCodexTransport(request, { root, signal, env = process.env, spawnProcess = spawnAgentProcess, timeoutMs = 60000 } = {}) {
+export async function runCodexTransport(request, { root, signal, env = process.env, spawnProcess = spawnAgentProcess, timeoutMs = 60000, control = false } = {}) {
   if (signal?.aborted) return { ok: false, error: 'cancelled', verb: request.verb };
-  const runner = spawnProcess(env.APEX_CODEX_PYTHON || 'python3', [path.join(root, 'tools/ci/codex-cloud.py')], {
+  const runner = spawnProcess(env.APEX_CODEX_PYTHON || 'python3', [path.join(root, 'tools/ci/codex-cloud.py'), ...(control ? ['--control'] : [])], {
     cwd: root, env, timeoutMs, cleanupOnExit: true,
   });
   const stdout = []; let bytes = 0, overflow = false;
@@ -72,6 +73,55 @@ export async function runCodexTransport(request, { root, signal, env = process.e
     if (!plain(body) || typeof body.ok !== 'boolean' || body.verb !== request.verb || (body.ok && result.exitCode !== 0)) return { ok: false, error: 'invalid_response', verb: request.verb };
     return body;
   } finally { signal?.removeEventListener('abort', cancel); }
+}
+
+export const CODEX_CONTROL_TOOL = {
+  name: 'apex_codex_control', kind: 'tree',
+  description: 'Tree — start Codex Cloud sessions or message one exact session using the host login. Writes may start agent work. Supply a unique requestId; replay the identical request after interruption to retrieve its receipt without resending. Acceptance is not completion. No permission overrides.',
+  inputSchema: { type: 'object', additionalProperties: false, properties: {
+    verb: { type: 'string', enum: ['capabilities', 'start', 'message'] },
+    id: { type: 'string', pattern: UUID.source },
+    options: { type: 'object', additionalProperties: false, properties: {
+      requestId: { type: 'string', pattern: UUID.source }, text: { type: 'string', minLength: 1, maxLength: 8192 },
+    } }, dryRun: { type: 'boolean' },
+  } },
+};
+export const CODEX_CONTROL_CAPABILITIES = {
+  ok: true, provider: 'codex-cloud', readOnly: false, verbs: ['capabilities', 'start', 'message'],
+  optionsByVerb: { capabilities: [], start: ['requestId', 'text'], message: ['requestId', 'text'] },
+  required: { start: ['options.requestId'], message: ['id', 'options.requestId', 'options.text'] },
+  limits: { textBytes: 8192, requestMs: 60000 },
+  delivery: 'A successful receipt means admitted, not completed. Query apex_codex_agents status/transcript for progress. Never automatically retry with a new requestId.',
+  recovery: 'Account-scoped private host receipts prevent replay of an identical requestId. Reuse the exact request to read its receipt. Unknown outcomes are not resent; host receipt loss removes this protection.',
+  permissions: 'Uses existing thread/host defaults. No sandbox, approval, model, environment or instruction overrides; no approval replies or interruption.',
+};
+export function validateCodexControlArgs(args) {
+  if (!plain(args) || Object.keys(args).some(k => !['verb', 'id', 'options', 'dryRun'].includes(k))) throw new Error('unknown argument');
+  const verb = args.verb === undefined ? 'capabilities' : args.verb;
+  const options = args.options === undefined ? {} : args.options;
+  if (!CODEX_CONTROL_CAPABILITIES.verbs.includes(verb) || !plain(options)) throw new Error('unsupported control request');
+  if (Object.keys(options).some(k => !CODEX_CONTROL_CAPABILITIES.optionsByVerb[verb].includes(k))) throw new Error('options not allowed for this verb');
+  if (verb === 'message' ? typeof args.id !== 'string' || !UUID.test(args.id) : args.id !== undefined) throw new Error('message requires one session UUID; other verbs forbid id');
+  if (args.dryRun !== undefined && typeof args.dryRun !== 'boolean') throw new Error('dryRun must be boolean');
+  if (verb !== 'capabilities' && (typeof options.requestId !== 'string' || !UUID.test(options.requestId))) throw new Error('unique requestId UUID required');
+  if (options.text !== undefined && (typeof options.text !== 'string' || !options.text.trim() || Buffer.byteLength(options.text) > 8192)) throw new Error('text must be nonblank and at most 8192 UTF-8 bytes');
+  if (verb === 'message' && options.text === undefined) throw new Error('message text required');
+  return { verb, ...(verb === 'message' ? { id: args.id.toLowerCase() } : {}), options: {
+    ...options, ...(options.requestId ? { requestId: options.requestId.toLowerCase() } : {}),
+  } };
+}
+export function createCodexControlHandler(ctx) {
+  return async (args = {}, { signal } = {}) => {
+    let request;
+    try { request = validateCodexControlArgs(args); }
+    catch (e) { return ctx.refuse('bad_args', e.message, 'Use apex_codex_control capabilities. Writes require a requestId UUID.'); }
+    if (request.verb === 'capabilities') return ctx.toolResult(CODEX_CONTROL_CAPABILITIES);
+    if (args.dryRun || ctx.mockMode?.()) return ctx.toolResult({ ok: true, ...request, dryRun: Boolean(args.dryRun), mocked: Boolean(ctx.mockMode?.()), readOnly: false });
+    const result = await (ctx.run || runCodexTransport)(request, { root: ctx.ROOT, signal, control: true });
+    if (!result.ok && !result.out) return ctx.toolResult({ ...result, outcomeUnknown: true, requestId: request.options.requestId,
+      fix: 'Replay this exact requestId and input to retrieve its host receipt; do not resend under a new requestId.' });
+    return ctx.toolResult(result);
+  };
 }
 export function createCodexAgentsHandler(ctx) {
   return async (args = {}, { signal } = {}) => {

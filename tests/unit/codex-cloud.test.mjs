@@ -6,7 +6,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CODEX_TOOL, CODEX_CAPABILITIES, validateCodexArgs, createCodexAgentsHandler, runCodexTransport } from '../../tools/mcp/apex-codex-agents.mjs';
+import { CODEX_TOOL, CODEX_CAPABILITIES, CODEX_CONTROL_TOOL, validateCodexControlArgs, createCodexControlHandler, validateCodexArgs, createCodexAgentsHandler, runCodexTransport } from '../../tools/mcp/apex-codex-agents.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const ID = '11111111-2222-3333-4444-555555555555';
 const ctx = (extra = {}) => ({ ROOT, toolResult: (x) => x, refuse: (error, message) => ({ ok: false, error, message }), ...extra });
@@ -59,6 +59,35 @@ function fakeSpawn(chunks, result = { exitCode: 0 }) {
   return { spawnProcess, state: () => ({ stops, args, input }) };
 }
 
+test('control validates exact targets, request IDs and UTF-8 bytes without permission overrides', () => {
+  assert.equal(CODEX_CONTROL_TOOL.inputSchema.additionalProperties, false);
+  for (const args of [null, { verb: 'start' }, { verb: 'start', id: ID, options: { requestId: ID } },
+    { verb: 'message', options: { requestId: ID, text: 'hi' } }, { verb: 'message', id: ID, options: { requestId: ID } },
+    { verb: 'start', options: { requestId: ID, text: '🏎'.repeat(2049) } },
+    { verb: 'start', options: { requestId: ID, approvalPolicy: 'never' } },
+    { verb: 'start', options: { requestId: ID, text: ' ' } }, { verb: 'resume', id: ID }]) assert.throws(() => validateCodexControlArgs(args));
+  assert.equal(validateCodexControlArgs({ verb: 'start', options: { requestId: ID, text: '🏎'.repeat(2048) } }).verb, 'start');
+});
+
+test('control capabilities, refusals and dry runs never authenticate or dispatch writes', async () => {
+  const handler = createCodexControlHandler(ctx({ run: () => { throw new Error('must not spawn'); } }));
+  assert.equal((await handler({})).readOnly, false);
+  assert.equal((await handler({ verb: 'start', options: { requestId: ID }, dryRun: true })).dryRun, true);
+  assert.equal((await handler({ verb: 'delete', id: ID })).error, 'bad_args');
+});
+
+test('control transport is explicitly selected and ambiguous receipts do not claim completion', async () => {
+  let observed;
+  const handler = createCodexControlHandler(ctx({ run: async (request, options) => { observed = { request, options }; return { ok: false, error: 'timeout' }; } }));
+  const result = await handler({ verb: 'message', id: ID, options: { requestId: ID, text: 'hello' } });
+  assert.equal(observed.options.control, true);
+  assert.equal(result.outcomeUnknown, true);
+  assert.equal(result.requestId, ID);
+  const fake = fakeSpawn([Buffer.from(JSON.stringify({ ok: true, verb: 'start' }))]);
+  await runCodexTransport({ verb: 'start', options: { requestId: ID } }, { root: ROOT, env: {}, control: true, spawnProcess: fake.spawnProcess });
+  assert.equal(fake.state().args.argv.at(-1), '--control');
+});
+
 test('transport preserves split UTF-8, uses stdin and owns bounded cleanup', async () => {
   const bytes = Buffer.from(JSON.stringify({ ok: true, verb: 'list', out: { name: '🏎' } }));
   const index = bytes.indexOf(Buffer.from('🏎')) + 1;
@@ -89,7 +118,7 @@ test('Python fixture covers UTF-8 continuity, stale cursors, filters and read-on
   const result = spawnSync('python3', [path.join(ROOT, 'tests/helpers/codex-cloud-fixture.py')], { cwd: ROOT, encoding: 'utf8', timeout: 15000 });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
-  assert.equal(report.ok, true); assert.equal(report.tests, 9);
+  assert.equal(report.ok, true); assert.equal(report.tests, 18);
 });
 
 test('existing Apex server discovers and dispatches the read-only Codex tool', () => {
@@ -99,6 +128,7 @@ test('existing Apex server discovers and dispatches the read-only Codex tool', (
     { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
     { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'apex_codex_agents', arguments: { verb: 'list', dryRun: true } } },
     { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'apex_codex_agents', arguments: { verb: 'send', id: ID } } },
+    { jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'apex_codex_control', arguments: { verb: 'start', options: { requestId: ID }, dryRun: true } } },
   ];
   const result = spawnSync(process.execPath, [path.join(ROOT, 'tools/mcp/apex-tools-mcp.mjs'), 'serve'], {
     cwd: ROOT, encoding: 'utf8', input: messages.map(x => JSON.stringify(x)).join('\n') + '\n',
@@ -108,6 +138,9 @@ test('existing Apex server discovers and dispatches the read-only Codex tool', (
   const replies = result.stdout.trim().split('\n').map(x => JSON.parse(x));
   const tool = replies.find(x => x.id === 2).result.tools.find(x => x.name === 'apex_codex_agents');
   assert.equal(tool.annotations.readOnlyHint, true); assert.equal(tool.annotations.destructiveHint, false); assert.equal(tool.annotations.openWorldHint, true);
+  const control = replies.find(x => x.id === 2).result.tools.find(x => x.name === 'apex_codex_control');
+  for (const [key, value] of Object.entries({ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true })) assert.equal(control.annotations[key], value);
+  assert.equal(replies.find(x => x.id === 5).result.structuredContent.dryRun, true);
   const dry = replies.find(x => x.id === 3).result;
   assert.equal(dry.structuredContent.dryRun, true); assert.equal(dry.structuredContent.readOnly, true);
   assert.equal(replies.find(x => x.id === 4).result.isError, true);

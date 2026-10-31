@@ -564,7 +564,7 @@
     "tools/ci/codex-cloud.py": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "JSON stdin request and typed exit/ok/error; selected-workspace CLI authentication remains in memory; fixed hosted endpoint, no redirects; lossless UTF-8 byte continuations and native pagination errors."
+      "preserve": "JSON stdin and typed exit/ok/error; in-memory host login and fixed endpoint/no redirects; lossless UTF-8 pagination; explicit control mode, account-scoped replay receipts, created thread IDs and ambiguous delivery."
     },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
@@ -1664,7 +1664,7 @@
     "tools/mcp/apex-codex-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "Closed read-only verb schemas; no auth on discovery/dryRun; bounded UTF-8 fragments, continuation and stale-page errors; owned child timeout/cancellation; no credential diagnostics."
+      "preserve": "Separate closed read-only/control schemas and annotations; no auth on discovery/dryRun; bounded UTF-8 continuation; owned child timeout/cancellation; request IDs and ambiguous delivery; no credential diagnostics."
     },
     "tools/mcp/apex-tools-mcp.mjs": {
       "action": "targeted-summary",

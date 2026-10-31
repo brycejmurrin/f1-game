@@ -24,6 +24,7 @@
   },
   "tools": [
     "apex_codex_agents",
+    "apex_codex_control",
     "apex_diagnostics",
     "apex_garage_plan",
     "apex_ui_mission_plan",

@@ -1392,6 +1392,8 @@ comment saying why they are not one.
 
 `codex-cloud.test.mjs` covers read-only argument/transport boundaries, UTF-8 cursor
 continuity and stale pages, Python RPC fixtures and existing Apex server discovery.
+It also covers separate write annotations, closed controls, account-scoped replay
+receipts, concurrent identical requests and ambiguous delivery without resending.
 It runs in `tooling-fast`; no account login or network is used by these fixtures.
 
 `pit-think-cache.test.mjs` covers lazy per-step AI pit weather/caution reads,

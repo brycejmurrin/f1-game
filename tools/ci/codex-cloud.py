@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Read-only hosted Codex JSON-RPC transport for apex_codex_agents.
+"""Hosted Codex history transport; --control separately enables start/message.
 Uses the existing CLI login, fixed WSS origin and no redirects. Protocol references:
 https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
 https://websockets.readthedocs.io/en/16.0/reference/asyncio/client.html
 """
-# @doc Bounded Codex Cloud list/status/transcript transport; JSON request on stdin.
+# @doc Bounded Codex Cloud history and explicit --control writes with replay receipts.
 import asyncio
 import base64
 import hashlib
@@ -12,12 +12,14 @@ import json
 import logging
 import math
 import os
+from pathlib import Path
 import re
 import sys
 
 ENDPOINT = 'wss://codex-cloud-backend.chatgpt.com/'
 OPTIONS = {'capabilities': set(), 'list': {'limit', 'cursor', 'archived'}, 'status': set(), 'transcript': {'limit', 'cursor', 'only', 'maxBytes'}}
 METHODS = {'initialize', 'thread/list', 'thread/read', 'thread/items/list'}
+CONTROL_METHODS = {'initialize', 'thread/start', 'thread/read', 'thread/resume', 'turn/start'}
 UUID = re.compile(r'^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$', re.I)
 class Failure(Exception):
     def __init__(self, code, fix=''):
@@ -132,8 +134,9 @@ def summary(thread):
             'updatedAt': thread.get('updatedAt'), 'historyMode': clipped(thread.get('historyMode'), 32)}
 
 class HostedReader:
-    def __init__(self):
-        self.ws, self.seq = None, 0
+    def __init__(self, allowed_methods=None):
+        self.ws, self.seq, self.account = None, 0, None
+        self.allowed_methods = METHODS if allowed_methods is None else frozenset(allowed_methods)
     async def __aenter__(self):
         try:
             import websockets
@@ -173,6 +176,7 @@ class HostedReader:
                 segment = token.split('.')[1]
                 claims = json.loads(base64.urlsafe_b64decode(segment + '=' * (-len(segment) % 4)))
                 account = claims['https://api.openai.com/auth']['chatgpt_account_id']
+                self.account = account
             except Exception:
                 raise Failure('account_routing_unavailable') from None
             self.ws = await NoRedirect(ENDPOINT, additional_headers={'Authorization': 'Bearer ' + token, 'ChatGPT-Account-ID': account},
@@ -196,7 +200,7 @@ class HostedReader:
         if self.ws:
             await self.ws.close()
     async def call(self, method, params):
-        if method not in METHODS:
+        if method not in self.allowed_methods:
             raise Failure('read_only')
         self.seq += 1
         number = self.seq
@@ -231,16 +235,123 @@ async def route(request, factory=HostedReader):
             out = transcript_page(page, query, state, options.get('maxBytes', 4096))
     return {'ok': True, 'verb': verb, 'readOnly': True, 'out': out}
 
+def validate_control(request):
+    if type(request) is not dict or set(request) - {'verb', 'id', 'options'}:
+        raise Failure('bad_args')
+    verb, options = request.get('verb'), request.get('options', {})
+    if type(verb) is not str or verb not in {'start', 'message'} or type(options) is not dict or set(options) - {'requestId', 'text'}:
+        raise Failure('bad_args')
+    if type(options.get('requestId')) is not str or not UUID.fullmatch(options['requestId']):
+        raise Failure('bad_args')
+    if verb == 'message':
+        if type(request.get('id')) is not str or not UUID.fullmatch(request['id']) or 'text' not in options:
+            raise Failure('bad_args')
+    elif 'id' in request:
+        raise Failure('bad_args')
+    if 'text' in options and (type(options['text']) is not str or not options['text'].strip() or len(options['text'].encode()) > 8192):
+        raise Failure('bad_args')
+    return {'verb': verb, **({'id': request['id'].lower()} if verb == 'message' else {}),
+            'options': {**options, 'requestId': options['requestId'].lower()}}
+
+def save_receipt(file, value):
+    # Replace atomically; no prompts, bearer tokens or provider diagnostics are persisted.
+    temporary = file.with_suffix('.' + str(os.getpid()) + '.tmp')
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(canonical(value))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, file)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+async def control_route(request, factory=None, journal_dir=None):
+    request = validate_control(request)
+    verb, options = request['verb'], request['options']
+    factory = factory or (lambda: HostedReader(CONTROL_METHODS))
+    async with factory() as reader:
+        if type(reader.account) is not str or not reader.account:
+            raise Failure('account_routing_unavailable')
+        directory = Path(journal_dir or Path(__file__).resolve().parents[2] / 'artifacts/run/codex-control') / digest(reader.account.encode())
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        file = directory / (options['requestId'] + '.json')
+        fingerprint = digest(canonical(request))
+        result = {'ok': False, 'verb': verb, 'readOnly': False, 'error': 'outcome_unknown', 'outcomeUnknown': True,
+                  'out': {'requestId': options['requestId'], 'threadId': request.get('id'), 'stage': 'claimed'}}
+        record = {'fingerprint': fingerprint, 'result': result}
+        try:
+            fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            try:
+                saved = json.loads(file.read_bytes())
+            except (ValueError, OSError):
+                raise Failure('receipt_unreadable', 'Do not resend with a new requestId; inspect the host receipt.') from None
+            if saved.get('fingerprint') != fingerprint:
+                raise Failure('request_id_conflict', 'This requestId belongs to a different request.')
+            return {**saved['result'], 'replayed': True}
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(canonical(record))
+            stream.flush()
+            os.fsync(stream.fileno())
+        def checkpoint(stage):
+            result['out']['stage'] = stage
+            save_receipt(file, record)
+        try:
+            if verb == 'start':
+                checkpoint('creating')
+                value = await reader.call('thread/start', {'ephemeral': False})
+                thread_id = value['thread']['id']
+                if type(thread_id) is not str or not UUID.fullmatch(thread_id):
+                    raise Failure('invalid_response')
+                result['out']['threadId'] = thread_id
+                result['out']['created'] = True
+                checkpoint('created')
+            else:
+                thread_id = request['id']
+                # Preserve existing settings; no permission/instruction or cwd overrides.
+                checkpoint('resuming')
+                value = await reader.call('thread/resume', {'threadId': thread_id, 'excludeTurns': True})
+                if value['thread']['id'].lower() != thread_id:
+                    raise Failure('invalid_response')
+                checkpoint('resumed')
+            if 'text' in options:
+                checkpoint('sending')
+                value = await reader.call('turn/start', {'threadId': thread_id, 'input': [
+                    {'type': 'text', 'text': options['text'], 'text_elements': []}], 'clientUserMessageId': options['requestId']})
+                turn = value['turn']
+                if type(turn.get('id')) is not str or not turn['id']:
+                    raise Failure('invalid_response')
+                result['out'].update(turnId=clipped(turn['id'], 80), status=clipped(turn.get('status'), 64))
+            result.update(ok=True, accepted=True, outcomeUnknown=False)
+            result.pop('error', None)
+            result['out'].update(stage='accepted', completed=False)
+            save_receipt(file, record)
+        except BaseException as error:
+            # A transport failure after dispatch may have been admitted. Never retry writes.
+            result['ok'] = False
+            result.pop('accepted', None)
+            result['error'] = error.code if isinstance(error, Failure) else 'outcome_unknown'
+            result['outcomeUnknown'] = not (isinstance(error, Failure) and error.code in {'rpc_rejected_-32601', 'rpc_rejected_-32602'})
+            result['fix'] = 'Replay the identical request to inspect this receipt. Do not resend with a new requestId.'
+            save_receipt(file, record)
+            if isinstance(error, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
+                raise
+        return result
+
 async def main():
     verb = 'unknown'
     try:
-        raw = sys.stdin.buffer.read(16385)
-        if len(raw) > 16384:
+        input_limit = 65536 if sys.argv[1:] == ['--control'] else 16384
+        raw = sys.stdin.buffer.read(input_limit + 1)
+        if len(raw) > input_limit:
             raise Failure('input_limit')
         request = json.loads(raw)
-        if isinstance(request, dict) and type(request.get('verb')) is str and request.get('verb') in OPTIONS:
+        if isinstance(request, dict) and type(request.get('verb')) is str and request.get('verb') in {*OPTIONS, 'start', 'message'}:
             verb = request['verb']
-        result = await asyncio.wait_for(route(request), 55)
+        if sys.argv[1:] not in ([], ['--control']):
+            raise Failure('bad_args')
+        result = await asyncio.wait_for((control_route if sys.argv[1:] else route)(request), 55)
     except Failure as error:
         result = {'ok': False, 'verb': verb, 'error': error.code, 'fix': error.fix}
     except Exception as error:
