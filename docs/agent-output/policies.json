@@ -1041,6 +1041,26 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/gen/blender/assemble-entrance-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-entrance-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage_entrance_camera_export.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-entrance.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/blender/garage-light-cues.py": {
       "action": "keep-native",
       "presentation": "native",

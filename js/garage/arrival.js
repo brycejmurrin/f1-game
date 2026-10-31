@@ -577,6 +577,7 @@ const GarageArrival = (function () {
     const extra = service ? (dir === "out" ? 3 : 6) : typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.extra(crew) : 0;
     return timeline(config, dir).base + extra;
   }
+  const entranceSources = new WeakMap();
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
     const rig = rigFor(config);
@@ -586,8 +587,12 @@ const GarageArrival = (function () {
     const u = Math.max(0, Math.min(1, (t - T.door) / T.lane));
     const lane = IN_LANE_M * (r && r.pushed ? ease(u) : 1 - (1 - u) * (1 - u));
     const back = ease((t - T.door - T.lane - T.pause) / T.back);
-    const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
-      : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
+    if (dir === "in" && !entranceSources.has(config)) entranceSources.set(config,
+      config._entranceAuthored !== false && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available());
+    const authored = dir === "in" && entranceSources.get(config)
+      ? GarageEntranceMotion.pose(t, T, side) : null;
+    const p = authored || (back > 0 ? pathAt(OUT_PATH * (1 - back), side)
+      : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN });
     const label = t < T.door ? "OPENING GARAGE"
       : r ? (t < T.door + T.lane + T.pause ? r.arrive : t < T.park ? r.park
         : dir === "home" ? homeTitle(config, r) : r.title)
@@ -596,10 +601,14 @@ const GarageArrival = (function () {
     const aim = cam === "left" || cam === "right"
       ? [Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)] : aimAt(cam, p, t < T.door);
     const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
-    return shot({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
+    return shot(Object.assign({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
       engine: !(r && r.pushed), side, calm, camera: rig || cam, shot: n + 1, mood: lightFor(config, dir), cue: cueFor(config, dir), swell: lookNum(config, "swell", 1),
       bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", sound: config.sound !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: rs ? rs.fov : config.fov,
-      door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label },
+      door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label }, authored ? {
+        // Channels describe authored motion, not renderer readiness. The ground root
+        // remains y=0; body pitch/heave belong on a separate body-only transform.
+        articulated: true, wheelDistance: authored.wheelDistance, steer: authored.steer,
+        bodyPitch: authored.pitch, bodyHeave: authored.heave } : null),
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
       rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look);
@@ -752,6 +761,8 @@ const GarageArrival = (function () {
       const home = opts && opts.home;
       dir = home ? "home" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
+      // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
+      config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
         driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry" });
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time

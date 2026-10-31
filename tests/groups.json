@@ -460,6 +460,7 @@
     "tests/unit/garage-crew-choreo.test.mjs",
     "// The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.",
     "tests/unit/garage-crew.test.mjs",
+    "tests/unit/garage-entrance-motion.test.mjs",
     "tests/unit/garage-finish-remap.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
     "// The Blender garage light cues (ctx.cue in GarageScene.live) and the podium / rain / neon moods.",

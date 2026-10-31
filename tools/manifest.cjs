@@ -1076,6 +1076,8 @@ const LAZY_EDGES = [
 // it alone (idle, garage entry, SETTINGS, RACE!) and until then a rig angle
 // plays the "cut" cameras and a Blender crew the shipped one.
 const LAZY_RACE = [
+  "js/data/garage-entrance-motion.js", // optional authored bay motion, warmed with presets
+  "js/garage/entrance-motion.js",
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
 ];

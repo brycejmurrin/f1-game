@@ -1986,6 +1986,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gen/blender/assemble-entrance-camera.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/blender/crew-body.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2007,6 +2013,18 @@
       ]
     },
     {
+      "path": "tools/gen/blender/garage-entrance-camera.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
+      "path": "tools/gen/blender/garage-entrance.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/gen/blender/garage-light-cues.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2020,6 +2038,11 @@
       "nativeOutputFlagMentions": [
         "--out"
       ]
+    },
+    {
+      "path": "tools/gen/blender/garage_entrance_camera_export.py",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/gen/compress-audio.mjs",

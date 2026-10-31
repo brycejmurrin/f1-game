@@ -14,7 +14,7 @@ const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 // LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed,
 // and the garage's Blender tables (js/garage/garage-data.js), each loaded by its own ensure.
-const isGarageData = (f) => /^js\/garage\//.test(f);
+const isGarageData = (f) => /^js\/garage\/|^js\/data\/garage-/.test(f);   // incl. the optional authored entrance motion
 const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
 const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
 // LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
