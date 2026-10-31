@@ -4264,8 +4264,11 @@ test("software GL quit-to-menu and garage-close use MenuTeardown readback cover"
   assert.ok(!readFile("js/render/glx/soft.js").includes("MenuTeardown"));
   assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
   const game = gameSource();
-  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0"));
+  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0")
+    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.cover()") && game.includes("PerfGov.softwareRaster()"));
   assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
+  const tlx = readFile("js/render/three/tlx.js");
+  assert.ok(tlx.includes("softwareGlUiReadbackDefer") && tlx.includes("_queueSoftBlit"));
   const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");
   const quitOracle = readFile("tools/gfx/readback-quit-menu-oracle.mjs");
   assert.ok(garageOracle.includes("garageClose") && garageOracle.includes("#sel-go"));
@@ -4503,7 +4506,7 @@ test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry s
   const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
   assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
   const gov = read("js/perf/governor.js");
-  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"'));
+  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("MenuTeardown.cover"), "quit/garage MenuTeardown cover must defer readback like race-entry sheets");
 });
 
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
@@ -4881,7 +4884,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/);
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\) \|\| \(typeof MenuTeardown !== "undefined" && MenuTeardown\.cover && MenuTeardown\.cover\(\)\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/);
   assert.match(raceSettings, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\); \} catch \(e\) \{[^}]*startRace\(\); \}/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,

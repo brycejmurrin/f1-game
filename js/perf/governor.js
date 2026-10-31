@@ -1266,6 +1266,9 @@ return {
       if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stallHandoffCover && RaceEntryProfile.stallHandoffCover()) return true;
     } catch (_) { /* harness */ }
     try {
+      if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover && MenuTeardown.cover()) return true;
+    } catch (_) { /* harness */ }
+    try {
       const g = typeof document !== "undefined" && document.getElementById;
       if (!g) return false;
       const ld = g.call(document, "loading");

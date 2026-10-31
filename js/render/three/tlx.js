@@ -4875,6 +4875,12 @@ const TLX = (function () {
       function _softReadStaleMs() { return Math.max(SOFT_READ_STALE_MS, 3 * _softReadLastMs); }
       function _queueSoftBlit(rt) {
         if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+        try {
+          if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
+            if (_softPresentWaiters.length) _softBlitNotify();
+            return;
+          }
+        } catch (_) { /* harness */ }
         const req = {
           rt,
           w: (rt && rt.width) || W,
