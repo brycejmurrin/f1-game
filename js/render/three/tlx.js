@@ -66,6 +66,7 @@ const TLX = (function () {
   function releaseTexSource(t) {
     if (!t) return false;
     t.onUpdate = null;
+    t.__tlxUp = true;   // has a GPU copy: refillTexture() need not upload early
     const img = t.image;
     if (!img || (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap)) return false;
     const stand = texStandIn();
@@ -5217,7 +5218,9 @@ const TLX = (function () {
           t.image = src;
           t.onUpdate = releaseTexSource;
           t.needsUpdate = true;
-          if (mobileTier || isMobile) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
+          // A spare re-filled before its first draw (draft spares park and refill unseen) would otherwise mint its GPU
+          // texture on whatever later edit first draws it: garage-livery-churn's one late 1024x1280 (v 11, r187).
+          if (mobileTier || isMobile || !t.__tlxUp) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
