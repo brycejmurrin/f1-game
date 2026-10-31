@@ -295,7 +295,11 @@ const ApexBridge = (function () {
 
   async function post(obj) {
     const r = await gh("/comments", { body: { body: fence(obj) } });
-    if (!r.ok) throw new Error("post " + r.status);
+    if (!r.ok) {
+      let msg = "";
+      try { msg = String((await r.json()).message || ""); } catch (_) { /* no JSON body */ }
+      throw new Error("post " + r.status + (msg ? " " + msg.slice(0, 80) : ""));
+    }
     return r.json();
   }
 
@@ -355,10 +359,11 @@ const ApexBridge = (function () {
     } catch (e) {
       // 401 on the hello is the token itself (wrong, expired, revoked, cut short): forget it and ask again, or every
       // reload would retry the same token and never show the box.
-      if (/ 401$/.test(e.message)) {
+      if (/^post 401\b/.test(e.message)) {
         setToken("");
-        if (_run) stop("GitHub rejected the token (401): paste a new one");
-        askToken(issue);
+        const why = "GitHub rejected the token (" + e.message.slice(5) + "; pasted text: " + tokenShape(tok) + ")";
+        if (_run) stop(why);
+        askToken(issue, why);
       } else if (_run) stop("could not reach GitHub (" + e.message + ")");
       return false;
     }
@@ -398,7 +403,17 @@ const ApexBridge = (function () {
   // plain box on <body> lost the iOS keyboard the moment it was tapped and a modal screen made it inert. The box is
   // its own modal <dialog> (top layer, never inert), a window-capture focusin listener stops that trap seeing focus
   // inside it, and PASTE reads the clipboard directly (iOS asks once) for when typing still fails.
-  function askToken(issue) {
+  // What a pasted token looks like, never the secret: Safari has no remote console, so a 401 needs this to tell a
+  // wrong token from a wrong paste. A fine-grained token is github_pat_ + 82 chars of [A-Za-z0-9_] (93 in all).
+  function tokenShape(t) {
+    const s = String(t || "");
+    const odd = s.match(/[^A-Za-z0-9_]/g) || [];
+    return s.length + " chars, " + (/^github_pat_/.test(s) ? "github_pat_" : /^gh[pousr]_/.test(s) ? s.slice(0, 4) : "unknown") + " prefix, "
+      + odd.length + " odd char" + (odd.length === 1 ? "" : "s")
+      + (odd.length ? " (" + odd.slice(0, 4).map((c) => "U+" + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")).join(" ") + ")" : "");
+  }
+
+  function askToken(issue, note) {
     if (typeof document === "undefined" || !document.body || document.getElementById("apex-bridge-token")) return;
     const el = (tag, cls) => { const n = document.createElement(tag); n.className = cls; return n; };
     const dlg = el("dialog", "apex-bridge-link");
@@ -410,7 +425,7 @@ const ApexBridge = (function () {
     box.style.cssText = "display:grid;gap:8px";
     const p = document.createElement("p");
     p.style.margin = "0";
-    p.textContent = "Link this phone to Claude through issue #" + issue + ". Paste a fine-grained GitHub token "
+    p.textContent = (note ? note + ". " : "") + "Link this phone to Claude through issue #" + issue + ". Paste a fine-grained GitHub token "
       + "(Issues: read and write, " + REPO + " only). It stays on this device.";
     const input = document.createElement("input");
     input.type = "password";
@@ -460,7 +475,7 @@ const ApexBridge = (function () {
   }
 
   boot();
-  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts,
+  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, tokenShape,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);
