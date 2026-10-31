@@ -810,7 +810,10 @@ const TrackBuildProps = (function () {
     };
     const waterBand = (s0, s1, side, gap0, gap1, cell, col, opts) => {
       const c = Math.max(4, cell || 12);
-      const k0 = Math.round(s0 * n) % n, k1 = Math.round(s1 * n) % n;
+      // Sign-safe wrap: callers hand in `s ± ε` (singapore marina depth bands) or
+      // a span whose start crosses the seam negative — same lossy % as scanBarrier
+      // before 32b6c55, which read undefined nodes and drew the wrong lap window.
+      const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
       const span = Math.abs(s1 - s0) >= 1 - 1e-9 ? n - 1 : ((k1 - k0) + n) % n;
       return waterEmit(waterRaster(k0, k0 + span, side, gap0, gap1, c), c, col, opts);
     };
