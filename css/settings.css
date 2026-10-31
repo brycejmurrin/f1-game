@@ -357,7 +357,7 @@
 }
 #pm-settings-index small {
   font-size: var(--fs-micro); font-weight: 400; letter-spacing: normal;
-  /* --dim (#9a9aa8) sits near 4.5:1 on a carbon door; pull it toward the
+  /* --dim sits near 4.5:1 on a carbon door; pull it toward the
      label so the one-line note is readable at arm's length. */
   color: color-mix(in oklab, var(--text) 78%, transparent);
 }

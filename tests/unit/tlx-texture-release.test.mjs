@@ -22,7 +22,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
 const FX = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-fx.js"), "utf8");
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
 
 function slice(src, startMarker, endMarker, what) {
   const a = src.indexOf(startMarker);

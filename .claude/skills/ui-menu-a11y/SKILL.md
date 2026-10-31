@@ -31,7 +31,7 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 Bryce's profile first — 844×390 landscape, touch (AGENTS.md §Coordination): one cell is
 `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens=<id>` (parent only; the default
 `ios-iphone-landscape` is 852×393, not his phone). Then shipped settings, stress cases labelled separately:
-**survey-ui-matrix** §Default-first visual verification (one copy).
+**survey-ui-matrix** `references/verification.md` §Default-first visual verification (one copy).
 
 ## Quick Reference
 
@@ -50,6 +50,8 @@ node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
 ```
 
 `tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
+FLOWS (door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
+844×390 touch: `node tools/ui/flows.mjs [--checks=…] [--diff=<old flows.json>]` (parent-only browser; `--list`/`--help` none).
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 `docs/notes/ARCHITECTURE-REVIEW.md`. First tap silent on iPhone (audio unlock on a user gesture) → **audio-debug**.
 

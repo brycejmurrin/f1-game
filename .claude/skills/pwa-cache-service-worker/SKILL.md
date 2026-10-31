@@ -13,7 +13,7 @@ cache-first for immutable `?v=<sha256>` assets.
 `<link rel="stylesheet">` into the **essential** set (plus `./`,
 `index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
-**DEFERRED** backends, `vendor/three-0.186.1`, other vendors, self-hosted fonts.
+**DEFERRED** backends, `vendor/three-0.187.0`, other vendors, self-hosted fonts.
 The GLX files and the career UI (`career-ui.js`, `career-planning-ui.js`) in it are promoted to
 REQUIRED at install (`isRequiredLazy` in `sw.js`: offline without GLX is "graphics unavailable",
 without the career UI there is no career); TLX and its vendor dependency are the critical optional pool,

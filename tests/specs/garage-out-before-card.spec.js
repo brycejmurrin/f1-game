@@ -236,7 +236,9 @@ test.describe("garage-out before race/session card", () => {
     expect(m.hadGaragePhase, "reduce must play garage phase, not skip it").toBe(true);
     expect(m.garageMs, "reduce must not speed the garage-out up (full OUT_DURATION at speed 1)").toBeGreaterThan(6000);
     // …and the flyby (card up, phase run — or card with no world) follows it, never a 700 ms flash to the race.
-    const after = tl.find((s) => s.t > m.lastGarageT && s.phase && s.phase !== "garage" && s.phase !== "build");
+    // Adjacent mutation samples can share performance.now(); event order is the contract.
+    const after = tl.slice(tl.map((s) => s.phase).lastIndexOf("garage") + 1)
+      .find((s) => s.phase && s.phase !== "garage" && s.phase !== "build");
     expect(after, "reduce: a phase follows the garage-out").toBeTruthy();
     expect(["run", "card", "handoff"], "reduce: the card + flyby follow the garage").toContain(after && after.phase);
   });
