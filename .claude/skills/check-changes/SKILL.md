@@ -68,6 +68,16 @@ Output levels, saved evidence and `--read`: [the common contract](../../../docs/
 verdict, required/not-run groups and log paths; a partial or truncated result never proves a pass. Handoff snapshot:
 `node tools/ci/session-status.mjs --summary` (`--pr <n>` adds live PR/CI state).
 
+Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
+
+```sh
+./tools/mcp/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
+./tools/mcp/apex-tools-mcp.sh call apex_pick_tests '{}'
+./tools/mcp/apex-tools-mcp.sh call apex_bump_cache_check '{}'
+node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
+./tools/mcp/apex-tools-mcp.sh smoke
+```
+
 ## Load on demand
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
