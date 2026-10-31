@@ -1,13 +1,31 @@
 // @doc Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts.
 import fs from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
+import { createProcFdPool } from '../lib/proc-stat-reader.mjs';
+const procPool = createProcFdPool();
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// /proc/PID/stat's comm can contain spaces and parentheses. Only four fields
+// are needed; avoid allocating all 50+ tokens for every PID on each 50 ms scan.
+export function parseProcStat(raw) {
+  let cursor = raw.lastIndexOf(')') + 2;
+  const take = () => {
+    if (cursor === -1) return undefined;
+    const end = raw.indexOf(' ', cursor), value = raw.slice(cursor, end === -1 ? undefined : end);
+    cursor = end === -1 ? -1 : end + 1;
+    return value;
+  };
+  const state = take(), parent = Number(take()), group = Number(take());
+  for (let field = 3; field < 19 && cursor !== -1; field++) {
+    const end = raw.indexOf(' ', cursor);
+    cursor = end === -1 ? -1 : end + 1;
+  }
+  return { state, group, parent, start: take() };
+}
 function info(pid) {
   try {
-    const raw = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
-    const fields = raw.slice(raw.lastIndexOf(')') + 2).split(' ');
-    return { state: fields[0], group: Number(fields[2]), parent: Number(fields[1]), start: fields[19] };
+    const raw = procPool.read(pid);
+    return parseProcStat(raw);
   } catch {
     try { process.kill(pid, 0); return { state: '?', start: null }; } catch { return null; }
   }
@@ -20,7 +38,9 @@ function descendants(pid) {
     // tree from numeric /proc entries, without launching a ps process per scan.
     const children = new Map();
     try {
-      for (const entry of fs.readdirSync('/proc')) {
+      const entries = fs.readdirSync('/proc');
+      procPool.sweep(entries.filter(entry => /^\d+$/.test(entry)).map(Number));
+      for (const entry of entries) {
         if (!/^\d+$/.test(entry)) continue;
         const pid = Number(entry), stamp = info(pid);
         if (!stamp?.parent) continue;
@@ -54,6 +74,7 @@ export function spawnAgentProcess(command, args = [], { cwd, stdio = 'pipe', env
   if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) throw new Error('timeoutMs must be a positive integer');
   const child = spawn(command, args, { cwd, stdio, env, shell: false, detached: process.platform !== 'win32' });
   const owned = new Map();
+  const releaseProcPool = procPool.acquire();
   let exited = false, closed = false, exitCode = null, signal = null, error, timedOut = false, cancelSignal = null;
   let shutdown, timer, doneResolve, exitResolve, closeResolve;
   const rootExited = new Promise((resolve) => { exitResolve = resolve; });
@@ -118,6 +139,7 @@ export function spawnAgentProcess(command, args = [], { cwd, stdio = 'pipe', env
     clearInterval(sampler);
     if (!closed) await Promise.race([streamsClosed, pause(1000)]);
     if (forwardSignals) { process.off('SIGINT', onInt); process.off('SIGTERM', onTerm); }
+    releaseProcPool();
     doneResolve({ exitCode, signal, timedOut, cancelSignal, ...(error ? { error } : {}), ...(survivors.length ? { cleanupError: 'owned descendant processes survived SIGKILL', survivors } : {}) });
   })();
   return { child, done, stop };

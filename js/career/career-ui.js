@@ -897,12 +897,14 @@ function create(G) {
       if (msg) input.setAttribute("aria-invalid", "true");
       input.oninput = () => onInput(input.value);
       wrap.appendChild(input);
-      form.appendChild(wrap);
       if (msg) {
-        const note = el("div", "cr-note", msg);
+        const note = el("div", "cr-note", msg), group = el("div");
+        note.id = `cr-error-${errKey}`;
+        input.setAttribute("aria-describedby", note.id);
         note.setAttribute("role", "alert");
-        form.appendChild(note);
-      }
+        group.append(wrap, note); // Keep the description outside the input's label.
+        form.appendChild(group);
+      } else form.appendChild(wrap);
       return input;
     };
     addField("NAME", draft.name, 22, (v) => { draft.name = v; }, "text", "name");
@@ -1757,6 +1759,12 @@ function create(G) {
       if (Object.keys(errs).length) {
         draftFieldErr = errs;
         buildSetupPanes();
+        const invalid = /** @type {HTMLInputElement|null} */ ($("cr-right").querySelector("input[aria-invalid='true']"));
+        if (invalid && typeof invalid.focus === "function") {
+          invalid.focus({ preventScroll: true });
+          const group = invalid.parentElement && invalid.parentElement.parentElement;
+          if (group && typeof group.scrollIntoView === "function") group.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+        }
         return;
       }
       draftFieldErr = null;

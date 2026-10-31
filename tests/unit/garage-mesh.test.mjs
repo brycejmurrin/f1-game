@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -880,7 +881,7 @@ test("reflection fade preserves each room's authored floor colours and markings"
 test("departure exterior has supported lane ground and an open outward doorway", () => {
   const { GarageScene, meshes, draws } = harness();
   GarageScene.draw(TEAM, LIV, [0, 2, 12], null, 0, { ambient: false });
-  const floor = meshes[draws[0].mesh.id - 1], p = floor.pos, n = floor.nrm;
+  const floor = meshes[draws[1].mesh.id - 1], p = floor.pos, n = floor.nrm;
   const ground = [], facade = [];
   for (let i = 0; i < p.length; i += 3) {
     if (n[i + 1] > .99 && Math.abs(p[i + 1] + .036) < .001 && p[i + 2] >= 6.45) ground.push(p[i]);
@@ -889,4 +890,373 @@ test("departure exterior has supported lane ground and an open outward doorway",
   assert.ok(Math.min(...ground) <= -22 && Math.max(...ground) >= 22, "lane extends under the exterior follow");
   assert.ok(facade.length > 16, "near frontage has outward-facing surfaces");
   assert.ok(facade.every(([x, y]) => Math.abs(x) >= 2.7 - .001 || y >= 4.8 - .001), "central aperture stays clear");
+});
+
+function garageWheelHarness() {
+  const draws = [], meshes = [], freed = [], recipes = [];
+  const ctx = vm.createContext({
+    Car3D: { TYRE_BAND: [null, [1, 0, 0]], BRAKE_CALIPER: [null, [1, 1, 0]],
+      buildWheelLayers(...args) {
+        recipes.push(args);
+        return { rotating: { kind: "rotating", axle: recipes.length }, fixed: { kind: "fixed", axle: recipes.length } };
+      } },
+  });
+  for (const file of ["js/core/mat4.js", "js/car/car-wheels.js"])
+    vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+  const gfx = { createMesh(data) { meshes.push(data); return data; },
+    freeMesh(mesh) { freed.push(mesh); },
+    draw(mesh, matrix) { draws.push({ mesh, matrix: Array.from(matrix) }); } };
+  return { ctx, gfx, draws, meshes, freed, recipes,
+    Wheels: vm.runInContext("CarWheels", ctx), M4: vm.runInContext("M4", ctx) };
+}
+
+test("garage wheels are available before the legacy race-session shim and retain fitted layers", () => {
+  const h = garageWheelHarness();
+  assert.equal(vm.runInContext("typeof GarageDepartureWheels", h.ctx), "undefined", "first garage visit has not loaded the race-session shim");
+  assert.equal(typeof h.Wheels.createGarage, "function");
+  const wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+  wheels.prepare("first", { rimTint: "#334455", caliperTint: "#ff3300" }, tiers);
+  wheels.prepare("first", {}, tiers);
+  assert.equal(h.recipes.length, 2, "one fitted front and rear pair");
+  assert.equal(h.meshes.length, 4, "rotating and fixed geometry share the cache");
+  assert.deepEqual(Array.from(h.recipes[0][2]), [1, .2, 0], "fitted wheel keeps livery caliper tint");
+  const base = h.M4.ident();
+  for (const distance of [0, .34, -.34, .34, .34]) wheels.draw(base, distance, .2, {});
+  assert.equal(h.recipes.length, 2, "stepping, reversing and holding only transform meshes");
+  assert.equal(h.draws.length, 40, "all four wheels retain rotating and fixed passes");
+  wheels.release(); wheels.release();
+  assert.equal(h.freed.length, 4, "release is idempotent");
+  wheels.prepare("second", {}, tiers);
+  assert.equal(h.recipes.length, 4, "re-entry restores released layers");
+  wheels.prepare("changed", {}, tiers);
+  assert.equal(h.freed.length, 8, "parts changes release the superseded fitted set");
+});
+
+test("garage wheel transforms reverse and seek exactly while calipers stay fixed", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), base = h.M4.ident();
+  wheels.prepare("moving", {}, { tyres: 1, brakes: 1 });
+  const frame = (distance) => {
+    h.draws.length = 0;
+    wheels.draw(base, distance, .2, {});
+    return h.draws.map(d => ({ mesh: d.mesh, matrix: d.matrix }));
+  };
+  const zero = frame(0), forward = frame(.34 * Math.PI / 2), reverse = frame(-.34 * Math.PI / 2);
+  assert.notDeepEqual(forward[0].matrix, zero[0].matrix, "a quarter turn changes the rendered rotating transform");
+  assert.ok(Math.abs(forward[0].matrix[5]) < 1e-6);
+  assert.ok(Math.abs(forward[0].matrix[6] + reverse[0].matrix[6]) < 1e-6, "reverse changes the spin sign");
+  for (let i = 1; i < 8; i += 2) {
+    assert.deepEqual(forward[i].matrix, zero[i].matrix, "fixed caliper does not follow the rim");
+    assert.deepEqual(reverse[i].matrix, zero[i].matrix, "reverse leaves fixed hardware planted");
+  }
+  assert.deepEqual(frame(.34 * Math.PI / 2), forward, "scrubbing back restores the exact same draw matrices");
+  assert.deepEqual(frame(.34 * Math.PI / 2), forward, "a paused frame does not advance phase");
+  assert.equal(h.recipes.length, 2, "no per-frame geometry rebuild");
+});
+
+test("legacy departure wheel entry delegates to the common first-visit implementation", () => {
+  const h = garageWheelHarness(), calls = [], sentinel = {};
+  const shim = vm.createContext({ CarWheels: { createGarage(gfx) { calls.push(gfx); return sentinel; } } });
+  vm.runInContext(read("js/garage/departure-wheels.js"), shim, { filename: absSrc("js/garage/departure-wheels.js") });
+  const legacy = vm.runInContext("GarageDepartureWheels", shim);
+  assert.equal(legacy.create(h.gfx), sentinel);
+  assert.deepEqual(calls, [h.gfx], "compatibility entry has one implementation owner");
+});
+
+
+test("garage wheel upload failure frees partial layers and the same preparation can retry", () => {
+  for (let failAt = 0; failAt < 4; failAt++) {
+    const h = garageWheelHarness(), create = h.gfx.createMesh;
+    let uploads = 0;
+    h.gfx.createMesh = (data) => {
+      if (uploads++ === failAt) throw new Error("wheel upload failed");
+      return create(data);
+    };
+    const wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+    assert.throws(() => wheels.prepare("retry", {}, tiers), /wheel upload failed/);
+    assert.equal(h.meshes.length, failAt, "only completed uploads own a handle");
+    assert.deepEqual(h.freed, h.meshes, "every partially uploaded layer is released");
+    wheels.draw(h.M4.ident(), 1, 0, {});
+    assert.equal(h.draws.length, 0, "a failed set cannot render partial wheels");
+    h.gfx.createMesh = create;
+    wheels.prepare("retry", {}, tiers);
+    assert.equal(h.recipes.length, 4, "same key builds again after failure");
+    wheels.draw(h.M4.ident(), 1, 0, {});
+    assert.equal(h.draws.length, 8, "retry restores all four wheel pairs");
+    wheels.release(); wheels.release();
+    assert.equal(h.freed.length, failAt + 4, "retry and release retain no handles");
+    assert.equal(new Set(h.freed).size, failAt + 4, "no layer is freed twice");
+  }
+});
+
+// Exercise the detached CPU builder with bounded geometry, never a race build/GPU.
+function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 1, dress = false, cachedDef = null } = {}) {
+  const c = Math.cos(yaw), s = Math.sin(yaw), origin = [10, 2, -8];
+  const raw = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  for (const p of points) {
+    raw.pos.push(origin[0] + p[0] * c + p[2] * s, origin[1] + p[1], origin[2] - p[0] * s + p[2] * c);
+    raw.nrm.push(s, 0, c); raw.col.push(.2, .4, .6); raw.mat.push(16);
+  }
+  for (let n = 0; n < repeats; n++) for (let i = 0; i < points.length; i++) raw.idx.push(i);
+  const blank = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
+  const right = [-s, 0, -c], tangent = [-c, 0, s];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = v => { const m = Math.hypot(...v); return v.map(x => x / m); };
+  let builds = 0;
+  const ctx = vm.createContext({ GaragePrims: { Z_DOOR: 6.4, HALF_W: 5.4, Z_BACK: -6.4 },
+    Tracks: { buildCenterline(_def, opts) { assert.equal(opts.line, false); builds++; return { def: cachedDef || _def }; },
+      build() { throw Error('full build forbidden'); }, buildPaced() { throw Error('race build forbidden'); } },
+    TrackPit: { build: () => ({ hasBays, side: 1, off: { workOut: 0 }, bay: { depth: 12.8, doorW: 5.4, doorH: 4.8 },
+      row: { boxes: [{ s: 20, k: 0 }] }, bands: { fast: 3.5 } }), rowOf: () => row },
+    TrackSpline: { curvature: () => 0, sample(_track, _arc, out) {
+      out.r = right; out.t = tangent; out.hw = 0;
+      out.p = origin.map((v, i) => v - right[i] * 6.4 - (i === 1 ? .02 : 0));
+    } }, TrackGeom: { norm, cross, addBox() {}, emit() {} },
+    TrackMesh: { bankOffsetAt: () => 0, buildRoad: () => raw, buildPitLane() {}, buildPitBoxes() {}, buildFloor: blank,
+      *buildTerrainSteps() { yield; return dress ? raw : blank(); } },
+    TrackModels: { sealGeometry: geo => geo }, TrackBuildProps: { *buildSteps(track, opts) {
+      assert.equal(opts.skipPits, true); assert.ok(track.terrainGeo, 'real terrain precedes scenery anchoring');
+      assert.ok(opts.region.maxVertices > 0); assert.equal(opts.region.intersects(origin, 20), true);
+      assert.equal(opts.region.intersects([origin[0] + 10000, 0, origin[2]], 1), false);
+      if (track.def.palette) track.def.palette.grass[0] = .99;
+      yield; return { out: dress ? raw : blank(), glass: dress ? raw : blank(), water: dress ? raw : blank() };
+    } },
+    TrackSurface: { profile: () => ({}) }, SceneryPits: { build(opts) { assert.equal(opts.exteriorOnly, true); return {}; } } });
+  vm.runInContext(read('js/garage/exterior-geometry.js'), ctx, {filename:absSrc('js/garage/exterior-geometry.js')});
+  const builder = vm.runInContext('GarageExteriorGeometry', ctx);
+  return { builder, builds: () => builds, origin, yaw, raw };
+}
+function finishExterior(builder, def = { id: 'fixture' }) {
+  const it = builder.buildSteps(def, { teamId: 'ferrari', night: true });
+  let r, yields = 0; do { r = it.next(); if (!r.done) yields++; } while (!r.done);
+  return { result: r.value, yields };
+}
+test('circuit exterior clips triangles at all six bounds, rotates normals and preserves material columns', () => {
+  const points = [
+    [-660, 0, 20], [-640, 0, 18], [-640, 2, 22], [660, 0, 20], [640, 0, 18], [640, 2, 22],
+    [0, -122, 20], [2, -118, 18], [-2, -118, 22], [0, 305, 20], [2, 295, 18], [-2, 295, 22],
+    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 1005], [2, 0, 995], [-2, 2, 995],
+  ];
+  const h = exteriorFixture(points), { result: r, yields } = finishExterior(h.builder);
+  assert.equal(r.supported, true); assert.ok(yields > 5);
+  assert.ok(Math.abs(r.anchor.yaw - h.yaw) < 1e-10);
+  r.anchor.position.forEach((v, i) => assert.ok(Math.abs(v - h.origin[i]) < 1e-10));
+  const b = [-650, 650, -120, 300, 6.4, 1000], seen = new Set(), geo = r.road;
+  assert.ok(geo.idx.length > 18, 'crossing triangles survive as clipped polygons');
+  assert.equal(geo.nrm.length, geo.pos.length); assert.equal(geo.col.length, geo.pos.length);
+  assert.equal(geo.mat.length, geo.pos.length / 3);
+  for (let i = 0; i < geo.pos.length; i++) {
+    const a = i % 3, v = geo.pos[i]; assert.ok(Number.isFinite(v));
+    assert.ok(v >= b[a * 2] - 1e-8 && v <= b[a * 2 + 1] + 1e-8);
+    for (const k of [a * 2, a * 2 + 1]) if (Math.abs(v - b[k]) < 1e-8) seen.add(k);
+    if (i < geo.pos.length - 12) {
+      assert.ok(Math.abs(geo.nrm[i] - (a === 2 ? 1 : 0)) < 1e-8);
+      assert.ok(Math.abs(geo.col[i] - [.2, .4, .6][a]) < 1e-8);
+    }
+  }
+  const ramp = geo.pos.slice(-12);
+  assert.deepEqual(Array.from(ramp), [-2.7, 0, 6.4, 2.7, 0, 6.4, -2.7, .03, 6.7, 2.7, .03, 6.7]);
+  assert.ok(Math.abs(Math.hypot(...geo.nrm.slice(-3)) - 1) < 1e-8);
+  assert.deepEqual(Array.from(r.stats.groundBounds), [-900, 900, -10000, 10000, 6.4, 1300]);
+  assert.equal(seen.size, 6); assert.ok(geo.mat.every(m => m === 16));
+  assert.ok(geo.idx.every(i => i >= 0 && i < geo.pos.length / 3));
+});
+test('circuit exterior refuses unavailable bay and invalid/budget-breaking geometry', () => {
+  const tri = [[0, 0, 20], [2, 0, 20], [0, 2, 20]];
+  for (const [opts, reason] of [[{ hasBays: false }, 'circuit-has-no-bays'], [{ row: -1 }, 'team-has-no-bay']]) {
+    const { builder } = exteriorFixture(tri, opts), r = finishExterior(builder).result;
+    assert.equal(r.supported, false); assert.equal(r.reason, reason); assert.equal(r.road, null); assert.equal(r.anchor, null);
+  }
+  const missing = exteriorFixture(tri);
+  assert.equal(finishExterior(missing.builder, null).result.reason, 'missing-circuit'); assert.equal(missing.builds(), 0);
+  assert.throws(() => finishExterior(exteriorFixture([[NaN, 0, 20], ...tri.slice(1)]).builder), /Non-finite/);
+  assert.throws(() => finishExterior(exteriorFixture(tri, { repeats: 240001 }).builder), /budget exceeded/);
+});
+
+test('detached exterior retains real terrain and separate scenery/glass/water without palette mutation', () => {
+  const def = { id: 'fixture', palette: { grass: [.2, .3, .4] } };
+  const cachedDef = { palette: { grass: [.1, .2, .3] } };
+  const h = exteriorFixture([[0, 0, 20], [2, 0, 20], [0, 2, 20]], { dress: true, cachedDef });
+  const r = finishExterior(h.builder, def).result;
+  assert.deepEqual(def.palette.grass, [.2, .3, .4], 'scenery palette adjustments are detached from the selected race');
+  assert.deepEqual(cachedDef.palette.grass, [.1, .2, .3], 'a cached centreline cannot lend its mutable definition to scenery');
+  for (const name of ['terrain', 'scenery', 'glass', 'water']) {
+    assert.equal(r[name].idx.length, 3, name + ' survives the world-to-garage transform');
+    assert.equal(r[name].pos.length, 9);
+  }
+  assert.equal(r.stats.sceneryVertices, 3); assert.equal(r.stats.terrainVertices, 3);
+  assert.equal(r.stats.glassVertices, 3); assert.equal(r.stats.waterVertices, 3);
+});
+
+test('night light-source separation preserves the complete scenery while leaving ordinary walls non-emissive', () => {
+  const h = exteriorFixture([[0,0,20],[2,0,20],[0,2,20], [4,0,20],[6,0,20],[4,2,20]], { dress: true });
+  for (let i = 9; i < 18; i += 3) h.raw.col.splice(i, 3, 1.3, 1.1, .75);
+  const r = finishExterior(h.builder).result;
+  assert.equal(r.scenery.idx.length, 3); assert.equal(r.sceneryLights.idx.length, 3);
+  assert.ok(r.scenery.col.every(v => v <= 1)); assert.ok(r.sceneryLights.col.some(v => v > 1));
+  assert.equal(r.stats.sceneryVertices, 6); assert.equal(r.stats.sceneryLightVertices, 3);
+  assert.ok(r.scenery.pos.every(Number.isFinite) && r.sceneryLights.pos.every(Number.isFinite));
+});
+
+
+test('circuit exterior surface samples an inclined raised road, excludes paint and has bounded finite lookup data', () => {
+  const plane = [[-2, 1.8, 10], [-2, 2.6, 14], [2, 2.2, 10], [2, 2.2, 10], [-2, 2.6, 14], [2, 3, 14]];
+  const points = plane.map(p => [p[0], p[1] - .03, p[2]]).concat(plane, plane.map(p => [p[0], p[1] + .015, p[2]]));
+  const h = exteriorFixture(points);
+  for (let i = 12; i < 18; i++) h.raw.mat[i] = 0; // real pit paint and ribbon can both be FLAT
+  const { result: r } = finishExterior(h.builder), sample = h.builder.sampleHeight, surface = r.surface;
+  assert.ok(Math.abs(sample(surface, 0, 12) - 2.4) < 1e-8, 'raised pavement wins over lower road; paint does not lift the car');
+  assert.ok(Math.abs(sample(surface, 1, 13) - 2.7) < 1e-8, 'barycentric lookup follows the inclined plane');
+  assert.equal(sample(surface, 0, 0), 0, 'service box is flat');
+  assert.equal(sample(surface, 0, 6.4), null, 'decorative bridge is excluded from contact index');
+  assert.equal(sample(surface, 0, 6.55), null, 'fixture has no actual road at the bridge');
+  assert.equal(sample(surface, NaN, 12), null); assert.equal(sample(surface, 56, 12), null);
+  assert.equal(sample(surface, 0, 111), null); assert.equal(sample(surface, 0, 30), null);
+  assert.ok(surface.triangles.every(Number.isFinite));
+  assert.ok(surface.maxFaces <= 256 && surface.refs <= 400000);
+  assert.ok(Object.values(surface.cells).every(v => v.length <= 256 && v.every(i => i >= 0 && i * 9 < surface.triangles.length)));
+});
+
+test('circuit exterior surface retains actual Bahrain and Monaco departure wheel contact heights', async () => {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url), h = require('../../tools/lib/track-build-vm.cjs').buildContext({ assets: false });
+  const ctx = vm.createContext(h.sandbox);
+  for (const f of ['js/garage/exterior-geometry.js', 'js/garage/exterior.js', 'js/data/garage-departure-motion.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const Builder = vm.runInContext('GarageExteriorGeometry', ctx), Motion = vm.runInContext('GarageDepartureMotion', ctx), Exterior = vm.runInContext('GarageExterior', ctx);
+  for (const [id, expected] of [['bahrain', [.1229, .1484, .1229, .1484]], ['monaco', [-.0121, .0012, -.0120, .0014]]]) {
+    const it = Builder.buildSteps(h.Tracks.LIST.find(d => d.id === id), { teamId: 'ferrari' });
+    let next; do { next = it.next(); } while (!next.done);
+    const data = next.value; assert.equal(data.supported, true);
+    const pose = { side: 1, eye: [], aim: [] }; Motion.sample(1, 1, pose); Exterior.fitPose(pose, data.anchor, true);
+    let wheel = 0;
+    for (const x of [-.79, .79]) for (const z of [-1.6, 1.7]) {
+      const wx = pose.x + x * Math.cos(pose.yaw) + z * Math.sin(pose.yaw);
+      const wz = pose.z - x * Math.sin(pose.yaw) + z * Math.cos(pose.yaw);
+      const y = Builder.sampleHeight(data.surface, wx, wz);
+      assert.ok(Number.isFinite(y), id + ' tyre has a supported surface');
+      assert.ok(Math.abs(y - expected[wheel++]) < .003, id + ' exact generated ribbon height survives indexing');
+    }
+    if (id === 'bahrain') {
+      assert.ok(data.stats.sceneryVertices > 10000, 'actual authored venue scenery is present beyond the pit structures');
+      assert.ok(data.stats.terrainVertices > 1000, 'the exterior includes real circuit terrain, not only a floor plane');
+      assert.ok(data.stats.sceneryLightVertices > 0, 'authored light-source faces survive in their own pass');
+      const xs = data.road.pos.filter((_v, i) => i % 3 === 0);
+      assert.ok(Math.max(...xs) >= 150, 'actual Bahrain road continues into the extended follow-view graphics region');
+    }
+    const ramp = data.road.pos.slice(-12);
+    for (const at of [6, 9]) {
+      const y = Builder.sampleHeight(data.surface, ramp[at], ramp[at + 2]);
+      assert.ok(Number.isFinite(y), id + ' outer sill edge has actual road support');
+      assert.ok(Math.abs(ramp[at + 1] - y) < 1e-6, id + ' sill endpoint meets actual banked road');
+    }
+    assert.equal(ramp[1], 0); assert.equal(ramp[4], 0);
+    assert.ok(data.surface.maxFaces <= 256);
+  }
+});
+
+
+test("the ordinary garage selects articulated wheels before any departure or race-session load", () => {
+  const builds = [], prepared = [], renderer = { prepare: (...args) => prepared.push(args) };
+  const team = { id: "test" }, tiers = { tyres: 1, brakes: 1 }, liv = { c1: [1, 0, 0], c2: [0, 0, 0] };
+  const env = {
+    Teams: { LIST: [team] }, G: { teamIdx: 0 }, gfx: {},
+    garageSeat: () => ({ num: 1 }), previewKey: () => "car", resolveLivery: () => liv,
+    partsVisualKey: () => "parts", seatTag: () => "1", hullKeyOf: () => "hull", getTeamParts: () => ({}),
+    Parts: { getVisualTiers: () => tiers }, CarWheels: { createGarage: () => renderer },
+    Car3D: { FINISH_FIELDS: [], build: (_a, _b, opts) => { builds.push(opts); return { data: true }; } },
+    GarageScene: { previewMesh: (_key, _hull, make) => ({ mesh: make(), hull: [] }) },
+  };
+  const make = new Function("env", `const {${Object.keys(env).join(",")}} = env;
+    let _spMesh, _spMeshKey = "", _spHull, _spBase, departureWheels, driveOut = null;
+    ${fnSource(read("js/garage/setup-camera.js"), "function getSetupPreviewMesh()")}
+    return getSetupPreviewMesh;`);
+  const get = make(env), first = get();
+  assert.equal(builds[0].noWheels, true, "an ordinary garage body must not bake stationary wheels");
+  assert.equal(prepared.length, 1, "first visit prepares common wheel layers without the legacy shim");
+  assert.equal(get(), first);
+  assert.equal(builds.length, 1, "successive preview frames reuse body geometry");
+  assert.equal(prepared.length, 1, "successive preview frames reuse wheel geometry");
+});
+
+test("garage reflection and normal wheel draws share the signed current-pose phase without driveOut", () => {
+  const drawSource = fnSource(read("js/garage/setup-camera.js"), "function drawDepartureReflection(");
+  for (const distance of [-2, 0, 2]) {
+    const draws = [], wheels = { draw: (...args) => draws.push(args) };
+    const draw = new Function("departureWheels", "_spWheelDistance", "_spWheelSteer", `let driveOut = null; ${drawSource}; return drawDepartureReflection;`)(wheels, distance, .15);
+    const normal = {}, reflection = {}, material = {};
+    draw(normal, material); draw(reflection, material);
+    assert.equal(draws.length, 2, "arrival/return wheel layers also reach the reflection pass");
+    assert.deepEqual(draws[0], [normal, distance, .15, material]);
+    assert.deepEqual(draws[1], [reflection, distance, .15, material]);
+  }
+});
+
+
+test("same-ID garage wheel edits and Undo invalidate fitted layers on the real mesh-bust path", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+  const bust = new Function("departureWheels", "GarageScene", `let _spMeshKey = "car", _flapBustAt; const _pk = { val: null };
+    ${fnSource(read("js/garage/setup-camera.js"), "function spMeshBust()")}
+    return spMeshBust;`)(wheels, { dropPreviewMeshes() {} });
+  h.ctx.CarMaterials = { SURFACES: { paint: 101 }, FINISH_SURFACE: { matte: 102 } };
+  const original = { rimTint: "#ff0000", caliperTint: "#00ff00", sidewallInk: "#0000ff", rimFinish: "gloss" };
+  wheels.prepare("same-id", original, tiers);
+  for (const liv of [{ rimTint: "#334455", caliperTint: "#ff3300", sidewallInk: "#ffffff", rimFinish: "matte" }, original]) {
+    const before = h.recipes.length;
+    bust(); wheels.prepare("same-id", liv, tiers);
+    assert.equal(h.recipes.length, before + 2, "a new draft or Undo rebuilds front/rear layers under the same livery ID");
+    const tint = h.Wheels.tints(liv), front = h.recipes[before];
+    assert.deepEqual(Array.from(front[2]), Array.from(tint.cal), "caliper tint follows the current draft");
+    assert.deepEqual(Array.from(front[3]), Array.from(tint.rim), "rim tint follows the current draft");
+    assert.deepEqual(Array.from(front[8]), Array.from(tint.ink), "sidewall ink follows the current draft");
+    assert.equal(front[9], tint.surf, "rim finish follows the current draft");
+  }
+  assert.equal(h.freed.length, 8, "each superseded wheel set releases its four GPU layers");
+});
+
+test("SetupCamera public release frees common wheels off-screen and preserves a visible garage", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), G = { setupPreviewOn: true };
+  wheels.prepare("car", {}, { tyres: 1, brakes: 1 });
+  let roomReleases = 0;
+  const release = new Function("departureWheels", "G", "GarageScene", `let _spMesh, _spMeshKey = "car", _spBase;
+    return ({${fnSource(read("js/garage/setup-camera.js"), "release() {")}}).release;`)(wheels, G, { release() { roomReleases++; } });
+  assert.equal(release(), false);
+  assert.equal(h.freed.length, 0, "the visible garage retains all four wheel layers");
+  assert.equal(roomReleases, 0);
+  G.setupPreviewOn = false;
+  assert.equal(release(), true);
+  assert.equal(h.freed.length, 4, "phone/prewarm release drops all common wheel GPU handles");
+  assert.equal(roomReleases, 1);
+  release();
+  assert.equal(h.freed.length, 4, "public release does not double-free wheel layers");
+  wheels.prepare("car", {}, { tyres: 1, brakes: 1 });
+  assert.equal(h.recipes.length, 4, "the next garage visit restores its wheel layers");
+});
+test('circuit exterior sill normals follow actual cross slope and contact data excludes the bridge', () => {
+  const points = [[-4, .016, 6.4], [-4, .032, 8], [4, .024, 6.4],
+    [4, .024, 6.4], [-4, .032, 8], [4, .040, 8]];
+  const h = exteriorFixture(points), { result: r } = finishExterior(h.builder);
+  const ramp = r.road.pos.slice(-12), normal = r.road.nrm.slice(-3);
+  for (const at of [6, 9]) assert.ok(Math.abs(ramp[at + 1] - h.builder.sampleHeight(r.surface, ramp[at], ramp[at + 2])) < 1e-8);
+  assert.ok(Math.abs(ramp[7] - .0203) < 1e-8); assert.ok(Math.abs(ramp[10] - .0257) < 1e-8);
+  const f = (ramp[7] + ramp[10]) / .6, x = (ramp[10] - ramp[7]) / 5.4, n = Math.hypot(x, 1, f);
+  assert.ok(Math.abs(normal[0] + x / n) < 1e-8); assert.ok(Math.abs(normal[1] - 1 / n) < 1e-8);
+  assert.ok(Math.abs(normal[2] + f / n) < 1e-8);
+  assert.ok(Math.abs(h.builder.sampleHeight(r.surface, 0, 6.4) - .02) < 1e-8, 'index samples actual road, not the zero-height sill edge');
+  assert.equal(r.surface.triangles.length / 9, 2, 'bridge triangles were never indexed');
+});
+
+
+test('circuit exterior retains distant rendered road while tyre lookup remains a bounded local index', () => {
+  const near = [[0, 0, 20], [0, 0, 24], [2, 0, 20]];
+  const far = [[140, 1, 20], [140, 1, 24], [155, 1, 20], [0, 2, 140], [0, 2, 145], [2, 2, 140]];
+  const h = exteriorFixture(near.concat(far)), r = finishExterior(h.builder).result;
+  assert.ok(r.road.pos.some((v, i) => i % 3 === 0 && v >= 150), 'real rendered continuation survives past 55 m');
+  assert.ok(r.road.pos.some((v, i) => i % 3 === 2 && v >= 140), 'forward graphics extent is independent of contact extent');
+  assert.equal(r.surface.triangles.length / 9, 1, 'remote rendered faces and decorative sill are not indexed');
+  assert.equal(h.builder.sampleHeight(r.surface, 150, 21), null); assert.equal(h.builder.sampleHeight(r.surface, 0, 140), null);
+  assert.equal(h.builder.sampleHeight(r.surface, .5, 21), 0);
+  assert.deepEqual(Array.from(r.surface.bounds), [-55, 55, 6.4, 110]);
+  for (const key of Object.keys(r.surface.cells)) {
+    const [x, z] = key.split(',').map(Number);
+    assert.ok(x >= -28 && x <= 27 && z >= 3 && z <= 55, 'all cell references remain in contact bounds');
+  }
 });

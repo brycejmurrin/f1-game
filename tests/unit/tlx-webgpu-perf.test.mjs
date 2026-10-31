@@ -50,21 +50,24 @@ function gpu() {
     device: {
       createBuffer(d) { const bytes = new Uint8Array(d.size); return { bytes, getMappedRange: () => bytes.buffer, unmap() {}, destroy() {} }; },
       queue: { writeBuffer(b, off, arr, start = 0, count = arr.length - start) {
+        out.written += count * arr.BYTES_PER_ELEMENT;
         b.bytes.set(new Uint8Array(arr.buffer, arr.byteOffset + start * arr.BYTES_PER_ELEMENT, count * arr.BYTES_PER_ELEMENT), off);
       } },
     },
   };
   const utils = new AttributeUtils(backend);
-  return {
+  const out = {
+    written: 0,   // bytes through queue.writeBuffer
     // What three's Attributes.update does for an INDEX attribute: create once, then upload on a version bump.
     sync(attr) {
       const d = backend.get(attr);
       if (d.buffer === undefined) { utils.createAttribute(attr, 16); d.v = attr.version; bufs.set(attr, d); return; }
       if (d.v < attr.version) { utils.updateAttribute(attr); d.v = attr.version; }
     },
-    // The first `n` indices the GPU buffer behind `attr` holds, decoded at the width it was created with.
-    decode(attr, n) { const d = backend.get(attr); return Array.from(new attr.array.constructor(d.buffer.bytes.buffer)).slice(0, n); },
+    // The `n` indices from `at` the GPU buffer behind `attr` holds, decoded at the width it was created with.
+    decode(attr, n, at = 0) { const d = backend.get(attr); return Array.from(new attr.array.constructor(d.buffer.bytes.buffer)).slice(at, at + n); },
   };
+  return out;
 }
 
 function chunkedSys(over = {}) {
@@ -104,13 +107,27 @@ test("W1: a changed visible set reaches the GPU index buffer on WebGPU (the merg
   assert.equal(attr.__apexUint16Index, true, "the vendor's narrow-index opt-in, like every chunk index");
   q.sync(attr);
   assert.equal(attr.array.constructor, Uint16Array, "three kept the Uint16 array (unmarked it was swapped for a Uint32 copy)");
-  assert.deepEqual(q.decode(attr, 12), want(mesh, [0, 1, 2, 3]));
+  assert.deepEqual(q.decode(attr, 12, g.drawRange.start), want(mesh, [0, 1, 2, 3]));
   for (const ids of [[4, 5, 6, 7], [7, 0, 3], [2, 6]]) {
     assert.equal(merge(sys, mesh, ids), g, "same slot geometry");
     assert.equal(g.index, attr, "no regrowth: the set shrank or held");
     q.sync(attr);
-    assert.deepEqual(q.decode(attr, ids.length * 3), want(mesh, ids), `GPU holds set ${ids}, not the first set`);
+    assert.deepEqual(q.decode(attr, ids.length * 3, g.drawRange.start), want(mesh, ids), `GPU holds set ${ids}, not the first set`);
     assert.equal(g.drawRange.count, ids.length * 3);
+  }
+});
+
+// GPU hunt 3 (#4272 item 3): the set sliding one chunk along the arc, through the vendor's Uint16 writeBuffer path.
+test("W1: a one-chunk slide of the visible set writes that chunk's bytes, not the set after the first change", () => {
+  const sys = chunkedSys(), mesh = record(40, 100), q = gpu();
+  const span = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
+  const g = merge(sys, mesh, span(5, 25));
+  q.sync(g.index);
+  for (const [a, b, bytes] of [[6, 26, 600], [5, 25, 0], [4, 24, 600]]) {
+    const w0 = q.written;
+    merge(sys, mesh, span(a, b)); q.sync(g.index);
+    assert.equal(q.written - w0, bytes, `chunks ${a}..${b - 1}: ${bytes} B (the first-change rule: 12000 B)`);
+    assert.deepEqual(q.decode(g.index, 6000, g.drawRange.start), want(mesh, span(a, b)));
   }
 });
 
@@ -239,7 +256,7 @@ test("W6: the draw warm compiles the canvas passes on both sides of the upscale 
   const h = await postRig(t, { up: true });
   const opts = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };
   h.post.drawWarm(opts, h.frame);
-  await settle();
+  await h.post.warmSettled();       // the canvas compiles themselves, not a wall-clock wait (flaked under load)
   const built = pipelineBuilds(h.renderer);
   h.present(opts);                  // SGSR -> canvas
   h.setUpscale(false);
@@ -275,3 +292,12 @@ test("W7: the sky cache bake is warmed by a draw keyed like cacheStep's (depth o
   assert.ok(warmed.has(false), `the warm built the bake's no-depth pipeline (warm saw depth ${[...warmed]})`);
 });
 
+
+test("W8: the production draw warm awaits the queued canvas compiles before it settles and opens the live present", () => {
+  // drawWarm only QUEUES the SGSR/FXAA canvas compiles (serialised); _gpuSettled waits on submitted GPU work, not on them.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("_warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);");
+  assert.ok(i > 0, "the entry draw warm call is where the test expects it");
+  const after = src.slice(i, src.indexOf("_gpuSettled(5000)", i));
+  assert.match(after, /await post\.warmSettled\(\)/, "warmSettled is awaited between drawWarmStage and _gpuSettled");
+});

@@ -201,7 +201,15 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #ga-transport[data-editing] { right: calc(var(--dock-px) + 16px); }
 #ga-transport > button { min-height: 44px; min-width: 44px; margin: 0; }
 #ga-transport > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
-#ga-scrub { flex: 1 1 140px; min-width: 120px; min-height: 44px; margin: 0; }
+/* The scrub carries the PHASE MARKS (setup-camera.js previewPhases): a tick under
+   the track at each beat, inset by half a UA thumb (~16px in Chromium, wider on
+   iOS) so a tick sits near the thumb's centre at that time. */
+#ga-scrubber { position: relative; display: flex; flex: 1 1 140px; min-width: 120px; }
+#ga-scrub { flex: 1 1 auto; min-width: 0; min-height: 44px; margin: 0; }
+#ga-marks { position: absolute; left: 8px; right: 8px; top: calc(50% + 7px); height: 8px; pointer-events: none; }
+#ga-marks > i { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: currentColor; opacity: 0.6; }
+#ga-phase { min-height: 44px; max-width: 12em; margin: 0; }
+#ga-phase[hidden] { display: none; }
 #ga-time { flex: 0 1 auto; min-width: 0; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* STOP keeps its primary paint but sits in the row at the row's height: the
    .bigbtn block width, margins and type would push it to a row of its own. */
@@ -1497,6 +1505,11 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 /* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
+/* STYLE quick-picks (js/garage/arrival.js buildRows): three 44px buttons over the rows; the active look is pressed. */
+#ga-styles { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin: 0 0 var(--gap); }
+#ga-styles > .tune-label { flex: 0 0 100%; }
+#ga-styles > button { flex: 1 1 auto; min-height: 44px; min-width: max-content; margin: 0; }   /* wraps a row rather than clip DOCUMENTARY */
+#ga-styles > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
 }
 
@@ -1516,6 +1529,7 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 .editor-workspace .ew-note { margin: 0; color: var(--dim); font-size: var(--fs-micro); flex: 0 0 auto; }
 .editor-workspace .ew-tools { display: contents; }
+.editor-workspace [data-editor-sequences] { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; gap: calc(var(--gap) * .5); flex: 0 0 auto; }   /* one row: the angle map below keeps its height on a short phone */
 .editor-workspace .ew-tools > summary { display: none; cursor: pointer; align-content: center; }
 :is(#lighting-inner, #camtune-inner, #flyby-inner).editor-workspace[data-editor-view] :is(#lt-rail, #ct-rail, #fb-rail) {
   display: flex; flex-direction: column; max-height: none; overflow: visible;

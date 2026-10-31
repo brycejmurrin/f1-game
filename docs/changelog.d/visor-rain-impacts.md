@@ -1,0 +1,1 @@
+Improved: Rain strikes the helmet visor as spreading droplets that briefly cling to the shield before airflow carries them away. Larger beads and small splash beads make the surface visible without an opaque rain film; reduced motion retains stationary, fading water.

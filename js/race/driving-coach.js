@@ -576,6 +576,7 @@ const DrivingCoach = (function () {
       return true;
     }
     function reset() {
+      for (const mode of pathwayModes) { const check = $("pm-pathway-check-" + mode); if (check) check.checked = false; }
       if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session reset before attempt completed");
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
       rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
@@ -604,7 +605,15 @@ const DrivingCoach = (function () {
     }
     function toggle() { enabled = !enabled; pendingReport = null; clearCandidate(); G.store.set("drivingCoach", enabled); paint(); return enabled; }
     const $ = G.$;
+    const pathwayModes = ["braking", "trail", "lap"];
+    function paintProgress() {
+      for (const mode of pathwayModes) {
+        const choice = $("pm-pathway-" + mode);
+        if (choice) { choice.disabled = !canPractice(); choice.onclick = () => { if (canPractice()) setPracticeGoal(mode); }; }
+      }
+    }
     function paint() {
+      paintProgress();
       SettingRow.paint($("pm-coach"), enabled ? "on" : "off");
       const coaching = feedback(), coachStatus = $("pm-coach-status"), coachTip = $("pm-coach-tip"), coachSummary = $("pm-coach-summary");
       if (coachStatus) coachStatus.textContent = { off: "Coach off. Turn it on for driving tips.", ready: "Ready for your next drive.",
@@ -682,6 +691,12 @@ const DrivingCoach = (function () {
       if (strategy) strategy.textContent = !G.tyres.on() ? "Enable tyre wear for stint forecasts." : !f || f.remainingLaps == null ? "Drive at least half a lap on this set for a tyre-life estimate."
         : "Tyre life ≈ " + f.remainingLaps.toFixed(1) + " laps · " + (f.reachesFinish ? "projected to reach the finish" : "another stop may be needed")
           + (f.paybackLaps == null ? "" : " · estimated stop payback " + f.paybackLaps.toFixed(1) + " laps") + " · " + f.confidence + " confidence";
+      const energyCard = $("pm-last-lap-energy-text");
+      if (energyCard) {
+        const receipt = f && f.lastLapEnergy, net = value => Math.abs(value * 100).toFixed(1) + " percentage points " + (value >= 0 ? "used" : "recovered");
+        energyCard.textContent = receipt ? "Lap " + receipt.lap + ": " + net(receipt.netUsed) + ". " + receipt.sectors.map((value, i) => "Sector " + (i + 1) + ": " + net(value)).join(" · ") + ". Measured net battery change, including recovery; this does not identify why energy changed."
+          : "Complete one full clean lap in stable conditions for a measured sector-by-sector review. Partial laps, pits, incidents, cautions and changed conditions are excluded.";
+      }
       const energy = $("pm-energy-forecast");
       if (energy) energy.textContent = !f || f.energyPerLap == null ? "Complete clean sectors to learn your energy use."
         : "Net energy per lap: " + (f.energyPerLap * 100).toFixed(1) + "%" + (f.energyLaps == null ? " · current pattern sustains charge" : " · charge lasts ≈ " + f.energyLaps.toFixed(1) + " laps") + " · estimated from recent sectors";

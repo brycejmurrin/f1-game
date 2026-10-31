@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { profileOptionProblem } from "../perf/lib.mjs";
 import { sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import {
@@ -428,6 +429,8 @@ export function createExtras(ctx) {
       case "profile": {
         const mode = String(a.mode || "spans");
         if (!["spans", "cpu", "hitch", "trace"].includes(mode)) throw Object.assign(new Error("mode"), { refuse: refuse("bad_args", "mode must be spans|cpu|hitch|trace", 'e.g. {"kind":"profile","mode":"spans"}.') });
+        const problem = profileOptionProblem(mode, ["frames", "repeat", "base"].filter(name => Object.hasOwn(a, name)));
+        if (problem) throw Object.assign(new Error("profile options"), { refuse: refuse("bad_args", problem, "Omit controls unsupported by the selected profile mode.") });
         const argv = nodeArgv("perf/profile.mjs", needTrack(a.track || "vegas"), "--mode", mode);
         if (a.frames != null) argv.push("--frames", String(Math.max(10, Math.min(600, Math.trunc(Number(a.frames)) || 40))));
         if (a.repeat != null) argv.push("--repeat", String(Math.max(1, Math.min(7, Math.trunc(Number(a.repeat)) || 1))));

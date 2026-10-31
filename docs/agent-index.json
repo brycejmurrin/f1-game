@@ -514,8 +514,12 @@
       "kind": "node",
       "files": [
         "tests/unit/agent-experiment.test.mjs",
+        "tests/unit/agent-inbox.test.mjs",
+        "tests/unit/agent-message-contract.test.mjs",
         "tests/unit/agent-output-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
+        "tests/unit/inbox-main-mcp.test.mjs",
+        "tests/unit/inbox-mcp.test.mjs",
         "tests/unit/output-level-mcp.test.mjs",
         "tests/unit/output-surface.test.mjs"
       ],
@@ -3443,6 +3447,21 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/exterior-geometry.js",
+      "global": "GarageExteriorGeometry",
+      "roster": "LAZY_GARAGE_EXTERIOR"
+    },
+    {
+      "path": "js/garage/exterior.js",
+      "global": "GarageExterior",
+      "roster": "LAZY_GARAGE_EXTERIOR"
+    },
+    {
+      "path": "js/garage/garage-data.js",
+      "global": "GarageData",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/garage/livery-design-editor.js",
       "global": "GarageLiveryDesignEditor",
       "roster": "tag"
@@ -4600,6 +4619,11 @@
     {
       "path": "js/track/scenery/pits.js",
       "global": "SceneryPits",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/region.js",
+      "global": "TrackSceneryRegion",
       "roster": "LAZY_TRACK_BUILD"
     },
     {

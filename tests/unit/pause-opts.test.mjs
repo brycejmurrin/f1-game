@@ -24,7 +24,7 @@ const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf
 const MANIFEST = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 
-function button(id, text) {
+function button(id, text, listenerSink) {
   const attrs = new Map();
   const cls = new Set();
   return {
@@ -36,6 +36,18 @@ function button(id, text) {
     setAttribute: (k, v) => attrs.set(k, String(v)),
     removeAttribute: (k) => attrs.delete(k),
     closest(sel) { return sel.split(",").map((s) => s.trim()).includes("#" + id) ? this : null; },
+    click() {
+      let stopped = false;
+      const ts = performance.now();
+      const ev = {
+        type: "click", target: this, isTrusted: false, detail: 1, timeStamp: ts,
+        stopImmediatePropagation() { stopped = true; },
+        stopPropagation() { stopped = true; },
+        preventDefault() {},
+      };
+      for (const l of listenerSink) if (l.type === "click" && l.capture) l.fn(ev);
+      if (!stopped && !this.disabled) listenerSink._handled?.push(this.id);
+    },
   };
 }
 
@@ -47,10 +59,11 @@ function load({ stored = {}, readyState = "complete", looks = null, secondary = 
   const painted = [];
   const observers = [];
   const html = { dataset: {} };
-  const quit = button("pm-quit", "QUIT TO MENU");
-  const restart = button("pm-restart", "RESTART RACE");
-  const resume = button("pm-resume", "RESUME");
   const listeners = [];
+  listeners._handled = null;
+  const quit = button("pm-quit", "QUIT TO MENU", listeners);
+  const restart = button("pm-restart", "RESTART RACE", listeners);
+  const resume = button("pm-resume", "RESUME", listeners);
   const pausemenu = {
     id: "pausemenu", hidden: false,
     addEventListener: (type, fn, capture) => listeners.push({ type, fn, capture }),
@@ -119,10 +132,11 @@ function load({ stored = {}, readyState = "complete", looks = null, secondary = 
   // A click as the browser dispatches it: capture listeners on #pausemenu
   // first; unless one stopped it, the button's own handler (js/game.js) runs.
   const handled = [];
+  listeners._handled = handled;
   function press(btn, extra = {}) {
     let stopped = false, prevented = false;
     const ev = {
-      type: "click", target: btn, ...extra,
+      type: "click", target: btn, timeStamp: now, ...extra,
       stopImmediatePropagation() { stopped = true; },
       stopPropagation() { stopped = true; },
       preventDefault() { prevented = true; },
@@ -131,11 +145,17 @@ function load({ stored = {}, readyState = "complete", looks = null, secondary = 
     if (!stopped && !btn.disabled) handled.push(btn.id);
     return { stopped, prevented };
   }
+  function pointerUp(btn, extra = {}) {
+    const ev = {
+      type: "pointerup", target: btn, pointerType: "touch", button: 0, isTrusted: true, ...extra,
+    };
+    for (const l of listeners) if (l.type === "pointerup" && l.capture) l.fn(ev);
+  }
   return {
     M: vm.runInContext("PauseOpts", ctx),
     html, written, wired, painted, observers, timers, listeners, document, pausemenu, summary,
     pauseBody, bodyKids, built,
-    quit, restart, resume, press, handled,
+    quit, restart, resume, press, pointerUp, handled,
     advance: (ms) => { now += ms; },
     runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
   };
@@ -247,6 +267,7 @@ test("wiring waits for DOMContentLoaded while deferred scripts still run", () =>
   document._handlers.DOMContentLoaded();
   assert.equal(wired.size, 4);
   assert.equal(listeners.filter((l) => l.type === "click" && l.capture === true).length, 1, "ONE capture-phase listener on #pausemenu");
+  assert.equal(listeners.filter((l) => l.type === "pointerup" && l.capture === true).length, 1, "ONE capture-phase pointerup on #pausemenu");
 });
 
 test("CONFIRM QUIT: the first press arms, the second runs the game's handler", () => {
@@ -281,16 +302,18 @@ test("RESTART arms the same way; arming one button disarms the other", () => {
   assert.equal(restart.textContent, "RESTART RACE");
 });
 
-test("the arm has no timer and no age cap: TAP AGAIN stays until confirm", () => {
-  const { press, handled, quit, timers, advance, M } = load();
+test("the arm expires on ARM_MAX_MS wall-clock idle (setTimeout, not rAF)", () => {
+  const { press, handled, quit, timers, advance, runTimers, M } = load();
+  assert.equal(M.ARM_MAX_MS, 5000);
   press(quit);
-  assert.equal(timers.size, 0, "nothing reverts the label");
-  assert.equal(M.ARM_MIN_MS, 350);
-  advance(15_500);
   assert.equal(quit.textContent, "TAP AGAIN");
-  assert.ok(M.isArmed("pm-quit"));
-  assert.ok(!press(quit).stopped);
-  assert.deepEqual(handled, ["pm-quit"]);
+  assert.equal(timers.size, 1, "one wall-clock expiry timer");
+  advance(4999);
+  assert.equal(quit.textContent, "TAP AGAIN");
+  runTimers();
+  assert.equal(quit.textContent, "QUIT TO MENU");
+  assert.ok(!quit.classList.contains("armed"));
+  assert.deepEqual(handled, []);
 });
 
 test("hiding the pause card disarms; resume and Escape drop the arm and pass through", () => {
@@ -333,7 +356,7 @@ test("a disabled RESTART (multiplayer) is never armed; CONFIRM OFF passes straig
 });
 
 // UI hunt 2026-10-29 #1: a 175 ms thumb double tap sent both presses to #pm-quit.
-test("a real press younger than ARM_MIN_MS is the same double tap: swallowed, still armed", () => {
+test("a real press younger than ARM_MIN_MS on the wall clock is the same double tap: swallowed, still armed", () => {
   const { press, handled, quit, advance, M } = load();
   const tap = { isTrusted: true, detail: 1 };
   assert.equal(M.ARM_MIN_MS, 350);
@@ -343,8 +366,7 @@ test("a real press younger than ARM_MIN_MS is the same double tap: swallowed, st
   assert.equal(M.armAge(), 175);
   assert.ok(press(quit, tap).stopped, "the double tap's second click never reaches the game's handler");
   assert.deepEqual(handled, []);
-  assert.ok(M.isArmed("pm-quit"), "the arm stays up, its clock unchanged");
-  assert.equal(M.armAge(), 175);
+  assert.ok(M.isArmed("pm-quit"), "the arm stays up");
   advance(200);
   assert.ok(!press(quit, tap).stopped, "a deliberate second tap commits");
   assert.deepEqual(handled, ["pm-quit"]);
@@ -357,69 +379,122 @@ test("a real press younger than ARM_MIN_MS is the same double tap: swallowed, st
   }
 });
 
-test("late-handled taps: event timeStamp confirms after input lag; a sub-350 ms ghost does not", () => {
+test("late-handled taps: wall clock confirms after input lag; event timeStamp ghost does not block", () => {
   const tap = { isTrusted: true, detail: 1 };
   const TS0 = 50_000;
-  // (1) tap 2 handled late (wall) but timeStamp 1 s after tap 1 confirms
+  // (1) tap 2 handled late (wall) with a young event timeStamp still confirms
   {
     const { press, handled, quit, advance } = load();
     press(quit, { ...tap, timeStamp: TS0 });
     advance(2000);
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 1000 }).stopped);
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 10 }).stopped);
     assert.deepEqual(handled, ["pm-quit"]);
   }
-  // (2) six seconds of wall time later the label is still TAP AGAIN and confirms
+  // (2) six seconds of wall time expires the arm before confirm
   {
-    const { press, handled, quit, advance } = load();
+    const { press, handled, quit, advance, timers } = load();
     press(quit, { ...tap, timeStamp: TS0 });
     advance(6000);
+    for (const t of [...timers.values()]) t.fn(); timers.clear();
+    assert.equal(quit.textContent, "QUIT TO MENU");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 6000 }).stopped, "re-arms after expiry");
     assert.equal(quit.textContent, "TAP AGAIN");
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 1000 }).stopped);
-    assert.deepEqual(handled, ["pm-quit"]);
+    assert.deepEqual(handled, []);
   }
-  // (3) two taps 150 ms apart in event time stay a ghost double tap
+  // (3) two taps 150 ms apart on the wall stay a ghost double tap
   {
-    const { press, handled, quit, M } = load();
+    const { press, handled, quit, advance, M } = load();
     press(quit, { ...tap, timeStamp: TS0 });
+    advance(150);
     assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped);
     assert.deepEqual(handled, []);
     assert.ok(M.isArmed("pm-quit"));
-    assert.equal(quit.textContent, "TAP AGAIN");
   }
-  // (4) a stamp long after the arm still confirms; there is no age cap
+  // (4) wall age past ARM_MIN_MS confirms even when event timeStamps look like a ghost
   {
-    const { press, handled, quit } = load();
+    const { press, handled, quit, advance } = load();
     press(quit, { ...tap, timeStamp: TS0 });
-    assert.equal(quit.textContent, "TAP AGAIN");
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 20_000 }).stopped);
+    advance(400);
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 5 }).stopped);
     assert.deepEqual(handled, ["pm-quit"]);
+    assert.equal(quit.textContent, "QUIT TO MENU");
   }
 });
 
-test("b0b89dc: a 15.5 s stall keeps TAP AGAIN and the late second tap confirms once", () => {
-  // Live sequence on b0b89dc: the first tap arms, the main thread then stalls,
-  // and Chrome stamps the second click's timeStamp when the handler finally
-  // runs. That tap is the confirm. A ghost in the same series is not, and
-  // closing the card clears the arm so the next open starts over.
+test("QF: both taps handled in ONE late batch (stalled main thread): 400 ms real gap confirms", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  h.advance(3);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"], "a deliberate 400 ms second tap quits even when handled late");
+});
+
+test("QF: tap 2 handled after a >5 s stall but only 400 ms after tap 1 confirms (no silent re-arm)", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  h.advance(6000);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("QF: a real thumb double tap (150 ms event gap) handled late is still swallowed", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  h.advance(2);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 150 });
+  assert.ok(h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 150 }).stopped);
+  assert.deepEqual(h.handled, []);
+  assert.ok(h.M.isArmed("pm-quit"));
+});
+
+test("pointerup confirms an armed guarded button once wall age passes ARM_MIN_MS", () => {
+  const h = load();
+  h.press(h.quit);
+  h.advance(400);
+  h.pointerUp(h.quit);
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("one tap only arms; pointerup plus native click never double-quits or re-arms", () => {
+  const h = load();
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  assert.deepEqual(h.handled, []);
+  h.advance(400);
+  h.pointerUp(h.quit, { isTrusted: true });
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.deepEqual(h.handled, ["pm-quit"], "exactly one quit handler from pointerup + native click");
+  assert.equal(h.quit.textContent, "QUIT TO MENU");
+  assert.ok(!h.M.isArmed("pm-quit"));
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.equal(h.quit.textContent, "TAP AGAIN", "next deliberate tap re-arms only");
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("b0b89dc: a 15.5 s stall keeps TAP AGAIN until ARM_MAX_MS then disarms; late confirm still works", () => {
   const tap = { isTrusted: true, detail: 1 };
   const TS0 = 50_000;
   {
     const { press, handled, quit, advance, timers, M } = load();
     press(quit, { ...tap, timeStamp: TS0 });
     assert.equal(quit.textContent, "TAP AGAIN");
-    assert.equal(timers.size, 0);
+    assert.equal(timers.size, 1);
     advance(15_500);
-    assert.equal(quit.textContent, "TAP AGAIN", "the label stays through the stall");
-    assert.ok(M.isArmed("pm-quit"));
-    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped, "a ghost under 350 ms does not confirm");
-    assert.equal(quit.textContent, "TAP AGAIN");
-    assert.equal(M.armAge(TS0 + 150), 150, "the ghost does not move the arm clock");
+    for (const t of [...timers.values()]) t.fn(); timers.clear();
+    assert.equal(quit.textContent, "QUIT TO MENU", "wall expiry clears a stuck arm");
+    assert.ok(!M.isArmed("pm-quit"));
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 15_500 }).stopped, "next tap re-arms");
     assert.deepEqual(handled, []);
-    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 15_500 }).stopped);
-    assert.deepEqual(handled, ["pm-quit"], "the late tap confirms exactly once");
-    assert.equal(quit.textContent, "QUIT TO MENU");
-    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 16_000 }).stopped, "the next tap is a new arm, not a second confirm");
-    assert.deepEqual(handled, ["pm-quit"]);
   }
   {
     const { press, handled, quit, pausemenu, observers } = load();

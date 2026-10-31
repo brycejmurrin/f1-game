@@ -1,0 +1,1 @@
+Improved: Garage animation editing puts the angle controls first and moves long instructions into expandable help. Appearance exposes Menu Customization and the existing main-menu editor. Garage wheel layers use a common first-visit renderer, preserving fixed calipers and cached geometry.

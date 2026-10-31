@@ -6,6 +6,7 @@ import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { saveSharedCard } from "../helpers/share-card.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -44,6 +45,70 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
   test.afterEach(async ({ pageErrors, consoleLines }) => {
     expect(pageErrors).toEqual([]);
     expect(consoleLines.filter(line => line.startsWith("error:"))).toEqual([]);
+  });
+
+  test("personal Daily history, practice pathway and energy review are reachable by touch", async ({ page }, testInfo) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    await page.evaluate(({ today, yesterday }) => localStorage.setItem("apex26.daily.v1", JSON.stringify({
+      days: { [today]: { best: 70, classes: { standard: { best: 71.2 }, open: { best: 70 } } }, [yesterday]: { best: 72 } },
+      streak: { count: 2, last: today },
+    })), { today, yesterday });
+    await page.reload();
+    await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    expect(await page.evaluate('AppearanceOpts.setHelp("off")')).toBe("off");
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    const homeGeometry = await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    }));
+    expect(homeGeometry.scrollHeight, "Home still fits before opening personal history").toBeLessThanOrEqual(homeGeometry.height + 1);
+    await expect(page.locator("#menu-buttons #daily-history")).toHaveCount(0);
+    await page.locator("#mb-saves").tap();
+    await expect(page.locator("#pm-panel-files")).toBeVisible();
+    await expect(page.locator("#daily-history")).toBeVisible();
+    await page.locator("#daily-history > summary").tap();
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    await expect(page.locator("#daily-history-list")).toBeVisible();
+    await expect(page.locator("#daily-history")).toContainText(today);
+    await expect(page.locator("#daily-history")).toContainText(yesterday);
+    await expect(page.locator("#daily-history")).toContainText("71.200s");
+    await expect(page.locator("#daily-history")).toContainText("legacy / mixed classes");
+    const dailyFit = await page.locator("#daily-history").evaluate(el => ({
+      clipped: el.scrollWidth > el.clientWidth + 1,
+      tapHeight: el.querySelector("summary").getBoundingClientRect().height,
+    }));
+    expect(dailyFit.clipped).toBe(false);
+    expect(dailyFit.tapHeight).toBeGreaterThanOrEqual(44);
+    await testInfo.attach("daily-history-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#daily-history > summary").tap();
+    await page.locator("#pm-settings-close").tap();
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    expect(await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    })), "Saves and Data must return the same Home geometry").toEqual(homeGeometry);
+
+    await page.locator("#mb-practice").tap();
+    await page.locator("#sel-go").tap();
+    await page.locator("#rs-go").tap();
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("#loading")).toBeHidden();
+    await page.locator("#pausebtn").tap();
+    await page.locator("#pm-practice").tap();
+    await page.locator("#pm-practice-pathway > summary").tap();
+    await expect(page.locator("#pm-practice-pathway")).toContainText("not verified drill completion");
+    await page.locator("#pm-practice-pathway").getByRole("button", { name: "CHOOSE 2. Brake release into a turn", exact: true }).tap();
+    await expect(page.locator("#pm-drill-sel")).toHaveValue("trail");
+    await page.locator("#pm-practice-pathway").getByRole("checkbox").first().check();
+    await expect(page.locator("#pm-practice-pathway").getByRole("checkbox").first()).toBeChecked();
+    await testInfo.attach("practice-pathway-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-review").tap();
+    await page.locator("#pm-last-lap-energy > summary").tap();
+    await expect(page.locator("#pm-last-lap-energy")).toContainText("Complete one full clean lap");
+    await testInfo.attach("energy-review-phone", { body: await page.screenshot(), contentType: "image/png" });
   });
 
   test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
@@ -587,7 +652,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
       await document.fonts.ready;
     }, device.safe);
     const press = async selector => device.touch ? page.locator(selector).tap() : page.locator(selector).click();
-    const rows = [];
+    const rows = [], helpSettlements = [];
 
     try {
       for (const pct of [40,80,100,130,150,200]) {
@@ -692,19 +757,15 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
-        // The sheet reopens with the shape/density it had at the PREVIOUS UI
-        // SIZE; SheetShape reclassifies it a frame or two later (fit cap, then
-        // density). An anchor jump taken before that lands in the old layout,
-        // and the reflow then carries #htp-driving out of the pane (desktop
-        // 200%, run 38985530584: wide rail -> compact strip, ratio 0). Jump
-        // only once a classify pass changes nothing.
-        await page.waitForFunction(() => {
-          const el = document.getElementById('howtoplay-inner');
-          if (!el || !el.dataset.shape || !el.dataset.density) return false;
-          const before = el.dataset.shape + '|' + el.dataset.density;
-          window.SheetShape.reclassify();
-          return before === el.dataset.shape + '|' + el.dataset.density;
-        }, null, {polling:100, timeout:10000});
+        // At 200%, the side rail can become a chip strip after reopening.
+        // Observed pane width changed 900 -> 1252 and scroll extent 12872 ->
+        // 8506 (report44573). One unchanged shape/density pass did not establish
+        // a quiet reading pane. Observe actual geometry before the real click;
+        // the bounded observer does not force classification or move the target.
+        const settlement = await page.evaluate(settleLayout, { root: '#howtoplay .pane' });
+        helpSettlements.push({ pct, settlement });
+        expect(settlement.stable, `Help reading pane at ${pct}%`).toBe(true);
+        expect(settlement.truncated, `Help reading pane sample at ${pct}%`).toBe(false);
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
@@ -719,6 +780,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#htp-close'); await expect(page.locator('#overlay')).toBeVisible();
       }
     } finally {
+      await info.attach('help-pane-settlements.json',{body:JSON.stringify(helpSettlements,null,2),contentType:'application/json'});
       await info.attach('zoom-measurements.json',{body:JSON.stringify(rows,null,2),contentType:'application/json'});
     }
     expect(errors).toEqual([]);

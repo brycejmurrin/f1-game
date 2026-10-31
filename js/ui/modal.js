@@ -143,7 +143,7 @@ window.TopModal = (function () {
   }
 
   function onEscape(e) {
-    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (e.isComposing || e.keyCode === 229 || e.key !== "Escape" || e.defaultPrevented) return;
     // A HELD Escape is one press. Its auto-repeat reached the door of the layer
     // the first press opened: in a race that paused, then pressed RESUME; from a
     // Settings sub-page it walked BACK → close → RESUME. input.js already
@@ -398,7 +398,7 @@ window.TopModal = (function () {
   // back: UI hunt 2026-10-29 #9). Wrap at the boundary before that happens.
   function tabWrap(el) {
     el.addEventListener("keydown", (e) => {
-      if (e.key !== "Tab" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.isComposing || e.keyCode === 229 || e.key !== "Tab" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       if (!window.UiLayers || window.UiLayers.top() !== el || topModalInside(el)) return;
       const stops = Array.from(el.querySelectorAll(focusableSel())).filter((n) => usable(n) && n.tabIndex >= 0);
       const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];

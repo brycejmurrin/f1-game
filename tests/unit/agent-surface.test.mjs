@@ -247,7 +247,7 @@ test("MCP descriptions state tree vs browser", () => {
 const AGENT_KEYS = new Set([
   // Claude Code sub-agents
   "name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns",
-  "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "isolation", "color",
+  "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "background", "isolation", "color",
   "initialPrompt",
   // Cursor subagents
   "readonly", "is_background",
@@ -255,7 +255,7 @@ const AGENT_KEYS = new Set([
 const SKILL_KEYS = new Set([
   // Claude Code skills
   "name", "description", "allowed-tools", "model", "context", "agent", "hooks", "paths",
-  "user-invocable", "disable-model-invocation", "when_to_use", "argument-hint",
+  "user-invocable", "disable-model-invocation", "when_to_use", "argument-hint", "effort", "background",
   // Agent Skills spec (agentskills.io)
   "license", "compatibility", "metadata",
 ]);
@@ -293,11 +293,17 @@ const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
 // Browser workflows run in the parent. survey-track stopped forking on 2026-10-14
 // when it absorbed the multi-circuit campaign (track-realism), which the parent
 // must run: the parent spawns one track-surveyor subagent per circuit instead.
-const FORKED_SKILLS = [];
+// challenge (2026-10-30) forks on purpose: it is a read-only one-pass reviewer with no browser and no conversation
+// history (the PR is its only input), the opposite of survey-track's parent-run campaign.
+const FORKED_SKILLS = ["challenge"];
+// A cost-bearing user-level skill that Claude may fire on its own is the trigger layer's main risk
+// (docs/notes/ORCHESTRATION-ROLES-2026-10-30.md): exactly these set disable-model-invocation: true.
+const USER_ONLY_SKILLS = ["challenge", "orchestrate"];
 test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
   const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
     .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));
   const forked = [];
+  const userOnly = [];
   for (const d of fs.readdirSync(SKILLS).filter((n) => fs.existsSync(path.join(SKILLS, n, "SKILL.md")))) {
     const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(path.join(SKILLS, d, "SKILL.md"), "utf8"))[1];
     const agent = /^agent:\s*(\S+)\s*$/m.exec(fm)?.[1];
@@ -305,8 +311,9 @@ test("every skill with agent: names an existing subagent or a builtin, and forks
     if (agent) assert.ok(agents.has(agent) || BUILTIN_AGENTS.has(agent), `${d}: agent: ${agent} is neither .claude/agents/${agent}.md nor a builtin`);
     if (agent) assert.ok(fork, `${d}: agent: without context: fork is ignored`);
     if (fork) forked.push(d);
+    if (/^disable-model-invocation:\s*true\s*$/m.test(fm)) userOnly.push(d);
   }
-  assert.deepEqual(forked.sort(), [...FORKED_SKILLS].sort(), "the forked set changed — update the list and its reason here");
+  assert.deepEqual([forked.sort(), userOnly.sort()], [[...FORKED_SKILLS].sort(), [...USER_ONLY_SKILLS].sort()], "the forked or user-only set changed — update the lists and their reasons here");
 });
 
 test("no skill declares paths: — it replaces description triggering instead of adding to it", () => {
@@ -355,3 +362,4 @@ test("every saved workflow parses and names only existing agentTypes", () => {
     for (const t of want) assert.ok((named[f] || []).includes(t), `${f}: no longer routes through ${t}`);
   }
 });
+

@@ -219,6 +219,9 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_bump_cache_check",
     "apex_car_audit",
     "apex_catalog",
+    "apex_claude_agents",
+    "apex_codex_agents",
+    "apex_codex_control",
     "apex_cursor_agents",
     "apex_debug_chrome",
     "apex_diagnostics",
@@ -232,6 +235,10 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
+    "apex_inbox_get",
+    "apex_inbox_list",
+    "apex_inbox_status",
+    "apex_inbox_sync",
     "apex_job_cancel",
     "apex_job_start",
     "apex_job_status",
@@ -1011,10 +1018,10 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
   assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_car_audit", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
     "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs",
     "apex_status", "apex_track_audit", "apex_viewer"], "exactly the tools with a measured result shape");
-  assert.deepEqual(destructive, ["apex_cursor_agents", "apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_cursor_agents"]);
-  for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  assert.deepEqual(destructive, ["apex_codex_control", "apex_cursor_agents", "apex_job_cancel"]);
+  assert.deepEqual(openWorld.sort(), ["apex_claude_agents", "apex_codex_agents", "apex_codex_control", "apex_cursor_agents", "apex_inbox_sync"]);
+  for (const n of ["apex_codex_agents", "apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_codex_control", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
@@ -1698,8 +1705,15 @@ test("apex-eval: the shapeOf helper it injects into the page parses (named fn ex
 // ("arguments must match one of the advertised types", "tool needs file"); the survey dropped `cams` and still said ok.
 // These keep every tool answerable to a minimal valid call, and every refusal self-explaining.
 const MIN_ARGS = {
+  // Inbox has real GitHub/cache semantics even under global mock mode.
+  // Validate its advertised arguments without fetching or creating a cache.
+  apex_inbox_sync: { issue: 4387, dryRun: true },
+  apex_inbox_list: { issue: 4387, dryRun: true },
+  apex_inbox_get: { issue: 4387, id: 1, dryRun: true },
+  apex_inbox_status: { issue: 4387, dryRun: true },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
   apex_cursor_agents: { verb: "digest" },
+  apex_claude_agents: { verb: "capabilities" },
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD~1", id: "monza" },
   apex_frame_report: { track: "monza" },
@@ -2728,6 +2742,27 @@ const cursorBad = (args) => {
   return cursorBody(r);
 };
 
+test("apex_claude_agents discovery, mock followup and refusals use the existing MCP server", () => {
+  const tool = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools.find((t) => t.name === "apex_claude_agents");
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ["verb", "id", "options", "dryRun"]);
+  assert.ok(Buffer.byteLength(JSON.stringify(tool)) < 800);
+  const id = "cse_contract123";
+  const result = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_claude_agents", arguments: { verb: "followup", id, options: { text: "never send during mock" } } } }])[0].result;
+  assert.equal(result.structuredContent.delivery, "not_attempted");
+  assert.equal(result.structuredContent.replyRetrieved, false);
+  assert.deepEqual(result.structuredContent, JSON.parse(result.content[0].text));
+  assert.ok(!JSON.stringify(result).includes("never send during mock"));
+  const refused = JSON.parse(callCli("apex_claude_agents", { verb: "launch" }).stdout);
+  assert.equal(refused.error, "unsupported_verb");
+  const share = JSON.parse(callCli("apex_claude_agents", { verb: "followup", id: "cshk_share", options: { text: "status" } }).stdout);
+  assert.equal(share.error, "bad_args");
+  const snapshot = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { refresh: true, maxChars: 500 }, dryRun: true }).stdout);
+  assert.equal(snapshot.dryRun, true);
+  assert.equal(snapshot.verb, "transcript");
+  const unpinned = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { offset: 500 } }).stdout);
+  assert.equal(unpinned.error, "bad_args");
+});
+
 test("apex_cursor_agents publishes four properties and stays inside the tools/list byte budget", () => {
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result;
   const t = listed.tools.find((x) => x.name === "apex_cursor_agents");
@@ -2739,7 +2774,7 @@ test("apex_cursor_agents publishes four properties and stays inside the tools/li
   assert.equal(t.inputSchema.properties.verb.enum, undefined);
   // The listing is paid on every session start: every byte this tool adds has to fit under the same cap as the rest,
   // so the per-verb options live in the description apex_help returns, not in the published schema.
-  // 800 -> 900 (2026-10-30): descriptions keep 400 chars, not 60, since a deferred client pays them per loaded tool.
+  // 800 -> 900 (2026-10-30): descriptions keep up to 360 chars, not 60, since a deferred client pays them per loaded tool.
   assert.ok(Buffer.byteLength(JSON.stringify(t)) < 900, `the entry is ${Buffer.byteLength(JSON.stringify(t))} bytes`);
   const help = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_cursor_agents" } } }])[0].result.structuredContent;
   for (const needle of ["Verbs: list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed, launch, followup, cancel, archive, delete", "options.confirm", "launch: prompt|promptFile", "transcript: run, all", "createPr, onBranch and env files are CLI-only", "never instructions"]) assert.ok(help.description.includes(needle), needle);

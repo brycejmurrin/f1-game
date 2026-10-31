@@ -365,7 +365,8 @@ const NetPlay = (function () {
       c.onKerb = !!st.onKerb;
       c.braking = !!st.braking;
 
-      const w = G.worldFromTrack(c.s, c.x);
+      // One spline sample: the world position fills _smp, and the yaw below reads its tangent (it sampled c.s twice).
+      const w = G.worldFromTrack(c.s, c.x, _smp);
       c.px = w.x;
       c.pz = w.z;
 
@@ -407,7 +408,6 @@ const NetPlay = (function () {
       }
 
       if (G.track) {
-        Tracks.sample(G.track, c.s, _smp);
         let psi = Math.atan2(_smp.t[0], _smp.t[2]) - c.head;
         while (psi > Math.PI) psi -= Math.PI * 2;
         while (psi < -Math.PI) psi += Math.PI * 2;
@@ -1088,7 +1088,12 @@ const NetPlay = (function () {
     }
 
     const _pubOwn = { id: -1, car: null }, _pubOne = [_pubOwn];   // publish scratch: one entry per packet
-    const _relay = [];                                             // host relay scratch: {id, car, at}
+    const _relay = [], _relayPool = [], _forGuest = [];            // host relay scratch: pooled {id, car, at}
+    const _hostEnt = { id: -1, car: null, at: 0 };                 // the host's own car, folded into each aged packet
+    function relayPush(id, car, at) {
+      const e = _relayPool[_relay.length] || (_relayPool[_relay.length] = { id: -1, car: null, at: 0 });
+      e.id = id; e.car = car; e.at = at; _relay.push(e);
+    }
     const _poseMaps = [remotes, aiRemotes];
     // `poseAt` (optional): when the local car's pose is, on the same clock as
     // `now` — the game loop publishes last frame's physics, which is older
@@ -1252,10 +1257,6 @@ const NetPlay = (function () {
         // Bounded: a pose from the future, or one older than a stall's worth,
         // is a clock we cannot trust — stamp the frame instead.
         const at = Number.isFinite(poseAt) && poseAt <= now && now - poseAt <= POSE_AGE_MAX_MS ? poseAt : now;
-        const bytes = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne);
-        // Live map is safe here: sendState delivers nothing (Map iterators
-        // tolerate a removal, and only pump() can run onClose).
-        for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) { /* a dead session must not stop the others' publish */ } }
         // THE RELAY: ONE DATAGRAM PER GUEST, every other player's car in it.
         // It was one per car per guest — 3 own + 3 × 2 relays = 9 sends a tick
         // in a four-player room, ~75 % of each SCTP/DTLS/UDP datagram overhead.
@@ -1265,28 +1266,41 @@ const NetPlay = (function () {
         // human's fallback pose is speculative: relaying it as fresh owner
         // evidence could finish that human on another guest.
         const withAi = role === "host" && (++publishN % AI_EVERY) === 0;
+        _relay.length = 0;
         if (role === "host" && (sessions.size > 1 || withAi)) {
-          _relay.length = 0;
           if (sessions.size > 1) for (const r of remotes.values()) {
-            const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
-            if (r.stale || id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
+            const id = G.wireId(r.car), rat = r.interp.presentedAt ? r.interp.presentedAt() : now;
+            if (r.stale || id < 0 || !Number.isFinite(rat)) continue;   // nothing posed yet: nothing to relay
             if (r.heardAt != null && now - r.heardAt > RELAY_FRESH_MS) continue;   // silent: not a frozen pose with a fresh stamp
-            _relay.push({ id, car: r.car, at });
+            relayPush(id, r.car, rat);
           }
           if (withAi) for (const c of G.cars || []) {
             if (c === localCar) continue;
             const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
             if (id < 0 || r) continue;   // human owner poses are relayed above; never fallback motion
-            _relay.push({ id, car: c, at });
+            relayPush(id, c, at);
           }
+        }
+        // The host's own car rides INSIDE that aged packet at its own stamp (age 0: it is the newest), so a
+        // guest gets one datagram per publish, not the own snapshot plus the relay (perf hunt 9: 30 → 20/s
+        // per guest with the AI field, 40 → 20 in a four-player room). A session with nothing relayed to it
+        // gets the plain own-car snapshot, encoded once for all of them.
+        let bytes = null;
+        // Live map is safe here: sendState delivers nothing (Map iterators
+        // tolerate a removal, and only pump() can run onClose).
+        for (const [sid, s] of sessions) {
+          let pkt = null;
           if (_relay.length) {
-            for (const [sid, s] of sessions) {
-              const own = remoteFor(sid);
-              const forGuest = _relay.filter((e) => e.id !== own);   // never back to the car's own driver
-              if (!forGuest.length) continue;
-              try { s.sendState(NetSnapshot.encodeAged(forGuest)); } catch (e) { /* as above */ }
+            const own = remoteFor(sid);
+            _forGuest.length = 0;
+            for (let i = 0; i < _relay.length; i++) if (_relay[i].id !== own) _forGuest.push(_relay[i]);   // never back to the car's own driver
+            if (_forGuest.length && _pubOwn.id >= 0) {
+              _hostEnt.id = _pubOwn.id; _hostEnt.car = localCar; _hostEnt.at = at; _forGuest.push(_hostEnt);
+              pkt = NetSnapshot.encodeAged(_forGuest);
             }
           }
+          if (!pkt) pkt = bytes || (bytes = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne));
+          try { s.sendState(pkt); } catch (e) { /* a dead session must not stop the others' publish */ }
         }
       }
     }

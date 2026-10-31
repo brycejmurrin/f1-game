@@ -37,9 +37,9 @@ test("superseded schedule responses retire native countdown observers", async ({
     window.__scheduleObserverProbe = { active, made: 0, calls: 0 };
     window.MutationObserver = class extends NativeObserver {
       observe(target, options) {
-        // The countdown watches `hidden` document-wide (an ancestor can hide the hub); its child lists are
-        // watched inside #datahub only, on the same observer, so one instance is counted once.
-        if (target === document.documentElement && options.subtree &&
+        // The countdown watches `hidden` and child lists inside #datahub (subtree), plus `hidden` on each of the
+        // hub's ancestors (no subtree): the subtree watch on the hub is its one fingerprint, counted once per instance.
+        if (target && target.id === "datahub" && options.subtree &&
             options.attributeFilter && options.attributeFilter.includes("hidden")) {
           if (!active.has(this)) window.__scheduleObserverProbe.made++;
           active.add(this);
@@ -350,6 +350,76 @@ test("LIVE refreshes coalesce and AUTO schedules only after settlement", async (
   await page.evaluate(() => window.__life.interval());
   await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(2);
 });
+
+async function settleLiveBatch(page, index, name) {
+  await page.evaluate(({ index, name }) => {
+    const life = window.__life;
+    life.weatherCalls[index].resolve(null);
+    life.positionCalls[index].resolve([{ num: 44, pos: 1 }]);
+    life.intervalCalls[index].resolve(null);
+    life.driverCalls[index].resolve([{ num: 44, code: "NEW", name }]);
+  }, { index, name });
+}
+
+for (const sort of ["POS", "TEAM"]) {
+  test(`LIVE AUTO retains focused ${sort} after replacing classification controls`, async ({ page }) => {
+    await dataReady(page);
+    await installPickerApi(page, { deferLive: true, captureInterval: true });
+    await openLive(page);
+    await settleLiveBatch(page, 0, "Initial Driver");
+    await expect(page.locator(".dh-split-R")).toContainText("Initial Driver");
+    await page.getByRole("button", { name: "AUTO", exact: true }).click();
+    const control = page.getByRole("button", { name: sort, exact: true });
+    const team = page.getByRole("button", { name: "TEAM", exact: true });
+    await team.click();
+    if (sort === "POS") await team.press("Shift+Tab");
+    await expect(control).toBeFocused();
+    await page.evaluate(() => window.__life.interval());
+    await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(2);
+    await settleLiveBatch(page, 1, "Updated Driver");
+    await expect(page.locator(".dh-split-R")).toContainText("Updated Driver");
+    await expect(control).toBeFocused();
+    await expect(control).toHaveAttribute("aria-pressed", sort === "TEAM" ? "true" : "false");
+    await expect(team).toHaveAttribute("aria-pressed", "true");
+  });
+}
+
+for (const destination of ["AUTO", "REFRESH", "another tab", "closed hub"]) {
+  test(`LIVE settlement does not reclaim sort focus after moving to ${destination}`, async ({ page }) => {
+    await dataReady(page);
+    await installPickerApi(page, { deferLive: true, captureInterval: true });
+    await openLive(page);
+    await settleLiveBatch(page, 0, "Initial Driver");
+    await expect(page.locator(".dh-split-R")).toContainText("Initial Driver");
+    await page.getByRole("button", { name: "AUTO", exact: true }).click();
+    await page.getByRole("button", { name: "TEAM", exact: true }).click();
+    await page.evaluate(() => {
+      window.__life.liveBody = document.querySelector(".dh-split-R");
+      window.__life.interval();
+    });
+    await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(2);
+    let destinationControl = destination === "REFRESH"
+      ? page.getByRole("button", { name: /REFRESH/ })
+      : page.getByRole("button", { name: "AUTO", exact: true });
+    if (destination === "another tab") {
+      destinationControl = page.locator(".dh-tab").filter({ hasText: "SCHEDULE" });
+    } else if (destination === "closed hub") {
+      await page.locator("#dh-close-btn").click();
+      await expect(page.locator("#datahub")).toBeHidden();
+      await page.evaluate(() => {
+        const outside = document.createElement("button");
+        outside.textContent = "Outside hub";
+        document.body.appendChild(outside);
+      });
+      destinationControl = page.getByRole("button", { name: "Outside hub", exact: true });
+    }
+    await destinationControl.click();
+    await expect(destinationControl).toBeFocused();
+    await settleLiveBatch(page, 1, "Updated Driver");
+    await expect.poll(() => page.evaluate(() => window.__life.liveBody.textContent)).toContain("Updated Driver");
+    await expect(destinationControl).toBeFocused();
+  });
+}
 
 test("closing the hub clears the NEXT GP countdown interval", async ({ page }) => {
   await dataReady(page);

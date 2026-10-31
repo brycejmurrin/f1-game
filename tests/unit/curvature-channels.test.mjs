@@ -55,6 +55,7 @@ function readsCurvature(src) {
 // one is a red test until the author raises the number HERE and classifies the
 // new site in the docs/PHYSICS.md row. Counted on comment-stripped source.
 const SITES = {
+  "js/garage/exterior-geometry.js": 1,
   "js/agent/agentview.js": 2, "js/agent/apex.js": 9, "js/audio/driving-cues.js": 4,
   "js/camera/extra-rigs.js": 2, "js/camera/vantage.js": 3, "js/editor/validate.js": 1,
   "js/game.js": 10, "js/physics/aero-zones.js": 1, "js/physics/brake-cue.js": 1,

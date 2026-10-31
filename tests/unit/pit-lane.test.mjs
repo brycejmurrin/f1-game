@@ -1383,6 +1383,31 @@ test("a worn AI stop counts the current lap toward payback", () => {
     "a cliff set with ~1.5-lap payback must still box when 2 laps remain incl. current");
 });
 
+test("a caution pull counts the lap the car is on before calling the next set long enough", () => {
+  // lapsToFlag is lapsTarget - lap + 1. fits asked whether the NEXT set reaches
+  // the flag with lapsTarget - lap, so a free stop was allowed onto a set one
+  // lap short — the second stop the guard was written to prevent (Bahrain,
+  // 12 laps, SC on lap 2). A planned later stop is already a c.lap index
+  // (arms when the counter reaches it); only the flag fallback was short.
+  const { pits, car, G } = strategySession(12);
+  G.cautionLevel = () => 3;
+  const c = car(0);
+  c.human = false; c.local = false;
+  c.lap = 2; c.pitStops = 0; c.tyreWear = 0.5;
+  c.tyre = { code: "S", tread: 0, life: 0.48 };
+  // Hard is the set a stop NOW would fit. 9.5 × 1.1 = 10.45, which covers
+  // lapsTarget - lap (10) and not the 11 laps still owed, including this one.
+  c.pitPlan = { stops: 1, seq: ["soft", "hard"], stints: [6, 6], lapsAt: [6], pitLossLaps: 0.2 };
+  G.tyres.planLaps = (life) => (life >= 1 ? 9.5 : 40);
+  assert.equal(pits.think(c), "",
+    "9.5 laps must not be called enough for 11 laps to the flag");
+  assert.equal(!!c.pitArmed, false, "the refused pull must not arm");
+  // 10 × 1.1 = 11: the same car, a set that does reach, still takes the free stop.
+  G.tyres.planLaps = (life) => (life >= 1 ? 10 : 40);
+  assert.equal(pits.think(c), "caution",
+    "a set that covers the lap the car is on still takes the safety-car stop");
+});
+
 test("AUTO fits the plan's letter, and the HUD names the set the crew will fit", () => {
   const { pits, car } = strategySession(5);                // under the rule's minimum: no rule
   const c = car(0);

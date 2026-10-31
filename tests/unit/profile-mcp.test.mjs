@@ -55,3 +55,36 @@ test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base a
   refused(call("apex_profile", { dryRun: true, mode: "bogus" }), "bad_args", /mode must be one of/);
   refused(call("apex_profile", { dryRun: true, kind: "ui_matrix" }), "bad_args", /unknown argument kind/); // the kind is not caller-chosen
 });
+
+test("profile typed plans reject unsupported explicit controls before either entrypoint starts a job", () => {
+  const unsupported = { cpu: { frames: 40, repeat: 1, base: "HEAD" }, hitch: { repeat: 1, base: "HEAD" }, trace: { repeat: 1, base: "HEAD" } };
+  for (const tool of ["apex_profile", "apex_job_start"]) for (const [mode, controls] of Object.entries(unsupported)) {
+    for (const [field, value] of Object.entries(controls)) {
+      const r = call(tool, { dryRun: true, mode, [field]: value, ...(tool === "apex_job_start" ? { kind: "profile" } : {}) });
+      const j = JSON.parse(r.out);
+      assert.equal(r.status, 1, "the existing CLI represents a structured tool refusal with exit 1");
+      assert.deepEqual({ ok: j.ok, error: j.error, message: j.message, jobId: j.jobId, argv: j.argv },
+        { ok: false, error: "bad_args", message: `--mode ${mode} does not support --${field}`, jobId: undefined, argv: undefined });
+    }
+  }
+});
+
+test("profile typed plans preserve omitted defaults and supported fields through both entrypoints", () => {
+  for (const tool of ["apex_profile", "apex_job_start"]) {
+    const invoke = args => {
+      const r = call(tool, { dryRun: true, ...args, ...(tool === "apex_job_start" ? { kind: "profile" } : {}) });
+      assert.equal(r.status, 0, r.err); return JSON.parse(r.out);
+    };
+    for (const mode of ["spans", "cpu", "hitch", "trace"]) {
+      const j = invoke({ mode });
+      assert.deepEqual({ ok: j.ok, dryRun: j.dryRun, jobId: j.jobId, argv: j.argv },
+        { ok: true, dryRun: true, jobId: undefined, argv: [process.execPath, path.join(ROOT, "tools/perf/profile.mjs"), "vegas", "--mode", mode] });
+    }
+    for (const mode of ["hitch", "trace"]) {
+      const j = invoke({ mode, track: "monza", frames: 90 });
+      assert.deepEqual(j.argv, [process.execPath, path.join(ROOT, "tools/perf/profile.mjs"), "monza", "--mode", mode, "--frames", "90"]);
+    }
+    const spans = invoke({ mode: "spans", track: "monza", frames: 90, repeat: 3, base: "HEAD" });
+    assert.deepEqual(spans.argv, [process.execPath, path.join(ROOT, "tools/perf/profile.mjs"), "monza", "--mode", "spans", "--frames", "90", "--repeat", "3", "--base", "HEAD"]);
+  }
+});

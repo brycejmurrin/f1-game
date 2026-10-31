@@ -227,10 +227,12 @@ function driveOutEngine(on) {
   }
 }
 function driveOutSound(pose, gap) {
-  if (!_outEngine || !(gap > 0)) { _outPrev = pose; return; }
-  const p = _outPrev; _outPrev = pose;
-  if (!p) return;
-  const v = Math.hypot(pose.x - p.x, pose.z - p.z) / Math.min(0.1, gap);   // m/s along the path
+  const p = _outPrev, dx = p ? pose.x - p.x : 0, dz = p ? pose.z - p.z : 0;
+  // The renderer fits this pose to the selected lane after audio samples it.
+  if (!p) _outPrev = { x: pose.x, z: pose.z };
+  else { p.x = pose.x; p.z = pose.z; }
+  if (!_outEngine || !(gap > 0) || !p) return;
+  const v = Math.hypot(dx, dz) / Math.min(0.1, gap);   // m/s along the path
   const s01 = Math.min(1, v / 12), rolling = v > 0.2;
   try {
     GameAudio.setEngine(rolling ? 0.22 + 0.35 * s01 : 0.12, 0, false, s01 * 0.2, 1,
@@ -254,20 +256,39 @@ function driveOutSound(pose, gap) {
 // leaving. A scrubbed or paused show holds its frame at the end instead of closing.
 // Built here, once, around the shell's STOP, as arrival.js builds its angle map
 // (index.html's DOM is at its shellNodes ceiling).
+// THE PHASE MARKS: ticks under the scrub at each beat of the sequence (shutter,
+// lane run, pause, back-in, parked, crew; going out: shutter, hold or crew clear,
+// roll-out, empty lane), from GarageArrival.timeline, so a timing setting changed
+// in EDIT moves them. In EDIT, JUMP TO seeks to a phase and names the held one.
+// Safari draws no <datalist> ticks on a range, hence the drawn ones.
 const FRAME_S = 1 / 24;
 let preview = null;
 const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
 const previewPose = (p) => GarageArrival.poseFor(p.dir)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
+/** The phases of a preview's sequence: [{ id, name, t }] by start time, inside its length. */
+function previewPhases(p) {
+  const T = GarageArrival.timeline(p.cfg, p.dir), len = previewLen(p), extra = len - T.base;
+  const marks = p.dir === "out"
+    ? [["door", "SHUTTER", 0], ["hold", extra > 0 ? "CREW CLEAR" : "HOLD", T.door], ["run", "ROLL OUT", T.door + T.hold + extra], ["gone", "EMPTY LANE", T.settle + extra]]
+    : [["door", "SHUTTER", 0], ["lane", "LANE RUN", T.door], ["pause", "PAUSE", T.door + T.lane], ["back", "BACK IN", T.door + T.lane + T.pause],
+      ["park", "PARKED", T.park], ["crew", "CREW", T.base]];
+  // A zero-length phase (HOLD BEAT 0, no crew) gives way to the one that starts with it.
+  return marks.map(([id, name, t]) => ({ id, name, t }))
+    .filter((m, i, a) => m.t < len - 1e-3 && !(a[i + 1] && a[i + 1].t - m.t < 1e-3));
+}
+const phaseAt = (marks, t) => marks.reduce((on, m) => (m.t <= t + 1e-6 ? m : on), marks[0]);
 function transport() {
   const stop = $("ga-preview-stop");
   if (typeof document === "undefined" || !stop || !stop.insertAdjacentHTML || $("ga-transport")) return;
   stop.insertAdjacentHTML("beforebegin", '<div id="ga-transport" role="group" aria-label="Preview playback" hidden>'
     + '<button id="ga-play" type="button" aria-pressed="false">PAUSE</button>'
     + '<button id="ga-back" type="button" aria-label="Back one frame">&lsaquo;</button>'
-    + '<input id="ga-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Preview time">'
+    + '<span id="ga-scrubber"><input id="ga-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Preview time">'
+    + '<span id="ga-marks" aria-hidden="true"></span></span>'
     + '<button id="ga-fwd" type="button" aria-label="Forward one frame">&rsaquo;</button>'
     + '<output id="ga-time"></output>'
+    + '<select id="ga-phase" aria-label="Jump to phase" hidden></select>'
     + '<button id="ga-loop" type="button" aria-pressed="false">LOOP</button>'
     + '<button id="ga-edit" type="button" aria-pressed="false">EDIT</button></div>');
   $("ga-transport").appendChild(stop);
@@ -275,10 +296,12 @@ function transport() {
   $("ga-back").onclick = () => previewSeek(preview ? preview.t - FRAME_S : 0);
   $("ga-fwd").onclick = () => previewSeek(preview ? preview.t + FRAME_S : 0);
   $("ga-scrub").oninput = (e) => previewSeek(preview ? Number(e.target.value) / 1000 * previewLen(preview) : 0);
+  $("ga-phase").onchange = (e) => previewPhase(e.target.value);
   $("ga-loop").onclick = () => { if (preview) { preview.loop = !preview.loop; previewSync(); } };
   $("ga-edit").onclick = () => previewEdit(!(preview && preview.editing));
 }
-// The bar's readout: the play state, the scrub position, the time and the caption.
+// The bar's readout: the play state, the scrub position, the time and the caption,
+// and the phase marks (rebuilt only when the sequence's beats move).
 function previewSync() {
   const p = preview;
   if (!p) return;
@@ -289,7 +312,22 @@ function previewSync() {
   press($("ga-loop"), p.loop); press($("ga-edit"), p.editing);
   set($("ga-scrub"), "value", String(Math.round(t / (len || 1) * 1000)));
   set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + previewPose(p).label);
+  const marks = previewPhases(p), on = phaseAt(marks, t), key = p.dir + marks.map((m) => m.id + m.t.toFixed(3)).join();
+  if (p.marked !== key) {
+    p.marked = key;
+    set($("ga-marks"), "innerHTML", marks.map((m) => '<i data-phase="' + m.id + '" style="left:'
+      + (m.t / (len || 1) * 100).toFixed(2) + '%"></i>').join(""));
+    set($("ga-phase"), "innerHTML", marks.map((m) => '<option value="' + m.id + '">' + m.name + " \u00b7 " + m.t.toFixed(1) + " s</option>").join(""));
+  }
+  set($("ga-phase"), "value", on.id);
+  set($("ga-phase"), "hidden", !p.editing);
   const bar = $("ga-transport"); if (bar && bar.toggleAttribute) bar.toggleAttribute("data-editing", p.editing);
+}
+/** JUMP TO: hold the first frame of a phase (by id). */
+function previewPhase(id) {
+  if (!preview) return;
+  const m = previewPhases(preview).find((x) => x.id === id);
+  if (m) previewSeek(m.t);
 }
 function previewPause(on) {
   if (!preview) return;
@@ -332,7 +370,7 @@ function startArrivalPreview(dir, btn) {
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   transport();
-  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false };
+  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
@@ -398,7 +436,13 @@ function noteResult(order, meta) {
   pendingHome = null;
   if (!pl || !Array.isArray(order) || typeof RaceCeremony === "undefined" || !RaceCeremony.eligible(G, meta)) return null;
   const pos = order.indexOf(pl) + 1;
-  pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now() };
+  // The race's facts for the held title and BY RESULT lighting: the driver, the
+  // fastest lap (the quickest finite best of a classified car), wet, night.
+  let fast = null;
+  for (const c of order) if (c && !c.retired && !c.dsq && Number.isFinite(c.best) && c.best > 0 && (!fast || c.best < fast.best)) fast = c;
+  const t = typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST[G.trackIdx] : null, night = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night));
+  pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now(),
+    driver: String(pl.name || pl.code || ""), fastest: fast === pl, wet: /rain|wet|storm/.test(String(G.raceWeather || "")), night };
   return pendingHome;
 }
 function startHome(from) {
@@ -655,6 +699,7 @@ function resetSetupCam() {
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
 let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
+let _spWheelDistance = 0, _spWheelSteer = 0;
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of
@@ -663,8 +708,10 @@ let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWh
 // the bust goes. Released at the bust itself, the old job (drawn a frame ago)
 // survived unless frames had stalled 2 s, so 1 or 2 sets stayed by frame timing.
 let _flapBustAt = 0;
+const _pk = { now: [], was: [], val: null };   // previewKey's stamp memo (below)
 function spMeshBust() {
-  _spMeshKey = ""; GarageScene.dropPreviewMeshes();
+  _spMeshKey = ""; _pk.val = null; GarageScene.dropPreviewMeshes();
+  if (departureWheels) departureWheels.release();
   _flapBustAt = typeof performance !== "undefined" ? performance.now() : 0;
 }
 function garageSeat() {
@@ -681,18 +728,38 @@ function garageSeat() {
 // pair when a second driver is hired.
 // Ten legends share num 1, so the player's Legends slot keys on the code too.
 function seatTag(team, seat) { return (seat && seat.num) + (team.legends && seat ? ":" + seat.code : ""); }
+// previewKey runs 2x per Home frame (getSetupPreviewMesh, prebuildKey) and
+// partsVisualKey resolves the whole setup (Parts.getVisualTiers) each time. A
+// raw-input stamp gates it (perf hunt 9): the team (its engine picks the
+// supplier-locked fallbacks; legends what seatTag adds), every fitted part id, the
+// legality era, the livery id, the seat (num + code, what seatTag reads), the
+// career save, the store revision and the live paint draft. spMeshBust clears it.
 function previewKey() {
-  const team = Teams.LIST[G.teamIdx], seat = garageSeat();
-  return team.id + ":" + partsVisualKey(team.id) + ":" + seatTag(team, seat);
+  const team = Teams.LIST[G.teamIdx], seat = garageSeat(), st = _pk.now;
+  st.length = 0;
+  st.push(team, team.id, team.engine, team.legends, G.getLiveryId(team.id), seat && seat.num, seat && seat.code,
+    Parts.legalityKey ? Parts.legalityKey() : "", typeof GameStore !== "undefined" && GameStore.store ? GameStore.store.rev : 0,
+    Career.inCareer() ? Career.data() : null, G.livDraftOverride);
+  const parts = getTeamParts(team.id) || {};
+  for (const k in parts) st.push(k, parts[k]);
+  if (_pk.val !== null && st.length === _pk.was.length) {
+    let same = true;
+    for (let i = 0; i < st.length; i++) if (st[i] !== _pk.was[i]) { same = false; break; }
+    if (same) return _pk.val;
+  }
+  _pk.was.length = st.length;
+  for (let i = 0; i < st.length; i++) _pk.was[i] = st[i];
+  _pk.val = team.id + ":" + partsVisualKey(team.id) + ":" + seatTag(team, seat);
+  return _pk.val;
 }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
   const seat = garageSeat();
-  const split = !!driveOut && typeof GarageDepartureWheels !== "undefined";
-  const key = previewKey() + (split ? "|departure" : "");
+  const split = typeof CarWheels !== "undefined" && typeof CarWheels.createGarage === "function";
+  const key = previewKey() + (split ? "|wheels" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
-    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|departure" : "");
+    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|wheels" : "");
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
@@ -708,13 +775,62 @@ function getSetupPreviewMesh() {
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
       }) }).data);
     if (split) {
-      if (!departureWheels) departureWheels = GarageDepartureWheels.create(gfx);
+      if (!departureWheels) departureWheels = CarWheels.createGarage(gfx);
       departureWheels.prepare(key, liv, Parts.getVisualTiers(getTeamParts(team.id), team));
     }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
   return _spMesh;
+}
+// Optional, detached circuit slice shared by every garage camera/animation.
+let exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
+let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
+const exteriorSkyInv = new Float32Array(16);
+function exteriorPick(ctx) {
+  const t = ctx.track, team = Teams.LIST[G.teamIdx], tod = home.active && home.mode === "night" ? "night" : G.raceTimeOfDay || "default", weather = G.raceWeather || "dry";
+  const night = tod === "night" || (tod === "default" && !!(t && t.night));
+  const p = exteriorSelection;
+  if (!p || p.trackId !== (t && t.id) || p.teamId !== (team && team.id) || p.weather !== weather || p.tod !== tod || p.night !== night)
+    exteriorSelection = { trackId: t && t.id, teamId: team && team.id, def: t, weather, tod, night };
+  return exteriorSelection;
+}
+function prepareExterior(ctx, pose) {
+  if (!deps.prepareExterior || ctx.studio) return false;
+  const selection = exteriorPick(ctx), sequence = !!(pose && pose.active);
+  if (sequence && !exteriorSequence) { exteriorHeld = selection; exteriorVisible = !!(exterior && exterior.ready(selection)); }
+  if (!sequence) { exteriorHeld = null; exteriorVisible = true; }
+  exteriorSequence = sequence;
+  const pick = exteriorHeld || selection;
+  if (!exterior && !exteriorBoot && exteriorBootKey !== pick.trackId) {
+    const generation = ++exteriorEpoch; exteriorBootKey = pick.trackId;
+    exteriorBoot = deps.prepareExterior(pick.trackId).then((def) => {
+      if (generation !== exteriorEpoch || !def || typeof GarageExterior === "undefined") return;
+      exterior = GarageExterior.create({ gfx, load: (choice) => deps.prepareExterior(choice.trackId),
+        onChange: (state) => { exteriorLight = null; exteriorAnchor = state.anchor || null; if (state.status === "failed") Log.warn("game", "garage exterior unavailable: " + state.error); } });
+      exteriorRequested = exteriorHeld || exteriorSelection; exterior.request(exteriorRequested);
+    }).catch((e) => { Log.warn("game", "garage exterior preparation failed: " + e.message); })
+      .finally(() => { if (generation === exteriorEpoch) exteriorBoot = null; });
+  }
+  if (exterior && exteriorRequested !== pick) { exteriorRequested = pick; exteriorLight = null; exterior.request(pick); }
+  // A late result may appear behind a CLOSED shutter, never halfway through a shot.
+  if (sequence && pose.door < .02 && exterior && exterior.ready()) exteriorVisible = true;
+  return !!(exterior && exterior.ready() && exteriorVisible);
+}
+function exteriorLighting() {
+  if (exteriorLight) return exteriorLight;
+  const light = exterior.lighting(), yaw = exteriorAnchor ? exteriorAnchor.yaw : 0;
+  const c = Math.cos(yaw), s = Math.sin(yaw), x = light.sunDir[0], z = light.sunDir[2];
+  light.sunDir[0] = x * c - z * s; light.sunDir[2] = x * s + z * c;
+  light.sky.sunDir = light.sunDir;
+  // Interior lamp rig stays the key; selected exterior conditions supply daylight/fog.
+  for (let i = 0; i < 3; i++) { light.sunColor[i] *= .55; light.ambientSky[i] *= .55; light.ambientGround[i] *= .55; }
+  return exteriorLight = light;
+}
+function releaseExterior() {
+  exteriorEpoch++; exteriorBoot = null; exteriorBootKey = ""; exteriorDrawn = false;
+  if (exterior) exterior.release();
+  exteriorRequested = null; exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; exteriorLight = null; exteriorAnchor = null;
 }
 // The ROOM's view of the game beyond the car (GarageScene.draw's ctx): the
 // circuit the next race runs at — the career's calendar, the free-play season's,
@@ -842,6 +958,7 @@ let _seqMoodWas = null, _seqBars = false, _seqSound = false, _seqSoundAt = 0;
 const _seqCue = { id: null, t: 0 };   // the ctx.cue record, reused every frame
 function sequenceLook(p) {
   const on = !!(p && p.active), want = on && p.mood;
+  if (!on) { exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; }
   const sound = on && !!p.sound && p.engine !== false && !driveOut && !(preview && G.state === "race");
   if (sound && !_seqSound && !_outEngine) { driveOutEngine(true); _seqSound = _outEngine; _seqSoundAt = 0; }
   else if (!sound && _seqSound) { _seqSound = false; driveOutEngine(false); }
@@ -854,10 +971,10 @@ function sequenceLook(p) {
   if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
 }
 function drawDepartureReflection(matrix, material) {
-  if (driveOut && departureWheels) departureWheels.draw(matrix, driveOut.motion.distance || 0,
-    -.45 * Math.sin(2 * (driveOut.motion.yaw || 0)), material);
+  if (departureWheels) departureWheels.draw(matrix, _spWheelDistance, _spWheelSteer, material);
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
+  exteriorDrawn = false;
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
   // before the first garage present. Measured on tip a52e9108 at 4× CPU: tapping
   // #mb-garage while Assets.createTextureArray was still uploading produced one
@@ -890,6 +1007,20 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  const context = garageCtx(), sceneTime = context.sceneNow;
+  context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
+  if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
+    GarageExterior.fitPose(arriving, exteriorAnchor, !!driveOut && driveOut.cfg.angle === "cut");
+    if (arriving.exteriorUnsupported) context.realExterior = false;
+    else exterior.groundPose(arriving, !!driveOut && driveOut.cfg.angle === "cut" && !reducedMotion());
+    if (driveOut) {
+      const previous = driveOut.travel || (driveOut.travel = { x: 0, y: 0, z: 0, distance: 0 });
+      previous.distance += Math.hypot(arriving.x - previous.x, (arriving.groundY || 0) - previous.y, arriving.z - previous.z); previous.x = arriving.x; previous.y = arriving.groundY || 0; previous.z = arriving.z;
+      driveOut.motion.distance = arriving.distance = previous.distance; driveOut.motion.yaw = arriving.yaw;
+    }
+  }
+  _spWheelDistance = arriving && Number.isFinite(arriving.distance) ? arriving.distance : 0;
+  _spWheelSteer = arriving ? -.45 * Math.sin(2 * (arriving.yaw || 0)) : 0;
   sequenceLook(arriving);
   _bayBusy = home.active || !!driveOut || !!preview || !!(arriving && arriving.active);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
@@ -990,7 +1121,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   eye[1] = setupPreviewOrbit[1] + setupPreviewPan[1] + spDist * spSe;
   eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
   const lens = setupPreviewLens;
-  M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 60);
+  M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 800);
   // An on-axis camera centers the car behind the panel, half-cropped. Shift the
   // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
   // region instead — sideways when the panel is docked to an edge, downwards
@@ -1007,13 +1138,13 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (arriving && arriving.active) {
     eye[0] = arriving.eye[0]; eye[1] = arriving.eye[1]; eye[2] = arriving.eye[2];
     _spAim[0] = arriving.aim[0]; _spAim[1] = arriving.aim[1]; _spAim[2] = arriving.aim[2];
-    M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, 60);
+    M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, 800);
   }
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
   GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(lens && lens.centre) && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
-  const context = garageCtx(), sceneTime = context.sceneNow;
+  const outside = context.realExterior ? exteriorLighting() : null;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
   context.swell = arriving && arriving.active && Number.isFinite(arriving.swell) ? arriving.swell : 1;   // its DOOR GLOW size
   // Its LIGHT CUE (scene.js live: { id, t } in seconds since the sequence began; null = none).
@@ -1034,12 +1165,13 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     // as long as the sun stayed at full white it owned the picture and the bay's
     // ten fixtures were decoration. proj/invProj are what unlock SSAO in
     // present(), and an interior lives or dies on its corner darkening.
-    viewProj: _spVP, view: _spView, eye, sunDir: (GarageScene.moodDef && GarageScene.moodDef().sun) || _spSun, sunColor: GarageScene.SKYLIGHT,
-    ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
-    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: lightsRig,
+    viewProj: _spVP, view: _spView, eye, sunDir: outside ? outside.sunDir : (GarageScene.moodDef && GarageScene.moodDef().sun) || _spSun, sunColor: outside ? outside.sunColor : GarageScene.SKYLIGHT,
+    ambientSky: outside ? outside.ambientSky : GarageScene.AMB_SKY, ambientGround: outside ? outside.ambientGround : GarageScene.AMB_GROUND,
+    fogColor: outside ? outside.fogColor : GarageScene.BACKDROP, fogDensity: outside ? outside.fogDensity : 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return false;
+  if (context.realExterior) exteriorDrawn = exterior.draw();
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Paint stays the race dry-day material. The old matte override (clearcoat 0.1,
@@ -1049,13 +1181,14 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const ay = (arriving && arriving.yaw) || 0, ac = Math.cos(ay), as = Math.sin(ay);
   arrivalCar[0] = -ac; arrivalCar[2] = as; arrivalCar[8] = as; arrivalCar[10] = ac;
   arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
+  arrivalCar[1] = arrivalCar[4] = arrivalCar[6] = arrivalCar[9] = arrivalCar[13] = 0; arrivalCar[5] = 1;
+  if (context.realExterior && arriving) GarageExterior.poseMatrix(arriving, arrivalCar);
   const team = Teams.LIST[G.teamIdx];
   const carMesh = getSetupPreviewMesh();
-  context.departureWheels = driveOut && departureWheels ? drawDepartureReflection : null;
+  context.departureWheels = departureWheels ? drawDepartureReflection : null;
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
-  if (driveOut && departureWheels && arriving) departureWheels.draw(arrivalCar, arriving.distance || 0,
-    -.45 * Math.sin(2 * arriving.yaw), spMat);
+  drawDepartureReflection(arrivalCar, spMat);
   // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
   // the grid (js/game.js drawRearLights); parked in the bay it stays dark. The
   // tuner's REAR LIGHT can force it on, off or flashing (GarageArrival.rearLightOn).
@@ -1088,6 +1221,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
   gfx.drawGlow(lightsRig, PostCommon.softwareGlowScale(GarageScene.glareStr() * glareScale() * moodDef().glare));
+  if (outside && gfx.drawSky) {
+    M4.invertTo(exteriorSkyInv, _spVP); outside.sky.invViewProj = exteriorSkyInv; outside.sky.time = sceneTime / 1000; gfx.drawSky(outside.sky);
+    if (exterior.drawWeather) exterior.drawWeather(sceneTime, reducedMotion());
+  }
   gfx.present(presentOpts());
   return !(gfx.warming && gfx.warming());
 }
@@ -1279,7 +1416,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) clear
 // Drop its gesture now, so a later visit never inherits that finger's baseline.
 if (typeof MutationObserver === "function") {
   for (const surface of [$("carsetup"), $("photo-studio")]) {
-    if (surface) new MutationObserver(() => { if (surface.hidden) clearSetupGestures(); })
+    if (surface) new MutationObserver(() => { if (surface.hidden) { clearSetupGestures(); if (!home.active && !driveOut && typeof releaseExterior === "function") releaseExterior(); } })
       .observe(surface, { attributes: true, attributeFilter: ["hidden"] });
   }
 }
@@ -1321,23 +1458,27 @@ return {
   get effDist() { return _spEffDist; },
   get effFit() { return _spEffFit; },
   get effPanel() { return _spEffPanel; },
+  prewarmExterior() { if (typeof prepareExterior === "function") prepareExterior(garageCtx(true), null); },
+  exteriorState: () => exterior ? Object.assign(exterior.state(), { visible: exteriorDrawn }) : { status: exteriorBoot ? "loading" : "idle", visible: false },
   // GaragePrebuild (js/garage/prebuild.js): the setup garage's car and room,
   // built ahead of the GARAGE tap — keyed exactly as the first garage frame keys them.
   previewKey, prebuildKey: () => previewKey() + "|" + GarageScene.ctxKey(garageCtx(true)),
   prebuild(part) {
     if (part === "car") return !!getSetupPreviewMesh();
-    const team = Teams.LIST[G.teamIdx];
-    return GarageScene.prepare(team, _spLiv(), getTeamParts, G.driverIdx, garageCtx(true));
+    const team = Teams.LIST[G.teamIdx], ctx = garageCtx(true);
+    prepareExterior(ctx, null);
+    return GarageScene.prepare(team, _spLiv(), getTeamParts, G.driverIdx, ctx);
   },
   roomReady() { return GarageScene.prepared(Teams.LIST[G.teamIdx], _spLiv(), getTeamParts, G.driverIdx, garageCtx(true)); },
   // Race start (GaragePrebuild.release): free the room and every cached car, unless a
   // garage is on screen. The cleared key makes the next getSetupPreviewMesh rebuild.
   release() {
     if (G.setupPreviewOn) return false;
-    GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
+    if (departureWheels) departureWheels.release();
+    if (typeof releaseExterior === "function") releaseExterior(); GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
-  get meshKey() { return _spMeshKey; },
+  get meshKey() { return _spMeshKey.endsWith("|wheels") ? _spMeshKey.slice(0, -7) : _spMeshKey; },   // the split-wheels suffix is internal: callers compare this to previewKey()
   set meshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
 };
 }

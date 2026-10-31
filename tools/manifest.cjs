@@ -641,6 +641,7 @@ const TRACK_VM = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -1050,7 +1051,7 @@ const LAZY_AGENT = [
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/agent/apex.js",
-  "js/agent/apex-bridge.js", // ApexBridge: postMessage commands from a framing claude.ai page (?bridge=1), reads __apex at call time
+  "js/agent/apex-bridge.js", // ApexBridge: apex-cmd comments on one GitHub issue (?bridge=<n> + device token), reads __apex at call time
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
@@ -1069,10 +1070,16 @@ const LAZY_EDGES = [
 // is js/lighting/profiles.js, and that reads window.LightPresets at CALL time
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
 // defaults rather than throwing, and game.js re-applies once it lands.
+// js/garage/garage-data.js (~48 KB) is the garage's Blender tables: the camera
+// rigs' samples and the crew clips' keys. Their ids and labels stay eager
+// (arrival.js / crew-choreo.js index blocks); LazyBundles.ensureGarageData loads
+// it alone (idle, garage entry, SETTINGS, RACE!) and until then a rig angle
+// plays the "cut" cameras and a Blender crew the shipped one.
 const LAZY_RACE = [
   "js/data/garage-entrance-motion.js", // optional authored bay motion, warmed with presets
   "js/garage/entrance-motion.js",
   "js/lighting/presets.js",
+  "js/garage/garage-data.js",
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,
@@ -1081,6 +1088,8 @@ const LAZY_RACE = [
 // menus from throwing until ensureRaceSession() reinjects via `var`.
 // Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
 // Hub WATCH / Director eval SHOTS).
+// Optional selected-circuit pit slice for every garage view. Never gates a race.
+const LAZY_GARAGE_EXTERIOR = ["js/garage/exterior-geometry.js", "js/garage/exterior.js"];
 const LAZY_RACE_SESSION = [
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
@@ -1324,9 +1333,11 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
+  ["js/track/scenery/region.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/scenery/landforms.js", "js/track/scenery/nature.js"],
   ["js/track/scenery/stands.js", "js/track/scenery/structures.js"],
@@ -1778,7 +1789,7 @@ module.exports = {
   SW_LOCALES,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
-  LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES,
+  LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,

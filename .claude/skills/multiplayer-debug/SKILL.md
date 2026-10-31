@@ -53,6 +53,9 @@ Do **not** use this for:
 | `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws; no default URL — `localStorage` key `apex26.rendezvous` |
 | `js/net/snapshot.js` | Fixed-size per-car snapshots, interpolation, road-following extrapolation |
 | `js/net/session.js` | Clock sync, packet routing, heartbeat |
+| `js/net/ice.js` | `NetIce`: the STUN/TURN list `NetTransport.rtc()` gathers with (one cache; the public names stay on `NetTransport`) |
+| `js/net/interp.js` | `NetInterp`: draws a rival smoothly from late, reordered or missing poses (peeled from `NetSnapshot`) |
+| `js/net/quali-wire.js` / `js/net/strategy-wire.js` | `QualiWire` validates a peer's qualifying time; `StrategyWire` is the versioned tyre/pit payload on the reliable channel (both peeled from `NetPlay`) |
 | `js/net/netplay.js` | Authority: own car never corrected; host relays guests and owns AI/race control |
 | `js/net/lobby.js` | VS FRIEND UI; sequential invites; profiles filed by connection |
 | `js/net/lobby-codes.js` | Paste/copy/share/scan/QR routes for invite and answer codes (`codeFrom` on pasted links) |

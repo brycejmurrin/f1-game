@@ -554,6 +554,15 @@ jobs:
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
+      - name: Capture paired desktop garage departure
+        if: ${{ needs.plan.outputs.census_only != 'true' && needs.plan.outputs.entry == 'menu-full' && contains(needs.plan.outputs.ls, 'apex26.garageEvidence=phone') }}
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --tod day --entry menu-full --beats 1 \
+            --backend three --path webgpu --ls apex26.wgxCapture=0 --ls apex26.garageEvidence=desktop \
+            --json game-garage-desktop.json --shot game-garage-desktop.png
+
       # THE RETURNING PLAYER (B·H8, #3235): the TLX/WebGPU check twice on ONE persistent
       # profile and ONE origin (fixed port — Chrome keys storage and its GPU caches by
       # origin), so the second launch meets the shader and HTTP caches the first one
@@ -682,6 +691,7 @@ jobs:
             census-*.json
             game-*.json
             game-*.png
+            game-*.webm
           if-no-files-found: warn
           retention-days: 7
 

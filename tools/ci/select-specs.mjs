@@ -1318,7 +1318,7 @@ export function specsAffectedBySource(changed, root = ROOT) {
 // and the graph covers helper/spec -> spec PRECISELY, which is exactly where
 // the RULES are weakest (^tests/ routes to `audit` and nothing else).
 export function specsImporting(changed, root = ROOT) {
-  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.js$/.test(f));
+  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.[cm]?js$/.test(f));
   if (!narrow.length) return [];
   const reverse = new Map(), specs = new Set();
   function scan(rel) {
@@ -1327,7 +1327,7 @@ export function specsImporting(changed, root = ROOT) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const file = `${rel}/${entry.name}`;
       if (entry.isDirectory()) { scan(file); continue; }
-      if (!entry.name.endsWith(".js")) continue;
+      if (!/\.[cm]?js$/.test(entry.name)) continue;
       if (file.endsWith(".spec.js")) specs.add(file);
       let refs = [];
       try { refs = referencesIn(fs.readFileSync(path.join(root, file), "utf8"), file).refs || []; }

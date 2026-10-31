@@ -146,6 +146,23 @@ const TitleMenu = (function () {
     return n;
   }
 
+  // Historical medals are not stored; keep each record class separate instead.
+  function dailyHistory(daily) {
+    const data = daily && daily.data ? daily.data() : null, days = data && data.days;
+    if (!days || typeof days !== "object" || Array.isArray(days)) return [];
+    const positive = n => typeof n === "number" && Number.isFinite(n) && n > 0;
+    return Object.keys(days).filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day))
+      && new Date(day).toISOString().slice(0, 10) === day).sort().reverse().slice(0, 7).flatMap(day => {
+      const entry = days[day];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+      const classes = entry.classes && typeof entry.classes === "object" && !Array.isArray(entry.classes)
+        ? Object.entries(entry.classes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).filter(([, value]) => value && positive(value.best)) : [];
+      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + value.best.toFixed(3) + "s")
+        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + entry.best.toFixed(3) + "s"] : [];
+      return results.length ? [{ day, text: results.join(" · ") }] : [];
+    });
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
@@ -155,7 +172,19 @@ const TitleMenu = (function () {
     // does something; game.js wires the handlers in this same task.
     if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
 
+    const history = $("daily-history"), historyList = $("daily-history-list");
+    const doc = typeof document !== "undefined" ? document : null;
+    if (history && history.addEventListener) history.addEventListener("toggle", () => { if (history.open) paintHistory(); });
+    function paintHistory() {
+      if (!historyList || !doc) return;
+      while (historyList.firstChild) historyList.removeChild(historyList.firstChild);
+      const rows = dailyHistory(G.daily);
+      for (const row of rows) { const li = doc.createElement("li"); li.textContent = row.day + " · " + row.text; historyList.appendChild(li); }
+      if (!rows.length) { const li = doc.createElement("li"); li.textContent = "No saved Daily laps yet. Complete a valid Daily lap to start your history."; historyList.appendChild(li); }
+    }
+
     function refresh() {
+      if (history && history.open) paintHistory();
       const btn = $("mb-career");
       // Paint must not Career.load(): that migrates and may write the slot
       // pointer. Boot and the career store subscriber already load first.

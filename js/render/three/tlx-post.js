@@ -542,13 +542,24 @@
     // FXAA's mid-race (createShaderModule x2 from runPass): the WebGPU post
     // warm() is off and no warm reached a canvas pass.
     let _scissorWarm = false, _warmDraws = 0, _warmSc = null, _warmCanvas = 0, _warmCanvasOnly = false, _warmFlipUp = false;
+    // Canvas compiles run ONE AT A TIME: compileAsync parks its context, handler and promise list on the renderer for
+    // its whole run, so the two a draw warm issues (SGSR, then FXAA, across the upscale switch) overlapped and one
+    // pipeline went unbuilt (W6 flaked ~1 in 10). Each job sets the state it keys on, calls, and puts it back at once.
+    let _warmCompiles = Promise.resolve();
+    function compileCanvas(mat) {
+      const mrt = renderer.getMRT();
+      const job = () => {
+        const rt = renderer.getRenderTarget(), mrt0 = renderer.getMRT();
+        setQuadMat(mat); renderer.setRenderTarget(null); renderer.setMRT(mrt);
+        try { return renderer.compileAsync(quad, quad.camera); } finally { renderer.setRenderTarget(rt); renderer.setMRT(mrt0); }
+      };
+      _warmCompiles = _warmCompiles.then(job).catch(() => { /* the live draw builds it then */ });
+    }
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
       if (_scissorWarm) {
         if (!target) {
-          setQuadMat(mat);
-          renderer.setRenderTarget(null);
-          renderer.compileAsync(quad, quad.camera).catch(() => { /* the live draw builds it then */ });
+          compileCanvas(mat);
           _warmCanvas++;
           return;
         }
@@ -578,6 +589,12 @@
       if (_mirTex) { _mirRect[0] = rect[0]; _mirRect[1] = rect[1]; _mirRect[2] = rect[2]; _mirRect[3] = rect[3]; }
       _mirHdr = !!hdr;
       _mirFlip = flip !== false;
+    }
+    // Quit-to-menu (#4219): tlx.js disposes the mirror target, so no texture node may keep naming it.
+    function releaseMirror() {
+      _mirTex = null;
+      if (P && P.mirror) P.mirror.tex.value = blackTex;
+      if (P && P.fxaa && P.fxaa.mirTex) P.fxaa.mirTex.value = blackTex;
     }
     // The rect / hdr / flip uniforms are shared by the mirror pass and the
     // FXAA fold (tsl-post.js mirrorU); false = no mirror this frame.
@@ -1319,6 +1336,7 @@
       resize,
       warm,
       drawWarm,   // A-W1
+      warmSettled: () => _warmCompiles,   // the draw warm's canvas compiles have landed
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
       needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
@@ -1327,6 +1345,7 @@
       dispose,
       viz,
       setMirror,
+      releaseMirror,
       mirrorComposites: () => _mirComposites,
       state: () => ({
         on: true,

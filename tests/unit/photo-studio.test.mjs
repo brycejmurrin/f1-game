@@ -592,7 +592,7 @@ test("contact sheet captures three sequential renderer frames and labels one bou
   assert.equal(b.downloads.length, 1, "cancel does not download");
 });
 
-for (const outcome of ["success", "write failure", "share cancellation"]) test("contact sheet awaits native export " + outcome, async () => {
+for (const outcome of ["success", "write failure", "share cancellation"]) test(`contact sheet awaits native export ${outcome}`, async () => {
   let resolve, reject, calls = 0, saved, settled = false;
   const held = new Promise((yes, no) => { resolve = yes; reject = no; });
   const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => {
