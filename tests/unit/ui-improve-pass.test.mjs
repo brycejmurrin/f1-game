@@ -731,6 +731,28 @@ test("title keyboard navigation has an explicit default before stateful controls
   assert.equal(g.focused(), "s-sound", "no data-menu-default → the aria-pressed control is the landing spot");
 });
 
+// uihunt4-flows-1030 #3: the title boots with focus on <body> (no autofocus: a
+// touch player would get a ring, a reader a jump). Enter/Space there seeds the same
+// anchor the first arrow does; once something is focused they stay native.
+test("Enter or Space with nothing focused seeds the title's default, and only then", () => {
+  const h = bootMenuNav();
+  h.dom.document.activeElement = h.dom.document.body;
+  h.button("mb-sound", 10, { "aria-pressed": "true" });
+  h.button("mb-career", 50, { "data-menu-default": "" });
+  let prevented = false;
+  h.MenuNav.onKeyDown({ key: "Enter", preventDefault() { prevented = true; }, altKey: false, ctrlKey: false, metaKey: false });
+  assert.equal(h.focused(), "mb-career");
+  assert.equal(prevented, true, "the seeding press is spent, not a click");
+  prevented = false;
+  h.MenuNav.onKeyDown({ key: "Enter", preventDefault() { prevented = true; }, altKey: false, ctrlKey: false, metaKey: false });
+  assert.equal(prevented, false, "Enter on a focused button keeps its native click");
+  const g = bootMenuNav("overlay2");
+  g.dom.document.activeElement = g.dom.document.body;
+  g.button("s-career", 50, { "data-menu-default": "" });
+  g.key(" ");
+  assert.equal(g.focused(), "s-career", "Space seeds too");
+});
+
 test("tuner tabs scroll the selected chip into view", () => {
   for (const file of ["js/lighting/tuner-panel.js", "js/camera/tuner-panel.js"]) {
     const s = code(file);

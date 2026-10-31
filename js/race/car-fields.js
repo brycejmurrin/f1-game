@@ -75,6 +75,9 @@ const CarFields = (function () {
       "(race-control.js). Added late, each turned a finished car into a DICTIONARY object for the rest of the race " +
       "(Node 22's V8 normalizes a named add once a map has > 128 mutable out-of-object fields; PERF-HUNT-4 B-F1b)",
       ["_coastHeld", "classified"]],
+    ["netplay wire id: game.js wireId() caches it on the first G.wireId call, which a host makes for every car on its " +
+      "first tick (perf hunt 9: a late add per car per online race)",
+      ["_wireId"]],
   ];
 
   const KEYS = [];
@@ -233,6 +236,7 @@ const CarFields = (function () {
     if (!("_lk" in c)) c._lk = undefined;
     if (!("_coastHeld" in c)) c._coastHeld = undefined;
     if (!("classified" in c)) c.classified = undefined;
+    if (!("_wireId" in c)) c._wireId = undefined;
     return c;
   }
 

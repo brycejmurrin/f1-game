@@ -36,6 +36,40 @@ const DailyChallenge = (function () {
     };
   }
 
+  // Apply one valid lap to the supplied save data. Persistence, badges and
+  // the active session belong to record(); these rules mutate only d.
+  function recordDay(d, day, lapTime, context) {
+    // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
+    const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    e.laps = (num(e.laps) || 0) + 1;
+    if (context != null) {
+      if (!isObj(e.classes)) e.classes = {};
+      const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
+      cls.laps = (num(cls.laps) || 0) + 1;
+      if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
+      e.classes[context] = cls;
+    }
+    if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
+    // Streak: consecutive UTC days with at least one lap. Only a NEWER day
+    // moves it (ISO dates compare as strings): a tab left on yesterday's plan
+    // past midnight, today already played elsewhere, reset it to 1.
+    if (!d.streak.last || day > d.streak.last) {
+      d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
+      d.streak.last = day;
+    }
+    // The per-day history is write-only (every reader asks for today; the
+    // streak lives in d.streak), so it keeps a window rather than growing
+    // ~680 chars a day for ever.
+    const floor = new Date(day + "T00:00:00Z");
+    if (Number.isFinite(floor.getTime())) {
+      floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
+      const cut = floor.toISOString().slice(0, 10);
+      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
+    }
+    return e;
+  }
+
   function create(G) {
     Log.info("game", "DailyChallenge.create");
     const { store } = G;
@@ -91,34 +125,7 @@ const DailyChallenge = (function () {
       if (!active || !(lapTime > 0) || !Number.isFinite(lapTime)) return null;
       const d = data();
       const day = active.day;
-      // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
-      const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
-      const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-      e.laps = (num(e.laps) || 0) + 1;
-      if (context != null) {
-        if (!isObj(e.classes)) e.classes = {};
-        const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
-        cls.laps = (num(cls.laps) || 0) + 1;
-        if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
-        e.classes[context] = cls;
-      }
-      if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-      // Streak: consecutive UTC days with at least one lap. Only a NEWER day
-      // moves it (ISO dates compare as strings): a tab left on yesterday's plan
-      // past midnight, today already played elsewhere, reset it to 1.
-      if (!d.streak.last || day > d.streak.last) {
-        d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
-        d.streak.last = day;
-      }
-      // The per-day history is write-only (every reader asks for today; the
-      // streak lives in d.streak), so it keeps a window rather than growing
-      // ~680 chars a day for ever.
-      const floor = new Date(day + "T00:00:00Z");
-      if (Number.isFinite(floor.getTime())) {
-        floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
-        const cut = floor.toISOString().slice(0, 10);
-        for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
-      }
+      const e = recordDay(d, day, lapTime, context);
       store.set(KEY, d);
       if (typeof Badges !== "undefined") Badges.onStreak(d.streak.count);   // js/career/badges.js
       return e;

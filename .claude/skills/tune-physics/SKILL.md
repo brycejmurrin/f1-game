@@ -49,7 +49,7 @@ Speed scaling and the no-curvature-assist contract live in
 After any player-path change run `node --test tests/unit/curvature-channels.test.mjs` and spawn agent `physics-contract-auditor`.
 
 **Touching steering or GRIP STEER:** `GripSteer.forPlayer` (called from `js/physics/player-forces.js`) must
-receive the SHAPED lock (`og.shaped` — the `expo`/`maxSlip`/taper output), as `grip-steer.js`'s `apply()`
+receive the SHAPED lock (`og.shaped` — the stick run through `STEER_EXPO` in `js/physics/player-forces.js`), as `grip-steer.js`'s `apply()`
 contract says, not the raw stick; an `expo` A/B is exactly what makes the two diverge. Pins:
 `node --test tests/unit/grip-steer.test.mjs`. `player-dyn.mjs` measures a bare seat (GRIP STEER off), so A/B it
 with `--seat shipped` plus a GRIP STEER on/off pair and say which seat each row came from.

@@ -39,7 +39,7 @@ function button(id, text) {
   };
 }
 
-function load({ stored = {}, readyState = "complete", looks = null } = {}) {
+function load({ stored = {}, readyState = "complete", looks = null, secondary = null, modalShield = null } = {}) {
   const timers = new Map();
   let nextTimer = 1;
   const written = {};
@@ -63,7 +63,7 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   };
   const ids = new Map([["pausemenu", pausemenu], ["pm-pausemenu-sum", summary],
     ["pm-pausemenu-body", pauseBody],
-    ["pm-quit", quit], ["pm-restart", restart], ["pm-resume", resume]]);
+    ["pm-quit", quit], ["pm-restart", restart], ["pm-resume", resume], ["pausebtn", button("pausebtn", "Pause")]]);
   const document = {
     readyState, documentElement: html, _handlers: {},
     getElementById: (id) => ids.get(id) || null,
@@ -112,6 +112,8 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   });
   // ScreenLooks loads AFTER pause-opts.js, so a stub is installed after eval
   // too — the module must read it at call time, never capture it.
+  if (secondary) ctx.InputHoldButtons = secondary;
+  if (modalShield) ctx.TopModal = modalShield;
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   if (looks) ctx.ScreenLooks = looks;
   // A click as the browser dispatches it: capture listeners on #pausemenu
@@ -556,4 +558,21 @@ test("dialog backdrop animations respect the explicit in-game reduced-motion pre
   assert.deepEqual(animated.map(r => r.selector), [':root:not([data-motion="reduce"]) dialog.screen.dim[open]::backdrop'],
     "normal-motion dialogs retain their entrance animation; the in-game motion override excludes backdrops too");
   assert.ok(animated[0].context.some(c => c.includes("prefers-reduced-motion: no-preference")));
+});
+
+
+test("secondary PAUSE wires once and preserves trusted gesture metadata for the modal shield", () => {
+  const registered = [], seen = []; let block = false;
+  const h = load({ secondary: { secondaryTap: (el, opts) => registered.push({ el, opts }) },
+    modalShield: { onClickShield(e) { seen.push(e); if (block) e.preventDefault(); } } });
+  h.M.initUI(); h.M.initUI();
+  assert.equal(registered.length, 1, "pause bridge registration is idempotent");
+  assert.equal(registered[0].el.id, "pausebtn");
+  const source = { target: registered[0].el, isTrusted: true, clientX: 712, clientY: 44, timeStamp: 1234 };
+  assert.equal(registered[0].opts.beforeActivate(source), true);
+  assert.equal(seen[0].isTrusted, true); assert.equal(seen[0].target, source.target);
+  assert.deepEqual([seen[0].clientX, seen[0].clientY, seen[0].timeStamp], [712, 44, 1234]);
+  assert.equal(seen[0].detail, 1, "the original touch is recorded as a semantic pointer activation");
+  block = true;
+  assert.equal(registered[0].opts.beforeActivate(source), false, "an active shield can reject the activation");
 });

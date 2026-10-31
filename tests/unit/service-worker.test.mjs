@@ -29,6 +29,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
+  let windows = clientWindows;
   let keysCalls = 0;
   let skipped = 0;
   let claimed = 0;
@@ -84,9 +85,11 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       },
       // Worker->page log channel: absent unless a test collects the posts, so
       // every other test also proves sw.js tolerates a missing matchAll.
+      // `windows` is mutable: a sweep that retained the predecessor must be
+      // re-checked after the last window closes.
       ...(posted || clientWindows != null ? {
         async matchAll() {
-          const n = clientWindows == null ? 1 : clientWindows;
+          const n = windows == null ? 1 : windows;
           return Array.from({ length: n }, () => ({ postMessage: (m) => posted && posted.push(m) }));
         },
       } : {}),
@@ -166,6 +169,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
     get keysCalls() {
       return keysCalls;
     },
+    setClientWindows(n) { windows = n; },
     lifecycleEvent,
     messageEvent(data, ports) {
       const lifetimes = [];
@@ -997,6 +1001,25 @@ test("the fetch-path sweep keeps one settled prior generation while a window cli
   await twoFetches(harness);
   assert.deepEqual(harness.deleted, ["apex26-319"], "N-2 and older go; N-1 stays for the open tab");
   assert.ok(harness.stores.has("apex26-320"));
+});
+
+test("a sweep that kept the prior generation drops it on the next navigation once every window has closed", async () => {
+  const harness = sweepHarness({ complete: true, clientWindows: 1 });
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "N-1 stays while a window is open");
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "asset fetches do not resweep while that window remains");
+  harness.setClientWindows(0);
+  await twoFetches(harness);
+  assert.deepEqual(harness.deleted, ["apex26-319"], "asset fetches stay quiet after the window closes");
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await nav.responsePromise;
+  await Promise.all(nav.lifetimes);
+  const droppedPrev = harness.deleted.indexOf("apex26-320") >= 0;
+  assert.equal(droppedPrev, true, "the next navigation drops the predecessor once no window remains");
+  assert.equal(harness.stores.has("apex26-321"), true, "the current settled generation stays");
+  assert.equal(harness.stores.has("apex26-322"), true, "a newer installing generation is still kept");
+  assert.equal(harness.stores.has("someone-else"), true, "only apex26-* generations are swept");
 });
 
 for (const lifecycle of ["fetch", "activate"]) {

@@ -350,6 +350,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `overtake-mode.js` | `OvertakeMode` | tag | OVERTAKE MODE (FIA 2026 Sporting Regs B7.2.3(c)): one Detection Line per circuit, the 1 s check there, and the 0.5 MJ allowance granted at the Activation Line… |
+| `energy-plan.js` | `EnergyPlan` | tag | ENERGY PLAN (#1580): a manual, per-sector ERS deployment policy for the local player. |
 | `lap-record.js` | `LapRecord` | tag | LapRecord: time-trial record and sector-clock state moved out of game.js. |
 | `storm-flash.js` | `StormFlash` | tag | StormFlash: the in-frame lightning flash (strike, thunder, ambient spike). |
 | `announce-banner.js` | `AnnounceBanner` | tag | AnnounceBanner: the race-radio card, its floor and its queue. |

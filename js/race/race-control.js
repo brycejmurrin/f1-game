@@ -243,9 +243,27 @@ const RaceControl = (function () {
     Log.info("game", "RaceControl flag " + LABEL[prev] + " -> " + LABEL[next]);
   }
 
+  // Compatibility boundary: only this adapter sees G. Scalars stay live across
+  // session/lazy-service replacement; the original store remains captured.
+  /** @param {GameCtx} G */
   function create(G) {
-    Log.info("game", "RaceControl.create");
     const { store } = G;
+    return createControl(Object.freeze({
+      get state() { return G.state; }, get session() { return G.session; },
+      get timeTrial() { return G.timeTrial; }, get _s8Stamp() { return G._s8Stamp; },
+      get raceT() { return G.raceT; }, get raceWeather() { return G.raceWeather; },
+      get leaderLap() { const leader = G.ranked && G.ranked[0]; return leader ? leader.lap : null; },
+      readCaution: () => store.get("caution", false), writeCaution: (on) => { store.set("caution", on); },
+      networkActive: () => G.netPlay.active(), ownsRaceControl: () => G.netPlay.ownsRaceControl(),
+      reportCaution: (d) => G.netPlay.reportCaution(d),
+      announce: (text, seconds, kind) => typeof G.announce === "function" ? G.announce(text, seconds, kind) : false,
+      wetness: () => typeof G.trackWetness === "function" ? G.trackWetness() : undefined,
+    }));
+  }
+
+  /** @param {RaceControlPort} port */
+  function createControl(port) {
+    Log.info("game", "RaceControl.create");
     let caution = blank();
     let queryT = 0;
     let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
@@ -279,7 +297,7 @@ const RaceControl = (function () {
     let stormSince = null, stormAtStart = false, stormLastT = 0;
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
-    const savedCaution = store.get("caution", false);
+    const savedCaution = port.readCaution();
     let enabled = !(savedCaution === false || savedCaution === 0 || savedCaution === "0");
 
     function reset() {
@@ -301,8 +319,8 @@ const RaceControl = (function () {
     function flag(prev, next) {
       logFlag(prev, next);
       if (prev >= 3 && next < 3) {
-        const leader = G.ranked && G.ranked[0];
-        otHoldLap = leader ? (leader.lap | 0) : null;
+        const lap = port.leaderLap;
+        otHoldLap = lap === null ? null : (lap | 0);
       }
     }
 
@@ -310,14 +328,13 @@ const RaceControl = (function () {
     // keeps showing a safety car that nothing is maintaining any more.
     function setEnabled(on) {
       enabled = !!on;
-      store.set("caution", enabled);
+      port.writeCaution(enabled);
       if (!enabled) reset();
       return enabled;
     }
 
     function publish() {
-      const netPlay = G.netPlay;
-      if (!netPlay.active() || !netPlay.ownsRaceControl()) return;
+      if (!port.networkActive() || !port.ownsRaceControl()) return;
       // total/sectors ride in the payload, so they must be in the change key —
       // an evolving hazard picture at a constant level went un-republished and
       // froze the guest's counts.
@@ -325,7 +342,7 @@ const RaceControl = (function () {
         "|" + caution.total + "|" + (caution.sectors ? caution.sectors.join(",") : "");
       if (key === sent) return;
       sent = key;
-      netPlay.reportCaution({
+      port.reportCaution({
         level: caution.level, sector: caution.sector, frac: caution.frac,
         cause: caution.cause, total: caution.total, sectors: caution.sectors,
         sinceT: caution.sinceT, phase: caution.phase,
@@ -354,12 +371,12 @@ const RaceControl = (function () {
       return true;
     }
 
-    // PERF-HUNT-2 S8: game.js flushes once per display frame (G._s8Stamp). A
+    // PERF-HUNT-2 S8: game.js flushes once per display frame (port._s8Stamp). A
     // second update with the same stamp is a no-op; tests that omit the stamp
     // keep the per-call behaviour.
     let _s8Done = null;
     function update(dt) {
-      const stamp = G._s8Stamp;
+      const stamp = port._s8Stamp;
       if (stamp != null && stamp === _s8Done) return;
       if (stamp != null) _s8Done = stamp;   // after the match check; call sites pass finite dt
       // State reset BEFORE the ownership gate: a guest's caution mirror comes
@@ -369,7 +386,7 @@ const RaceControl = (function () {
       // player's OWN cones and shards (hz.total >= 6) raised a VSC whose
       // cautionV held them to 0.6 of vTop, and the CAUTIONS row is hidden there
       // so it could not be switched off. Same reset path as "not racing".
-      if ((G.state !== "race" && !(replayOwned && G.state === "count")) || G.timeTrial || G.session === "quali") {
+      if ((port.state !== "race" && !(replayOwned && port.state === "count")) || port.timeTrial || port.session === "quali") {
         if (caution.level !== 0 || capHoldT || replayOwned) reset();
         lowGripNoted = false;
         return;
@@ -378,11 +395,11 @@ const RaceControl = (function () {
       // The LOW GRIP note, once a race, on every peer (it is read off the
       // shared weather, not the flag): the one place the player is told why the
       // Overtake button went dead in the wet. Retried until the banner takes it.
-      if (!lowGripNoted && lowGrip() && typeof G.announce === "function") {
-        lowGripNoted = G.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
-        if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+G.raceT || 0).toFixed(1));
+      if (!lowGripNoted && lowGrip()) {
+        lowGripNoted = port.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
+        if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+port.raceT || 0).toFixed(1));
       }
-      if (!G.netPlay.ownsRaceControl()) return;
+      if (!port.ownsRaceControl()) return;
       // CAUTIONS off means no flag the local sim raises, the storm's included
       // (Bryce 2026-10-23: a storm SC flew with the row OFF). setEnabled(false)
       // resets wxHeld; this keeps a storm from raising it again.
@@ -454,7 +471,7 @@ const RaceControl = (function () {
       caution.sectors = hz.sectors.slice();
       // v1: a networked race never goes red — the standing restart needs the
       // host to name the moment (netplay hostStart) — it holds a SAFETY CAR.
-      if (desired === 4 && G.netPlay.active()) { desired = 3; dcause = "SAFETY CAR"; }
+      if (desired === 4 && port.networkActive()) { desired = 3; dcause = "SAFETY CAR"; }
 
       // The HARD CAP the constants always promised ("a stuck hazard cannot
       // neutralise the race forever"): a flag flown for its full cap drops to
@@ -564,22 +581,22 @@ const RaceControl = (function () {
     // car. Only with CAUTIONS on (update() gates the call): OFF raises no flag.
     function stormTick() {
       const S = typeof Storm !== "undefined" ? Storm : null;
-      const t = typeof G.raceT === "number" && Number.isFinite(G.raceT) ? G.raceT : 0;
+      const t = typeof port.raceT === "number" && Number.isFinite(port.raceT) ? port.raceT : 0;
       // A practice rewind (driving-coach restoreWorld) sets raceT back: carry the storm's start with it, or the
       // window measures t - stormSince across the jump and the SC stays out for the rewound span again (R2).
       if (stormSince != null && t < stormLastT - 0.5) stormSince -= stormLastT - t;
       stormLastT = t;
-      if (!S || !S.is(G.raceWeather)) {
+      if (!S || !S.is(port.raceWeather)) {
         if (stormSince != null) Log.info("race", "storm eased raceT=" + t.toFixed(1));
         stormSince = null;
-        if (wxHeld) { wxHeld = 0; rehold(); if (typeof G.announce === "function") G.announce("STORM EASING — SAFETY CAR IN THIS LAP", 3, "info"); }
+        if (wxHeld) { wxHeld = 0; rehold(); port.announce("STORM EASING — SAFETY CAR IN THIS LAP", 3, "info"); }
         return;
       }
       if (stormSince == null) {
         stormSince = t; stormAtStart = t < 2;
         wxHeld = 3; rehold();
         Log.info("race", "storm SC deployed start=" + stormAtStart + " raceT=" + t.toFixed(1));
-        if (typeof G.announce === "function") G.announce(stormAtStart ? "STORM — START BEHIND THE SAFETY CAR" : "STORM — SAFETY CAR DEPLOYED", 3, "warning");
+        port.announce(stormAtStart ? "STORM — START BEHIND THE SAFETY CAR" : "STORM — SAFETY CAR DEPLOYED", 3, "warning");
         return;
       }
       if (wxHeld && t - stormSince >= (stormAtStart ? S.SC_START_S : S.SC_ROLL_S)) {
@@ -609,8 +626,8 @@ const RaceControl = (function () {
     // Overtake is off and active aero only partial (game.js aeroWetK). Read
     // live, so a weather arc that dries the track hands both back.
     function lowGrip() {
-      if (typeof TyreModel === "undefined" || G.raceWeather == null) return false;
-      return TyreModel.treadFor(G.raceWeather, typeof G.trackWetness === "function" ? G.trackWetness() : undefined) > 0;
+      if (typeof TyreModel === "undefined" || port.raceWeather == null) return false;
+      return TyreModel.treadFor(port.raceWeather, port.wetness()) > 0;
     }
     // May a car EARN Overtake at the Detection Line now? Not under the Safety
     // Car or red flag (a bunched queue would all earn it for the restart lap),
@@ -618,11 +635,11 @@ const RaceControl = (function () {
     function otDetectOpen() { return caution.level < 3 && !lowGrip(); }
     function otEnabled() {
       if (caution.level >= 3 || lowGrip()) return false;
-      const leader = G.ranked[0];
-      if (!leader || !(leader.lap > 1)) return false;
+      const lap = port.leaderLap;
+      if (!(lap > 1)) return false;
       // Never cleared here: a red flag's regrid rewinds the lap AFTER the drop,
       // so a read in between must not spend the hold. Laps only rise otherwise.
-      return otHoldLap == null || leader.lap > otHoldLap;
+      return otHoldLap == null || lap > otHoldLap;
     }
 
     function info() {

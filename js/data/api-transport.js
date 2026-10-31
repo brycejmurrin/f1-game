@@ -2,7 +2,83 @@
 const F1Transport = (function () {
   "use strict";
 
+  // The adapter owns platform resources; policy below receives only capabilities.
+  // fetch resolves at headers, so an attempt owns its deadline through body read.
+  function createEffects() {
+    const controllers = new Set(), waits = new Set();
+    function attempt(url, deadlineMs, consume) {
+      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      if (controller) controllers.add(controller);
+      let timer, onAbort;
+      const timeout = new Promise(function (_resolve, reject) {
+        timer = setTimeout(function () {
+          reject(new Error("Request timed out for " + url));
+          if (controller) controller.abort();
+        }, deadlineMs);
+      });
+      const cancelled = controller ? new Promise(function (_resolve, reject) {
+        onAbort = function () { reject(cancelledError(url)); };
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+      }) : null;
+      let network;
+      try {
+        network = Promise.resolve(fetch(url, controller ? { signal: controller.signal } : undefined)).then(consume);
+      } catch (e) { network = Promise.reject(e); }
+      // Even a broken fetch/body that ignores abort must release capacity.
+      return Promise.race(cancelled ? [network, timeout, cancelled] : [network, timeout]).finally(function () {
+        clearTimeout(timer);
+        if (controller) {
+          controller.signal.removeEventListener("abort", onAbort);
+          controllers.delete(controller);
+        }
+      });
+    }
+    function wait(ms, url) {
+      return new Promise(function (resolve, reject) {
+        const cancel = function () {
+          clearTimeout(timer); waits.delete(cancel); reject(cancelledError(url));
+        };
+        const timer = setTimeout(function () { waits.delete(cancel); resolve(); }, ms);
+        waits.add(cancel);
+      });
+    }
+    function cancelAll() {
+      waits.forEach(function (cancel) { cancel(); });
+      let aborted = 0;
+      controllers.forEach(function (controller) {
+        try { controller.abort(); aborted++; } catch (e) { /* already settled */ }
+      });
+      controllers.clear();
+      return aborted;
+    }
+    return {
+      attempt, wait, cancelAll,
+      now: function () { return Date.now(); },
+      read: function (key) { return localStorage.getItem(key); },
+      write: function (key, value) { localStorage.setItem(key, value); },
+      remove: function (key) { localStorage.removeItem(key); },
+      keys: function () {
+        const keys = [], n = localStorage.length;
+        for (let i = 0; i < n; i++) keys.push(localStorage.key(i));
+        return keys;
+      },
+      info: function (message) { Log.info("data", message); },
+      warn: function (...args) { Log.warn("data", ...args); }
+    };
+  }
+
+  function cancelledError(url) {
+    const error = new Error("Cancelled request for " + url);
+    error.cancelled = true;
+    return error;
+  }
+
   function create(OPENF1, TTL_HISTORIC) {
+    return createTransport(OPENF1, TTL_HISTORIC, createEffects());
+  }
+
+  /** @param {ReturnType<typeof createEffects>} effects */
+  function createTransport(OPENF1, TTL_HISTORIC, effects) {
     const CACHE_PREFIX = "apex26.api.";
     const CACHE_MAX_CHARS = 256 * 1024;
     const MIN_GAP_MS = 400;
@@ -31,8 +107,7 @@ const F1Transport = (function () {
     // window holds OpenF1 under the cap instead.
     const OPENF1_PER_MIN = 28, _of1Recent = [];
     let netGen = 0;                       // bumped by cancelAll(); a request born before it is stale
-    const liveControllers = new Set();    // AbortControllers of fetches on the wire
-    const pendingWaits = new Set();       // cancellation hooks for pacing / retry sleeps
+    const pendingWaits = new Set();       // policy-only capacity reservations (adapter owns timer waits)
     const inFlight = new Map();           // generation + cache policy + URL -> shared request Promise
     const failWarnAt = Object.create(null); // endpoint name -> last Log.warn ms
     const FAIL_WARN_MS = 30 * 1000;
@@ -63,19 +138,17 @@ const F1Transport = (function () {
       if (maxAge == null) maxAge = TTL_HISTORIC;
       let removed = 0;
       try {
-        if (typeof localStorage === "undefined" || localStorage == null) return 0;
-        const n = localStorage.length;
-        if (typeof n !== "number") return 0;
-        const now = Date.now();
+        const keys = effects.keys();
+        const now = effects.now();
         const doomed = [];
-        for (let i = 0; i < n; i++) {
-          const key = localStorage.key(i);
+        for (let i = 0; i < keys.length; i++) {
+          const key = keys[i];
           if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-          const t = cacheEntryT(localStorage.getItem(key));
+          const t = cacheEntryT(effects.read(key));
           if (t == null || (now - t) > maxAge || t > now) doomed.push(key);   // future-stamped = clock skew, not fresh
         }
         for (let i = 0; i < doomed.length; i++) {
-          try { localStorage.removeItem(doomed[i]); removed++; } catch (e) { /* ignore */ }
+          try { effects.remove(doomed[i]); removed++; } catch (e) { /* ignore */ }
         }
       } catch (e) { /* no storage */ }
       return removed;
@@ -90,10 +163,11 @@ const F1Transport = (function () {
       let removed = 0;
       try {
         const entries = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
+        const keys = effects.keys();
+        for (let i = 0; i < keys.length; i++) {
+          const key = keys[i];
           if (!key || key.indexOf(CACHE_PREFIX) !== 0) continue;
-          const raw = localStorage.getItem(key);
+          const raw = effects.read(key);
           const t = cacheEntryT(raw);   // null (corrupt) → oldest
           entries.push({
             key, t: t || 0,
@@ -108,7 +182,7 @@ const F1Transport = (function () {
         });
         const n = Math.min(count || 8, entries.length);
         for (let i = 0; i < n; i++) {
-          try { localStorage.removeItem(entries[i].key); removed++; } catch (e) { /* ignore */ }
+          try { effects.remove(entries[i].key); removed++; } catch (e) { /* ignore */ }
         }
       } catch (e) { /* no storage */ }
       return removed;
@@ -118,7 +192,7 @@ const F1Transport = (function () {
       const mem = memCache.get(url);
       if (mem) { memCache.delete(url); memCache.set(url, mem); return mem; }
       try {
-        const raw = localStorage.getItem(CACHE_PREFIX + url);
+        const raw = effects.read(CACHE_PREFIX + url);
         if (!raw) return null;
         const obj = JSON.parse(raw);
         if (obj && typeof obj.t === "number" && Object.prototype.hasOwnProperty.call(obj, "data")) return obj;
@@ -128,9 +202,9 @@ const F1Transport = (function () {
 
     function writeMemory(url, data) {
       memCache.delete(url);
-      memCache.set(url, { t: Date.now(), data });
+      memCache.set(url, { t: effects.now(), data });
       while (memCache.size > MEM_MAX) memCache.delete(memCache.keys().next().value);
-      try { localStorage.removeItem(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
+      try { effects.remove(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
     }
 
     function writeCache(url, data, memoryOnly) {
@@ -138,7 +212,7 @@ const F1Transport = (function () {
       // discover that they exceed the disk budget. Keep normal cache semantics.
       if (memoryOnly) { writeMemory(url, data); return; }
       const key = CACHE_PREFIX + url;
-      const payload = JSON.stringify({ t: Date.now(), data });
+      const payload = JSON.stringify({ t: effects.now(), data });
       // A multi-MB body (/position, car_data) would take the origin's whole
       // localStorage quota from the game's own saves: keep it in memory only,
       // and drop an older small disk copy so it cannot stand in as the stale fallback.
@@ -147,7 +221,7 @@ const F1Transport = (function () {
         return;
       }
       memCache.delete(url);
-      const now = Date.now();
+      const now = effects.now();
       let swept = false;
       if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
         purgeExpiredCache();
@@ -155,17 +229,17 @@ const F1Transport = (function () {
         swept = true;
       }
       try {
-        localStorage.setItem(key, payload);
+        effects.write(key, payload);
         return;
       } catch (e) {
-        Log.warn("data", "apex26: api cache write failed (quota?)", e);
+        effects.warn("apex26: api cache write failed (quota?)", e);
       }
       if (!swept) purgeExpiredCache();   // just ran above? once is enough
       purgeOldestCache(16);
       try {
-        localStorage.setItem(key, payload);
+        effects.write(key, payload);
       } catch (e2) {
-        Log.warn("data", "apex26: api cache write still failing after purge", e2);
+        effects.warn("apex26: api cache write still failing after purge", e2);
       }
     }
 
@@ -197,43 +271,22 @@ const F1Transport = (function () {
     // body holding its provider's queue slot forever.
     function fetchTimed(url, lane, consume) {
       const myGen = netGen;
-      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-      if (controller) liveControllers.add(controller);
-      let timer = null;
-      let onAbort = null;
       let responseError = null;
-      const timeout = new Promise(function (_resolve, reject) {
-        timer = setTimeout(function () {
-          reject(new Error("Request timed out for " + url));
-          if (controller) controller.abort();
-        }, FETCH_TIMEOUT_MS);
-      });
-      const cancelled = controller ? new Promise(function (_resolve, reject) {
-        onAbort = function () { reject(cancelledError(url)); };
-        controller.signal.addEventListener("abort", onAbort, { once: true });
-      }) : null;
-      let network;
-      try {
-        network = Promise.resolve(fetch(url, controller ? { signal: controller.signal } : undefined)).then(function (res) {
-          // Remember failure headers BEFORE awaiting the body. A rejected body
-          // or the original attempt deadline must not turn a known 401/403
-          // into an offline error eligible for stale-cache fallback.
-          if (!res.ok) {
-            responseError = httpError(url, res);
-            // Publish exposed throttle windows at headers, even when the error
-            // body stalls. Cancellation does not erase the server's window;
-            // late headers from an obsolete attempt cannot extend it.
-            if (myGen === netGen && responseError.status === 429 && responseError.retryAfterMs > 0) {
-              lane.pauseUntil = Math.max(lane.pauseUntil, Date.now() + responseError.retryAfterMs);
-            }
+      return effects.attempt(url, FETCH_TIMEOUT_MS, function (res) {
+        // Remember failure headers BEFORE awaiting the body. A rejected body
+        // or the original attempt deadline must not turn a known 401/403
+        // into an offline error eligible for stale-cache fallback.
+        if (!res.ok) {
+          responseError = httpError(url, res);
+          // Publish exposed throttle windows at headers, even when the error
+          // body stalls. Cancellation does not erase the server's window;
+          // late headers from an obsolete attempt cannot extend it.
+          if (myGen === netGen && responseError.status === 429 && responseError.retryAfterMs > 0) {
+            lane.pauseUntil = Math.max(lane.pauseUntil, effects.now() + responseError.retryAfterMs);
           }
-          return consume(res, responseError);
-        });
-      }
-      catch (e) { network = Promise.reject(e); }
-      // Promise.race is intentional even with AbortController: a broken fetch
-      // or body implementation that ignores abort must release its provider queue.
-      return Promise.race(cancelled ? [network, timeout, cancelled] : [network, timeout]).catch(function (err) {
+        }
+        return consume(res, responseError);
+      }).catch(function (err) {
         if (!responseError || (err && err.cancelled) || err === responseError) throw err;
         // Wrap rather than mutate a body implementation's rejection (which
         // may be primitive or frozen). Keep timeout/body diagnostics as well
@@ -243,12 +296,6 @@ const F1Transport = (function () {
         failure.retryAfterMs = responseError.retryAfterMs;
         failure.cause = err;
         throw failure;
-      }).finally(function () {
-        clearTimeout(timer);
-        if (controller) {
-          controller.signal.removeEventListener("abort", onAbort);
-          liveControllers.delete(controller);
-        }
       });
     }
 
@@ -261,9 +308,9 @@ const F1Transport = (function () {
       // existing ceiling instead of retrying inside the server's quota window.
       const hdr = res.headers && res.headers.get && res.headers.get("retry-after");
       let ra = parseFloat(hdr);
-      if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - Date.now()) / 1000;
+      if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - effects.now()) / 1000;
       const retryMs = Math.round(ra * 1000);
-      if (isFinite(retryMs) && retryMs > 0 && isFinite(Date.now() + retryMs)) err.retryAfterMs = retryMs;
+      if (isFinite(retryMs) && retryMs > 0 && isFinite(effects.now() + retryMs)) err.retryAfterMs = retryMs;
       return err;
     }
 
@@ -272,7 +319,7 @@ const F1Transport = (function () {
     // 429 stalled every other endpoint behind up to ~75 s of pure sleeping
     // (2 × 10-20 s backoff + 3 × 15 s timeouts on the shared chain).
     function fetchOnce(url, lane) {
-      lane.lastNetAt = Date.now();
+      lane.lastNetAt = effects.now();
       // Count actual attempts, never a reservation cancelled during pacing.
       if (lane === openF1Lane) _of1Recent.push(lane.lastNetAt);
       return fetchTimed(url, lane, function (res, httpErr) {
@@ -296,28 +343,13 @@ const F1Transport = (function () {
     }
 
     function warnFetchFail(name, kind) {
-      const now = Date.now();
+      const now = effects.now();
       if (now - (failWarnAt[name] || 0) < FAIL_WARN_MS) return;
       failWarnAt[name] = now;
-      Log.warn("data", "fetch " + name + " fail" + (kind ? " " + kind : ""));
+      effects.warn("fetch " + name + " fail" + (kind ? " " + kind : ""));
     }
 
-    function cancelledError(url) {
-      const e = new Error("Cancelled request for " + url);
-      e.cancelled = true;   // the shape js/data/export.js already recognises
-      return e;
-    }
-
-    function waitForRequest(ms, url) {
-      return new Promise(function (resolve, reject) {
-        const cancel = function () {
-          clearTimeout(timer); pendingWaits.delete(cancel);
-          reject(cancelledError(url));
-        };
-        const timer = setTimeout(function () { pendingWaits.delete(cancel); resolve(); }, ms);
-        pendingWaits.add(cancel);
-      });
-    }
+    function waitForRequest(ms, url) { return effects.wait(ms, url); }
 
     function waitForCapacity(lane, url) {
       if (lane.active.size < MAX_ACTIVE) return null;
@@ -344,7 +376,7 @@ const F1Transport = (function () {
       const hit = cache ? readCache(url) : null;
       // age < 0 is an entry stamped by a clock that has since been stepped back:
       // it would read as fresh for as long as the skew lasts, so refetch instead.
-      const age = hit ? Date.now() - hit.t : 0;
+      const age = hit ? effects.now() - hit.t : 0;
       if (ttl > 0 && hit && age >= 0 && age < ttl) return Promise.resolve(hit.data);
       // The queue paces network hits; it must not turn two callers for the same
       // resource into two sequential hits. Cache policy is part of the key so a
@@ -363,7 +395,7 @@ const F1Transport = (function () {
       // sleeps, a late completion never reaches the caller.
       function startAfterProviderGate() {
         if (myGen !== netGen) throw cancelledError(url);
-        const wait = lane.pauseUntil - Date.now();
+        const wait = lane.pauseUntil - effects.now();
         // Check and start in one callback: headers can arrive between any two
         // Promise reactions, including after a pacing reservation wakes.
         // Browser timers overflow above the signed 32-bit delay range.
@@ -385,9 +417,9 @@ const F1Transport = (function () {
           })
           .then(function () {
             if (myGen !== netGen) throw cancelledError(url);
-            let wait = lane.lastNetAt + MIN_GAP_MS - Date.now();
+            let wait = lane.lastNetAt + MIN_GAP_MS - effects.now();
             if (lane === openF1Lane) {
-              const now = Date.now();
+              const now = effects.now();
               while (_of1Recent.length && now - _of1Recent[0] >= 60000) _of1Recent.shift();
               if (_of1Recent.length >= OPENF1_PER_MIN) wait = Math.max(wait, _of1Recent[0] + 60000 - now + 50);
             }
@@ -413,7 +445,7 @@ const F1Transport = (function () {
         .then(function (json) {
           if (myGen !== netGen) throw cancelledError(url);
           if (cache) writeCache(url, json, cachePolicy === "memory");
-          if (!quiet) Log.info("data", "fetch " + name + " ok");
+          if (!quiet) effects.info("fetch " + name + " ok");
           return json;
         })
         .catch(function (err) {
@@ -449,12 +481,8 @@ const F1Transport = (function () {
       // Promise is still unwinding through fetch/queue cleanup.
       inFlight.clear();
       pendingWaits.forEach(function (cancel) { cancel(); });
-      let aborted = 0;
-      liveControllers.forEach(function (c) {
-        try { c.abort(); aborted++; } catch (e) { /* already settled */ }
-      });
-      liveControllers.clear();
-      if (aborted) Log.info("data", "api cancelAll aborted " + aborted);
+      const aborted = effects.cancelAll();
+      if (aborted) effects.info("api cancelAll aborted " + aborted);
       return aborted;
     }
 
@@ -473,7 +501,7 @@ const F1Transport = (function () {
      *  localStorage alone leaves it served until the page reloads (an unfinished race's /position grid). */
     function forget(url) {
       memCache.delete(url);
-      try { localStorage.removeItem(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
+      try { effects.remove(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
     }
 
     return { request, cancelAll, cacheEntryT, staleMark, staleSince, forget };

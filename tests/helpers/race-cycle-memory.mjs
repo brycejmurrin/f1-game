@@ -17,6 +17,19 @@ export const WARM_CYCLES = 5;
 export const STRICT = process.env.APEX_PERF_MEMORY_STRICT === "1"
   || process.env.APEX_PERF_STRICT === "1";
 
+const available = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+/** Validate observation coverage, separately from retention and growth bounds. */
+export function cycleCensusIssues(row) {
+  const issues = [];
+  if (row?.backend?.renderer !== "three" || !["webgl2", "webgpu"].includes(row?.backend?.api))
+    issues.push("expected observed three renderer and WebGL2/WebGPU API");
+  if (row?.instrumentation?.tracksReady !== true) issues.push("track census hooks unavailable");
+  if (![row?.heapMB, row?.audioMB].every(available)) issues.push("finite nonnegative heap and audio observations required");
+  if (![row?.three?.geometries, row?.three?.textures].every(available)) issues.push("Three geometry/texture counters unavailable");
+  return issues;
+}
+
 /**
  * Post-warm menu heap / audio slope: cycle N minus cycle N-1 (1-based).
  * `byCycle` maps cycle number → { heapMB, audioMB } from the final menu
@@ -68,14 +81,15 @@ export function postWarmSlope(byCycle, laterCycle = WARM_CYCLES + 1) {
       series,
     };
   }
-  const heapDelta = (typeof later.heapMB === "number" && typeof earlier.heapMB === "number")
+  const heapDelta = (available(later.heapMB) && available(earlier.heapMB))
     ? +(later.heapMB - earlier.heapMB).toFixed(1)
     : null;
-  const audioDelta = (typeof later.audioMB === "number" && typeof earlier.audioMB === "number")
+  const audioDelta = (available(later.audioMB) && available(earlier.audioMB))
     ? +(later.audioMB - earlier.audioMB).toFixed(1)
     : null;
   return {
-    ok: true,
+    ok: heapDelta != null && audioDelta != null,
+    ...(heapDelta == null || audioDelta == null ? { reason: "finite nonnegative post-warm heap and audio observations required" } : {}),
     later: laterCycle,
     earlier: earlierCycle,
     heapDelta,

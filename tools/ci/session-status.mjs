@@ -31,6 +31,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gitTry } from "../lib/git-run.mjs";
+import { verificationIdentity, readVerification } from "./verification-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEPLOY = "claude/f1-game-project-26h3ng";
@@ -109,11 +110,12 @@ export function collect() {
   const unpushed = upstream ? Number(git("rev-list", "--count", `${upstream}..HEAD`)) || 0 : null;
   const dirty = git("status", "--porcelain").split("\n").filter(Boolean);
   const logDir = path.join(ROOT, "artifacts/logs");
+  const source = verificationIdentity(ROOT);
   const logs = fs.existsSync(logDir)
     ? fs.readdirSync(logDir).filter((f) => f.endsWith(".log")).map((f) => {
         const abs = path.join(logDir, f);
         const st = fs.statSync(abs);
-        return { log: `artifacts/logs/${f}`, verdict: parseVerdict(fs.readFileSync(abs, "utf8")),
+        return { log: `artifacts/logs/${f}`, verdict: parseVerdict(fs.readFileSync(abs, "utf8")), evidence: readVerification(abs, source),
                  ageMin: Math.round((Date.now() - st.mtimeMs) / 60000) };
       }).sort((a, b) => a.ageMin - b.ageMin)
     : [];
@@ -145,7 +147,7 @@ export function toMarkdown(s) {
   out.push("");
   out.push("**Test logs** (newest first; a log is this container's, gone with it)");
   if (!s.logs.length) out.push("- none in artifacts/logs/");
-  for (const l of s.logs.slice(0, 10)) out.push(`- \`${l.log}\` — ${l.verdict} (${l.ageMin} min ago)`);
+  for (const l of s.logs.slice(0, 10)) out.push(`- \`${l.log}\` — ${l.verdict} (${l.ageMin} min ago); source: ${l.evidence?.status || "unknown"}${l.evidence ? ` (${l.evidence.reason}; ${l.evidence.files?.length || 0} listed suites)` : " (no source receipt)"}`);
   return out.join("\n");
 }
 
@@ -171,6 +173,8 @@ export function toSummary(s) {
     else unresolved.push(log);
   }
   out.push(`- **Local test logs** ${s.logs.length}: ${passed.length} passed; ${failed.length} failed/timedout/interrupted; ${unresolved.length} unresolved (historical logs, not current-tip verification)`);
+  const current = s.logs.filter((l) => l.evidence?.status === "current" && l.evidence.verdict === "passed");
+  out.push(`- **Source-bound verification** ${current.length} current passing receipt(s); ${s.logs.filter((l) => l.evidence?.status === "stale").length} stale; each receipt covers only its listed suites`);
   const selected = [...failed, ...unresolved].slice(0, 3);
   for (const l of selected) {
     const verdict = l.verdict.length > 240 ? l.verdict.slice(0, 240) + "… (truncated)" : l.verdict;

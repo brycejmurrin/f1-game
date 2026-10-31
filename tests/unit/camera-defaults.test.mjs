@@ -63,12 +63,17 @@ function camHarness() {
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
     setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); },
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(el, opts) { this.el = el; this.opts = opts; } } };
-  ctx.window = ctx;
+  ctx.window = ctx; ctx.addEventListener = () => {};
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/pedal-travel.js"), "utf8"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/hold-buttons.js"), "utf8"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
+  ctx.InputHoldButtons = vm.runInNewContext("InputHoldButtons", ctx);
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
   const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
-  const fire = (type, timeStamp) => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1, timeStamp });
+  button._rect = { left: 0, top: 0, right: 44, bottom: 44, width: 44, height: 44 };
+  button.click = () => button.onclick();
+  const fire = (type, timeStamp, extra = {}) => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1, timeStamp, clientX: 20, clientY: 20, ...extra });
   const runTimers = () => { for (const fn of [...timers.values()]) fn(); };
   return { dom, G, cams, button, fire, runTimers, observers };
 }
@@ -92,7 +97,7 @@ test("an open CAM picker hides when #btn-cam hides (race end), not only on pause
   assert.equal(h.dom.byId("campicker").hidden, false);
   const mo = h.observers.find((o) => o.el === h.button);
   assert.ok(mo && mo.opts.attributeFilter.includes("hidden"), "the button's hidden attribute is observed");
-  h.button.hidden = true; mo.fn([]);   // endRace: els.btnCam.hidden = true
+  h.button.hidden = true; for (const watcher of h.observers.filter(o => o.el === h.button)) watcher.fn([]);   // endRace: els.btnCam.hidden = true
   assert.equal(h.dom.byId("campicker").hidden, true);
   assert.equal(h.button.getAttribute("aria-expanded"), "false");
 });
@@ -863,4 +868,19 @@ test("CAM context-menu and late hold cannot open on a paused, hidden or non-race
     dom.dispatch(button, { type: "contextmenu" });
     assert.equal(button.getAttribute("aria-expanded"), "true", "countdown remains a valid CAM owner");
   }
+});
+
+
+test("CAM secondary contact cycles without a native click and preserves long press", () => {
+  const h = camHarness(), extra = { isPrimary: false };
+  h.fire("pointerdown", 1000, extra); h.fire("pointerup", 1080, extra);
+  assert.equal(h.G.camMode, 1, "a second finger changes camera while the first stays held");
+  h.fire("pointerdown", 2000, extra); h.runTimers(); h.fire("pointerup", 2700, extra);
+  assert.equal(h.G.camMode, 1, "long press opens the picker without cycling");
+  assert.equal(h.dom.byId("campicker").hidden, false);
+  h.cams.hideCamPicker();
+  h.fire("pointerdown", 3000, extra); h.runTimers(); h.fire("pointerup", 3080, extra);
+  assert.equal(h.G.camMode, 2, "an event-time short tap still cycles if a delayed timer fired first");
+  h.fire("pointerdown", 4000, extra); h.fire("pointercancel", 4040, extra); h.fire("pointerup", 4080, extra);
+  assert.equal(h.G.camMode, 2, "cancelled secondary gestures cannot cycle");
 });

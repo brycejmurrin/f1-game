@@ -352,7 +352,10 @@ const DesignerCanvas = (function () {
       }
       if (mode === "draw" && path) {
         const lastPt = path[path.length - 1], wx = toWX(p.x), wz = toWZ(p.y);
-        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) path.push([wx, wz]);
+        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) {
+          if (path.length === 1 && hooks.onBegin) hooks.onBegin();
+          path.push([wx, wz]);
+        }
         render();
       }
     }
