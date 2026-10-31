@@ -52,6 +52,28 @@ export function probeHudElements(arg) {
     for (let p = el; p && p !== document.documentElement; p = p.parentElement) k *= scaleOf(getComputedStyle(p));
     return parseFloat(cs.fontSize) * k;
   };
+  // Any computed colour (rgb, color(srgb …), oklab from color-mix) → "rgba(r, g, b, a)" via a 1px canvas.
+  let cvx = null;
+  const toRgba = (c) => {
+    try {
+      cvx = cvx || Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d", { willReadFrequently: true });
+      cvx.clearRect(0, 0, 1, 1);
+      cvx.fillStyle = "#000";
+      cvx.fillStyle = c;
+      cvx.fillRect(0, 0, 1, 1);
+      const d = cvx.getImageData(0, 0, 1, 1).data;
+      return `rgba(${d[0]}, ${d[1]}, ${d[2]}, ${+(d[3] / 255).toFixed(3)})`;
+    } catch { return c; }
+  };
+  // The first ancestor (or self) with a non-transparent background-color.
+  const effectiveBg = (el) => {
+    for (let p = el; p; p = p.parentElement) {
+      const c = toRgba(getComputedStyle(p).backgroundColor);
+      const m = /rgba\(([^)]+)\)/.exec(c);
+      if (m && Number(m[1].split(",")[3]) > 0) return c;
+    }
+    return null;
+  };
   const els = targets.map((t) => resolve(t.sel));
   const out = targets.map((t, i) => {
     const el = els[i];
@@ -82,6 +104,7 @@ export function probeHudElements(arg) {
     rec.contains = targets.filter((o, j) => j !== i && els[j] && el !== els[j] && el.contains(els[j])).map((o) => o.key);
     if (wantFonts && rec.visible) {
       let min = Infinity, at = null;
+      const inks = [];
       const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
       let n = 0;
       for (let tn = walk.nextNode(); tn && n < 200; tn = walk.nextNode()) {
@@ -94,7 +117,13 @@ export function probeHudElements(arg) {
         n++;
         const px = fontPx(pe);
         if (px < min) { min = px; at = tn.nodeValue.trim().slice(0, 24); }
+        // Ink samples for the contrast finding: distinct (colour, plate, size) triples, capped.
+        const fg = toRgba(pcs.color), bg = effectiveBg(pe), big = px >= 18.66;
+        if (inks.length < 6 && !inks.some((k) => k.fg === fg && k.bg === bg && k.big === big)) {
+          inks.push({ fg, bg, big, px: +px.toFixed(2), text: tn.nodeValue.trim().slice(0, 24) });
+        }
       }
+      rec.inks = inks;
       rec.minFontPx = Number.isFinite(min) ? +min.toFixed(2) : null;
       rec.minFontText = at;
     }

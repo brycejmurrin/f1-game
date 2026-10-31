@@ -958,3 +958,29 @@ test("menu-mock: hidden fold controls are excluded while summaries and visible s
     assert.equal(opened.issues.offscreen.length, 1, "a visible off-screen control is still reported");
   }
 });
+
+test("hud-survey: DEFAULT_CELL.contrast is the game's shipped default (appearance-opts.js)", () => {
+  const src = read("js/ui/appearance-opts.js");
+  const m = /store\.get\(K_CONTRAST,\s*"(\w+)"\)/.exec(src);
+  assert.ok(m, "appearance-opts.js still reads K_CONTRAST with a literal default");
+  assert.equal(M.DEFAULT_CELL.contrast, m[1]);
+  // A knobless cell carries no contrast part in its id; naming the non-default does.
+  const parts = (c) => M.cellId(M.normalizeCell(c)).split("-");
+  assert.deepEqual(parts({}).filter((p) => p === "contrast"), []);
+  assert.deepEqual(parts({ contrast: "off" }).slice(-2), ["contrast", "off"]);
+});
+
+test("hud-survey: classifyFindings flags text below WCAG 1.4.3 (4.5:1 small, 3:1 large)", () => {
+  const cell = { ...M.normalizeCell({}), id: "t" };
+  const ink = (fg, bg, px) => [{ fg, bg, big: px >= 18.66, px, text: "P1" }];
+  const f = (inks) => M.classifyFindings(cell, { records: [rec("pos", 100, 100, 60, 30, { inks })], ctx: { desktop: true } }).filter((x) => x.kind === "contrast");
+  const bad = f(ink("rgb(20, 20, 24)", "rgba(10, 10, 12, 0.9)", 14));
+  assert.equal(bad.length, 1);
+  assert.equal(bad[0].severity, "high");
+  assert.equal(f(ink("rgb(255, 255, 255)", "rgba(10, 10, 12, 0.9)", 14)).length, 0);
+  // ~3.5:1: fails small text, passes large text.
+  const mid = ["rgb(130, 130, 130)", "rgb(255, 255, 255)"];
+  assert.equal(f(ink(mid[0], mid[1], 14)).length, 1);
+  assert.equal(f(ink(mid[0], mid[1], 24)).length, 0);
+  assert.equal(f(undefined).length, 0, "records without ink samples add nothing");
+});

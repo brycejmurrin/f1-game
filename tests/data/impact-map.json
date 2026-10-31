@@ -17146,6 +17146,7 @@
         "tests/unit/appearance-opts.test.mjs"
       ],
       "*": [
+        "tests/unit/hud-survey.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ]
     },
