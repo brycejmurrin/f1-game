@@ -13116,7 +13116,8 @@
         "tests/unit/race-control.test.mjs"
       ],
       "blank": [
-        "tests/unit/damage.test.mjs"
+        "tests/unit/damage.test.mjs",
+        "tests/unit/race-control.test.mjs"
       ],
       "classify": [
         "tests/unit/career-settle.test.mjs",
@@ -13142,6 +13143,9 @@
         "tests/unit/source-pin-hygiene.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "createControl": [
+        "tests/unit/race-control.test.mjs"
       ],
       "deferLine": [
         "tests/unit/race-control.test.mjs"
@@ -13191,6 +13195,9 @@
         "tests/unit/aero-zones-vm.test.mjs",
         "tests/unit/incident-gate.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/race-control.test.mjs"
+      ],
+      "logFlag": [
         "tests/unit/race-control.test.mjs"
       ],
       "lowGrip": [
