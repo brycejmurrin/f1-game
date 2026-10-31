@@ -397,8 +397,8 @@ test("late-handled taps: wall clock confirms after input lag; event timeStamp gh
     advance(6000);
     for (const t of [...timers.values()]) t.fn(); timers.clear();
     assert.equal(quit.textContent, "QUIT TO MENU");
-    press(quit, { ...tap, timeStamp: TS0 + 1000 });
-    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 2000 }).stopped, "re-arms after expiry");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 6000 }).stopped, "re-arms after expiry");
+    assert.equal(quit.textContent, "TAP AGAIN");
     assert.deepEqual(handled, []);
   }
   // (3) two taps 150 ms apart on the wall stay a ghost double tap
@@ -419,6 +419,41 @@ test("late-handled taps: wall clock confirms after input lag; event timeStamp gh
     assert.deepEqual(handled, ["pm-quit"]);
     assert.equal(quit.textContent, "QUIT TO MENU");
   }
+});
+
+test("QF: both taps handled in ONE late batch (stalled main thread): 400 ms real gap confirms", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  h.advance(3);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"], "a deliberate 400 ms second tap quits even when handled late");
+});
+
+test("QF: tap 2 handled after a >5 s stall but only 400 ms after tap 1 confirms (no silent re-arm)", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  h.advance(6000);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 400 });
+  h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 400 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("QF: a real thumb double tap (150 ms event gap) handled late is still swallowed", () => {
+  const TS0 = 50_000;
+  const h = load();
+  h.pointerUp(h.quit, { timeStamp: TS0 });
+  h.press(h.quit, { isTrusted: true, detail: 1, timeStamp: TS0 });
+  h.advance(2);
+  h.pointerUp(h.quit, { timeStamp: TS0 + 150 });
+  assert.ok(h.press(h.quit, { isTrusted: true, detail: 2, timeStamp: TS0 + 150 }).stopped);
+  assert.deepEqual(h.handled, []);
+  assert.ok(h.M.isArmed("pm-quit"));
 });
 
 test("pointerup confirms an armed guarded button once wall age passes ARM_MIN_MS", () => {
