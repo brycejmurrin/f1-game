@@ -209,7 +209,7 @@ test("garage toolbar Preview starts the real Race start action only after the us
   assert.deepEqual(h.calls, [], "opening the editor does not autoplay");
   h.sheet.querySelector(".ew-preview").click();
   assert.deepEqual(h.calls, ["ga-preview-out"]);
-  assert.equal(h.sheet.dataset.editorView, "preview");
+  assert.equal(h.sheet.dataset.editorView, "edit", "new playback visibility belongs to the domain");
 });
 
 test("garage toolbar Preview preserves the active sequence and paused editing transport", () => {
@@ -229,4 +229,20 @@ test("generic editor Preview remains furniture-only", () => {
   h.sheet.querySelector(".ew-preview").click();
   assert.equal(calls, 0);
   assert.equal(h.sheet.dataset.editorView, "preview");
+});
+
+
+test("stopping a toolbar-launched garage preview returns to visible edit controls", () => {
+  const h = garage(), toggle = h.sheet.querySelector(".ew-preview");
+  // Domain playback owns sheet visibility. Its Stop restores the sheet without
+  // calling furniture APIs, as setup-camera's start/stop preview contract does.
+  h.buttons[1].onclick = () => { h.sheet.hidden = true; h.transport.hidden = false; };
+  toggle.click();
+  assert.equal(h.sheet.hidden, true);
+  assert.equal(h.transport.hidden, false);
+  h.transport.hidden = true; h.sheet.hidden = false;
+  assert.equal(h.sheet.hidden, false);
+  assert.equal(h.sheet.dataset.editorView, "edit");
+  assert.equal(toggle.textContent, "Preview");
+  assert.equal(toggle.getAttribute("aria-pressed"), "false");
 });

@@ -2998,6 +2998,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "tints": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
@@ -8107,6 +8108,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
       ],
+      "dropPreviewMeshes": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "framingHull": [
         "tests/unit/garage-mesh.test.mjs"
       ],
@@ -8274,6 +8278,9 @@
       ],
       "setupZoom": [
         "tests/unit/garage-aero-no-camera.test.mjs"
+      ],
+      "spMeshBust": [
+        "tests/unit/garage-mesh.test.mjs"
       ],
       "startArrivalPreview": [
         "tests/unit/garage-arrival.test.mjs"

@@ -1024,3 +1024,44 @@ test("garage reflection and normal wheel draws share the signed current-pose pha
     assert.deepEqual(draws[1], [reflection, distance, .15, material]);
   }
 });
+
+
+test("same-ID garage wheel edits and Undo invalidate fitted layers on the real mesh-bust path", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+  const bust = new Function("departureWheels", "GarageScene", `let _spMeshKey = "car", _flapBustAt;
+    ${fnSource(read("js/garage/setup-camera.js"), "function spMeshBust()")}
+    return spMeshBust;`)(wheels, { dropPreviewMeshes() {} });
+  h.ctx.CarMaterials = { SURFACES: { paint: 101 }, FINISH_SURFACE: { matte: 102 } };
+  const original = { rimTint: "#ff0000", caliperTint: "#00ff00", sidewallInk: "#0000ff", rimFinish: "gloss" };
+  wheels.prepare("same-id", original, tiers);
+  for (const liv of [{ rimTint: "#334455", caliperTint: "#ff3300", sidewallInk: "#ffffff", rimFinish: "matte" }, original]) {
+    const before = h.recipes.length;
+    bust(); wheels.prepare("same-id", liv, tiers);
+    assert.equal(h.recipes.length, before + 2, "a new draft or Undo rebuilds front/rear layers under the same livery ID");
+    const tint = h.Wheels.tints(liv), front = h.recipes[before];
+    assert.deepEqual(Array.from(front[2]), Array.from(tint.cal), "caliper tint follows the current draft");
+    assert.deepEqual(Array.from(front[3]), Array.from(tint.rim), "rim tint follows the current draft");
+    assert.deepEqual(Array.from(front[8]), Array.from(tint.ink), "sidewall ink follows the current draft");
+    assert.equal(front[9], tint.surf, "rim finish follows the current draft");
+  }
+  assert.equal(h.freed.length, 8, "each superseded wheel set releases its four GPU layers");
+});
+
+test("SetupCamera public release frees common wheels off-screen and preserves a visible garage", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), G = { setupPreviewOn: true };
+  wheels.prepare("car", {}, { tyres: 1, brakes: 1 });
+  let roomReleases = 0;
+  const release = new Function("departureWheels", "G", "GarageScene", `let _spMesh, _spMeshKey = "car", _spBase;
+    return ({${fnSource(read("js/garage/setup-camera.js"), "release() {")}}).release;`)(wheels, G, { release() { roomReleases++; } });
+  assert.equal(release(), false);
+  assert.equal(h.freed.length, 0, "the visible garage retains all four wheel layers");
+  assert.equal(roomReleases, 0);
+  G.setupPreviewOn = false;
+  assert.equal(release(), true);
+  assert.equal(h.freed.length, 4, "phone/prewarm release drops all common wheel GPU handles");
+  assert.equal(roomReleases, 1);
+  release();
+  assert.equal(h.freed.length, 4, "public release does not double-free wheel layers");
+  wheels.prepare("car", {}, { tyres: 1, brakes: 1 });
+  assert.equal(h.recipes.length, 4, "the next garage visit restores its wheel layers");
+});

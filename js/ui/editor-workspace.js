@@ -86,7 +86,11 @@ const EditorWorkspace = (function () {
       // when no transport is active; an edited or paused sequence keeps its pose.
       if (on && options.defaultPreview && (!session || session.hidden)) {
         const button = doc.getElementById(options.defaultPreview);
-        if (button) button.click();
+        if (button) {
+          // The domain hides its sheet for playback and restores it on Stop.
+          // Leave edit furniture ready for that return rather than hiding it twice.
+          setPreview(false); button.click(); return;
+        }
       }
       setPreview(on);
     };

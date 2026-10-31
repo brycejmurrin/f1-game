@@ -702,6 +702,7 @@ let _spWheelDistance = 0, _spWheelSteer = 0;
 let _flapBustAt = 0;
 function spMeshBust() {
   _spMeshKey = ""; GarageScene.dropPreviewMeshes();
+  if (departureWheels) departureWheels.release();
   _flapBustAt = typeof performance !== "undefined" ? performance.now() : 0;
 }
 function garageSeat() {
@@ -1371,6 +1372,7 @@ return {
   // garage is on screen. The cleared key makes the next getSetupPreviewMesh rebuild.
   release() {
     if (G.setupPreviewOn) return false;
+    if (departureWheels) departureWheels.release();
     GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
