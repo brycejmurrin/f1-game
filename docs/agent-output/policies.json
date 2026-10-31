@@ -566,6 +566,11 @@
       "presentation": "native",
       "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, queued versus unknown delivery, replyRetrieved and retrySafe. Never expose message stdin or credentials."
     },
+    "tools/ci/claude-transcript.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON retrieval verdict; no terminal transcript or credentials in diagnostics. Dedicated reader checkout, confirmed export, deadline and no model prompts. Helper for cloud transcript snapshots, never a general shell runner."
+    },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",

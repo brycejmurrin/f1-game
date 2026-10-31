@@ -2697,6 +2697,11 @@ test("apex_claude_agents discovery, mock followup and refusals use the existing 
   assert.equal(refused.error, "unsupported_verb");
   const share = JSON.parse(callCli("apex_claude_agents", { verb: "followup", id: "cshk_share", options: { text: "status" } }).stdout);
   assert.equal(share.error, "bad_args");
+  const snapshot = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { refresh: true, maxChars: 500 }, dryRun: true }).stdout);
+  assert.equal(snapshot.dryRun, true);
+  assert.equal(snapshot.verb, "transcript");
+  const unpinned = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { offset: 500 } }).stdout);
+  assert.equal(unpinned.error, "bad_args");
 });
 
 test("apex_cursor_agents publishes four properties and stays inside the tools/list byte budget", () => {

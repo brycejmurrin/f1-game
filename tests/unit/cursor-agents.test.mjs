@@ -1269,3 +1269,84 @@ test("MCP descriptor is compact and exposes honest mutation/network hints", asyn
 });
 
 }
+
+// Cloud transcript snapshots: same registered suite, no live provider traffic.
+{
+const { createClaudeAgents } = await import("../../tools/ci/claude-agents.mjs");
+const { createClaudeTools } = await import("../../tools/mcp/apex-claude-agents.mjs");
+const { spawnSync } = await import("node:child_process");
+const { fileURLToPath } = await import("node:url");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ID = "cse_transcript123";
+function fixture(t) {
+  const parent = path.join(ROOT, "artifacts", "claude-transcript-tests");
+  fs.mkdirSync(parent, { recursive: true });
+  const root = fs.mkdtempSync(path.join(parent, "case-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+test("cloud transcript retrieval publishes a pinned, bounded snapshot and reuses it without refetch", async (t) => {
+  const root = fixture(t); let calls = 0; let exported;
+  const handle = createClaudeAgents({ root, now: () => "2026-10-31T00:00:00Z", runReader: async (argv, options) => {
+    calls++; assert.equal(options.executable, "python3"); assert.equal(options.timeoutMs, 48000);
+    assert.equal(argv[argv.indexOf("--id") + 1], ID);
+    exported = argv[argv.indexOf("--output") + 1];
+    fs.writeFileSync(exported, "user: status\nassistant: READY\n0123456789");
+    return { exit: 0, stdout: JSON.stringify({ ok: true, source: "cloud_teleport_export" }) };
+  } });
+  const first = await handle({ verb: "transcript", id: ID, options: { maxChars: 8 } });
+  assert.equal(first.ok, true); assert.equal(first.text, "user: st");
+  assert.deepEqual([first.live, first.untrustedData, first.source], [false, true, "cloud_teleport_export"]);
+  assert.equal(first.nextOffset, 8);
+  assert.equal(fs.statSync(exported).mode & 0o777, 0o600);
+  const second = await handle({ verb: "transcript", id: ID, options: { offset: first.nextOffset, snapshotId: first.snapshotId, maxChars: 8 } });
+  assert.deepEqual([second.text, calls], ["atus\nass", 1]);
+  const changed = await handle({ verb: "transcript", id: ID, options: { offset: 8, snapshotId: "a".repeat(64) } });
+  assert.equal(changed.error, "snapshot_changed");
+  fs.appendFileSync(exported, "tampered");
+  assert.equal((await handle({ verb: "transcript", id: ID })).error, "snapshot_changed");
+});
+
+test("transcript dryRun/invalid continuations never create files or invoke the reader", async (t) => {
+  const root = fixture(t);
+  const tools = createClaudeTools({ root, runReader: () => assert.fail("must not fetch") });
+  const invoke = (args) => tools.handlers.apex_claude_agents({ verb: "transcript", id: ID, ...args });
+  assert.equal((await invoke({ dryRun: true })).structuredContent.dryRun, true);
+  for (const options of [{ offset: 1 }, { offset: -1 }, { refresh: "yes" }, { maxChars: 32001 }, { snapshotId: "bad" }, { refresh: true, offset: 2, snapshotId: "a".repeat(64) }]) assert.equal((await invoke({ options })).isError, true);
+  assert.equal(fs.existsSync(path.join(root, "artifacts")), false);
+});
+
+test("failed refresh never substitutes a stale snapshot; missing export and malformed receipts fail", async (t) => {
+  const root = fixture(t); let fail = false;
+  const handle = createClaudeAgents({ root, runReader: async (argv) => {
+    if (fail) return { exit: 1, stdout: '{"ok":false,"error":"reader_busy"}' };
+    fs.writeFileSync(argv[argv.indexOf("--output") + 1], "history");
+    return { exit: 0, stdout: '{"ok":true,"source":"cloud_teleport_export"}' };
+  } });
+  assert.equal((await handle({ verb: "transcript", id: ID })).ok, true); fail = true;
+  const rejected = await handle({ verb: "transcript", id: ID, options: { refresh: true } });
+  assert.equal(rejected.ok, false); assert.equal(rejected.error, "reader_busy");
+  for (const result of [{ error: "timeout" }, { exit: 0, stdout: "broken" }, { exit: 0, stdout: '{"ok":true,"source":"cloud_teleport_export"}' }]) {
+    const other = createClaudeAgents({ root: fixture(t), runReader: async () => result });
+    assert.equal((await other({ verb: "transcript", id: ID })).ok, false);
+  }
+});
+
+test("PTY export driver sends only the built-in export command and rejects trust prompts", (t) => {
+  const root = fixture(t), helper = path.join(ROOT, "tools/ci/claude-transcript.py");
+  const cli = path.join(root, "fake-claude");
+  fs.writeFileSync(cli, '#!/usr/bin/env python3\nimport sys,pathlib,time\nassert sys.argv[1:5]==["--safe-mode","--tools","","--strict-mcp-config"]\nprint("Session resumed\\n❯",flush=True)\nline=sys.stdin.readline().strip()\nassert line.startswith("/export "),line\npathlib.Path(line[8:]).write_text("user: status\\nassistant: fixture reply")\nprint("Conversation expor ed to: "+line[8:],flush=True)\nsys.stdout.write("\\x1b[1A\\x1b[19Gt\\x1b[1B");sys.stdout.flush()\ntime.sleep(3)\n', { mode: 0o700 });
+  const output = path.join(root, "snapshot.txt");
+  const code = 'import importlib.util,sys,pathlib,json;spec=importlib.util.spec_from_file_location("reader",sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);print(json.dumps(m.drive(sys.argv[2],"cse_fixture",pathlib.Path(sys.argv[3]),pathlib.Path(sys.argv[4]),5)))';
+  const r = spawnSync("python3", ["-c", code, helper, cli, root, output], { encoding: "utf8", timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  const body = JSON.parse(r.stdout); assert.equal(body.ok, true); assert.equal(body.newCloudMessagesSent, 0);
+  assert.equal(fs.readFileSync(output, "utf8"), "user: status\nassistant: fixture reply");
+  const cli2 = path.join(root, "trust-claude");
+  fs.writeFileSync(cli2, '#!/usr/bin/env python3\nimport time\nprint("Yes, I trust this folder",flush=True)\ntime.sleep(3)\n', { mode: 0o700 });
+  const denied = spawnSync("python3", ["-c", code, helper, cli2, root, path.join(root, "absent.txt")], { encoding: "utf8", timeout: 10000 });
+  assert.equal(JSON.parse(denied.stdout).error, "reader_setup_required");
+  assert.equal(fs.existsSync(path.join(root, "absent.txt")), false);
+});
+}

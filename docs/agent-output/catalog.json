@@ -880,6 +880,12 @@
       ]
     },
     {
+      "path": "tools/ci/claude-transcript.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

@@ -2,7 +2,8 @@
 /**
  * @doc Claude Code CLI adapter: auth, known cloud references, followups and local session reads.
  * Cloud references are a local address book, NOT a live provider inventory. Sending queues one
- * message; it never waits for a response, retries, teleports, uploads a repository or starts a worker.
+ * message; it never waits for a response, retries, uploads a repository or starts a worker.
+ * Transcript retrieval teleports only inside an explicitly configured dedicated reader clone.
  * Sources: https://code.claude.com/docs/en/cli-reference
  *          https://code.claude.com/docs/en/claude-code-on-the-web#send-follow-ups-from-the-cli
  */
@@ -10,12 +11,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createHash, randomUUID } from "node:crypto";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SESSION = /^(?:cse_|session_)[A-Za-z0-9_-]{1,128}$/;
 export const CLAUDE_OPTIONS = Object.freeze({
   capabilities: [], auth: [], list: ["limit"], remember: ["title"],
   followup: ["text", "textFile"], "local-list": ["all", "limit"], "local-logs": ["maxChars"],
+  transcript: ["refresh", "offset", "maxChars", "snapshotId"],
 });
 const fail = (error, message, fix) => Object.assign(new Error(message), { code: error, fix });
 const object = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
@@ -43,13 +46,13 @@ export function validateClaudeRequest(args) {
   if (!object(args)) throw fail("bad_args", "Arguments must be an object");
   for (const key of Object.keys(args)) if (!["verb", "id", "options", "dryRun"].includes(key)) throw fail("bad_args", `Unknown argument: ${key}`);
   const { verb } = args;
-  if (typeof verb !== "string" || !Object.hasOwn(CLAUDE_OPTIONS, verb)) throw fail("unsupported_verb", `Supported verbs: ${Object.keys(CLAUDE_OPTIONS).join(", ")}`, "Cloud launch, attach, cancel, transcript and usage are not implemented; capabilities describes the supported routes.");
+  if (typeof verb !== "string" || !Object.hasOwn(CLAUDE_OPTIONS, verb)) throw fail("unsupported_verb", `Supported verbs: ${Object.keys(CLAUDE_OPTIONS).join(", ")}`, "Cloud launch, attach, cancel and usage are not implemented; capabilities describes the supported routes.");
   if (args.dryRun != null && typeof args.dryRun !== "boolean") throw fail("bad_args", "dryRun must be boolean");
   const o = args.options ?? {};
   if (!object(o)) throw fail("bad_args", "options must be an object");
   for (const key of Object.keys(o)) if (!CLAUDE_OPTIONS[verb].includes(key)) throw fail("bad_args", `Unknown option ${key} for ${verb}`);
   const out = { verb, options: { ...o }, dryRun: args.dryRun === true };
-  if (["remember", "followup"].includes(verb)) out.id = cloudId(args.id);
+  if (["remember", "followup", "transcript"].includes(verb)) out.id = cloudId(args.id);
   else if (verb === "local-logs") out.id = text(args.id, "local session id", 128);
   else if (args.id != null) throw fail("bad_args", `${verb} does not accept an id`);
   if (verb === "local-logs" && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(out.id)) throw fail("bad_args", "Use a local session id, not flags, a URL or a name");
@@ -57,6 +60,15 @@ export function validateClaudeRequest(args) {
   if (verb === "local-list" && o.all != null && typeof o.all !== "boolean") throw fail("bad_args", "all must be boolean");
   if (verb === "local-logs") out.options.maxChars = integer(o.maxChars ?? 8000, "maxChars", 32000);
   if (verb === "remember") out.options.title = text(o.title, "title", 160);
+  if (verb === "transcript") {
+    if (o.refresh != null && typeof o.refresh !== "boolean") throw fail("bad_args", "refresh must be boolean");
+    out.options.offset = o.offset ?? 0;
+    if (!Number.isInteger(out.options.offset) || out.options.offset < 0 || out.options.offset > 8 * 1024 * 1024) throw fail("bad_args", "offset must be an integer in 0..8388608");
+    out.options.maxChars = integer(o.maxChars ?? 8000, "maxChars", 32000);
+    if (o.refresh && out.options.offset !== 0) throw fail("bad_args", "refresh starts at offset 0; pin snapshotId when paging");
+    if (o.snapshotId != null && (typeof o.snapshotId !== "string" || !/^[a-f0-9]{64}$/.test(o.snapshotId))) throw fail("bad_args", "snapshotId must be a SHA-256 hex digest");
+    if (out.options.offset > 0 && !o.snapshotId) throw fail("bad_args", "Continuation reads require snapshotId from the first page");
+  }
   if (verb === "followup") {
     if ((o.text == null) === (o.textFile == null)) throw fail("bad_args", "followup needs exactly one of options.text or options.textFile");
     if (o.text != null) out.options.text = text(o.text, "text", 100000);
@@ -80,13 +92,13 @@ function messageOf(request, root) {
 const clean = (s) => String(s).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").replace(/\b(?:sk-ant-[A-Za-z0-9_-]+|Bearer\s+[^\s"']+)/gi, "[REDACTED]");
 const capabilities = () => ({
   ok: true, provider: "claude-code-cli", verbs: Object.keys(CLAUDE_OPTIONS),
-  cloud: { list: "known_references_only", discover: "interactive claude --teleport", followup: "queue_only", attach: "not_implemented", launch: "not_implemented", transcript: "not_implemented", usage: "not_implemented" },
+  cloud: { list: "known_references_only", discover: "interactive claude --teleport", followup: "queue_only", attach: "not_implemented", launch: "not_implemented", transcript: "bounded_teleport_snapshot", usage: "not_implemented" },
   local: { list: true, logs: true, launch: false },
   auth: "Uses the CLI login on the MCP server host; credentials never belong in tool arguments.",
 });
 
 /** Asynchronous and bounded; no shell, terminal, automatic login, downloads or request retry. */
-export function runClaude(argv, { input = "", cwd = ROOT, signal, timeoutMs = 45000, env = process.env } = {}) {
+export function runClaude(argv, { input = "", cwd = ROOT, signal, timeoutMs = 45000, env = process.env, executable } = {}) {
   return new Promise((resolve) => {
     let child, stdout = "", stderr = "", bytes = 0, settled = false, timer;
     let sent = false;
@@ -104,7 +116,7 @@ export function runClaude(argv, { input = "", cwd = ROOT, signal, timeoutMs = 45
     const abort = () => stop("cancelled");
     if (signal?.aborted) return finish({ exit: null, error: "cancelled" });
     try {
-      const bin = env.APEX_CLAUDE_BIN || "claude";
+      const bin = executable || env.APEX_CLAUDE_BIN || "claude";
       child = spawn(bin, argv, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"], shell: false });
       child.once("spawn", () => { sent = true; });
     } catch { return finish({ exit: null, error: "cli_unavailable" }); }
@@ -125,8 +137,50 @@ export function runClaude(argv, { input = "", cwd = ROOT, signal, timeoutMs = 45
   });
 }
 
-export function createClaudeAgents({ root = ROOT, run = runClaude, now = () => new Date().toISOString() } = {}) {
+export function createClaudeAgents({ root = ROOT, run = runClaude, runReader = runClaude, now = () => new Date().toISOString() } = {}) {
   const registry = path.join(root, "artifacts", "claude-agents.json");
+  async function transcript(request, signal) {
+    const { id, options: o } = request;
+    const base = path.join(root, "artifacts", "claude-transcripts", id);
+    const index = path.join(base, "latest.json");
+    const safe = (file) => {
+      const real = fs.realpathSync(file);
+      if (!within(fs.realpathSync(root), real) || !within(path.join(fs.realpathSync(root), "artifacts", "claude-transcripts", id), real)) throw fail("path_escaped", "Transcript snapshot escaped its directory");
+      return real;
+    };
+    let meta;
+    try { if (fs.statSync(safe(index)).size > 4096) throw fail("snapshot_invalid", "Snapshot metadata is too large"); meta = JSON.parse(fs.readFileSync(safe(index), "utf8")); }
+    catch (e) { if (e.code !== "ENOENT") throw e; }
+    if (o.refresh || !meta) {
+      if (o.snapshotId || o.offset) throw fail("snapshot_changed", "Requested snapshot is no longer the current cached snapshot");
+      fs.mkdirSync(base, { recursive: true, mode: 0o700 }); safe(base);
+      const folder = fs.mkdtempSync(path.join(base, "fetch-")); fs.chmodSync(folder, 0o700);
+      const file = path.join(folder, "snapshot.txt");
+      const result = await runReader([fileURLToPath(new URL("./claude-transcript.py", import.meta.url)), "--id", id, "--output", file, "--root", root], { executable: "python3", cwd: root, timeoutMs: 48000, signal });
+      if (result.error) return { ok: false, error: result.error, id, message: "Transcript retrieval did not finish; no stale snapshot was substituted" };
+      let receipt;
+      try { receipt = JSON.parse(result.stdout); } catch { throw fail("reader_incomplete", "Transcript reader did not return a valid receipt"); }
+      if (result.exit !== 0 || receipt.ok !== true || receipt.source !== "cloud_teleport_export") return { ok: false, error: receipt.error || "reader_incomplete", message: receipt.message || "Cloud snapshot export failed", id };
+      if (!fs.statSync(safe(file)).isFile() || fs.statSync(file).size > 8 * 1024 * 1024 || fs.statSync(file).size === 0) throw fail("snapshot_invalid", "Snapshot must be nonempty and at most 8 MiB");
+      fs.chmodSync(file, 0o600);
+      const raw = fs.readFileSync(file);
+      meta = { id, source: "cloud_teleport_export", snapshotId: createHash("sha256").update(raw).digest("hex"), retrievedAt: now(), file: path.relative(base, file), bytes: raw.length };
+      const temp = `${index}.${randomUUID()}.tmp`;
+      try { fs.writeFileSync(temp, JSON.stringify(meta) + "\n", { mode: 0o600, flag: "wx" }); fs.renameSync(temp, index); }
+      finally { try { fs.unlinkSync(temp); } catch { /* already renamed */ } }
+    }
+    if (meta.id !== id || meta.source !== "cloud_teleport_export" || !/^[a-f0-9]{64}$/.test(meta.snapshotId) || !/^fetch-[A-Za-z0-9]+\/snapshot\.txt$/.test(meta.file) || !Number.isFinite(Date.parse(meta.retrievedAt))) throw fail("snapshot_invalid", "Invalid cloud snapshot metadata");
+    if (o.snapshotId && o.snapshotId !== meta.snapshotId) throw fail("snapshot_changed", "Snapshot changed; restart at offset 0 instead of mixing pages");
+    const file = safe(path.join(base, meta.file));
+    if (fs.statSync(file).size > 8 * 1024 * 1024) throw fail("snapshot_invalid", "Snapshot is too large");
+    const raw = fs.readFileSync(file);
+    if (createHash("sha256").update(raw).digest("hex") !== meta.snapshotId) throw fail("snapshot_changed", "Snapshot content changed; retrieve a fresh snapshot");
+    const content = clean(raw.toString("utf8"));
+    if (o.offset > content.length) throw fail("bad_args", "offset is beyond the transcript");
+    const page = content.slice(o.offset, o.offset + o.maxChars);
+    const next = o.offset + page.length;
+    return { ok: true, id, source: meta.source, live: false, untrustedData: true, retrievedAt: meta.retrievedAt, snapshotId: meta.snapshotId, path: path.relative(root, file), totalChars: content.length, offset: o.offset, nextOffset: next < content.length ? next : null, text: page, note: "Downloaded snapshot; cloud-compacted history may contain summaries rather than earlier raw messages." };
+  }
   function readRegistry() {
     try {
       if (fs.lstatSync(registry).isSymbolicLink() || !within(fs.realpathSync(root), fs.realpathSync(registry))) throw fail("path_escaped", "Cloud reference registry must stay inside the checkout");
@@ -162,6 +216,7 @@ export function createClaudeAgents({ root = ROOT, run = runClaude, now = () => n
       const { verb, options: o } = r;
       if (r.dryRun) return { ok: true, dryRun: true, verb, ...(r.id && { id: r.id }), ...(verb === "followup" && { delivery: "not_attempted", replyRetrieved: false }), source: verb === "list" ? "local_reference_registry" : "claude-code-cli", options: Object.keys(o) };
       if (verb === "capabilities") return capabilities();
+      if (verb === "transcript") return await transcript(r, signal);
       if (verb === "list") {
         const sessions = readRegistry().sessions;
         return { ok: true, source: "local_reference_registry", live: false, total: sessions.length, sessions: sessions.slice(0, o.limit), truncated: sessions.length > o.limit, hint: "These are remembered addresses, not account inventory. Use claude --teleport interactively to discover cloud sessions." };
