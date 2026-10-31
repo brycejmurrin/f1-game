@@ -4265,7 +4265,7 @@ test("software GL quit-to-menu and garage-close use MenuTeardown readback cover"
   assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
   const game = gameSource();
   assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0")
-    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.cover()") && game.includes("PerfGov.softwareRaster()"));
+    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.teardownActive()") && game.includes("PerfGov.softwareRaster()"));
   assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
   const tlx = readFile("js/render/three/tlx.js");
   assert.ok(tlx.includes("softwareGlUiReadbackDefer") && tlx.includes("_queueSoftBlit"));

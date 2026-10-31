@@ -10619,6 +10619,9 @@
       ],
       "cover": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "teardownActive": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ]
     },
     "js/perf/metrics-overlay.js": {

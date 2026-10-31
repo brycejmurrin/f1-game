@@ -58,6 +58,9 @@ const MenuTeardown = (function () {
     if (mask !== 0) return true;
     return pauseSheetUp();
   }
+  function teardownActive() {
+    return software() && mask !== 0;
+  }
   function garageBusyPlate() {
     return !software();
   }
@@ -97,7 +100,7 @@ const MenuTeardown = (function () {
 
   // pauseSheetUp stays module-local (cover/report call it); report remains the probe seam.
   return {
-    cover, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
+    cover, teardownActive, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
     beginQuit, endQuit, beginGarageClose, endGarageClose,
   };
 })();

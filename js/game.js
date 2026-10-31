@@ -7304,7 +7304,7 @@ function render(dt) {
     }
     return;
   }
-  try { if (!setupPreviewOn && state !== "results" && typeof MenuTeardown !== "undefined" && MenuTeardown.cover && MenuTeardown.cover() && typeof PerfGov !== "undefined" && PerfGov.softwareRaster && PerfGov.softwareRaster()) return; } catch (_) { /* harness */ }
+  try { if (!setupPreviewOn && state !== "results" && typeof MenuTeardown !== "undefined" && MenuTeardown.teardownActive && MenuTeardown.teardownActive() && typeof PerfGov !== "undefined" && PerfGov.softwareRaster && PerfGov.softwareRaster()) return; } catch (_) { /* harness */ }
   if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
   if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();
   // The live Home garage returned above. Other menus hide undrawn canvases
