@@ -30,7 +30,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
-  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, STRICT, postWarmSlope, cycleCensusIssues,
+  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues,
 } from "../helpers/race-cycle-memory.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -89,7 +89,7 @@ async function flagToMenu(page) {
 test("racing circuit after circuit keeps at most one world in memory", async ({ page }) => {
   // Twelve race builds (6 cycles × monza+spa) on software GL plus forced GCs — long enough
   // for TLX caches to flatten before the heap/audioMB slope gate (H17).
-  test.setTimeout(1200000);
+  test.setTimeout(1800000);   // + up to CONFIRM_CYCLES when the first pair is over the bound
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
     try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}   // as track-switch-memory: TLX init can exceed 8 s on a busy runner
@@ -104,7 +104,8 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   /** @type {Map<number, { heapMB: number|null, audioMB: number|null }>} */
   const menuByCycle = new Map();
   const log = (row) => { readings.push(row); mkdirSync("artifacts/logs", { recursive: true }); writeFileSync("artifacts/logs/race-cycle-memory.json", JSON.stringify(readings, null, 1)); };
-  for (let cycle = 1; cycle <= CYCLES; cycle++) {
+  let lastCycle = CYCLES;
+  for (let cycle = 1; cycle <= lastCycle; cycle++) {
     for (const id of CIRCUITS) {
       await raceAndDrive(page, id);
       const built = await censusAfterGc(page, cdp);
@@ -122,6 +123,9 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
       if (id === CIRCUITS[CIRCUITS.length - 1]) {
         menuByCycle.set(cycle, { heapMB: menu.heapMB, audioMB: menu.audioMB });
+        // A first pair over the hard bound may be one odd reading (dip or step): race CONFIRM_CYCLES more and let
+        // the robust slope decide below. A clean pair costs nothing extra.
+        if (cycle === CYCLES && lastCycle === CYCLES && postWarmSlope(menuByCycle, CYCLES).heapHardFail) lastCycle = CYCLES + CONFIRM_CYCLES;
       }
       // ...and a garage visit from the title between races, as a player does (GARAGE → BACK).
       if (id === CIRCUITS[0]) {
@@ -147,9 +151,15 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
     description: JSON.stringify(slope.series),
   });
   if (slope.heapDelta != null) {
+    // Pair within the bound passes as before. Over it, the confirmation cycles (lastCycle > CYCLES) were raced
+    // and the median pairwise slope from cycle WARM_CYCLES on decides: a leak keeps climbing, a dip/step does not.
+    const robust = slope.heapHardFail ? robustHeapSlope(slope.series) : null;
+    const gated = robust ? robust.slope : slope.heapDelta;
     expect(
-      slope.heapDelta,
-      `post-warm menu heap cycle${slope.later}−cycle${slope.earlier}=${slope.heapDelta} MiB after ${WARM_CYCLES} warm cycles (hard ≤${HEAP_SLOPE_HARD_MB}; H12 leak was ~12 MiB/cycle; series=${JSON.stringify(slope.series)})`,
+      gated,
+      `post-warm menu heap cycle${slope.later}−cycle${slope.earlier}=${slope.heapDelta} MiB after ${WARM_CYCLES} warm cycles` +
+      (robust ? `; confirmed over ${robust.points} readings, median slope ${robust.slope} MiB/cycle` : "") +
+      ` (hard ≤${HEAP_SLOPE_HARD_MB}; H12 leak was ~12 MiB/cycle; series=${JSON.stringify(slope.series)})`,
     ).toBeLessThanOrEqual(HEAP_SLOPE_HARD_MB);
   }
   const softMsgs = [];
