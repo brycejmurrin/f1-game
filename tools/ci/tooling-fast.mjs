@@ -57,12 +57,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 import { changedPaths } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
+import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
 import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
 // Cycle-safe: node-plan reads TOOLING_FAST_FILES only inside functions, and this
@@ -295,7 +297,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // The ready stamp names the tree this run MEASURED (tools/lib/work-tree-id.mjs),
   // not HEAD read afterwards: the edit loop runs the suite on a dirty tree, and
   // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
-  // Only a full suite stamps, so only a full suite pays for the tree hash.
+  // CLI subset runs also retain source-bound evidence; only a full suite stamps.
   const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
   // car-shade's unchanged CPU benchmark measured 1875 ms alongside other
   // files versus 293–562 ms alone. game-vm's unchanged 12 s boot/race wall
@@ -306,8 +308,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   files = [...isolatedFiles, ...files.filter((file) => !isolated.has(rel(file)))];
   const ran = new Set(files.map(rel));
   const fullSuite = ran.size === TOOLING_FAST_FILES.length && TOOLING_FAST_FILES.every((f) => ran.has(f));
-  const startHead = fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "";
-  const startTree = fullSuite ? workTreeId(ROOT) : null;
+  const source = opts.verification ? verificationIdentity(ROOT) : null;
+  const evidenceLog = opts.verification ? path.join(path.dirname(logPath), `verification-${randomUUID()}.log`) : null;
+  const evidence = evidenceLog ? beginVerification({ logPath: evidenceLog, files: files.map(rel), source }) : null;
+  if (evidence) emit(verificationMarker(evidence).replace(/^\[tooling-fast\] /, ""));
+  const startHead = source?.head || (fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "");
+  const startTree = source?.tree || (fullSuite ? workTreeId(ROOT) : null);
 
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
@@ -450,7 +456,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // The tree must be the same before and after the run: an edit made while
   // the suite ran (the edit hook blocks only a live BROWSER run) means the
   // verdict is about neither tree.
-  const endTree = fullSuite && startTree ? workTreeId(ROOT) : null;
+  const endSource = opts.verification ? verificationIdentity(ROOT) : null;
+  const endTree = endSource?.tree || (fullSuite && startTree ? workTreeId(ROOT) : null);
   const stampTree = ok && fullSuite && startTree && startTree === endTree ? startTree : null;
   if (stampTree) emit(`= tree ${stampTree} head ${startHead}`);
   // --quiet drops PASS lines, so a red run names its files and its log here, always, before the verdict.
@@ -463,6 +470,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
+  if (evidenceLog) {
+    fs.writeFileSync(evidenceLog, lines.join("\n") + "\n");
+    if (!finishVerification(evidence, { logPath: evidenceLog, source: endSource, ok, notStarted })) {
+      console.warn("[tooling-fast] source receipt unavailable; verdict remains historical evidence only");
+    } else console.log(`[tooling-fast] source receipt: ${path.relative(ROOT, evidenceLog)}.receipt.json`);
+  }
   // Full-suite green on an UNCHANGED tree → stamp it for ready-gate.mjs
   // (draft→ready must not flip without tooling-fast evidence; #1111
   // designer-canvas). The stamp is the START head plus the tree hash the suite
@@ -1256,6 +1269,7 @@ if (isMain) {
     console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
   }
   const { ok, failed: nFailed } = await runToolingFast(files, {
+    verification: true,
     jobs: parsed.jobs,
     bail: parsed.bail,
     quiet: parsed.quiet,

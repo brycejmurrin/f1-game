@@ -20,6 +20,8 @@ function harness({ dailyOn, stub, cls = "standard" }) {
     $: () => back, clearTimeout() {}, Log: { warn: (...a) => events.push(["warn", a[1]]) }, announce: () => events.push(["failed"]),
     gfx: { warming: () => false }, introNow: () => 0, menuSlice: async () => {},
     RaceEntryProfile: { spanAsync: async (_n, fn) => fn(), beginUi() {}, setProgressSink() {}, afterPaint: async () => {} },
+    // These cases isolate DAILY hydration with the departure payload already present.
+    GarageDepartureMotion: {}, GarageDepartureWheels: {},
     UiExperience: { isPracticePick: () => false }, isTimeTrial: () => true,
     entrySettings: () => ctx.settings, loadingScreen: { stop() {} }, cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
     daily: { isActive: () => dailyOn, current: () => (dailyOn ? { class: cls } : null) }, SessionRecords: stub ? { _stub: true } : {},

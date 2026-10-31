@@ -268,7 +268,7 @@ test.describe.parallel("Career — the guide", () => {
     await boot(page);
     await startCareer(page);
     await page.locator("#cr-guide").click();
-    const body = await page.locator("#cg-body").innerText();
+    const body = await page.locator("#cg-body").textContent();
     const c = await page.evaluate(() => ({
       win: Career.PRIZE[0], last: Career.prizeFor(22), bonus: Career.OBJ_BONUS,
       mult: Career.RESEARCH_MULT, slots: Career.SLOTS,
@@ -300,7 +300,7 @@ test.describe.parallel("Career — the guide", () => {
     await boot(page);
     await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "OKO", seed: 4 }));
     await page.locator("#cr-guide").click();
-    const body = await page.locator("#cg-body").innerText();
+    const body = await page.locator("#cg-body").textContent();
     const asks = await page.evaluate(() => Career.freeAgents().map((a) => a.ask));
     expect(body).toContain(Math.min(...asks) + " cr a round");
     expect(body).toContain(Math.max(...asks) + " cr a round");

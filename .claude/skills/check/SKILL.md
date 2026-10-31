@@ -26,11 +26,11 @@ third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structura
    snapshot. It finds OPEN PRs only: "no open PR" may mean merged — check with `gh api "repos/brycejmurrin/f1-game/pulls?state=all&head=brycejmurrin:<branch>"`
    (or MCP `search_pull_requests`), then pass `--pr <n>`. Use `git rev-parse HEAD` when the
    snapshot has no head SHA. No PR is not evidence that no run exists.
-2. `node tools/ci/ci-watch.mjs --sha <head> --once` — the `= ci …` line. Anything but `passed` is not green:
+2. `node tools/ci/ci-watch.mjs --sha <head> --once` — the `= ci …` line (its default floor is the PR's last run-ci/ready/reopen event, so an older head reads `none`: add `--since none` to look further back). Anything but `passed` is not green:
    `running (0 failed)` is not stale; `none` = the push started no run; `hollow` = a draft without `run-ci`;
    `superseded (merged)` → re-read with `--sha <merge sha> --pages`; `superseded (new head …)` → re-read on that
    sha; `blocked` = conflicts; `unknown` = no API evidence.
-3. The `gate` line: `gh api repos/<owner>/<repo>/commits/<head>/statuses`, newest `context: gate` (ci-watch does not
+3. The `gate` line: `gh api repos/brycejmurrin/f1-game/commits/<head>/statuses`, newest `context: gate` (ci-watch does not
    read statuses). Absent on a draft or a PR without `land` is expected; for one PR's land readiness (Plan, LAND/WAIT)
    `node tools/ci/pr-board.mjs --pr <n>`.
 4. Only when step 1 shows a live run (or `artifacts/logs/` has a log newer than

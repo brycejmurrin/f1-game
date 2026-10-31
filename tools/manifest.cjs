@@ -353,6 +353,7 @@ const FULL = [
   "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/energy-plan.js",    // EnergyPlan: manual per-sector ERS policy (#1580); neutral = no effect
   "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
   "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
   "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
@@ -1079,6 +1080,8 @@ const LAZY_RACE = [
 // Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
 // Hub WATCH / Director eval SHOTS).
 const LAZY_RACE_SESSION = [
+  "js/data/garage-departure-motion.js",
+  "js/garage/departure-wheels.js",
   "js/race/reliability.js",
   "js/race/damage.js",
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
@@ -1291,6 +1294,7 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 // global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
 // is FULL and read at call time, so it has no edges and no boot stub.
 const LAZY_UI_PRESETS = [
+  "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js", // LayoutPresets
 ];
 const LAZY_UI_PRESETS_EDGES = [];

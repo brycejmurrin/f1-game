@@ -25,7 +25,7 @@ launch a browser (AGENTS.md rule 10, hook-enforced).
 
 ## Workflow
 
-1. Pick the tool: one `__apex` value → `tools/shot/apex-eval.mjs`; one framed still →
+1. Pick the tool (the `apex_eval` / `apex_shot` MCP wraps are the cheaper route; the CLI is for pinning a backend, `references/commands.md`): one `__apex` value → `tools/shot/apex-eval.mjs`; one framed still →
    `tools/shot/shot.mjs`; mode/track fanout → `tools/shot/apex-capture.mjs`; GLX vs TLX →
    `tools/shot/backend-compare.mjs`; flicker → `tools/shot/motion-capture.mjs`; frame time →
    `tools/perf/profile.mjs`; car only → `tools/car/render-car.mjs`. Menus/DOM resize surveys are

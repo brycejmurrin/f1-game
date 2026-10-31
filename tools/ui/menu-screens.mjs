@@ -597,6 +597,15 @@ export const OVERLAY_IDS = [
   // click on #mb-race times out on a button that measures perfectly visible
   // (quali SKIPPED behind duelpicker in every sweep, 2026-09-30).
   "duel-picker",
+  // UiLayers layers (js/ui/layers.js DEFS) the list had drifted from: the free
+  // camera, the garage arrival tuner, the TITLE LAYOUT editor bar and the HUD
+  // arrange bar. ui-reset.mjs closes them through their doors; this list is
+  // only its hidden=true FALLBACK. Deliberately absent: #overlay (the title
+  // itself), #rotate-device (CSS-gated on body.in-race + a portrait media
+  // query, never `hidden` — the reset strips in-race instead), and the
+  // #ios-install / #install-chip tips (not layers; ui-reset TIP_IDS).
+  // tests/unit/ui-reset-tap-floor.test.mjs pins this against DEFS.
+  "freecam", "garrival", "tl-editor", "hud-arrange-bar",
 ];
 
 export function listScreenIds() {

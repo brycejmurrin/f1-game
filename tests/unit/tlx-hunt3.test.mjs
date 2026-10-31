@@ -29,7 +29,7 @@ const TLX = read("js/render/three/tlx.js");
 
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
@@ -833,7 +833,7 @@ test("B14: tsl-lit groups the shadow, bake, lamp-grid, material-array and env-cu
   const ids = THREE_PATCH_IDS();
   assert.ok(ids.includes(13));
 });
-function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.186.1/MANIFEST.json")).patches; }
+function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.187.0/MANIFEST.json")).patches; }
 
 // R8 / A2 (lane TLX-2): the prop batches as attribute-instanced plain Meshes (tlx.js _aiMesh), on the REAL
 // R1 instance step and lit material, three r186 WebGL2 over the fake GL.
@@ -944,7 +944,8 @@ test("shared bind groups: last-owner eviction, context isolation and robust keys
   t.after(() => renderer.dispose());
   const manager = renderer._bindings;
   const uniforms = (...ids) => [{ isNodeUniformsGroup: true, uniforms: ids.map(id => ({ nodeUniform: { node: { id } } })) }];
-  const shared = (bindings) => manager.getSharedBindGroup("render", bindings);
+  // r187: getSharedBindGroup(bindGroup, renderContext) takes the builder's BindGroup (name + bindings).
+  const shared = (bindings) => manager.getSharedBindGroup({ name: "render", bindings });
   assert.notEqual(shared(uniforms(1, 23)), shared(uniforms(12, 3)), "uniform IDs have delimiters");
   assert.notEqual(shared([{nodeUniform: {id: 123}}]), shared(uniforms(123)), "standalone uniforms have their own prefix");
   const tex = name => [{ isSampler: true, isSampledTexture: true, texture: null, textureNode: {id: 7}, name, release() {} }];

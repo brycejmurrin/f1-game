@@ -6,12 +6,15 @@
 //   * A HUNG FILE FAILS BY NAME: node's --test-timeout bounds each test, and a
 //     per-file wall kills a child that never exits — instead of the file running
 //     to the CI job's timeout-minutes and the job reporting a nameless `cancelled`.
+import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import { verificationIdentity, beginVerification, finishVerification, readVerification, verificationPath, verificationMarker } from "../../tools/ci/verification-receipt.mjs";
 import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
@@ -22,6 +25,147 @@ import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, schedule
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
+
+test("verification receipts separate a suite verdict from current source applicability", () => {
+  const dir = tmp(), logPath = path.join(dir, "suite.log");
+  const source = { root: dir, head: "a".repeat(40), tree: "b".repeat(40) };
+  try {
+    fs.mkdirSync(path.join(dir, "tests", "unit"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "tests", "unit", "tooling-fast-runner.test.mjs"), "// selected fixture\n");
+    fs.writeFileSync(path.join(dir, "example"), "example suite\n");
+    fs.writeFileSync(path.join(dir, "another"), "another suite\n");
+    assert.equal(readVerification(logPath, source).status, "unknown");
+    fs.writeFileSync(logPath, "= run passed (1 passed, 0 failed)\n");
+    const started = beginVerification({ logPath, files: ["tests/unit/tooling-fast-runner.test.mjs"], source });
+    fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed (1 passed, 0 failed)\n");
+    assert.equal(readVerification(logPath, source).status, "unknown", "a started run is not a pass");
+    finishVerification(started, { logPath, source, ok: true });
+    const current = readVerification(logPath, { ...source, head: "c".repeat(40) });
+    assert.equal(current.status, "current", "committing the tested bytes preserves evidence");
+    assert.equal(current.verdict, "passed");
+    assert.deepEqual(current.files, ["tests/unit/tooling-fast-runner.test.mjs"]);
+    assert.equal(readVerification(logPath, { ...source, tree: "d".repeat(40) }).status, "stale");
+    assert.equal(readVerification(logPath, { ...source, root: "another-checkout" }).status, "stale");
+    assert.equal(readVerification(logPath, { ...source, tree: null }).status, "unknown");
+    fs.appendFileSync(logPath, "appended unrelated run\n");
+    assert.equal(readVerification(logPath, source).reason, "log differs from completed run");
+    const failed = beginVerification({ logPath, files: ["example"], source });
+    fs.writeFileSync(logPath, verificationMarker(failed) + "\n= run failed (0 passed, 1 failed)\n");
+    finishVerification(failed, { logPath, source, ok: false });
+    assert.equal(readVerification(logPath, source).verdict, "failed", "a matching source cannot promote a failure");
+    const changed = beginVerification({ logPath, files: ["example"], source });
+    fs.writeFileSync(logPath, verificationMarker(changed) + "\n= run passed (1 passed, 0 failed)\n");
+    finishVerification(changed, { logPath, source: { ...source, tree: "e".repeat(40) }, ok: true });
+    assert.equal(readVerification(logPath, source).reason, "source changed during verification");
+    const old = beginVerification({ logPath, files: ["example"], source });
+    const latest = beginVerification({ logPath, files: ["another"], source });
+    assert.equal(finishVerification(old, { logPath, source, ok: true }), null, "an older runner cannot replace the new receipt");
+    fs.writeFileSync(logPath, verificationMarker(old) + "\n= run failed (0 passed, 1 failed)\n");
+    assert.equal(finishVerification(latest, { logPath, source, ok: true }), null, "a newer receipt cannot adopt an older runner's log");
+    assert.equal(JSON.parse(fs.readFileSync(verificationPath(logPath), "utf8")).id, latest.id);
+    fs.rmSync(logPath);
+    finishVerification(latest, { logPath, source, ok: true });
+    assert.equal(readVerification(logPath, source).status, "unknown");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("receipt hashes detect ignored selected suites changed or deleted after a completed run", () => {
+  const dir = tmp(), logPath = path.join(dir, "artifacts", "suite.log");
+  const git = (...args) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), "artifacts/\n");
+    assert.equal(git("add", ".").status, 0);
+    fs.mkdirSync(path.dirname(logPath));
+    const selected = path.join(dir, "artifacts", "selected.test.mjs");
+    const link = path.join(dir, "artifacts", "linked.test.mjs");
+    fs.symlinkSync("selected.test.mjs", link);
+    for (const file of ["artifacts/selected.test.mjs", selected, "artifacts/linked.test.mjs"]) {
+      fs.writeFileSync(selected, "original\n");
+      const source = verificationIdentity(dir);
+      const started = beginVerification({ logPath, files: [file], source });
+      fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed\n");
+      finishVerification(started, { logPath, source: verificationIdentity(dir), ok: true });
+      assert.equal(readVerification(logPath, source).status, "current");
+      fs.writeFileSync(selected, "modified\n");
+      assert.equal(verificationIdentity(dir).tree, source.tree);
+      assert.equal(readVerification(logPath, verificationIdentity(dir)).status, "stale");
+      fs.unlinkSync(selected);
+      assert.equal(verificationIdentity(dir).tree, source.tree);
+      assert.equal(readVerification(logPath, verificationIdentity(dir)).status, "stale");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("receipt hashes detect ignored selected input changes during the run even after restoration", () => {
+  const dir = tmp(), logPath = path.join(dir, "artifacts", "suite.log");
+  const git = (...args) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), "artifacts/\n");
+    assert.equal(git("add", ".").status, 0);
+    fs.mkdirSync(path.dirname(logPath));
+    const selected = path.join(dir, "artifacts", "selected.test.mjs");
+    const source = verificationIdentity(dir);
+    for (const change of ["edit", "delete"]) {
+      fs.writeFileSync(selected, "original\n");
+      const started = beginVerification({ logPath, files: ["artifacts/selected.test.mjs"], source });
+      fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed\n");
+      if (change === "edit") fs.writeFileSync(selected, "modified\n"); else fs.unlinkSync(selected);
+      assert.equal(verificationIdentity(dir).tree, source.tree);
+      finishVerification(started, { logPath, source: verificationIdentity(dir), ok: true });
+      fs.writeFileSync(selected, "original\n");
+      const result = readVerification(logPath, source);
+      assert.equal(result.status, "stale");
+      assert.equal(result.reason, "selected input changed during verification");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("legacy or missing selected-input snapshots retain the historical verdict without proving currency", () => {
+  const dir = tmp(), logPath = path.join(dir, "suite.log");
+  const source = { root: dir, head: "a".repeat(40), tree: "b".repeat(40) };
+  try {
+    const selected = path.join(dir, "selected.test.mjs");
+    fs.writeFileSync(selected, "original\n");
+    const started = beginVerification({ logPath, files: [selected], source });
+    fs.writeFileSync(logPath, verificationMarker(started) + "\n= run passed\n");
+    const finished = finishVerification(started, { logPath, source, ok: true });
+    delete finished.inputHashes; delete finished.endInputHashes;
+    fs.writeFileSync(verificationPath(logPath), JSON.stringify(finished));
+    assert.equal(readVerification(logPath, source).status, "unknown");
+    assert.equal(readVerification(logPath, source).verdict, "passed");
+    fs.unlinkSync(selected);
+    const missing = beginVerification({ logPath, files: [selected], source });
+    fs.writeFileSync(logPath, verificationMarker(missing) + "\n= run passed\n");
+    finishVerification(missing, { logPath, source, ok: true });
+    assert.equal(readVerification(logPath, source).status, "unknown");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("verification source identity includes dirty and untracked inputs but ignores artifacts", () => {
+  const dir = tmp();
+  const git = (...args) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    fs.writeFileSync(path.join(dir, ".gitignore"), "artifacts/\n");
+    fs.writeFileSync(path.join(dir, "input.js"), "original\n");
+    assert.equal(git("add", ".").status, 0);
+    const before = verificationIdentity(dir);
+    assert.match(before.tree, /^[0-9a-f]{40,64}$/);
+    fs.mkdirSync(path.join(dir, "artifacts"));
+    fs.writeFileSync(path.join(dir, "artifacts", "output.json"), "evidence\n");
+    assert.equal(verificationIdentity(dir).tree, before.tree);
+    fs.writeFileSync(path.join(dir, "input.js"), "modified\n");
+    const dirty = verificationIdentity(dir);
+    assert.notEqual(dirty.tree, before.tree);
+    fs.writeFileSync(path.join(dir, "untracked.js"), "new input\n");
+    assert.notEqual(verificationIdentity(dir).tree, dirty.tree);
+    fs.rmSync(path.join(dir, "input.js"));
+    assert.notEqual(verificationIdentity(dir).tree, dirty.tree);
+    assert.equal(verificationIdentity(path.join(dir, "absent")).tree, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("longest recorded duration first; unmeasured files ahead of all, in list order", () => {
   const files = ["a", "b", "c", "d", "e"];
