@@ -1503,6 +1503,9 @@
       "setVisorColor": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisorDropSize": [
+        "tests/unit/camera-defaults.test.mjs"
+      ],
       "setVisorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
@@ -1521,6 +1524,9 @@
       ],
       "visorColor": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorDropSize": [
+        "tests/unit/camera-defaults.test.mjs"
       ],
       "visorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"

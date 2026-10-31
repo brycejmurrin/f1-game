@@ -126,8 +126,8 @@ test("setCamMode refuses NaN / Infinity so a poisoned index cannot stick", () =>
   assert.ok(stored.every((v) => Number.isFinite(v)), "store never receives NaN");
 });
 
-function loadCockpitOpts(disk) {
-  const store = new Map(Object.entries(disk || {}));
+function loadCockpitOpts(disk, extra = {}) {
+  const store = disk instanceof Map ? disk : new Map(Object.entries(disk || {}));
   const ctx = {
     GameStore: {
       store: {
@@ -136,6 +136,7 @@ function loadCockpitOpts(disk) {
       },
     },
     Log: { info() {} },
+    ...extra,
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8") + "\nthis.exported = CockpitOpts;",
@@ -313,6 +314,33 @@ test("VISOR BEAMS is a 0..2 slider factor stored as a percent, with level words 
   O2.setVisorBeams(0.5);
   assert.deepEqual(seen, [["visorBeams", 0.5]], "a change notifies the visor consumers like every other visor setting");
   assert.ok(!("visorBeams" in O2.CHOICES), "not a choice row: the cockpit panel builds it as a slider");
+});
+
+test("visor droplet size defaults, clamps stored percentages and persists/notifies factors", () => {
+  const key="apex26.helmetVisorDropSize";
+  for (const [stored,want] of [[undefined,1],[null,1],["",1],["  ",1],["bad",1],["Infinity",1],[true,1],["50",0.5],["100",1],["200",2],["20",0.5],["250",2]])
+    assert.equal(loadCockpitOpts({[key]:stored}).visorDropSize(),want,`stored ${String(stored)}`);
+  const disk=new Map(), opts=loadCockpitOpts(disk), seen=[];
+  opts.onWheel((name,value)=>seen.push([name,value]));
+  for (const [factor,want] of [[1.5,1.5],[0.1,0.5],[4,2],[null,1],["",1],["  ",1],[NaN,1],[Infinity,1],[true,1],["bad",1]]) {
+    assert.equal(opts.setVisorDropSize(factor),want);
+    assert.equal(disk.get(key),String(want*100),"raw storage carries percent, not factor");
+    assert.equal(loadCockpitOpts(disk).visorDropSize(),want,"a fresh module reloads the saved setting");
+    assert.deepEqual(seen.at(-1),["visorDropSize",want],"render consumers receive the factor");
+  }
+});
+
+test("Cockpit droplet slider has its own minimum and native input persistence; other sliders keep zero", () => {
+  const dom=makeDom(), doc=dom.document, get=doc.getElementById;
+  doc.body.appendChild(dom.makeElement("div","pm-panel-display"));
+  doc.getElementById=id=>dom.has(id)?get(id):null;
+  doc.createTextNode=text=>({nodeType:3,textContent:text});
+  const disk=new Map(), opts=loadCockpitOpts(disk,{document:doc,SettingRow:{build:()=>({row:doc.createElement("div")}),wire(){},paint(){}}});
+  const slider=doc.getElementById("pm-visor-drop-size");
+  assert.deepEqual([slider.type,slider.min,slider.max,slider.step,slider.value,slider.getAttribute("aria-label")],["range","50","200","10","100","Visor droplet size"]);
+  assert.deepEqual([doc.getElementById("pm-visor-beams").min,doc.getElementById("pm-turnchase").min],["0","0"]);
+  slider.value="170"; slider.oninput();
+  assert.deepEqual([opts.visorDropSize(),disk.get("apex26.helmetVisorDropSize"),doc.getElementById("pm-visor-drop-size-v").textContent],[1.7,"170","170%"]);
 });
 
 // Read off the LOADED CAM_MODES and the cut setCamMode() actually starts: a

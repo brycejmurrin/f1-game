@@ -33,7 +33,7 @@ function ctx2d(calls) {
   };
 }
 
-function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", recordDraws = false, recordAtlas = false, seed = 0xd809 } = {}) {
+function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", dropSize = 1, recordDraws = false, recordAtlas = false, seed = 0xd809 } = {}) {
   const calls = { clear: 0, draw: 0, rotate: 0, ...(recordDraws ? { frameDraws: [] } : {}), ...(recordAtlas ? { atlasStops: [], atlasBuilds: 0 } : {}) };
   const el = { id: "fx-droplets", hidden: true, width: 0, height: 0, getContext: () => ctx2d(calls), setAttribute() {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } } };
@@ -49,12 +49,12 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet
   const ctx = vm.createContext({
     Math: Object.assign(Object.create(Math), { random: () => rng.unit() }), Float32Array, Object,
     document, window: { innerWidth: 844, innerHeight: 390, devicePixelRatio: 3 },
-    CockpitOpts: { visor: () => "clear", visorRain: () => rainAmount, visorRunoff: () => runoff, visorRefraction: () => "off", visorReflections: () => "light" },
+    CockpitOpts: { visor: () => "clear", visorRain: () => rainAmount, visorRunoff: () => runoff, visorDropSize: () => dropSize, visorRefraction: () => "off", visorReflections: () => "light" },
     GLX: { isMobile: mobile }, GfxQuality: { current: () => preset },
   });
   seedLog(ctx);
   const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", ctx, { filename: absSrc("js/fx/droplets.js") });
-  return { D, el, calls, setHelmet: v => { helmet = v; } };
+  return { D, el, calls, setHelmet: v => { helmet = v; }, setDropSize: v => { dropSize = v; } };
 }
 
 // 5 s of 60 Hz frames.
@@ -216,6 +216,31 @@ test("helmet rain: phone-sized impact beads remain visibly larger and stronger t
     assert.ok(helmet.width>=8.5 && helmet.width>classic.width*2.5,`seed ${seed}: helmet ${helmet.width}px is clearly larger than classic ${classic.width}px`);
     assert.ok(helmet.alpha>=0.7 && helmet.alpha>classic.alpha,`seed ${seed}: helmet ${helmet.alpha} has stronger ink than classic ${classic.alpha}`);
   }
+});
+
+test("helmet droplet size: paused adjustment rescales existing water without changing its motion or rebuilding the atlas", () => {
+  const {D,calls,setDropSize} = makeDroplets({helmet:true,mobile:true,recordDraws:true,recordAtlas:true});
+  D.tick(.06,true,1,false,0,false);D.tick(.09,true,0,false,0,false);
+  const width = () => Math.max(...calls.frameDraws.map(d=>d.dest[2]));
+  const normal = width(), before = D.stats(), builds = calls.atlasBuilds, draws = calls.draw;
+  setDropSize(.5);D.tick(0,true,0,false,0,false);
+  assert.ok(Math.abs(width()/normal-.5)<1e-7,"50% updates the painted radius while paused");
+  assert.deepEqual(D.stats(),before,"size leaves positions, lifetime, adhesion clock and count unchanged");
+  setDropSize(2);D.tick(0,true,0,false,0,false);
+  assert.ok(Math.abs(width()/normal-2)<1e-7,"200% updates the same bead immediately");
+  assert.deepEqual(D.stats(),before);
+  assert.ok(calls.draw>draws,"paused size changes actually repaint");
+  assert.equal(calls.atlasBuilds,builds,"size never rebuilds the cached meniscus atlas");
+});
+
+test("helmet droplet size: classic onboard water ignores the helmet size preference", () => {
+  const widths = [];
+  for (const dropSize of [.5,1,2]) {
+    const {D,calls} = makeDroplets({dropSize,mobile:true,recordDraws:true});
+    D.tick(.06,true,1,false,0,false);D.tick(.09,true,0,false,0,false);
+    widths.push(calls.frameDraws[0].dest[2]);
+  }
+  assert.equal(widths[0],widths[1]);assert.equal(widths[2],widths[1]);
 });
 
 test("helmet impact: physical hit clock ignores runoff and speed, pins the hit, then releases water", () => {
