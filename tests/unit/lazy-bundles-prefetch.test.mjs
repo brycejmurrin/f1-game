@@ -352,12 +352,12 @@ test("ensureScenery asks for baked models while the track-build toolkit is still
 
 const ROOT_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readPath = (rel) => fs.readFileSync(path.join(ROOT_PATH, rel), "utf8");
-function boot({ agent = false, lazyV = null } = {}) {
+function boot({ agent = false, lazyV = null, audioFiles = ["js/audio/engine.js"], onScript = null } = {}) {
   const idles = [], workers = [], links = [];
   const ctx = vm.createContext({
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
-      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
+      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: audioFiles, LAZY_AUDIO_EDGES: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
       LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
@@ -381,8 +381,12 @@ function boot({ agent = false, lazyV = null } = {}) {
     document: {
       readyState: "complete", querySelectorAll: () => [], querySelector: () => null,
       getElementById: (id) => (id === "apex-lazy-v" && lazyV ? { textContent: JSON.stringify(lazyV) } : null),
-      createElement: () => ({ dataset: {}, remove() {} }),
-      head: { appendChild(el) { links.push(el); } },
+      createElement: () => ({ dataset: {}, remove() {}, onload: null, onerror: null, src: "" }),
+      head: { appendChild(el) {
+        if (el.rel === "prefetch") { links.push(el); return; }
+        if (el.src && typeof onScript === "function") onScript(el, ctx);
+        else links.push(el);
+      } },
     },
   });
   vm.runInContext(readPath("js/core/script-loader.js") + "\n" + readPath("js/track/build-client.js") + "\n" + readPath("js/core/lazy-bundles.js") + `
@@ -412,6 +416,30 @@ test("the agent surface still warms the worker at title idle", async () => {
   ctx.__lb.raceAssets();
   await drain(idles);
   assert.equal(workers.length, 1, "warmed for __apex track switches");
+});
+
+test("idle audio prefetch skips files already in audioScriptsLoaded after a partial ensureAudio", async () => {
+  const b = boot({
+    audioFiles: ["js/audio/engine.js", "js/audio/panel.js"],
+    onScript(el, ctx) {
+      const rel = el.src.replace(/\?.*$/, "");
+      if (rel === "js/audio/engine.js") {
+        ctx.GameAudio = { _stub: false, setEnabled() {}, setMusicVolume() {}, setSfxVolume() {} };
+        queueMicrotask(() => el.onload && el.onload());
+        return;
+      }
+      queueMicrotask(() => el.onerror && el.onerror());
+    },
+  });
+  b.ctx.GameAudio = { _stub: true, setEnabled() {}, setMusicVolume() {}, setSfxVolume() {} };
+  assert.equal(await b.ctx.__lb.ensureAudio(), false, "panel.js failed once");
+  b.ctx.__lb.raceAssets();
+  await drain(b.idles);
+  assert.deepEqual(
+    b.links.filter((l) => l.rel === "prefetch").map((l) => l.href.replace(/\?.*$/, "")),
+    ["js/audio/panel.js"],
+    "engine.js already landed: only the missing file is prefetched",
+  );
 });
 
 test("the idle audio prefetch asks for the content-hash key the loader will inject (R3-PHONE-8)", async () => {

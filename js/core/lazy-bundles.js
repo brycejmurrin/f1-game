@@ -543,6 +543,9 @@ function prefetchAudio() {
   if (typeof document === "undefined" || !document.createElement) return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
+    // A partial ensureAudio failure keeps landed files in audioScriptsLoaded; re-fetching
+    // them here wastes bandwidth and fights the retry that loads only what is missing.
+    if (audioScriptsLoaded.has(src)) continue;
     // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
     const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
     if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
