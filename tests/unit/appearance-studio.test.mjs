@@ -113,7 +113,8 @@ test("Menu customization exposes the existing editor and retains persistence, fo
   assert.ok(edit.parentNode === menu, "reuse the original launcher, including its focus and disabled-state owner");
   assert.ok(fold.parentNode === menu, "menu controls are outside the Advanced fold");
   const profile = controls.children.find(child => child.children.some(node => node.textContent === "APPEARANCE PROFILE"));
-  assert.ok(controls.children.indexOf(menu) < controls.children.indexOf(profile), "menu tools precede profile management");
+  const order = Array.from(controls.children); const menuAt = order.indexOf(menu), profileAt = order.indexOf(profile);
+  assert.ok(menuAt >= 0 && menuAt < profileAt, "menu tools precede profile management");
   assert.equal(dom.document.querySelectorAll("#pm-tl-edit").length, 1);
   edit.click();
   assert.equal(title.editing, true);
