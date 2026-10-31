@@ -276,6 +276,19 @@ function save(options) {
       lastSave = { ok: false, durable: false, reason: "conflict" };
       return career;
     }
+    // load() ends with save({ migration: true }) so climbed shapes land on disk once.
+    // After that, migrateCareer is idempotent and the canonical JSON matches what
+    // is already stored — rewriting every boot bumped keyRevision with no bytes
+    // changed (extra quota traffic and spurious cross-tab conflicts).
+    if (options && options.migration && store.raw && !options.requireDurable) {
+      let json;
+      try { json = JSON.stringify(career); } catch (_) { json = null; }
+      if (json != null && store.raw(liveSlotKey()) === json) {
+        lastSave = { ok: true, durable: true, reason: null };
+        armRevision();
+        return career;
+      }
+    }
     lastSave = writeResult(liveSlotKey(), career, options);
     armRevision();
   }
