@@ -303,9 +303,9 @@ async function precacheAssetLists() {
     // because it is reached through the importmap, not a <script> tag, so
     // the parser below cannot see it. OPTIONAL: an install must not fail
     // over a backend most sessions never select.
-    "vendor/three-0.186.1/three.webgpu.min.js",
-    "vendor/three-0.186.1/three.core.min.js",
-    "vendor/three-0.186.1/three.tsl.min.js",
+    "vendor/three-0.187.0/three.webgpu.min.js",
+    "vendor/three-0.187.0/three.core.min.js",
+    "vendor/three-0.187.0/three.tsl.min.js",
     // jsQR / Rapier / trystero are NOT install-precached. Each is default-off
     // or path-only (QR scan, apex26.debris==="1", room code): ~2.5 MB that a
     // title/garage/race session never needs. Fetch-miss still cache.put on

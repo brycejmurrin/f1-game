@@ -261,8 +261,11 @@ const SettingsNav = (function () {
         n.id = "audioset-offline"; n.className = "adv-help"; n.setAttribute("role", "status");
         panel.insertBefore(n, panel.firstChild);
       }
+      // A role=status filled as it is inserted is not announced: say it once (uihunt4 #2).
+      const say = failed && (n.hidden || !n.textContent) && typeof LiveRegion !== "undefined";
       n.textContent = "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD";
       n.hidden = !failed;
+      if (say) LiveRegion.say(n.textContent, "hud");
     }
 
     function back() {

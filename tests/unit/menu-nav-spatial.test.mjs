@@ -354,3 +354,23 @@ test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => 
     assert.equal(loadMenuNav({ layer: { id } }).activeLayer(), null, id);
   }
 });
+
+// uihunt4-flows-1030 #1: at 1280x800 the STANDINGS and LIVE panels can hold no
+// control (offline, loading), so Up/Down off the tab found nothing in band and
+// the DOM wrap focused the NEXT tab without selecting it.
+test("step(): Up/Down off a tab over an empty panel leaves the rail instead of focusing a sibling tab", () => {
+  const { step } = loadMenuNav();
+  const rail = { contains: (n) => n && n._rail === true };
+  const tab = (id, x) => el(id, x, 25, 100, 44, {
+    _rail: true, getAttribute: (k) => (k === "role" ? "tab" : null),
+    closest: (s) => (s === "[role='tablist']" ? rail : null),
+  });
+  const schedule = tab("dh-tab-schedule", 353), standings = tab("dh-tab-standings", 453), results = tab("dh-tab-results", 561);
+  const more = el("more", 1003, 35, 24, 24), close = el("dh-close-btn", 1033, 25, 44, 44);
+  const list = [schedule, standings, results, more, close];
+  assert.equal(step(standings, 0, 1, list).id, "more", "Down skips the rail's next tab");
+  assert.equal(step(standings, 0, -1, list).id, "dh-close-btn", "Up wraps past the rail to the head's last control");
+  assert.equal(step(standings, 1, 0, list).id, "dh-tab-results", "sideways still walks the rail");
+  const row = el("row", 199, 285, 210, 48);
+  assert.equal(step(schedule, 0, 1, [schedule, standings, more, close, row]).id, "row", "a panel control in band still wins");
+});
