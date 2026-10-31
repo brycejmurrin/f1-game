@@ -143,6 +143,9 @@
       "pollOnce": [
         "tests/unit/apex-bridge.test.mjs"
       ],
+      "tokenShape": [
+        "tests/unit/apex-bridge.test.mjs"
+      ],
       "*": [
         "tests/unit/css-has-scope.test.mjs"
       ]

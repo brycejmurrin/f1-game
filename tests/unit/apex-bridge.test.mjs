@@ -279,3 +279,11 @@ test("batch runs steps in order, stops at the first failure, and keeps reload la
   assert.equal(nest.value[0].error, "batch cannot nest");
   assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(11).fill({ cmd: "ping" }) } })).ok, false);
 });
+
+test("tokenShape describes a pasted token without revealing it", () => {
+  const { api } = load({ search: "" });
+  assert.equal(api.tokenShape("github_pat_" + "a".repeat(82)), "93 chars, github_pat_ prefix, 0 odd chars");
+  assert.equal(api.tokenShape("ghp_abc"), "7 chars, ghp_ prefix, 0 odd chars");
+  assert.equal(api.tokenShape("github_pat_ab​c"), "15 chars, github_pat_ prefix, 1 odd char (U+200B)");
+  assert.equal(api.tokenShape(""), "0 chars, unknown prefix, 0 odd chars");
+});
