@@ -136,7 +136,7 @@ export const TRACK_RE = /^[a-z][a-z0-9_-]{0,39}$/;
 
 export const DEFAULT_CELL = Object.freeze({
   device: "desktop-1280", track: "monza", cam: "chase", profile: "standard", layout: "full", map: "on", gaps: "on",
-  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
+  mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "high", textSize: "normal",
   hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", portrait: "race", off: Object.freeze([]),
 });
 export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer", "portrait"]);
@@ -412,7 +412,7 @@ export function exhaustiveRaw(base = {}) {
     // Every HudElements toggle switched off on its own.
     for (const id of Object.keys(ELEMENT_TOGGLES)) out.push({ ...b, off: [id] });
     // Night under the readability knobs: plates are tuned against a day sky.
-    for (const x of [{ theme: "light" }, { contrast: "high" }, { cvd: "deutan" }]) out.push({ ...b, ...x, tod: "night" });
+    for (const x of [{ theme: "light" }, { contrast: "off" }, { cvd: "deutan" }]) out.push({ ...b, ...x, tod: "night" });
   }
   const pw = pairwise({ device: MATRIX_DEVICES, cam: CAMS, profile: ENUMS.profile, layout: ["full", "timing", "driver", "compact"],
     preset: Object.keys(PRESETS), hudScale: [70, null, 150] }, { valid: fullValid, only: EXHAUSTIVE_PAIRS });
@@ -849,6 +849,16 @@ export function classifyFindings(cell, m, { minFontPx = 10, analyze = analyzeOve
       add("tinyText", [r.key], `${r.key} renders "${r.minFontText || ""}" at ${r.minFontPx}px (< ${minFontPx}px)`, r.minFontPx < 8 ? "high" : "medium");
     }
   }
+  // WCAG 2.2 SC 1.4.3: ink below 4.5:1 (3:1 from 18.66px up) against its effective plate over mid-grey.
+  for (const r of recs) {
+    if (!shown(r) || r.role === "overlay") continue;
+    let worst = null;
+    for (const k of r.inks || []) {
+      const ratio = contrastRatio(k.fg, k.bg);
+      if (ratio != null && ratio < (k.big ? 3 : 4.5) && (!worst || ratio < worst.ratio)) worst = { ...k, ratio };
+    }
+    if (worst) add("contrast", [r.key], `${r.key} "${worst.text}" ${worst.fg} on ${worst.bg || "transparent"} is ${worst.ratio}:1 at ${worst.px}px (< ${worst.big ? 3 : 4.5}:1)`, worst.ratio < 3 ? "high" : "medium");
+  }
   // Overlaps on the transient set (announce / limits / flag forced on with
   // their widest text, as hud-layout.spec does) when the runner measured it.
   const pool = m.transientRecords && m.transientRecords.length ? m.transientRecords : recs;
@@ -886,7 +896,7 @@ export function applyChecks(cells) {
 }
 
 export function rankFindings(findings) {
-  const order = ["pageError", "lead", "missing", "unexpected", "overlap", "offscreen", "unsafe", "tinyText", "noEffect"];
+  const order = ["pageError", "lead", "missing", "unexpected", "overlap", "offscreen", "unsafe", "tinyText", "contrast", "noEffect"];
   return [...findings].sort((a, b) => (SEVERITY[b.severity] - SEVERITY[a.severity])
     || (order.indexOf(a.kind) - order.indexOf(b.kind)) || a.cell.localeCompare(b.cell));
 }

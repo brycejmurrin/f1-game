@@ -897,7 +897,7 @@ const CATALOG = [
   {
     name: "apex_hud_shot",
     kind: "browser",
-    description: "Browser (lock first) — ONE race-HUD cell (device × camera × HUD settings): screenshot + measured boxes + findings (overlap / missing / offscreen / unsafe / tinyText / pageError). ~2 min on SwiftShader (one boot), past the host's ~60–120 s MCP limit, so by default it runs as apex_job_start hud_shot and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns structuredContent {shot, findings, measurements} + a resource_link to the PNG. Local tree only. Skill: survey-ui-matrix.",
+    description: "Browser (lock first) — ONE race-HUD cell (device × camera × HUD settings): screenshot + measured boxes + findings (overlap / missing / offscreen / unsafe / tinyText / contrast / pageError). ~2 min on SwiftShader (one boot), past the host's ~60–120 s MCP limit, so by default it runs as apex_job_start hud_shot and returns a jobId at once (poll apex_job_status). async:false blocks instead and returns structuredContent {shot, findings, measurements} + a resource_link to the PNG. Local tree only. Skill: survey-ui-matrix.",
     inputSchema: {
       type: "object",
       properties: {
