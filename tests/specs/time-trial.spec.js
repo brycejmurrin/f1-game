@@ -6,6 +6,7 @@ import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { saveSharedCard } from "../helpers/share-card.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -651,7 +652,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
       await document.fonts.ready;
     }, device.safe);
     const press = async selector => device.touch ? page.locator(selector).tap() : page.locator(selector).click();
-    const rows = [];
+    const rows = [], helpSettlements = [];
 
     try {
       for (const pct of [40,80,100,130,150,200]) {
@@ -756,19 +757,15 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
-        // The sheet reopens with the shape/density it had at the PREVIOUS UI
-        // SIZE; SheetShape reclassifies it a frame or two later (fit cap, then
-        // density). An anchor jump taken before that lands in the old layout,
-        // and the reflow then carries #htp-driving out of the pane (desktop
-        // 200%, run 38985530584: wide rail -> compact strip, ratio 0). Jump
-        // only once a classify pass changes nothing.
-        await page.waitForFunction(() => {
-          const el = document.getElementById('howtoplay-inner');
-          if (!el || !el.dataset.shape || !el.dataset.density) return false;
-          const before = el.dataset.shape + '|' + el.dataset.density;
-          window.SheetShape.reclassify();
-          return before === el.dataset.shape + '|' + el.dataset.density;
-        }, null, {polling:100, timeout:10000});
+        // At 200%, the side rail can become a chip strip after reopening.
+        // Observed pane width changed 900 -> 1252 and scroll extent 12872 ->
+        // 8506 (report44573). One unchanged shape/density pass did not establish
+        // a quiet reading pane. Observe actual geometry before the real click;
+        // the bounded observer does not force classification or move the target.
+        const settlement = await page.evaluate(settleLayout, { root: '#howtoplay .pane' });
+        helpSettlements.push({ pct, settlement });
+        expect(settlement.stable, `Help reading pane at ${pct}%`).toBe(true);
+        expect(settlement.truncated, `Help reading pane sample at ${pct}%`).toBe(false);
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
@@ -783,6 +780,7 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#htp-close'); await expect(page.locator('#overlay')).toBeVisible();
       }
     } finally {
+      await info.attach('help-pane-settlements.json',{body:JSON.stringify(helpSettlements,null,2),contentType:'application/json'});
       await info.attach('zoom-measurements.json',{body:JSON.stringify(rows,null,2),contentType:'application/json'});
     }
     expect(errors).toEqual([]);

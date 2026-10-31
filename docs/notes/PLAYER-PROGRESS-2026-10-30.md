@@ -53,3 +53,13 @@ existing SAVES & DATA panel, reached by its existing Home shortcut. This keeps
 all feature nodes and their IDs while restoring the original Home grid; no
 CSS, session API or additional shell-budget change is needed. The relevant
 Home-fit and screenshot checks must pass before that correction is accepted.
+
+The subsequent full time-trial run passed 26 of 27 cases. Its desktop 200%
+Help-anchor failure is retained in report46633. A diagnostic-only run44573
+observed the reading pane change from 900 to 1252 pixels wide and its scroll
+extent from 12872 to 8506 while reopening. The previous test readiness guard
+compared only shape and density during one forced classification pass. The
+test now reuses the existing bounded layout observer on the reading pane,
+requires sampled geometry stability without truncation, and retains the real
+anchor click and viewport/ARIA assertions. This changes test readiness only;
+quiet sampled frames do not prove absence of every later asynchronous change.
