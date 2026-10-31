@@ -31,7 +31,7 @@ window.MenuNav = (function () {
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
   // because that is the design system's own name for "a scroll region".
-  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,.dh-tpopup-body,.dh-telem-main,.dh-telem-side,#track-detail-panel,#track-detail";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,.dh-tpopup-body,.dh-telem-main,.dh-telem-side,#track-detail-panel,#track-detail,#menu-buttons";
 
   // `summary` is a real control: the fold headers on the DISPLAY / STEERING /
   // MUSIC settings pages open with Enter (native) or the pad's A (padActivate
@@ -488,6 +488,8 @@ window.MenuNav = (function () {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||
           ty === "submit" || ty === "reset") return false;
+      // Physical page keys step a range's value; synthetic pad keys page its pane.
+      if (ty === "range" && (key === "PageUp" || key === "PageDown")) return !(event && event.isTrusted === false);
       // Same reason as TEXTAREA: the pad's synthetic Left/Right moves no caret,
       // so owning it left the field with a dead direction (#2161).
       if ((key === "ArrowLeft" || key === "ArrowRight") && event && event.isTrusted === false) return false;
@@ -551,7 +553,7 @@ window.MenuNav = (function () {
   }
 
   function navKey(e) {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.isComposing || e.keyCode === 229 || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     const key = e.key;
     const dir = DIRS[key];
     const paging = key === "PageDown" || key === "PageUp" || key === "Home" || key === "End";

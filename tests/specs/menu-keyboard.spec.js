@@ -221,6 +221,31 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.evaluate(() => window.__apex.uiScale(null));
   });
 
+  test("synthetic page keys scroll enlarged Home destinations and keep focus in the menu", async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => { window.__apex.headless(true); window.__apex.uiScale(200); });
+    await expect.poll(() => page.locator("#menu-buttons").evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(1);
+    const result = await page.evaluate(() => {
+      const menu = document.getElementById("menu-buttons");
+      document.getElementById("mb-career").focus({ preventScroll: true });
+      menu.scrollTop = 0;
+      const key = name => {
+        const event = new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true });
+        document.activeElement.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, scroll: menu.scrollTop, focused: menu.contains(document.activeElement) };
+      };
+      const down = key("PageDown"), up = key("PageUp");
+      return { down, up, documentScroll: document.documentElement.scrollTop };
+    });
+    expect(result.down.prevented).toBe(true);
+    expect(result.down.scroll).toBeGreaterThan(0);
+    expect(result.up.prevented).toBe(true);
+    expect(result.up.scroll).toBeLessThan(result.down.scroll);
+    expect(result.down.focused && result.up.focused).toBe(true);
+    expect(result.documentScroll).toBe(0);
+  });
+
   test("PageDown on the circuit strip hands focus to a visible circuit; the next arrow does not page back", async ({ page }) => {
     // #1789: keepFocusInView checked only top/bottom, so focus stayed on a
     // circuit paged off the strip's left edge and ArrowRight scrolled back.
@@ -609,6 +634,47 @@ test.describe("Escape is BACK", () => {
       return out;
     });
     expect(bad).toEqual([]);
+  });
+
+  test("composition keys leave picker input, scroll and layer unchanged", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openSelect(page);
+    const results = await page.evaluate(() => {
+      const input = document.getElementById("sel-track-search");
+      const picker = document.getElementById("select");
+      const strip = document.getElementById("sel-tracks");
+      input.focus();
+      const before = { left: strip.scrollLeft, top: document.getElementById("sel-track-section").scrollTop };
+      const rows = [];
+      for (const composing of [{ isComposing: true }, { keyCode: 229 }]) {
+        for (const key of ["ArrowDown", "PageDown", "Escape"]) {
+          const event = new KeyboardEvent("keydown", { key, ...composing, bubbles: true, cancelable: true });
+          input.dispatchEvent(event);
+          rows.push({ key, composing, prevented: event.defaultPrevented, focused: document.activeElement === input,
+            hidden: picker.hidden, left: strip.scrollLeft, top: document.getElementById("sel-track-section").scrollTop });
+        }
+      }
+      return { before, rows };
+    });
+    for (const row of results.rows) {
+      expect(row, JSON.stringify(row)).toEqual({ key: row.key, composing: row.composing, prevented: false,
+        focused: true, hidden: false, ...results.before });
+    }
+    const tabResults = await page.evaluate(() => {
+      const picker = document.getElementById("select");
+      const last = window.MenuNav.items(picker).filter(el => el.tabIndex >= 0).at(-1);
+      return [{ isComposing: true }, { keyCode: 229 }].map(composing => {
+        last.focus();
+        const event = new KeyboardEvent("keydown", { key: "Tab", ...composing, bubbles: true, cancelable: true });
+        last.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === last };
+      });
+    });
+    expect(tabResults).toEqual([{ prevented: false, retained: true }, { prevented: false, retained: true }]);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#select")).toBeHidden();
+    await expect(page.locator("#overlay")).toBeVisible();
   });
 
   test("Escape on the circuit picker goes back to the title", async ({ page }) => {

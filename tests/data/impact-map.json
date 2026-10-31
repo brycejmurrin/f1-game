@@ -143,6 +143,9 @@
       "pollOnce": [
         "tests/unit/apex-bridge.test.mjs"
       ],
+      "tokenShape": [
+        "tests/unit/apex-bridge.test.mjs"
+      ],
       "*": [
         "tests/unit/css-has-scope.test.mjs"
       ]
@@ -1535,6 +1538,9 @@
       "setVisorColor": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisorDropSize": [
+        "tests/unit/camera-defaults.test.mjs"
+      ],
       "setVisorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
@@ -1553,6 +1559,9 @@
       ],
       "visorColor": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorDropSize": [
+        "tests/unit/camera-defaults.test.mjs"
       ],
       "visorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -8976,6 +8985,7 @@
       ],
       "poll": [
         "tests/specs/gamepad.spec.js",
+        "tests/specs/menu-keyboard.spec.js",
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -9195,7 +9205,6 @@
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "*": [
-        "tests/specs/menu-keyboard.spec.js",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/ratchets.test.mjs",
@@ -18149,6 +18158,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "items": [
+        "tests/specs/menu-keyboard.spec.js",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs"
       ],

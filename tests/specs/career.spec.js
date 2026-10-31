@@ -325,12 +325,42 @@ test.describe.parallel("Career — hub", () => {
     await expect(page.locator("#cr-go")).toHaveText("GO RACING");
   });
 
-  test("NEW CAREER number rejects truncated numeric input before saving", async ({ page }) => {
+  for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) test(`NEW CAREER validation reveals its field and error at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
     await boot(page);
     await page.locator("#mb-career").click();
     await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
     const fields = page.locator("#cr-right .cr-input");
+    const assertError = async (/** @type {import("@playwright/test").Locator} */ input, /** @type {string} */ id) => {
+      await expect(input).toBeFocused();
+      await expect(input).toHaveAttribute("aria-describedby", id);
+      const note = page.locator("#" + id);
+      await expect(note).toHaveAttribute("role", "alert");
+      expect(await note.evaluate((n) => !n.closest("label") && n.previousElementSibling && n.previousElementSibling.tagName === "LABEL")).toBe(true);
+      expect(await input.evaluate((field) => {
+        const note = document.getElementById(field.getAttribute("aria-describedby") || "");
+        if (!note) return false;
+        const a = field.getBoundingClientRect(), b = note.getBoundingClientRect();
+        let top = 0, bottom = innerHeight, left = 0, right = innerWidth;
+        for (let p = field.parentElement; p; p = p.parentElement) {
+          const s = getComputedStyle(p), r = p.getBoundingClientRect();
+          if (/auto|scroll|hidden|clip/.test(s.overflowY)) { top = Math.max(top, r.top + (parseFloat(s.getPropertyValue("--sfade-t")) || 0) * (r.height / (p.offsetHeight || r.height))); bottom = Math.min(bottom, r.bottom - (parseFloat(s.getPropertyValue("--sfade-b")) || 0) * (r.height / (p.offsetHeight || r.height))); }
+          if (/auto|scroll|hidden|clip/.test(s.overflowX)) { left = Math.max(left, r.left); right = Math.min(right, r.right); }
+        }
+        const foot = document.getElementById("cr-foot").getBoundingClientRect();
+        bottom = Math.min(bottom, foot.top);
+        return Math.min(a.top, b.top) >= top - 1 && Math.max(a.bottom, b.bottom) <= bottom + 1 && Math.min(a.left, b.left) >= left - 1 && Math.max(a.right, b.right) <= right + 1;
+      }), "invalid field and its description must both clear the viewport, clip edges, scroll fade and footer").toBe(true);
+    };
+    await fields.nth(0).fill("");
+    await fields.nth(1).fill("");
+    await page.locator("#cr-go").click();
+    await assertError(fields.nth(0), "cr-error-name");
+    await expect(fields.nth(1)).toHaveValue("");
     await fields.nth(0).fill("Number Test");
+    await page.locator("#cr-go").click();
+    await assertError(fields.nth(1), "cr-error-code");
+    await expect(fields.nth(0)).toHaveValue("Number Test");
     await fields.nth(1).fill("NUM");
     const number = page.locator('#cr-right input[type="number"]');
     for (const value of ["1e2", "1.5", "100", "0", ""]) {
@@ -338,6 +368,9 @@ test.describe.parallel("Career — hub", () => {
       await page.locator("#cr-go").click();
       await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
       await expect(number).toHaveAttribute("aria-invalid", "true");
+      await assertError(number, "cr-error-num");
+      await expect(fields.nth(0)).toHaveValue("Number Test");
+      await expect(fields.nth(1)).toHaveValue("NUM");
       await expect(page.locator("#cr-right")).toContainText("Number must be 1–99");
       expect(await page.evaluate(() => localStorage.getItem("apex26.career.driver.0"))).toBeNull();
     }

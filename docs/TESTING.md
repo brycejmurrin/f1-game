@@ -1390,6 +1390,8 @@ comment saying why they are not one.
 
 ## 5. Coverage table
 
+`codex-cloud.test.mjs` (tooling-fast, no network) covers the Codex Cloud history and control contracts.
+
 `pit-think-cache.test.mjs` covers lazy per-step AI pit weather/caution reads,
 live reads outside the car-loop bracket, tick invalidation and real strategy
 decision parity. It runs in the `tooling-fast` Node group without a browser.
