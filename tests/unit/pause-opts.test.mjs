@@ -425,8 +425,24 @@ test("pointerup confirms an armed guarded button once wall age passes ARM_MIN_MS
   const h = load();
   h.press(h.quit);
   h.advance(400);
-  const up = { type: "pointerup", target: h.quit, pointerType: "touch", button: 0, isTrusted: true };
-  for (const l of h.listeners) if (l.type === "pointerup" && l.capture) l.fn(up);
+  h.pointerUp(h.quit);
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.deepEqual(h.handled, ["pm-quit"]);
+});
+
+test("one tap only arms; pointerup plus native click never double-quits or re-arms", () => {
+  const h = load();
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.equal(h.quit.textContent, "TAP AGAIN");
+  assert.deepEqual(h.handled, []);
+  h.advance(400);
+  h.pointerUp(h.quit, { isTrusted: true });
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.deepEqual(h.handled, ["pm-quit"], "exactly one quit handler from pointerup + native click");
+  assert.equal(h.quit.textContent, "QUIT TO MENU");
+  assert.ok(!h.M.isArmed("pm-quit"));
+  h.press(h.quit, { isTrusted: true, detail: 1 });
+  assert.equal(h.quit.textContent, "TAP AGAIN", "next deliberate tap re-arms only");
   assert.deepEqual(h.handled, ["pm-quit"]);
 });
 

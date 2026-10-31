@@ -4257,16 +4257,16 @@ test("software GL garage path gates readback and stall reload (#3589)", () => {
 test("software GL quit-to-menu and garage-close use MenuTeardown readback cover", () => {
   const mt = readFile("js/perf/menu-teardown.js");
   assert.ok(mt.includes("beginQuit") && mt.includes("garageBusyPlate") && mt.includes("pauseSheetUp"));
-  assert.ok(mt.includes("deferQuitTail") && mt.includes("deferQuitPhases") && mt.includes("noteSync"));
+  assert.ok(mt.includes("deferQuitTail") && mt.includes("noteSync"));
   const loop = readFile("js/perf/loop-health.js");
   assert.ok(loop.includes("MenuTeardown.cover()") && loop.includes("noteSync"));
   assert.ok(!readFile("js/render/glx/post.js").includes("MenuTeardown"));
   assert.ok(!readFile("js/render/glx/soft.js").includes("MenuTeardown"));
   assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
   const game = gameSource();
-  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("resetMenuGateOnQuit()")
-    && game.includes("deferQuitPhases") && game.includes("MenuTeardown.quitRenderHold()") && game.includes("PerfGov.softwareRaster()"));
-  assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("quitToMenuHeavy"));
+  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0")
+    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.quitRenderHold()") && game.includes("PerfGov.softwareRaster()"));
+  assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
   const tlx = readFile("js/render/three/tlx.js");
   assert.ok(tlx.includes("softwareGlSoftPresentDefer") && tlx.includes("_queueSoftBlit"));
   const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");

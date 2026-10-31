@@ -179,7 +179,15 @@ const PauseOpts = (function () {
     expireIfStale();
     const t = e && e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
-    if (confirmPending && btn && confirmPending === btn.id) { confirmPending = null; return; }
+    if (confirmPending && btn && confirmPending === btn.id) {
+      if (!e.isTrusted) {
+        e.stopImmediatePropagation();
+        if (e.preventDefault) e.preventDefault();
+        return;
+      }
+      confirmPending = null;
+      return;
+    }
     if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); return; }
     if (confirmMode() === "off") { disarm(); return; }
     const live = !!(armed && armed.btn === btn);
@@ -203,7 +211,7 @@ const PauseOpts = (function () {
     if (wallAge < ARM_MIN_MS) return;
     confirmPending = btn.id;
     disarm();
-    try { btn.click(); } finally { if (confirmPending === btn.id) confirmPending = null; }
+    btn.click();
   }
   function onPauseKey(e) {
     if (!e || e.key !== "Escape") return;
