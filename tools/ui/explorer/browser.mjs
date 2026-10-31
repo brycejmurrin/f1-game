@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { validateFocusOracle } from "./core.mjs";
 import { installProbeInit, gotoGame, mutateCaptureScene, awaitCaptureReady, screenshotPresentedCanvas } from "../../shot/probe-page.mjs";
 import { pixelEvidence } from "../../shot/capture-contract.mjs";
 import { resolveUIProfile, measureUIProfile } from "../../lib/ui-device-profile.mjs";
@@ -69,6 +70,8 @@ export async function performAction(session, a) {
       }, a.percent); break;
     case "offline": await context.setOffline(a.value); break;
     case "reload":
+      for (const witness of session.focusWitnesses?.values() || []) await witness.dispose();
+      session.focusWitnesses?.clear();
       await page.reload({ waitUntil: "domcontentloaded" });
       // The title DOM exists before lazy game boot attaches its click handlers.
       // Use the same readiness boundary as openSession/gotoGame before replay resumes.
@@ -76,9 +79,10 @@ export async function performAction(session, a) {
       if (!session.background) await page.evaluate(() => window.__apex.headless(true));
       break;
     case "wait": await page.locator(a.selector).waitFor({ state: a.state || "visible" }); break;
+    case "rememberFocus": await rememberFocus(session, a); break;
     case "checkpoint": break;
     case "assert": {
-      const check = a.oracle.type === "feedback" ? await checkFeedback(session, a.oracle) : a.oracle.type === "binding" ? await checkBinding(session, a.oracle) : { matches: await matchesOracle(session, a.oracle) };
+      const check = a.oracle.type === "focus" ? await checkFocus(session, a.oracle) : a.oracle.type === "feedback" ? await checkFeedback(session, a.oracle) : a.oracle.type === "binding" ? await checkBinding(session, a.oracle) : { matches: await matchesOracle(session, a.oracle) };
       if (!check.matches) throw new Error(`Replay assertion failed: ${JSON.stringify({ expected: a.oracle, actual: check.actual ?? null })}`);
       break;
     }
@@ -90,6 +94,7 @@ export async function performAction(session, a) {
 export async function matchesOracle(session, oracle) {
   if (!oracle) return false;
   const { page, logs } = session;
+  if (oracle.type === "focus") return (await checkFocus(session, oracle)).matches;
   if (oracle.type === "feedback") return (await checkFeedback(session, oracle)).matches;
   if (oracle.type === "binding") return (await checkBinding(session, oracle)).matches;
   if (oracle.type === "game") {
@@ -105,6 +110,70 @@ export async function matchesOracle(session, oracle) {
   if (state === "detached") return await l.count() === 0;
   const v = await l.isVisible();
   return state === "visible" ? v : !v;
+}
+
+/** Arm before the player trigger. Retain only a node handle; never focus it. */
+export async function rememberFocus(session, action) {
+  if (!session.focusWitnesses) {
+    session.focusWitnesses = new Map();
+    // Closing the context releases its browser handles; drop our references too.
+    session.context?.once?.("close", () => session.focusWitnesses.clear());
+  }
+  if (!session.focusWitnesses.has(action.id) && session.focusWitnesses.size >= 16) throw new Error("Focus witness limit is 16 per session");
+  const handle = await session.page.evaluateHandle(captureFocusedNode, action.selector);
+  const previous = session.focusWitnesses.get(action.id);
+  session.focusWitnesses.set(action.id, handle);
+  await previous?.dispose();
+}
+
+/** Self-contained browser callback; the explicit document also makes its contract testable without source evaluation. */
+export function captureFocusedNode(selector, documentRef = document) {
+  const nodes = documentRef.querySelectorAll(selector);
+  if (nodes.length !== 1) throw new Error(`Focus witness needs one target (matched ${nodes.length})`);
+  if (documentRef.activeElement !== nodes[0]) throw new Error("Focus witness target is not currently focused");
+  return nodes[0];
+}
+
+/** Serializable polling callback: replacement and focused object identity are separate evidence. */
+export function sampleFocus({ probe, selector, stableMs }, environment = null) {
+  const doc = environment ? environment.document : document;
+  const now = environment ? environment.now() : performance.now(), nodes = [...doc.querySelectorAll(selector)], target = nodes.length === 1 ? nodes[0] : null;
+  const replaced = probe.previous.isConnected === false, focused = !!target && target !== probe.previous && target === doc.activeElement;
+  const reason = !replaced ? "replacement-not-observed" : !nodes.length ? "missing-target" : nodes.length > 1 ? "ambiguous-target" : !focused ? "wrong-focus" : "settling-focus";
+  const sampleGapMs = probe.lastAt === null ? 0 : now - probe.lastAt;
+  probe.lastAt = now; probe.maxGapMs = Math.max(probe.maxGapMs, sampleGapMs);
+  if (sampleGapMs > 100) { probe.since = null; probe.last = null; }
+  if (!replaced || !focused) { probe.since = null; probe.last = null; }
+  else if (probe.last !== target) { probe.since = now; probe.last = target; }
+  const active = doc.activeElement, stableForMs = probe.since === null ? 0 : now - probe.since;
+  probe.actual = { reason, replaced, targetCount: nodes.length, focused, stableForMs, elapsedMs: now - probe.started,
+    sampleGapMs, maxSampleGapMs: probe.maxGapMs, active: active ? { tag: active.tagName, id: active.id || null, role: active.getAttribute("role") } : null };
+  const matches = replaced && focused && stableForMs >= stableMs;
+  if (matches) probe.actual.reason = "focus-stable";
+  const sample = { ...probe.actual };
+  if (probe.samples.length < 64) probe.samples.push(sample); else { probe.samples[63] = sample; probe.omitted++; }
+  return matches;
+}
+
+/** Read-only assertion after a remembered node is replaced. No action retries or focus repair. */
+export async function checkFocus(session, oracle) {
+  oracle = validateFocusOracle(oracle);
+  const previous = session.focusWitnesses?.get(oracle.afterReplacement);
+  if (!previous) return { matches: false, actual: { reason: "missing-witness", witness: oracle.afterReplacement } };
+  // One arm belongs to one assertion; an old detached node cannot bless a later update.
+  session.focusWitnesses.delete(oracle.afterReplacement);
+  let probe, matches = false;
+  try {
+    probe = await session.page.evaluateHandle(previous => ({ previous, last: null, since: null, started: performance.now(), samples: [], omitted: 0, actual: null, lastAt: null, maxGapMs: 0 }), previous);
+    try {
+      const ready = await session.page.waitForFunction(sampleFocus, { probe, selector: oracle.selector, stableMs: oracle.stableMs ?? 150 }, { polling: 50, timeout: oracle.timeoutMs ?? 3000 });
+      await ready.dispose(); matches = true;
+    } catch (e) { if (e.name !== "TimeoutError") throw e; }
+    const actual = await probe.evaluate(p => ({ ...(p.actual || { reason: "unmeasured-no-samples" }), samples: p.samples, omitted: p.omitted, truncated: p.omitted > 0,
+      limitation: "Sampled focus after DOM replacement; gaps between samples and later updates are unmeasured" }));
+    if (!matches && actual.reason === "settling-focus") actual.reason = actual.maxSampleGapMs > 100 ? "unmeasured-sampling-gaps" : "stability-not-observed";
+    return { matches, actual };
+  } finally { try { await probe?.dispose(); } finally { await previous.dispose(); } }
 }
 
 /** Read-only geometric feedback assertion. No scrolling, focus changes or healing. */

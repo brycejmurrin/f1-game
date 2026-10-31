@@ -82,3 +82,33 @@ viewport/scrollport rectangle. It never scrolls, focuses or retries. CSS clips/m
 unmeasured. Occlusion, contrast and actual screen-reader delivery
 need separate checks. Existing `text` and `visible` oracles keep their semantics.
 Research and priorities: [agent UI measurement](../../../docs/notes/AGENT-UI-MEASUREMENT-2026-10-30.md).
+
+## Focus after controls are rebuilt
+
+Arm a read-only witness while the expected starting control is focused, before
+triggering the application update:
+
+```json
+{"type":"rememberFocus","id":"before-refresh","selector":"#team"}
+```
+
+Keep the player's ordinary click/keypress separate. Then use:
+
+```json
+{"type":"assert","oracle":{"type":"focus","selector":"#team","afterReplacement":"before-refresh","timeoutMs":3000,"stableMs":150}}
+```
+
+The oracle requires the remembered node to be disconnected and a unique new
+matching node to hold sampled focus. A different expected selector permits an
+intentional focus transfer. Same-node reinsertion never proves replacement.
+Sampling runs every50ms; target changes, mismatches and gaps over100ms restart
+the stability window. Timelines retain64samples plus omission counts. Missing
+witnesses, unobserved replacement, measured wrong focus and incomplete sampling
+are distinct outcomes. A sampling gap is unmeasured time, not proof of a UI defect.
+
+This v1 covers DOM replacement within one document. Updates retaining the old
+node require a different completion witness; do not call their timeout a focus
+failure. Each assertion consumes its witness; arm a fresh one for every update.
+Reload clears witnesses; other navigation/evaluation errors propagate.
+The check never focuses, scrolls or retries a player action. Sampling cannot prove
+what happened between samples or after the observation window.

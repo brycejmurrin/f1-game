@@ -258,3 +258,19 @@ test('visible subview identity survives graph normalization and changes state ke
   addGraphStep(graph, before, after, { type: 'click', selector: '#display' });
   assert.deepEqual(graph.nodes.map(n => n.snapshot.views), [['#home'], ['#display']]);
 });
+
+
+test('focus assertions require a bounded named replacement witness instead of a stale marker', () => {
+  const focus = { type: 'focus', selector: '#team', afterReplacement: 'before' };
+  const input = scenario([{ type: 'rememberFocus', id: 'before', selector: '#team' }, { type: 'assert', oracle: focus }]);
+  const valid = validateScenario({ ...input, oracle: focus });
+  assert.deepEqual(valid.actions[0], input.actions[0]);
+  assert.deepEqual(valid.oracle, { ...focus, timeoutMs: 3000, stableMs: 150 });
+  for (const oracle of [
+    { ...focus, afterReplacement: '' }, { ...focus, afterReplacement: undefined }, { ...focus, afterReplacement: '../other' },
+    { ...focus, timeoutMs: 0 }, { ...focus, timeoutMs: 10001 }, { ...focus, timeoutMs: NaN }, { ...focus, stableMs: 99 },
+    { ...focus, stableMs: 1001 }, { ...focus, stableMs: 200, timeoutMs: 200 }, { ...focus, stableMs: 150.5 }, { ...focus, script: 'focus()' },
+  ]) assert.throws(() => validateScenario({ ...scenario([]), oracle }), TypeError);
+  for (const action of [{ type: 'rememberFocus', id: '', selector: '#team' }, { type: 'rememberFocus', id: 'before', selector: '' },
+    { type: 'rememberFocus', id: 'before', selector: '#team', click: true }]) assert.throws(() => validateScenario(scenario([action])), TypeError);
+});

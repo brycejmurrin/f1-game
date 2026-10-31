@@ -717,3 +717,91 @@ test("MCP feedback summaries distinguish missing coverage and bound advisory sam
   assert.equal(row.advisoryTotal, 0, "hidden feedback observations do not become automatic defects");
   assert.throws(() => summarizeUIInspection({ controls: [], feedback: [null] }), /feedback/);
 });
+
+test('focus sampling waits for replacement and resets on focus, identity and sampling gaps', async () => {
+  const { sampleFocus } = await import('../../tools/ui/explorer/browser.mjs');
+  let now = 0;
+  const old = { isConnected: true, id: 'old', tagName: 'BUTTON', getAttribute: () => null }, target = { id: 'team', tagName: 'BUTTON', getAttribute: () => null };
+  const doc = { activeElement: target, querySelectorAll: () => [target] };
+  const environment = { document: doc, now: () => now };
+  const fresh = () => ({ previous: old, started: 0, last: null, since: null, lastAt: null, maxGapMs: 0, samples: [], omitted: 0 });
+  let probe = fresh();
+  const poll = time => { now = time; return sampleFocus({ probe, selector: '#team', stableMs: 150 }, environment); };
+  assert.equal(poll(0), false); assert.equal(poll(150), false, 'an already focused target cannot prove the update happened');
+  assert.equal(probe.actual.reason, 'replacement-not-observed');
+  old.isConnected = false; assert.equal(poll(200), false);
+  assert.equal(poll(250), false); assert.equal(poll(300), false); assert.equal(poll(350), true);
+  assert.equal(probe.actual.reason, 'focus-stable');
+  old.isConnected = true; assert.equal(poll(400), false, 'reinsertion invalidates the replacement boundary');
+  old.isConnected = false; probe = fresh(); assert.equal(poll(0), false);
+  assert.equal(poll(50), false); doc.activeElement = null; assert.equal(poll(100), false);
+  doc.activeElement = target; assert.equal(poll(150), false); assert.equal(poll(200), false); assert.equal(poll(250), false); assert.equal(poll(300), true);
+  probe = fresh(); assert.equal(poll(0), false); assert.equal(poll(50), false);
+  const replacement = { ...target }; doc.querySelectorAll = () => [replacement]; doc.activeElement = replacement;
+  assert.equal(poll(100), false); assert.equal(poll(150), false); assert.equal(poll(200), false); assert.equal(poll(250), true, 'same selector does not retain the prior object dwell');
+  probe = fresh(); assert.equal(poll(0), false); assert.equal(poll(200), false, 'a long unsampled gap cannot establish stability');
+  assert.equal(probe.actual.maxSampleGapMs, 200);
+  assert.equal(poll(250), false); assert.equal(poll(300), false); assert.equal(poll(350), true);
+  doc.querySelectorAll = () => []; assert.equal(poll(400), false); assert.equal(probe.actual.reason, 'missing-target');
+  doc.querySelectorAll = () => [target, replacement]; assert.equal(poll(450), false); assert.equal(probe.actual.reason, 'ambiguous-target');
+  doc.querySelectorAll = () => [old]; doc.activeElement = old; assert.equal(poll(500), false, 'the remembered node itself never qualifies');
+  doc.querySelectorAll = () => [replacement]; doc.activeElement = replacement; probe = fresh();
+  old.isConnected = true;
+  for (let i = 0; i < 100; i++) assert.equal(poll(i * 50), false);
+  assert.equal(probe.samples.length, 64); assert.equal(probe.omitted, 36); assert.equal(probe.samples[63].elapsedMs, 4950);
+});
+
+test('focus witness capture is atomic, capped, reused and invalidated on reload', async () => {
+  const { rememberFocus, captureFocusedNode } = await import('../../tools/ui/explorer/browser.mjs');
+  const node = {}, doc = { activeElement: node, querySelectorAll: () => [node] };
+  let disposed = 0, close;
+  const session = { context: { once: (name, callback) => { assert.equal(name, 'close'); close = callback; } }, page: {
+    evaluateHandle: async (fn, selector) => {
+      assert.equal(fn, captureFocusedNode);
+      const result = fn(selector, doc);
+      assert.equal(result, node); return { dispose: async () => { disposed++; } };
+    }, reload: async () => {}, waitForFunction: async () => {},
+  }, background: true };
+  await rememberFocus(session, { id: 'before', selector: '#team' });
+  await rememberFocus(session, { id: 'before', selector: '#team' }); assert.equal(disposed, 1);
+  doc.activeElement = null; await assert.rejects(() => rememberFocus(session, { id: 'other', selector: '#team' }), /not currently focused/);
+  doc.activeElement = node; doc.querySelectorAll = () => [];
+  await assert.rejects(() => rememberFocus(session, { id: 'other', selector: '#team' }), /matched 0/);
+  doc.querySelectorAll = () => [node];
+  for (let i = 0; i < 15; i++) await rememberFocus(session, { id: `other${i}`, selector: '#team' });
+  await assert.rejects(() => rememberFocus(session, { id: 'too-many', selector: '#team' }), /limit is 16/);
+  await performAction(session, { type: 'reload' }); assert.equal(session.focusWitnesses.size, 0); assert.equal(disposed, 17);
+  await rememberFocus(session, { id: 'new', selector: '#team' }); close(); assert.equal(session.focusWitnesses.size, 0);
+});
+
+test('focus assertion retains sampled evidence and disposes handles without swallowing evaluation failures', async () => {
+  const { checkFocus } = await import('../../tools/ui/explorer/browser.mjs');
+  const oracle = { type: 'focus', selector: '#team', afterReplacement: 'before', timeoutMs: 400, stableMs: 150 };
+  assert.equal((await checkFocus({}, oracle)).actual.reason, 'missing-witness');
+  await assert.rejects(() => checkFocus({}, { ...oracle, timeoutMs: 0 }), TypeError);
+  await assert.rejects(() => checkFocus({}, { ...oracle, stableMs: 10001 }), TypeError);
+  let disposed = 0, witnessDisposed = 0, timedOut = false, unexpected = false;
+  const witness = { dispose: async () => { witnessDisposed++; } };
+  const state = { actual: { reason: 'settling-focus', replaced: true, focused: true, stableForMs: 50 }, samples: [{ elapsedMs: 0 }], omitted: 0 };
+  const probe = { evaluate: async fn => fn(state), dispose: async () => { disposed++; } };
+  const session = { focusWitnesses: new Map([['before', witness]]), page: {
+    evaluateHandle: async () => probe,
+    waitForFunction: async (fn, args, opts) => {
+      assert.equal(args.probe, probe); assert.equal(args.selector, '#team'); assert.deepEqual(opts, { polling: 50, timeout: 400 });
+      if (unexpected) throw new Error('Execution context was destroyed');
+      if (timedOut) { const error = new Error('budget'); error.name = 'TimeoutError'; throw error; }
+      state.actual = { ...state.actual, reason: 'focus-stable', stableForMs: 150 };
+      return { dispose: async () => { disposed++; } };
+    },
+  } };
+  assert.equal((await checkFocus(session, oracle)).matches, true); assert.equal(disposed, 2);
+  assert.equal(witnessDisposed, 1); assert.equal((await checkFocus(session, oracle)).actual.reason, 'missing-witness', 'a consumed boundary cannot bless another update');
+  session.focusWitnesses.set('before', witness); state.actual = { ...state.actual, reason: 'settling-focus', stableForMs: 50 }; timedOut = true; const failure = await checkFocus(session, oracle);
+  assert.equal(failure.matches, false); assert.equal(failure.actual.reason, 'stability-not-observed'); assert.equal(failure.actual.samples.length, 1); assert.equal(disposed, 3);
+  session.focusWitnesses.set('before', witness); state.actual.maxSampleGapMs = 200;
+  assert.equal((await checkFocus(session, oracle)).actual.reason, 'unmeasured-sampling-gaps');
+  state.actual.maxSampleGapMs = 50;
+  session.focusWitnesses.set('before', witness);
+  await assert.rejects(() => performAction(session, { type: 'assert', oracle }), /Replay assertion failed:.*stability-not-observed/);
+  session.focusWitnesses.set('before', witness); unexpected = true; await assert.rejects(() => checkFocus(session, oracle), /Execution context was destroyed/); assert.equal(disposed, 6); assert.equal(witnessDisposed, 5);
+});
