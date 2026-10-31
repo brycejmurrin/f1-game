@@ -73,6 +73,12 @@ const LiveRegion = (function () {
     r.textContent = "";
     phase = "beat";
     timer = setTimeout(() => {
+      // The node captured at say() is wrong once a dialog opens or closes in
+      // this beat: showModal() makes #announce-live inert, and a closed dialog
+      // takes its twin with it. Speak on the region the reader is watching,
+      // with a fresh clear-then-write so the change is announced.
+      const live = region();
+      if (live !== r) { r.textContent = ""; write(item); return; }
       r.textContent = item.text;
       item.at = now();
       phase = "hold";
@@ -111,14 +117,25 @@ const LiveRegion = (function () {
     return false;
   }
 
-  /** A new session: nothing queued from the last one is read into this one,
-   *  and the polite region itself is cleared so browse mode does not keep a
-   *  race call on the title after resetRace(). */
+  /** A new session: nothing queued from the last one is read into this one.
+   *  Clear every polite region. resetRace() runs while a dialog can still be
+   *  :modal (RESTART leaves #pausemenu up until clearMenuScreens), and
+   *  region() would blank only that dialog's twin — browse mode then kept the
+   *  last race call in #announce-live, and a closed dialog kept its own. */
   function reset() {
     clearTimeout(timer);
     timer = 0; phase = "idle"; current = null; queue.length = 0;
-    const r = region();
-    if (r) r.textContent = "";
+    if (typeof document === "undefined") return;
+    const live = document.getElementById && document.getElementById("announce-live");
+    if (live) { live.textContent = ""; el = live; }
+    if (!document.querySelectorAll) return;
+    const blank = (n) => { if (n) n.textContent = ""; };
+    let twins = [];
+    try { twins = document.querySelectorAll("[data-announce-modal]"); } catch (_) { twins = []; }
+    for (const n of twins) blank(n);
+    let modals = [];
+    try { modals = document.querySelectorAll(":modal"); } catch (_) { modals = []; }
+    for (const top of modals) blank(top && top.querySelector && top.querySelector(":scope > [data-announce-modal]"));
   }
 
   /** Test / debug view of the announcer (never a source of game state). */

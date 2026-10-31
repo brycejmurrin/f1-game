@@ -352,8 +352,10 @@
 /* PRE-BOOT: on Slow 4G these doors paint ~12 s before game.js wires them, and
    a tap did nothing. Until html[data-booted] (js/ui/title-menu.js) they sit
    dim and inert; the rule fills with --boot-p (index.html), held at 85 %
-   until boot: on a 4x-slowed CPU, evaluation outlasts the download by ~11 s. */
-:root:not([data-booted]) #menu-buttons { opacity: .4; filter: grayscale(1); pointer-events: none; }
-#menu-buttons { transition: opacity var(--dur-3) var(--ease-out), filter var(--dur-3) var(--ease-out); }
+   until boot: on a 4x-slowed CPU, evaluation outlasts the download by ~11 s.
+   Dimmed by filter, not opacity: a translucent grid let the line-art car show
+   through the plates and across the labels (design pass 3). */
+:root:not([data-booted]) #menu-buttons { filter: grayscale(1) brightness(.45); pointer-events: none; }
+#menu-buttons { transition: filter var(--dur-3) var(--ease-out); }
 :root:not([data-booted]) #title::after { transform: skewX(-30deg) scaleX(calc(var(--boot-p, .07) * .85)); transform-origin: left; }
 } /* @layer components */

@@ -77,38 +77,39 @@ const NetSnapshot = (function () {
     return Number.isInteger(id) && id >= 0 && id <= 255;
   }
 
+  // Both encoders count the valid entries first and write them in a second pass: the copied `list` they
+  // built was one array per packet (20-40 a second per guest on a host).
+  const validEntry = (e) => !!e && wireId(e.id);
+  const validAged = (e) => !!e && wireId(e.id) && Number.isFinite(e.at);
   function encodeSnapshot(tick, entries) {
-    const list = [];
     const src = entries || [];
-    for (let i = 0; i < src.length && list.length < 255; i++) {
-      const e = src[i];
-      if (!e || !wireId(e.id)) continue;
-      list.push(e);
-    }
-    const n = list.length;
+    let n = 0;
+    for (let i = 0; i < src.length && n < 255; i++) if (validEntry(src[i])) n++;
     const buf = new ArrayBuffer(SNAP_HEADER + n * CAR_BYTES);
     const dv = new DataView(buf);
     dv.setUint8(0, TYPE_SNAPSHOT);
     dv.setUint32(1, tick >>> 0);
     dv.setUint8(5, n);
     let off = SNAP_HEADER;
-    for (let i = 0; i < n; i++) off = writeCar(dv, off, list[i].id, list[i].car);
+    for (let i = 0, w = 0; w < n; i++) {
+      const e = src[i];
+      if (!validEntry(e)) continue;
+      off = writeCar(dv, off, e.id, e.car); w++;
+    }
     return new Uint8Array(buf);
   }
 
   // entries: [{ id, car, at }] — `at` the moment that pose was true, in the
   // sender's clock. The header tick is the NEWEST at; each age is tick − at.
   function encodeAged(entries) {
-    const list = [];
     const src = entries || [];
-    let tick = -Infinity;
-    for (let i = 0; i < src.length && list.length < 255; i++) {
+    let tick = -Infinity, n = 0;
+    for (let i = 0; i < src.length && n < 255; i++) {
       const e = src[i];
-      if (!e || !wireId(e.id) || !Number.isFinite(e.at)) continue;
-      list.push(e);
+      if (!validAged(e)) continue;
+      n++;
       if (e.at > tick) tick = e.at;
     }
-    const n = list.length;
     const buf = new ArrayBuffer(SNAP_HEADER + n * AGED_BYTES);
     const dv = new DataView(buf);
     const t = n ? Math.round(tick) : 0;
@@ -116,9 +117,11 @@ const NetSnapshot = (function () {
     dv.setUint32(1, t >>> 0);
     dv.setUint8(5, n);
     let off = SNAP_HEADER;
-    for (let i = 0; i < n; i++) {
-      off = writeCar(dv, off, list[i].id, list[i].car);
-      dv.setUint16(off, clamp(Math.round(t - list[i].at), 0, MAX_AGE_MS)); off += 2;
+    for (let i = 0, w = 0; w < n; i++) {
+      const e = src[i];
+      if (!validAged(e)) continue;
+      off = writeCar(dv, off, e.id, e.car);
+      dv.setUint16(off, clamp(Math.round(t - e.at), 0, MAX_AGE_MS)); off += 2; w++;
     }
     return new Uint8Array(buf);
   }

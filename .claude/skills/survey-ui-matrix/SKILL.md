@@ -29,12 +29,12 @@ One CLI owns the menu matrix: `tools/ui/layout-audit.mjs`. The race HUD has its 
 
 1. **Plan the matrix** (no browser, parent-only): `node tools/ui/layout-audit.mjs --list`, and cross-check
    the screen roots in `index.html` against `SCREENS` ([setup.md](references/setup.md) §Enumerate).
-2. **Baseline** (if proving a CSS change): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
+2. **Baseline** (if proving a CSS change; needs an earlier run's `audit.json`, else take the baseline from step 3 first): `cp artifacts/layout-audit/audit.json artifacts/layout-audit/audit.before.json`.
 3. **Bryce's cell first**, pictures AND DOM, as ONE background task (AGENTS.md rule 4), after
    `mkdir -p artifacts/logs`:
    `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*' --shots --dom > artifacts/logs/layout-audit-844.log 2>&1`.
    Browser runs need `/proc/loadavg` < 3 and no live Playwright run (AGENTS.md rules 5, 7).
-4. **Widen to the scoped axes**, e.g. the whole "0.8-1.5x, touch + mouse" ask in one run:
+4. **Widen to the scoped axes** (a background task with a log, like step 3), e.g. the whole "0.8-1.5x, touch + mouse" ask in one run:
    `node tools/ui/layout-audit.mjs --screens='*' --viewports='ios-*,desktop-*' --scale=80,100,150 --shots`.
    Fast look first with `menu-mock.mjs`; title-path only is `--survey` (`npm run ui:survey`), all menus fast
    is `--gallery` ([cli.md](references/cli.md)).

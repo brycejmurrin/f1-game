@@ -143,7 +143,7 @@ function simCareerRound() {
   for (let i = 0; i < rows.length; i++) {
     const car = byId.get(rows[i].driverId);
     if (!car) continue;
-    car.gridPos = i + 1;
+    car.gridPos = i + 1; delete car.classified; delete car.dsq;   // this simulated round owns its result
     if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
     const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
     // Race day is not qualifying. Pace order is a strong prior; craft is how much
@@ -588,9 +588,11 @@ const api = {
       wheelState: typeof WheelState !== "undefined" && WheelState.enabled(),   // #1628 opt-in torque-balanced wheels
     };
   },
-  physState() {
+  // physState({lite:true}) — the METRICS overlay's 4 Hz read: no coach.status() (driving: undefined).
+  physState(o) {
     if (!G.player || G.player.px == null) return null;
     if (!G.track) return { error: "no track" };   // a stepped rebuild / menu flyby drop nulls the track while px survives
+    const dAx = typeof DamageHandling !== "undefined" ? DamageHandling.axles() : null;
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     Tracks.sample(G.track, G.player.s, smp);
     const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
@@ -603,7 +605,7 @@ const api = {
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
+      slipFactor: +slipFactor.toFixed(3), driving: o && o.lite ? undefined : G.coach.status(),
       // The DRIVEN axle's circle after the brake-bias re-split (player-forces
       // c.slipFactor) — not the whole-car budget above. null before a tick.
       drivenSlip: G.player.slipFactor != null ? +G.player.slipFactor.toFixed(3) : null,
@@ -615,8 +617,8 @@ const api = {
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
       // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
-      damageAxF: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().f.toFixed(4) : 1,
-      damageAxR: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().r.toFixed(4) : 1,
+      damageAxF: dAx ? +dAx.f.toFixed(4) : 1,
+      damageAxR: dAx ? +dAx.r.toFixed(4) : 1,
       damageHandling: typeof DamageHandling !== "undefined" && DamageHandling.isEnabled(),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
@@ -1642,8 +1644,10 @@ const api = {
   // js/perf/governor.js) rather than a hardcoded 16.7 ms; it rises to match an
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
+  // renderScale({lite:true}) skips frameTimes (PerfGov.frameStats copies and sorts its 2048-frame ring).
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
+    const lite = !!(v && v.lite === true);
+    if (v === undefined || lite) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), lookPostShed: !!(PerfGov.lookPostShed && PerfGov.lookPostShed()), phoneSlowLatch: !!(PerfGov.phoneSlowLatch && PerfGov.phoneSlowLatch()), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: lite ? undefined : PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
     // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)
@@ -1698,6 +1702,7 @@ const api = {
       if (o && o.measure !== undefined) PerfSpans.measure(o.measure);
       if (o && o.on !== undefined) PerfSpans.on(o.on);
     }
+    if (o && o.lite) return this.renderScale(o);   // perf({lite:true}): the overlay's read, no frameTimes / span report
     const base = this.renderScale();
     if (typeof PerfSpans === "undefined" || !(PerfSpans.isOn() || o)) return base;
     return Object.assign(base, PerfSpans.report(), { gpu: this.gpuTimer() });

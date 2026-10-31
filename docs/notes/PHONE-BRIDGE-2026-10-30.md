@@ -55,6 +55,13 @@ GitHub facts this leans on (read 2026-10-30):
 | `gpuTest` | `op` start/stop/status/active | the PHONE TEST > GPU TEST run (`GpuTestRun`) |
 | `recorder` | `op` start/stop/isOn/json | `PhoneRecorder` |
 | `reload` | — | reload the page (the link re-forms with a new hello) |
+| `path` | `to` webgpu/webgl2/auto, `reload` | pin three.js on a path (the pin `BenchRun.pathPrefs` writes) and reload; no `to` = the current pin and live path |
+| `bench` | `op` tests/start/stop/status/result/leg | SETTINGS > GRAPHICS > BENCHMARK (`BenchRun`); start reloads per leg |
+| `snap` | `w` 64–640, `q` | a downscaled JPEG data URL of the canvas, under 56,000 chars |
+| `wait` | `ms` 0–30000 | a pause between `batch` steps |
+| `batch` | `steps[]` 1–10 | several commands from one comment; stops at the first failure; `reload`/`path` only last |
+
+Recipes and result parsing: skill `phone-bridge` (`.claude/skills/phone-bridge/`).
 
 ## 4. Limits and safety
 
@@ -64,3 +71,17 @@ GitHub facts this leans on (read 2026-10-30):
 - iOS suspends a background tab, so the game must stay in front while commands run. Replies are capped at 60,000
   chars (GitHub's comment limit is 65,536); a bigger result comes back as `{truncated, head}`.
 - Poll latency is about 4 s plus GitHub's own; this is for perf runs and state reads, not frame-level control.
+
+## 5. Token box fix (2026-10-30, Bryce: "It won't let me type or paste")
+
+The first LINK box was a plain `<form>` on `<body>`. The game's focus trap (`TopModal.onFocusIn`, a document-capture
+`focusin`) pulled focus back into the title screen as soon as the box was tapped: in Chromium at 844×390 touch the
+focus landed on `#soundbtn` and typed text never reached the box. The box is now its own modal `<dialog>` (top layer,
+never inert), a window-capture `focusin` listener keeps that trap from seeing focus inside it, and a PASTE button
+reads the clipboard directly. Same probe after the fix: focus stays on the input and the text arrives.
+
+## 6. Live runs
+
+| date (Pacific) | build (`facts.sha`) | device | path | scene | fps | p50 / p95 / p99 ms | over 33 ms |
+|---|---|---|---|---|---|---|---|
+| 2026-10-30 | — | — | — | first live run pending: the link was not formed this session | — | — | — |

@@ -739,21 +739,22 @@ test("a spare pad disconnect preserves held action edge baselines", () => {
  * fitHud writes --hud-z-dock (js/ui/hud.js, not touched here). The dock then
  * `zoom`s, so an authored --fs-micro (14px) paints at 9.7px on a 390px-tall
  * landscape phone at HUD 150% (css/touch-controls.css, 2026-10-14). The floor
- * is a font-size max() that divides 10 CSS px by that zoom — width/height stay
- * on --tap/--hold, so hit areas do not grow. */
-const LABEL_FLOOR_PX = 10;
+ * is a font-size max() that divides 11 CSS px (Apple's 11 pt text minimum,
+ * #4258; was 10) by that zoom — width/height stay on --tap/--hold, so hit
+ * areas do not grow. */
+const LABEL_FLOOR_PX = 11;
 
 function paintedLabelPx(authoredPx, dockZoom) {
   const z = Math.max(0.4, +dockZoom || 1);
   return Math.max(authoredPx, LABEL_FLOOR_PX / z) * z;
 }
 
-test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
+test("dock touch labels keep an 11 CSS-px painted floor under --hud-z-dock", () => {
   const ov = css("css/touch-controls.css");
   const tk = css("css/tokens.css");
   const land = { context: /orientation:\s*landscape/ };
-  assert.equal(decl(tk, ":root", "--touch-label-floor"), "10px",
-    "--touch-label-floor is the 10 CSS-px painted minimum");
+  assert.equal(decl(tk, ":root", "--touch-label-floor"), "11px",
+    "--touch-label-floor is the 11 CSS-px painted minimum");
 
   const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
   assert.ok(dock, "landscape dock publishes zoom");
@@ -763,7 +764,7 @@ test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () =
 
   const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);
   assert.match(String(tapFont), /max\(/, "tap labels clamp with max()");
-  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the 10px floor");
+  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the label floor");
   assert.match(String(tapFont), /var\(--touch-label-z/, "tap labels divide the floor by dock zoom");
   assert.doesNotMatch(String(tapFont), /\bwidth\b|\bheight\b/, "the font rule does not restyle hit boxes");
 
@@ -777,15 +778,16 @@ test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () =
   assert.match(String(shiftFont), /var\(--touch-label-floor\)/);
 
   const pauseFont = decl(ov, "#pausebtn", "font-size");
-  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same 10px floor");
+  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same label floor");
   const camFont = decl(ov, "#btn-cam", "font-size");
-  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same 10px floor");
+  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same label floor");
 
   // The 9.7px case: authored 14px × dock zoom 0.69. Without the floor that
-  // paints 9.66; with it, 10. Width/height stay on --tap/--hold (not asserted
+  // paints 9.66; with it, 11. Width/height stay on --tap/--hold (not asserted
   // as a computed box here — the selectors above never mention them).
-  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ 10");
-  assert.ok(paintedLabelPx(14, 0.69) < 14 * 0.69 + 1, "the floor does not enlarge labels that already clear 10px by much");
+  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ the floor");
+  assert.ok(paintedLabelPx(14, 0.69) <= LABEL_FLOOR_PX + 1e-9, "the floor lifts a sub-floor label exactly to the floor, no further");
+  assert.ok(paintedLabelPx(18, 1) === 18, "a label that already clears the floor keeps its authored size");
   for (const z of [0.4, 0.5, 0.69, 0.82, 1, 1.25, 1.5]) {
     for (const authored of [11, 14, 15, 18]) {
       assert.ok(paintedLabelPx(authored, z) + 1e-9 >= LABEL_FLOOR_PX,

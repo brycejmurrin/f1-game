@@ -66,7 +66,7 @@ function idleSampleSrc() {
 const live = new Set();
 function node(kind, counts) {
   if (counts) counts[kind] = (counts[kind] || 0) + 1;
-  const self = { kind, connections: [], connect(t) { self.connections.push(t); return t; }, disconnect() { live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
+  const self = { kind, connections: [], unplugs: 0, connect(t) { self.connections.push(t); return t; }, disconnect() { self.unplugs++; live.delete(self); }, start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; }, type: "", loop: false,
            loopStart: 0, loopEnd: 0, buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0,
            getFloatFrequencyData() {}, gain: param(1), frequency: param(440), detune: param(0),
            Q: param(1), playbackRate: param(1) };
@@ -120,6 +120,7 @@ function boot(opts) {
   if (opts && opts.realWatch) sb.RealRace = { isWatch: () => true, status: () => { throw new Error("WATCH guard must not build a status snapshot"); } };
   if (opts && opts.Audio) sb.Audio = opts.Audio;
   if (opts && opts.ErsLayer) sb.ErsLayer = opts.ErsLayer;
+  if (opts && opts.search != null) { sb.location = { search: opts.search }; sb.URLSearchParams = URLSearchParams; }
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc("js/core/mat4.js") });
@@ -2722,4 +2723,92 @@ test("rain restarts (pause/resume, weather flips) reuse one 4 s loop buffer inst
   assert.equal(second.buffer, first.buffer, "…over the same cached noise buffer");
   A.stopRain(); flushTimers(); A.startRain(0.2);
   assert.equal(rainBufs(), 1, "three rain starts generated the 4 s buffer once");
+});
+
+// ── LAB audioIdle (?lab=audioIdle; OFF by default) ──────────────────────────
+// The rival pass-by pool, the crowd bed + cheers and the ERS layer loop through
+// menus at gain 0. With the lab on, stopEngine() unplugs their output gains from
+// the bus once the fades are done, and startEngine() plugs them back.
+async function idleRig(search) {
+  const b = boot({ search });
+  const all = [];
+  for (const k of Object.keys(b.ctx)) {
+    if (!k.startsWith("create") || typeof b.ctx[k] !== "function" || k === "createBuffer") continue;
+    const make = b.ctx[k];
+    b.ctx[k] = (...a) => { const n = make(...a); all.push(n); return n; };
+  }
+  for (const file of ["js/physics/consts.js", "js/audio/ers-layer.js", "js/audio/rivals.js", "js/audio/crowd.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), b.vctx, { filename: absSrc(file) });
+  const mods = vm.runInContext("({ RivalAudio, ErsLayer, CrowdAudio })", b.vctx);
+  b.GameAudio.init();
+  await b.release();
+  b.GameAudio.startEngine();
+  const unplugs = () => all.reduce((s, n) => s + n.unplugs, 0);
+  const plugs = () => all.reduce((s, n) => s + n.connections.length, 0);
+  const pans = () => mods.RivalAudio.passByVoices().map((v) => v.pan);
+  // A pause → menu → resume cycle, with the deferred disconnects flushed.
+  const menu = () => { b.GameAudio.stopEngine(); b.ctx.currentTime += 1; b.flushTimers(); };
+  return { ...b, ...mods, all, unplugs, plugs, pans, menu };
+}
+
+test("audioIdle OFF leaves the layer graph exactly as shipped through a menu cycle", async () => {
+  const sig = (r) => r.all.map((n) => n.kind + ":" + n.connections.length + ":" + n.unplugs).join(",");
+  const runs = [];
+  for (const search of [null, "?lab=rivalEps", "?lab="]) {
+    const r = await idleRig(search);
+    assert.equal(r.CrowdAudio.inspect().attached, true, "precondition: the crowd bed is built");
+    assert.equal(r.ErsLayer.attached(), true, "precondition: the ERS layer is built");
+    assert.equal(r.pans().length, 4, "precondition: four pass-by voices");
+    r.menu();
+    assert.equal(r.pans().reduce((s, p) => s + p.unplugs, 0), 0, `${search}: no pass-by panner is unplugged`);
+    assert.equal(r.CrowdAudio.inspect().bedGain.unplugs, 0, `${search}: the crowd bed stays plugged in`);
+    r.GameAudio.startEngine();
+    runs.push({ sig: sig(r), unplugs: r.unplugs(), plugs: r.plugs() });
+  }
+  assert.equal(runs[1].sig, runs[0].sig, "a different lab builds and tears down the same graph");
+  assert.equal(runs[2].sig, runs[0].sig, "an empty lab param is off");
+});
+
+test("audioIdle ON unplugs the rival, crowd and ERS outputs in menus and restores them on race entry", async () => {
+  const off = await idleRig(null);
+  const on = await idleRig("?lab=audioIdle");
+  const u0off = off.unplugs(), u0on = on.unplugs();
+  assert.equal(u0on, u0off, "nothing is unplugged while racing");
+  off.menu(); on.menu();
+  // 4 pass-by panners + crowd bed + 4 desktop cheer gains + 4 ERS gains = 13.
+  // Red on d7d7617b: 0 (no lab, no idle()).
+  assert.equal((on.unplugs() - u0on) - (off.unplugs() - u0off), 13, "the menu unplugs 13 layer outputs");
+  for (const p of on.pans()) assert.equal(p.unplugs, 1, "every pass-by panner is unplugged");
+  assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 1, "the crowd bed is unplugged");
+  assert.equal(on.ErsLayer.attached(), true, "the ERS layer keeps its nodes: unplugged, not torn down");
+  // Nothing new is created and the context is untouched (iOS unlock path).
+  const nOn = on.all.length, nOff = off.all.length;
+  const p0off = off.plugs(), p0on = on.plugs();
+  off.GameAudio.startEngine(); on.GameAudio.startEngine();
+  assert.equal((on.plugs() - p0on) - (off.plugs() - p0off), 13, "race entry plugs the same 13 outputs back");
+  assert.equal(on.all.length - nOn, off.all.length - nOff, "race entry creates no extra node (nothing is rebuilt)");  const bus = on.pans()[0].connections[0];
+  for (const p of on.pans()) {
+    assert.equal(p.connections.length, 2, "each panner is connected again");
+    assert.equal(p.connections[1], bus, "…to the same bus");
+  }
+  const bed = on.CrowdAudio.inspect().bedGain;
+  assert.equal(bed.connections.length, 2, "the crowd bed is connected again");
+  // …and the restored pool takes a param write on the first race frame.
+  const me = { s: 100, x: 0, speed: 50, rpm: 9000 }, rival = { s: 106, x: 1, speed: 70, rpm: 9000 };
+  const R = on.RivalAudio.create({ track: { total: 1000 }, cars: [me, rival] });
+  const g = on.RivalAudio.passByVoices()[0].gain.gain, sets = g.sets;
+  R.collect(me);
+  assert.ok(g.sets > sets && g.value > 0, "the reconnected pass-by voice is aimed on the first collect()");
+});
+
+test("audioIdle ON: a resume inside the fade window never unplugs anything", async () => {
+  const on = await idleRig("?lab=audioIdle");
+  const u0 = on.unplugs();
+  on.GameAudio.stopEngine();
+  on.GameAudio.startEngine();       // back in the race before the 500 ms timer
+  on.ctx.currentTime += 1;
+  on.flushTimers();                 // the stale idle timer fires with the engine on
+  assert.equal(on.pans().reduce((s, p) => s + p.unplugs, 0), 0, "the pass-by pool stays plugged in");
+  assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 0, "the crowd bed stays plugged in");
+  assert.ok(on.unplugs() >= u0);
 });

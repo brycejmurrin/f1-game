@@ -63,10 +63,41 @@ var RivalAudio = (() => {
   function passByPan(lat, arc) {
     return PAN_MAX * Math.max(-1, Math.min(1, (+lat || 0) / Math.max(3, Math.abs(+arc || 0) + 3)));
   }
-  function aimParam(param, target, t, tau) {
+  // URL labs (?lab=a,b): opt-in switches for Bryce's listening passes, read once
+  // at module eval. No store key. Absent/garbled → false (the shipped behaviour).
+  function labOn(name) {
+    try {
+      if (typeof location === "undefined" || !location) return false;
+      const v = new URLSearchParams(location.search).get("lab");
+      return !!v && v.split(",").some((s) => s.trim() === name);
+    } catch (e) { return false; }
+  }
+  // LAB rivalEps (OFF by default; perf hunt 7 measured 9.2 → ~1.3 calls/frame).
+  // Try: https://brycejmurrin.github.io/f1-game/?lab=rivalEps
+  // A slow drift re-aimed every param every frame. With the lab on, applyPassBy
+  // re-aims only when the target moved past a per-param threshold below
+  // audibility. The cache holds the LAST ISSUED target, so drift accumulates
+  // until it crosses (error bounded by the threshold), and a large step issues
+  // at once. A target of exactly 0 always lands (a voice going silent).
+  const EPS_ON = labOn("rivalEps");
+  // gain: 3 % relative ≈ 0.26 dB, well under the ~1 dB level JND; the 5e-4 floor
+  // is -66 dBFS, inaudible under the engine (GAIN_PEAK 0.07 ≈ -23 dBFS).
+  const EPS_GAIN = { abs: 5e-4, rel: 0.03 };
+  // playbackRate: 0.5 % ≈ 8.6 cents. Pitch JND is ~5-10 cents for pure tones and
+  // far coarser for lowpassed noise; the whoosh has no tonal partials.
+  const EPS_RATE = { abs: 0, rel: 0.005 };
+  // pan: 0.01 of the ±1 equal-power pan ≈ 0.9° of image shift, under the ~1-2°
+  // minimum audible angle for frontal sources (coarser at the sides).
+  const EPS_PAN = { abs: 0.01, rel: 0 };
+  // lowpass cutoff: 1 % ≈ 17 cents of corner; the spectral-edge JND on
+  // broadband noise is ~3-5 %.
+  const EPS_CUT = { abs: 0, rel: 0.01 };
+  function aimParam(param, target, t, tau, eps) {
     if (!param || typeof param.setTargetAtTime !== "function") return;
     const prev = param._apexPassTgt;
     if (prev === target || (prev !== undefined && Math.abs(prev - target) < 1e-4)) return;
+    if (eps && prev !== undefined && target !== 0 &&
+        Math.abs(prev - target) < Math.max(eps.abs, eps.rel * Math.abs(target))) return;
     param.setTargetAtTime(target, t, tau);
     param._apexPassTgt = target;
   }
@@ -95,7 +126,7 @@ var RivalAudio = (() => {
   // order) and stash dest on the stub as _pendingAttach; we consume it below.
   const pending = (typeof RivalAudio !== "undefined" && RivalAudio._pendingAttach) || null;
   const voiced = new Array(SLOTS).fill(false);
-  let actx = null, voices = null, mix = 1;
+  let actx = null, voices = null, mix = 1, outDest = null, idled = false;
 
   function attach(ctx, bus) {
     if (!ctx) return;
@@ -103,6 +134,8 @@ var RivalAudio = (() => {
     if (voices) detach();
     actx = ctx;
     const dest = bus || ctx.destination;
+    outDest = dest;
+    idled = false;
     const noise = noiseBuffer(ctx);
     voices = [];
     for (let i = 0; i < SLOTS; i++) {
@@ -140,12 +173,12 @@ var RivalAudio = (() => {
       // A car holding station is not a continuous full-volume fly-by.
       const motion = 0.12 + 0.88 * Math.min(1, r.relativeSpeed / 45);
       v.level = passByGain(dist, r.arc) * motion;
-      aimParam(v.gain.gain, v.level * mix, t, 0.10);
-      aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08);
-      aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06);
+      aimParam(v.gain.gain, v.level * mix, t, 0.10, EPS_ON ? EPS_GAIN : undefined);
+      aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08, EPS_ON ? EPS_RATE : undefined);
+      aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06, EPS_ON ? EPS_PAN : undefined);
       const cut = Math.max(700, Math.min(2400,
         2400 * Math.pow(REF / Math.max(dist, REF), 0.35)));
-      aimParam(v.filt.frequency, cut, t, 0.12);
+      aimParam(v.filt.frequency, cut, t, 0.12, EPS_ON ? EPS_CUT : undefined);
       v.dist = dist;
       v.key = r.key;
     }
@@ -190,6 +223,20 @@ var RivalAudio = (() => {
     }
     voices = null;
     actx = null;
+    outDest = null;
+    idled = false;
+  }
+
+  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // idle(true) unplugs each voice's panner from the bus once its fade is done;
+  // idle(false) plugs it back. Same nodes, same ctx: nothing is rebuilt.
+  function idle(on) {
+    if (!voices || !outDest || !!on === idled) return;
+    for (let i = 0; i < voices.length; i++) {
+      const p = voices[i].pan;
+      try { if (on) p.disconnect(); else p.connect(outDest); } catch (e) { /* torn down */ }
+    }
+    idled = !!on;
   }
 
   function passByState() {
@@ -355,5 +402,5 @@ var RivalAudio = (() => {
     try { if (pending.mix != null) setMix(pending.mix); attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
   }
 
-  return { create, attach, detach, silence, setMix, sprayAhead, passByVoices };
+  return { create, attach, detach, silence, setMix, sprayAhead, passByVoices, idle };
 })();

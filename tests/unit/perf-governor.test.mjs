@@ -70,6 +70,29 @@ test("software GL UI readback deferral preserves the Document receiver", async (
   });
 });
 
+test("software GL readback defer covers MenuTeardown quit (not garage mask leak)", () => {
+  function defer(softwareGL, quitHold) {
+    const document = {
+      getElementById() {
+        assert.equal(this, document, "native Document methods require their receiver");
+        return { hidden: true };
+      },
+    };
+    const context = vm.createContext({
+      document,
+      Log: { info() {} },
+      GameStore: { store: { raw: () => null } },
+      MenuTeardown: { quitReadbackDefer: () => quitHold },
+    });
+    const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+    governor.init({ backendState: () => ({ softwareGL }) });
+    return governor.softwareGlUiReadbackDefer();
+  }
+  assert.equal(defer(true, true), true, "quit readback defer on software GL");
+  assert.equal(defer(true, false), false, "quit off with hidden sheets does not defer");
+  assert.equal(defer(false, true), false, "hardware keeps the readback");
+});
+
 test("software GL readback defer covers countdown and race-entry handoff", () => {
   function defer(softwareGL, cover) {
     const document = {
@@ -598,7 +621,7 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
 
 test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /let DPR_CAP = mobileTier \? 1\.5 : 2;/, "the cap is mutable");
+  assert.match(tlx, /let DPR_CAP = _lite \? _lite\.dprCap : \(mobileTier \? 1\.5 : 2\);/, "the cap is mutable (B8: the ?lab=tlxLite tier seeds it lower)");
   assert.match(tlx, /capDpr\(n\) \{\s*if \(!\(n >= 1\) \|\| n >= DPR_CAP\) return false;\s*DPR_CAP = n; resizeNow\(\); return true;/);
 });
 

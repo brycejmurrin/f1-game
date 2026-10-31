@@ -188,6 +188,12 @@ const Car3D = (function () {
 
   // shadeFlags.round / coverHi: mutated for one build(), then reset (was _round / _coverHi).
   const shadeFlags = { round: false, coverHi: true };
+  // The driver's lid, in build() and alone for a teammate (CarMaterials.reseat). Paint-edge splits (~+2k tris on
+  // busy lids) matter only large on screen: field AI bodies (tens of px) and depth silhouettes drop them to 0.
+  function emitHelmet(out, opts, c1, liv, sil) {
+    const des = Helmets.styled(Helmets.designFor(opts && opts.num, c1, helmetKey(opts)), liv.helmetStyle, liv.helmetBase, liv.helmetAccent), flat = sil || !!(opts && opts.field);
+    Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.visor, maxSplit: flat ? 0 : undefined, simplePaint: flat });
+  }
 
   const { addWheel, buildWheel, buildWheelLayers } = CarWheels.create({
     geometry, SURFACES, TYRE, INTAKE,
@@ -234,7 +240,7 @@ const Car3D = (function () {
     return out;
   }
 
-  function build(color, color2, opts) {
+  function buildOne(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
     // Field body / silhouette = mid & far track LODs: keep the cheap cover.
@@ -246,7 +252,7 @@ const Car3D = (function () {
     const part = (name) => {
       const at = out.pos.length / 3;
       if (sections.length) sections[sections.length - 1].to = at;
-      sections.push({ name, from: at, to: at });
+      sections.push({ name, from: at, to: at, ifrom: out.idx.length });   // ifrom: reseat finds the lid triangles
     };
     const zoneRanges = [], zone = (name, draw) => { const from = out.pos.length / 3; draw(); zoneRanges.push({ name, from, to: out.pos.length / 3 }); };   // #2796: livery-section paint that takes a zone's finish
     const c1 = color  || [0.8, 0.05, 0.05];
@@ -1610,24 +1616,11 @@ const Car3D = (function () {
     }
 
     part("helmet");
-    if (!(opts && opts.noDriver)) {
-      // The driver's head: helmets.js owns the lid. cy is the TEMPLE line. At
-      // 0.630 the crown sat at 0.749 under a cockpit surround topping out at
-      // 0.765 — the head was BELOW the tub, and a design nobody can see is the
-      // defect this module exists to fix. 0.715 clears it by 82 mm, and still
-      // passes 43 mm under the halo at 0.890.
-      const des = Helmets.styled(Helmets.designFor(opts && opts.num, c1, helmetKey(opts)), liv.helmetStyle, liv.helmetBase, liv.helmetAccent);
-      // Paint-edge splits (~+2k tris on busy lids) matter when the helmet is
-      // large on screen (player body, garage, cockpit). Field AI bodies are
-      // tens of pixels; depth silhouettes never see paint. Both drop to 0.
-      const field = !!(opts && opts.field);
-      Helmets.build(out, 0, 0.715, -0.075, des, {
-        paint: SURFACES.paint, glass: SURFACES.visor,
-        maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
-      });
-      // No boxes bolted on here: the rear gurney, top intake and visor strip are
-      // lofts on the shell itself (helmets.js buildAero), built with the lid.
-    }
+    // The driver's head: helmets.js owns the lid (emitHelmet). cy 0.715 is the TEMPLE line: at 0.630 the crown sat
+    // at 0.749 under a cockpit surround topping out at 0.765 — the head was BELOW the tub. 0.715 clears it by 82 mm
+    // and passes 43 mm under the halo at 0.890. No boxes bolted on: the rear gurney, top intake and visor strip
+    // are lofts on the shell itself (helmets.js buildAero), built with the lid.
+    if (!(opts && opts.noDriver)) emitHelmet(out, opts, c1, liv, sil);
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
     // 0.805, so against a driver's eye at (0.72, -0.20) its front face is 2.5 cm
@@ -2874,6 +2867,12 @@ const Car3D = (function () {
     return out;
   }
 
+  // opts.seats (#4219): teammates' bodies from this one build (CarMaterials.reseat; `lid` emits a seat's lid alone).
+  function build(color, color2, opts) {
+    if (!(opts && opts.seats && opts.seats.size && CarMaterials.seatable(opts))) return buildOne(color, color2, opts);
+    const lid = (num) => { const h = { pos: [], nrm: [], col: [], mat: [], idx: [] }; emitHelmet(h, Object.assign({}, opts, { num }), color || [0.8, 0.05, 0.05], opts.livery || {}, false); return h; };
+    return CarMaterials.reseat(buildOne(color, color2, Object.assign({}, opts, { refinish: true })), opts, lid);
+  }
   function buildComplete(color, color2, opts) {
     const out = build(color, color2, opts);
     const info = out.flapInfo;

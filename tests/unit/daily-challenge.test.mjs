@@ -122,7 +122,7 @@ function load() {
     flow: "gp", timeTrial: false,
     startRace: () => calls.push("startRace"),
   };
-  return { D, d: D.create(G), G, stored, calls };
+  return { D, d: D.create(G), G, stored, calls, ctx };
 }
 
 test("COPY DAILY CODE binds time and medal to the same class PB across repeats", async () => {
@@ -238,6 +238,28 @@ test("record() keeps the day's best and counts a streak of consecutive UTC days"
   d.open("2026-09-06"); d.record(70);   // a missed day resets the streak
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-09-06" });
   assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
+});
+
+test("record() persists its returned entry before notifying streak badges", () => {
+  const { d, G, ctx } = load();
+  const day = "2026-09-03", events = [];
+  let persisted;
+  G.store.set = (key, value) => {
+    events.push("store");
+    assert.equal(key, "daily.v1");
+    persisted = value;
+  };
+  ctx.Badges = { onStreak(count) {
+    events.push("badge");
+    assert.equal(count, 1);
+    assert.equal(persisted.days[day].best, 81.345);
+    assert.equal(persisted.days[day].classes.standard.best, 81.345);
+    assert.equal(persisted.streak.last, day);
+  } };
+  d.select(day);
+  const entry = d.record(81.3454, "standard");
+  assert.deepEqual(events, ["store", "badge"]);
+  assert.equal(entry, persisted.days[day], "return the exact entry supplied to persistence");
 });
 
 test("a lap on an OLDER day's plan never resets or rewinds the streak", () => {

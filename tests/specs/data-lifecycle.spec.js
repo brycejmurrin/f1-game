@@ -37,9 +37,9 @@ test("superseded schedule responses retire native countdown observers", async ({
     window.__scheduleObserverProbe = { active, made: 0, calls: 0 };
     window.MutationObserver = class extends NativeObserver {
       observe(target, options) {
-        // The countdown watches `hidden` document-wide (an ancestor can hide the hub); its child lists are
-        // watched inside #datahub only, on the same observer, so one instance is counted once.
-        if (target === document.documentElement && options.subtree &&
+        // The countdown watches `hidden` and child lists inside #datahub (subtree), plus `hidden` on each of the
+        // hub's ancestors (no subtree): the subtree watch on the hub is its one fingerprint, counted once per instance.
+        if (target && target.id === "datahub" && options.subtree &&
             options.attributeFilter && options.attributeFilter.includes("hidden")) {
           if (!active.has(this)) window.__scheduleObserverProbe.made++;
           active.add(this);

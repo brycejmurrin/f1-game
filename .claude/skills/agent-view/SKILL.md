@@ -15,7 +15,7 @@ official count, never "the corner list". Grade is `trackProfile(n).slope` (formu
 track-geometry.md §Whole-lap recipe); `trackInfo({what:'profile'})` / CLI `track --what profile`
 is 60 points of `y`/`widthM`/`radiusM` with NO slope.
 `node tools/shot/apex-eval.mjs spa "({c:a.trackInfo({what:'corners'}), p:a.trackProfile(200)})" --raw --vm`
-(`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays).
+(`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays. Main session only: bash-guard refuses it in a subagent, see below.)
 MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
 '{"track":"monza","command":"world"}'`. Full surface catalog, staging, and
 driving policy → [references/surface.md](references/surface.md). Design notes:

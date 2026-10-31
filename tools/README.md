@@ -133,6 +133,8 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
+| **ci/claude-agents.mjs** | Claude Code CLI adapter: auth, known cloud references, followups and local session reads. | — |
+| **ci/claude-transcript.py** | Download one Claude cloud conversation via the official teleport/export CLI flow. | — |
 | **ci/cursor-agents.mjs** | Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched. | steward |
 | **ci/deploy-child.mjs** | Bounded deploy child supervision, including descendants and cooperative shutdown. | — |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
@@ -141,8 +143,10 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
+| **ci/path-overlap.mjs** | Advisory delegation overlap against open-PR diffs and supplied sibling briefs; GET-only, never a reservation. | worker |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/poll-live-shell.mjs** | Poll github.io until the live shell matches this deploy, a newer train | — |
+| **ci/pr-wait.mjs** | Explain one PR's current wait from bounded GET evidence, without polling or changing GitHub. | steward |
 | **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first. | check-changes |
 | **ci/ready-gate.mjs** | Pre-flip gate: open draft, Plan closed, Structural guards or the local tooling-fast stamp green on the tip, memory ok. | steward |
 | **ci/release-provenance.mjs** | Proves the deployed revision by combining local git ancestry with live shell SHA/build metadata. | — |
@@ -155,6 +159,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
+| **ci/verification-receipt.mjs** | Source-bound evidence for ordinary local verification; never a landing permission. | — |
 | **ci/verify-live.mjs** | Post-deploy byte and SHA-256 verification for the shell, secondary pages, service worker, and lazy assets. | — |
 | **ci/wait-for.mjs** | The generic background waiter: block until the 1-min load drops, a file is non-empty, or a pid is gone (exit 0 / 124). | — |
 
@@ -236,7 +241,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
 | **gen/blender/crew-body.py** | Blender-authors the pit crew body (overalls, full-face helmet, gloves, pit shoes) into js/garage/crew-draw.js. | — |
 | **gen/blender/crew-choreo.py** | Blender-authors garage enter/leave crew variants and the in-race pit crew into js/garage/crew-choreo.js. | — |
-| **gen/blender/garage-camera-rigs.py** | Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track) into js/garage/arrival.js. | — |
+| **gen/blender/garage-camera-rigs.py** | Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track, drone, steadicam) into js/garage/arrival.js. | — |
 | **gen/blender/garage-light-cues.py** | Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out) into js/garage/scene.js. | — |
 | **gen/blender/garage-previz.py** | Editable Blender previz of the garage arrival / drive-out (bay, shutter, car, keyed camera) from arrival-poses JSON. | — |
 | **gen/compress-audio.mjs** | Cap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames. | — |
@@ -496,6 +501,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/catalog.mjs** | UI explorer mission recipes and independent-browser task briefs. | — |
 | **ui/explorer/core.mjs** | Validated UI replay data, semantic atlas states and bounded delta debugging without executable input. | — |
 | **ui/explorer/css-evidence.mjs** | Bounded CDP inherited and container CSS candidates with explicit unavailable evidence. | — |
+| **ui/explorer/fault-schedule.mjs** | Replay bounded lazy-script faults through an existing session/action adapter; no browser controller. | — |
 | **ui/explorer/inspector.mjs** | Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences. | — |
 | **ui/explorer/modes.mjs** | Eight UI exploration modes sharing bounded evidence, replay and a real navigation graph. | — |
 | **ui/explorer/report.mjs** | Offline UI explorer evidence report with native navigation, linked state graph and safe local artifacts. | — |
@@ -541,6 +547,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **mcp/apex-claude-agents.mjs** | Existing-server Claude tool descriptor and handler; no separate server or credential store. | — |
 | **mcp/apex-extras.mjs** | Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit. | check-changes |
 | **mcp/apex-report.js** | Browser paste, not a node tool: one diagnostic JSON bundle from a live page (diag, GL identity, log ring, errors). | mcp-probe |
 | **mcp/apex-tools-mcp.mjs** | Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock). | check-changes |
@@ -772,7 +779,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **ci/dispatch.json** | `ci/dispatch.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md`, `tests/unit/dispatch.test.mjs` |
-| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
+| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tooling-fast-runner.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
 | **environment/ENVIRONMENT.md** | `environment/MCP-STARTUP-SKILL.md`, `environment/bind-canonical.sh`, `environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md` |
 | **environment/MCP-STARTUP-SKILL.md** | `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/install-environment.sh` |
 | **environment/PLUGIN-BUILD.md** | `environment/bind-canonical.sh` |

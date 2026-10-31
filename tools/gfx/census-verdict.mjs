@@ -230,6 +230,11 @@ function detailRows(path3, g, { tlxLeg }) {
       _up.groups.map((c) => `${c.cls} ${Math.round(c.share * 100)}%`).join(" "));
     for (const r of _up.rows.slice(0, 5)) rows.push(`${IND}  ${String(r.kbPerFrame).padStart(7)} KB/f ${String(r.nPerFrame).padStart(5)}x ${r.site.slice(0, 160)}`);
   }
+  // GPU hunt 3: every writeBuffer by buffer group (unsampled), then the mirror and churn rates over the window.
+  if (Array.isArray(g.uploadGroups)) rows.push(`${IND}ugroups: ` + g.uploadGroups.slice(0, 8).map((r) => `${r.group} ${r.nPerFrame}/f ${r.kbPerFrame}KB`).join(" | "));
+  const _mw = g.mirrorWindow;
+  if (_mw && !_mw.note) rows.push(`${IND}mirror: drawn ${_mw.drawnPerFrame}/f glass ${_mw.glassPerFrame}/f renders ${_mw.rendersPerFrame}/f allocs ${_mw.allocs}` +
+    ` rung ${(_mw.quality || []).join(">")}` + (_mw.churnPerFrame ? " churn " + Object.entries(_mw.churnPerFrame).map(([k, v]) => `${k}=${v}/f`).join(" ") : ""));
   // PIPELINE COMPILES: only a compile count separates "allocate faster" from
   // "warm the programs" (run 197).
   const _w = g.gpuWork;

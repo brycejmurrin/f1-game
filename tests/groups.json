@@ -1065,6 +1065,8 @@
     "// TLX's instanced cull reuses its resident pack by surviving CELL SET",
     "// (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.",
     "tests/unit/tlx-inst-cells.test.mjs",
+    "// B8 lab tier: ?lab=tlxLite lightens three's WebGL2 leg on a phone (DPR, sun map, post opts); off by default, a no-op on WebGPU/desktop.",
+    "tests/unit/tlx-lite-lab.test.mjs",
     "// TLX's material cache key is memoised on the opts object; the memo's",
     "// failure mode is a STALE key, which returns the wrong material and shows",
     "// up only on screen. Fuzzes the real lifted source over every field.",
