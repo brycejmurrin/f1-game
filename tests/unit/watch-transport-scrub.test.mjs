@@ -116,6 +116,21 @@ test("50 scrub `input` events cost at most one seek (one paint) before the next 
   t.ui.stop();
 });
 
+test("WATCH timeline blur abandons a coalesced scrub without a later seek", () => {
+  const t = setup({ raf: true });
+  const seek = t.find("seek");
+  t.state.T = 5;
+  seek.value = "40"; seek.dispatch("input");
+  assert.equal(t.find("time").textContent, "0:40");
+  assert.equal(t.seeks.length, 0, "the replay waits for the animation frame");
+  seek.dispatch("blur");
+  assert.equal(seek.value, "5", "blur restores the slider to the live clock");
+  t.flush();
+  assert.deepEqual(t.seeks, [], "an abandoned drag must not reposition the replay on a later frame");
+  assert.equal(t.state.T, 5);
+  t.ui.stop();
+});
+
 test("a frame that fires after stop() seeks nothing", () => {
   const t = setup({ raf: true });
   const seek = t.find("seek");

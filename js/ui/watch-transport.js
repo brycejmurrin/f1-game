@@ -10,6 +10,10 @@ const WatchTransport = (function () {
   function create(G, replay) {
     let root = null, refs = {}, desc = null, tickAt = 0, scrubbing = false;
     let pendingSeek = null, seekFrame = 0;   // the latest scrub value awaiting its frame
+    function cancelPendingSeek() {
+      if (seekFrame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(seekFrame);
+      seekFrame = 0; pendingSeek = null;
+    }
     function flushSeek() {
       seekFrame = 0;
       if (pendingSeek == null || !root) { pendingSeek = null; return; }
@@ -86,7 +90,9 @@ const WatchTransport = (function () {
         if (!seekFrame) seekFrame = requestAnimationFrame(flushSeek);
       });
       seek.addEventListener("change", () => { scrubbing = false; pendingSeek = null; replay.seek(+seek.value); paint(); });
-      seek.addEventListener("blur", () => { scrubbing = false; paint(); });
+      // Blur without `change` abandons a drag: the clock text already moved on
+      // `input`, but the replay must stay at T until the slider commits.
+      seek.addEventListener("blur", () => { scrubbing = false; cancelPendingSeek(); paint(); });
       track.appendChild(seek); timeline.appendChild(track); timeline.appendChild(node("span", "duration", clock(duration)));
       root.appendChild(timeline);
       const chapters = node("details", "chapters");
@@ -157,7 +163,8 @@ const WatchTransport = (function () {
       setDisabled(refs.next, !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) > s.T + 1));
     }
     function stop() {
-      if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0; pendingSeek = null;
+      cancelPendingSeek();
+      if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0;
       if (typeof document !== "undefined" && document.body) document.body.classList.remove("watch-controls-on");
     }
     function tick(dt) { tickAt -= dt; if (tickAt <= 0) { tickAt = 0.1; paint(); } }
