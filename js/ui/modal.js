@@ -442,7 +442,11 @@ window.TopModal = (function () {
      script's el.click() (untrusted) and automation (navigator.webdriver,
      whose bot-speed clicks are deliberate, as loading-card.js treats it)
      always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard. */
-  const SHIELD_MS = 350, SHIELD_PX = 32;
+  // 350 ms covers thumb double-tap; flows on a busy SwiftShader box measured
+  // 635 ms from the opening door click to the ghost click on the new layer
+  // (touch2 at ~120 ms, click2 after the main thread unblocks). Same spot,
+  // same intent — still the double-tap's second activation.
+  const SHIELD_MS = 700, SHIELD_PX = 32;
   let lastTap = null, shield = null;
   function shieldLayer(layer) {
     if (lastTap && Date.now() - lastTap.at < SHIELD_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
@@ -455,6 +459,7 @@ window.TopModal = (function () {
         Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
       e.preventDefault();
       e.stopImmediatePropagation();
+      if (e.stopPropagation) e.stopPropagation();
       return;
     }
     lastTap = { at: now, x: e.clientX, y: e.clientY };

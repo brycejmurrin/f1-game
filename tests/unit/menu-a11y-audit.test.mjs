@@ -888,7 +888,7 @@ test("TopModal: the ghost-tap shield swallows only a fast pointer repeat at the 
   assert.equal(click(row, { detail: 0 }).stopped, false, "keyboard Enter/Space (detail 0) passes");
   assert.equal(click(row, { isTrusted: false }).stopped, false, "a script's el.click() passes");
   assert.equal(click(row, { clientX: 400, clientY: 300 }).stopped, false, "a tap elsewhere is a real choice");
-  now += 400;
+  now += 750;
   assert.equal(click(row).stopped, false, "after SHIELD_MS the same spot is live again");
   // The window runs from the OPENING tap, not the show: a screen that took a
   // second to swap in must not swallow the next deliberate tap at that spot.

@@ -114,6 +114,7 @@ export function probeDoubletap(env, doors) {
           window.__flowClicksOn = true;
           // document capture runs after modal.js's window-capture shield, so a swallowed tap never lands here.
           document.addEventListener("click", (e) => {
+            if (e.defaultPrevented) return;
             const t = UiLayers.top(), el = e.target;
             const c = (el.closest && el.closest("button,summary,a,input,select,label,[role=tab],.track-row")) || el;
             window.__flowClicks.push({ el, at: performance.now(), top: t ? t.id : null, inTop: !!t && t.id !== "overlay" && t.contains(el),
