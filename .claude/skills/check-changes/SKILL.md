@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache version bump, the deploy's own checks on a dirty tree, or Playwright timeout triage. Not red Actions → ci-red-triage; landing → ship."
+description: "Picks tests and runs pre-push checks. Use when asked did I break anything, validate/pre-push, verify track edits, js/css shell/cache version bump, deploy checks on a dirty tree, Playwright timeouts. Not red Actions → ci-red-triage; landing → ship."
 ---
 
 # Validate changes before committing/pushing
@@ -64,15 +64,9 @@ Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
 ## Output and reading budget
 
-Output levels, saved evidence and `--read` retrieval: [the common
-contract](../../../docs/agent-output/README.md) (`node tools/agent-run.mjs -- <cmd>`).
-Report the verdict, required/not-run groups and log paths; keep the exit status;
-a partial, pending or truncated result never proves a pass.
-For routine handoff snapshots use `node tools/ci/session-status.mjs --summary`
-(`--pr <n>` adds live PR/CI state); omit `--summary` for the full handoff, or
-use `--json` for complete data. Local log counts are not current-tip verification.
-For tree health, `node tools/check/doctor.mjs` already prints only warnings,
-failures and counts; its `--json` returns every check for programmatic analysis.
+Output levels, saved evidence and `--read`: [the common contract](../../../docs/agent-output/README.md). Report the
+verdict, required/not-run groups and log paths; a partial or truncated result never proves a pass. Handoff snapshot:
+`node tools/ci/session-status.mjs --summary` (`--pr <n>` adds live PR/CI state).
 
 Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 
