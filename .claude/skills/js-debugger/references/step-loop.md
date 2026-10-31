@@ -38,7 +38,7 @@
 To get a pause in the game, start a real race inside the run: `race()` with no
 argument returns false, `race(id)` returns a promise (the circuit hydrates lazily),
 and `go()` before it settles leaves zero cars. The Cloud Chromium launch line is in
-the reference.
+[setup.md](setup.md) §Get a Chrome to attach to.
 
 ## Pause the player at a speed
 
