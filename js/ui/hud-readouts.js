@@ -303,7 +303,9 @@ const HudReadouts = (function () {
   }
 
   // GAP_FINE_LT stays module-local (gapDecimals only).
-  return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
+  /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): any pitState but "none" (lane, box, out). */
+  function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
+  return { inPit, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };

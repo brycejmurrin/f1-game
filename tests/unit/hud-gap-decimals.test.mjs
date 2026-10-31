@@ -64,13 +64,14 @@ test("REL and the WATCH tower spell a gap exactly like the chip (one rule, no 1-
   assert.match(bc, /HudReadouts\.fmtGapSec\(/, "the tower delegates to HudReadouts.fmtGapSec");
   assert.doesNotMatch(bc, /"\+" \+ v\.toFixed\(1\)/);
   const tower = vm.createContext({ console, Math, Number, HudReadouts: R });
-  const fn = bc.match(/function fmtGap\(r, mode\) \{[\s\S]*?\n  \}\n/);
-  assert.ok(fn, "broadcast.js fmtGap(r, mode) found");
+  const fn = bc.match(/function fmtGap\(r, mode, profile\) \{[\s\S]*?\n  \}\n/);
+  assert.ok(fn, "broadcast.js fmtGap(r, mode, profile) found");
   vm.runInContext(fn[0] + "; this.fmtGap = fmtGap;", tower);
   const row = (gap) => ({ gap, interval: gap, pos: 2, down: 0 });
   assert.equal(tower.fmtGap(row(0.94), "gap"), "+" + R.fmtGapSec(0.94));
   assert.equal(tower.fmtGap(row(0.94), "gap"), "+0.94");
   assert.equal(tower.fmtGap(row(12.6), "gap"), "+12.6");
+  assert.equal(tower.fmtGap(row(12.6), "gap", "broadcast"), "+12.60", "F-20: the tower honours the BROADCAST profile");
 });
 
 test("hud.js gapSec routes through HudReadouts (no private 1-dp ternary)", () => {

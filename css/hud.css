@@ -46,7 +46,7 @@
    from 175%. 1920x1080 is clean everywhere, which is the tell — the defect is a
    ratio, not a size.
    So the zoom each band actually gets is the player's --hud-scale capped by what
-   the viewport can hold, computed in js/game/hud.js (fitHud) from each band's
+   the viewport can hold, computed in js/ui/hud.js (fitHud) from each band's
    MEASURED intrinsic width. The two bands are capped separately because they run
    out of room at different points, and the top band caps as ONE unit so the map,
    the gap readout and the centred POS row keep their relationship.
@@ -201,7 +201,7 @@ body:not(.hud-prof-broadcast) #hud-best { color: var(--hud-glance); }
      behind, which is the order they sit in on the road.
      The horizontal anchor is the map: 146px is minimap left (10) + width (128) +
      an 8px gap, and both responsive overrides below re-derive it wherever the
-     minimap resizes. Because this element rides `zoom: var(--hud-scale)` (see
+     minimap resizes. Because this element rides the `--hud-scale` zoom (see
      the group rule above) that constant tracks the map at every HUD SIZE for
      free — the map is in the same zoom group.
      Vertically it is TOP-ALIGNED WITH THE MAP (the same 8px), so the pair reads
@@ -271,7 +271,7 @@ body:not(.hud-prof-broadcast) #hud-best { color: var(--hud-glance); }
    rest of the HUD (docs/notes/LIVE-INPUT-H11-2026-10-20.md). js/ui/hud.js
    (gapsEmptySync) sets it when both lines go empty and clears it on text. */
 .hud-gaps[data-empty] { display: none; }
-/* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
+/* THE DROPPED STATE. Set by js/ui/hud.js when the slot beside the map is
    smaller than any spelling of the readout — see the threshold table there. The
    widget keeps its column (still beside the minimap, still top-left) and moves
    below `.hud-top`'s bottom edge, where the strip is empty to the far side of
@@ -1185,7 +1185,7 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
      at 56. tests/specs/hud-layout.spec.js caught it as
      hudClash ["#hud-sectors+pausebtn"] on notched-landscape.
      THE WHOLE OFFSET is divided by --hud-scale, not just the inset: #hud-sectors
-     rides `zoom: var(--hud-scale)` (see the group rule above) while #pausebtn
+     rides the `--hud-scale` zoom (see the group rule above) while #pausebtn
      does NOT, so clearing an unscaled box means converting the unscaled sum into
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
@@ -1392,7 +1392,7 @@ body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
    four lines covering half the height (measured 852x344). It is a radio
    message now, the way a broadcast captions team radio: a small card under the
    timing row, the channel on top (#announce-who: RUSSELL · RADIO, RACE
-   CONTROL, COACH — js/game.js radioWho), the words in quotes under it.
+   CONTROL, COACH — js/ui/captions.js radioWho), the words in quotes under it.
 
    THE NUMBER PLATE (#announce-num) is the card's identity anchor, the device
    every broadcast radio caption is built around: a filled block of the TEAM's
@@ -1414,7 +1414,7 @@ body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
    With no number to show (the menus, a car with none) :empty collapses the
    plate back to exactly the 3px stripe this card used to carry. */
 #announce[hidden] { display: none; }   /* the author `display` below would beat the UA's [hidden] */
-/* The card's SPOKEN twin (js/game.js showAnnounce): always rendered, so a
+/* The card's SPOKEN twin (js/ui/hud-radio-lane.js showAnnounce): always rendered, so a
    screen reader has watched it since boot, and visually hidden the standard
    way — display:none or visibility:hidden would take it out of the tree. */
 #announce-live, [data-announce-modal] {   /* [data-announce-modal]: the twin inside an open modal (js/ui/live-region.js) */
@@ -2140,7 +2140,6 @@ body.bc-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display:
 body.bc-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-work) { display: none !important; }
 body.bc-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
 body.bc-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
-body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
 body.bc-on :is(.touchbtn, #campicker) { display: none !important; }
 body.bc-on :is(#btn-cam, #announce, #lights) { display: none !important; }
 body.bc-on[data-helmet-cam] #hud::before { content: none; }

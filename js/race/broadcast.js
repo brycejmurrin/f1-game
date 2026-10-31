@@ -158,7 +158,7 @@ const Broadcast = (function () {
     _towerScript = script; _towerSample = h; _towerN = n;
     return _rows;
   }
-  function fmtGap(r, mode) {
+  function fmtGap(r, mode, profile) {
     if (r.out) return "OUT";
     if (r.pit) return "PIT";
     if (r.pos === 1) return mode === "interval" ? "INTERVAL" : "LEADER";
@@ -166,7 +166,7 @@ const Broadcast = (function () {
     const v = mode === "interval" ? r.interval : r.gap;
     if (v == null) return "";
     // The HUD chip's spelling (hundredths under ~10 s, tenths above); inline when HudReadouts has not loaded.
-    return "+" + (typeof HudReadouts !== "undefined" && HudReadouts ? HudReadouts.fmtGapSec(v) : v.toFixed(v < 9.995 ? 2 : 1));
+    return "+" + (typeof HudReadouts !== "undefined" && HudReadouts ? HudReadouts.fmtGapSec(v, profile) : v.toFixed(profile === "broadcast" || v < 9.995 ? 2 : 1));
   }
 
   // ── The director (pure): who to show, and how ─────────────────────────────
@@ -383,7 +383,7 @@ const Broadcast = (function () {
         prevPos.set(r.num, r.pos);
         const dl = deltaAt.get(r.num);
         const delta = dl && wall - dl.at < DELTA_S ? (dl.up ? "up" : "down") : "";
-        const gapText = fmtGap(r, mode);
+        const gapText = fmtGap(r, mode, G.hudProfile);
         const onCam = r.num === followNum;
         // Field compare — no "|".join string per row per tick.
         if (e._pos === r.pos && e._code === r.code && e._gap === gapText && e._tyre === (r.tyre || "") &&
