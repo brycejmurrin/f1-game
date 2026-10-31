@@ -1180,7 +1180,7 @@ const GLXPost = (function () {
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
     let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
     const _mirRectScratch = [0, 0, 0, 0];   // mirRect points here (or is null); doubles, like TLX: no float32 rounding
-    let mirRenders = 0, mirComposites = 0, mirGlass = 0;
+    let mirRenders = 0, mirComposites = 0, mirGlass = 0, mirAllocs = 0;   // allocs: lifetime; mirRenders restarts on each (GPU hunt 3)
     // MIPMAPPED: the target is supersampled (js/render/shared/mirror-pass.js SS)
     // and minified into the HUD rect, so a plain LINEAR read skipped texels and
     // the image still shimmered. The chain is rebuilt in end(), right after the
@@ -1235,7 +1235,7 @@ const GLXPost = (function () {
         mirrorFree(); mirDead = true;
         return false;
       }
-      mirW = w; mirH = h; mirHdr = hdr;
+      mirW = w; mirH = h; mirHdr = hdr; mirAllocs++;
       return true;
     }
     // The FBO binding begin() makes while a mirror pass is open (it binds the
@@ -1346,7 +1346,7 @@ const GLXPost = (function () {
       composite: mirrorComposite,
       glass: mirrorGlass,
       state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
-        renders: mirRenders, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
+        renders: mirRenders, allocs: mirAllocs, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
     };
 
     function invalidateUniformCache() {

@@ -4053,7 +4053,7 @@ const WGX = (function () {
     let mirSampleView = null, _mirSamp = null, _mirGlassLod = -Infinity, _mirGlassInf = 0;
     const _mirBox = [0, 0, 0, 0];
     let _mirPassSeq = 0;   // bumped per mirrorBegin: a batch's mirror instance view is valid only for the pass that culled it
-    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
+    let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true, _mirAllocs = 0;   // flip false: the broadcast PiP
     let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
     let _mirUBO = null, _mirBG = null;
     // The live glass's group (drawMirrorGlass): built lazily on mirSampleView,
@@ -4098,7 +4098,7 @@ const WGX = (function () {
           mirSampleView = mirTex.createView();
           mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: _transientRenderUsage() });   // P6: clear + discard only
           mirDepthView = mirDepthTex.createView();
-          mirW = w; mirH = h;
+          mirW = w; mirH = h; _mirAllocs++;   // lifetime: _mirRenders restarts on each (GPU hunt 3)
         } catch (e) {
           _mirrorFree(); _mirDead = true;
           try { Log.warn("gfx", "WGX mirror allocation failed — mirror off:", e && e.message); } catch (_) { /* harness */ }
@@ -5955,7 +5955,7 @@ const WGX = (function () {
       mirrorEnd,
       mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip,
+        renders: _mirRenders, allocs: _mirAllocs, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip,
         mips: mirTex ? mirTex.mipLevelCount : 0, glassLod: _mirGlassLod }),
       drawMirrorGlass,
       // Quit-to-menu (#4219): destroy both textures and drop the composite / glass bind groups naming them
