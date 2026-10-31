@@ -72,7 +72,15 @@ Recipes and result parsing: skill `phone-bridge` (`.claude/skills/phone-bridge/`
   chars (GitHub's comment limit is 65,536); a bigger result comes back as `{truncated, head}`.
 - Poll latency is about 4 s plus GitHub's own; this is for perf runs and state reads, not frame-level control.
 
-## 5. Live runs
+## 5. Token box fix (2026-10-30, Bryce: "It won't let me type or paste")
+
+The first LINK box was a plain `<form>` on `<body>`. The game's focus trap (`TopModal.onFocusIn`, a document-capture
+`focusin`) pulled focus back into the title screen as soon as the box was tapped: in Chromium at 844×390 touch the
+focus landed on `#soundbtn` and typed text never reached the box. The box is now its own modal `<dialog>` (top layer,
+never inert), a window-capture `focusin` listener keeps that trap from seeing focus inside it, and a PASTE button
+reads the clipboard directly. Same probe after the fix: focus stays on the input and the text arrives.
+
+## 6. Live runs
 
 | date (Pacific) | build (`facts.sha`) | device | path | scene | fps | p50 / p95 / p99 ms | over 33 ms |
 |---|---|---|---|---|---|---|---|

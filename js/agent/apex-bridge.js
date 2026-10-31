@@ -376,12 +376,19 @@ const ApexBridge = (function () {
   }
 
   // No token on this device yet: one paste box. The token stays in this browser's storage only.
+  // The game's focus trap (TopModal.onFocusIn, a document-capture focusin) pulls focus back into the top screen, so a
+  // plain box on <body> lost the iOS keyboard the moment it was tapped and a modal screen made it inert. The box is
+  // its own modal <dialog> (top layer, never inert), a window-capture focusin listener stops that trap seeing focus
+  // inside it, and PASTE reads the clipboard directly (iOS asks once) for when typing still fails.
   function askToken(issue) {
     if (typeof document === "undefined" || !document.body || document.getElementById("apex-bridge-token")) return;
+    const dlg = document.createElement("dialog");
+    dlg.id = "apex-bridge-token";
+    dlg.style.cssText = "z-index:99999;width:min(92vw,420px);padding:14px;border:0;border-radius:12px;background:#1b1d22;"
+      + "color:#eee;font:13px/1.45 system-ui,sans-serif;-webkit-user-select:text;user-select:text";
     const box = document.createElement("form");
-    box.id = "apex-bridge-token";
-    box.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:99999;width:min(92vw,420px);"
-      + "padding:14px;border-radius:12px;background:#1b1d22;color:#eee;font:13px/1.45 system-ui,sans-serif;display:grid;gap:8px";
+    box.method = "dialog";
+    box.style.cssText = "display:grid;gap:8px";
     const p = document.createElement("p");
     p.style.margin = "0";
     p.textContent = "Link this phone to Claude through issue #" + issue + ". Paste a fine-grained GitHub token "
@@ -391,21 +398,36 @@ const ApexBridge = (function () {
     input.id = "apex-bridge-token-input";
     input.autocomplete = "off";
     input.setAttribute("aria-label", "GitHub token");
-    input.style.cssText = "font:inherit;padding:8px;border-radius:8px;border:1px solid #555;background:#000;color:#fff";
+    input.style.cssText = "font:16px system-ui;padding:8px;border-radius:8px;border:1px solid #555;background:#000;color:#fff;"
+      + "-webkit-user-select:text;user-select:text;touch-action:auto";
+    const btnCss = "font:600 13px system-ui;padding:10px;border-radius:8px;border:0;color:#fff;touch-action:manipulation";
+    const paste = document.createElement("button");
+    paste.type = "button";
+    paste.textContent = "PASTE";
+    paste.style.cssText = btnCss + ";background:#444";
     const go = document.createElement("button");
     go.type = "submit";
     go.textContent = "LINK";
-    go.style.cssText = "font:600 13px system-ui;padding:8px;border-radius:8px;border:0;background:#d97757;color:#fff";
-    box.append(p, input, go);
-    box.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const t = input.value.trim();
+    go.style.cssText = btnCss + ";background:#d97757";
+    box.append(p, input, paste, go);
+    dlg.appendChild(box);
+    const shield = (e) => { if (dlg.contains(e.target)) e.stopImmediatePropagation(); };
+    window.addEventListener("focusin", shield, true);
+    const link = (t) => {
+      t = String(t || "").trim();
       if (!t) return;
+      window.removeEventListener("focusin", shield, true);
       setToken(t);
-      box.remove();
+      try { dlg.close(); } catch (_) { /* not open */ }
+      dlg.remove();
       start(issue, t);
+    };
+    paste.addEventListener("click", async () => {
+      try { link(await navigator.clipboard.readText()); } catch (e) { p.textContent = "Paste refused (" + (e && e.name) + "): long-press the box and Paste."; }
     });
-    document.body.appendChild(box);
+    box.addEventListener("submit", (e) => { e.preventDefault(); link(input.value); });
+    document.body.appendChild(dlg);
+    try { dlg.showModal(); } catch (_) { dlg.setAttribute("open", ""); }
   }
 
   function boot() {
