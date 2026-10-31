@@ -1,0 +1,1 @@
+Fixed: TRACK DESIGNER — Rolling and Hilly presets no longer drop the road into a wall where the lap closes. The start stays at 0 m by shifting the whole profile, so a hill that crosses the line keeps its slope.

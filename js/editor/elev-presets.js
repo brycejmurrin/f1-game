@@ -62,18 +62,14 @@ const ElevPresets = (function () {
     for (let i = 0; i < n; i++) {
       let y = 0;
       for (let k = 0; k < bumps.length; k++) y += bumpAt(c[i], L, bumps[k]);
-      out[i] = clampH(y);
+      out[i] = y;
     }
-    // Close the loop: pin start height, blend the last few metres into it.
-    out[0] = 0;
-    if (n > 2) {
-      const blend = Math.min(3, n - 1);
-      for (let j = 1; j <= blend; j++) {
-        const i = n - j;
-        const t = j / (blend + 1);
-        out[i] = clampH(out[i] * (1 - t));
-      }
-    }
+    // Pin the start at 0 by shifting the whole profile. Zeroing only index 0
+    // and scaling the last three points left the cosine's height on one chord:
+    // a hilly lap dropped 18 m to 4 m (30 %) and closed 8.5 m onto 0 m (20 %),
+    // both past the validator's 15 % wall.
+    const base = out[0];
+    for (let i = 0; i < n; i++) out[i] = clampH(out[i] - base);
     return out;
   }
 
