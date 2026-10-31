@@ -353,7 +353,13 @@ const ApexBridge = (function () {
       schedule();
       return true;
     } catch (e) {
-      if (_run) stop("could not reach GitHub (" + e.message + ")");
+      // 401 on the hello is the token itself (wrong, expired, revoked, cut short): forget it and ask again, or every
+      // reload would retry the same token and never show the box.
+      if (/ 401$/.test(e.message)) {
+        setToken("");
+        if (_run) stop("GitHub rejected the token (401): paste a new one");
+        askToken(issue);
+      } else if (_run) stop("could not reach GitHub (" + e.message + ")");
       return false;
     }
   }
@@ -375,12 +381,16 @@ const ApexBridge = (function () {
       _badge.style.cssText = "position:fixed;top:max(4px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);"
         + "z-index:99999;padding:4px 10px;border:0;border-radius:8px;font:600 11px/1.4 system-ui,sans-serif;"
         + "background:rgba(217,119,87,.9);color:#fff;letter-spacing:.06em";
-      _badge.addEventListener("click", () => stop("ended on the phone"));
+      // Live: tap ends the link. Off: tap asks for a token again (a fresh one after a 401).
+      _badge.addEventListener("click", () => {
+        if (_run) stop("ended on the phone");
+        else { const issue = issueOf(location.search); if (issue) askToken(issue); }
+      });
       document.body.appendChild(_badge);
     }
     _badge.textContent = _run ? "CLAUDE LINK " + (_run.state === "live" ? "· " + _run.served + " · TAP TO END" : "…")
       : "CLAUDE LINK OFF" + (endedWhy ? " — " + endedWhy : "");
-    _badge.disabled = !_run;
+    _badge.disabled = !_run && !!token();
   }
 
   // No token on this device yet: one paste box. The token stays in this browser's storage only.
