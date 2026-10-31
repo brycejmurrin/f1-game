@@ -1,6 +1,6 @@
 ---
 name: mcp-probe
-description: "Use when poking the live game in Chrome through the DevTools MCP (__apex, console, network, heap, performance), or recovering the private chat MCP tunnel or gateway. Not for: breakpoints → js-debugger; the deployed site → deploy-research; batch screenshots → playwright-probe; scripted hooks → agent-view."
+description: "Use when poking the live game in Chrome through the DevTools MCP (__apex, console, network, heap, performance). Not for: breakpoints → js-debugger; the deployed site → deploy-research; batch screenshots → playwright-probe; scripted hooks → agent-view."
 ---
 
 # Probing the live game with the Chrome MCP
@@ -111,7 +111,7 @@ beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not 
 
 Chrome DevTools naming: `chrome_click` (CLI) and `mcp__chrome-devtools__click` (attached) are the same underlying `click` action.
 
-## Private chat attachment
+## Private chat attachment (recovering the private chat MCP tunnel or gateway)
 
 For existing-tunnel startup/recovery, namespaced gateway contracts and environment
 checks, follow [free design tooling](../../../docs/DESIGN-TOOLS.md). Local readiness

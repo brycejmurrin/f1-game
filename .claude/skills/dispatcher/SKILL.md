@@ -13,15 +13,20 @@ printed as a line YOU execute. The exact commands, line formats and the schedule
 `tools/ci/dispatch.mjs` (their one home). The labels and Hand-off format are `docs/WORKERS.md`; the worker's side of
 a launch is skill `worker`.
 
-## The cycle (summary; the header is exact)
+## The cycle (summary; the header of `dispatch.mjs` is exact)
 
-`--children` → `get_session` per named child (save each result for `--sessions`) → `get_session` alone (its
-`rate_limit_info.status` is `--quota`) → `--apply` → per `CREATE_SESSION` line, ONE AT A TIME: `get_session` alone,
-`launch-gate.mjs artifacts/launch/self.json` (exit 0), `create_session`, then the `RECORD_LAUNCH` line with
-`{SESSION_ID}` replaced → each `NUDGE_SESSION` by `send_message` → each `ARCHIVE_SESSION` by `archive_session` →
-a final `PAUSE_TRIGGER <id>` means `update_trigger enabled=false` and end; the next user message or PR event is the
-RESUME (`enabled=true`, then run the cycle). Read the FIRST output line: `= dispatch refused` (another lock: do
-nothing), `= quota rejected` (disable the trigger), `= quota allowed_warning` (launch cycle skipped).
+Read the FIRST output line of step 1: `= dispatch refused` (another lock: do nothing), `= quota rejected` (disable the
+trigger), `= quota allowed_warning` (launch cycle skipped).
+
+1. `node tools/ci/dispatch.mjs --children`
+2. `get_session` per named child; save each result for `--sessions`.
+3. `get_session` alone; its `rate_limit_info.status` is `--quota`.
+4. `--apply`.
+5. Per `CREATE_SESSION` line, ONE AT A TIME: `get_session` alone, `launch-gate.mjs artifacts/launch/self.json` (exit 0),
+   `create_session`, then the `RECORD_LAUNCH` line with `{SESSION_ID}` replaced.
+6. Each `NUDGE_SESSION` by `send_message`; each `ARCHIVE_SESSION` by `archive_session`.
+7. A final `PAUSE_TRIGGER <id>` means `update_trigger enabled=false` and end; the next user message or PR event is the
+   RESUME (`enabled=true`, then run the cycle).
 
 ## The six rules
 
@@ -54,10 +59,8 @@ nothing), `= quota rejected` (disable the trigger), `= quota allowed_warning` (l
 
 ## Efficiency (docs/notes/EFFICIENCY-REVIEW-2026-10-30.md)
 
-- Hand off at 300k context (skill `handoff`): every wake re-reads the whole context. Draft follow-up prompts into
-  the Hand-off block before idling.
-- Disable the hourly trigger when nothing is actionable (the `PAUSE_TRIGGER` line) and re-enable it on the next event.
-- Launch Sonnet workers (`model` in `dispatch.json`); reviewer subagents run `model: sonnet`.
+- Hand off at the brief's `STOP AT` (skill `handoff`): every wake re-reads the whole context. Draft follow-up prompts
+  into the Hand-off block before idling.
 - Launch prompts use the deep template: the full Hand-off block, `STOP AT`, exact numbers, known container-only reds.
-  Workers send questions to `@parent` (you) or `needs-decision`; only you use AskUserQuestion.
-- `pr-board.mjs` suggests LAND for a ready PR, never ARM: no session arms. The veto is the `hold` label.
+  Only you use AskUserQuestion; workers send questions to `@parent` or `needs-decision` (`docs/WORKERS.md`).
+- The model and caps come from `dispatch.json`; `pr-board.mjs` suggests LAND, never ARM (no session arms).

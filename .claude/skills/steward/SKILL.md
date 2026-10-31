@@ -29,8 +29,7 @@ PR → agent `finding-verifier` before you fix any of them.
    `CONTINUE PR #<n>` (claims are for issues, docs/WORKERS.md §1): start from its Plan and Hand-off block, set
    `owner:`.
 2. Read CI on the tip: `node tools/ci/ci-watch.mjs --sha <head> --once`, THEN `node tools/ci/needs-sync.mjs
-   <branch>` (two calls). On `stale-red` (the tip moved after the run started) sync FIRST (§2) and fix only what is
-   still red: the tip may already carry the fix.
+   <branch>` (two calls). Red AND conflicting: override 2 holds the ordering.
 3. Triage a red: agent `ci-red-triage` names the job, test and assertion; its `base:` line says whose it is
    (`already-red-on-base` → §3, not yours to fix).
 4. Fix on the branch.
@@ -53,7 +52,7 @@ PR → agent `finding-verifier` before you fix any of them.
    deploy).
 4. **Deploy branch** — never pushed to (AGENTS.md §Git branch & deploy); a red deploy branch is claimed through the Board (override 3), fixed by a PR. A deploy is a MERGE of other sessions'
    work: re-measure on the merged tree. A worker's change lands through the `land` label (§12).
-5. **Flakes** — do not re-run a browser group to chase one: AGENTS.md rules 8 and 9.
+5. **Flakes** — AGENTS.md rules 8 and 9.
 6. **Fix push** — validate at the floor (docs/WORKERS.md §3; AGENTS.md rule 3); the fast tier (`run-ci` on the
    draft), the full tier (ready) and the `gate` status prove the rest. `ready-gate.mjs` needs Structural guards
    green on the tip, so a draft needs `run-ci` (`--local` instead reads the stamp a green full `tooling-fast` run
@@ -72,7 +71,7 @@ PR → agent `finding-verifier` before you fix any of them.
 10. **Sweeping many PRs** is the dispatcher's job (skill `dispatcher`). A session reads
     `node tools/ci/pr-board.mjs --json` (read-only; exit 3 = no token) to find who owns a red (§3); it does not
     sweep, disarm or take over another lane's PR.
-11. **Browser runs** — `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10.
+11. **Browser runs** — AGENTS.md rules 5, 6 and 10.
 12. **Draft → ready → `land`** — the steps live in skill `ship` (push bare, mergeable first, the
     `ready-gate.mjs --pr <n>` receipt). A veto is the `hold` label, never body wording.
 
