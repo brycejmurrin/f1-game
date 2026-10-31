@@ -108,6 +108,13 @@ test("production mirror fallback declares its gradient sampler through cold/off/
       assert.equal(graph.fxaa.mirTex.value, on ? mirror.texture : context.blackTex);
       assert.ok(declared(build()), `mirror ${on}: every gradient sample references a declared sampler`);
     }
+    // #4219: quit-to-menu disposes the mirror target, so neither texture node may keep naming it.
+    graph.mirror.tex.value = mirror.texture;   // the SGSR path's own pass holds it the same way
+    chain.releaseMirror();
+    assert.equal(graph.mirror.tex.value, context.blackTex, "the inset pass drops the freed target");
+    assert.equal(graph.fxaa.mirTex.value, context.blackTex, "and so does the FXAA fold");
+    chain.present({ bloom: 0, ssao: 0, godray: 0, reflect: 0 }, frame);
+    assert.equal(graph.fxaa.U.mir.value, 0, "no inset until setMirror names a live target again");
     // Former negative control: on r186 the old Nearest DataTexture placeholder emitted textureSampleGrad against an
     // undeclared sampler (the startup defect). r187 (#35169, grad() with unfilterable textures) no longer does; the
     // Linear placeholder above stays, and the old one must not regress to an undeclared sampler either.

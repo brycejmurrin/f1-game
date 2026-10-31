@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1726,6 +1726,10 @@ function redFlagRestart() {
   seedPlayerPose();
   raceCtl.rewound();   // the leader re-runs its lap: a pending Overtake hold follows it (#2166)
   feel.restartPending = true; replayBuf.breakTimeline();   // same clock, every car teleported: a scrub must not blend track position into the grid box
+  // takeRestart() returns before the results clock, and state "count" never ticks it, so a countdown already in hand
+  // (the 2.2 s all-done arm, or the 0.1 s cap) would classify the restart a second after the lights. postFinish.since
+  // is the moment the human was done: raceT keeps running under the flag, and the 75 s cap would already be expired.
+  resultT = 0; postFinish.since = -1;
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; feel.startHold = 0;
   els.lights.hidden = false;
   for (const l of els.lights.children) l.classList.remove("on");
@@ -2742,7 +2746,7 @@ const _customTrackStarts = new WeakSet();
 // Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
 // startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
 // LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
-function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
+function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -4399,7 +4403,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4461,8 +4465,8 @@ function rankFinishers() {
 }
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
-function releaseFieldScratch() {
-  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(); pits.releaseTrack();
+function releaseFieldScratch(quit) {
+  ranked.length = 0; parked.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
 }
@@ -4696,7 +4700,13 @@ function update(dt) {
   // human race an AI/other player crossing first must NOT start a 3.5 s result
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
-  if (resultT === 0) {
+  // A red flag that can still restart (nobody has finished; redFlagRestart
+  // declines otherwise) stays state "race" for RED_STOP+RED_HOLD, 14 s. The
+  // countdown below would hit zero in that window and endRace() would run
+  // before takeRestart() ever asked. Once anyone has finished the restart is
+  // off the table and the countdown stands.
+  if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
+  else if (resultT === 0) {
     postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
@@ -7282,16 +7292,15 @@ function render(dt) {
     if (typeof GfxEscalation !== "undefined" && GfxEscalation.maybeRecoverRaceEntry) GfxEscalation.maybeRecoverRaceEntry(gfxContextLost, quitToMenuAfterCtxLost);
     return;
   }
-  // Warming used to return before the visibility pass. openGarage's Home→bay
-  // gap hides #game via menuBlank; if a program warm then latched, the lid
-  // stayed up until an unrelated present (a panel click) cleared warming.
-  // Intro staging (_studio.cardUp) must keep both canvases hidden under
-  // PREPARING until the first successful garage present (garage-arrival).
+  // Warming returns before the visibility pass. A latched program warm keeps
+  // #game hidden until present() completes — an early unhide showed a half-written
+  // default-FB frame for tens of seconds on software GL while _warmPending held
+  // present(). Re-veil each garage-preview frame; intro _studio.cardUp unchanged.
   if ((gfx.warming && gfx.warming()) || _carWarm.busy) {
     if (setupPreviewOn && !(_studio && _studio.cardUp)) {
-      if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
+      if (canvas.style.visibility !== "hidden") canvas.style.visibility = "hidden";
       if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
-      if (_softEl && _softEl.style.visibility === "hidden") _softEl.style.visibility = "";
+      if (_softEl && _softEl.style.visibility !== "hidden") _softEl.style.visibility = "hidden";
     }
     return;
   }
@@ -7303,7 +7312,9 @@ function render(dt) {
   const homeTrack = !!(uiExperience && uiExperience.trackActive());
   const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld()))
     || ((loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
-  const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
+  const garageWarmVeil = setupPreviewOn && !(_studio && _studio.cardUp) &&
+    ((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
+  const vis = menuBlank || (_studio && _studio.cardUp) || garageWarmVeil ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
   // its visibility in lockstep with #game or a blank menu still shows the last blit.
@@ -7335,7 +7346,10 @@ function render(dt) {
     if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
       _menuGate.garageReady = true;
       if (!_studio || _studio.softReady !== false) studioShown();
-      if (_studio && !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
+      if (!_studio || !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
+    } else if (setupPreviewOn && !(_studio && _studio.cardUp) &&
+      ((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()))) {
+      canvas.style.visibility = "hidden"; if (_softEl) _softEl.style.visibility = "hidden";
     }
     return;
   }
@@ -8922,7 +8936,7 @@ function openSettings() {
   // LAZY_AUDIO: kick ensureAudio but reveal Settings sync — awaiting the
   // ~449 KB bundle before #pmsettings unhides broke ui-scale (probe ~400ms
   // after mb-settings click). MUSIC & SOUND waits in settings-tabs.js.
-  ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
+  ensureAudio(); ensureGarageData(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown; GARAGE ENTER & LEAVE previews the Blender rigs
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
   // showModal() runs after the hidden flip; defer so hub focus beats the dialog's
@@ -9089,7 +9103,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  loadingScreen.stop(); garagePre.markOpen(from);   // stale busy/prep plate (z 36) must not cover #carsetup
+  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
@@ -9108,18 +9122,17 @@ function openGarage(from) {
   // the module cannot hold the helper itself. The build runs inside the
   // transition callback — vt's 60 ms drop-safety applies it directly if the
   // page is not compositing.
-  // ENTRY FRAME: endHome() runs before setupPreviewOn flips, so render()'s
-  // menuBlank path can hide #game for the Home→garage gap. startViewTransition
-  // then defers the game loop; the bay stayed black until a panel click pumped
-  // another present. Unhide and draw one garage frame inside the same vt
-  // callback as openSetup — not a timer mask, the frame entry owes the player.
-  const enterGarage = () => {
-    openSetup(); setupCam.startHome(from);   // AFTER THE RACE (never from a pit stop): its first frame is this one
+  // ENTRY FRAME: endHome() hides #game for the Home→garage gap; draw in the vt
+  // callback but reveal only after renderSetupPreview succeeds (not while warming).
+  const revealGarageCanvas = () => {
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";
+  };
+  const enterGarage = () => {
+    openSetup(); setupCam.startHome(from);   // AFTER THE RACE (never from a pit stop): its first frame is this one
     try { if (gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
-    try { renderSetupPreview(0); } catch (_) { /* mesh/warm may still be settling */ }
+    try { if (renderSetupPreview(0)) revealGarageCanvas(); } catch (_) { /* mesh/warm may still be settling */ }
   };
   if (from === "pit") { enterGarage(); setupCam.startArrival(); }
   else vt(enterGarage);

@@ -6,9 +6,11 @@ import { absSrc } from '../helpers/abs-src.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
-vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
+vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival.js') });
+// The Blender rigs' samples (LAZY_RACE): loaded as the game's idle prefetch / garage entry would.
+vm.runInContext(readFileSync(new URL('../../js/garage/garage-data.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/garage-data.js') });
 const Arrival = vm.runInContext('GarageArrival', context);
-vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
+vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/track/core/pit.js') });
 const TrackPit = vm.runInContext('TrackPit', context);
 function raceEntryProfileStub({ budgetMs = 30000, now = () => 0 } = {}) {
   let t0 = now();
@@ -294,7 +296,7 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   assert.ok(run.indexOf('await d.menuIdle(current)') > 0 && run.indexOf('await d.menuIdle(current)') < run.indexOf('G.gfx.warm()'), 'only once the menu is idle');
   assert.ok(run.indexOf('G.gfx.warm()') > 0 && run.indexOf('G.gfx.warm()') < run.indexOf('gate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
   assert.match(game, /await menuFinish\(current, key\);\n\s*await garagePrewarm\(current\);/, 'after the circuit is done');
-  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
+  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4500);
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
 });
@@ -791,6 +793,26 @@ test('hidden garage prewarming records readiness only after a successful present
   assert.equal(h.presents(), 1);
   assert.equal(h.c._menuGate.garageReady, true);
   assert.equal(h.c.canvas.style.visibility, 'hidden');
+});
+
+test('a regular garage preview stays veiled while shader warm blocks present()', async () => {
+  const h = garageEntryRegressionHarness();
+  h.c.setupPreviewOn = true;
+  h.c._studio = null;
+  h.c.canvas.style.visibility = 'hidden';
+  h.c._softEl.style.visibility = 'hidden';
+  h.eval('renderSetupPreview = () => { gfx.present(); return !gfx.warming(); };');
+  await h.advance(16);
+  assert.equal(h.c.gfx.warming(), true);
+  let veiledWhileWarm = true;
+  for (let i = 0; i < 200 && h.c.gfx.warming(); i++) {
+    if (h.c.canvas.style.visibility !== 'hidden') veiledWhileWarm = false;
+    await h.advance(100);
+  }
+  assert.ok(veiledWhileWarm, 'warming must not reveal #game');
+  await h.advance(16);
+  assert.ok(h.presents() >= 1);
+  assert.equal(h.c.canvas.style.visibility, '', 'first successful present reveals #game');
 });
 
 test('a refused garage begin returns false and cannot reveal the unpresented frame', async () => {
@@ -1689,7 +1711,7 @@ test('LIGHT CUE: off by default; a pick rides the pose; after the race BY RESULT
 });
 
 test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, the aim settles on the live car', () => {
-  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'orbit', 'rear']);
+  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'drone', 'orbit', 'rear', 'steadicam']);
   for (const id of Arrival.RIG_IDS) {
     assert.equal(Arrival.settings({ angle: id }).angle, id);
     for (const [dir, fn] of [['in', Arrival.pose], ['out', Arrival.poseOut], ['home', Arrival.poseHome]]) {
@@ -1819,4 +1841,74 @@ test('departure wheels cache fitted layers and rotate rims while calipers remain
   wheels.draw([], 1, 0, {}); assert.equal(builds, 2, 'rendering never rebuilds geometry');
   wheels.release(); assert.equal(freed, 4);
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 4, 'repeat launch restores released wheels');
+});
+
+// ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
+test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
+  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary']);
+  for (const id of Object.keys(Arrival.STYLES)) {
+    const v = Arrival.applyStyle({ enterCrew: 'current', speed: 2, door: 3.5 }, id);
+    assert.deepEqual([v.enterCrew, v.speed, v.door], ['current', 2, 3.5], `${id}: crews and timing stay the player's`);
+    for (const [k, want] of Object.entries(Arrival.STYLES[id].look)) if (k !== 'cue' && k !== 'light') assert.deepEqual(v[k], want, `${id}.${k}`);
+  }
+  for (const id of ['cinema', 'documentary']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
+  assert.equal(Arrival.styleOf(null), null, 'the shipped look is no style');
+  assert.deepEqual(Arrival.applyStyle(null, 'nope'), Arrival.settings(null), 'an unknown style is the saved settings');
+  assert.equal(Arrival.settings(null).race, 'dry', 'PREVIEW RACE defaults to the shipped dry look');
+});
+test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
+  const dom = makeDom(), doc = dom.document;
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {} }, CUES: ['lightsup'] } });
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
+  const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
+  const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
+  row('ga-enabled', 'input').type = 'checkbox';
+  const angle = row('ga-angle', 'select');
+  for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
+  row('ga-fov', 'input');
+  let saved = null;
+  const $ = (id) => doc.getElementById(id);
+  A.bindSettings($, { get: () => saved, set: (k, v) => { saved = v; } });
+  const bar = $('ga-styles');
+  assert.ok(bar, 'built in JS (index.html is at its shellNodes ceiling)');
+  const kids = rows.children;
+  assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
+  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY']);
+  $('ga-style-cinema').onclick();
+  assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
+  assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
+  $('ga-style-broadcast').onclick();
+  assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
+  assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
+});
+test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
+  const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });
+  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), ctx);
+  const A = vm.runInContext('GarageArrival', ctx);
+  const held = (extra) => { const c = Object.assign(A.settings({ result: 'podium' }), extra); return A.poseFor('home')(A.duration(c, 'home') - 0.01, c, false).label; };
+  assert.equal(held({ pos: 3, driver: 'Norris', fastest: true }), 'P3 · NORRIS · PODIUM FINISH · FASTEST LAP');
+  assert.equal(held({ pos: 3 }), 'P3 · PODIUM FINISH', 'no name known: the shipped title');
+  assert.equal(held({ result: 'dnf', pos: 14, driver: 'Norris', fastest: true }), 'NORRIS · RETIRED', 'a retirement has no place and no fastest lap');
+  const light = (race, result = 'win') => A.lightFor(Object.assign(A.settings({ result }), { race }), 'home');
+  assert.deepEqual([light('dry'), light('wet'), light('night'), light('wet', 'dnf')], ['showroom', 'rain', 'neon', 'rain']);
+  assert.equal(A.lightFor(A.settings({ result: 'win', race: 'wet', homeLight: 'broadcast' }), 'home'), 'broadcast', 'a picked mood wins');
+  assert.equal(A.lightFor(A.settings({ race: 'wet' }), 'in'), null, 'the pit-stop arrival keeps its own lighting');
+  assert.equal(A.settings({ race: 'storm' }).race, 'dry');
+});
+test('noteResult carries the race to the way home: driver, fastest lap, wet, night', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// AFTER THE RACE: endRace notes'), cam.indexOf('const arrivalCar'));
+  const player = { name: 'Lando Norris', best: 81.2 }, rival = { best: 81.9 }, out = { best: 80.1, retired: true };
+  const G = { player, trackIdx: 0, raceWeather: 'rain', raceTimeOfDay: 'default', store: { get: () => null } };
+  const c = vm.createContext({ GarageArrival: Arrival, G, endHome() {}, performance: { now: () => 1 }, Tracks: { LIST: [{ night: true }] },
+    RaceCeremony: { eligible: () => true }, LoadingScreen: { isAutomation: () => false }, arrival: { start() {} } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const note = vm.runInContext('noteResult', c);
+  const n = note([rival, player, out], {});
+  assert.deepEqual([n.driver, n.fastest, n.wet, n.night], ['Lando Norris', true, true, true], 'a retired car\'s quicker lap does not count');
+  G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
+  const d = note([rival, player], {});
+  assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
 });

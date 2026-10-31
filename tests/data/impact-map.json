@@ -268,6 +268,7 @@
     "js/audio/announcer.js": {
       "create": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/pause-silence.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
@@ -3127,6 +3128,7 @@
     },
     "js/car/crest-draw.js": {
       "create": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
@@ -3377,6 +3379,7 @@
     },
     "js/car/liveries.js": {
       "forTeam": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
@@ -3389,7 +3392,6 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -3416,11 +3418,13 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "*": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/garage-followups.test.mjs"
       ]
     },
     "js/car/livery-graphics.js": {
       "create": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -3550,6 +3554,7 @@
         "tests/unit/fin-design.test.mjs"
       ],
       "*": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/legends-team.test.mjs"
@@ -3589,6 +3594,7 @@
       ],
       "getFactorySetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
@@ -3609,6 +3615,7 @@
         "tests/specs/parts-catalog.spec.js",
         "tests/unit/aero-defaults-2026.test.mjs",
         "tests/unit/aero-preview-fields.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -3655,7 +3662,6 @@
       "*": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
@@ -5110,7 +5116,11 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "ensureGarageData": [
+        "tests/unit/data-lazy-loader.test.mjs"
+      ],
       "ensureLightPresets": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureNet": [
@@ -7666,6 +7676,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "applyStyle": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "bindSettings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs"
@@ -7673,19 +7686,21 @@
       "cancel": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "carryPlayback": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
-      "crewFor": [
-        "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs"
-      ],
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs"
+      ],
+      "lightFor": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7699,6 +7714,9 @@
       ],
       "resultKind": [
         "tests/unit/garage-arrival.test.mjs"
+      ],
+      "rigData": [
+        "tests/unit/garage-camera-rigs.test.mjs"
       ],
       "rigSample": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7722,6 +7740,9 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "step": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "styleOf": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "timeline": [
@@ -7851,6 +7872,14 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
+      ]
+    },
+    "js/garage/garage-data.js": {
+      "*": [
+        "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-camera-rigs.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/livery-design-editor.js": {
@@ -15120,6 +15149,10 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
+      ],
+      "releaseMirror": [
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
