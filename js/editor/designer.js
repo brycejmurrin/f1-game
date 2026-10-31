@@ -910,6 +910,7 @@ const TrackDesigner = (function () {
   function showPane(pane) {
     if (workspace) workspace.remember();
     if (pane !== "library" && pane !== "howto") pane = "design";
+    if (pane !== "library") confirmDel = null;
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
@@ -1500,12 +1501,16 @@ const TrackDesigner = (function () {
   }
   function renderLibrary() {
     if (!ui.lib) return;
+    const active = document.activeElement, cards = Array.from(ui.lib.children);
+    const at = cards.findIndex((card) => card.contains(active));
+    const action = at < 0 ? -1 : Array.from(cards[at].querySelectorAll("button")).indexOf(active);
+    const focusedId = at < 0 ? null : cards[at].dataset.trackId;
     if (ui.recoverDraft) ui.recoverDraft.hidden = !draftItem(true);
     while (ui.lib.firstChild) ui.lib.removeChild(ui.lib.firstChild);
     const items = custom.list();
-    if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
+    if (!items.length) ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker."));
     for (const it of items) {
-      const card = el("div", "td-card");
+      const card = el("div", "td-card"); card.dataset.trackId = it.id;
       const c = el("canvas"); c.width = 320; c.height = 220; c.setAttribute("aria-hidden", "true");
       const def = Tracks.LIST.find((t) => t.id === it.id);
       try { if (def) TrackMaps.draw(c, def, { width: 3, color: "#f6f6f9" }); } catch (e) { Log.warn("track", "library thumbnail failed: " + (e && e.message)); }
@@ -1526,6 +1531,13 @@ const TrackDesigner = (function () {
       );
       card.append(c, name, meta, row);
       ui.lib.appendChild(card);
+    }
+    if (action >= 0 && openFlag && !ui.paneLib.hidden) {
+      const same = items.findIndex((it) => it.id === focusedId);
+      const card = ui.lib.children[same < 0 ? Math.min(at, items.length - 1) : same];
+      // A removed row lands on EDIT, so repeating Enter cannot delete its neighbour.
+      const target = card && card.querySelectorAll("button")[same < 0 ? 0 : action];
+      (target || ui.tabLib).focus();
     }
   }
 

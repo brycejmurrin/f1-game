@@ -781,8 +781,9 @@
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr); gap: calc(var(--gap) / 2);
   padding: calc(var(--gap) / 2) 0 calc(var(--pad) * 0.4);
 }
-#trackdesigner[data-foot="in"] .td-foot [data-role="workspace-status"] { grid-column: 1 / -1; flex-wrap: nowrap; }
-#trackdesigner[data-foot="in"] .td-foot .td-msg { display: none; }
+#trackdesigner[data-foot="in"] .td-foot [data-role="workspace-status"] { grid-column: 1 / -1; flex-wrap: wrap; }
+#trackdesigner[data-foot="in"] .td-foot .td-msg { display: block; flex-basis: 100%; overflow: visible; -webkit-line-clamp: unset; line-clamp: unset; }
+#trackdesigner[data-foot="in"] .td-foot .td-msg:empty { display: none; }
 #trackdesigner[data-foot="in"] .td-foot .sel-edit, #trackdesigner[data-foot="in"] .td-foot .sel-chip,
 #trackdesigner[data-foot="in"] .td-foot [data-role="file-menu"] > summary { padding-inline: calc(var(--gap) / 3); min-width: 0; }
 
