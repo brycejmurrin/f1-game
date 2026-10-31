@@ -63,30 +63,38 @@ const HudInputs = (function () {
   const win = typeof window !== "undefined" ? window : null;
   let root = null, cv = null, ctx2 = null, gearEl = null, lastGear = null;
   const mKey = [0, 0, 0, 0, 0];   // innerWidth, innerHeight, dpr, --hl-s, CSS zoom (HUD SIZE / fit cap) of the last measure
-  let cssW = 128, cssH = 48, ratio = 1;
+  let cssW = 128, cssH = 48, ratio = 1, zAge = 0, zSeen = 1, vw = 0, vh = 0, vDirty = true, fontOn = false;
   const _rmq = win && win.matchMedia ? win.matchMedia("(prefers-reduced-motion: reduce)") : null;
   function reduced() { return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_rmq && _rmq.matches) || !!(doc && doc.documentElement && doc.documentElement.dataset.motion === "reduce"); }
   const isOn = () => typeof HudElements === "undefined" || HudElements.isOn("inputs");
 
+  // One resize handler for the viewport cache (measure) and the open review sheet.
+  const onResize = () => { vDirty = true; if (review && review.open) paintReview(); };
   function bind() {
     root = doc && doc.getElementById("hud-inputs");
     cv = doc && doc.getElementById("hud-inputs-cv");
     gearEl = doc && doc.getElementById("hud-inputs-gear");
-    ctx2 = cv && cv.getContext ? cv.getContext("2d") : null;
+    ctx2 = cv && cv.getContext ? cv.getContext("2d") : null; fontOn = false;
+    if (win && win.addEventListener) { win.addEventListener("resize", onResize); win.addEventListener("orientationchange", onResize); }
     return !!(root && ctx2);
   }
   /** DPR-aware bitmap, like js/ui/hud.js drawMinimap: re-measured on a key change only. */
   function measure() {
     const dpr = (win && win.devicePixelRatio) || 1;
     const hl = parseFloat(root.style.getPropertyValue("--hl-s")) || 1;
-    const iw = win ? win.innerWidth : 0, ih = win ? win.innerHeight : 0;
-    const z = cv.currentCSSZoom || 1;
+    // window.innerWidth/Height and currentCSSZoom each flush layout; at the 10 Hz draw that was one forced
+    // reflow per tick (HUD F-07). Viewport: re-read on resize/orientation only. Zoom (fit cap): within ~1 s.
+    if (vDirty || ++zAge >= 10) {
+      vDirty = false; zAge = 0;
+      vw = win ? win.innerWidth : 0; vh = win ? win.innerHeight : 0; zSeen = cv.currentCSSZoom || 1;
+    }
+    const iw = vw, ih = vh, z = zSeen;
     if (iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3] && z === mKey[4]) return;
     mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl; mKey[4] = z;
     cssW = cv.clientWidth || 128; cssH = cv.clientHeight || 48;
     ratio = Math.max(1, Math.min(4, z * dpr * hl));
     const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; fontOn = false; }
   }
 
   // Throttle / brake read CvdPalette at paint time, so a COLOUR VISION change
@@ -98,7 +106,9 @@ const HudInputs = (function () {
     const w = cssW, h = cssH, pad = 2, lx = w - 9;   // the legend's column at the right
     c.setTransform(ratio, 0, 0, ratio, 0, 0);
     c.clearRect(0, 0, w, h);
-    c.font = "bold 8px sans-serif"; c.textBaseline = "middle";
+    // Assigning ctx.font resolves the canvas's computed style: a forced style/layout pass per 10 Hz draw
+    // (HUD F-07). The font survives clearRect/setTransform; only a bitmap resize (measure) resets it.
+    if (!fontOn) { c.font = "bold 8px sans-serif"; c.textBaseline = "middle"; fontOn = true; }
     // centre line (steer zero)
     c.strokeStyle = C_MID; c.lineWidth = 1; c.setLineDash([3, 3]);
     c.beginPath(); c.moveTo(0, h / 2); c.lineTo(lx - 2, h / 2); c.stroke(); c.setLineDash([]);
@@ -190,7 +200,7 @@ const HudInputs = (function () {
     reviewCanvas.setAttribute("role","img");
     review.append(summary,reviewNote,reviewCanvas);
     review.addEventListener("toggle", () => { if (review.open) paintReview(); });
-    if (win && win.addEventListener) win.addEventListener("resize", () => { if (review.open) paintReview(); });
+    if (win && win.addEventListener) win.addEventListener("resize", onResize);   // one shared reference: the DOM dedupes it with bind()'s
     const quit = doc.getElementById("pm-quit"); host.insertBefore(review,quit && quit.parentElement === host ? quit : null);
     paintReview(); return true;
   }
