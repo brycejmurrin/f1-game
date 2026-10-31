@@ -38,6 +38,7 @@ import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } f
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
 import { GARAGE_PLAN_SCHEMA, createGaragePlanHandler } from "./garage-plan.mjs";
 import { DIAGNOSTICS_TOOL, createDiagnosticsHandler } from "./diagnostics-tools.mjs";
+import { CODEX_TOOL, CODEX_CONTROL_TOOL } from "./apex-codex-agents.mjs";
 import { TOOLS as INBOX_TOOLS } from "./inbox-mcp.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
@@ -495,6 +496,8 @@ const CURSOR_ONLY = ["tools", "errors", "chat", "turns"];
 
 const CATALOG = [
   ...CLAUDE_CATALOG,
+  CODEX_TOOL,
+  CODEX_CONTROL_TOOL,
   ...INBOX_TOOLS.map((tool) => ({ ...tool, description: "Tree — " + tool.description, kind: "tree", inputSchema: { ...tool.inputSchema,
     properties: { ...tool.inputSchema.properties, dryRun: { type: "boolean" } } } })),
   { ...DIAGNOSTICS_TOOL, kind: 'tree' },
@@ -2739,6 +2742,14 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   try { validateArgs(known, args); }
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
 
+  if (name === 'apex_codex_agents') {
+    return import('./apex-codex-agents.mjs').then(({ createCodexAgentsHandler }) =>
+      createCodexAgentsHandler({ ROOT, toolResult, refuse, mockMode })(args, { signal }));
+  }
+  if (name === 'apex_codex_control') {
+    return import('./apex-codex-agents.mjs').then(({ createCodexControlHandler }) =>
+      createCodexControlHandler({ ROOT, toolResult, refuse, mockMode })(args, { signal }));
+  }
   if (INBOX_TOOLS.some((tool) => tool.name === name)) return handleInbox(name, args);
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
@@ -2911,11 +2922,11 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_debug_chrome", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer", "apex_cursor_agents"]);
-const DESTRUCTIVE = new Set(["apex_job_cancel", "apex_cursor_agents"]);
-const OPEN_WORLD = new Set(["apex_cursor_agents"]);
+const NOT_READ_ONLY = new Set(["apex_debug_chrome", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer", "apex_cursor_agents", "apex_codex_control"]);
+const DESTRUCTIVE = new Set(["apex_job_cancel", "apex_cursor_agents", "apex_codex_control"]);
+const OPEN_WORLD = new Set(["apex_cursor_agents", "apex_codex_agents", "apex_codex_control"]);
 // launch and followup are not idempotent (a client must not auto-retry them on the strength of a hint).
-const NOT_IDEMPOTENT = new Set(["apex_cursor_agents"]);
+const NOT_IDEMPOTENT = new Set(["apex_cursor_agents", "apex_codex_control"]);
 function toolAnnotations(entry) {
   if (entry.annotations) return { title: "Apex 26 · " + entry.name.replace(/^apex_/, "").replace(/_/g, " "), ...entry.annotations };
   const readOnly = toolKind(entry) === "tree" && !NOT_READ_ONLY.has(entry.name);
@@ -3015,7 +3026,7 @@ function toolOutputSchema(entry) {
 // top level collapse to their type. apex_help {tool} returns the full text and schema. Validation always
 // uses the full CATALOG schema; only the published copy is compact.
 // Keep full help unchanged; discovery has a measured 55,000-byte total ceiling.
-const DESC_LONG = 400, DESC_KEEP = 360, PROP_KEEP = 60, REQUIRED_ENUM_INLINE_MAX = 24, ENUM_INLINE_CHARS = 240;
+const DESC_LONG = 400, DESC_KEEP = 230, PROP_KEEP = 60, REQUIRED_ENUM_INLINE_MAX = 24, ENUM_INLINE_CHARS = 240;
 function cutAt(text, max) {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
@@ -3023,6 +3034,8 @@ function cutAt(text, max) {
   return (stop > max / 3 ? head.slice(0, stop + 1) : head.replace(/\s+\S*$/, "") + "…");
 }
 function compactDescription(name, d) {
+  if (name === "apex_codex_agents") return 'Tree — read-only Codex Cloud session history. apex_help {tool: "apex_codex_agents"}.';
+  if (name === "apex_codex_control") return 'Tree — start or message Codex Cloud sessions (writes). apex_help {tool: "apex_codex_control"}.';
   if (name === "apex_claude_agents") return 'Tree — Claude auth, cloud messages and transcript snapshots. apex_help {tool: "apex_claude_agents"}.';
   if (name === "apex_help" || d.length <= DESC_LONG) return d;
   const skill = d.match(/\s(Skill: [^.]*\.?)\s*$/);
@@ -3066,7 +3079,7 @@ function compactOutput(schema) {
 function denseSchema(t) {
   const plain = compactSchema(t.inputSchema);
   // inbox list/get carry the most bounds; bounds stay enforced by the handler and shown by apex_help.
-  return JSON.stringify(plain).length > 1500 || t.name === "apex_inbox_list" || t.name === "apex_inbox_get" ? compactSchema(t.inputSchema, 0, true) : plain;
+  return JSON.stringify(plain).length > 1500 || t.name === "apex_inbox_list" || t.name === "apex_inbox_get" || t.name === "apex_codex_agents" || t.name === "apex_codex_control" ? compactSchema(t.inputSchema, 0, true) : plain;
 }
 // Every accepted top-level input must remain discoverable: with additionalProperties:false,
 // omitting an optional property prevents schema-aware clients from sending it at all.
@@ -3193,7 +3206,8 @@ export const ROUTES = [
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; circuit turns/sectors/scenery targets: apex_locations; " +
     "circuit health (build, floats, clipping): apex_track_audit; flyby framing: apex_frame_report; one __apex expr without a browser: apex_eval {vm:true}; " +
     "car parts/crests: apex_car_audit; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; saved profiles: apex_profile_query; " +
-    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor.",
+    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; Codex Cloud session history: apex_codex_agents (read-only).",
+    "Start or message a Codex Cloud session: apex_codex_control (writes; requestId required).",
   "BROWSER (apex_status first; one browser at a time; holds the lock) — scene shots: apex_shot, apex_shot_survey; race HUD: apex_hud_mock (fastest), " +
     "apex_hud_shot, apex_hud_survey; menu screens: apex_ui_shot, apex_ui_fit, apex_ui_inspect; live __apex: apex_eval, apex_agent, or a persistent apex_track session; " +
     "garage: apex_garage; frame budget: apex_profile. Minutes-long work: apex_job_start, then apex_job_status {wait}.",

@@ -69,6 +69,21 @@ const BEAMS_DEFAULT = 1;
 const BEAMS_MAX = 2;
 const BEAMS_LEVELS = { off: 0, light: 0.6, medium: 1, strong: 1.6 };
 let beams = null;
+const DROP_SIZE_KEY = "apex26.helmetVisorDropSize";
+let dropSize = null;
+function clampDropSize(v) {
+  return (typeof v === "number" || (typeof v === "string" && v.trim() !== "")) && Number.isFinite(+v) ? Math.max(0.5, Math.min(2, +v)) : 1;
+}
+function visorDropSize() {
+  if (dropSize === null) { const v = GameStore.store.raw(DROP_SIZE_KEY); dropSize = clampDropSize((typeof v === "number" || (typeof v === "string" && v.trim() !== "")) ? Number(v) / 100 : null); }
+  return dropSize;
+}
+function setVisorDropSize(v) {
+  dropSize = clampDropSize(v);
+  GameStore.store.rawSet(DROP_SIZE_KEY, String(Math.round(dropSize * 100)));
+  for (const fn of listeners) fn("visorDropSize", dropSize);
+  return dropSize;
+}
 
 function clampBeams(raw) {
   if (typeof raw === "string" && BEAMS_LEVELS[raw.toLowerCase()] != null) return BEAMS_LEVELS[raw.toLowerCase()];
@@ -339,7 +354,7 @@ function initUI() {
   row("pm-visor-reflections", "VISOR REFLECTIONS", C.visorReflections.values, C.visorReflections.labels,
     "Shield reflections in HELMET camera with CLEAR or TINTED visor. LIGHT is subtle; OFF removes the highlights.", visorReflections, setVisorReflections);
   // A percent slider (the TURN CHASING pattern): label, live value, then the range; the help line under it.
-  function slider(id, label, aria, title, max, step, read, write) {
+  function slider(id, label, aria, title, max, step, read, write, min = 0) {
     const lab = document.createElement("label");
     lab.className = "tune-row";
     lab.title = title;
@@ -351,12 +366,12 @@ function initUI() {
     span.appendChild(out);
     const inp = document.createElement("input");
     inp.type = "range";
-    inp.min = "0";
+    inp.min = String(min);
     inp.max = String(max);
     inp.step = String(step);
     inp.id = id;
     inp.setAttribute("aria-label", aria);
-    const paint = () => { const pct = Math.round(read() * 100); inp.value = String(pct); out.textContent = `${pct}%`; };
+    const paint = () => { const pct = Math.round(read() * 100); inp.value = String(pct); inp.setAttribute("aria-valuetext", `${pct}%`); out.textContent = `${pct}%`; };
     inp.oninput = () => { write(parseFloat(inp.value) / 100); paint(); };
     lab.appendChild(span);
     lab.appendChild(inp);
@@ -370,6 +385,9 @@ function initUI() {
     200, 10, visorBeams, setVisorBeams);
   row("pm-visor-rain", "VISOR RAIN", C.visorRain.values, C.visorRain.labels,
     "Water accumulating on the shield in HELMET camera with CLEAR or TINTED visor. Actual rain controls new drops; OFF clears the water. LOW graphics disables droplets.", visorRain, setVisorRain);
+  slider("pm-visor-drop-size", "DROPLET SIZE", "Visor droplet size",
+    "Size of collected rain on the HELMET visor. 50% is small, 100% is standard and 200% is large. Updates existing drops while paused. Requires CLEAR or TINTED visor with VISOR RAIN on.",
+    200, 1, visorDropSize, setVisorDropSize, 50);
   row("pm-visor-runoff", "WATER RUNOFF", C.visorRunoff.values, C.visorRunoff.labels,
     "How quickly visor water slides away. Airflow moves drops at speed; stopped drops sag downward. REDUCED MOTION keeps drops still.", visorRunoff, setVisorRunoff);
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
@@ -397,7 +415,7 @@ if (typeof document !== "undefined") {
 return {
   KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, BEAMS_KEY, BEAMS_DEFAULT, BEAMS_MAX, WHEELS, CHOICES, HALO_VALUES,
   PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity,
-  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorRunoff, setVisorRunoff,
+  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorDropSize, setVisorDropSize, visorRunoff, setVisorRunoff,
   wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();

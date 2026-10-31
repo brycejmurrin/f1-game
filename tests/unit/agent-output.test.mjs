@@ -638,6 +638,8 @@ test('oversized scans keep a working set and use original reader for excess PIDs
 });
 
 const countProcFd=()=>fs.readdirSync('/proc/self/fd').length;
+// Python's join() returns before the kernel finishes reaping the thread; wait for the task dir to vanish (loaded runners lag).
+const taskGone=async(pid,tid)=>{const end=Date.now()+10000;while(fs.existsSync(`/proc/${pid}/task/${tid}`)){if(Date.now()>end)assert.fail(`task ${tid} still listed`);await new Promise(r=>setTimeout(r,10))}};
 test('actual proc FD after target exit returns ESRCH and never silently returns old metadata',{skip:process.platform !== 'linux'},async()=>{
   const child=spawn(process.execPath,['-e','setTimeout(()=>{},150)'],{stdio:'ignore'});
   const done=new Promise(resolve=>child.once('exit',resolve)),fd=fs.openSync(`/proc/${child.pid}/stat`,'r'),bytes=Buffer.alloc(8192);
@@ -676,7 +678,7 @@ print('thread-after',flush=True);sys.stdin.readline();os.write(wt,b'x');os.close
       if(phase==='before'){pid=Number(b);before=parseProcStat(pool.read(pid));assert.equal(before.parent,Number(a));child.stdin.write('\n');}
       if(phase==='after'){const after=parseProcStat(pool.read(pid));assert.equal(after.start,before.start);assert.equal(after.parent,child.pid);assert.notEqual(after.parent,before.parent);assert.equal(opens.filter(p=>p===`/proc/${pid}/stat`).length,1);child.stdin.write('\n');}
       if(phase==='thread-before'){tid=Number(a);threadPid=Number(b);threadBefore=parseProcStat(pool.read(threadPid));child.stdin.write('\n');}
-      if(phase==='thread-after'){const after=parseProcStat(pool.read(threadPid));assert.equal(after.parent,threadBefore.parent);assert.equal(after.parent,child.pid);assert.equal(fs.existsSync(`/proc/${child.pid}/task/${tid}`),false);assert.equal(opens.filter(p=>p===`/proc/${threadPid}/stat`).length,1);child.stdin.write('\n');}
+      if(phase==='thread-after'){const after=parseProcStat(pool.read(threadPid));assert.equal(after.parent,threadBefore.parent);assert.equal(after.parent,child.pid);await taskGone(child.pid,tid);assert.equal(opens.filter(p=>p===`/proc/${threadPid}/stat`).length,1);child.stdin.write('\n');}
     }
     assert.equal(await done,0);
   }finally{child.stdin.end();release()}

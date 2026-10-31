@@ -233,6 +233,82 @@ async function randomiseGreen(page, seed) {
   return page.evaluate(() => TrackDesigner.state());
 }
 
+for (const viewport of [{ width: 844, height: 390 }, { width: 390, height: 844 }]) {
+  test(`library deletion keeps keyboard focus and cancels stale confirmation at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
+    for (const seed of [7, 11, 23]) {
+      await randomiseGreen(page, seed);
+      expect((await page.evaluate((s) => { TrackDesigner.setName("Focus circuit " + s); return TrackDesigner.save(); }, seed)).ok).toBe(true);
+    }
+    const root = page.locator("#trackdesigner"), library = root.getByRole("tab", { name: "MY CIRCUITS", exact: true });
+    const cards = root.locator('#td-pane-library .td-card');
+    await library.press("Enter");
+    await expect(library).toBeFocused(); // A rebuild must not steal focus from outside the card grid.
+    await expect(cards).toHaveCount(3);
+    const middleName = await cards.nth(1).locator("strong").innerText();
+    const middle = cards.filter({ has: page.locator("strong", { hasText: middleName }) });
+    await middle.getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    // Leaving the pane withdraws destructive intent; returning needs two presses again.
+    await root.getByRole("tab", { name: "DESIGN", exact: true }).press("Enter");
+    await library.press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE", exact: true })).toBeVisible();
+    await middle.getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.nth(1).getByRole("button", { name: "EDIT", exact: true })).toBeFocused();
+    // Delete the final row, then the only row: previous EDIT, then the library tab.
+    for (const remaining of [1, 0]) {
+      await cards.last().getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+      await expect(cards.last().getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(cards).toHaveCount(remaining);
+      if (remaining) await expect(cards.last().getByRole("button", { name: "EDIT", exact: true })).toBeFocused();
+      else await expect(library).toBeFocused();
+    }
+    await expect(root.locator(".td-empty")).toContainText("No saved circuits yet");
+  });
+
+  test(`invalid native file import keeps its status readable and focus in place at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
+    const root = page.locator("#trackdesigner"), trigger = root.locator('[data-role="file-menu"] > summary');
+    await trigger.press("Enter");
+    const chooser = page.waitForEvent("filechooser");
+    await root.getByRole("button", { name: "IMPORT", exact: true }).press("Enter");
+    await (await chooser).setFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{ malformed circuit") });
+    const status = root.locator('[data-role="workspace-status"] .td-msg');
+    await expect(status).toHaveText("Not an Apex 26 circuit file");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("aria-live", "polite");
+    await expect(status).toBeVisible();
+    await expect(trigger).toBeFocused();
+    const bounds = await status.evaluate((e) => {
+      const range = document.createRange(); range.selectNodeContents(e);
+      const text = [...range.getClientRects()];
+      const vv = visualViewport, view = { left: vv ? vv.offsetLeft : 0, top: vv ? vv.offsetTop : 0,
+        right: (vv ? vv.offsetLeft + vv.width : document.documentElement.clientWidth),
+        bottom: (vv ? vv.offsetTop + vv.height : document.documentElement.clientHeight) };
+      const clips = text.map((r) => Math.max(view.left - r.left, r.right - view.right, view.top - r.top, r.bottom - view.bottom, 0));
+      for (let node = e; node; node = node.parentElement) {
+        const cs = getComputedStyle(node), r = node.getBoundingClientRect();
+        const sx = node.offsetWidth ? r.width / node.offsetWidth : 1, sy = node.offsetHeight ? r.height / node.offsetHeight : 1;
+        const left = r.left + node.clientLeft * sx, top = r.top + node.clientTop * sy;
+        for (const t of text) clips.push(Math.max(
+          /hidden|clip|auto|scroll/.test(cs.overflowX) ? Math.max(left - t.left, t.right - left - node.clientWidth * sx) : 0,
+          /hidden|clip|auto|scroll/.test(cs.overflowY) ? Math.max(top - t.top, t.bottom - top - node.clientHeight * sy) : 0, 0));
+      }
+      return { lines: text.length, clipped: Math.max(0, ...clips), overflow: Math.max(e.scrollHeight - e.clientHeight, 0) };
+    });
+    expect(bounds.lines).toBeGreaterThan(0);
+    expect(bounds.clipped, JSON.stringify(bounds)).toBeLessThanOrEqual(1);
+    expect(bounds.overflow, JSON.stringify(bounds)).toBeLessThanOrEqual(1);
+  });
+}
+
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
 

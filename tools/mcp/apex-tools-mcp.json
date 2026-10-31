@@ -24,6 +24,8 @@
   },
   "tools": [
     "apex_claude_agents",
+    "apex_codex_agents",
+    "apex_codex_control",
     "apex_inbox_sync",
     "apex_inbox_list",
     "apex_inbox_get",
