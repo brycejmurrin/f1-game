@@ -157,11 +157,12 @@ test("a command past the first page of 100 is served, and the poll window moves 
   assert.ok(new URL(lastPage.url).searchParams.get("since") > sinces[1]);
 });
 
-test("a token GitHub rejects never links", async () => {
+test("a token GitHub rejects never links, and is forgotten so the box asks again", async () => {
   const b = load({ tok: "bad" });
   await flush();
   assert.equal(b.api.active(), false);
   assert.equal(b.gh.thread.length, 0);
+  assert.equal(b.store.has("apex26.bridgeToken"), false);
 });
 
 test("saves, career and net hooks are not callable", async () => {
