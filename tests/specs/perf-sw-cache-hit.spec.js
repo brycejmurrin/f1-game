@@ -20,7 +20,7 @@
 //      __apex surface (tools/manifest.cjs LAZY_AGENT — measured 2026-10-24: those 9 files were the only misses).
 import { createRequire } from "node:module";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { startPwaRecoveryServer, pwaRecoverySnapshot, pwaServedGeneration } from "../helpers/pwa-recovery.mjs";
+import { recoveryRelease, startPwaRecoveryServer, pwaRecoverySnapshot, pwaServedGeneration } from "../helpers/pwa-recovery.mjs";
 
 const require = createRequire(import.meta.url);
 // The __apex / agentview surface: injected for tests and localhost only, never on a player's page, and
@@ -80,6 +80,7 @@ test("real service worker preserves a settled release across offline launch and 
     expect(snapshot.controller?.state, label).toBe("activated");
     expect(snapshot.controller?.scriptURL, label).toBe(`${server.origin}/sw.js?v=${build}`);
     expect(snapshot.shellBuild, label).toBe(build);
+    expect(snapshot.scriptURL, label).toBe(new URL(recoveryRelease(build).asset, server.origin).href);
     expect(snapshot.assetBuild, label).toBe(build);
     expect(snapshot.generations.find((g) => g.name === `apex26-${build}`)?.settled, label).toBe(true);
     const servedGeneration = await pwaServedGeneration(page);

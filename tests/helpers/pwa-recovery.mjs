@@ -81,6 +81,7 @@ export async function pwaRecoverySnapshot(page) {
       installing: registration?.installing?.scriptURL || null,
       waiting: registration?.waiting?.scriptURL || null,
       shellBuild: Number(document.querySelector('meta[name="apex-build"]')?.getAttribute("content")) || null,
+      scriptURL: document.querySelector("script[src]")?.src || null,
       assetBuild: window.__pwaFixtureBuild || null,
       generations,
     };
