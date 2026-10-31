@@ -151,7 +151,22 @@ const GarageArrival = (function () {
   }
   // A Blender crew whose key tables have not landed (js/garage/garage-data.js, lazy) plays the shipped crew.
   const playable = (v) => typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.known(v) && !GarageCrewChoreo.has(v) ? "current" : v;
-  function crewFor(config, dir) {
+  /* PINNED PER PLAYBACK: the lazy tables can land mid-sequence, and a held t on
+   * the same config must keep its camera family and crew (a late load swapped
+   * the "cut" eye for the crane, and the pushed car's path side with it). The
+   * first read of a config object decides; the next playback's fresh object
+   * adopts whatever has landed by then. */
+  const _pinned = new WeakMap();
+  function pinned(config, key, fn) {
+    if (!config || typeof config !== "object") return fn();
+    let m = _pinned.get(config);
+    if (!m) { m = {}; _pinned.set(config, m); }
+    if (!(key in m)) m[key] = fn();
+    return m[key];
+  }
+  const rigFor = (config) => pinned(config, "rig", () => rigData(config.angle) ? config.angle : null);
+  const crewFor = (config, dir) => pinned(config, "crew:" + dir, () => crewNow(config, dir));
+  function crewNow(config, dir) {
     const key = dir === "out" ? "leaveCrew" : dir === "home" ? "homeCrew" : "enterCrew";
     let v = config && config[key];
     if (dir === "home" && (!v || v === "auto")) {
@@ -544,7 +559,7 @@ const GarageArrival = (function () {
   }
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
-    const rig = rigData(config.angle) ? config.angle : null;
+    const rig = rigFor(config);
     const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
     const n = t < T.door ? 0 : t < s2 ? 1 : 2, cam = cams[n];
     const look = { config, last: n === 2, k: n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2) };
@@ -663,7 +678,7 @@ const GarageArrival = (function () {
   function poseOut(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, "out"), end = duration(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
-    const rig = rigData(config.angle) ? config.angle : null;
+    const rig = rigFor(config);
     const cams = shotsFor(config, "out"), side = rig ? 1 : sideFor(cams[1]);
     const opening = t < T.door;
     const d = outDistance(Math.min(t, settle) - go, Object.assign({}, T, { settle: T.run + OUT_EXIT_M / T.v }));

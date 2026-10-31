@@ -7643,10 +7643,6 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
-      "crewFor": [
-        "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs"
-      ],
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",

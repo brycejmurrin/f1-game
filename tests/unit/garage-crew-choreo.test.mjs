@@ -333,3 +333,27 @@ test("lazy key tables: the index lists every clip at boot, and until the tables 
   assert.deepEqual(index, Object.fromEntries(Object.entries(full).map(([id, c]) => { const { actors, ...rest } = c; return [id, rest]; })), "rerun crew-choreo.py --write-runtime");
   assert.ok(data.has("marshal"));
 });
+
+// The lazy tables can land mid-sequence: a held t on the SAME config keeps its camera family and crew;
+// the next playback's fresh config adopts what has landed (PR #4310 review, 2026-10-31).
+test("a late GarageData load never swaps a playing sequence's camera or crew; the next playback adopts it", () => {
+  // V8 shares compiled code across vm contexts by source text, and code compiled where GarageData was
+  // already a script const keeps reading that slot; a browser has one realm. A unique source suffix gives
+  // this fixture its own compile, the same as a page where garage-data.js lands after arrival.js.
+  const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, WeakMap, Map, String, Log: { info() {}, warn() {} } });
+  for (const f of FILES.filter((x) => x !== "js/garage/garage-data.js"))
+    vm.runInContext(read(f) + (f === "js/garage/arrival.js" ? "\n// late-load fixture\n" : ""), ctx, { filename: absSrc(f) });
+  const Arrival = vm.runInContext("GarageArrival", ctx, { filename: "garage-crew-choreo:get" });
+  const cases = [["in", { angle: "crane", enterCrew: "marshal" }, 6], ["out", { angle: "crane", leaveCrew: "sendoff" }, 4],
+    ["home", { angle: "crane", result: "dnf" }, 6]];
+  const held = cases.map(([dir, v, t]) => { const c = Arrival.settings(v); return [dir, c, t, Arrival.poseFor(dir)(t, c, true)]; });
+  vm.runInContext(read("js/garage/garage-data.js"), ctx, { filename: absSrc("js/garage/garage-data.js") });
+  for (const [dir, c, t, before] of held) {
+    const after = Arrival.poseFor(dir)(t, c, true);
+    assert.deepEqual([after.camera, after.crew, after.eye, after.x, after.yaw], [before.camera, before.crew, before.eye, before.x, before.yaw], dir + ": the held frame is unchanged");
+    assert.notEqual(before.camera, "crane", dir + ": before the tables, the shipped cameras");
+    const fc = Arrival.settings(cases.find((k) => k[0] === dir)[1]);
+    const fresh = Arrival.poseFor(dir)(t, fc, true);
+    assert.equal(fresh.camera, "crane", dir + ": the next playback plays the rig");
+  }
+});
