@@ -271,7 +271,7 @@ test("countdown ownership retires document observers and timers, including queue
 
 // LIVE-MEMORY-H12: the countdown watched every child list in the document, so once the hub had been opened
 // (it keeps this node cached) sync() ran after every HUD text write for the rest of the session.
-test("countdown watches child lists inside the hub only, and `hidden` anywhere", async () => {
+test("countdown watches child lists and `hidden` inside the hub, and `hidden` on its ancestors only", async () => {
   const calls = [];
   class Observer { constructor(fn) { this.fn = fn; } observe(target, opts) { calls.push({ target, opts }); } disconnect() {} }
   function el(tag, cls, text) {
@@ -281,7 +281,7 @@ test("countdown watches child lists inside the hub only, and `hidden` anywhere",
       appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
       classList: {add() {}}, scrollWidth: 0, clientWidth: 0};
   }
-  const root = {}, hub = { id: "datahub" };
+  const root = { parentElement: null }, body = { parentElement: root }, hub = { id: "datahub", parentElement: body };
   const context = vm.createContext({ I18n: i18nStub(), MutationObserver: Observer,
     document: {documentElement: root, querySelector: () => null, getElementById: (id) => (id === "datahub" ? hub : null)},
     queueMicrotask: () => {}, setInterval: () => 1, clearInterval: () => {},
@@ -297,6 +297,12 @@ test("countdown watches child lists inside the hub only, and `hidden` anywhere",
   assert.equal(onHub.length, 1);
   assert.equal(onHub[0].opts.childList, true);
   assert.equal(onHub[0].opts.subtree, true);
+  // Perf hunt 9: the cached node outlives a hub CLOSE with its observer, so nothing outside the hub's ancestor
+  // chain may wake it — a `hidden` watch over the whole document ran sync() on every HUD show/hide all session.
+  const docWide = calls.filter((c) => c.opts.subtree && c.target !== hub);
+  assert.equal(docWide.length, 0, "a subtree watch outside the hub");
+  assert.deepEqual(calls.map((c) => c.target), [hub, body, root], "the hub, then each of its ancestors (own `hidden` only)");
+  assert.deepEqual(Array.from(onHub[0].opts.attributeFilter), ["hidden"], "an element hidden inside the hub still pauses the countdown");
   wrap.dispose();
 });
 

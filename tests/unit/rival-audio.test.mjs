@@ -492,3 +492,78 @@ test("Doppler closing speed is the line-of-sight component: zero when level, ful
   // ±0.1 m of arc at 2 m across is ±1.5 m/s of closing; the old form jumped 60.
   assert.ok(Math.abs(justAhead - justBehind) < 4, `crossing arc 0 must not step the closing speed (${justBehind} -> ${justAhead})`);
 });
+
+// ── LAB rivalEps (?lab=rivalEps; OFF by default) ───────────────────────────
+// A fake AudioContext whose params COUNT setTargetAtTime calls, driven by a
+// recorded slow-drift sequence: a car 40 m ahead closing at 2 m/s while it
+// eases 1 m across, plus a second car holding station 70 m back; 10 s at 60 fps.
+function passByRig(search) {
+  const sb = { Math, Array, Object, Number, console, URLSearchParams };
+  if (search != null) sb.location = { search };
+  sb.window = sb;
+  const vctx = vm.createContext(sb);
+  for (const file of ["js/core/mat4.js", "js/physics/consts.js", "js/audio/rivals.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), vctx, { filename: absSrc(file) });
+  const RivalAudio = vm.runInContext("RivalAudio", vctx);
+  const calls = { n: 0 };
+  const param = (v) => { const p = { value: v, setTargetAtTime(x) { calls.n++; p.value = x; } }; return p; };
+  const node = (kind) => {
+    const n = { kind, plugged: 0, connect(t) { n.plugged++; return t; }, disconnect() { n.plugged = 0; }, start() {}, stop() {},
+      gain: param(1), frequency: param(440), Q: param(1), playbackRate: param(1), pan: param(0) };
+    return n;
+  };
+  const ctx = { currentTime: 0, sampleRate: 8000, destination: node("dest"),
+    createBuffer: (ch, len, sr) => ({ getChannelData: () => new Float32Array(len), sampleRate: sr }),
+    createBufferSource: () => node("src"), createBiquadFilter: () => node("biquad"),
+    createGain: () => node("gain"), createStereoPanner: () => node("panner") };
+  RivalAudio.attach(ctx, ctx.destination);
+  const me = car({ s: 500, x: 0, speed: 60 });
+  const lead = car({ s: 540, x: 2, speed: 58 });
+  const tail = car({ s: 430, x: -1, speed: 60 });
+  const R = RivalAudio.create({ track: { total: LAP }, cars: [me, lead, tail] });
+  const frame = (dt) => {
+    ctx.currentTime += dt;
+    for (const c of [me, lead, tail]) c.s += c.speed * dt;
+    R.collect(me);
+  };
+  return { RivalAudio, R, ctx, calls, me, lead, frame };
+}
+function drift(search) {
+  const rig = passByRig(search);
+  rig.frame(1 / 60);                       // first aim
+  const first = rig.calls.n;
+  for (let i = 0; i < 600; i++) { rig.lead.x = 2 - i / 600; rig.frame(1 / 60); }
+  return { rig, first, drift: rig.calls.n - first };
+}
+
+test("rivalEps OFF (no lab / another lab) keeps the shipped call count on a slow drift", () => {
+  const none = drift(null), other = drift("?lab=audioIdle"), garbage = drift("?lab=%E0%A4%A");
+  // 639 is what the pre-lab rivals.js (d7d7617b) issues on this sequence, with
+  // or without a lab param: the off path must not move it.
+  assert.equal(none.drift, 639, "no location: the shipped aimParam");
+  assert.equal(other.drift, 639, "a different lab leaves rivalEps off");
+  assert.equal(garbage.drift, 639, "a malformed lab param is off, not a throw");
+  assert.equal(none.first, 10, "first frame: 4 params on each of 2 voiced cars, gain on each free voice");
+});
+
+test("rivalEps ON re-aims a slow drift far less, and a large step still issues at once", () => {
+  const on = drift("?lab=rivalEps,audioIdle");
+  assert.equal(on.first, 10, "the first aim is unchanged");
+  // 639 → 26 over 600 frames (1.07 → 0.04 calls per frame). Red on d7d7617b: 639.
+  assert.equal(on.drift, 26, "600 drift frames: far fewer calls with the per-param thresholds");
+  // A big jump (the lead car is suddenly 5 m away) clears every threshold.
+  const { rig } = on;
+  const leadVoice = rig.RivalAudio.passByVoices().find((x) => x.key === 1);
+  const gainBefore = leadVoice.gain.gain.value;
+  const n0 = rig.calls.n;
+  rig.lead.s = rig.me.s + 5; rig.lead.x = 0.5;
+  rig.frame(1 / 60);
+  assert.ok(rig.calls.n - n0 >= 3, `a step re-aims gain, filter and pan at once (got ${rig.calls.n - n0})`);
+  assert.ok(leadVoice.gain.gain.value > gainBefore * 3, "the gain target follows the step on the same frame");
+  // Exactly 0 always lands: the car drops out of range, so its voice goes silent.
+  rig.lead.s = rig.me.s + 400;
+  const n1 = rig.calls.n;
+  rig.frame(1 / 60);
+  assert.equal(leadVoice.gain.gain.value, 0, "an out-of-range voice lands on an exact 0");
+  assert.ok(rig.calls.n > n1);
+});

@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Forty `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. The `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -319,7 +319,7 @@ scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) an
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
 saved report queries). Browser diagnostics use the existing job lock; planning
 and report comparison do not launch Chromium.
-`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) is in the table below; `apex_who_is_on_it` left it when it was retired on 2026-10-27 with the claims board (40 → 39). The table is the count's source: 39 rows on 2026-10-27, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
+`apex_cursor_agents` wraps Cursor agent operations under the owner contract. The inbox tools wrap cached GitHub reads; they do not send to providers. The wrap table is the current roster; use `tools/list` for current counts.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -327,6 +327,10 @@ and report comparison do not launch Chromium.
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
 | `apex_help` | built-in | tree | check-changes |
+| `apex_inbox_sync` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_list` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_get` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_status` | `agent/inbox.mjs` | tree | worker |
 | `apex_diagnostics` | `perf/diagnostics.mjs` | tree | renderer-debug |
 | `apex_garage_plan` | `shot/garage-angles.mjs` | tree | garage-parts-livery |
 | `apex_ui_mission_plan` | `ui/explorer.mjs` | tree | survey-ui-matrix |
@@ -343,6 +347,9 @@ and report comparison do not launch Chromium.
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
 | `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
+| `apex_claude_agents` | `ci/claude-agents.mjs` | tree | steward |
+| `apex_codex_agents` | `ci/codex-cloud.py` | tree | steward |
+| `apex_codex_control` | `ci/codex-cloud.py` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
 | `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |
@@ -394,6 +401,18 @@ Pins the wrap always applies (you cannot override them):
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
   `paths` that start with `-` are refused so none reaches the CLI as a flag
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
+- `apex_codex_control` → create a hosted session or send text to one exact session
+  UUID. Requires a request UUID and persists account-scoped private receipts.
+  Ambiguous writes are never retried automatically; acceptance is not completion.
+  Preserves existing permissions. Separate write/destructive/open-world annotations.
+  See [delivery and recovery](notes/CODEX-CLOUD-MCP-2026-10-31.md).
+- `apex_codex_agents` → one bounded read-only Codex Cloud request using the server host's
+  existing ChatGPT Codex CLI login. `capabilities` and `dryRun` do not authenticate.
+  `list` accepts `limit`/`cursor`/`archived`; `status` requires a session UUID;
+  `transcript` accepts `limit`/`cursor`/`only:chat|all`/`maxBytes`. Returned UTF-8 JSONL
+  fragments continue without losing bytes; changed pages return `stale_cursor`.
+  Credentials, endpoints and write verbs are not arguments. Source, prerequisites and
+  measured acceptance: [Codex Cloud MCP](notes/CODEX-CLOUD-MCP-2026-10-31.md).
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`: ONE tool with a `verb` argument, only `verb`, `id`, `options` and
   `dryRun` published (the listing is byte-capped, so the per-verb `options` live in the text `apex_help` returns and
   are checked strictly per verb with a did-you-mean). Needs `CURSOR_API_KEY` in the server's environment and never in

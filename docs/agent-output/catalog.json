@@ -42,6 +42,25 @@
       ]
     },
     {
+      "path": "tools/agent/inbox-store.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/agent/inbox.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--limit"
+      ]
+    },
+    {
+      "path": "tools/agent/message.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/agent/output.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -872,6 +891,27 @@
         "--failures-only",
         "--quiet"
       ]
+    },
+    {
+      "path": "tools/ci/claude-agents.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/claude-transcript.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
+      "path": "tools/ci/codex-cloud.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
     },
     {
       "path": "tools/ci/coverage-merge.mjs",
@@ -2654,6 +2694,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/proc-stat-reader.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/process-tree.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2824,6 +2869,16 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/mcp/apex-claude-agents.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/mcp/apex-codex-agents.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/mcp/apex-extras.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "job-status",
@@ -2967,6 +3022,11 @@
       "path": "tools/mcp/garage-plan.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
+    },
+    {
+      "path": "tools/mcp/inbox-mcp.mjs",
+      "classification": "protocol-entrypoint",
+      "outputPolicy": "protocol-only"
     },
     {
       "path": "tools/mcp/ios-console.mjs",
@@ -4120,6 +4180,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/explorer/fault-schedule.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/explorer/inspector.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -4368,7 +4433,7 @@
     },
     {
       "name": "test:agent-output",
-      "command": "node --test --test-timeout=900000 tests/unit/agent-experiment.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/agent-experiment.test.mjs tests/unit/agent-inbox.test.mjs tests/unit/agent-message-contract.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/inbox-main-mcp.test.mjs tests/unit/inbox-mcp.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
     },
     {
       "name": "test:audio-unit",

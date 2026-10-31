@@ -180,6 +180,7 @@ const DataLive = (function () {
 
       let refreshPromise = null;
       let scheduleAuto = null;
+      let sortControls = {};
       const liveState = {
         positionCursor: null, intervalCursor: null,
         positions: new Map(), intervals: Object.create(null),
@@ -250,6 +251,10 @@ const DataLive = (function () {
             }
             return;
           }
+          // Ownership is checked at settlement: the player may have moved
+          // focus while this batch was loading, or closed/left the LIVE tab.
+          const focusedSort = dataEl.isConnected && armAuto === scheduleAuto
+            ? Object.keys(sortControls).find(key => sortControls[key] === document.activeElement) : null;
           clear(dataEl);
           if (failed.length) {
             const partial = el("div", "dh-error");
@@ -268,7 +273,8 @@ const DataLive = (function () {
               }
             });
           }
-          fillLive(dataEl, res[0], positions, res[2]);
+          sortControls = fillLive(dataEl, res[0], positions, res[2]) || {};
+          if (focusedSort && sortControls[focusedSort]) sortControls[focusedSort].focus({ preventScroll: true });
           dataEl.setAttribute("data-state", failed.length ? "partial"
             : (positions && positions.length ? "ready" : "empty"));
           const fetchedAt = lastFetchedAt(meta.sessionKey);
@@ -420,6 +426,7 @@ const DataLive = (function () {
         });
       }
       renderRows();
+      return sortBtns;
     }
 
     return { loadLive, stopLiveAuto, disarmLiveAuto };

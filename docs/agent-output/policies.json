@@ -36,6 +36,21 @@
       "presentation": "shared-levels",
       "preserve": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility."
     },
+    "tools/agent/inbox-store.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/agent/inbox.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exit status and bounded JSON, source identity, cache freshness/errors, generation/body cursors and claimed identity; no provider delivery or ACK inference."
+    },
+    "tools/agent/message.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/agent/output.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -560,6 +575,21 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
+    },
+    "tools/ci/codex-cloud.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON stdin and typed exit/ok/error; in-memory host login and fixed endpoint/no redirects; lossless UTF-8 pagination; explicit control mode, account-scoped replay receipts, created thread IDs and ambiguous delivery."
+    },
+    "tools/ci/claude-agents.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, queued versus unknown delivery, replyRetrieved and retrySafe. Never expose message stdin or credentials."
+    },
+    "tools/ci/claude-transcript.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON retrieval verdict; no terminal transcript or credentials in diagnostics. Dedicated reader checkout, confirmed export, deadline and no model prompts. Helper for cloud transcript snapshots, never a general shell runner."
     },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
@@ -1496,6 +1526,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/proc-stat-reader.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/process-tree.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1641,6 +1676,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/mcp/apex-claude-agents.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Existing-server descriptor and handler exports; MCP text must mirror structuredContent and preserve isError and dryRun. Not a standalone server."
+    },
     "tools/mcp/apex-extras.mjs": {
       "action": "job-status",
       "presentation": "shared-levels",
@@ -1655,6 +1695,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "40 native tool names, stdio/HTTP route"
+    },
+    "tools/mcp/apex-codex-agents.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Separate closed read-only/control schemas and annotations; no auth on discovery/dryRun; bounded UTF-8 continuation; owned child timeout/cancellation; request IDs and ambiguous delivery; no credential diagnostics."
     },
     "tools/mcp/apex-tools-mcp.mjs": {
       "action": "targeted-summary",
@@ -1810,6 +1855,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Correctness and timing separate"
+    },
+    "tools/mcp/inbox-mcp.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "JSON-RPC stdout framing, closed tool arguments, bounded cache payloads/cursors, isError, and no provider sends; no CLI output wrapping."
     },
     "tools/mcp/lsp-mcp.mjs": {
       "action": "page-results",
@@ -2555,6 +2605,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
+    },
+    "tools/ui/explorer/fault-schedule.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Validated bounded fault scenarios, exact held-request terminal transfers, failure evidence and unconditional owned-route cleanup; application readiness remains an explicit oracle."
     },
     "tools/ui/explorer/inspector.mjs": {
       "action": "no-direct-output",

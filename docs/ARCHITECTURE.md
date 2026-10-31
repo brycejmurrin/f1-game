@@ -324,6 +324,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
 | `api-wrap.js` | `SceneryApiWrap` | LAZY_TRACK_BUILD | SceneryApiWrap: the scenery(api) coordinate wrap (origin shift, reverse side, authored-frame along/every). |
+| `region.js` | `TrackSceneryRegion` | LAZY_TRACK_BUILD | Optional bounded CPU scenery emission. |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**
@@ -563,7 +564,10 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
 | `livery-design-editor.js` | `GarageLiveryDesignEditor` | tag | Livery editing tools. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
+| `garage-data.js` | `GarageData` | LAZY_RACE | GarageData: the garage's Blender-authored tables, loaded LAZY. |
 | `departure-wheels.js` | `GarageDepartureWheels` | LAZY_RACE_SESSION | Garage-only articulated wheels: one cached fitted set, transform-only playback. |
+| `exterior-geometry.js` | `GarageExteriorGeometry` | LAZY_GARAGE_EXTERIOR | Detached circuit pit exterior: build once on selection, never on the render clock. |
+| `exterior.js` | `GarageExterior` | LAZY_GARAGE_EXTERIOR | Selected-world garage exterior. |
 
 **`js/fx/`**
 

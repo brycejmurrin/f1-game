@@ -213,15 +213,16 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
     "unset is exactly 1 (shipped alphas unchanged) and no text plate thins under 0.45 of its alpha");
   const hc = tokens.match(/:root\[data-ui-contrast="high"\] \{([^}]*)\}/);
   assert.ok(hc && /--hud-panel-a-eff:\s*1;/.test(hc[1]), "HIGH CONTRAST must pin --hud-panel-a-eff at 1");
-  // Every listed plate multiplies its shipped alpha by the effective token.
-  for (const [sel, a] of [[".hud-box {", "0.92"], ["#hud-gearbox {", "0.92"], ["#hud-tach {", "0.88"],
-    ["#minimap {", "0.86"], ["#hud-sectors {", "0.9"], ["#hud-limits {", "0.9"], ["#announce {", "0.94"]]) {
+  // Every listed plate reads the one strip token, which multiplies the effective token.
+  assert.ok(hud.includes("--hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent);"),
+    "--hud-strip-bg is the one panel token");
+  for (const sel of [".hud-box {", ".hud-gaps {", "#hud-gearbox {", "#hud-tach {", "#minimap {", "#hud-sectors {",
+    "#hud-limits {", "#announce {", "#bc-tower {"]) {
     const at = hud.indexOf("\n" + sel);
     assert.ok(at >= 0, sel);
     const block = hud.slice(at, hud.indexOf("\n}", at + 1));
-    assert.ok(block.includes(`rgb(8 8 14 / calc(${a} * var(--hud-panel-a-eff)))`), sel + " plate");
+    assert.ok(block.includes("background: var(--hud-strip-bg);") || block.includes("background: var(--hud-strip-bg)"), sel + " plate");
   }
-  assert.match(hud, /background: rgb\(8 8 14 \/ calc\(0\.86 \* var\(--hud-panel-a-eff\)\)\); padding: 3px 8px;/, ".hud-gaps plate");
   // Lights, flags and the OT/AERO fills are signals, not plates.
   const lights = hud.indexOf("\n#lights {");
   assert.ok(lights >= 0, "#lights block");

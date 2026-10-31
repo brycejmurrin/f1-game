@@ -86,6 +86,35 @@ test('binding replay assertions accept finite data and reject executable or unkn
     assert.throws(() => validateScenario(scenario([{ type: 'assert', oracle: bad }])), TypeError);
 });
 
+test('feedback oracles normalize independently at scenario and replay assertion boundaries', () => {
+  for (const text of ['Expected message', 'x'.repeat(2048)]) {
+    const oracle = { type: 'feedback', selector: '#status', text };
+    const input = { ...scenario([{ type: 'assert', oracle }]), oracle };
+    const normalized = validateScenario(input);
+    assert.deepEqual(normalized.oracle, oracle);
+    assert.deepEqual(normalized.actions[0], { type: 'assert', oracle });
+    assert.notEqual(normalized.oracle, oracle, 'the scenario oracle must not retain caller data');
+    assert.notEqual(normalized.actions[0].oracle, oracle, 'the replay oracle must not retain caller data');
+    normalized.oracle.text = 'Changed normalized message';
+    assert.equal(input.oracle.text, text);
+    assert.equal(normalized.actions[0].oracle.text, text);
+  }
+});
+
+test('feedback oracles reject missing, empty, unbounded, executable and unknown fields in both contexts', () => {
+  const valid = { type: 'feedback', selector: '#status', text: 'Expected message' };
+  const invalid = [
+    { type: 'feedback', text: valid.text }, { ...valid, selector: '' },
+    { type: 'feedback', selector: valid.selector },
+    ...['', '   ', 'x'.repeat(2049), 'bad\0message', null, {}, [], () => true].map(text => ({ ...valid, text })),
+    { ...valid, script: 'window.alert(1)' }, { ...valid, state: 'visible' },
+  ];
+  for (const oracle of invalid) {
+    assert.throws(() => validateScenario({ ...scenario([]), oracle }), TypeError);
+    assert.throws(() => validateScenario(scenario([{ type: 'assert', oracle }])), TypeError);
+  }
+});
+
 test('state signature ignores timers, logs and source ordering but preserves interaction states', () => {
   const first = snapshot({
     time: 123, logs: ['first'], roots: [{ role: 'main', id: 'title', time: 1 }],
@@ -228,4 +257,20 @@ test('visible subview identity survives graph normalization and changes state ke
   const graph = { nodes: [], edges: [] };
   addGraphStep(graph, before, after, { type: 'click', selector: '#display' });
   assert.deepEqual(graph.nodes.map(n => n.snapshot.views), [['#home'], ['#display']]);
+});
+
+
+test('focus assertions require a bounded named replacement witness instead of a stale marker', () => {
+  const focus = { type: 'focus', selector: '#team', afterReplacement: 'before' };
+  const input = scenario([{ type: 'rememberFocus', id: 'before', selector: '#team' }, { type: 'assert', oracle: focus }]);
+  const valid = validateScenario({ ...input, oracle: focus });
+  assert.deepEqual(valid.actions[0], input.actions[0]);
+  assert.deepEqual(valid.oracle, { ...focus, timeoutMs: 3000, stableMs: 150 });
+  for (const oracle of [
+    { ...focus, afterReplacement: '' }, { ...focus, afterReplacement: undefined }, { ...focus, afterReplacement: '../other' },
+    { ...focus, timeoutMs: 0 }, { ...focus, timeoutMs: 10001 }, { ...focus, timeoutMs: NaN }, { ...focus, stableMs: 99 },
+    { ...focus, stableMs: 1001 }, { ...focus, stableMs: 200, timeoutMs: 200 }, { ...focus, stableMs: 150.5 }, { ...focus, script: 'focus()' },
+  ]) assert.throws(() => validateScenario({ ...scenario([]), oracle }), TypeError);
+  for (const action of [{ type: 'rememberFocus', id: '', selector: '#team' }, { type: 'rememberFocus', id: 'before', selector: '' },
+    { type: 'rememberFocus', id: 'before', selector: '#team', click: true }]) assert.throws(() => validateScenario(scenario([action])), TypeError);
 });

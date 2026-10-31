@@ -833,7 +833,12 @@ const MirrorPass = (function () {
       preparing: () => !!_preparation,
       cancelPreparation,
       // Race teardown: the lamp re-rank cache keys on the track, and a page-lifetime pass kept it alive.
-      releaseTrack() { _vlTrack = null; _vlSrc = null; _vlAge = Infinity; },
+      // quit (quit-to-menu only, #4219): the backend frees its mirror target too; the next mirrorBegin re-allocates.
+      releaseTrack(quit) {
+        _vlTrack = null; _vlSrc = null; _vlAge = Infinity;
+        const g = G.gfx;
+        if (quit && g && typeof g.releaseMirror === "function") g.releaseMirror();
+      },
       standDown,
       toggle,
       setMode,
