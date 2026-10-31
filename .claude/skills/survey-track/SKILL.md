@@ -60,9 +60,9 @@ circuits run in parallel or the diagnosis would flood this context.
 The surveyor's edits are on its worktree branch, not in this checkout. Its report names the branch
 and path. Per surveyor, in turn:
 
-1. Scope check BEFORE merging: `git diff --name-only <base>..<surveyor-branch>` (`<base>` = the
-   delegation prompt's `Start SHA`) lists only its assigned pair plus `scratch/`/`artifacts/`.
-   Anything else = reject that file and say so (the hook cannot bind the circuit id).
+1. Scope check BEFORE merging: `node tools/track/surveyor-scope.mjs <id> <base> <surveyor-branch>` (`<base>` = the
+   delegation prompt's `Start SHA`; exit 1 lists each file outside the assigned pair plus `scratch/`/`artifacts/`).
+   Reject those files and say so (the hook cannot bind the circuit id).
 2. `git merge --no-ff <surveyor-branch>`, then `verify-track <id>` on the merged tree.
 3. `git worktree remove <path>`.
 

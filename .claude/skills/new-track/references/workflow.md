@@ -90,8 +90,7 @@ Load from the SKILL.md index when the task needs this detail.
         in `tests/data/f1-circuit-reference.geojson` (its count derives from the map). The spec
         asserts the game's circuits and the map are the same SET, so a circuit with no
         reference feature fails outright.
-     3. `tools/check/offline-precache-check.cjs` — the literal scenery-file count in its
-        `installed.scenery !== N` line (a browser tool: the parent runs it),
+     3. `tools/check/offline-precache-check.cjs` derives the scenery-file count from disk: no edit (a browser tool: the parent runs it),
      4. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
         fails on a circuit whose country has no drawn flag,
      5. `tests/data/landmarks/<id>.json` for a hero landmark (`js/circuits/AGENTS.md`),

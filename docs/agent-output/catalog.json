@@ -4068,6 +4068,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/track/surveyor-scope.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/track/track-accuracy-validator.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

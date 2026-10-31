@@ -121,7 +121,9 @@ srv.listen(0, "127.0.0.1", async () => {
     console.log("install:", JSON.stringify(installed));
     if (!installed.ok) bad.push("service worker install: " + installed.why);
     else {
-      if (installed.scenery !== 52) bad.push(`only ${installed.scenery}/52 scenery files precached`);
+      // Derived from disk, so adding a circuit never needs a hand-edited count.
+      const sceneryOnDisk = fs.readdirSync(path.join(__dirname, "..", "..", "js", "circuits", "scenery")).filter((f) => f.endsWith(".js")).length;
+      if (installed.scenery !== sceneryOnDisk) bad.push(`only ${installed.scenery}/${sceneryOnDisk} scenery files precached`);
       if (!installed.presets) bad.push("js/lighting/presets.js not precached");
     }
     // Race it ONLINE first and keep the count. That, not the Node number, is
