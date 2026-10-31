@@ -99,6 +99,17 @@ const MenuTeardown = (function () {
     deferUi(() => { try { fn(); } finally { endQuit(); } });
     return true;
   }
+  /** Software GL: paint the title first, then run heavy quit sync off the click stack. */
+  function deferQuitPhases(heavy, tail) {
+    if (!software()) return false;
+    deferUi(() => {
+      try {
+        if (heavy) runSync("quit-heavy", heavy);
+        if (tail) runSync("quit-tail", tail);
+      } finally { endQuit(); }
+    });
+    return true;
+  }
   function report() {
     return {
       cover: cover(),
@@ -111,7 +122,7 @@ const MenuTeardown = (function () {
 
   // pauseSheetUp stays module-local (cover/report call it); report remains the probe seam.
   return {
-    cover, teardownActive, quitRenderHold, quitReadbackDefer, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
+    cover, teardownActive, quitRenderHold, quitReadbackDefer, garageBusyPlate, runSync, deferUi, deferQuitTail, deferQuitPhases, report,
     beginQuit, endQuit, beginGarageClose, endGarageClose,
   };
 })();

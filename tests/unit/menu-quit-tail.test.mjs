@@ -62,3 +62,26 @@ test("afterOverlay resets session flow without needing forgetGp or unused wire f
   assert.equal(calls.career, 1);
   assert.equal("team" in deps._doc.dataset, false);
 });
+
+test("MenuTeardown.deferQuitPhases runs heavy then tail off-stack on software GL", () => {
+  const order = [];
+  const ctx = {
+    Object, Array, String, RegExp, performance: { now: () => 0 },
+    Log: { warn() {}, error() {} },
+    PerfGov: { softwareRaster: () => true },
+    LoopHealth: { noteSync() {} },
+    setTimeout(fn) { fn(); },
+    requestAnimationFrame(fn) { fn(); },
+    clearTimeout() {},
+  };
+  const src = readFileSync(join(ROOT, "js/perf/menu-teardown.js"), "utf8");
+  const MenuTeardown = vm.runInNewContext(src + "\n;MenuTeardown", ctx, { filename: absSrc("js/perf/menu-teardown.js") });
+  const ok = MenuTeardown.deferQuitPhases(
+    () => order.push("heavy"),
+    () => order.push("tail"),
+  );
+  assert.equal(ok, true);
+  assert.deepEqual(order, ["heavy", "tail"]);
+  ctx.PerfGov.softwareRaster = () => false;
+  assert.equal(MenuTeardown.deferQuitPhases(() => order.push("x"), null), false);
+});

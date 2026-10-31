@@ -538,7 +538,7 @@ test("resuming releases the flyby editor's parked camera", () => {
   // quit have to call it, or a player who resumed with the panel open drives
   // the race from a parked flyby vantage.
   const game = gameSource();
-  for (const fn of ["function setPaused(p, why)", "function quitToMenu()"]) {
+  for (const fn of ["function setPaused(p, why)", "function quitToMenuHeavy(forgetGp)"]) {
     const i = game.indexOf(fn);
     assert.ok(i > 0, fn + " still exists");
     const body = game.slice(i, game.indexOf("\nfunction ", i + 10));

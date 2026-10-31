@@ -213,7 +213,7 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // may drop is a ONE-OFF GP weekend's own order (forgetGp), which no CONTINUE
   // ever re-grids from — a championship's flag stays false by construction.
   assert.match(GAME, /quali\.clear\(forgetGp\);   \/\/ memory only/);
-  assert.match(GAME, /const forgetGp = !isChampionship\(\) && !!season && season\.qualiMode === "gp";/,
+  assert.match(symbolSource("function quitToMenu()"), /const forgetGp = !isChampionship\(\) && !!season && season\.qualiMode === "gp";/,
     "quitToMenu may forget only a one-off GP's order, never a season's or career's");
   // NOT a blanket whole-file ban. The bug this suite exists for is a
   // clear(true) inside the SHEET'S OWN lifecycle (openQuali / quitToMenu),
@@ -264,7 +264,7 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   assert.match(symbolSource("function setPaused(p, why)"), /if \(!p\) \{\s*closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(symbolSource("function setPaused(p, why)"), /closeSettings\(\)/,
     "setPaused(false) must closeSettings so pad axis capture cannot survive resume");
-  assert.match(symbolSource("function quitToMenu()"), /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
+  assert.match(symbolSource("function quitToMenuHeavy(forgetGp)"), /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   // The caution pace cap, now four levels deep: RED (4) stops the field at a
   // walking-pace floor rather than 0, so every "approaches vmax" fade stays
@@ -298,7 +298,7 @@ test("friend-race title quit cancels the lobby instead of aborting back into it"
   // NOT GAME.slice(i, i + 2200) — that window took the deploy branch red on
   // 2026-09-02: quitToMenu grew and netLobby.cancel() moved to +2605, so this
   // assertion failed for a call that was still there. See tests/helpers/fn-source.mjs.
-  const quit = symbolSource("function quitToMenu()");
+  const quit = symbolSource("function quitToMenuHeavy(forgetGp)");
   assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(\)/);
   assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel()"), /netLobby\.cancel\(\)/);
   assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);

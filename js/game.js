@@ -4359,6 +4359,46 @@ if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
 }
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
+function resetMenuGateOnQuit() {
+  _menuGate.garageWarm = 0;
+  const def = trackIdx >= 0 ? Tracks.LIST[trackIdx] : null;
+  const mk = def ? menuKey(trackIdx) : "";
+  if (track && def && builtTrackId === def.id && mk && !bareStale() && builtGridSlots === fieldSize()) {
+    _menuGate.track = track;
+    _menuGate.ready = mk;
+    try { if (typeof FlybySeq !== "undefined") FlybySeq.reset(); } catch (_) { /* harness */ }
+    _menuGate.warm = 2;
+    return;
+  }
+  _menuGate.warm = 0;
+  _menuGate.track = null;
+  _menuGate.ready = "";
+  _menuFly = null;
+}
+function quitToMenuHeavy(forgetGp) {
+  resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear();
+  if (raceMessageHistory) raceMessageHistory.clear();
+  if (typeof InputGhost !== "undefined") InputGhost.flush();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  sessionEntry.cancel();
+  qualiSheet.close();
+  if (announcer.stop) announcer.stop();
+  feel.shake = 0; feel.hitStop = 0;
+  PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker();
+  if (setupTrialSession) setupTrialSession.cancel();
+  if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
+  if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();
+  closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
+  quali.clear(forgetGp);   // memory only
+  qualiNet.clearPeers();
+  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
+  stormFx._ltBase = null; stormFx._ltFlash = 0;
+  if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }
+  releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();
+  practiceMode = false;
+  Particles.rainShow(false); Particles.clear(); Droplets.clear();
+  MenuQuitTail.afterOverlay(forgetGp);
+}
 function quitToMenu() {
   if (!frozen && !gfxContextLost() && soloPlayerDone() && !postFinishWait()) {
     if (!pendingFinishQuit) announce("SETTLING FINISH — RETURNING TO MENU", 4, "info");
@@ -4373,37 +4413,19 @@ function quitToMenu() {
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
   Input.unlockLandscape();
-  _menuGate.warm = 0; _menuGate.garageWarm = 0; _menuGate.track = null; _menuGate.ready = ""; _menuFly = null;
-  resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear();
-  if (raceMessageHistory) raceMessageHistory.clear();
-  if (typeof InputGhost !== "undefined") InputGhost.flush();
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
-  sessionEntry.cancel();
-  qualiSheet.close();
-  if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
-  feel.shake = 0; feel.hitStop = 0;
-  PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker();   // inactive: forgets a stale disconnect reason
-  if (setupTrialSession) setupTrialSession.cancel();
-  if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
-  if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
-  if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
+  resetMenuGateOnQuit();
   // A mid-quali quit: the 1-car trim is not the menu's field. A takeover is keyed by the TRIM's index, so it is
   // handed back before the swap; after it, index 0 named the full field's first car (perf-debug-e5b2).
   if (qualiField) { try { IncidentSim.reset(); } catch (_) { /* module absent */ } cars = qualiField; qualiField = null; }
   const forgetGp = !isChampionship() && !!season && season.qualiMode === "gp";   // read before setFlow: a one-off weekend ends here (RACE AGAIN never passes)
-  closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
-  quali.clear(forgetGp);   // memory only
-  qualiNet.clearPeers();
-  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
-  stormFx._ltBase = null; stormFx._ltFlash = 0;   // the lightning's saved race base is not the menu's
+  if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
   // stop is clearMenuScreens(), which startRaceBody() reaches near the END of
   // its work, so a throw before that lands in startRace()'s `.catch` here and
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false;
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -4433,12 +4455,11 @@ function quitToMenu() {
   els.overlay.hidden = false;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
-  practiceMode = false;
-  Particles.rainShow(false); Particles.clear(); Droplets.clear();
   if (soundOn) GameAudio.startMusic(-1);
   consumeGhostHash();
-  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitTail(() => MenuQuitTail.afterOverlay(forgetGp))) return;
-  MenuQuitTail.afterOverlay(forgetGp);
+  if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferQuitPhases
+    && MenuTeardown.deferQuitPhases(() => quitToMenuHeavy(forgetGp), null)) return;
+  quitToMenuHeavy(forgetGp);
   if (typeof MenuTeardown !== "undefined") MenuTeardown.endQuit();
 }
 

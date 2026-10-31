@@ -7375,6 +7375,9 @@
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/race-step-snap.test.mjs"
       ],
+      "resetMenuGateOnQuit": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "retireCar": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/rank-sort-alloc-vm.test.mjs"
@@ -10622,6 +10625,12 @@
       ],
       "cover": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "deferQuitPhases": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "noteSync": [
+        "tests/unit/menu-quit-tail.test.mjs"
       ],
       "quitRenderHold": [
         "tests/unit/gfx-backend-canary.test.mjs"

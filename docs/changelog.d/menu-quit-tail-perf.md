@@ -1,0 +1,1 @@
+Fixed: on software GL, quit-to-menu defers heavy session teardown until after the title overlay is up, reclaims the race world for the title warm when the grid still matches, and records phased sync work in MenuTeardown (#4395 follow-up).
