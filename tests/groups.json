@@ -228,6 +228,7 @@
     "tests/unit/cockpit-wheels.test.mjs",
     "// Codex Cloud history: offline pagination, descendant scope, resume, credential redaction and read-only protocol fixtures.",
     "tests/unit/codex-cloud-history.test.mjs",
+    "tests/unit/codex-cloud.test.mjs",
     "tests/unit/comment-citations.test.mjs",
     "// No screenshot outside a *-snapshots/ baseline under tests/, no image over",
     "// 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.",
