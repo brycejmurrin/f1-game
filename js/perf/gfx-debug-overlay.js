@@ -74,7 +74,7 @@ const GfxDebug = (() => {
       lines.push(`three api=${b.api} pin=${b.pin} soft=${b.softwareGL ? "GL" : "-"}` +
         (b.softAdapter ? "/adapter" : "") + (b.softBlit ? "/blit" : "") +
         (b.forceHw ? " FORCE-HW" : "") + (b.forceBatches ? " FORCE-BATCH" : ""));
-      lines.push(`mobile=${b.isMobile} tier=${b.mobileTier} lite=${b.liteGpu}`);
+      lines.push(`mobile=${b.isMobile} tier=${b.mobileTier} lite=${b.liteGpu}` + (b.liteLab ? " LAB:tlxLite" : ""));
       if (b.envFail) lines.push(`ENV FACES FAILED: ${b.envFail}  ${b.envFailMsg || ""}`);
     } catch (e) { lines.push("backendState threw: " + (e && e.message)); }
     try {

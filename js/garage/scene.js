@@ -1167,7 +1167,51 @@ function buildStatic(liv, opts) {
 // The room's build identity. `geom` rebuilds meshes, `live` repaints the 512
 // screens, `dressId` repaints the crest, and `key` is the whole thing plus the
 // spec boards. rebuild() and prepared() share it.
+//
+// Every garage frame asks, and the answer almost never moves, so a raw-input
+// stamp gates the string work (perf hunt 9). The stamp holds EVERY value the
+// strings below read — roomKeys itself, ctxKey, GarageExperience.careerKey and,
+// through `info`'s identity, boardKey (boardInfo returns one frozen-by-convention
+// object per stamp and builds a fresh one on any change). Values compare with
+// ===, which is stricter than the toFixed(3) strings: a sub-rounding wobble
+// recomputes the strings and lands on the same key, never a stale one.
+const _rkNow = [], _rkWas = [];
+let _rkKeys = null;
+function rkColour(out, c) {
+  if (!c) { out.push(null, null, null, 0); return; }
+  const v = rgb(c, [0, 0, 0]);
+  out.push(v[0], v[1], v[2], 1);
+}
+function roomStamp(team, liv, info, ctx) {
+  const o = _rkNow;
+  o.length = 0;
+  const d0 = seatDriverAt(team, 0), d1 = seatDriverAt(team, 1);
+  o.push(team && team.id, (team && team.legend) || "", info, d0 && d0.num, d1 && d1.num, logoGen, GaragePrims.lookId());
+  rkColour(o, liv && liv.c1); rkColour(o, liv && (liv.accent || liv.stripe || liv.c2)); rkColour(o, liv && liv.c2);
+  rkColour(o, liv && liv.logo); rkColour(o, liv && liv.logo2); rkColour(o, liv && liv.logo3);
+  o.push((liv && liv.sponsors) || "-", !!ctx);
+  if (ctx) {
+    const last = ctx.last, a = ctx.achievements, sp = ctx.sponsor;
+    const hyd = ctx.track && typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(ctx.track) ? 1 : 0;
+    o.push(ctx.track ? ctx.track.id : "-", hyd, ctx.weather, ctx.tod, ctx.wins | 0, !!ctx.night, !!ctx.career, ctx.round | 0,
+      !!last, last && last.dnf, last && (last.p | 0), last && (last.pts | 0), sp && sp.label, !!ctx.studio,
+      !!(a && a.active), a && a.facility, a && a.wins, a && a.podiums, a && a.titles);
+  }
+  return o;
+}
 function roomKeys(team, liv, info, ctx) {
+  const st = roomStamp(team, liv, info, ctx);
+  if (_rkKeys && st.length === _rkWas.length) {
+    let same = true;
+    for (let i = 0; i < st.length; i++) if (st[i] !== _rkWas[i]) { same = false; break; }
+    if (same) return _rkKeys;
+  }
+  _rkWas.length = st.length;
+  for (let i = 0; i < st.length; i++) _rkWas[i] = st[i];
+  _rkKeys = roomKeyStrings(team, liv, info, ctx);
+  return _rkKeys;
+}
+function roomKeyStrings(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
@@ -1182,7 +1226,8 @@ function roomKeys(team, liv, info, ctx) {
                + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
-  return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
+  const board = boardKey(info);
+  return { geom, live, dressId, board, key: `${geom}|${live}|${dressId}|${board}` };
 }
 // A paint edit repaints a bay atlas of the SAME size: a backend that can (TLX refillTexture) re-fills the live
 // handle in place, so nothing is allocated. Free-then-create leaned on the TLX retire pool, and a handle retired
@@ -1219,7 +1264,7 @@ function uploadLive(team, liv, ctx, now) {
     liveFail++; liveRetryAt = now + 1000; liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
 function rebuild(team, liv, info, ctx) {
-  const { geom, live, dressId, key } = roomKeys(team, liv, info, ctx);
+  const { geom, live, dressId, board, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   const uploads = !!(_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined");
   if (live !== liveKey) { liveFail = 0; liveRetryAt = 0; }
@@ -1284,7 +1329,7 @@ function rebuild(team, liv, info, ctx) {
     liveKey = live;
   }
   if (dressId !== dressIdKey) { dressCanvas = null; dressIdKey = dressId; }
-  const dressFull = dressId + "|" + boardKey(info);
+  const dressFull = dressId + "|" + board;
   if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.

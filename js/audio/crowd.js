@@ -71,6 +71,7 @@ var CrowdAudio = (function () {
   let standTrack = null;
   let wrapped = false;
   let _orig = null;
+  let idled = false;             // LAB audioIdle: bed + cheers unplugged from the bus
 
   function context() {
     if (host && typeof host.context === "function") return host.context();
@@ -114,6 +115,20 @@ var CrowdAudio = (function () {
     cheers = null;
     cheerPool = 0;
     actx = bus = null;
+    idled = false;
+  }
+
+  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // idle(true) unplugs the bed gain and every cheer gain from the bus once
+  // silence() has faded them; idle(false) plugs them back. Same nodes, same ctx.
+  function idle(on) {
+    if (!bedGain || !bus || !!on === idled) return;
+    const outs = [bedGain];
+    if (cheers) for (let i = 0; i < cheers.length; i++) outs.push(cheers[i].g);
+    for (let i = 0; i < outs.length; i++) {
+      try { if (on) outs[i].disconnect(); else outs[i].connect(bus); } catch (e) { /* torn down */ }
+    }
+    idled = !!on;
   }
 
   // rebuildCtx() / hide-show restart the engine via startEngineGraph(), which
@@ -446,7 +461,7 @@ var CrowdAudio = (function () {
   // CrowdAudio.swell site exists (inspect().swell exposes the live amount).
   return {
     bindHost, bind, attach, detach, silence, update, fireCheer,
-    inspect, liveOk,
+    inspect, liveOk, idle,
     // test hooks (inspect().bedGain already exposes the GainNode)
     _resetEvents() { lastPos = 0; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
     _setPos(p) { lastPos = p | 0; },

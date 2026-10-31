@@ -162,6 +162,72 @@ test("WebKit never invalidates the DEFAULT framebuffer; FBO targets keep theirs 
   };
   const safari = count(IPHONE), chrome = count(CHROME);
   assert.equal(safari.def, 0, "Safari/WebKit: no default-framebuffer invalidation");
-  assert.ok(safari.all > 0, "Safari keeps the FBO-target DontCare hints (the tile-GPU win)");
+  // The iPhone is on the cover path, where post colour targets CLEAR instead (next test);
+  // the scene-depth DontCare hint is still issued.
+  assert.ok(safari.all > 0, "Safari keeps an FBO DontCare hint (scene depth)");
   assert.ok(chrome.def > 0, "Chromium keeps the default-framebuffer hints");
+});
+
+// ---- Perf hunt 9: phone cover targets (iPhone GLX black canvas, candidate 1 + 2) ----
+const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const CHROME_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+function presentCalls(userAgent) {
+  const h = bootGlx({ userAgent, extensions: ["EXT_color_buffer_float"] });
+  h.GLX.begin(h.frame()); h.reset();
+  h.GLX.present({ ssao: 0.5, bloom: 0.5 });
+  return h;
+}
+/** Every draw present() issues on an FBO, with what happened to its colour since the bind. */
+function fboDraws(h) {
+  const g = h.gl;
+  let fb = null, inv = false, clr = false;
+  const out = [];
+  for (const [name, a] of h.calls) {
+    if (name === "bindFramebuffer" && (a[0] === g.FRAMEBUFFER || a[0] === g.DRAW_FRAMEBUFFER)) { fb = a[1]; inv = false; clr = false; }
+    else if (name === "invalidateFramebuffer" && a[0] === g.FRAMEBUFFER && a[1].includes(g.COLOR_ATTACHMENT0)) inv = true;
+    else if (name === "clear" && (a[0] & g.COLOR_BUFFER_BIT)) clr = true;
+    else if (/^draw(Arrays|Elements)/.test(name) && fb) out.push({ fb, inv, clr });
+  }
+  return out;
+}
+const steps = (h, name) => h.calls.filter((c) => c[0] === "uniform2f" && c[1][0] && c[1][0].name === name).map((c) => [c[1][1], c[1][2]]);
+
+test("phone cover targets are cleared, never DontCare'd, so the area outside the w×h rect is defined", () => {
+  // A square max(w,h)² cover is drawn only inside its viewport, while the next pass's taps cross the
+  // edge. Whole-attachment invalidation left that area undefined per frame on ANGLE-Metal (NaN in RGBA16F).
+  const h = presentCalls(IPHONE_UA);
+  const draws = fboDraws(h);
+  assert.ok(draws.length >= 8, "present() drew the SSAO + bloom passes on FBOs; got " + draws.length);
+  assert.equal(draws.filter((d) => d.inv).length, 0, "no post pass draws into a colour attachment it invalidated");
+  assert.ok(draws.filter((d) => d.clr).length >= 8, "the overwrite passes start from a full clear");
+  assert.ok(h.count("clearColor", (c) => c.every((x) => x === 1)) > 0, "the SSAO targets clear to 1 (no occlusion bleeds in)");
+  assert.ok(h.count("clearColor", (c) => c.every((x) => x === 0)) > 0, "colour targets clear to 0");
+});
+
+test("desktop post passes keep the DontCare hint and issue no clear (call stream unchanged off the cover path)", () => {
+  const h = presentCalls(CHROME_UA);
+  const draws = fboDraws(h);
+  assert.equal(h.count("clear"), 0, "present() issues no clear on desktop");
+  assert.equal(h.count("clearColor"), 0, "present() sets no clear colour on desktop");
+  assert.ok(draws.filter((d) => d.inv).length >= 8, "desktop overwrite passes still invalidate first");
+});
+
+test("tap texels are one PHYSICAL texel: square on a phone cover, logical on desktop", () => {
+  // vUV is physical UV (p * uUVScale), so a step of 1/logical overshoots by alloc/logical on a cover.
+  const phone = presentCalls(IPHONE_UA);
+  const W = phone.GLX.width, H = phone.GLX.height;
+  assert.notEqual(W, H, "need a non-square logical size");
+  const pDir = steps(phone, "uDir"), pAO = steps(phone, "uAOTexel"), pTex = steps(phone, "uTexel").slice(1);   // [0] is SSAO's (unused)
+  assert.ok(pDir.length >= 2 && pTex.length >= 8, "blur + bloom + FXAA steps recorded");
+  assert.equal(pDir[0][0], pDir[1][1], "SSAO blur: H step == V step on the square half-res cover");
+  assert.equal(pAO[0][0], pAO[0][1], "AO grid texel is square on the cover");
+  assert.deepEqual(pTex.filter((t) => t[0] !== t[1]), [], "bloom + FXAA texels are square on the cover");
+  const desk = presentCalls(CHROME_UA);
+  const dW = desk.GLX.width, dH = desk.GLX.height;
+  const half = (a) => Math.max(1, Math.floor(a / 2));
+  const dDir = steps(desk, "uDir"), dTex = steps(desk, "uTexel");
+  assert.deepEqual([dDir[0][0], dDir[1][1]], [1 / half(dW), 1 / half(dH)], "desktop SSAO blur: logical half-res texel");
+  assert.deepEqual(steps(desk, "uAOTexel")[0], [1 / half(dW), 1 / half(dH)], "desktop AO grid: logical half-res texel");
+  assert.deepEqual(dTex[1], [1 / half(dW), 1 / half(dH)], "desktop first bloom downsample: 1/level-0 size");
+  assert.deepEqual(dTex[dTex.length - 1], [1 / dW, 1 / dH], "desktop FXAA: 1/render size");
 });

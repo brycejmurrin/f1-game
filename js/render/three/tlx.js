@@ -173,6 +173,34 @@ const TLX = (function () {
     attr.needsUpdate = true;
   }
 
+  // B8 LAB TIER (Bryce 2026-10-30, "B8 opt-in"; docs/notes/TLX-WEBGPU-PERF-2026-10-30.md): a lighter
+  // tier for three's WebGL2 leg on a phone (the WebGPU fallback an iPhone 14 ran at 42 vs 60 fps).
+  // OFF unless the URL carries ?lab=tlxLite (comma list, read once; no storage key), and a no-op on
+  // WebGPU or a desktop. Every lever is a value the GRAPHICS: LOW / autoShed path already produces.
+  const LITE = Object.freeze({ dprCap: 1.25, sunSize: 512, bloomLevels: 2, ssrQuality: 2 });
+  let _labs = null;
+  function labOn(name) {
+    if (_labs === null) {
+      _labs = [];
+      try {
+        const v = new URLSearchParams(location.search).get("lab");
+        if (v) _labs = v.split(",").map((s) => s.trim()).filter(Boolean);
+      } catch (_) { /* no location (node harness) or a bad query: no labs */ }
+    }
+    return _labs.indexOf(name) >= 0;
+  }
+  function liteTier(webgl2, phone) { return labOn("tlxLite") && !!webgl2 && !!phone ? LITE : null; }
+  // Per present, on the caller's opts (pinSoftwareRaceShed's precedent): idempotent, so a reused opts is safe.
+  function liteOpts(o) {
+    if (!o) return o;
+    o.ssao = 0; o.contact = 0; o.godray = 0; o.lampVol = 0; o.flareMul = 0;   // lookPostShed's zeros, bloom kept
+    o.bloomLevels = o.bloomLevels > 0 ? Math.min(o.bloomLevels | 0, LITE.bloomLevels) : LITE.bloomLevels;
+    o.grLite = true;
+    o.carReflect = 0;                                                            // tier >= 2
+    o.ssrQuality = Math.max(o.ssrQuality | 0, LITE.ssrQuality);                  // tier >= 3 march
+    return o;
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
@@ -1228,7 +1256,9 @@ const TLX = (function () {
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
-      let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
+      const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
+      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -1358,7 +1388,7 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : 0,
             isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
@@ -6466,6 +6496,7 @@ const TLX = (function () {
           // allowed to resize — including the one that starts the warm.
           // Kept above the rig-warm seen/dispatch pair: that pair is one
           // source line in tlx-rig-warm.test.mjs.
+          if (_lite) liteOpts(opts);   // B8 lab: before the warm, so it compiles the lite pass set
           if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
@@ -6867,7 +6898,7 @@ const TLX = (function () {
                 } catch (_) { /* WebGPU backend has no gl; null is the honest answer */ }
                 return null;
               })(),
-              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
+              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu, liteLab: !!_lite,
               softwareGL, softwareRaceShed: _swRaceShed, softAdapter: _softAdapter, headless: _headless,
               forceHw: _forceHw.on, forceBatches: _forceBatches,
               // The live verdict, not just the inputs: which way skipBatches()
@@ -7089,7 +7120,7 @@ const TLX = (function () {
     return s < 2 ? 0 : s;
   }
 
-  return { create, lastFailure: () => _lastFailure };
+  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;
