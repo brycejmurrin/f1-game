@@ -4397,7 +4397,7 @@ function quitToMenu() {
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
   if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
-  setState("menu", "quit"); paused = false; releaseFieldScratch(); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; frozen = false; raceRestarting = false; releaseFieldScratch(); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race; RESTART arms frozen until startRaceBody commits — quit must drop both (LIVE-DEBUGGER-RACE-2026-10-24 F2)
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT

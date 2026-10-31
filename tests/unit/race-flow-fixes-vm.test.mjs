@@ -642,6 +642,22 @@ test("3.10 pause-menu RESTART does not run the old race through the async start 
   } finally { g.close(); }
 });
 
+test("3.10c quit during an in-flight RESTART clears frozen on the menu (F2)", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop();
+    await G.startRace();
+    g.apex.go(); g.step(120);
+    assert.equal(G.state, "race");
+    g.sandbox.document.getElementById("pm-restart").onclick();
+    G.quitToMenu();
+    g.flushTimers(true);
+    assert.equal(G.state, "menu");
+    assert.equal(G.frozen, false, "quitToMenu must not leave the RESTART freeze latched on the title");
+  } finally { g.close(); }
+});
+
 test("3.10b pause-menu RESTART keeps the build plate up and the governor off until the new grid commits (#3283)", async () => {
   const g = await createGame({ track: "monza" });
   try {
