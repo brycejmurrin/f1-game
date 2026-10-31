@@ -1828,21 +1828,20 @@ test('departure bundle failure restores Start Race and stale settlement cannot l
 test('departure wheels cache fitted layers and rotate rims while calipers remain fixed', () => {
   let builds = 0, freed = 0;
   const draws = [];
-  const c = vm.createContext({ CarWheels: { tints: () => ({}) },
+  const c = vm.createContext({
     Car3D: { TYRE_BAND: [null, [1,0,0]], BRAKE_CALIPER: [null, [1,1,0]],
-      buildWheelLayers() { builds++; return { rotating: {}, fixed: {} }; } },
-    M4: { mulTo(out, _base, local) { out.set(local); } } });
-  vm.runInContext(readFileSync(new URL('../../js/garage/departure-wheels.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/departure-wheels.js') });
-  const Wheels = vm.runInContext('GarageDepartureWheels', c);
-  const wheels = Wheels.create({ createMesh: data => data, freeMesh() { freed++; },
+      buildWheelLayers() { builds++; return { rotating: {}, fixed: {} }; } } });
+  for (const f of ['js/core/mat4.js', 'js/car/car-wheels.js'])
+    vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), c, { filename: absSrc(f) });
+  const wheels = vm.runInContext('CarWheels', c).createGarage({ createMesh: data => data, freeMesh() { freed++; },
     draw(_mesh, matrix, opts) { draws.push({ matrix: Array.from(matrix), opts }); } });
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 });
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 2);
-  wheels.draw([], .34 * Math.PI / 2, 0, {});
+  wheels.draw(vm.runInContext('M4.ident()', c), .34 * Math.PI / 2, 0, {});
   assert.equal(draws.length, 8);
   assert.ok(Math.abs(draws[0].matrix[5]) < 1e-6); assert.equal(draws[1].matrix[5], 1);
   assert.equal(draws[0].opts.doubleSided, true);
-  wheels.draw([], 1, 0, {}); assert.equal(builds, 2, 'rendering never rebuilds geometry');
+  wheels.draw(vm.runInContext('M4.ident()', c), 1, 0, {}); assert.equal(builds, 2, 'rendering never rebuilds geometry');
   wheels.release(); assert.equal(freed, 4);
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 4, 'repeat launch restores released wheels');
 });

@@ -1193,7 +1193,7 @@ test("garage reflection and normal wheel draws share the signed current-pose pha
 
 test("same-ID garage wheel edits and Undo invalidate fitted layers on the real mesh-bust path", () => {
   const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
-  const bust = new Function("departureWheels", "GarageScene", `let _spMeshKey = "car", _flapBustAt;
+  const bust = new Function("departureWheels", "GarageScene", `let _spMeshKey = "car", _flapBustAt; const _pk = { val: null };
     ${fnSource(read("js/garage/setup-camera.js"), "function spMeshBust()")}
     return spMeshBust;`)(wheels, { dropPreviewMeshes() {} });
   h.ctx.CarMaterials = { SURFACES: { paint: 101 }, FINISH_SURFACE: { matte: 102 } };
