@@ -130,7 +130,7 @@ function bootImportUI(opts = {}) {
 }
 
 test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
-  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast" };
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
   const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
   for (const mode of ["all", "changes"]) {
     const saved = boot({ disk }).collect(mode);
@@ -143,16 +143,27 @@ test("visor optics and water settings survive both backup modes and reject inval
   }
   const defaults = boot().collect("all").settings.camera;
   assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
-    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal",
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
   });
   assert.equal(defaults.helmetVisorBeams, "100", "the VISOR BEAMS slider exports as a percent, 100 by default");
   const beams = boot({ disk: { "apex26.helmetVisorBeams": "160" } }).collect("changes");
   assert.equal(beams.settings.camera.helmetVisorBeams, "160");
   const invalid = boot({ disk }).collect("changes");
-  for (const key of Object.keys(values)) invalid.settings.camera[key] = "invalid";
+  const choices = Object.keys(values).filter(key => key !== "helmetVisorDropSize");
+  for (const key of choices) invalid.settings.camera[key] = "invalid";
   const target = boot();
   target.loadSettings(invalid);
-  for (const key of Object.keys(values)) assert.equal(target.disk.has("apex26." + key), false);
+  for (const key of choices) assert.equal(target.disk.has("apex26." + key), false);
+  for (const percent of ["50", "125.5", "200"]) {
+    target.loadSettings({ format: "apex26-settings-v1", settings: { camera: { helmetVisorDropSize: percent } } });
+    assert.equal(target.disk.get("apex26.helmetVisorDropSize"), percent, "drop size retains its raw numeric percent string");
+    assert.equal(target.collect("changes").settings.camera.helmetVisorDropSize, percent);
+  }
+  const reset = target.loadSettings({ format: "apex26-settings-v1", settings: { camera: { helmetVisorDropSize: defaults.helmetVisorDropSize } } });
+  assert.equal(reset.applied, 1);
+  assert.equal(target.disk.get("apex26.helmetVisorDropSize"), "100", "restoring the exported default resets the size");
+  assert.equal(target.collect("all").settings.camera.helmetVisorDropSize, "100", "reset restores the shipped percent");
+  assert.equal(target.collect("changes").settings.camera?.helmetVisorDropSize, undefined, "reset no longer appears changed");
 });
 
 test("backup controls mount once in their own settings page, outside renderer options", () => {

@@ -25,7 +25,7 @@ const Droplets = (function () {
 
   let _cv = null, _ctx = null, _sprite = null, _looked = false;
   let _w = 0, _h = 0, _dpr = 1, _shown = false, _mobile = null;
-  let _n = 0, _acc = 0, _spriteReflection = 1, _spriteHelmet = false;
+  let _n = 0, _acc = 0, _spriteReflection = 1, _spriteHelmet = false, _dropScale = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
   const _r = new Float32Array(CAP_DESK);                                       // radius, fraction of min(w, h)
@@ -137,12 +137,12 @@ const Droplets = (function () {
     const i = _n++;
     _x[i] = 0.04 + Math.random() * 0.92;
     _y[i] = 0.04 + Math.random() * 0.80;   // not the very bottom: the cockpit/HUD sits there
-    _r[i] = (helmet ? 0.005 : 0.0025) + Math.random() * Math.random() * (helmet ? 0.018 : 0.009);
+    _r[i] = (helmet ? 0.011 : 0.0025) + Math.random() * Math.random() * (helmet ? 0.026 : 0.009);
     _variant[i] = Math.floor(Math.random() * 3);
     _age[i] = _hit[i] = 0;
     _life[i] = reduced ? 1.8 + Math.random() * 1.6 : helmet ? 12 + Math.random() * 10 : 2.5 + Math.random() * 3.5;
     _vx[i] = _vy[i] = 0;
-    _a[i] = 0.55 + Math.random() * 0.35;
+    _a[i] = (helmet ? 0.74 : 0.55) + Math.random() * (helmet ? 0.22 : 0.35);
   }
 
   function _kill(i) {
@@ -168,7 +168,7 @@ const Droplets = (function () {
         // Surface tension pins small beads more strongly than large beads.
         // Gravity and aerodynamic pressure compete; pressure scales with v².
         const release = Math.min(1, _r[i] / 0.010);
-        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.023, _r[i] + dt * rain * 0.00035);
+        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.037, _r[i] + dt * rain * 0.00035);
         const push = air * (0.18 + 0.82 * release) * runoff;
         const tx = (_x[i] - 0.5) * 2.8 * push;
         const ty = helmet ? ((0.025 + 0.085 * release) * (1 - 0.8 * air) - 0.035 * air) * runoff
@@ -196,7 +196,7 @@ const Droplets = (function () {
       const a = _a[i] * env;
       if (a <= 0.01) continue;
       const impact = helmet && !reduced ? Math.max(0, 1 - _hit[i] / 0.18) : 0;
-      const rad = _r[i] * m * (1 + 0.65 * Math.sin(Math.PI * (1 - impact))), cx = _x[i] * _w, cy = _y[i] * _h;
+      const rad = _r[i] * m * (helmet ? _dropScale : 1) * (1 + 0.65 * Math.sin(Math.PI * (1 - impact))), cx = _x[i] * _w, cy = _y[i] * _h;
       const sp = Math.hypot(_vx[i], _vy[i]);
       const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + sp * 11);
       const narrow = rad / Math.sqrt(st);
@@ -245,7 +245,10 @@ const Droplets = (function () {
     const strength = reflection === "off" ? 0 : reflection === "medium" ? 1.4 : reflection === "strong" ? 1.8 : 1;
     const changed = strength !== _spriteReflection || helmet !== _spriteHelmet;
     if (changed) { _spriteReflection = strength; _spriteHelmet = helmet; _sprite = _paintSprite(strength, helmet); }
-    if (!(dt > 0)) { if (resized || changed) _draw(!!reduced, helmet); return; }   // paused: the last frame stays on the glass
+    const scale = helmet && typeof CockpitOpts.visorDropSize === "function" ? CockpitOpts.visorDropSize() : 1;
+    const sizeChanged = scale !== _dropScale;
+    _dropScale = scale;
+    if (!(dt > 0)) { if (resized || changed || sizeChanged) _draw(!!reduced, helmet); return; }   // paused: size edits repaint existing water
     if (dt > 0.1) dt = 0.1;
     _step(dt, vs || 0, !!reduced, runoff, helmet, rain);
     const c = cap(_mob(), !!reduced);

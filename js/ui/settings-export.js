@@ -155,6 +155,7 @@ const SPEC = [
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
   { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
   { k: "helmetVisorRain", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRain", oneOf: ["normal", "off", "light", "heavy"] },
+  { k: "helmetVisorDropSize", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js visorDropSize (percent,50–200)" },
   { k: "helmetVisorRunoff", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRunoff", oneOf: ["normal", "slow", "fast"] },
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
