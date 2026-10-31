@@ -12347,7 +12347,8 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/share-card.test.mjs"
+        "tests/unit/share-card.test.mjs",
+        "tests/unit/title-menu-even.test.mjs"
       ],
       "current": [
         "tests/unit/daily-challenge.test.mjs"
@@ -12404,8 +12405,7 @@
         "tests/unit/loading-card.test.mjs"
       ],
       "*": [
-        "tests/unit/start-race-latch.test.mjs",
-        "tests/unit/title-menu-even.test.mjs"
+        "tests/unit/start-race-latch.test.mjs"
       ]
     },
     "js/race/damage-handling.js": {
@@ -18874,7 +18874,8 @@
     },
     "js/ui/title-menu.js": {
       "create": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/title-menu-even.test.mjs"
       ],
       "organize": [
         "tests/unit/title-menu-even.test.mjs"
