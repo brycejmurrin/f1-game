@@ -29,11 +29,15 @@
    or RESTART RACE only ARMS the button ("TAP AGAIN", .armed fill, an
    aria-label that says so). The arm clears on a confirming press, another
    pause option, pause close, or ARM_MAX_MS of wall-clock idle (setTimeout —
-   never tied to rAF). A real pointer press younger than ARM_MIN_MS on the
-   wall clock is the same double tap, swallowed; the arm stays up. Keyboard
-   activation (detail 0) and a script's el.click() (untrusted) are deliberate
-   and may confirm. pointerup on the armed button confirms when the wall age
-   is past ARM_MIN_MS even if a delayed click would mis-read event timeStamp.
+   never tied to rAF). A real pointer press young on BOTH the wall clock and
+   the trusted event's timeStamp (since arm) is the same double tap,
+   swallowed; the arm stays up. Input queued behind a long frame (software GL)
+   can land in one late batch where the wall gap collapses — event time keeps
+   a deliberate second tap from being mis-read as a ghost, and expireIfStale
+   will not disarm on wall expiry alone while the confirming event is still
+   within ARM_MAX_MS. Keyboard activation (detail 0) and a script's el.click()
+   (untrusted) are deliberate and may confirm. pointerup on the armed button
+   confirms when past ARM_MIN_MS on both clocks (youngTap).
    A capture-phase click listener on #pausemenu does the gating, so the
    handlers in js/game.js stay untouched. A disabled button
    (multiplayer restart) is never armed. Behaviour only, so no attribute.
@@ -127,7 +131,7 @@ const PauseOpts = (function () {
   function setConfirm(v) { const r = setConfirmRaw(v); if (r === "off") disarm(); return r; }
 
   // ── CONFIRM QUIT / RESTART ─────────────────────────────────────────────
-  let armed = null;   // { btn, text, aria, wallAt } — wallAt from performance.now()
+  let armed = null;   // { btn, text, aria, wallAt, evAt } — wallAt from performance.now()
   let armTimer = 0;
   let confirmPending = null;   // btn.id while a pointerup-driven el.click() is in flight
   function wallNow() {
@@ -136,8 +140,24 @@ const PauseOpts = (function () {
   function clearArmTimer() {
     if (armTimer) { clearTimeout(armTimer); armTimer = 0; }
   }
-  function expireIfStale() {
-    if (armed && wallNow() - armed.wallAt >= ARM_MAX_MS) disarm();
+  // Gesture age from the events' own timeStamps. Input queued behind a long
+  // frame (software GL) is handled in one late batch: the wall gap collapses
+  // to ~0 or stretches past ARM_MAX_MS while the user's real gap was 400 ms.
+  function eventAge(e) {
+    if (!armed || armed.evAt == null || !e || !e.isTrusted || !Number.isFinite(e.timeStamp)) return null;
+    return e.timeStamp - armed.evAt;
+  }
+  function expireIfStale(e) {
+    if (!armed || wallNow() - armed.wallAt < ARM_MAX_MS) return;
+    const ev = eventAge(e);
+    if (ev != null && ev >= 0 && ev < ARM_MAX_MS) return;   // the tap itself came in time; only its handling was late
+    disarm();
+  }
+  // Young on BOTH clocks = the same double tap. Old on either = deliberate.
+  function youngTap(e) {
+    if (!armed || wallNow() - armed.wallAt >= ARM_MIN_MS) return false;
+    const ev = eventAge(e);
+    return !(ev != null && ev >= ARM_MIN_MS);
   }
   function revertBtn(a) {
     a.btn.textContent = a.text;
@@ -152,10 +172,11 @@ const PauseOpts = (function () {
     clearArmTimer();
     revertBtn(a);
   }
-  function arm(btn) {
+  function arm(btn, e) {
     disarm();
     armed = {
       btn,
+      evAt: e && e.isTrusted && Number.isFinite(e.timeStamp) ? e.timeStamp : null,
       text: btn.textContent,
       aria: btn.getAttribute ? btn.getAttribute("aria-label") : null,
       wallAt: wallNow(),
@@ -176,7 +197,7 @@ const PauseOpts = (function () {
   // unarmed press is swallowed here and never reaches js/game.js. Any other
   // click on the card is another option: drop the arm and let it through.
   function onPauseClick(e) {
-    expireIfStale();
+    expireIfStale(e);
     const t = e && e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
     if (confirmPending && btn && confirmPending === btn.id) {
@@ -191,24 +212,22 @@ const PauseOpts = (function () {
     if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); return; }
     if (confirmMode() === "off") { disarm(); return; }
     const live = !!(armed && armed.btn === btn);
-    const wallAge = live ? wallNow() - armed.wallAt : Infinity;
     // Keyboard activation (detail 0) and a script's el.click() (untrusted) are
     // deliberate; only a fast pointer repeat is the accidental double tap.
-    const ghost = live && e.isTrusted && e.detail !== 0 && wallAge < ARM_MIN_MS;
+    const ghost = live && e.isTrusted && e.detail !== 0 && youngTap(e);
     if (live && !ghost) { disarm(); return; }   // the second press: let the handler run
     e.stopImmediatePropagation();
     if (e.preventDefault) e.preventDefault();
-    if (!ghost) arm(btn);
+    if (!ghost) arm(btn, e);
   }
   function onPausePointerUp(e) {
     if (!e || e.pointerType === "mouse" && e.button !== 0) return;
-    expireIfStale();
+    expireIfStale(e);
     const t = e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
     if (!btn || !GUARDED[btn.id] || btn.disabled || confirmMode() === "off") return;
     if (!armed || armed.btn !== btn || !e.isTrusted) return;
-    const wallAge = wallNow() - armed.wallAt;
-    if (wallAge < ARM_MIN_MS) return;
+    if (youngTap(e)) return;
     confirmPending = btn.id;
     disarm();
     btn.click();
