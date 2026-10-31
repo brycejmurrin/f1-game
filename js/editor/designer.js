@@ -809,7 +809,10 @@ const TrackDesigner = (function () {
     ui.export = btn("EXPORT", "sel-chip", () => exportFile());
     ui.import = btn("IMPORT", "sel-chip", () => ui.file.click());
     ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
-    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
+    // A native chooser can leave focus on <body> when it closes; hand it back to the menu that opened it.
+    const refocusFiles = () => { const t = ui.filesTrigger, a = document.activeElement; if (t && root && !root.hidden && (!a || a === document.body || !root.contains(a))) t.focus({ preventScroll: true }); };
+    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; refocusFiles(); if (f) Promise.resolve(importFile(f)).then(refocusFiles, refocusFiles); });
+    ui.file.addEventListener("cancel", refocusFiles);
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
     const files = el("div", "td-chips"); files.dataset.role = "file-actions";
     files.append(ui.share, ui.card, ui.export, ui.import);
