@@ -529,7 +529,7 @@ test("Daily history is reachable on Home, keeps classes separate and tolerates d
   const before = structuredClone(data);
   const sandbox = vm.createContext({ document: dom.document, Log: { info() {} }, Career: { data: () => null },
     Tracks: { SEASON: [] }, Teams: { LIST: [] } });
-  vm.runInContext(read("js/ui/title-menu.js"), sandbox);
+  vm.runInContext(read("js/ui/title-menu.js"), sandbox, { filename: absSrc("js/ui/title-menu.js") });
   const api = vm.runInContext("TitleMenu", sandbox).create({ $: dom.byId, store: {}, daily: { data: () => data,
     plan: () => ({ trackName: "Monza", weather: "dry" }) }, openDailyPicker() {} });
   assert.equal(hero.querySelector("#daily-history"), history); assert.equal(history.children[0].style.minHeight, "44px");
