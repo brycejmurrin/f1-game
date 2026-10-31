@@ -874,6 +874,12 @@
       ]
     },
     {
+      "path": "tools/ci/codex-cloud.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2822,6 +2828,11 @@
       "path": "tools/manifest.cjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/mcp/apex-codex-agents.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/mcp/apex-extras.mjs",

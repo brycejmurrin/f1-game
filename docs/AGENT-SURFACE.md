@@ -343,6 +343,7 @@ and report comparison do not launch Chromium.
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
 | `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
+| `apex_codex_agents` | `ci/codex-cloud.py` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
 | `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |
@@ -394,6 +395,13 @@ Pins the wrap always applies (you cannot override them):
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
   `paths` that start with `-` are refused so none reaches the CLI as a flag
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
+- `apex_codex_agents` → one bounded read-only Codex Cloud request using the server host's
+  existing ChatGPT Codex CLI login. `capabilities` and `dryRun` do not authenticate.
+  `list` accepts `limit`/`cursor`/`archived`; `status` requires a session UUID;
+  `transcript` accepts `limit`/`cursor`/`only:chat|all`/`maxBytes`. Returned UTF-8 JSONL
+  fragments continue without losing bytes; changed pages return `stale_cursor`.
+  Credentials, endpoints and write verbs are not arguments. Source, prerequisites and
+  measured acceptance: [Codex Cloud MCP](notes/CODEX-CLOUD-MCP-2026-10-31.md).
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`: ONE tool with a `verb` argument, only `verb`, `id`, `options` and
   `dryRun` published (the listing is byte-capped, so the per-verb `options` live in the text `apex_help` returns and
   are checked strictly per verb with a did-you-mean). Needs `CURSOR_API_KEY` in the server's environment and never in

@@ -37,6 +37,7 @@ import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } f
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
 import { GARAGE_PLAN_SCHEMA, createGaragePlanHandler } from "./garage-plan.mjs";
 import { DIAGNOSTICS_TOOL, createDiagnosticsHandler } from "./diagnostics-tools.mjs";
+import { CODEX_TOOL } from "./apex-codex-agents.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
@@ -47,7 +48,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.17.0";
+const SERVER_VERSION = "1.18.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -492,6 +493,7 @@ const CURSOR_VERBS = ["list", "status", "wait", "usage", "artifacts", "artifact"
 const CURSOR_ONLY = ["tools", "errors", "chat", "turns"];
 
 const CATALOG = [
+  CODEX_TOOL,
   { ...DIAGNOSTICS_TOOL, kind: 'tree' },
   {
     name: "apex_garage_plan",
@@ -2712,6 +2714,10 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   try { validateArgs(known, args); }
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
 
+  if (name === 'apex_codex_agents') {
+    return import('./apex-codex-agents.mjs').then(({ createCodexAgentsHandler }) =>
+      createCodexAgentsHandler({ ROOT, toolResult, refuse, mockMode })(args, { signal }));
+  }
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
   if (name === "apex_help") return handleHelp(args);
@@ -2879,7 +2885,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // not a permission boundary — the pins and the lock remain the real guards.
 const NOT_READ_ONLY = new Set(["apex_debug_chrome", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer", "apex_cursor_agents"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel", "apex_cursor_agents"]);
-const OPEN_WORLD = new Set(["apex_cursor_agents"]);
+const OPEN_WORLD = new Set(["apex_cursor_agents", "apex_codex_agents"]);
 // launch and followup are not idempotent (a client must not auto-retry them on the strength of a hint).
 const NOT_IDEMPOTENT = new Set(["apex_cursor_agents"]);
 function toolAnnotations(entry) {
@@ -3149,7 +3155,7 @@ export const ROUTES = [
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; circuit turns/sectors/scenery targets: apex_locations; " +
     "circuit health (build, floats, clipping): apex_track_audit; flyby framing: apex_frame_report; one __apex expr without a browser: apex_eval {vm:true}; " +
     "car parts/crests: apex_car_audit; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; saved profiles: apex_profile_query; " +
-    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor.",
+    "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; Codex Cloud session history: apex_codex_agents (read-only).",
   "BROWSER (apex_status first; one browser at a time; holds the lock) — scene shots: apex_shot, apex_shot_survey; race HUD: apex_hud_mock (fastest), " +
     "apex_hud_shot, apex_hud_survey; menu screens: apex_ui_shot, apex_ui_fit, apex_ui_inspect; live __apex: apex_eval, apex_agent, or a persistent apex_track session; " +
     "garage: apex_garage; frame budget: apex_profile. Minutes-long work: apex_job_start, then apex_job_status {wait}.",

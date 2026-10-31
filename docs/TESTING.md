@@ -1390,6 +1390,10 @@ comment saying why they are not one.
 
 ## 5. Coverage table
 
+`codex-cloud.test.mjs` covers read-only argument/transport boundaries, UTF-8 cursor
+continuity and stale pages, Python RPC fixtures and existing Apex server discovery.
+It runs in `tooling-fast`; no account login or network is used by these fixtures.
+
 `pit-think-cache.test.mjs` covers lazy per-step AI pit weather/caution reads,
 live reads outside the car-loop bracket, tick invalidation and real strategy
 decision parity. It runs in the `tooling-fast` Node group without a browser.

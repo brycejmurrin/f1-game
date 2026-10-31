@@ -561,6 +561,11 @@
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
     },
+    "tools/ci/codex-cloud.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON stdin request and typed exit/ok/error; selected-workspace CLI authentication remains in memory; fixed hosted endpoint, no redirects; lossless UTF-8 byte continuations and native pagination errors."
+    },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1655,6 +1660,11 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "40 native tool names, stdio/HTTP route"
+    },
+    "tools/mcp/apex-codex-agents.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Closed read-only verb schemas; no auth on discovery/dryRun; bounded UTF-8 fragments, continuation and stale-page errors; owned child timeout/cancellation; no credential diagnostics."
     },
     "tools/mcp/apex-tools-mcp.mjs": {
       "action": "targeted-summary",

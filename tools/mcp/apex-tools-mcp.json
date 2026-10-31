@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.17.0"
+    "version": "1.18.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -23,6 +23,7 @@
     ]
   },
   "tools": [
+    "apex_codex_agents",
     "apex_diagnostics",
     "apex_garage_plan",
     "apex_ui_mission_plan",
