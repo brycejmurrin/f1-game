@@ -1084,13 +1084,13 @@ const TrackDesigner = (function () {
     ui.prevPt = btn("PREV POINT", "sel-chip", () => cyclePoint(-1));
     ui.nextPt = btn("NEXT POINT", "sel-chip", () => cyclePoint(1));
     ui.spanEnd = btn("SELECT END", "sel-chip", () => armSpanEnd());
-    ui.prevPt.setAttribute("aria-label", "Select previous control point");
-    ui.nextPt.setAttribute("aria-label", "Select next control point");
-    ui.spanEnd.setAttribute("aria-label", "Next tap sets the end of a selected span (group move, elevate, or replace)");
+    ui.prevPt.setAttribute("aria-label", "Prev point: select previous control point");
+    ui.nextPt.setAttribute("aria-label", "Next point: select next control point");
+    ui.spanEnd.setAttribute("aria-label", "Select end: next tap sets the end of a selected span (group move, elevate, or replace)");
     ui.spanEnd.setAttribute("aria-pressed", "false");
     actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.prevPt, ui.nextPt, ui.spanEnd);
     ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
-    ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
+    ui.testHere.setAttribute("aria-label", "Test here: test drive from the selected point");
     actions.appendChild(ui.testHere);
     circuit.appendChild(actions);
     // Elevation presets (always built; shown in elevation mode).
@@ -1143,7 +1143,7 @@ const TrackDesigner = (function () {
     // The label row carries FIX ALL (shown while a red issue has an automatic fix).
     const head = el("div", "td-chips");
     ui.fixAll = btn("FIX ALL", "sel-chip", () => fixEverything());
-    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix every issue the designer can repair");
+    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix all: fix every issue the designer can repair");
     head.append(el("div", "td-label", "CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");

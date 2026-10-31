@@ -488,6 +488,8 @@ window.MenuNav = (function () {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||
           ty === "submit" || ty === "reset") return false;
+      // Physical page keys step a range's value; synthetic pad keys page its pane.
+      if (ty === "range" && (key === "PageUp" || key === "PageDown")) return !(event && event.isTrusted === false);
       // Same reason as TEXTAREA: the pad's synthetic Left/Right moves no caret,
       // so owning it left the field with a dead direction (#2161).
       if ((key === "ArrowLeft" || key === "ArrowRight") && event && event.isTrusted === false) return false;
