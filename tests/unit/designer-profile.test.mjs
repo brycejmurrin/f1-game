@@ -231,7 +231,7 @@ test("span elev: selection API + Up/Down offset every grip in the group by the s
 
 for (const sign of [1, -1]) {
   const bound = sign * 60, outward = sign > 0 ? "ArrowUp" : "ArrowDown";
-  test("span keyboard offsets preserve relative hills at " + bound + " m", () => {
+  test(`span keyboard offsets preserve relative hills at ${bound} m`, () => {
     const hs = new Array(design().pts.length).fill(0);
     hs[2] = sign * 58; hs[3] = sign * 59;
     const h = boot(hs);
@@ -250,7 +250,7 @@ for (const sign of [1, -1]) {
     assert.equal(h.list()[2], bound, "a single node still reaches its own boundary");
   });
 
-  test("span drag preview and release preserve relative hills at " + bound + " m", () => {
+  test(`span drag preview and release preserve relative hills at ${bound} m`, () => {
     const hs = new Array(design().pts.length).fill(0);
     hs[2] = sign * 58; hs[3] = sign * 59;
     const h = boot(hs);
@@ -293,7 +293,7 @@ test("destroy removes every input subscription and is idempotent", () => {
 });
 
 for (const dy of [-8, 8]) {
-  test("held elevation grip applies live delta once: " + dy, () => {
+  test(`held elevation grip applies live delta once: ${dy}`, () => {
     const h = boot();
     const before = h.grips()[0];
     const span = Math.max(8, Math.max(...h.tr.py) - Math.min(...h.tr.py));

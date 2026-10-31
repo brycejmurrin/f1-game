@@ -3,34 +3,32 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { absSrc } from '../helpers/abs-src.mjs';
-import { parse } from 'acorn';
-import * as THREE from '../../vendor/three-0.186.1/three.webgpu.min.js';
+import { vendorModule, bindImports } from '../helpers/vendor-class.mjs';
+import * as THREE from '../../vendor/three-0.187.0/three.webgpu.min.js';
+import * as CORE from '../../vendor/three-0.187.0/three.core.min.js';
 
-// Execute the actual generated vendor utility, locating it by public methods,
-// not terser's unstable class name. The queue models WebGPU's byte-level contract.
-const VENDOR = absSrc('vendor/three-0.186.1/three.webgpu.min.js');
+// Execute the actual generated vendor utility, located by public methods (not terser's unstable class name),
+// with the module-level writeBufferAligned it calls. The queue models WebGPU's byte-level contract.
+// r187 (#34734) keeps every non-storage Uint16 index buffer narrow and aligns partial writes upstream; this
+// suite pinned the local opt-in patch 20 on r186 and now pins the upstream contract TLX's merged chunk
+// indices rely on (tlx-webgpu-perf W1: the GPU buffer stays fed from the array tlx-chunked writes).
+const VENDOR = absSrc('vendor/three-0.187.0/three.webgpu.min.js');
 const source = fs.readFileSync(VENDOR, 'utf8');
-const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module' });
-const node = ast.body.find(n => n.type === 'ClassDeclaration' && n.body.body.some(m => m.key.name === 'createShaderVertexBuffers'));
-assert.ok(node, 'actual WebGPUAttributeUtils class exists');
-const code = source.slice(node.start, node.end);
+const vmod = vendorModule(source);
+const ast = vmod.ast;
+const node = vmod.classWith('createAttribute', 'updateAttribute', 'getVertexBufferLayout');
+const { code, imports } = vmod.closure([node]);
 const context = { Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float32Array,
-  GPUBufferUsage: { INDEX: 16, VERTEX: 32, STORAGE: 128 } };
-for (const n of ast.body) {
-  if (n.type === 'ImportDeclaration') for (const s of n.specifiers) {
-    if (s.imported && s.imported.name in THREE) context[s.local.name] = THREE[s.imported.name];
-  }
-}
-const descriptor = /([\w$]+)\.mappedAtCreation=/.exec(code)?.[1];
-assert.ok(descriptor, 'mapped descriptor located');
-context[descriptor] = { reset() {} };
-const AttributeUtils = vm.runInNewContext(`${code};${node.id.name}`, context, { filename: absSrc('vendor/three-0.186.1/three.webgpu.min.js') });
+  GPUBufferUsage: { INDEX: 16, VERTEX: 32, STORAGE: 128 }, ...bindImports(imports, THREE, CORE) };
+const AttributeUtils = vm.runInNewContext(`${code};${node.id.name}`, context, { filename: absSrc('vendor/three-0.187.0/three.webgpu.min.js') });
 
 function fixture(values = [0, 1, 2], options = {}) {
   const records = [], writes = [], data = new WeakMap();
   const backend = {
     get(a) { if (!data.has(a)) data.set(a, {}); return data.get(a); },
     delete(a) { data.delete(a); },
+    has(a) { return data.has(a); },
+    getBufferAttribute: (a) => (a.isInterleavedBufferAttribute ? a.data : a),
     device: {
       createBuffer(d) {
         const bytes = new Uint8Array(d.size);
@@ -48,7 +46,6 @@ function fixture(values = [0, 1, 2], options = {}) {
     },
   };
   const attribute = new THREE.BufferAttribute(new (options.Type || Uint16Array)(values), options.itemSize || 1);
-  attribute.__apexUint16Index = options.mark !== false;
   Object.assign(attribute, options.attribute);
   const utils = new AttributeUtils(backend);
   utils.createAttribute(attribute, options.usage ?? 16);
@@ -58,7 +55,7 @@ function fixture(values = [0, 1, 2], options = {}) {
   };
 }
 
-test('opted-in odd Uint16 indices preserve mapped values and halve allocation with padding', () => {
+test('odd Uint16 indices stay narrow, keep mapped values and pad the allocation to 4 bytes', () => {
   const f = fixture();
   assert.equal(f.attribute.array.constructor, Uint16Array);
   assert.equal(f.records[0].size, 8);
@@ -66,83 +63,41 @@ test('opted-in odd Uint16 indices preserve mapped values and halve allocation wi
   assert.deepEqual(Array.from(f.records[0].buffer.bytes), [0, 0, 1, 0, 2, 0, 0, 0]);
   f.attribute.array.set([3, 4, 5]); f.update();
   assert.deepEqual(f.decoded(), [3, 4, 5]);
-  assert.deepEqual(f.writes, [{ offset: 0, bytes: 8 }]);
+  // writeBufferAligned: the aligned words, then the odd tail as one padded word.
+  assert.deepEqual(f.writes, [{ offset: 0, bytes: 4 }, { offset: 4, bytes: 4 }]);
 });
 
-test('partial odd offsets and odd tails preserve unrequested neighboring GPU values', () => {
-  const f = fixture([10, 11, 12, 13, 14]);
-  f.attribute.array.set([99, 21, 22, 88, 24]);
+test('partial ranges upload the aligned words around them from the CPU array, nothing outside', () => {
+  const f = fixture([10, 11, 12, 13, 14, 15, 16, 17]);
+  f.attribute.array.set([99, 21, 22, 88, 24, 25, 26, 77]);
   f.attribute.addUpdateRange(1, 2); f.attribute.addUpdateRange(4, 1); f.update();
-  assert.deepEqual(f.decoded(), [10, 21, 22, 13, 24]);
-  assert.deepEqual(f.writes, [{ offset: 0, bytes: 8 }, { offset: 8, bytes: 4 }]);
+  // Words [0,1] and [4] are written (the CPU values of their neighbours ride along); word [6,7] is not.
+  assert.deepEqual(f.decoded(), [99, 21, 22, 88, 24, 25, 16, 17]);
+  assert.deepEqual(f.writes, [{ offset: 0, bytes: 4 }, { offset: 4, bytes: 4 }, { offset: 8, bytes: 4 }]);
   assert.equal(f.attribute.updateRanges.length, 0);
-  f.attribute.array[3] = 33; f.attribute.addUpdateRange(3, 1); f.update();
-  assert.deepEqual(f.decoded(), [10, 21, 22, 33, 24]);
 });
-
 test('same-sized subarray replacement respects source byteOffset', () => {
   const f = fixture();
   f.attribute.array = new Uint16Array([900, 7, 8, 9, 901]).subarray(1, 4);
   f.update(); assert.deepEqual(f.decoded(), [7, 8, 9]);
 });
 
-test('unsupported changes fail visibly before writes and preserve buffer lifecycle', () => {
-  for (const replacement of [new Uint16Array([1, 2]), new Uint32Array([1, 2, 3]), new Uint16Array([1, 65535, 3])]) {
-    const f = fixture(); f.attribute.array = replacement;
-    assert.throws(() => f.update(), /replace the BufferAttribute/);
-    assert.equal(f.writes.length, 0);
-    assert.deepEqual(Array.from(new Uint16Array(f.records[0].buffer.bytes.buffer)), [0, 1, 2, 0]);
-    f.utils.destroyAttribute(f.attribute);
-    assert.equal(f.records[0].buffer.destroyed, true);
-    f.attribute.array = new Uint16Array([4, 5, 6]);
-    f.utils.createAttribute(f.attribute, 16);
-    assert.equal(f.records.length, 2); assert.deepEqual(f.decoded(), [4, 5, 6]);
+test('actual strip index format follows the narrow array, restart value included', () => {
+  const owner = vmod.classWith('getStripIndexFormat', 'getSampleCount');
+  const method = owner.body.body.find(m => m.key.name === 'getStripIndexFormat');
+  // The method plus the module-level GPUIndexFormat table it reads.
+  const { code: fmtCode, imports: fmtImports } = vmod.closure([method]);
+  const decls = fmtCode.slice(0, fmtCode.lastIndexOf(source.slice(method.start, method.end)));
+  const utils = vm.runInNewContext(`${decls};({${source.slice(method.start, method.end)}})`,
+    { Uint16Array, ...bindImports(fmtImports, THREE, CORE) }, { filename: absSrc('vendor/three-0.187.0/three.webgpu.min.js') });
+  // A non-storage index keeps 0xffff, the uint16 restart value, so both stay narrow (r186 widened the restart case).
+  for (const f of [fixture(), fixture([0, 65535, 2])]) {
+    assert.equal(f.attribute.array.constructor, Uint16Array);
+    assert.equal(utils.getStripIndexFormat({ isLine: true }, { index: f.attribute }), 'uint16');
+    assert.equal(utils.getStripIndexFormat({ isLine: true, isLineSegments: true }, { index: f.attribute }), undefined);
   }
 });
-
-test('invalid ranges are atomic and zero-count ranges perform no GPU write', () => {
-  const f = fixture(); f.attribute.array[0] = 100;
-  f.attribute.addUpdateRange(0, 1); f.attribute.addUpdateRange(2, 2);
-  assert.throws(() => f.update(), /out of bounds/); assert.equal(f.writes.length, 0);
-  f.attribute.clearUpdateRanges(); f.attribute.addUpdateRange(1, 0); f.update();
-  assert.equal(f.writes.length, 0); assert.deepEqual(f.decoded(), [0, 1, 2]);
-});
-
-test('unmarked, dynamic, stream, vertex, storage, wide and restart controls retain upstream behavior', () => {
-  for (const options of [
-    { mark: false }, { usage: 32 }, { usage: 16 | 128 }, { usage: 16 | 32 },
-    { attribute: { usage: THREE.DynamicDrawUsage } }, { attribute: { usage: THREE.StreamDrawUsage } },
-    { attribute: { isStorageBufferAttribute: true } }, { attribute: { isStorageInstancedBufferAttribute: true } },
-    { attribute: { isInstancedBufferAttribute: true } },
-  ]) {
-    const f = fixture([0, 1, 2], options);
-    assert.equal(f.attribute.array.constructor, Uint32Array, JSON.stringify(options));
-    assert.equal(f.records[0].size, 12); assert.deepEqual(f.decoded(), [0, 1, 2]);
-  }
-  const restart = fixture([0, 65535, 2]);
-  assert.equal(restart.attribute.array.constructor, Uint32Array);
-  assert.deepEqual(restart.decoded(), [0, 4294967295, 2]);
-  const wide = fixture([0, 70000, 2], { Type: Uint32Array });
-  assert.equal(wide.records[0].size, 12); assert.deepEqual(wide.decoded(), [0, 70000, 2]);
-});
-
-test('actual primitive state keeps narrow strip format and wide restart format consistent', () => {
-  for (const n of ast.body) if (n.type === 'VariableDeclaration') {
-    for (const d of n.declarations) if (d.id.type === 'Identifier' && d.init?.type === 'Literal') context[d.id.name] = d.init.value;
-  }
-  const owner = ast.body.find(n => n.type === 'ClassDeclaration' && n.body.body.some(m => m.key.name === '_getPrimitiveState'));
-  const method = owner.body.body.find(m => m.key.name === '_getPrimitiveState');
-  const pipeline = vm.runInNewContext(`({${source.slice(method.start, method.end)}})`, context, { filename: absSrc('vendor/three-0.186.1/three.webgpu.min.js') });
-  pipeline.backend = { utils: { getPrimitiveTopology: () => 'line-strip' } };
-  const narrow = fixture(), restart = fixture([0, 65535, 2]);
-  for (const [f, expected] of [[narrow, 'uint16'], [restart, 'uint32']]) {
-    const state = pipeline._getPrimitiveState({ isLine: true }, { index: f.attribute }, { side: THREE.FrontSide });
-    assert.equal(state.stripIndexFormat, expected);
-    assert.equal(pipeline._getPrimitiveState({ isLine: true, isLineSegments: true }, { index: f.attribute }, {}).stripIndexFormat, undefined);
-  }
-});
-
-test('shared marked attribute creates one buffer and release/recreation uses new source bytes', () => {
+test('a shared index attribute creates one buffer and release/recreation uses new source bytes', () => {
   const f = fixture([3, 4, 5]);
   f.utils.createAttribute(f.attribute, 16);
   assert.equal(f.records.length, 1, 'shared shadow/mirror geometry reuses allocation');
@@ -152,3 +107,15 @@ test('shared marked attribute creates one buffer and release/recreation uses new
   assert.equal(f.records.length, 2); assert.equal(f.records[1].size, 12);
   assert.deepEqual(Array.from(new Uint16Array(f.records[1].buffer.bytes.buffer)), [6, 7, 8, 9, 10, 0]);
 });
+
+test('index buffers that are also storage widen to Uint32 and map the restart value; vertex Uint16 widens', () => {
+  const storage = fixture([0, 65535, 2], { usage: 16 | 128 });
+  assert.equal(storage.attribute.array.constructor, Uint32Array);
+  assert.deepEqual(storage.decoded(), [0, 4294967295, 2]);
+  const vertex = fixture([0, 1, 2], { usage: 32 });
+  assert.equal(vertex.attribute.array.constructor, Uint32Array);
+  assert.equal(vertex.records[0].size, 12);
+  const narrow = fixture([0, 1, 2], { attribute: { usage: THREE.DynamicDrawUsage } });
+  assert.equal(narrow.attribute.array.constructor, Uint16Array, 'usage hints do not widen an index');
+});
+

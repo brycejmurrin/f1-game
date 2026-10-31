@@ -52,7 +52,7 @@ __apex.weatherArc()                  // live arc or null; weatherArc("dry","rain
 ```
 
 No hook reads the two-compound state. Probe it: `__apex.tyres({level:"real"})` + a dry race of
-≥ `TWO_COMPOUND_MIN_LAPS`, one compound, finish; the console shows `DSQ car=… why=…` (`Log.info("game", …)`).
+≥ `TWO_COMPOUND_MIN_LAPS` (8, closure-private in `js/race/pit-lane.js`), one compound, finish; the console shows `DSQ car=… why=…` (`Log.info("game", …)`).
 
 Career qualifying flow or DNF settlement money → **career-mode**. For verification
 selection and browser ownership, follow [AGENTS.md §Verification](../../../AGENTS.md#verification--scale-it-to-the-change).

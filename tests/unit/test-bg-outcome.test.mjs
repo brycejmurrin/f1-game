@@ -14,7 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start, workerBudget } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start, workerBudget, waitChain, waitForRunning } from "../../tools/ci/test-bg.mjs";
 
 test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
   assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
@@ -287,4 +287,75 @@ test("workerBudget: environment and parsed CLI overrides beat the available-CPU 
   assert.equal(workerBudget({ env: { WORKERS: "3" }, system }).workers, "3");
   const { workers } = parseTestBgArgv(["--workers=2", "smoke"]);
   assert.equal(workerBudget({ workers, env: { WORKERS: "3" }, system }).workers, "2");
+});
+
+// A wait deadline is an observation result: the owned runner remains alive.
+// Exercise the controller without a browser or real registry mutation.
+test("waitChain preserves a waiter deadline and starts no later group, even with keep-going", async () => {
+  const oldExit = process.exitCode;
+  const oldArgv = process.argv;
+  try {
+    for (const keepGoing of [false, true]) {
+      process.exitCode = 0;
+      process.argv = keepGoing ? [...oldArgv, "--keep-going"] : oldArgv;
+      const started = [];
+      await waitChain(["smoke", "tiny"], { force: true }, {
+        loadPkg: () => ({ scripts: { "test:smoke": "x", "test:tiny": "x" } }),
+        start: (groups) => started.push(...groups),
+        waitForRunning: async () => { process.exitCode = 124; return 124; },
+        readState: () => ({ runs: [{ group: "smoke" }] }),
+        outcome: () => "running",
+      });
+      assert.equal(process.exitCode, 124, "deadline must not become a test failure");
+      assert.deepEqual(started, ["smoke"], "later groups cannot start while the timed-out runner remains alive");
+    }
+  } finally { process.exitCode = oldExit; process.argv = oldArgv; }
+});
+
+test("waitChain preserves completed pass and failure sequencing", async () => {
+  const oldExit = process.exitCode;
+  const oldArgv = process.argv;
+  try {
+    for (const [verdicts, keepGoing, expectedGroups, expectedExit] of [
+      [["passed (1 passed)", "passed (1 passed)"], false, ["smoke", "tiny"], 0],
+      [["failed (1 failed)", "passed (1 passed)"], false, ["smoke"], 1],
+      [["failed (1 failed)", "passed (1 passed)"], true, ["smoke", "tiny"], 1],
+    ]) {
+      process.exitCode = 0;
+      process.argv = keepGoing ? [...oldArgv, "--keep-going"] : oldArgv;
+      const started = [];
+      const completed = [];
+      await waitChain(["smoke", "tiny"], { force: true }, {
+        loadPkg: () => ({ scripts: { "test:smoke": "x", "test:tiny": "x" } }),
+        start: (groups) => started.push(...groups),
+        waitForRunning: async () => {
+          const code = verdicts[started.length - 1].startsWith("passed") ? 0 : 1;
+          process.exitCode = code;
+          completed.push(started.at(-1));
+          return code;
+        },
+        readState: () => ({ runs: started.map((group) => ({ group })) }),
+        outcome: ({ group }) => verdicts[["smoke", "tiny"].indexOf(group)],
+      });
+      assert.deepEqual(started, expectedGroups);
+      assert.deepEqual(completed, expectedGroups, "every launched group was awaited");
+      assert.equal(process.exitCode, expectedExit, "a later pass cannot erase an earlier failure");
+    }
+  } finally { process.exitCode = oldExit; process.argv = oldArgv; }
+});
+
+test("production waiter returns 124 when its deadline expires with an owned runner still live", async () => {
+  const oldExit = process.exitCode;
+  const live = [{ group: "fixture-live-run" }];
+  try {
+    process.exitCode = 0;
+    let reads = 0;
+    const result = await waitForRunning({ deadline: Date.now() - 1 }, {
+      running: () => { reads++; return live; },
+    });
+    assert.equal(result, 124, "waitChain consumes the production waiter's deadline result");
+    assert.equal(process.exitCode, 124, "standalone --wait retains its terminal deadline status");
+    assert.ok(reads > 0);
+    assert.deepEqual(live, [{ group: "fixture-live-run" }], "the runner remains live and untouched");
+  } finally { process.exitCode = oldExit; }
 });
