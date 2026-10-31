@@ -4373,7 +4373,7 @@ function quitToMenu() {
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginQuit();
   els.pausemenu.hidden = true;
   Input.unlockLandscape();
-  _menuGate.warm = 0; _menuGate.garageWarm = 0;
+  _menuGate.warm = 0; _menuGate.garageWarm = 0; _menuGate.track = null; _menuGate.ready = ""; _menuFly = null;
   resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
@@ -7304,13 +7304,14 @@ function render(dt) {
     }
     return;
   }
+  try { if (!setupPreviewOn && state !== "results" && typeof MenuTeardown !== "undefined" && MenuTeardown.quitRenderHold && MenuTeardown.quitRenderHold() && typeof PerfGov !== "undefined" && PerfGov.softwareRaster && PerfGov.softwareRaster()) return; } catch (_) { /* harness */ }
   if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
   if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();
   // The live Home garage returned above. Other menus hide undrawn canvases
   // so a previous garage/race frame cannot leak behind a new screen. Loading
   // cinematics and garage previews retain their existing covered warm-up.
   const homeTrack = !!(uiExperience && uiExperience.trackActive());
-  const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld()))
+  const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld() || (typeof MenuTeardown !== "undefined" && MenuTeardown.cover && MenuTeardown.cover())))
     || ((loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
   const garageWarmVeil = setupPreviewOn && !(_studio && _studio.cardUp) &&
     ((gfx.warming && gfx.warming()) || (gfx.warmQueued && gfx.warmQueued()));
@@ -9184,6 +9185,11 @@ function leaveGarage() {
   $("carsetup").hidden = true;
   setupPreviewOn = false;
   recomputePlayerMods();
+  if (typeof MenuTeardown !== "undefined") {
+    const release = () => MenuTeardown.endGarageClose();
+    if (garageReturn === "menu" && MenuTeardown.deferUi) MenuTeardown.deferUi(release);
+    else release();
+  }
 }
 /* BACK — the door DONE cannot be, because DONE goes FORWARD. From the circuit
    picker, DONE means "I have chosen a car, now set the race up" and lands on
@@ -9201,9 +9207,8 @@ function garageBack() {
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
   else {
     const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
-    const done = () => { finish(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
-    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(done);
-    else done();
+    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(finish);
+    else finish();
   }
   if (garageReturn !== "menu") loadingScreen.stop();
 }
@@ -9223,9 +9228,8 @@ $("cs-done").onclick = () => {
   else if (garageReturn === "select") raceSettings.openRaceSettings("select");
   else {
     const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold
-    const done = () => { finish(); if (typeof MenuTeardown !== "undefined") MenuTeardown.endGarageClose(); };
-    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(done);
-    else done();
+    if (typeof MenuTeardown !== "undefined" && MenuTeardown.deferUi) MenuTeardown.deferUi(finish);
+    else finish();
   }
   if (garageReturn !== "menu") loadingScreen.stop();
 };

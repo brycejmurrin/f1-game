@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
+import { fnSource } from '../helpers/fn-source.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
@@ -296,7 +297,7 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   assert.ok(run.indexOf('await d.menuIdle(current)') > 0 && run.indexOf('await d.menuIdle(current)') < run.indexOf('G.gfx.warm()'), 'only once the menu is idle');
   assert.ok(run.indexOf('G.gfx.warm()') > 0 && run.indexOf('G.gfx.warm()') < run.indexOf('gate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
   assert.match(game, /await menuFinish\(current, key\);\n\s*await garagePrewarm\(current\);/, 'after the circuit is done');
-  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4500);
+  const render = fnSource(game, 'function render(dt)');
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
 });

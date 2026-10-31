@@ -10622,6 +10622,9 @@
       ],
       "cover": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "quitRenderHold": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ]
     },
     "js/perf/metrics-overlay.js": {
