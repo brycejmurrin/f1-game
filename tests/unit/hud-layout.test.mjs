@@ -200,7 +200,7 @@ test("phone portrait parks the minimap under the timing tower; other shapes keep
   assert.ok(m, "a portrait-and-narrow query owns the tower/map stack");
   assert.match(m[1], /#minimap/);
   assert.match(m[1], /\.hud-gaps/);
-  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 8px\)/);
+  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 8px\)/);
   const baseMap = src.match(/(?:^|\n)#minimap \{\s*position: absolute;([\s\S]*?)\n\}/);
   assert.ok(baseMap, "shipped #minimap rule");
   assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);

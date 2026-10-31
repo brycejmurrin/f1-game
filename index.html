@@ -664,7 +664,8 @@
 </div>
 
 <!-- race HUD -->
-  <div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
+  <button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
+<div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
   <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
        a child position, so adding or re-ordering a box cannot hide the wrong one.
        DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
@@ -840,7 +841,6 @@
 </div>
 
 <button id="btn-cam" hidden aria-label="CHASE camera">CHASE</button>
-<button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
 <!-- Shown only while the HUD is hidden (body.hud-hidden): the one control that
      brings the HUD + buttons back. Tiny, top-right, out of the way. -->
 <button id="hud-restore" aria-label="Show HUD">&#128065;</button>

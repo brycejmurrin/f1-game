@@ -109,7 +109,7 @@ test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
 test("dropped gaps and the limits chip ride measured offsets", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 4px\);/);
+  assert.match(css, /:root\[data-gap-drop\] \.hud-gaps \{\s*\n\s*top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 4px\);/);
   assert.match(css, /var\(--hud-sec-h, 4\.8em\)/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-top-h"/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-sec-h"/);
