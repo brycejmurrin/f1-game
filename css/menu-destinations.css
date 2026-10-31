@@ -279,7 +279,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
 /* At comfortable heights the destinations retain their groups instead of
    dissolving into a field of equal tiles. DOM order is the reading order. */
-@media (min-height: 720px), (max-aspect-ratio: 1/1) {
+@media (min-height: 800px) and (min-aspect-ratio: 1/1) {
 #overlay #menu-buttons :is(#menu-primary, #menu-explore, #menu-create) {
   border-top: 1px solid var(--plate-line);
   padding-top: calc(var(--gap) * .5);
