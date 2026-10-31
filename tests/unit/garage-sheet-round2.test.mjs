@@ -254,7 +254,7 @@ test("the setup turntable gives the Legends slot its own helmet key and a per-le
 });
 
 for (const state of ["race", "menu"]) {
-  test("garage identity is locked only during pit work: " + state, () => {
+  test(`garage identity is locked only during pit work: ${state}`, () => {
     const h = harness({ tab: "team" });
     let picks = 0, edits = 0;
     h.G.state = state;
