@@ -629,3 +629,20 @@ test("the bounded window matches a sorted keep-newest model, without per-push sh
   assert.equal(buf.size(), 0);
   assert.equal(buf.newest(), null);
 });
+
+// ---- perf hunt 9: the encoders write the entries in place, no copied list per packet ---------------------------
+test("encodeSnapshot / encodeAged build no list (0 array pushes) and skip invalid entries exactly as before", () => {
+  const car = { s: 120.5, x: -1.25, head: 0.5, speed: 70, gear: 6, lap: 2 };
+  const src = [{ id: 1, car, at: 990 }, null, { id: 300, car, at: 1000 }, { id: 2, car, at: 1000 }, { id: 3, car, at: NaN }, { id: 4, car, at: 960 }];
+  const push = Array.prototype.push;
+  let pushes = 0;
+  Array.prototype.push = function () { pushes++; return push.apply(this, arguments); };
+  let snap, aged;
+  try { snap = NetSnapshot.encodeSnapshot(1000, src); aged = NetSnapshot.encodeAged(src); }
+  finally { Array.prototype.push = push; }
+  assert.equal(pushes, 0, "no list copied per packet (was one push per valid entry)");
+  const s = NetSnapshot.decodeSnapshot(snap), a = NetSnapshot.decodeSnapshot(aged);
+  assert.deepEqual(s.cars.map((c) => c.id), [1, 2, 3, 4], "snapshot: null and out-of-range ids skipped; `at` not required");
+  assert.deepEqual(a.cars.map((c) => [c.id, c.age]), [[1, 10], [2, 0], [4, 40]], "aged: a non-finite `at` skipped too; ages from the newest");
+  assert.equal(a.tick, 1000);
+});

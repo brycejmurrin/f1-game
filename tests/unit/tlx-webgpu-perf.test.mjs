@@ -7,14 +7,17 @@
  *   W2  a widening view regrows the merge index O(log) times with headroom and releases each outgrown one
  *   W3  the sun/lamp passes cast a chunked record's visible chunks as ONE merged caster (tlx.js castShadowChunked)
  *   W4  setSsrMrt with an unchanged state walks no material (tsl-lit, tsl-fx)
- *   W5  frame-varying uniforms nothing reads skip their write: hazeTime with no haze, godray time on a clear sky */
+ *   W5  frame-varying uniforms nothing reads skip their write: hazeTime with no haze, godray time on a clear sky
+ *   (round 3, three r187, docs/notes/TLX-WEBGPU-PERF-3-2026-10-30.md)
+ *   W6  the draw warm compiles the canvas passes, both sides of the upscale switch: the live present builds none
+ *   W7  the sky cache's bake pipeline is warmed by a draw keyed like cacheStep's (no depth), not only by a compile */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parse } from "acorn";
+import { vendorModule, bindImports } from "../helpers/vendor-class.mjs";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -24,48 +27,47 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-const VENDOR = "vendor/three-0.186.1/three.webgpu.min.js";
+const VENDOR = "vendor/three-0.187.0/three.webgpu.min.js";
 const THREE = await import(pathToFileURL(path.join(ROOT, VENDOR)).href);
+const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-fx.js",
   "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
-// The actual generated WebGPUAttributeUtils (webgpu-uint16-index.test.mjs's extraction) over a byte-model queue.
-const source = read(VENDOR);
-const ast = parse(source, { ecmaVersion: "latest", sourceType: "module" });
-const cls = ast.body.find((n) => n.type === "ClassDeclaration" && n.body.body.some((m) => m.key.name === "createShaderVertexBuffers"));
-const code = source.slice(cls.start, cls.end);
+// The actual generated WebGPUAttributeUtils (and the module-level writeBufferAligned r187 calls) over a byte-model queue.
+const vmod = vendorModule(read(VENDOR));
+const { code: utilsCode, imports: utilsImports } = vmod.closure([vmod.classWith("createAttribute", "updateAttribute", "getVertexBufferLayout")]);
 const uctx = { Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float32Array,
-  GPUBufferUsage: { INDEX: 16, VERTEX: 32, STORAGE: 128 } };
-for (const n of ast.body) if (n.type === "ImportDeclaration") for (const s of n.specifiers)
-  if (s.imported && s.imported.name in THREE) uctx[s.local.name] = THREE[s.imported.name];
-uctx[/([\w$]+)\.mappedAtCreation=/.exec(code)[1]] = { reset() {} };
-uctx[/const e=([\w$]+)\(a\),r=e\?1:a\.BYTES_PER_ELEMENT/.exec(code)?.[1] || "ss"] = (a) => ArrayBuffer.isView(a);   // a typed array: ranges in elements
-const AttributeUtils = vm.runInNewContext(`${code};${cls.id.name}`, uctx, { filename: absSrc(VENDOR) });
+  GPUBufferUsage: { INDEX: 16, VERTEX: 32, STORAGE: 128 }, ...bindImports(utilsImports, THREE, CORE) };
+const AttributeUtils = vm.runInNewContext(`${utilsCode};${vmod.classWith("createAttribute", "updateAttribute", "getVertexBufferLayout").id.name}`, uctx, { filename: absSrc(VENDOR) });
 function gpu() {
   const data = new WeakMap(), bufs = new Map();
   const backend = {
     get(a) { if (!data.has(a)) data.set(a, {}); return data.get(a); },
+    getBufferAttribute: (a) => (a.isInterleavedBufferAttribute ? a.data : a),   // r187 WebGPUBackend
     device: {
       createBuffer(d) { const bytes = new Uint8Array(d.size); return { bytes, getMappedRange: () => bytes.buffer, unmap() {}, destroy() {} }; },
       queue: { writeBuffer(b, off, arr, start = 0, count = arr.length - start) {
+        out.written += count * arr.BYTES_PER_ELEMENT;
         b.bytes.set(new Uint8Array(arr.buffer, arr.byteOffset + start * arr.BYTES_PER_ELEMENT, count * arr.BYTES_PER_ELEMENT), off);
       } },
     },
   };
   const utils = new AttributeUtils(backend);
-  return {
+  const out = {
+    written: 0,   // bytes through queue.writeBuffer
     // What three's Attributes.update does for an INDEX attribute: create once, then upload on a version bump.
     sync(attr) {
       const d = backend.get(attr);
       if (d.buffer === undefined) { utils.createAttribute(attr, 16); d.v = attr.version; bufs.set(attr, d); return; }
       if (d.v < attr.version) { utils.updateAttribute(attr); d.v = attr.version; }
     },
-    // The first `n` indices the GPU buffer behind `attr` holds, decoded at the width it was created with.
-    decode(attr, n) { const d = backend.get(attr); return Array.from(new attr.array.constructor(d.buffer.bytes.buffer)).slice(0, n); },
+    // The `n` indices from `at` the GPU buffer behind `attr` holds, decoded at the width it was created with.
+    decode(attr, n, at = 0) { const d = backend.get(attr); return Array.from(new attr.array.constructor(d.buffer.bytes.buffer)).slice(at, at + n); },
   };
+  return out;
 }
 
 function chunkedSys(over = {}) {
@@ -105,13 +107,27 @@ test("W1: a changed visible set reaches the GPU index buffer on WebGPU (the merg
   assert.equal(attr.__apexUint16Index, true, "the vendor's narrow-index opt-in, like every chunk index");
   q.sync(attr);
   assert.equal(attr.array.constructor, Uint16Array, "three kept the Uint16 array (unmarked it was swapped for a Uint32 copy)");
-  assert.deepEqual(q.decode(attr, 12), want(mesh, [0, 1, 2, 3]));
+  assert.deepEqual(q.decode(attr, 12, g.drawRange.start), want(mesh, [0, 1, 2, 3]));
   for (const ids of [[4, 5, 6, 7], [7, 0, 3], [2, 6]]) {
     assert.equal(merge(sys, mesh, ids), g, "same slot geometry");
     assert.equal(g.index, attr, "no regrowth: the set shrank or held");
     q.sync(attr);
-    assert.deepEqual(q.decode(attr, ids.length * 3), want(mesh, ids), `GPU holds set ${ids}, not the first set`);
+    assert.deepEqual(q.decode(attr, ids.length * 3, g.drawRange.start), want(mesh, ids), `GPU holds set ${ids}, not the first set`);
     assert.equal(g.drawRange.count, ids.length * 3);
+  }
+});
+
+// GPU hunt 3 (#4272 item 3): the set sliding one chunk along the arc, through the vendor's Uint16 writeBuffer path.
+test("W1: a one-chunk slide of the visible set writes that chunk's bytes, not the set after the first change", () => {
+  const sys = chunkedSys(), mesh = record(40, 100), q = gpu();
+  const span = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
+  const g = merge(sys, mesh, span(5, 25));
+  q.sync(g.index);
+  for (const [a, b, bytes] of [[6, 26, 600], [5, 25, 0], [4, 24, 600]]) {
+    const w0 = q.written;
+    merge(sys, mesh, span(a, b)); q.sync(g.index);
+    assert.equal(q.written - w0, bytes, `chunks ${a}..${b - 1}: ${bytes} B (the first-change rule: 12000 B)`);
+    assert.deepEqual(q.decode(g.index, 6000, g.drawRange.start), want(mesh, span(a, b)));
   }
 });
 
@@ -174,17 +190,19 @@ test("W4: setSsrMrt with an unchanged state walks no material", () => {
   assert.ok(born.mrtNode, "and the next change arms it");
 });
 
-// The post chain on three r186 (forceWebGL over the no-op context), its uniform set captured from TLXShaders.post.
+// The post chain on three r187 (forceWebGL over the no-op context), its uniform set captured from TLXShaders.post.
 function withStore(ls, fn) {
   const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true,
     value: { getItem: (k) => (k in ls ? ls[k] : null), setItem() {}, removeItem() {} } });
   try { return fn(); } finally { if (had) Object.defineProperty(globalThis, "localStorage", had); else delete globalThis.localStorage; }
 }
-async function postRig(t) {
+async function postRig(t, { up = false } = {}) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
+  // As tlx.js sets it: the post chain tone-maps, so three draws the canvas directly (no frame-buffer target).
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace; renderer.toneMapping = THREE.NoToneMapping;
   const identity = new THREE.Matrix4().elements;
   const shadow = { sunTex: new THREE.DepthTexture(1, 1), S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
   const T = globalThis.TLXShaders, orig = T.post;
@@ -194,13 +212,14 @@ async function postRig(t) {
   try {
     post = withStore({ "apex26.tlxAoFold": "0" }, () => T.postChain(THREE, TSL, { renderer, isMobile: true,
       chunks: T.chunks(THREE, TSL), shadow, viz: null, ssrTag: false, softDest: () => null,
-      wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+      wantSpatialUpscale: () => up, getPresentSize: () => [320, 180], sceneSamples: 0 }));
   } finally { T.post = orig; }
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity,
     eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], time: 0, cloud: 0 };
-  return { P, frame, present: (opts) => post.present(opts, frame) };
+  return { P, frame, post, renderer, present: (opts) => post.present(opts, frame),
+    setUpscale(v) { up = v; post.resize(320, 180); } };
 }
 
 test("W5: a clear sky and no exhaust haze leave the frame-varying time uniforms unwritten; both write once read", async (t) => {
@@ -216,4 +235,69 @@ test("W5: a clear sky and no exhaust haze leave the frame-varying time uniforms 
   h.present({ ...opts, haze: { u: 0.5, v: 0.5, str: 1 } });
   assert.equal(h.P.godray.U.time.value, 5, "clouds: the march reads the current time");
   assert.equal(h.P.composite.U.hazeTime.value, 5, "haze: the plume reads the current time");
+});
+
+// Every render pipeline three builds from here on, named by material: the backend call itself.
+function pipelineBuilds(renderer) {
+  const built = [], be = renderer.backend, orig = be.createRenderPipeline;
+  be.createRenderPipeline = function (ro, ...rest) {
+    built.push((ro.material.name || ro.material.type) + "#" + ro.material.id);
+    return orig.call(this, ro, ...rest);
+  };
+  return built;
+}
+const settle = () => new Promise((r) => setTimeout(r, 300));   // compileAsync yields per object
+
+test("W6: the draw warm compiles the canvas passes on both sides of the upscale switch; the live presents build none", async (t) => {
+  // Census 41021224706 (Dawn/Metal): createShaderModule x2 mid-race from runPass, FXAA into the canvas. The draw warm
+  // skipped every canvas pass (a draw there presents) and the WebGPU post warm() is off. Warm at scale < 1 (SGSR to the
+  // canvas), then race across 1.0 (FXAA to the canvas). A canvas compile alone is not enough: QuadMesh.render() swaps
+  // three's quad vertex node in for the draw only, so compileAsync(quad) built a different program (tlx-post setQuadMat).
+  const h = await postRig(t, { up: true });
+  const opts = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };
+  h.post.drawWarm(opts, h.frame);
+  await h.post.warmSettled();       // the canvas compiles themselves, not a wall-clock wait (flaked under load)
+  const built = pipelineBuilds(h.renderer);
+  h.present(opts);                  // SGSR -> canvas
+  h.setUpscale(false);
+  h.present(opts);                  // FXAA -> canvas
+  await settle();
+  assert.deepEqual(built, [], "no pipeline is built by a live present after the draw warm");
+});
+
+test("W7: the sky cache bake is warmed by a draw keyed like cacheStep's (depth off), not only by compileAsync (depth on)", async (t) => {
+  // r187 compileAsync keys the render context's depth from renderer.depth; render() from the target's depthBuffer,
+  // and the cache targets have none. Census 41021224706 built the bake's pipeline mid-race from cacheStep.
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
+  const fg = makeFakeGL(64, 64);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const sky = globalThis.TLXShaders.sky(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), cache: true, cacheSize: 64 });
+  t.after(() => { sky.dispose(); renderer.dispose(); });
+  let into = null;
+  const getForRender = renderer._pipelines.getForRender;
+  renderer._pipelines.getForRender = function (ro, ...rest) {
+    if (into && ro.material.customProgramCacheKey && ro.material.customProgramCacheKey() === "tlx-sky-cache") into.add(ro.context.depth);
+    return getForRender.call(this, ro, ...rest);
+  };
+  const warmed = new Set(), live = new Set();
+  into = warmed;
+  await sky.cacheWarm(renderer);                                   // the compile stage (tlx.js runProgramWarmStages)
+  if (sky.cacheDrawWarm) sky.cacheDrawWarm(renderer);              // the draw stage (drawWarmStage)
+  into = live;
+  sky.uniforms.cloud.value = 0.5;
+  sky.cacheStep(renderer);                                          // the race's first bake band
+  into = null;
+  assert.deepEqual([...live], [false], "the bake renders with no depth attachment");
+  assert.ok(warmed.has(false), `the warm built the bake's no-depth pipeline (warm saw depth ${[...warmed]})`);
+});
+
+
+test("W8: the production draw warm awaits the queued canvas compiles before it settles and opens the live present", () => {
+  // drawWarm only QUEUES the SGSR/FXAA canvas compiles (serialised); _gpuSettled waits on submitted GPU work, not on them.
+  const src = read("js/render/three/tlx.js");
+  const i = src.indexOf("_warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);");
+  assert.ok(i > 0, "the entry draw warm call is where the test expects it");
+  const after = src.slice(i, src.indexOf("_gpuSettled(5000)", i));
+  assert.match(after, /await post\.warmSettled\(\)/, "warmSettled is awaited between drawWarmStage and _gpuSettled");
 });

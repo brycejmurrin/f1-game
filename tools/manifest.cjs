@@ -353,6 +353,7 @@ const FULL = [
   "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/energy-plan.js",    // EnergyPlan: manual per-sector ERS policy (#1580); neutral = no effect
   "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
   "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
   "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
@@ -1068,8 +1069,14 @@ const LAZY_EDGES = [
 // is js/lighting/profiles.js, and that reads window.LightPresets at CALL time
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
 // defaults rather than throwing, and game.js re-applies once it lands.
+// js/garage/garage-data.js (~48 KB) is the garage's Blender tables: the camera
+// rigs' samples and the crew clips' keys. Their ids and labels stay eager
+// (arrival.js / crew-choreo.js index blocks); LazyBundles.ensureGarageData loads
+// it alone (idle, garage entry, SETTINGS, RACE!) and until then a rig angle
+// plays the "cut" cameras and a Blender crew the shipped one.
 const LAZY_RACE = [
   "js/lighting/presets.js",
+  "js/garage/garage-data.js",
 ];
 
 // RACE SESSION (~320 KB). Pit lane, radio/coach/engineer, reliability/damage,
@@ -1079,6 +1086,8 @@ const LAZY_RACE = [
 // Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
 // Hub WATCH / Director eval SHOTS).
 const LAZY_RACE_SESSION = [
+  "js/data/garage-departure-motion.js",
+  "js/garage/departure-wheels.js",
   "js/race/reliability.js",
   "js/race/damage.js",
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)

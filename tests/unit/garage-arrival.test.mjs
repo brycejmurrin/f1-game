@@ -6,9 +6,11 @@ import { absSrc } from '../helpers/abs-src.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
-vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
+vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival.js') });
+// The Blender rigs' samples (LAZY_RACE): loaded as the game's idle prefetch / garage entry would.
+vm.runInContext(readFileSync(new URL('../../js/garage/garage-data.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/garage-data.js') });
 const Arrival = vm.runInContext('GarageArrival', context);
-vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
+vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/track/core/pit.js') });
 const TrackPit = vm.runInContext('TrackPit', context);
 function raceEntryProfileStub({ budgetMs = 30000, now = () => 0 } = {}) {
   let t0 = now();
@@ -111,7 +113,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
-  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.wallSeconds\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed, SLOW-MO included');
+  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play, motion: \{ eye: \[0, 0, 0\], aim: \[0, 0, 0\] \} \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.wallSeconds\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed, SLOW-MO included');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
@@ -242,7 +244,7 @@ test('the first presented garage frame takes over its preparation cover, then ha
       menuSlice: async () => { now += 1000; if (!c.gfx.warming()) c.studioShown(); if (mode === 'quit' && now >= 2000) c.state = 'race'; if (mode === 'skip' && now === 2000) c._skip();  },
       raceIntro: () => events.push(c._introSkip === c._introRun ? 'skip:' + c._introKey : 'fly:' + c._introKey), go: () => events.push('go'), Log: { warn() {} },
       RaceEntryProfile: raceEntryProfileStub({ budgetMs: 1e9, now: () => now }), PerfGov: PERF_GOV_STUB,
-      UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false };
+      GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false };
     vm.createContext(c); vm.runInContext(src, c);
     const took = c.introGarage(c.go);
     for (let i = 0; i < 400; i++) await Promise.resolve();
@@ -294,7 +296,7 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   assert.ok(run.indexOf('await d.menuIdle(current)') > 0 && run.indexOf('await d.menuIdle(current)') < run.indexOf('G.gfx.warm()'), 'only once the menu is idle');
   assert.ok(run.indexOf('G.gfx.warm()') > 0 && run.indexOf('G.gfx.warm()') < run.indexOf('gate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
   assert.match(game, /await menuFinish\(current, key\);\n\s*await garagePrewarm\(current\);/, 'after the circuit is done');
-  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
+  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4500);
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
 });
@@ -314,7 +316,7 @@ function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}
     window: { addEventListener: (t, fn) => { if (t === 'keydown') keys.push(fn); } } });
   vm.runInContext(src, c);
   const fn = (n) => vm.runInContext(n, c);
-  return { $, G, c, frames, keys, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
+  return { $, G, c, frames, keys, fn, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
 }
 test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canvas back', () => {
   for (const dir of ['in', 'out']) {
@@ -536,7 +538,7 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
       $: (id) => (id === 'rs-cancel' ? back : null), clearTimeout(t) { if (t === 7) ctx.cleared++; },
       Log: { warn() {} }, announce() { events.push(['failed']); }, gfx: { warming: () => warming }, performance: { now: () => now }, introNow: () => now,
       RaceEntryProfile: raceEntryProfileStub({ budgetMs: 30000, now: () => now }), PerfGov: PERF_GOV_STUB,
-      UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
+      GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
       entrySettings: () => ctx.settings, loadingScreen: { building: () => events.push(['card']), stop() {} }, studioSkip() {},
       cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
       // Model a successfully presented garage frame releasing the sheet.
@@ -652,7 +654,7 @@ function garageEntryRegressionHarness() {
     Log: { warn() {} },
     raceIntro() { events.push('handoff'); },
     RaceEntryProfile: raceEntryProfileStub({ budgetMs: 1e9, now: () => now }),
-    PerfGov: PERF_GOV_STUB, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
+    PerfGov: PERF_GOV_STUB, GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
     ensureScenery: async () => {}, motionReduced: () => false,
     loadTrackStepped: async () => false,
     prepareMenuCarAssets: async () => {}, warmPrograms() {},
@@ -666,6 +668,7 @@ function garageEntryRegressionHarness() {
   vm.createContext(c);
   vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/crew-draw.js') });
   vm.runInContext(introArrivalSource, c);
+  vm.runInContext(readFileSync(new URL('../../js/data/garage-departure-motion.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/data/garage-departure-motion.js') });
   const clockStart = introCameraSource.indexOf('let driveOut = null;');
   const clockEnd = introCameraSource.indexOf('// THE ARRIVAL PREVIEW', clockStart);
   assert.ok(clockStart >= 0 && clockEnd > clockStart, 'production drive-out clock extraction');
@@ -790,6 +793,26 @@ test('hidden garage prewarming records readiness only after a successful present
   assert.equal(h.presents(), 1);
   assert.equal(h.c._menuGate.garageReady, true);
   assert.equal(h.c.canvas.style.visibility, 'hidden');
+});
+
+test('a regular garage preview stays veiled while shader warm blocks present()', async () => {
+  const h = garageEntryRegressionHarness();
+  h.c.setupPreviewOn = true;
+  h.c._studio = null;
+  h.c.canvas.style.visibility = 'hidden';
+  h.c._softEl.style.visibility = 'hidden';
+  h.eval('renderSetupPreview = () => { gfx.present(); return !gfx.warming(); };');
+  await h.advance(16);
+  assert.equal(h.c.gfx.warming(), true);
+  let veiledWhileWarm = true;
+  for (let i = 0; i < 200 && h.c.gfx.warming(); i++) {
+    if (h.c.canvas.style.visibility !== 'hidden') veiledWhileWarm = false;
+    await h.advance(100);
+  }
+  assert.ok(veiledWhileWarm, 'warming must not reveal #game');
+  await h.advance(16);
+  assert.ok(h.presents() >= 1);
+  assert.equal(h.c.canvas.style.visibility, '', 'first successful present reveals #game');
 });
 
 test('a refused garage begin returns false and cannot reveal the unpresented frame', async () => {
@@ -960,7 +983,7 @@ function sheetRecoveryHarness({ manual = false, pollThrows = false, syncPollThro
       if (!deferredCold) ctx.sheetRelease(true);
     },
     RaceEntryProfile: raceEntryProfileStub({ budgetMs: 30000, now: () => clock }),
-    PerfGov: PERF_GOV_STUB, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
+    PerfGov: PERF_GOV_STUB, GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
   };
   vm.createContext(ctx);
   vm.runInContext(state + warm + helpers + wrapper + ';globalThis.sheetOwner = () => _introSheet;', ctx);
@@ -1305,6 +1328,90 @@ test('a covered PREP menu with no owed warm frames still presents for a queued w
   const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
   assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
 });
+test('PREVIEW transport: pause holds, scrub holds the end, LOOP replays, EDIT re-poses on a change and IN / OUT switch', () => {
+  let saved = { angle: 'left', fov: 50 };
+  const h = previewHarness();
+  h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
+  const fn = h.fn;
+  assert.equal(h.start('in'), true);
+  h.step(0.1); h.step(0.1);
+  fn('previewPause')(true);
+  const held = h.playing().t;
+  for (let i = 0; i < 5; i++) h.step(0.1);
+  assert.equal(h.playing().t, held, 'PAUSE holds the clock');
+  assert.equal(h.$('ga-play').textContent, 'PLAY');
+  assert.equal(h.$('ga-time').textContent, `0.2 / ${Arrival.duration(h.playing().cfg, 'in').toFixed(1)} s · OPENING GARAGE`, 'time, length and the caption');
+  fn('previewSeek')(Arrival.DURATION + 5);
+  const end = h.step(0.1);
+  assert.equal(h.playing() !== null, true, 'a scrub to the end holds the frame instead of closing');
+  assert.equal(end.active, true); assert.equal(end.z, 0, 'the parked pose');
+  assert.equal(h.$('ga-scrub').value, '1000');
+  fn('previewSeek')(1); fn('previewSeek')(h.playing().t - 1 / 24);
+  assert.ok(Math.abs(h.playing().t - (1 - 1 / 24)) < 1e-9, 'a frame back');
+  // LOOP: past the end it starts again rather than handing the canvas back.
+  h.playing().loop = true; fn('previewPause')(false);
+  fn('previewSeek')(Arrival.DURATION - 0.05); fn('previewPause')(false);
+  h.step(0.1);
+  assert.ok(h.playing() && h.playing().t < 0.2, 'LOOP replays from the top');
+  // EDIT: paused, the panel back, a saved change re-poses the held frame.
+  fn('previewEdit')(true);
+  assert.equal(h.playing().paused, true); assert.equal(h.$('garrival-inner').hidden, false, 'the panel is over the room');
+  saved = { angle: 'right', fov: 70 };
+  fn('refreshPreview')();
+  const now = h.step(0.1);
+  assert.equal(now.fov, 70, 'the new lens on the held frame'); assert.ok(now.eye[0] > 0, 'the new angle');
+  // From EDIT, PREVIEW OUT switches direction and plays.
+  assert.equal(h.start('out'), true);
+  assert.equal(h.playing().dir, 'out'); assert.equal(h.playing().paused, false); assert.equal(h.$('garrival-inner').hidden, true);
+  assert.equal(h.start('in'), false, 'outside EDIT a second start is still refused');
+  // Space and the arrows drive it from the keyboard; Escape still stops.
+  const key = (k, target) => { const ev = { key: k, target, preventDefault() {}, stopPropagation() {} }; for (const f of h.keys) f(ev); };
+  key(' '); assert.equal(h.playing().paused, true, 'Space pauses');
+  const t0 = h.playing().t; key('ArrowRight'); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, '→ steps a frame');
+  key('ArrowRight', { tagName: 'INPUT' }); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, 'the scrub keeps its own arrows');
+  key('Escape'); assert.equal(h.playing(), null);
+});
+test('PREVIEW phase marks: the beats of the timeline on the scrub, JUMP TO in EDIT, and they move with HOLD BEAT', () => {
+  let saved = { angle: 'left', hold: 1 };
+  const h = previewHarness();
+  h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
+  const fn = h.fn;
+  assert.equal(h.start('in'), true);
+  const p = h.playing(), T = Arrival.timeline(p.cfg, 'in'), len = Arrival.duration(p.cfg, 'in');
+  const marks = fn('previewPhases')(p);
+  assert.deepEqual([...marks].slice(0, 5).map((m) => [m.id, m.t]),
+    [['door', 0], ['lane', T.door], ['pause', T.door + T.lane], ['back', T.door + T.lane + T.pause], ['park', T.park]]);
+  assert.ok(marks.every((m, i) => m.t < len && (i === 0 || m.t > marks[i - 1].t)), 'in order, inside the show');
+  assert.ok(h.$('ga-marks').innerHTML.includes(`data-phase="back" style="left:${((T.door + T.lane + T.pause) / len * 100).toFixed(2)}%"`));
+  assert.equal(h.$('ga-phase').hidden, true, 'JUMP TO only in EDIT');
+  // EDIT: JUMP TO holds the first frame of a phase and names the held one.
+  fn('previewEdit')(true);
+  assert.equal(h.$('ga-phase').hidden, false);
+  fn('previewPhase')('back');
+  assert.equal(h.playing().t, T.door + T.lane + T.pause); assert.equal(h.playing().paused, true);
+  assert.equal(h.$('ga-phase').value, 'back');
+  assert.equal(h.step(0).label, 'BRINGING CAR IN');
+  fn('previewSeek')(T.door + 0.1);
+  assert.equal(h.$('ga-phase').value, 'lane', 'the readout follows the scrub');
+  // HOLD BEAT NONE: the pause has no length, so its mark gives way to BACK IN.
+  saved = { angle: 'left', hold: 0 };
+  fn('refreshPreview')();
+  assert.ok(!h.$('ga-marks').innerHTML.includes('data-phase="pause"'));
+  assert.ok(!h.$('ga-phase').innerHTML.includes('PAUSE'));
+  // RACE START: shutter, hold, roll-out, empty lane.
+  assert.equal(h.start('out'), true);
+  const out = fn('previewPhases')(h.playing()), To = Arrival.timeline(h.playing().cfg, 'out');
+  assert.deepEqual([...out].map((m) => m.id).slice(0, 2), ['door', 'run'], 'HOLD BEAT NONE: straight from the shutter to the roll-out');
+  assert.ok(Math.abs(out[1].t - (To.door + To.hold + Arrival.duration(h.playing().cfg, 'out') - To.base)) < 1e-9);
+  assert.equal(out[out.length - 1].id, 'gone');
+});
+test('bindSettings tells a running preview about every saved edit and RESET', () => {
+  const { $ } = harness(); let n = 0;
+  Arrival.bindSettings($, { get: () => null, set() {} }, { preview() {}, changed: () => n++ });
+  $('ga-fov').value = '60'; $('ga-fov').onchange();
+  $('ga-reset').onclick();
+  assert.equal(n, 2);
+});
 
 // ── CAMERAS, SHOT LENGTHS, AFTER THE RACE (#garrival's 2026-10-30 controls) ──
 test('every camera, preset and sequence keeps the eye inside the bay and ends where the sequence ends', () => {
@@ -1604,7 +1711,7 @@ test('LIGHT CUE: off by default; a pick rides the pose; after the race BY RESULT
 });
 
 test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, the aim settles on the live car', () => {
-  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'orbit', 'rear']);
+  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'drone', 'orbit', 'rear', 'steadicam']);
   for (const id of Arrival.RIG_IDS) {
     assert.equal(Arrival.settings({ angle: id }).angle, id);
     for (const [dir, fn] of [['in', Arrival.pose], ['out', Arrival.poseOut], ['home', Arrival.poseHome]]) {
@@ -1644,3 +1751,164 @@ test('BLENDER rigs keep their beats: a slow RETIRED push or a long shutter shot 
   assert.equal(Arrival.rigU(Arrival.settings({}), 'out', 3, 6), 0.5, 'the drive-out keeps t / duration');
 });
 
+// Departure's Blender export: exercise the shipped table, including interpolation
+// between authored keys, rather than reconstructing the author's path formula.
+const departureContext = vm.createContext({});
+vm.runInContext(readFileSync(new URL('../../js/data/garage-departure-motion.js', import.meta.url), 'utf8'), departureContext, { filename: absSrc('js/data/garage-departure-motion.js') });
+const DepartureMotion = vm.runInContext('GarageDepartureMotion', departureContext);
+const departureOutput = () => ({ eye: [0, 0, 0], aim: [0, 0, 0] });
+test('departure export is deterministic, finite, mirrored and reuses caller-owned vectors', () => {
+  const a = departureOutput(), b = departureOutput(), repeat = departureOutput();
+  const eye = a.eye, aim = a.aim;
+  for (let i = 0; i <= 1000; i++) {
+    const u = i / 1000;
+    assert.equal(DepartureMotion.sample(u, 1, a), a);
+    DepartureMotion.sample(u, -1, b); DepartureMotion.sample(u, 1, repeat);
+    assert.deepEqual(a, repeat);
+    assert.equal(a.eye, eye); assert.equal(a.aim, aim);
+    for (const v of [a.x, a.z, a.yaw, a.distance, a.fov, ...a.eye, ...a.aim]) assert.ok(Number.isFinite(v));
+    assert.equal(a.x, -b.x); assert.equal(a.yaw, -b.yaw);
+    assert.equal(a.z, b.z); assert.equal(a.distance, b.distance);
+    assert.equal(a.eye[0], -b.eye[0]); assert.equal(a.aim[0], -b.aim[0]);
+    assert.deepEqual(a.eye.slice(1), b.eye.slice(1)); assert.deepEqual(a.aim.slice(1), b.aim.slice(1));
+  }
+  DepartureMotion.sample(-1, 1, a); DepartureMotion.sample(NaN, 1, b); assert.deepEqual(a, b);
+  DepartureMotion.sample(2, 1, a); DepartureMotion.sample(1, 1, b); assert.deepEqual(a, b);
+});
+test('departure swept car envelope clears the doorway on both lane sides and camera stays continuous', () => {
+  for (const side of [-1, 1]) {
+    const p = departureOutput(), previousEye = [0, 0, 0];
+    let previousDistance = 0;
+    for (let i = 0; i <= 10000; i++) {
+      DepartureMotion.sample(i / 10000, side, p);
+      assert.ok(p.distance >= previousDistance, 'wheel distance never reverses');
+      previousDistance = p.distance;
+      const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+      // Intersect all four rectangle edges with the full 30 cm door reveal;
+      // checking corners alone could miss an edge crossing the jamb.
+      const corners = [[-.95, -2.69], [.95, -2.69], [.95, 3.18], [-.95, 3.18]]
+        .map(([x, z]) => [p.x + x * c + z * s, p.z - x * s + z * c]);
+      for (const plane of [6.1, 6.25, 6.4]) {
+        for (let j = 0; j < 4; j++) {
+          const a = corners[j], b = corners[(j + 1) % 4];
+          if ((a[1] <= plane && b[1] >= plane || b[1] <= plane && a[1] >= plane) && a[1] !== b[1]) {
+            const x = a[0] + (b[0] - a[0]) * (plane - a[1]) / (b[1] - a[1]);
+            assert.ok(Math.abs(x) < 2.7, `door reveal clear at u=${i / 10000}, x=${x}`);
+          }
+        }
+      }
+      if (i) assert.ok(Math.hypot(...p.eye.map((v, j) => v - previousEye[j])) < .01, 'camera has no position cut');
+      previousEye.splice(0, 3, ...p.eye);
+      assert.ok(p.eye[1] > 1.8 && p.eye[1] < 3, 'camera remains above crew heads');
+      assert.ok(p.z < 15.1, 'car stays in front of the far pit wall');
+    }
+    assert.ok(p.distance > 24 && p.distance < 24.1);
+    assert.ok(Math.abs(p.yaw - side * Math.PI / 2) < .00001);
+  }
+});
+
+test('departure bundle failure restores Start Race and stale settlement cannot launch a newer owner', async () => {
+  for (const mode of ['false', 'reject', 'cancel']) {
+    const h = sheetRecoveryHarness({ manual: true });
+    delete h.ctx.GarageDepartureMotion;
+    const gate = sheetRecoveryDeferred();
+    h.ctx.ensureRaceSession = () => gate.promise;
+    const view = h.start(); h.assertBusy(view);
+    if (mode === 'cancel') h.ctx.cancelIntro();
+    if (mode === 'reject') gate.reject(new Error('bundle unavailable')); else gate.resolve(mode !== 'false');
+    await h.drain(); h.assertRetry(view);
+    assert.equal(h.intros.length, 0);
+  }
+});
+
+test('departure wheels cache fitted layers and rotate rims while calipers remain fixed', () => {
+  let builds = 0, freed = 0;
+  const draws = [];
+  const c = vm.createContext({ CarWheels: { tints: () => ({}) },
+    Car3D: { TYRE_BAND: [null, [1,0,0]], BRAKE_CALIPER: [null, [1,1,0]],
+      buildWheelLayers() { builds++; return { rotating: {}, fixed: {} }; } },
+    M4: { mulTo(out, _base, local) { out.set(local); } } });
+  vm.runInContext(readFileSync(new URL('../../js/garage/departure-wheels.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/departure-wheels.js') });
+  const Wheels = vm.runInContext('GarageDepartureWheels', c);
+  const wheels = Wheels.create({ createMesh: data => data, freeMesh() { freed++; },
+    draw(_mesh, matrix, opts) { draws.push({ matrix: Array.from(matrix), opts }); } });
+  wheels.prepare('one', {}, { tyres: 1, brakes: 1 });
+  wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 2);
+  wheels.draw([], .34 * Math.PI / 2, 0, {});
+  assert.equal(draws.length, 8);
+  assert.ok(Math.abs(draws[0].matrix[5]) < 1e-6); assert.equal(draws[1].matrix[5], 1);
+  assert.equal(draws[0].opts.doubleSided, true);
+  wheels.draw([], 1, 0, {}); assert.equal(builds, 2, 'rendering never rebuilds geometry');
+  wheels.release(); assert.equal(freed, 4);
+  wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 4, 'repeat launch restores released wheels');
+});
+
+// ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
+test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
+  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary']);
+  for (const id of Object.keys(Arrival.STYLES)) {
+    const v = Arrival.applyStyle({ enterCrew: 'current', speed: 2, door: 3.5 }, id);
+    assert.deepEqual([v.enterCrew, v.speed, v.door], ['current', 2, 3.5], `${id}: crews and timing stay the player's`);
+    for (const [k, want] of Object.entries(Arrival.STYLES[id].look)) if (k !== 'cue' && k !== 'light') assert.deepEqual(v[k], want, `${id}.${k}`);
+  }
+  for (const id of ['cinema', 'documentary']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
+  assert.equal(Arrival.styleOf(null), null, 'the shipped look is no style');
+  assert.deepEqual(Arrival.applyStyle(null, 'nope'), Arrival.settings(null), 'an unknown style is the saved settings');
+  assert.equal(Arrival.settings(null).race, 'dry', 'PREVIEW RACE defaults to the shipped dry look');
+});
+test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
+  const dom = makeDom(), doc = dom.document;
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {} }, CUES: ['lightsup'] } });
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
+  const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
+  const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
+  row('ga-enabled', 'input').type = 'checkbox';
+  const angle = row('ga-angle', 'select');
+  for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
+  row('ga-fov', 'input');
+  let saved = null;
+  const $ = (id) => doc.getElementById(id);
+  A.bindSettings($, { get: () => saved, set: (k, v) => { saved = v; } });
+  const bar = $('ga-styles');
+  assert.ok(bar, 'built in JS (index.html is at its shellNodes ceiling)');
+  const kids = rows.children;
+  assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
+  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY']);
+  $('ga-style-cinema').onclick();
+  assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
+  assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
+  $('ga-style-broadcast').onclick();
+  assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
+  assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
+});
+test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
+  const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });
+  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), ctx);
+  const A = vm.runInContext('GarageArrival', ctx);
+  const held = (extra) => { const c = Object.assign(A.settings({ result: 'podium' }), extra); return A.poseFor('home')(A.duration(c, 'home') - 0.01, c, false).label; };
+  assert.equal(held({ pos: 3, driver: 'Norris', fastest: true }), 'P3 · NORRIS · PODIUM FINISH · FASTEST LAP');
+  assert.equal(held({ pos: 3 }), 'P3 · PODIUM FINISH', 'no name known: the shipped title');
+  assert.equal(held({ result: 'dnf', pos: 14, driver: 'Norris', fastest: true }), 'NORRIS · RETIRED', 'a retirement has no place and no fastest lap');
+  const light = (race, result = 'win') => A.lightFor(Object.assign(A.settings({ result }), { race }), 'home');
+  assert.deepEqual([light('dry'), light('wet'), light('night'), light('wet', 'dnf')], ['showroom', 'rain', 'neon', 'rain']);
+  assert.equal(A.lightFor(A.settings({ result: 'win', race: 'wet', homeLight: 'broadcast' }), 'home'), 'broadcast', 'a picked mood wins');
+  assert.equal(A.lightFor(A.settings({ race: 'wet' }), 'in'), null, 'the pit-stop arrival keeps its own lighting');
+  assert.equal(A.settings({ race: 'storm' }).race, 'dry');
+});
+test('noteResult carries the race to the way home: driver, fastest lap, wet, night', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// AFTER THE RACE: endRace notes'), cam.indexOf('const arrivalCar'));
+  const player = { name: 'Lando Norris', best: 81.2 }, rival = { best: 81.9 }, out = { best: 80.1, retired: true };
+  const G = { player, trackIdx: 0, raceWeather: 'rain', raceTimeOfDay: 'default', store: { get: () => null } };
+  const c = vm.createContext({ GarageArrival: Arrival, G, endHome() {}, performance: { now: () => 1 }, Tracks: { LIST: [{ night: true }] },
+    RaceCeremony: { eligible: () => true }, LoadingScreen: { isAutomation: () => false }, arrival: { start() {} } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const note = vm.runInContext('noteResult', c);
+  const n = note([rival, player, out], {});
+  assert.deepEqual([n.driver, n.fastest, n.wet, n.night], ['Lando Norris', true, true, true], 'a retired car\'s quicker lap does not count');
+  G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
+  const d = note([rival, player], {});
+  assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
+});

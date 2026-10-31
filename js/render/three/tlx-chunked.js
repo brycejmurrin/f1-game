@@ -625,33 +625,38 @@
         ic[i] = c; cnt += c;
         if (!Ctor || a.BYTES_PER_ELEMENT > Ctor.BYTES_PER_ELEMENT) Ctor = a.constructor;
       }
-      if (!s) s = slots[si] = { n: 0, ids: [], geo: null, arr: null };
+      if (!s) s = slots[si] = { n: 0, ids: [], geo: null, arr: null, res: [], rc: [], rn: 0, rb: 0, r2: [], c2: [] };
       const g = s.geo || (s.geo = new THREE.BufferGeometry());
       if (!g.boundingSphere) {
         g.boundingSphere = new THREE.Sphere();
         const src = vis[0].geo;
         for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
       }
-      // Perf hunt 7 (census 41021778161: index 82 KB/f of TLX WebGPU's uploads): only a fresh array rewrites from
-      // 0; otherwise the leading chunks that did not change keep their bytes and the upload range starts at the
-      // first change.
-      let keep = 0;
-      if (!s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor) {
-        // A regrowth takes 1.5x headroom (capped at the record's whole index count),
-        // so a widening view replaces the buffer O(log) times, not on every new high.
-        let cap = cnt;
-        if (s.arr && s.arr.constructor === Ctor) {
-          let tot = mesh._tlxIdxTotal;
-          if (!(tot > 0)) {
-            tot = 0;
-            for (const ch of mesh.chunks) { const ix = ch.geo && ch.geo.index; if (ix) tot += ix.count; }
-            mesh._tlxIdxTotal = tot;
-          }
-          cap = Math.max(cnt, Math.min(tot, Math.ceil(s.arr.length * 1.5)));
+      let tot = mesh._tlxIdxTotal;
+      if (!(tot > 0)) {
+        tot = 0;
+        for (let k = 0; k < mesh.chunks.length; k++) {
+          const ch = mesh.chunks[k], ix = ch.geo && ch.geo.index;
+          ch._tlxCi = k;   // record order, which cull lists in: the run search below is one merge walk
+          if (ix) tot += ix.count;
         }
+        mesh._tlxIdxTotal = tot;
+      }
+      // GPU hunt 3 (#4272 item 3; census 41030658536: 200-920 KB index rewrites when the FIRST visible chunk
+      // changed): a sliding window. The chunks the buffer holds (s.res from offset s.rb, drawn or not) keep their
+      // offsets; the new set keeps its longest run shared with them in place and writes only the chunks before and
+      // after it, so a head chunk leaving uploads nothing and one entering uploads itself. The GPU draws the same
+      // indices in the same order from a moved drawRange.start. A fresh array, or a set that does not fit around
+      // its run, rewrites from scratch, centred.
+      let fresh = !s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor, made = null;
+      if (fresh) {
+        // 1.5x headroom (capped at the record's whole index count): the window's slack, and a widening view
+        // replaces the buffer O(log) times, not on every new high.
+        const grow = s.arr && s.arr.constructor === Ctor ? s.arr.length : 0;
+        const cap = Math.max(cnt, Math.min(tot, Math.ceil(Math.max(cnt, grow) * 1.5)));
         const old = g.index;
         s.arr = new Ctor(cap);
-        const ia = new THREE.BufferAttribute(s.arr, 1);
+        const ia = made = new THREE.BufferAttribute(s.arr, 1);
         // The vendor's narrow-index opt-in (PATCHES §20), as packIndex marks every
         // chunk's own index: unmarked, three's WebGPU backend swaps ia.array for a
         // Uint32 copy at creation, every later write below lands in the orphaned
@@ -660,30 +665,61 @@
         g.setIndex(ia);
         // The replaced index's GPU buffer, now held by nothing but the GC.
         if (old && ctx && ctx.releaseAttribute) ctx.releaseAttribute(old);
-      } else for (const m = Math.min(s.n, n); keep < m && s.ids[keep] === vis[keep];) keep++;
-      let o = 0, from = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
-      const dst = s.arr;
+      }
+      const dst = s.arr, res = s.res, rc = s.rc;
+      let bi = 0, bj = 0, bl = 0, bc = 0, P = 0;   // longest shared run: res[bi..], vis[bj..], bl chunks, bc indices at P
+      for (let i = 0, j = 0, o = s.rb, ri = 0, rj = 0, rl = 0, rn = 0, rp = 0; !fresh && i < s.rn && j < n;) {
+        const a = res[i], b = vis[j];
+        if (a === b && rc[i] === ic[j]) {
+          if (rl > 0 && ri + rl === i && rj + rl === j) { rl++; rn += ic[j]; } else { ri = i; rj = j; rl = 1; rn = ic[j]; rp = o; }
+          if (rn > bc) { bc = rn; bi = ri; bj = rj; bl = rl; P = rp; }
+          o += rc[i]; i++; j++;
+        } else if (a._tlxCi < b._tlxCi) { o += rc[i]; i++; } else j++;
+      }
+      let pre = 0;
+      for (let i = 0; i < bj; i++) pre += ic[i];
+      let start = P - pre;
+      if (!(bl > 0 && start >= 0 && start + cnt <= dst.length)) {
+        // A set drifting off one end restarts at the other, so a steady drive along the arc (record order) spends
+        // the whole slack before the next rewrite. Even: a Uint16 range starts 4-byte aligned.
+        start = P = (bl > 0 ? (start < 0 ? dst.length - cnt : 0) : (dst.length - cnt) >> 1) & ~1;
+        fresh = true; bi = bj = bl = bc = pre = 0;
+      }
+      const end = start + cnt, post = end - (P + bc);
+      let o = start, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       for (let i = 0; i < n; i++) {
         const ch = vis[i], a = ch.geo.index.array, c = ic[i];
-        if (i < keep) from = o + c;
-        else if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
-        else for (let k = 0; k < c; k++) dst[o + k] = a[k];
+        if (i < bj || i >= bj + bl) {
+          if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
+          else for (let k = 0; k < c; k++) dst[o + k] = a[k];
+        }
         o += c; s.ids[i] = ch;
         const mn = ch.min, mx = ch.max;
         if (!mn || !mx) continue;
         if (mn[0] < x0) x0 = mn[0]; if (mn[1] < y0) y0 = mn[1]; if (mn[2] < z0) z0 = mn[2];
         if (mx[0] > x1) x1 = mx[0]; if (mx[1] > y1) y1 = mx[1]; if (mx[2] > z1) z1 = mx[2];
       }
-      s.n = n;
-      g.setDrawRange(0, o);
-      const attr = g.index, r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
-      const ur = attr.updateRanges || (attr.updateRanges = []);
-      // three clears updateRanges after it uploads (both backends): a range still queued is a change that never
-      // reached the GPU (the pass did not draw), so the new one starts no later than it.
-      if (ur.length === 1 && ur[0] === r && r.count > 0) from = Math.min(from, r.start);
-      r.start = from; r.count = o - from;
-      if (!(ur.length === 1 && ur[0] === r)) { ur.length = 0; ur.push(r); }
-      if (r.count > 0) attr.needsUpdate = true;   // a set that only lost tail chunks moves the draw range alone
+      // What the buffer now holds: the new set, plus the old chunks on a side it did not write (still intact).
+      const r2 = s.r2, c2 = s.c2;
+      let m = 0, rb = start;
+      if (bl > 0 && pre === 0) { rb = s.rb; for (let i = 0; i < bi; i++) { r2[m] = res[i]; c2[m++] = rc[i]; } }
+      for (let i = 0; i < n; i++) { r2[m] = vis[i]; c2[m++] = ic[i]; }
+      if (bl > 0 && post === 0) for (let i = bi + bl; i < s.rn; i++) { r2[m] = res[i]; c2[m++] = rc[i]; }
+      s.res = r2; s.rc = c2; s.r2 = res; s.c2 = rc; s.rn = m; s.rb = rb; s.n = n;
+      g.setDrawRange(start, cnt);
+      // three r186 uploads each queued range with its own writeBuffer / bufferSubData, in list order, then clears
+      // the list (both backends): a range still queued never reached the GPU (the pass did not draw), so it stays.
+      // A new attribute queues none: three's create uploads the whole array and leaves the ranges for the NEXT
+      // update to re-send.
+      const attr = g.index, ur = attr.updateRanges || (attr.updateRanges = []);
+      if (attr !== made && (pre > 0 || fresh)) ur.push({ start, count: fresh ? cnt : pre });
+      if (post > 0 && !fresh) ur.push({ start: end - post, count: post });
+      if (ur.length > 4) {   // many owed ranges: one span covers them
+        let a = Infinity, b = 0;
+        for (const r of ur) { if (r.start < a) a = r.start; if (r.start + r.count > b) b = r.start + r.count; }
+        ur.length = 0; ur.push({ start: a, count: b - a });
+      }
+      if (ur.length) attr.needsUpdate = true;   // a set inside what the buffer holds moves the draw range alone
       const bs = g.boundingSphere, cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5, cz = (z0 + z1) * 0.5;
       const ct = bs.center || (bs.center = new THREE.Vector3());
       ct.x = cx; ct.y = cy; ct.z = cz;
@@ -715,7 +751,7 @@
      * A ZERO-LENGTH VIEW, NOT null. Every three site that touches .array after
      * upload wants a PROPERTY OF THE TYPE, never the data, and each one is a
      * null dereference away from taking the renderer down (all four verified
-     * against vendor/three-0.186.1/three.webgpu.min.js):
+     * against vendor/three-0.187.0/three.webgpu.min.js):
      *
      *   node builder      attribute.array.constructor, on every pass it has not
      *                     compiled before — the env probe threw on 41 WebGL2 /

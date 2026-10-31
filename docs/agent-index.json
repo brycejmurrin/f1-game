@@ -14,7 +14,7 @@
       "name": "awaitPresent",
       "group": "perceive",
       "signature": "awaitPresent(timeoutMs)?",
-      "summary": "WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome"
+      "summary": "WAIT FOR THE PIXELS — resolves once a real frame is on screen; screenshot after it (before: stale or black canvas)"
     },
     {
       "name": "field",
@@ -83,10 +83,16 @@
       "summary": "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line), plus bankingDeg/camber,…"
     },
     {
+      "name": "ersPlan",
+      "group": "act",
+      "signature": "ersPlan(plan?)",
+      "summary": "sector ERS plan, 3× manual|deploy|save; get/set"
+    },
+    {
       "name": "objective",
       "group": "act",
       "signature": "objective()",
-      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once"
+      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once"
     },
     {
       "name": "rollout",
@@ -3157,6 +3163,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/garage-departure-motion.js",
+      "global": "GarageDepartureMotion",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/data/hub.js",
       "global": "DataHub",
       "roster": "LAZY_DATA"
@@ -3412,9 +3423,19 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/departure-wheels.js",
+      "global": "GarageDepartureWheels",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/garage/experience.js",
       "global": "GarageExperience",
       "roster": "tag"
+    },
+    {
+      "path": "js/garage/garage-data.js",
+      "global": "GarageData",
+      "roster": "LAZY_RACE"
     },
     {
       "path": "js/garage/livery-design-editor.js",
@@ -3980,6 +4001,11 @@
       "path": "js/race/duel.js",
       "global": "Duel",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/energy-plan.js",
+      "global": "EnergyPlan",
+      "roster": "tag"
     },
     {
       "path": "js/race/engineer.js",

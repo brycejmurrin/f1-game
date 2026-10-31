@@ -904,7 +904,7 @@ const BOX_HW = 2.20, BOX_ZF = 4.25, BOX_ZB = -4.00;
 // the door is the lane the car pits in (js/track/core/mesh.js builds the real
 // one from the same numbers, and the box is the same 8 m).
 const PIT_B = TrackPit.BANDS;
-const PIT_HW = 10.5, PIT_Z0 = Z_DOOR + 0.05;
+const PIT_HW = 22, PIT_Z0 = Z_DOOR + 0.05;
 const PIT_WORK1 = PIT_Z0 + PIT_B.work, PIT_CORR1 = PIT_WORK1 + PIT_B.corridor, PIT_Z1 = PIT_CORR1 + PIT_B.fast;
 const PIT_FAST_Z = (PIT_CORR1 + PIT_Z1) / 2;
 function buildPitLane(out, liv, night) {
@@ -920,7 +920,7 @@ function buildPitLane(out, liv, night) {
   const ASPHALT = [0.20, 0.205, 0.215], LINE = [0.88, 0.89, 0.91];
   const WALL = [0.30, 0.31, 0.34], WALL_TOP = [0.46, 0.47, 0.50];
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  // 21 x 5.45 m — 114 m2, the entire backdrop of the REAR preset, seen through
+  // Extended lane for the departure follow shot, also seen from REAR through
   // a 5.4 x 4.8 m aperture. As ONE `tile()` (two triangles, one flat colour)
   // ten spot lights have nothing to fall on and the lane reads as a painted
   // backdrop rather than a surface. Subdivided 12 x 4 with a little
@@ -948,12 +948,12 @@ function buildPitLane(out, liv, night) {
   // Bollards along the FAR edge, between the outer line and the wall — never
   // mid-lane, which is where a car drives. The vertical marks are what give the
   // lane depth from the low REAR camera.
-  for (let i = -3; i <= 3; i++)
+  for (let i = -7; i <= 7; i++)
     cyl(out, i * 2.9, APRON_Y + 0.008, PIT_Z1 - 0.08, 0.055, 0.62,
         i % 2 ? [0.80, 0.80, 0.84] : [0.72, 0.30, 0.10], 6, MAT.METAL);
   // The garages opposite: a low run of blocks with lit fascias, so the far side
   // of the lane is a row of buildings rather than the end of the mesh.
-  for (let i = -3; i <= 3; i++) {
+  for (let i = -7; i <= 7; i++) {
     block(out, i * 3.0, APRON_Y + 1.60, PIT_Z1 + 1.30, 1.42, 1.10, 0.60,
           scale(WALL, i % 2 ? 0.92 : 1.06), MAT.CONCRETE);
     // A fascia BAND on the front face, not a roof slab: 0.16 m deep, so its
@@ -962,18 +962,30 @@ function buildPitLane(out, liv, night) {
     block(out, i * 3.0, APRON_Y + 2.78, PIT_Z1 + 0.78, 1.46, 0.10, 0.08,
           scale(WALL_TOP, 1.1), MAT.METAL);
   }
+  // Outward frontage: the inward shell remains the inspection cutaway. These
+  // one-sided faces stay invisible inside; only the exterior follow sees them.
+  const AP = TrackPit.BAY.doorW / 2, DH = TrackPit.BAY.doorH, FZ = Z_DOOR + 0.025;
+  for (const side of [-1, 1]) {
+    panelGrid(out, [side < 0 ? -HALF_W : AP, 0, FZ], [HALF_W - AP, 0, 0], [0, CEIL_Y, 0], 4, 4, [0, 0, 1], () => WALL, MAT.CONCRETE);
+    for (let bay = 1; bay <= 2; bay++) {
+      const x = side * TrackPit.PITCH * bay;
+      block(out, x, 2.5, Z_DOOR - 0.35, HALF_W - 0.10, 2.5, 0.35, scale(WALL, 0.85), MAT.CONCRETE);
+      block(out, x, 4.65, Z_DOOR + 0.015, HALF_W - 0.16, 0.16, 0.04, c1, MAT.METAL);
+    }
+  }
+  panelGrid(out, [-AP, DH, FZ], [AP * 2, 0, 0], [0, CEIL_Y - DH, 0], 8, 1, [0, 0, 1], () => c1, MAT.METAL);
   // A wall to stop the eye. Without it the lane runs to the apron rim and
   // fades into the clear colour, which reads as fog rather than as somewhere.
   block(out, 0, APRON_Y + 0.50, PIT_Z1 + 0.18, PIT_HW, 0.50, 0.16, WALL, MAT.CONCRETE);
   block(out, 0, APRON_Y + 1.03, PIT_Z1 + 0.18, PIT_HW, 0.05, 0.20, WALL_TOP, MAT.METAL);
   // A team-coloured hoarding along it, so the far side of the lane is a place
   // rather than a grey slab.
-  for (let i = -2; i <= 2; i++)
+  for (let i = -5; i <= 5; i++)
     block(out, i * 3.6, APRON_Y + 0.62, PIT_Z1 + 0.02, 1.55, 0.26, 0.05,
           scale(c1, night ? 1.25 : (i % 2 ? 0.55 : 0.9)));
 }
 function buildApron(out) {
-  const RINGS = 7, SEG = 40, R = 18, Y = -0.04;
+  const RINGS = 7, SEG = 40, R = 30, Y = -0.04;
   const HOT = [0.105, 0.107, 0.115];
   const push = (x, z, t) => {
     const k = smooth(t);
@@ -1155,7 +1167,51 @@ function buildStatic(liv, opts) {
 // The room's build identity. `geom` rebuilds meshes, `live` repaints the 512
 // screens, `dressId` repaints the crest, and `key` is the whole thing plus the
 // spec boards. rebuild() and prepared() share it.
+//
+// Every garage frame asks, and the answer almost never moves, so a raw-input
+// stamp gates the string work (perf hunt 9). The stamp holds EVERY value the
+// strings below read — roomKeys itself, ctxKey, GarageExperience.careerKey and,
+// through `info`'s identity, boardKey (boardInfo returns one frozen-by-convention
+// object per stamp and builds a fresh one on any change). Values compare with
+// ===, which is stricter than the toFixed(3) strings: a sub-rounding wobble
+// recomputes the strings and lands on the same key, never a stale one.
+const _rkNow = [], _rkWas = [];
+let _rkKeys = null;
+function rkColour(out, c) {
+  if (!c) { out.push(null, null, null, 0); return; }
+  const v = rgb(c, [0, 0, 0]);
+  out.push(v[0], v[1], v[2], 1);
+}
+function roomStamp(team, liv, info, ctx) {
+  const o = _rkNow;
+  o.length = 0;
+  const d0 = seatDriverAt(team, 0), d1 = seatDriverAt(team, 1);
+  o.push(team && team.id, (team && team.legend) || "", info, d0 && d0.num, d1 && d1.num, logoGen, GaragePrims.lookId());
+  rkColour(o, liv && liv.c1); rkColour(o, liv && (liv.accent || liv.stripe || liv.c2)); rkColour(o, liv && liv.c2);
+  rkColour(o, liv && liv.logo); rkColour(o, liv && liv.logo2); rkColour(o, liv && liv.logo3);
+  o.push((liv && liv.sponsors) || "-", !!ctx);
+  if (ctx) {
+    const last = ctx.last, a = ctx.achievements, sp = ctx.sponsor;
+    const hyd = ctx.track && typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(ctx.track) ? 1 : 0;
+    o.push(ctx.track ? ctx.track.id : "-", hyd, ctx.weather, ctx.tod, ctx.wins | 0, !!ctx.night, !!ctx.career, ctx.round | 0,
+      !!last, last && last.dnf, last && (last.p | 0), last && (last.pts | 0), sp && sp.label, !!ctx.studio,
+      !!(a && a.active), a && a.facility, a && a.wins, a && a.podiums, a && a.titles);
+  }
+  return o;
+}
 function roomKeys(team, liv, info, ctx) {
+  const st = roomStamp(team, liv, info, ctx);
+  if (_rkKeys && st.length === _rkWas.length) {
+    let same = true;
+    for (let i = 0; i < st.length; i++) if (st[i] !== _rkWas[i]) { same = false; break; }
+    if (same) return _rkKeys;
+  }
+  _rkWas.length = st.length;
+  for (let i = 0; i < st.length; i++) _rkWas[i] = st[i];
+  _rkKeys = roomKeyStrings(team, liv, info, ctx);
+  return _rkKeys;
+}
+function roomKeyStrings(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
@@ -1170,7 +1226,8 @@ function roomKeys(team, liv, info, ctx) {
                + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
-  return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
+  const board = boardKey(info);
+  return { geom, live, dressId, board, key: `${geom}|${live}|${dressId}|${board}` };
 }
 // A paint edit repaints a bay atlas of the SAME size: a backend that can (TLX refillTexture) re-fills the live
 // handle in place, so nothing is allocated. Free-then-create leaned on the TLX retire pool, and a handle retired
@@ -1207,7 +1264,7 @@ function uploadLive(team, liv, ctx, now) {
     liveFail++; liveRetryAt = now + 1000; liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
 function rebuild(team, liv, info, ctx) {
-  const { geom, live, dressId, key } = roomKeys(team, liv, info, ctx);
+  const { geom, live, dressId, board, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   const uploads = !!(_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined");
   if (live !== liveKey) { liveFail = 0; liveRetryAt = 0; }
@@ -1272,7 +1329,7 @@ function rebuild(team, liv, info, ctx) {
     liveKey = live;
   }
   if (dressId !== dressIdKey) { dressCanvas = null; dressIdKey = dressId; }
-  const dressFull = dressId + "|" + boardKey(info);
+  const dressFull = dressId + "|" + board;
   if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
@@ -1415,6 +1472,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     const sheen = mirrorSheen(eye, carMat);
     if (sheen > 0.02) {
       _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
+      if (ctx && ctx.departureWheels) ctx.departureWheels(arrivalMirror, MIRROR_RESOLVE);
       ensureMirrorFade(liv);
       if (mirrorFadeMesh) {
         _mirrorFadeOpts.alpha = 1 - sheen;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-wWx+z9KMUGEcBO5lr2IV0QGE1Fkqx0HRvn6hrkRx0g4=' 'sha256-AeLreRKLyHmzWVUwCsEdK9LF4XrDWEj5IOeI0xAa2jo=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-wWx+z9KMUGEcBO5lr2IV0QGE1Fkqx0HRvn6hrkRx0g4=' 'sha256-AeLreRKLyHmzWVUwCsEdK9LF4XrDWEj5IOeI0xAa2jo=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -933,6 +933,10 @@
             <p id="pm-coach-summary" class="adv-help" data-help="keep">No coaching tips recorded this session.</p>
             <p id="pm-connection" class="adv-help" data-help="keep" hidden></p>
             <ol id="pm-incident-log"></ol>
+            <details id="pm-last-lap-energy">
+              <summary class="adv-more-btn">LAST LAP · ENERGY REVIEW</summary>
+              <p id="pm-last-lap-energy-text" class="adv-help" data-help="keep">Complete one full clean lap in stable conditions for a measured sector-by-sector review. Partial laps, pits, incidents, cautions and changed conditions are excluded.</p>
+            </details>
             <details id="pm-technical-data">
               <summary class="adv-more-btn" data-i18n="pause.techdata">TECHNICAL DATA</summary>
               <p class="adv-help">Optional JSON download: recent driving samples, race events and estimates. Driving samples are recorded while coach or practice is active.</p>
@@ -965,6 +969,22 @@
           <details open id="pm-practice-panel">
             <summary class="adv-more-btn" data-i18n="pause.practice">PRACTICE A SECTION</summary>
             <p id="pm-practice-help" class="adv-help">Choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal. REWIND 10s steps the car back without one. A Time Trial is always practice; in a race or qualifying, ARM PRACTICE first — that makes the session unscored and cannot be undone.</p>
+            <details id="pm-practice-pathway">
+              <summary class="adv-more-btn">PRACTICE PATHWAY · CLEAN EXITS</summary>
+              <p class="adv-help">A self-guided checklist, not verified drill completion. Practise braking, brake release into a turn, then a clean lap. Choose a goal, save a starting point and resume. No settings or assists change.</p>
+              <div>
+                <button id="pm-pathway-braking" type="button" aria-describedby="pm-practice-state">CHOOSE 1. Controlled stop</button>
+                <label style="display:block;min-height:var(--tap-paint)"><input id="pm-pathway-check-braking" type="checkbox"> I practised this step</label>
+              </div>
+              <div>
+                <button id="pm-pathway-trail" type="button" aria-describedby="pm-practice-state">CHOOSE 2. Brake release into a turn</button>
+                <label style="display:block;min-height:var(--tap-paint)"><input id="pm-pathway-check-trail" type="checkbox"> I practised this step</label>
+              </div>
+              <div>
+                <button id="pm-pathway-lap" type="button" aria-describedby="pm-practice-state">CHOOSE 3. Full clean lap</button>
+                <label style="display:block;min-height:var(--tap-paint)"><input id="pm-pathway-check-lap" type="checkbox"> I practised this step</label>
+              </div>
+            </details>
             <button id="pm-practice-arm" type="button" aria-describedby="pm-practice-state" hidden>ARM PRACTICE (UNSCORED)</button>
             <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
               <span class="tune-label" id="pm-drill-label" data-i18n="pause.goal">PRACTICE GOAL</span>
@@ -1088,7 +1108,13 @@
         </section>
 
         <section id="pm-panel-a11y" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
-        <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
+        <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details id="daily-history" class="adv-help" data-help="keep" style="grid-column:1 / -1;min-width:0">
+            <summary class="adv-more-btn">DAILY HISTORY · RECENT DAYS</summary>
+            <p id="daily-history-note">Up to 7 saved days and 4 classes per day on this device. Class numbers are local to each day, not a comparison across days. Historical medals are not available.</p>
+            <ul id="daily-history-list" style="overflow-wrap:anywhere"><li>No saved Daily laps yet. Complete a valid Daily lap to start your history.</li></ul>
+          </details>
+        </section>
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
 <details id="adv-feel-details">
@@ -3541,7 +3567,7 @@
   <div id="garrival-inner" class="sheet">
     <div id="ga-head"><h2>GARAGE ENTER &amp; LEAVE</h2></div>
     <div id="ga-rows" class="pane">
-      <p class="adv-help">Three sequences: PIT STOP (WORK ON CAR brings the car in), RACE START (the drive-out every RACE! opens on) and AFTER THE RACE (your next garage visit brings the car home, flavoured by how the race ended). Reduced motion skips the arrivals and removes camera sway. PREVIEW plays any of them here, even with animations off; Escape stops it.</p>
+      <p class="adv-help">Three sequences: PIT STOP (WORK ON CAR brings the car in), RACE START (the drive-out every RACE! opens on) and AFTER THE RACE (your next garage visit brings the car home, flavoured by how the race ended). Reduced motion skips the arrivals and removes camera sway. PREVIEW plays any of them here, even with animations off: pause, scrub or step it frame by frame (Space, arrow keys), LOOP it, or EDIT to hold the frame, JUMP TO a phase (the ticks under the scrub) and change a setting on it; Escape stops it.</p>
       <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ANIMATIONS</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
       <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
         <select id="ga-speed"><option value="0.5">SLOW · 0.5×</option><option value="1" selected>NORMAL · 1×</option><option value="2">FAST · 2×</option></select>
@@ -3646,10 +3672,10 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "./vendor/three-0.186.1/three.webgpu.min.js",
-    "three/webgpu": "./vendor/three-0.186.1/three.webgpu.min.js",
-    "three/tsl": "./vendor/three-0.186.1/three.tsl.min.js",
-    "three/addons/": "./vendor/three-0.186.1/addons/",
+    "three": "./vendor/three-0.187.0/three.webgpu.min.js",
+    "three/webgpu": "./vendor/three-0.187.0/three.webgpu.min.js",
+    "three/tsl": "./vendor/three-0.187.0/three.tsl.min.js",
+    "three/addons/": "./vendor/three-0.187.0/addons/",
     "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
     "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js",
     "@noble/secp256k1": "./vendor/trystero-0.25.4/noble-secp256k1.js"
@@ -3859,6 +3885,7 @@
 <script defer crossorigin="anonymous" src="js/race/wind.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/energy-plan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/drive-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/lap-record.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/storm-flash.js?v=dev"></script>

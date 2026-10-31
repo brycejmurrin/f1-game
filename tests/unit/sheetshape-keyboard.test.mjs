@@ -312,3 +312,26 @@ test("a rotation scrolls the top layer's focused control back into its scroller"
   btn._rect = box(900, 44); layer = null; sb.innerWidth = 390; sb.innerHeight = 844; fire("win", "resize");
   assert.equal(calls.length, 1, "no menu layer (racing): nothing moves");
 });
+
+/* uihunt4-flows-1030 #5: at 844x390 the career guide's contents rail is a SIDEWAYS strip (overflow-x auto,
+   overflow-y hidden). A rotation reset its scrollLeft and left the focused link at x 1339 of an 844 screen;
+   the settle pass only looked for vertical scrollers. */
+test("a rotation scrolls a focused control back into a sideways strip too", () => {
+  let layer = null;
+  const { dom, sb, fire } = boot({
+    UiLayers: { top: () => layer },
+    getComputedStyle: (el) => ({ getPropertyValue: () => "", overflowY: el._overflowY || "visible", overflowX: el._overflowX || "visible" }),
+  });
+  const box = (left, width) => ({ left, right: left + width, width, top: 39, bottom: 94, height: 55 });
+  const make = (parent, tag, rect) => { const n = dom.makeElement(tag); n._rect = rect; parent.appendChild(n); return n; };
+  layer = make(dom.document.body, "dialog", box(0, 844));
+  const rail = make(layer, "nav", box(9, 826)); rail._overflowX = "auto"; rail._overflowY = "hidden";
+  rail.scrollWidth = 1500; rail.scrollHeight = 55; rail._client = 55;   // clientWidth reads the 826 box
+  const link = make(rail, "a", box(1339, 144));
+  const calls = [];
+  link.scrollIntoView = (o) => calls.push(o);
+  link.focus();
+  sb.innerWidth = 844; sb.innerHeight = 390;
+  fire("win", "orientationchange");
+  assert.deepEqual(calls.map((o) => [o.block, o.inline]), [["nearest", "nearest"]], "the off-strip link is scrolled in along the strip");
+});

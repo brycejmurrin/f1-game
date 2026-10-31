@@ -15,6 +15,7 @@
 //   node tools/ui/layout-audit.mjs --screens=select,garage --viewports=ios-*
 //   node tools/ui/layout-audit.mjs --shots --dom          # + PNG / DOM per cell
 //   node tools/ui/layout-audit.mjs --scale=100,130 --circuits=jeddah
+//   node tools/ui/layout-audit.mjs --theme=dark,light       # theme axis (default dark)
 //
 //   # Fast PNG + DOM gallery (one boot per viewport, resumable, parallel)
 //   node tools/ui/layout-audit.mjs --gallery
@@ -46,9 +47,12 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
-import { runDiff } from "./audit-diff.mjs";
+import { runDiff, auditCellKey } from "./audit-diff.mjs";
 import { CliArgError } from "../lib/cli-args.mjs";
-import { SCREENS, VIEWPORTS, OVERLAY_IDS, pickScreens, pickViewports } from "./menu-screens.mjs";
+import { SCREENS, VIEWPORTS, pickScreens, pickViewports } from "./menu-screens.mjs";
+import { resetToTitleState, titleUsable as isTitleUsable } from "./ui-reset.mjs";
+import { ensureTapFloor } from "./tap-floor.mjs";
+import { parseThemes, themeTag, themeInitScript, rowTheme, THEME_KEY } from "./theme-axis.mjs";
 import {
   runMenuGallery,
   runMenuShot,
@@ -76,6 +80,8 @@ function printHelp() {
   --shots / --dom                add PNG / structured DOM to geometry cells
   --screens=a,b / --viewports=   filter cells (wildcards: ios-*)
   --scale=100,130 / --circuits=  UI-scale and map-circuit axes
+  --theme=dark,light             theme axis (default dark): context colorScheme AND
+                                 the game's own uiTheme setting; rows carry \`theme\`
   --lang=TAG                     I18n query (?lang=); en-XA = pseudo-locale stress
   --json                         print this run's rows as one JSON object on stdout
   --jobs=N                       parallel viewports (default 3 geometry / 2 gallery)
@@ -127,6 +133,7 @@ function parseArgv(argv) {
     viewport: arg("--viewport=") || "ios-iphone-landscape",
     scales: parseScales(argv),
     circuits: parseCircuits(argv),
+    themes: parseThemes(argv),
     lang: arg("--lang=") || null,
     outDir: arg("--out=")
       ? path.resolve(ROOT, arg("--out="))
@@ -263,8 +270,14 @@ const PROBE = (rootSel) => {
   // rounding difference — it is the entire touch ladder, so every "soft" count
   // this tool has ever reported for a phone was an UNDERCOUNT, and the circuit
   // list's 45px rows passed a floor they miss by 7px.
-  const tapFloor = parseFloat(getComputedStyle(document.body)
-    .getPropertyValue("--tap")) || 44;
+  // ONE definition (tools/ui/tap-floor.mjs, installed as window.__apexTap by
+  // ensureTapFloor before this probe): body `--tap` (44 when unreadable) and
+  // WCAG 24, sizes in CSS px (painted ÷ currentCSSZoom, label union) — the
+  // same floors and the same box menu-mock and fit-audit now judge.
+  const T = window.__apexTap;
+  if (!T) throw new Error("tap-floor not installed (ensureTapFloor)");
+  const floors = T.floors();
+  const tapFloor = floors.comfy;
   out.tapFloor = tapFloor;
   // Two thresholds, because they mean different things. WCAG 2.2 SC 2.5.8 (AA)
   // is 24x24 CSS px and is a CONFORMANCE floor — under it is a real defect.
@@ -272,8 +285,7 @@ const PROBE = (rootSel) => {
   // a 40px full-width circuit row with 24px of spacing around it is compliant
   // and merely below our preference. Counting both as one number had the grid
   // reporting 40 "violations" on a screen that has none.
-  const WCAG_MIN = 24;
-  out.thresholds = { smallTaps: { floor: tapFloor, slack: 0.5 }, tinyTaps: { floor: WCAG_MIN, slack: 0.5 } };
+  out.thresholds = { smallTaps: { floor: tapFloor, slack: T.TAP_SLACK }, tinyTaps: { floor: floors.wcag, slack: T.TAP_SLACK } };
   out.units = "CSS px (map metrics retain their native percent/buffer units)";
   out.tinyTaps = [];
   out.belowFold = 0;
@@ -298,35 +310,24 @@ const PROBE = (rootSel) => {
   // ~13x13 the platform paints it and calls each one a WCAG failure — which is
   // both wrong and, worse, wrong in a way that hides the real ones. WCAG SC
   // 2.5.8 measures the ACTIVATION target, and that is the union of the two.
-  const targetRect = (el) => {
-    const r = el.getBoundingClientRect();
-    if (!/^(checkbox|radio)$/.test(el.type || "")) return r;
-    const lab = el.closest("label")
-      || (el.id && root.querySelector(`label[for="${CSS.escape(el.id)}"]`));
-    if (!lab) return r;
-    const lr = lab.getBoundingClientRect();
-    if (lr.width < 1 || lr.height < 1) return r;
-    return {
-      left: Math.min(r.left, lr.left), top: Math.min(r.top, lr.top),
-      right: Math.max(r.right, lr.right), bottom: Math.max(r.bottom, lr.bottom),
-      width: Math.max(r.right, lr.right) - Math.min(r.left, lr.left),
-      height: Math.max(r.bottom, lr.bottom) - Math.min(r.top, lr.top),
-    };
-  };
+  // (The <label> union lives in tap-floor.mjs measureTapTarget.)
+  const targetRect = (el) => T.measure(el, root).box;
   for (const el of root.querySelectorAll(FOCUSABLE)) {
     if (!visible(el)) continue;
-    const r = targetRect(el);
+    const m = T.measure(el, root);
+    const r = m.box;
     const off = r.right < -0.5 || r.bottom < -0.5 || r.left > vw + 0.5 || r.top > vh + 0.5;
     if (off) {
       if (scrollerAncestor(el)) out.belowFold++;
       else out.offscreen.push({ el: desc(el), box: [px(r.left), px(r.top), px(r.width), px(r.height)],
         text: (el.textContent || "").trim().slice(0, 24) });
     }
-    if (r.height < tapFloor - 0.5 || r.width < tapFloor - 0.5) {
-      const rec = { el: desc(el), w: px(r.width), h: px(r.height),
+    const judged = T.judge(m, floors);
+    if (judged.small) {
+      const rec = { el: desc(el), w: px(m.w), h: px(m.h),
         text: (el.textContent || "").trim().slice(0, 24) };
       out.smallTaps.push(rec);
-      if (r.height < WCAG_MIN - 0.5 || r.width < WCAG_MIN - 0.5) out.tinyTaps.push(rec);
+      if (judged.tiny) out.tinyTaps.push(rec);
     }
   }
 
@@ -629,6 +630,12 @@ if (opts.report) {
   const r = reportMenuGallery(opts.outDir);
   process.exit(r.ok ? 0 : 1);
 }
+// The theme axis lives in the geometry matrix only; refuse rather than
+// silently capture a dark gallery the caller asked to see light.
+if ((opts.screen || opts.gallery) && opts.themes.join(",") !== "dark") {
+  console.error("--theme applies to the geometry matrix only (not --gallery / --screen)");
+  process.exit(1);
+}
 if (opts.screen) {
   if (opts.scales.length !== 1) throw new Error("--screen accepts one --scale; use --gallery for a scale matrix");
   const result = await runMenuShot({
@@ -665,6 +672,7 @@ const DOM_DIR = path.join(OUT, "dom");
 const viewports = opts.viewports;
 const SCALES = opts.scales;
 const CIRCUITS_AXIS = opts.circuits;
+const THEMES_AXIS = opts.themes;
 const screens = opts.screens;
 const JOBS = opts.jobs;
 
@@ -694,14 +702,21 @@ const source = await captureAuditSource(ROOT);
 // Rescaling a live context would be cheaper, but the reset-and-reload recovery
 // below can fire at any cell, and a job whose identity is one column is far
 // easier to reason about than one that changes size halfway down it.
+// The theme axis (--theme=) is a context property too: colorScheme is fixed at
+// newContext, and the game's own uiTheme is seeded by an init script so the
+// reload recovery keeps it (theme-axis.mjs).
 const queue = [];
-for (const vp of viewports) for (const sc of SCALES) queue.push([vp, sc]);
+for (const vp of viewports) for (const sc of SCALES) for (const th of THEMES_AXIS) queue.push([vp, sc, th]);
 await Promise.all(Array.from({ length: Math.min(JOBS, queue.length) }, () => worker()));
-async function worker() { while (queue.length) { const job = queue.shift(); if (job) await sweepViewport(job[0], job[1]); } }
+async function worker() { while (queue.length) { const job = queue.shift(); if (job) await sweepViewport(job[0], job[1], job[2]); } }
 
-async function sweepViewport([baseName, vpOpts, why, insets], scale) {
+async function sweepViewport([baseName, vpOpts, why, insets], scale, theme) {
   const vpName = baseName + scaleTag(scale);
-  const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+  // Log lines and file names carry the theme; the row keeps `viewport` clean
+  // and records `theme` on its own (audit-diff's auditCellKey joins them).
+  const vpLabel = vpName + themeTag(theme);
+  const ctx = await browser.newContext({ ...vpOpts, colorScheme: theme });
+  await ctx.addInitScript(themeInitScript, { key: THEME_KEY, theme });
   // The probe's visible() gate is a zero-rect test, and a content-visibility:
   // auto row outside Chrome's render margin has zero rects on every descendant
   // — the livery grid's ~70 cards would shrink to the ~4 on screen and the
@@ -748,7 +763,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     page.setDefaultTimeout(12000);
     booted = true;
   } catch (e) {
-    console.log(`${vpName}: BOOT FAILED — ${e.message.split("\n")[0]}`);
+    console.log(`${vpLabel}: BOOT FAILED — ${e.message.split("\n")[0]}`);
   }
   // In-race screens need a track built, which is the one slow step left; run
   // them last so the cheap overlay cells are already recorded if it times out.
@@ -764,7 +779,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     } else expanded.push(s);
   }
   for (const screen of expanded) {
-    const cell = { producer: "layout-audit", root: screen.root, viewport: vpName, why, screen: screen.id, screenName: screen.name };
+    const cell = { producer: "layout-audit", root: screen.root, viewport: vpName, theme, why, screen: screen.id, screenName: screen.name };
     errors = [];
     if (!booted) cell.skipped = "boot failed";
     else try {
@@ -772,45 +787,23 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       // hides #overlay when one opens — leaving nothing for the next cell to
       // click. Geometry probing does not need the state machine to agree, only
       // the buttons to be hittable.
-      await page.evaluate((ids) => {
-        // DataHub keeps its own open flag: hiding #datahub alone left it set, so
-        // the next #mb-data click only switched tabs and every later data* cell
-        // timed out (UI hunt 2026-10-29). Close it through its own door first.
-        if (typeof DataHub !== "undefined" && DataHub.isOpen && DataHub.isOpen()) DataHub.close();
-        for (const id of ids) { const el = document.getElementById(id); if (el) el.hidden = true; }
-        const ov = document.getElementById("overlay");
-        if (ov) { ov.hidden = false; ov.style.removeProperty("display"); }
-        // Remove EVERY route-set body class, not just in-race. lt-open and
-        // photo-mode survive `hidden = true` on their panels, and
-        // css/hud.css gates `#hud { display: none !important }` on them — so
-        // every hud* cell downstream of the fly-cam cell measured a hidden
-        // HUD and reported zero findings while reading as a pass
-        // (rootPresent:false on all 88 hud rows of the 2026-08 matrix).
-        document.body.classList.remove("in-race", "lt-open", "photo-mode", "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
-      }, OVERLAY_IDS);
+      // ONE reset (ui-reset.mjs): every open layer leaves through its own
+      // door — DataHub's openFlag (UI hunt 2026-10-29), Photo Studio's body
+      // class, a paused race's QUIT — and `hidden = true` survives only as a
+      // logged fallback. Route body classes go too: lt-open and photo-mode
+      // gate `#hud { display: none !important }` in css/hud.css, so a stale
+      // one made every later hud* cell measure a hidden HUD (rootPresent:false
+      // on all 88 hud rows of the 2026-08 matrix).
+      await resetToTitleState(page, { tag: `${screen.id} ${vpLabel}` });
       await page.waitForTimeout(200);
-      // VERIFY THE RESET, DO NOT ASSUME IT. Hiding the overlays gets the title
-      // back for most screens, but one that started a SESSION (qualifying, a
-      // race) leaves state that no amount of `hidden = true` undoes, and the
-      // symptom is the next cell timing out on a click against a zero-sized
-      // button — a harness failure that reads exactly like a broken route.
-      // Cheap check, expensive fallback, and the fallback only fires when the
-      // cheap check says it must.
-      // Sized AND hittable: a modal dialog nobody closed leaves #mb-race
-      // full-sized but inert, and a size check passed it (2026-09-30).
-      const titleUsable = await page.evaluate(() => {
-        const b = document.getElementById("mb-race");
-        if (!b) return false;
-        const r = b.getBoundingClientRect();
-        if (!(r.width > 1 && r.height > 1)) return false;
-        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        // AND the state machine at the menu: the doors gate on G.state, not on the DOM. A cell that
-        // built a race (photocontrols, pause, results) left state "race" under a hittable title, so
-        // openDataHub returned early on every later #mb-data click and the next data*/customize
-        // cells timed out — the 8 skips of design pass #1 (#4241; alone, each one measured).
-        const atMenu = !window.__apex || !window.__apex.info || window.__apex.info().state === "menu";
-        return atMenu && !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
-      });
+      // VERIFY THE RESET, DO NOT ASSUME IT. A screen that started a SESSION
+      // (qualifying, a race) can leave state no door undoes, and the symptom
+      // is the next cell timing out on a click against a zero-sized button —
+      // a harness failure that reads exactly like a broken route. Cheap check,
+      // expensive fallback, and the fallback only fires when the cheap check
+      // says it must. Sized AND hittable: a modal dialog nobody closed leaves
+      // #mb-race full-sized but inert, and a size check passed it (2026-09-30).
+      const titleUsable = await page.evaluate(isTitleUsable);
       if (!titleUsable) {
         await page.goto(bootUrl, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60000 });
@@ -871,17 +864,18 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       if (screen.id.split("#")[0] === "select") {
         await page.waitForFunction(previewMapSettled, null, { polling: 100, timeout: 5000 }).catch(() => {});
       }
+      await ensureTapFloor(page);
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
       cell.environment = await page.evaluate(captureAuditEnvironment, { root: screen.root, source, adjustments: ["content-visibility:visible!important"] }).catch(() => null);
       cell.selectorIndex = await page.evaluate(captureAuditSelectors, { root: screen.root, selectors: auditFindingSelectors(cell) }).catch(() => ({}));
       if (wantShots) {
-        const file = `${screen.id}__${vpName}.png`;
+        const file = `${screen.id}__${vpLabel}.png`;
         await page.screenshot({ path: path.join(SHOT_DIR, file), timeout: 300000 });
         cell.shot = "shots/" + file;
       }
       if (wantDom) {
         const dom = await page.evaluate(collectDomInfo, { root: screen.root });
-        const domFile = `${screen.id}__${vpName}.dom.json`;
+        const domFile = `${screen.id}__${vpLabel}.dom.json`;
         fs.writeFileSync(path.join(DOM_DIR, domFile), JSON.stringify(dom, null, 2));
         cell.dom = "dom/" + domFile;
       }
@@ -891,7 +885,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     cell.errors = errors;
     rows.push(cell);
     const n = (a) => (a ? a.length : 0);
-    console.log(`${cell.screen.padEnd(13)} ${vpName.padEnd(28)} ` +
+    console.log(`${cell.screen.padEnd(13)} ${vpLabel.padEnd(28)} ` +
       (cell.skipped ? `SKIPPED: ${cell.skipped}`
         : `clipped ${String(n(cell.clipped)).padStart(2)}  offscreen ${String(n(cell.offscreen)).padStart(2)}` +
           `  tapUnder24 ${String(n(cell.tinyTaps)).padStart(2)}  tapSoft ${String(n(cell.smallTaps)).padStart(2)}` +
@@ -922,17 +916,19 @@ await server.close();
 // viewport silently throws the other hundred away.
 let prior = [];
 try { prior = JSON.parse(fs.readFileSync(path.join(OUT, "audit.json"), "utf8")).rows || []; } catch {}
-const key = (r) => r.screen + "|" + r.viewport;
+const key = auditCellKey;
 // Sorted back into the canonical matrix order, so a filtered run's rows land in
 // their own columns instead of appending new ones to the right of the grid.
 const vpOrder = VIEWPORTS.flatMap(([n]) => SCALES.map((s) => n + scaleTag(s)));
 const scOrder = SCREENS.map((s) => s.id);
-const rank = (r) => [scOrder.indexOf(r.screen), vpOrder.indexOf(r.viewport)];
+const thOrder = ["dark", "light"];
+const rank = (r) => [scOrder.indexOf(r.screen), vpOrder.indexOf(r.viewport) * thOrder.length + thOrder.indexOf(rowTheme(r))];
 const merged = [...prior.filter((p) => !rows.some((r) => key(r) === key(p))), ...rows]
   .sort((a, b) => { const [as, av] = rank(a), [bs, bv] = rank(b); return as - bs || av - bv; });
 fs.writeFileSync(path.join(OUT, "audit.json"), JSON.stringify({
   when: null, build: JSON.parse(fs.readFileSync(path.join(ROOT, "version.json"), "utf8")).build,
   lang: opts.lang || null,
+  themes: THEMES_AXIS,
   viewports: viewports.flatMap(([n, , w]) => SCALES.map((s) => ({ name: n + scaleTag(s), why: w }))),
   screens: screens.map((s) => ({ id: s.id, name: s.name })),
   rows: merged,
@@ -988,7 +984,8 @@ if (skipped.length) {
   const scr = [...new Set(skipped.map((r) => r.screen))].join(",");
   console.log(`  a skip is NOT a pass. Re-run those cells alone before believing them:\n` +
     `    node tools/ui/layout-audit.mjs --viewports=${vps} --screens=${scr} --jobs=1` +
-    (SCALES[0] == null ? "" : ` --scale=${SCALES.join(",")}`));
+    (SCALES[0] == null ? "" : ` --scale=${SCALES.join(",")}`) +
+    (THEMES_AXIS.length === 1 && THEMES_AXIS[0] === "dark" ? "" : ` --theme=${[...new Set(skipped.map(rowTheme))].join(",")}`));
 }
 
 function writeIndex(rows) {
@@ -1013,11 +1010,13 @@ function writeIndex(rows) {
     const shot = r.shot ? `<a href="${esc(r.shot)}">Screenshot</a>` : "";
     return `<td class="${cls}">${detail ? `<details><summary>${issues || "Review"} findings</summary><pre>${esc(detail)}</pre></details>` : "&check;"} ${shot}</td>`;
   };
-  const vps = [...new Set(rows.map((r) => r.viewport))];
+  // One column per viewport x theme; a dark column keeps its bare viewport name.
+  const col = (r) => r.viewport + themeTag(rowTheme(r));
+  const vps = [...new Set(rows.map(col))];
   const scr = [...new Set(rows.map((r) => r.screen))];
   const head = vps.map((v) => `<th>${esc(v)}</th>`).join("");
   const body = scr.map((s) => `<tr><th>${esc(s)}</th>` +
-    vps.map((v) => cellHtml(rows.find((r) => r.screen === s && r.viewport === v) || { skipped: "not run" })).join("") +
+    vps.map((v) => cellHtml(rows.find((r) => r.screen === s && col(r) === v) || { skipped: "not run" })).join("") +
     "</tr>").join("\n");
   fs.writeFileSync(path.join(OUT, "index.html"), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Apex 26 layout audit</title>

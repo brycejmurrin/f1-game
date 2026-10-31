@@ -2825,7 +2825,7 @@ const GLXBackend = (function () {
     mirrorBegin,
     mirrorEnd,
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
-    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
+    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
     drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the

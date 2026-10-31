@@ -12,8 +12,11 @@ const ctxOrNull = () => {
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
-// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed.
-const RACE_FILES = ApexRoster.LAZY_RACE;
+// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed,
+// and the garage's Blender tables (js/garage/garage-data.js), each loaded by its own ensure.
+const isGarageData = (f) => /^js\/garage\//.test(f);
+const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
+const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
 // LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
@@ -25,6 +28,8 @@ let raceSessionLoad = null;
 // (PitLane) called a group whose later file failed complete: the retry saw the
 // real PitLane, loaded nothing, and the race ran on stub engineer / radio.
 const RACE_SESSION_READY = {
+  "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
+  "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/damage-handling.js": () => typeof DamageHandling !== "undefined" && !!DamageHandling && !DamageHandling._stub,
@@ -54,7 +59,7 @@ function ensureRaceSession() {
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
   // Real before THIS loader ran anything (an eager shell / a spec that evaluated
   // the group itself): nothing to fetch and nobody to notify.
-  if (!raceSessionLoaded.size && RACE_SESSION_READY["js/race/pit-lane.js"]()) {
+  if (!raceSessionLoaded.size && RACE_SESSION_FILES.every((f) => !RACE_SESSION_READY[f] || RACE_SESSION_READY[f]())) {
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
@@ -532,24 +537,30 @@ async function loadBackendScripts(files, edges, opts) {
   }
   return loadScripts(files, edges, opts);
 }
+// One warm per file per session (a second raceAssets() must not re-download).
+const audioPrefetched = new Set();
 function prefetchAudio() {
   // HTTP-cache only — do not evaluate. Evaluating at idle would create no
   // AudioContext (restoreOnEngine still gates on userActivation) but would
   // still compete with title paint; #1135 forbids putting these 449 KB on
   // the title networkidle wall, so this runs on a late idle timeout.
-  if (audioIsGameVm() || audioLoad) return;
-  if (typeof document === "undefined" || !document.createElement) return;
+  // A low-priority fetch(), not <link rel=prefetch>: iOS Safari ships prefetch
+  // disabled (https://caniuse.com/link-rel-prefetch), so the hint was a no-op on
+  // iPhone. mode cors + credentials same-origin is the request a
+  // <script crossorigin=anonymous> makes, so inject() hits this HTTP-cache (or SW)
+  // entry; its SRI check runs on the bytes, not the cache key. The body is read:
+  // an unobserved, unread fetch may be terminated (https://fetch.spec.whatwg.org/#garbage-collection).
+  if (audioIsGameVm() || audioLoad || typeof fetch !== "function") return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
+    if (audioPrefetched.has(src)) continue;
+    audioPrefetched.add(src);
     // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
     const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
-    if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
-    const el = document.createElement("link");
-    el.rel = "prefetch";
-    el.as = "script";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    document.head.appendChild(el);
+    try {
+      fetch(href, { priority: "low", credentials: "same-origin", mode: "cors" })
+        .then((r) => r.arrayBuffer()).catch(() => {});
+    } catch (_) { /* a throwing fetch shim: the gesture load still works */ }
   }
 }
 function restoreOnEngine() {
@@ -659,9 +670,20 @@ function ensureAudio() {
     // onAudioReady is counted as fired only once it returns: a throw clears the
     // memo so the next call retries it, and audioReadyOnce latches each part that
     // already returned so the retry re-runs only the part that threw.
+    // Each part runs in its own task (a yield between parts): one task for all of
+    // them was the 787 ms LoAF on the macOS census (#4219). The hook only QUEUES
+    // parts here; the latch and order are unchanged.
     await audioYieldToMain("task");
     if (typeof deps.onAudioReady === "function") try {
-      deps.onAudioReady(audioReadyOnce);
+      const parts = [];
+      deps.onAudioReady((key, fn) => { parts.push([key, fn]); });
+      let ran = false;
+      for (const [key, fn] of parts) {
+        if (audioReadyDone.has(key)) continue;
+        if (ran) await audioYieldToMain("task");
+        ran = true;
+        audioReadyOnce(key, fn);
+      }
     } catch (e) {
       Log.error("audio", "the audio ready hook threw: " + (e && e.message));
       audioLoad = null;
@@ -761,6 +783,22 @@ function ensureLightPresets() {
   });
   return lightLoad;
 }
+// THE GARAGE'S BLENDER TABLES (GarageData): asked for at idle, on garage entry,
+// SETTINGS and RACE!; strict, so a second ask never re-evaluates the const. A
+// failed load is forgotten and the next ask fetches again; until it lands the
+// rigs play the "cut" cameras and the crews the shipped crew.
+let garageLoad = null;
+const garageReady = () => typeof GarageData !== "undefined" && !!GarageData;
+function ensureGarageData() {
+  if (garageReady() || !GARAGE_FILES.length) return Promise.resolve(garageReady());
+  if (garageLoad) return garageLoad;
+  garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
+    garageLoad = null;
+    if (!garageReady()) Log.warn("game", "the garage's Blender tables did not load — the next garage visit asks again");
+    return garageReady();
+  });
+  return garageLoad;
+}
 /** Save-Data on, or a 2G link: the title skips its idle lighting, race-session and
  *  audio prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
  *  Firefox) reads as a normal link. */
@@ -833,6 +871,7 @@ function raceAssets() {
     scheduleIdle(() => { ensureLightPresets(); }, 8000);
     scheduleIdle(() => { ensureRaceSession(); }, 9000);
     scheduleIdle(() => { prefetchAudio(); }, 12000);
+    if (GARAGE_FILES.length) scheduleIdle(() => { ensureGarageData(); }, 6000);   // WORK ON CAR can be the first tap
   }
   bootDesktopAudio();
 }
@@ -856,7 +895,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

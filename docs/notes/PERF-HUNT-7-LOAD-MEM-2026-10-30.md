@@ -155,3 +155,36 @@ concurrency, 63.6 s serial (network only, no parse/execute).
 - Release the TLX/WGX mirror target on quit (menu memory).
 - The circuit's `scenery(api)` closure as one build step: an emitter queue is needed to split it.
 - Car warm: build one body per team, not per seat (slice c: 22 builds where 11 would do, ~0.5 s Node).
+
+## Follow-ups (#4219, PR #4262)
+
+Five worker worktrees, merged on the deploy tip after #4205 landed (`5588e489`):
+
+| item | change | evidence |
+|---|---|---|
+| SW install order | `swOptionalBlock` seeds LAZY_RACE / RACE_SESSION / TRACK_BUILD / AUDIO / WORKER before circuits and scenery; optional install fetches `priority: "low"` | `service-worker.test.mjs`: race/ was fetch #161 after circuit #57 on the old order; now first (red on old, green on new) |
+| `VOICE_CACHE` LRU | keeps the 6 most recently written voice ids; bin + json evicted together, after a put, never on read | seeding 8 ids and writing a 9th leaves 6 (red on old: all 9 kept) |
+| iPhone audio warm | `prefetchAudio` issues a low-priority cors `fetch` per LAZY_AUDIO file and reads the body (iOS ships `rel=prefetch` off: https://caniuse.com/link-rel-prefetch; an unread body may be dropped: https://fetch.spec.whatwg.org/#garbage-collection) | `lazy-bundles-prefetch.test.mjs` |
+| `onAudioReady` | each part runs after its own task yield; the per-part latch keeps retry re-running only unfinished parts | `lazy-audio-yield.test.mjs` |
+| build steps | hidden-face classify in 4096-triangle slices, `SceneryPits.buildSteps`, propsSeal yields, street-circuit rows | sync == stepped hashes on montreal, silverstone, monaco, spa, singapore (base and change); VM CPU per step: classify 77–94 → 12–22 ms, pits 96–104 → 8–22 ms, Singapore rows ~400 → ~174 ms |
+| teammate bodies | the second seat is derived from the first (recoloured helmet lid, same finish and weld) | derived seat deep-equals its own full build, 11 teams × 2 seats, smoothing off and on; 1,085 of 1,109 livery combinations identical (the other 24 have identical lids by design); menu prep body builds 21 → 11 |
+| mirror on quit | `gfx.releaseMirror()` on TLX / WGX / GLX from `quitToMenu` only; lazy re-allocation by each backend's existing path | unit tests on all three backends (red on old); ~1.3–8.7 MB per backend and rung, estimated |
+| circuit `scenery(api)` closure | **not split**: a plain function cannot be suspended, so this needs circuits to opt in as generator closures (52 files) | stays open on #4219 |
+
+### Real GPU (gpu-census 41049959190 on `53b7c272`, same inputs as 41020574623)
+
+Verdict step: `success`. Measured against #4205's after-run:
+
+| TLX / WebGPU | #4205 after | this PR |
+|---|---:|---:|
+| menu car-asset CPU: first / cold relaunch / warm relaunch | 831 / 914 / 894 ms | 1,124 / 893 / 932 ms |
+| race entry after START: blocked | 0 ms | 130 ms (2 tasks, 79 + 51 ms, flyby frame callbacks and the START handler) |
+| texture MB at menu after quit, cycles 1–3 | 147.0 / 146.8 / 146.8 | 149.7 / 158.4 / 151.7 |
+| WGX race entry blocked | 0 ms | 0 ms |
+
+**The census does not show the teammate-body or the mirror win, and none is claimed here.**
+- Car-asset CPU moves by ±300 ms between single runs on the same code (#4205 before vs after). The predicted cut (about 10 field bodies at tens of ms each) sits inside that noise; it needs repeated runs to resolve.
+- The memory cycles quit 6 s after `race()`. A local probe (TLX on SwiftShader, the same pause → QUIT) showed the mirror target is never allocated that early (`mirrorState().renders` 0 at quit), so this measurement never exercises the release. A census leg that drives past the lights before quitting is needed to see it.
+- The two race-entry tasks are in code this PR does not touch; one sample each side cannot separate them from run-to-run noise.
+
+The unit evidence above stands; the real-GPU effect of those two items is **unmeasured**, not disproved.

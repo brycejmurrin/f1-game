@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -217,10 +217,10 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
     nodes: [
       cpuNode(1, "(root)", "", 0, [2, 4]),
       cpuNode(2, "render", "http://x/js/render/three/tlx.js?v=abc", 3400, [3]),
-      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
       cpuNode(4, "endPass", "http://x/js/render/three/tlx-shadow.js?v=abc", 260, [5, 6]),
-      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
-      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
+      cpuNode(6, "createBindings", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
     ],
     samples:    [3,      3,      5,       6,      1,     6],
     timeDeltas: [100000, 50000,  150000,  40000,  10000, 60000],
@@ -229,9 +229,9 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
   assert.equal(a.totalMs, 410, "total is the sum of the deltas");
   assert.match(a.verdict, /TOP SELF TIME: getNodeBuilderState/);
   assert.equal(a.rows[0].ms, 300, "two parents fold into one 300 ms row");
-  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.1/three.webgpu.min.js:6");
+  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.187.0/three.webgpu.min.js:6");
   assert.equal(a.rows[1].ms, 100);
-  assert.equal(a.files[0].file, "vendor/three-0.186.1/three.webgpu.min.js");
+  assert.equal(a.files[0].file, "vendor/three-0.187.0/three.webgpu.min.js");
   assert.ok(a.files[0].share > 0.97, "the per-file fold attributes 400 of 410 ms to the bundle");
 });
 
@@ -527,4 +527,19 @@ test("the census sizes WebGL2 uploads from the call's own arguments (hunt 4 §A 
   assert.equal(GL.texSubImage2D([0, 0, 0, 0, 8, 8, 0, 0, new Uint8Array(256)]), 256);
   assert.equal(GL.texImage3D([0, 0, 0, 4, 4, 2, 0, 0, 0, new Uint8Array(128)]), 128);
   assert.equal(GL.texSubImage3D([0, 0, 0, 0, 0, 4, 4, 3, 0, 0, { width: 4, height: 4 }]), 4 * 4 * 3 * 4, "image source per layer at 4 B/texel");
+});
+
+test("analyseMirrorChurn turns both-end mirror and churn reads into per-frame rates, and says when a read failed (GPU hunt 3)", () => {
+  const a = { drawn: 100, glass: 99, renders: 400, allocs: 2, quality: "full", churn: { poolNew: 10, streamNew: 1 } };
+  const b = { drawn: 300, glass: 299, renders: 36, allocs: 3, quality: "lite", churn: { poolNew: 30, streamNew: 1 } };
+  const m = analyseMirrorChurn(a, b, 200);
+  assert.equal(m.drawnPerFrame, 1); assert.equal(m.glassPerFrame, 1);
+  assert.equal(m.allocs, 1);
+  assert.equal(m.rendersPerFrame, null, "a backend counter that restarted is no rate");
+  assert.deepEqual(m.quality, ["full", "lite"]);
+  assert.deepEqual(m.churnPerFrame, { poolNew: 0.1, streamNew: 0 });
+  assert.equal(analyseMirrorChurn({ ...a, renders: 0 }, { ...b, renders: 100, allocs: 2 }, 200).rendersPerFrame, 0.5);
+  assert.equal(analyseMirrorChurn({ ...a, renders: 1 }, { ...b, renders: 15 }, 200).rendersPerFrame, null, "a re-allocation inside the window voids the rate");
+  assert.equal(analyseMirrorChurn({ error: "timeout" }, b, 200).note, "mirror/churn read failed: timeout");
+  assert.equal(analyseMirrorChurn(a, b, 0).note, "no window frames");
 });

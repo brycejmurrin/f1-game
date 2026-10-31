@@ -51,7 +51,8 @@
    wraps its screen swaps in document.startViewTransition when supported). The
    UA default is a 0.22s plus-lighter cross-fade of BOTH root snapshots, which
    prints the title tiles over the Grand Prix list and the Career sheet. Fade
-   the old snapshot out first, then fade the new in over an opaque --bg scrim;
+   the old snapshot out first (it LEAVES, so --ease-in), then fade the new in
+   (it ARRIVES, --ease-out) over an opaque --bg scrim;
    mix-blend-mode:normal drops the UA plus-lighter keyframe. Reduced-motion
    still cancels the animation entirely. Outside the layer blocks: these UA
    pseudo-elements aren't part of the normal element cascade. */
@@ -61,7 +62,7 @@
 ::view-transition-old(root) {
   animation-name: apex-vt-fade-out;
   animation-duration: 0.10s;
-  animation-timing-function: ease-out;
+  animation-timing-function: var(--ease-in);
   animation-fill-mode: both;
   mix-blend-mode: normal;
   z-index: 0;
@@ -70,7 +71,7 @@
   animation-name: apex-vt-fade-in;
   animation-duration: 0.14s;
   animation-delay: 0.10s;
-  animation-timing-function: ease-in;
+  animation-timing-function: var(--ease-out);
   animation-fill-mode: both;
   mix-blend-mode: normal;
   z-index: 1;
@@ -235,7 +236,7 @@
   --visor-amber: #503d20;
   --visor-ice: #233b50;
   --visor-rose: #4c2d3c;
-  --dim: #9a9aa8;
+  --dim: #bdbdca; /* APCA Lc 67 on --bg, >= 60 on the HUD plate (#4258) */
   --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim));
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
@@ -293,7 +294,7 @@
   --layout-active: var(--bp-phone);
   /* One control column. 660px matched the landscape 32vw column at 1920. */
   --col-max: 660px;
-  --touch-label-floor: 10px; --touch-pedal-radius: 28%; --touch-tablet-btn: 96px; --touch-tablet-steer: 108px;
+  --touch-label-floor: 11px; --touch-pedal-radius: 28%; --touch-tablet-btn: 96px; --touch-tablet-steer: 108px;
   --menu-fit-sheet: 1180px; --menu-fit-sheet-wide: 1360px; --menu-fit-pause: 480px;
   /* Foldables. Fallbacks are the whole viewport and a zero hinge. Unitless 0:
      a px literal on a property whose name contains "gap" counts as raw spacing. */
@@ -557,6 +558,9 @@
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #5fe88a;
   --slower: #ff3b30;
+  /* Red as TEXT: --slower is a fill (Lc 40 as ink). Toward --text, so it follows
+     the CVD remaps and darkens under LIGHT; Lc >= 60 (apca-timing.test.mjs). */
+  --slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text));
   /* The RED FLAG chip's field (css/hud.css #hud-flag.flag-red): a fixed flag
      red like the yellow and the VSC amber, so COLOUR VISION never remaps it,
      and dark enough that --hud-ink-light reads on it (5.6:1). */
@@ -660,6 +664,12 @@
   --dur-4: 600ms;
   --dur-draw: 1400ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* --ease-in is for anything LEAVING: a slow start that accelerates away, so
+     the exit never competes with what arrives (design pass 3E). */
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  /* The press state on touch: a red ring and base rule that show AROUND the
+     thumb (css/components.css PRESSED = LIT, the title doors in menus.css). */
+  --press-lit: inset 0 -3px 0 var(--red), 0 0 0 2px color-mix(in oklab, var(--red) 70%, transparent);
   /* The fallback: without linear() a spring cannot be written in CSS, and
      ease-out is the same arrival without the bounce. The real curve is in the
      @supports block below. */
@@ -893,7 +903,8 @@ body:not(.desktop) {
   --bg: #0c0c14;
   --carbon: #15151E;
   --text: #f6f6f9;
-  --dim: #9a9aa8;
+  --dim: #bdbdca;
+  --slower-ink: color-mix(in oklab, var(--slower) 55%, var(--text));
   --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
   --surf-1: color-mix(in oklab, #fff 4%, var(--bg));
   --surf-3: color-mix(in oklab, #fff 11%, var(--bg));

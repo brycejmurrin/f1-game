@@ -270,7 +270,7 @@ test("last key wins: RIGHT pressed while LEFT is still held steers right", () =>
  * capacitive left→right roll-over keeps both thumbs down briefly; right−left
  * cancelled to centre until this fix. Boot keeps element stubs BY ID so the
  * hold listeners fire (throttle-latch.test.mjs pattern). */
-function bootButtons() {
+function bootButtons({ count = null, inputFile = "js/input/input.js" } = {}) {
   const listeners = {};
   const els = new Map();
   const clock = { t: 0 };
@@ -300,8 +300,13 @@ function bootButtons() {
     if (id) els.set(id, e);
     return e;
   }
+  let MathObj = Math;
+  if (count) {
+    MathObj = { pow: function (a, b) { if (count.on) count.powN++; return Math.pow(a, b); } };
+    Object.setPrototypeOf(MathObj, Math);
+  }
   const sb = {
-    Math, Object, Array, Number, isFinite, JSON, Map, Set, Date,
+    Math: MathObj, Object, Array, Number, isFinite, JSON, Map, Set, Date,
     performance: { now: () => clock.t }, DeviceOrientationEvent: function DeviceOrientationEvent() {},
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
@@ -316,7 +321,7 @@ function bootButtons() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", inputFile])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
@@ -538,6 +543,44 @@ test("idle keyboard steer skips the exponent and a held arrow still builds lock"
   const a = Input.steer(1 / 60);
   const b = Input.steer(1 / 60);
   assert.ok(a > 0 && b > a, `held arrow must keep ramping, got ${a} then ${b}`);
+});
+
+/** Drives the on-screen arrows through a press / roll-over / release script and returns every steer value. */
+function buttonScript(h, mix) {
+  const { Input, clock, left, right } = h;
+  Input.reset(); Input.setSteerMode("buttons"); Input.setAdaptiveButtons(mix); Input.setSpeedStd(40);
+  clock.t = 1000;
+  const out = [];
+  const run = (n, ms) => { for (let i = 0; i < n; i++) { clock.t += ms; out.push(Input.steer(1 / 60)); } };
+  run(30, 16);                                          // resting
+  left().fire("pointerdown", { pointerId: 1 }); run(12, 16);
+  right().fire("pointerdown", { pointerId: 2 }); run(9, 8);   // roll-over, two substeps a frame
+  left().fire("pointerup", { pointerId: 1 }); run(7, 16);
+  right().fire("pointerup", { pointerId: 2 }); run(40, 16);   // unwind to centre, then rest
+  run(25, 0);                                           // resting substeps with the clock still
+  left().fire("pointerdown", { pointerId: 3 }); run(5, 16);   // a fresh press after rest is one frame, not a jump
+  left().fire("pointerup", { pointerId: 3 }); run(30, 16);
+  return out;
+}
+
+test("resting on-screen arrows skip the exponent; a press/release script steers exactly as before", () => {
+  const count = { on: false, powN: 0 };
+  const h = bootButtons({ count });
+  h.Input.reset(); h.Input.setSteerMode("buttons"); h.Input.setAdaptiveButtons(0.5); h.Input.setSpeedStd(40);
+  count.on = true;
+  for (let i = 0; i < 600; i++) { h.clock.t += 1000 / 120; h.Input.steer(1 / 120); }
+  count.on = false;
+  assert.equal(count.powN, 0, "600 resting buttonSteering substeps ran Math.pow");
+  for (const mix of [0, 0.5, 1]) {
+    const seq = buttonScript(bootButtons(), mix);
+    assert.equal(seq.length, 158);
+    assert.equal(seq.slice(0, 30).every((v) => Object.is(v, 0)), true, "rest is exactly +0");
+    const peak = Math.min(...seq.slice(30, 42));
+    assert.ok(peak < -0.2, `the LEFT press builds lock (mix ${mix}: ${peak})`);
+    assert.equal(seq.slice(-10).every((v) => Object.is(v, 0)), true, "back to exactly +0 at rest");
+    const again = buttonScript(bootButtons(), mix);
+    assert.deepEqual(again, seq, "deterministic across boots");
+  }
 });
 
 test("dropping a pad still forgets its use record when the live set is reused", () => {

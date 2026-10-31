@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
-import * as THREE from "../../vendor/three-0.186.1/three.webgpu.min.js";
+import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 
 installThreeGlobals();
@@ -108,12 +108,22 @@ test("production mirror fallback declares its gradient sampler through cold/off/
       assert.equal(graph.fxaa.mirTex.value, on ? mirror.texture : context.blackTex);
       assert.ok(declared(build()), `mirror ${on}: every gradient sample references a declared sampler`);
     }
-    // Negative control: the former production DataTexture defaults reproduce
-    // the missing WGSL sampler even though the mirror gate is disabled.
+    // #4219: quit-to-menu disposes the mirror target, so neither texture node may keep naming it.
+    graph.mirror.tex.value = mirror.texture;   // the SGSR path's own pass holds it the same way
+    chain.releaseMirror();
+    assert.equal(graph.mirror.tex.value, context.blackTex, "the inset pass drops the freed target");
+    assert.equal(graph.fxaa.mirTex.value, context.blackTex, "and so does the FXAA fold");
+    chain.present({ bloom: 0, ssao: 0, godray: 0, reflect: 0 }, frame);
+    assert.equal(graph.fxaa.U.mir.value, 0, "no inset until setMirror names a live target again");
+    // Former negative control: on r186 the old Nearest DataTexture placeholder emitted textureSampleGrad against an
+    // undeclared sampler (the startup defect). r187 (#35169, grad() with unfilterable textures) no longer does; the
+    // Linear placeholder above stays, and the old one must not regress to an undeclared sampler either.
     chain.setMirror(null, [17, 13, 63, 29], true, true);
     chain.present({ bloom: 0, ssao: 0, godray: 0, reflect: 0 }, frame);
     context.blackTex.minFilter = context.blackTex.magFilter = THREE.NearestFilter;
-    assert.equal(declared(build()), false, "old nearest placeholder reproduces the startup defect");
+    const nearest = build(), gradSampler = /textureSampleGrad\(\s*\w+\s*,\s*(\w+)/.exec(nearest)?.[1];
+    assert.ok(!gradSampler || new RegExp(`var\\s+${gradSampler}\\s*:\\s*sampler\\b`).test(nearest),
+      "r187: the nearest placeholder references no undeclared sampler");
   } finally {
     window.TLXShaders.post = original;
     if (chain) chain.dispose();

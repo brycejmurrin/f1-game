@@ -515,6 +515,17 @@
 
     // fullscreen runner
     quad = new THREE.QuadMesh();
+    // QuadMesh.render() swaps three's own full-screen vertex node in for the
+    // draw only; compileAsync(quad) builds the material's (null) one, a
+    // different program, so no quad compile warm ever matched a draw (W6).
+    // Capture that node once and pin it on each pass material (setQuadMat):
+    // render() then swaps in the same node, and a compile keys its program.
+    let _quadVN = null;
+    quad.render({ render(q) { _quadVN = q.material.vertexNode; } });
+    function setQuadMat(mat) {
+      if (_quadVN && mat && !mat.vertexNode) mat.vertexNode = _quadVN;
+      quad.material = mat;
+    }
     let compileJobs = null;
     // load=false CLEARS first (only called inside present(), which restores
     // autoClear): a full-viewport NoBlending quad overwrites every pixel, so a
@@ -523,21 +534,44 @@
     // A-W1 draw warm (drawWarm below): every pass DRAWS once into its own
     // target under a 1x1 scissor, so the driver's first-draw work (ANGLE-Metal's
     // pipeline state, vertex/format conversion) lands in the warm, not on the
-    // race's first frames. Never the canvas (target null): a draw there would
-    // present a fresh, black drawing buffer for the rest of the warm.
-    let _scissorWarm = false, _warmDraws = 0, _warmSc = null;   // the scissor scratch, made on the first warm draw
+    // race's first frames. Never a DRAW to the canvas (target null): it would
+    // present a fresh, black drawing buffer for the rest of the warm. A canvas
+    // pass (FXAA, SGSR, the mirror over SGSR) is COMPILED there instead:
+    // compileAsync takes the target, MRT and depth synchronously, so it keys
+    // the pipeline present() draws. Census 41021224706 (Dawn/Metal) built
+    // FXAA's mid-race (createShaderModule x2 from runPass): the WebGPU post
+    // warm() is off and no warm reached a canvas pass.
+    let _scissorWarm = false, _warmDraws = 0, _warmSc = null, _warmCanvas = 0, _warmCanvasOnly = false, _warmFlipUp = false;
+    // Canvas compiles run ONE AT A TIME: compileAsync parks its context, handler and promise list on the renderer for
+    // its whole run, so the two a draw warm issues (SGSR, then FXAA, across the upscale switch) overlapped and one
+    // pipeline went unbuilt (W6 flaked ~1 in 10). Each job sets the state it keys on, calls, and puts it back at once.
+    let _warmCompiles = Promise.resolve();
+    function compileCanvas(mat) {
+      const mrt = renderer.getMRT();
+      const job = () => {
+        const rt = renderer.getRenderTarget(), mrt0 = renderer.getMRT();
+        setQuadMat(mat); renderer.setRenderTarget(null); renderer.setMRT(mrt);
+        try { return renderer.compileAsync(quad, quad.camera); } finally { renderer.setRenderTarget(rt); renderer.setMRT(mrt0); }
+      };
+      _warmCompiles = _warmCompiles.then(job).catch(() => { /* the live draw builds it then */ });
+    }
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
       if (_scissorWarm) {
-        if (!target) return;
+        if (!target) {
+          compileCanvas(mat);
+          _warmCanvas++;
+          return;
+        }
+        if (_warmCanvasOnly) return;
         (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1);
-        quad.material = mat;
+        setQuadMat(mat);
         renderer.setRenderTarget(target);
         renderer.autoClear = false;   // a clear (WebGPU loadOp) ignores the scissor
         try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); }
         return;
       }
-      quad.material = mat;
+      setQuadMat(mat);
       renderer.setRenderTarget(target);
       renderer.autoClear = !load;
       quad.render(renderer);
@@ -555,6 +589,12 @@
       if (_mirTex) { _mirRect[0] = rect[0]; _mirRect[1] = rect[1]; _mirRect[2] = rect[2]; _mirRect[3] = rect[3]; }
       _mirHdr = !!hdr;
       _mirFlip = flip !== false;
+    }
+    // Quit-to-menu (#4219): tlx.js disposes the mirror target, so no texture node may keep naming it.
+    function releaseMirror() {
+      _mirTex = null;
+      if (P && P.mirror) P.mirror.tex.value = blackTex;
+      if (P && P.fxaa && P.fxaa.mirTex) P.fxaa.mirTex.value = blackTex;
     }
     // The rect / hdr / flip uniforms are shared by the mirror pass and the
     // FXAA fold (tsl-post.js mirrorU); false = no mirror this frame.
@@ -1033,7 +1073,7 @@
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
         P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
-        const useUpscale = !!(P.sgsr && aaRT && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
+        const useUpscale = !!(P.sgsr && aaRT && !!(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()) !== _warmFlipUp);
         if (useUpscale) {
           if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
           runPass(P.fxaa.mat, aaRT);
@@ -1224,7 +1264,7 @@
           // runPass, the same eight sites). Compiling `quad` itself with the job's material is
           // exactly what runPass does, so the hit is guaranteed whatever the key
           // contains.
-          quad.material = job.mat;
+          setQuadMat(job.mat);
           await renderer.compileAsync(quad, quad.camera);
           if (performance.now() >= deadline) break;
         }
@@ -1242,11 +1282,19 @@
     function drawWarm(opts, frame) {
       const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest, mc = _mirComposites, n0 = _warmDraws;
       const sc0 = renderer.getScissorTest();
+      _warmCanvas = 0;
       try {
         _scissorWarm = true;
         renderer.setScissorTest(true);
         present(opts, frame);
+        // The other side of the upscale switch, canvas passes only: a render
+        // scale crossing 1.0 mid-race swaps FXAA->canvas for SGSR->canvas.
+        if (P.sgsr && aaRT && !viz) {
+          _warmCanvasOnly = true; _warmFlipUp = true;
+          present(opts, frame);
+        }
       } finally {
+        _warmCanvasOnly = false; _warmFlipUp = false;
         _scissorWarm = false;
         renderer.setScissorTest(sc0);
         Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest; _mirComposites = mc;
@@ -1259,7 +1307,7 @@
       const target = renderer.getRenderTarget(), previousTex = P.mirror.tex.value;
       try {
         P.mirror.tex.value = tex;   // use the live mipmapped mirror sampling state
-        quad.material = P.mirror.mat;
+        setQuadMat(P.mirror.mat);
         renderer.setRenderTarget((typeof ctx.softDest === "function" ? ctx.softDest() : null) || null);
         await renderer.compileAsync(quad, quad.camera);
       } finally {
@@ -1288,6 +1336,7 @@
       resize,
       warm,
       drawWarm,   // A-W1
+      warmSettled: () => _warmCompiles,   // the draw warm's canvas compiles have landed
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
       needsTag, discardAttachments,   // A-P2 (the mirror discards its depth + tag through this)
@@ -1296,6 +1345,7 @@
       dispose,
       viz,
       setMirror,
+      releaseMirror,
       mirrorComposites: () => _mirComposites,
       state: () => ({
         on: true,

@@ -66,6 +66,7 @@ const TLX = (function () {
   function releaseTexSource(t) {
     if (!t) return false;
     t.onUpdate = null;
+    t.__tlxUp = true;   // has a GPU copy: refillTexture() need not upload early
     const img = t.image;
     if (!img || (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap)) return false;
     const stand = texStandIn();
@@ -172,6 +173,34 @@ const TLX = (function () {
     attr.needsUpdate = true;
   }
 
+  // B8 LAB TIER (Bryce 2026-10-30, "B8 opt-in"; docs/notes/TLX-WEBGPU-PERF-2026-10-30.md): a lighter
+  // tier for three's WebGL2 leg on a phone (the WebGPU fallback an iPhone 14 ran at 42 vs 60 fps).
+  // OFF unless the URL carries ?lab=tlxLite (comma list, read once; no storage key), and a no-op on
+  // WebGPU or a desktop. Every lever is a value the GRAPHICS: LOW / autoShed path already produces.
+  const LITE = Object.freeze({ dprCap: 1.25, sunSize: 512, bloomLevels: 2, ssrQuality: 2 });
+  let _labs = null;
+  function labOn(name) {
+    if (_labs === null) {
+      _labs = [];
+      try {
+        const v = new URLSearchParams(location.search).get("lab");
+        if (v) _labs = v.split(",").map((s) => s.trim()).filter(Boolean);
+      } catch (_) { /* no location (node harness) or a bad query: no labs */ }
+    }
+    return _labs.indexOf(name) >= 0;
+  }
+  function liteTier(webgl2, phone) { return labOn("tlxLite") && !!webgl2 && !!phone ? LITE : null; }
+  // Per present, on the caller's opts (pinSoftwareRaceShed's precedent): idempotent, so a reused opts is safe.
+  function liteOpts(o) {
+    if (!o) return o;
+    o.ssao = 0; o.contact = 0; o.godray = 0; o.lampVol = 0; o.flareMul = 0;   // lookPostShed's zeros, bloom kept
+    o.bloomLevels = o.bloomLevels > 0 ? Math.min(o.bloomLevels | 0, LITE.bloomLevels) : LITE.bloomLevels;
+    o.grLite = true;
+    o.carReflect = 0;                                                            // tier >= 2
+    o.ssrQuality = Math.max(o.ssrQuality | 0, LITE.ssrQuality);                  // tier >= 3 march
+    return o;
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
@@ -209,7 +238,7 @@ const TLX = (function () {
 
       // The vendored bundle carries TWO local patches (swizzle omission for
       // Chromium 141, the #33952 bind-group-leak backport) — recipe and
-      // rationale in vendor/three-0.186.1/PATCHES.md, guarded by
+      // rationale in vendor/three-0.187.0/PATCHES.md, guarded by
       // gfx-backend-canary. Re-apply both on any vendor bump.
 
       // WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
@@ -1227,7 +1256,9 @@ const TLX = (function () {
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
-      let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
+      const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
+      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present: the
@@ -1357,7 +1388,7 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : 0,
             isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
@@ -1514,6 +1545,7 @@ const TLX = (function () {
       function prepareMirrorTarget(w, h, forWarm) {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         const lv = _mirLevels(w, h);
+        if (!mirRT || mirRT.width !== w || mirRT.height !== h || lv > _mirLevelsNow(w, h)) prepareMirrorTarget.allocs = (prepareMirrorTarget.allocs | 0) + 1;   // census: WGX/GLX's renders restart on one
         if (!mirRT) {
           mirRT = _mirTarget(post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType, w, h, _mirMrtWant());
           _mirSetLevels(lv, w, h);
@@ -3455,7 +3487,7 @@ const TLX = (function () {
         return out;
       }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
-        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
+        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0, sky: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
         const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
         const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
@@ -3486,6 +3518,7 @@ const TLX = (function () {
           if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
           if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
           if (shadowSys && shadowSys.drawWarm) drawn.casts = shadowSys.drawWarm();
+          if (typeof sky !== "undefined" && sky && sky.cacheDrawWarm) drawn.sky = sky.cacheDrawWarm(renderer);   // cacheWarm's compile keys depth on; the bake has none
         } finally {
           _mirWarmUnswap();
           sRT.scissor.copy(sSc);
@@ -3647,6 +3680,7 @@ const TLX = (function () {
           try {
             _gpuLastOperation = "warm-draw";
             _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
+            if (post && post.warmSettled) await post.warmSettled();   // the queued canvas compiles, before the live present can race them
             await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
           } catch (e) {
             _warmStages.drawn = { error: String((e && e.message) || e) };
@@ -5215,7 +5249,9 @@ const TLX = (function () {
           t.image = src;
           t.onUpdate = releaseTexSource;
           t.needsUpdate = true;
-          if (mobileTier || isMobile) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
+          // A spare re-filled before its first draw (draft spares park and refill unseen) would otherwise mint its GPU
+          // texture on whatever later edit first draws it: garage-livery-churn's one late 1024x1280 (v 11, r187).
+          if (mobileTier || isMobile || !t.__tlxUp) { try { renderer.initTexture(t); } catch (_) { /* first draw uploads it */ } }
           return true;
         },
         freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
@@ -5757,9 +5793,22 @@ const TLX = (function () {
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
-            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders,
+            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders, allocs: prepareMirrorTarget.allocs | 0,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
+        },
+        // Quit-to-menu (#4219): the largest race-only target (colour + ssrTag + depth + mips) leaves the menu and
+        // garage. The post / FXAA texture nodes and the glass material drop it first (WebKit keeps a freed GPU
+        // texture while a bind group names it); prepareMirrorTarget re-allocates on the next mirrorBegin.
+        releaseMirror() {
+          if (_mirActive || _warmPending) return false;
+          if (!mirRT) return true;
+          const t = mirRT.texture;
+          try { if (post && post.releaseMirror) post.releaseMirror(); } catch (_) { /* node values only */ }
+          try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
+          try { mirRT.dispose(); } catch (_) { /* already gone */ }
+          mirRT = null; mirCam = null; _mirRenders = 0;
+          return true;
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
@@ -6461,6 +6510,7 @@ const TLX = (function () {
           // allowed to resize — including the one that starts the warm.
           // Kept above the rig-warm seen/dispatch pair: that pair is one
           // source line in tlx-rig-warm.test.mjs.
+          if (_lite) liteOpts(opts);   // B8 lab: before the warm, so it compiles the lite pass set
           if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
@@ -6862,7 +6912,7 @@ const TLX = (function () {
                 } catch (_) { /* WebGPU backend has no gl; null is the honest answer */ }
                 return null;
               })(),
-              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
+              isMobile, mobileTier, isWebKit, liteGpu: _liteGpu, liteLab: !!_lite,
               softwareGL, softwareRaceShed: _swRaceShed, softAdapter: _softAdapter, headless: _headless,
               forceHw: _forceHw.on, forceBatches: _forceBatches,
               // The live verdict, not just the inputs: which way skipBatches()
@@ -7084,7 +7134,7 @@ const TLX = (function () {
     return s < 2 ? 0 : s;
   }
 
-  return { create, lastFailure: () => _lastFailure };
+  return { create, lastFailure: () => _lastFailure, liteTier, liteOpts };
 })();
 
 if (typeof window !== "undefined") window.TLX = TLX;

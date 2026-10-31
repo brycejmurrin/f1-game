@@ -30,7 +30,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
-  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, STRICT, postWarmSlope,
+  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, STRICT, postWarmSlope, cycleCensusIssues,
 } from "../helpers/race-cycle-memory.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -108,14 +108,16 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
     for (const id of CIRCUITS) {
       await raceAndDrive(page, id);
       const built = await censusAfterGc(page, cdp);
-      log({ cycle, id, at: "race", aliveTracks: built.aliveTracks, heapMB: built.heapMB, audioMB: built.audioMB, audioBuffers: built.audioBuffers, three: built.three && { geometries: built.three.geometries, textures: built.three.textures } });
+      log({ cycle, id, at: "race", ...built });
+      expect(cycleCensusIssues(built), "race census must observe the requested renderer and usable counters").toEqual([]);
       expect(built.instrumentation.tracksReady, "the census must see Tracks.build").toBe(true);
       expect(built.aliveTracks, `cycle ${cycle}, ${id} built: built tracks still reachable after GC`).toEqual([id]);
 
       await flagToMenu(page);
       const quietMs = id === CIRCUITS[CIRCUITS.length - 1] ? await menuQuiet(page) : null;
       const menu = await censusAfterGc(page, cdp);
-      log({ cycle, id, at: "menu", quietMs, aliveTracks: menu.aliveTracks, heapMB: menu.heapMB, audioMB: menu.audioMB, audioBuffers: menu.audioBuffers, three: menu.three && { geometries: menu.three.geometries, textures: menu.three.textures } });
+      log({ cycle, id, at: "menu", quietMs, ...menu });
+      expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
       expect(menu.aliveTracks.length, `cycle ${cycle}, menu after ${id}: ${menu.aliveTracks.join(", ")} still reachable after GC`).toBeLessThanOrEqual(1);
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
       if (id === CIRCUITS[CIRCUITS.length - 1]) {

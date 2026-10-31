@@ -29,7 +29,7 @@ const TLX = read("js/render/three/tlx.js");
 
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
@@ -833,7 +833,7 @@ test("B14: tsl-lit groups the shadow, bake, lamp-grid, material-array and env-cu
   const ids = THREE_PATCH_IDS();
   assert.ok(ids.includes(13));
 });
-function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.186.1/MANIFEST.json")).patches; }
+function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.187.0/MANIFEST.json")).patches; }
 
 // R8 / A2 (lane TLX-2): the prop batches as attribute-instanced plain Meshes (tlx.js _aiMesh), on the REAL
 // R1 instance step and lit material, three r186 WebGL2 over the fake GL.
@@ -944,7 +944,8 @@ test("shared bind groups: last-owner eviction, context isolation and robust keys
   t.after(() => renderer.dispose());
   const manager = renderer._bindings;
   const uniforms = (...ids) => [{ isNodeUniformsGroup: true, uniforms: ids.map(id => ({ nodeUniform: { node: { id } } })) }];
-  const shared = (bindings) => manager.getSharedBindGroup("render", bindings);
+  // r187: getSharedBindGroup(bindGroup, renderContext) takes the builder's BindGroup (name + bindings).
+  const shared = (bindings) => manager.getSharedBindGroup({ name: "render", bindings });
   assert.notEqual(shared(uniforms(1, 23)), shared(uniforms(12, 3)), "uniform IDs have delimiters");
   assert.notEqual(shared([{nodeUniform: {id: 123}}]), shared(uniforms(123)), "standalone uniforms have their own prefix");
   const tex = name => [{ isSampler: true, isSampledTexture: true, texture: null, textureNode: {id: 7}, name, release() {} }];
@@ -1122,4 +1123,105 @@ for (const language of ["WGSL", "GLSL"]) test(`hunt 6: pit-lane, sun-disc and we
     at(new RegExp(`${fade} = clamp\\( \\( 1\\.0 - \\( \\( \\w+ - 10\\.0 \\) / 10\\.0`));   // the weave gate is wvFade
     clean(wvH);
   } finally { renderer.dispose(); }
+});
+
+// GPU hunt 3 (#4272 item 5): the hunt-1 exact-zero gates as REAL control flow in every backend's compiled shader.
+//   S1  cloudShadow's FBM runs only where the sun-shadow factor it multiplies is > 0 (0 * x == 0, x >= 0).
+//   S2  the car-map taps run only where the static PCF result is > 0 (min(0, csh) == 0, csh >= 0).
+//   P5-3 the lens-dirt fetch runs only when its value is read: bloom on (else bloomSample == 0), or the flare
+//        branch can run (uniform flareStr > 0 and sunUV on screen).
+// `headersAt` returns the block headers enclosing a source offset (comments blanked), so a single-line `if (..) { }`
+// counts too. Pixels still need the parent's Dawn run, gfx-probe and gpu-census.yml.
+function headersAt(src, idx) {
+  const s = src.replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length)), stack = [];
+  let start = 0;
+  for (let i = 0; i < idx; i++) {
+    const ch = s[i];
+    if (ch === "{") { stack.push(s.slice(start, i).trim()); start = i + 1; }
+    else if (ch === "}") { stack.pop(); start = i + 1; }
+    else if (ch === ";") start = i + 1;
+  }
+  return stack;
+}
+const sitesOf = (src, re) => [...src.matchAll(new RegExp(re.source, "g"))].map((m) => m.index);
+function assertGated(label, src, re, headerRe, n) {
+  const at = sitesOf(src, re);
+  assert.equal(at.length, n, `${label}: ${n} ${re} sites`);
+  for (const i of at) assert.ok(headersAt(src, i).some((h) => headerRe.test(h)), `${label}: ${re} at ${i} sits under ${headerRe}`);
+}
+
+test("GPU hunt 3: GLX and WGX gate cloudShadow, the car taps and the lens-dirt fetch on their exact-zero factor", async () => {
+  const { extractGlsl, extractWgsl } = await import("../../tools/check/shader-validate.mjs");
+  const src = Object.fromEntries([...extractGlsl(), ...extractWgsl()].map((s) => [s.id, s.source]));
+  const lit = (id, call, car) => {
+    assertGated(id, src[id], call, /^if \(shadow > 0\.0\)$/, 1);
+    assertGated(id, src[id], car, /^if \((?:uCarShadowOn|F\.params6\.y) > 0\.5 && sh > 0\.0\)$/, 4);
+  };
+  lit("LIT_FS", /cloudShadow\(vWorldPos\)/, /texture\(uCarShadowMap,/);
+  lit("WGSLChunks.LIT", /cloudShadow\(in\.wpos\)/, /textureSampleCompareLevel\(carShadowTex,/);
+  assertGated("COMPOSITE_FS", src.COMPOSITE_FS, /texture\(uDirt,/,
+    /^if \(uLensDirt > 0\.001 && \(uBloomAmt > 0\.001 \|\| \(uFlareStr > 0\.0 && uSunUV\.x >= 0\.0/, 1);
+  assertGated("WGSLPost.COMPOSITE", src["WGSLPost.COMPOSITE"], /textureSampleLevel\(dirtTex,/,
+    /^if \(lensDirt > 0\.001 && \(bloomAmt > 0\.001 \|\| \(flareStr > 0\.0 && sunUV\.x >= 0\.0/, 1);
+});
+
+for (const language of ["WGSL", "GLSL"]) test(`GPU hunt 3: TLX gates cloudShadow and the car taps on their exact-zero factor in ${language}`, async () => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  try {
+    await renderer.init();
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const dt = () => { const t = new THREE.DepthTexture(4, 4); t.compareFunction = THREE.LessEqualCompare; return t; };
+    const shadow = { S: { enabled: true, carEnabled: true, lampEnabled: false }, sunTex: dt(), carTex: dt(), sunSize: 4, carSize: 4 };
+    const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow,
+      ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+    const g = new THREE.BufferGeometry();
+    for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1], ["trk", 3]])
+      g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
+    const B = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const b = new B(new THREE.Mesh(g, lit.makeMaterial({ clearcoat: 0.8, carPaint: 1 })), renderer);
+    b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+    const src = b.fragmentShader;
+    // S1: the cloud deck projection (* 0.0052) sits under `if (V > 0.0)` where V is the factor the cloud term multiplies.
+    const gatedBy = (v) => new RegExp(`${v} = \\( ${v} \\* \\( 1\\.0 - `).test(src);
+    assertGated(`${language} S1`, src, /vec2(?:<f32>)?\( 0\.0052 \)/, {
+      test: (h) => { const m = h.match(/^if \( \( (nodeVar\d+) > 0\.0 \) \)$/); return !!m && gatedBy(m[1]); } }, 1);
+    // S2: the 4 car taps (the 4-tap compare sampler; the sun map has 8) sit under `carShadowOn > 0.5 && sh > 0.0`,
+    // sh being the static map's 8-tap mean.
+    const tapRe = language === "WGSL" ? /textureSampleCompare\( (\w+),/g : /texture\( (\w+), vec3\(/g;
+    const taps = {};
+    for (const m of src.matchAll(tapRe)) (taps[m[1]] = taps[m[1]] || []).push(m.index);
+    assert.deepEqual(Object.values(taps).map((a) => a.length).sort(), [4, 8], `${language}: one sun (8) and one car (4) compare sampler`);
+    const shRe = /^if \( \( \( [\w.]+ > 0\.5 \) && \( (nodeVar\d+) > 0\.0 \) \) \)$/;
+    const isSh = (h) => { const m = h.match(shRe); return !!m && new RegExp(`${m[1]} = \\( nodeVar\\d+ \\* 0\\.125 \\)`).test(src); };
+    for (const i of Object.values(taps).find((a) => a.length === 4))
+      assert.ok(headersAt(src, i).some(isSh), `${language}: car tap at ${i} sits under the static-sh gate`);
+  } finally { renderer.dispose(); }
+});
+
+test("GPU hunt 3 (TLX-P5-3): the TLX composite fetches lens dirt only under lensDirt && (bloom || on-screen flare)", async () => {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true, chunks: globalThis.TLXShaders.chunks(THREE, TSL),
+    shadow: null, viz: null, ssrTag: false, softDest: () => null, wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+  try {
+    post.resize(320, 180);
+    const I = new THREE.Matrix4().toArray(), n0 = fg.shaders.length;
+    await post.warm({ reflect: 0, carReflect: 0, bloom: 0.5, ssao: 0.5, godray: 0, exposure: 1 },
+      { proj: I, invProj: I, invVP: I, viewProj: I, time: 0, sunVS: [0, 0, -1] });
+    const gateRe = /^if \( \( \( [\w.]+ > 0\.001 \) && \( \( [\w.]+ > 0\.001 \) \|\| \( \( \( \( \( [\w.]+ > 0\.0 \) && \( ([\w.]+)\.x >= 0\.0 \)/;
+    const comps = fg.shaders.slice(n0).filter((s) => sitesOf(s, /vec3\( 2\.2 \)/).length);
+    assert.equal(comps.length, 1, "one composite carries the dirt veil");
+    const src = comps[0];
+    const veil = sitesOf(src, /vec3\( 2\.2 \)/);
+    assert.equal(veil.length, 1, "one veil add");
+    const H = headersAt(src, veil[0]).find((h) => gateRe.test(h));
+    assert.ok(H, "the veil add sits under lensDirt > 0.001 && (bloomAmt > 0.001 || flareStr > 0 && sunUV on screen)");
+    // The fetch feeding the veil sits in that same block: the one texture() whose sampler is read nowhere else.
+    const taps = [...src.matchAll(/texture\( (\w+),/g)];
+    const dirt = taps.filter((m) => headersAt(src, m.index).includes(H));
+    assert.equal(dirt.length, 1, "exactly one fetch under the dirt gate");
+    assert.equal(taps.filter((m) => m[1] === dirt[0][1]).length, 1, "the dirt sampler is fetched nowhere else (no ungated twin)");
+  } finally { post.dispose(); renderer.dispose(); }
 });

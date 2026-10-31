@@ -104,7 +104,8 @@ functions and slots, with no new localStorage key.
 - Frames in the window differ (377 → 534); every row is per frame.
 - fps is a paravirtual-runner number (PP-19) and is not quoted.
 
-WORKER-C-PLACEHOLDER
+Worker C (the TLX exact-zero shader gates) shipped nothing in this PR; the gates moved to #4272 item 5 and GPU hunt 3
+(`PERF-GPU3-2026-10-30.md`).
 
 ## Not run / limits
 
@@ -118,7 +119,7 @@ WORKER-C-PLACEHOLDER
 
 ## Sources
 
-- three.js r186 vendored build (`vendor/three-0.186.1/three.webgpu.min.js`): `updateAttribute` →
+- three.js r186 vendored build (`vendor/three-0.187.0/three.webgpu.min.js`): `updateAttribute` →
   `clearUpdateRanges()` on both backends, the `createIndexAttribute` path, `updateBinding`.
 - WebGPU `GPUQueue.writeBuffer`: https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/writeBuffer
 - three.js UBO cost with many render items, mrdoob/three.js#30560: https://github.com/mrdoob/three.js/issues/30560

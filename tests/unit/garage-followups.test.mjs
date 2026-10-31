@@ -113,10 +113,11 @@ test('an unedited garage draft exits in one tap and an old confirmation cannot a
 });
 
 function tuneFixture() {
-  const dom = makeDom(), saved = new Map();
+  const dom = makeDom(), saved = new Map(), timers = new Map(), writes = { n: 0 };
+  let timerId = 0;
   const context = vm.createContext({ document: dom.document, GameStore: { store: {
-    get: (k, d) => saved.get(k) ?? d, set: (k, v) => v === undefined ? saved.delete(k) : saved.set(k, v),
-  } }, PhysicsConsts: { BB_REF: .56, LAT_MAX: 20 }, csVisitTunes: new Map(), csTuneExperiments: new Map(),
+    get: (k, d) => saved.get(k) ?? d, set: (k, v) => { writes.n++; return v === undefined ? saved.delete(k) : saved.set(k, v); },
+  } }, setTimeout: (fn) => { timers.set(++timerId, fn); return timerId; }, clearTimeout: (id) => { timers.delete(id); }, PhysicsConsts: { BB_REF: .56, LAT_MAX: 20 }, csVisitTunes: new Map(), csTuneExperiments: new Map(),
     $: id => dom.byId(id), csLabel: text => { const n = dom.document.createElement('h3'); n.textContent = text; return n; },
     renderStatBars() {}, csTabId: x => x, getTeamParts: () => ({}), GameAudio: {},
     Parts: { RH_GAIN: .06, aeroLoad: (_p, _t, tune) => Math.min(1, Math.max(0, 1 + .06 * (tune?.rake || 0))) }, G: { soundOn: false, $: id => dom.byId(id), getTeamParts: () => ({}) },
@@ -127,8 +128,21 @@ function tuneFixture() {
   const build = () => { container.replaceChildren(); context.experiments.build(container, team); };
   const button = text => container.querySelectorAll('button').find(b => b.textContent === text);
   const input = k => container.querySelectorAll('input').find(n => n.dataset.csTune === k);
-  return { context, S: context.S, team, build, button, input, container };
+  const runTimers = () => { const due = [...timers.values()]; timers.clear(); for (const fn of due) fn(); };
+  return { context, S: context.S, team, build, button, input, container, writes, timers, runTimers };
 }
+test('a tune slider drag writes the store once: inputs debounce, change commits the final value (perf hunt 9)', () => {
+  const f = tuneFixture(), { S, team } = f; f.build();
+  const inp = f.input('rideR'), w0 = f.writes.n;
+  for (let i = 0; i < 30; i++) { inp.value = 50 + i; inp.oninput(); }
+  assert.equal(f.writes.n - w0, 0, 'no store write while the thumb moves');
+  inp.onchange();
+  assert.ok(f.writes.n - w0 <= 1, `30 inputs + 1 change wrote ${f.writes.n - w0} times`);
+  assert.equal(S.get(team.id).rideR, 79, 'the stored value is the final slider value');
+  f.runTimers(); assert.equal(f.writes.n - w0, 1, 'no late write after the change');
+  inp.value = 62; inp.oninput(); f.runTimers();
+  assert.equal(S.get(team.id).rideR, 62, 'a drag with no change event still commits after the debounce');
+});
 test('visit restore survives tune rebuilds, restores all fields and remains team scoped', () => {
   const f = tuneFixture(), { S, team } = f;
   S.set(team.id, { arbF: 9, arbR: 8, rideF: 30, rideR: 70, brakeBias: 59 });
