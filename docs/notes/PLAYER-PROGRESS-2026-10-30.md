@@ -2,8 +2,8 @@
 
 Base: fetched deploy `ed60f0f62254c3d9c8d5b991b976edd1076b344d`.
 
-Daily history reads the existing device-local Daily record without changing its
-schema or persistence. It shows at most seven saved dates and four classes per
+Daily history is reached through Home → SAVES & DATA. It reads the existing
+device-local Daily record without changing its schema or persistence. It shows at most seven saved dates and four classes per
 date. Class numbers are local to a date; historical circuit identities and
 medals are unavailable and are not reconstructed. Invalid backups are ignored.
 
@@ -38,8 +38,18 @@ ceiling covers exactly that growth.
 Before the budget update, the three affected unit suites passed 142 tests with
 zero failures. Independent review checked selectors, static DOM ownership,
 clean-lap validity and self-reported wording. The time-trial browser spec adds
-a touch journey through all three panels at 844 by 390. It checks history,
+a touch journey through all three panels at 844 by 390. It checks Home fits
+without an extra history row, opens history through SAVES & DATA, and verifies
+the same Home dimensions on return. The history remains visible with HELP TEXT
+set to HIDE through the existing appearance preference API. It also checks history,
 goal selection, checklist interaction and the empty measured-review state;
 populated energy receipts are covered by unit tests rather than a real driven
 lap. Structural, browser and remote CI verdicts are recorded separately in the
 PR handoff; this note does not imply any unrun check passed.
+
+The first placement directly in the Home grid caused phone overflow in CI and
+changed the Home screenshots. The fixed history blueprint now lives in the
+existing SAVES & DATA panel, reached by its existing Home shortcut. This keeps
+all feature nodes and their IDs while restoring the original Home grid; no
+CSS, session API or additional shell-budget change is needed. The relevant
+Home-fit and screenshot checks must pass before that correction is accepted.

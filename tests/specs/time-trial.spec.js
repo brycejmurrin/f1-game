@@ -56,8 +56,20 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     await page.reload();
     await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.headless(true));
-    const doorHeights = await page.locator("#mb-career, #mb-daily").evaluateAll(nodes => nodes.map(node => node.offsetHeight));
+    expect(await page.evaluate('AppearanceOpts.setHelp("off")')).toBe("off");
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    const homeGeometry = await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    }));
+    expect(homeGeometry.scrollHeight, "Home still fits before opening personal history").toBeLessThanOrEqual(homeGeometry.height + 1);
+    await expect(page.locator("#menu-buttons #daily-history")).toHaveCount(0);
+    await page.locator("#mb-saves").tap();
+    await expect(page.locator("#pm-panel-files")).toBeVisible();
+    await expect(page.locator("#daily-history")).toBeVisible();
     await page.locator("#daily-history > summary").tap();
+    await expect(page.locator("html")).toHaveAttribute("data-menu-help", "off");
+    await expect(page.locator("#daily-history-list")).toBeVisible();
     await expect(page.locator("#daily-history")).toContainText(today);
     await expect(page.locator("#daily-history")).toContainText(yesterday);
     await expect(page.locator("#daily-history")).toContainText("71.200s");
@@ -68,9 +80,14 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     }));
     expect(dailyFit.clipped).toBe(false);
     expect(dailyFit.tapHeight).toBeGreaterThanOrEqual(44);
-    expect(await page.locator("#mb-career, #mb-daily").evaluateAll(nodes => nodes.map(node => node.offsetHeight))).toEqual(doorHeights);
     await testInfo.attach("daily-history-phone", { body: await page.screenshot(), contentType: "image/png" });
     await page.locator("#daily-history > summary").tap();
+    await page.locator("#pm-settings-close").tap();
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    expect(await page.locator("#menu-buttons").evaluate(el => ({
+      height: el.clientHeight, scrollHeight: el.scrollHeight,
+      doors: [...el.querySelectorAll("button")].map(node => [node.id, node.offsetWidth, node.offsetHeight]),
+    })), "Saves and Data must return the same Home geometry").toEqual(homeGeometry);
 
     await page.locator("#mb-practice").tap();
     await page.locator("#sel-go").tap();

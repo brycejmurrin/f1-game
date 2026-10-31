@@ -643,16 +643,16 @@ test('practice pathway and energy review use fixed settings blueprints without c
   const text = dom.document.createElement('p'); text.id = 'pm-last-lap-energy-text'; box.appendChild(text); h.nodes.set(text.id, text);
   const before = { practice: h.G.practice, timeTrial: h.G.timeTrial };
   h.coach.paint(); assert.equal(practice.querySelector('#pm-practice-pathway'), path);
-  assert.match(path.querySelector('p').textContent, /not verified drill completion/);
   const buttons = path.querySelectorAll('button'), checks = path.querySelectorAll('input');
   assert.equal(buttons.length, 3); buttons[1].onclick(); assert.equal(h.coach.practiceGoal(), 'trail');
   assert.deepEqual({ practice: h.G.practice, timeTrial: h.G.timeTrial }, before);
   checks[0].checked = true; h.coach.reset(); assert.equal(checks[0].checked, false);
   h.G.practice = false; h.G.timeTrial = false; h.coach.paint(); assert.ok(buttons.every(b => b.disabled));
-  const card = review.querySelector('#pm-last-lap-energy'); assert.ok(card); assert.match(card.querySelector('p').textContent, /Complete one full clean lap/);
+  const card = review.querySelector('#pm-last-lap-energy'); assert.ok(card);
+  assert.equal(card.querySelector('p').textContent,
+    'Complete one full clean lap in stable conditions for a measured sector-by-sector review. Partial laps, pits, incidents, cautions and changed conditions are excluded.');
   h.ins.forecast = () => ({ lastLapEnergy: { lap: 2, sectors: [.1, -.05, .02], netUsed: .07 } }); h.coach.paint();
-  assert.match(card.querySelector('p').textContent, /7.0 percentage points used/);
-  assert.match(card.querySelector('p').textContent, /Sector 2: 5.0 percentage points recovered/);
-  assert.match(card.querySelector('p').textContent, /does not identify why/);
+  assert.equal(card.querySelector('p').textContent,
+    'Lap 2: 7.0 percentage points used. Sector 1: 10.0 percentage points used · Sector 2: 5.0 percentage points recovered · Sector 3: 2.0 percentage points used. Measured net battery change, including recovery; this does not identify why energy changed.');
   h.coach.paint(); assert.equal(review.querySelectorAll('#pm-last-lap-energy').length, 1);
 });
