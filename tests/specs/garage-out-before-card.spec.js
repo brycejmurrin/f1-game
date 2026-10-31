@@ -147,9 +147,10 @@ async function awaitGarageThenCard(page) {
         if (tl.some((s) => s.prep) && go && !go.disabled && /START/i.test(text) && !text.startsWith("PREPARING")) return "released";
         return false;
       }
-      // Wait for the card itself — assertGarageThenCard requires it. Still in
-      // garage: the timeout allows studioDone's 3× duration cap to fire (~8 s × 3).
-      return tl.some((s) => s.cardShown) && "card";
+      // BUILD can reveal the preparation card between studioClose and raceIntro.
+      // Keep recording until the actual session card/flyby follows that cover;
+      // the ordering checks below still include every intermediate sample.
+      return tl.some((s) => s.cardShown && ["run", "card", "handoff"].includes(s.phase)) && "card";
     }, null, { polling: 100, timeout: 180_000 });
     if ((await verdict.jsonValue()) === "released") throw new Error("START released after PREPARING with no garage-out (#3591): see the apex-logs line \"intro released without a garage-out\"");
   } catch (e) {

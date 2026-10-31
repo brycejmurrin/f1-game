@@ -95,6 +95,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   GPU-less container, for COUNTS (passes, store ops, mips), never ms
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
+  --ls apex26.garageEvidence=phone|desktop  opt-in menu-full TLX/WebGPU garage trace, six frames and video
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
   --boot-timeout MS  --race-timeout MS
   --profile DIR  --port N         a PERSISTENT browser profile and a fixed server port: run twice
@@ -199,6 +200,12 @@ const launchOpts = {
 // --profile: one persistent context in place of browser + newContext. `launch` says whether the
 // profile already held a run (a returning player's launch) or was empty (the first ever).
 const PROFILE = flag("--profile", null);
+// Diagnostic-only capture; the existing workflow forwards --ls without another dispatch input.
+// https://playwright.dev/docs/videos and /docs/api/class-video (context close flushes video).
+const garageCapture = !PROFILE && entry === "menu-full" && backend === "three" && path3 === "webgpu"
+  ? (extraLs.join(" ").match(/apex26\.garageEvidence=(phone|desktop)\b/) || [])[1] : null;
+const garageViewport = garageCapture === "phone" ? { width: 844, height: 390 } : { width: 1280, height: 720 };
+let captureContext = null, captureVideo = null;
 let persistent = null, browser;
 if (PROFILE) {
   out.profile = { dir: PROFILE, launch: existsSync(join(PROFILE, "Default")) ? "warm" : "cold", port };
@@ -218,8 +225,12 @@ checkpoint("browser-launched");
 // written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
 const console_ = [];
 try {
-  const ctx = persistent || await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctx = persistent || await browser.newContext({ viewport: garageViewport,
+    ...(garageCapture ? { recordVideo: { dir: dirname(jsonAt || "."), size: garageViewport } } : {}),
+    ...(garageCapture === "phone" ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2,
+      userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36" } : {}) });
   const page = await ctx.newPage();
+  if (garageCapture) { captureContext = ctx; captureVideo = page.video(); }
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));
   // A renderer crash makes every later page.evaluate hang FOREVER rather than
@@ -818,6 +829,7 @@ try {
         try { await page.selectOption("#rs-time-sel", tod, { timeout: 10000 }); m.tod = await page.$eval("#rs-time-sel", (s) => s.value); }
         catch (e) { m.todError = String((e && e.message) || e).slice(0, 100); }
       }
+      if (garageCapture) await page.selectOption("#rs-weather-sel", garageCapture === "phone" ? "rain" : "dry");
       const tw = Date.now();
       await page.evaluate(prepTimelineStart).catch(() => {});
       try { await page.waitForFunction(menuPrepReady, null, { polling: 100, timeout: menuTimeout }); m.prepReady = true; }
@@ -837,9 +849,39 @@ try {
       m.atGo = await prep();
       m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
         return g ? { ready: g.ready, garageReady: g.garageReady, last: g.last } : null; }).catch(() => null);
+      if (garageCapture) {
+        await page.waitForFunction(() => { const e = window.__apex.garageCam().exterior;
+          return e?.status === "ready" && e.weather === document.getElementById("rs-weather-sel").value && e.tod === document.getElementById("rs-time-sel").value;
+        }, null, { polling: 100, timeout: 30000 });
+        m.garageEvidence = { profile: garageCapture, viewport: garageViewport, source: process.env.GITHUB_SHA || null, frames: [],
+          before: await page.evaluate(() => ({ exterior: __apex.garageCam().exterior, saved: localStorage.getItem("apex26.camMode"),
+            weather: document.getElementById("rs-weather-sel").value, tod: document.getElementById("rs-time-sel").value, help: __apex.agentHelp() })) };
+        await page.evaluate(() => { window.__garageEvidence = []; window.__garageEvidenceOn = true;
+          const at = performance.now(); function tick() { if (!window.__garageEvidenceOn) return;
+            if (window.__garageEvidence.length < 1200) window.__garageEvidence.push({ t: performance.now() - at,
+              phase: document.getElementById("loading").dataset.phase, exterior: __apex.garageCam().exterior, state: __apex.info().state });
+            requestAnimationFrame(tick); } requestAnimationFrame(tick); });
+      }
       await page.evaluate(() => window.__apexMark("raceCall"));
       await page.locator("#rs-go").click({ timeout: 60000 });
       step("start-race");
+      if (garageCapture) {
+        await page.waitForFunction(() => document.getElementById("loading").dataset.phase === "garage", null, { polling: 100, timeout: 60000 });
+        for (let i = 0; i < 6; i++) {
+          const shotAt = (jsonAt || "game-capture.json").replace(/\.json$/, ".garage-" + i + ".png");
+          const fresh = await freshFrame("garage-" + i);
+          if (fresh && fresh.error) throw new Error("Garage frame refresh failed: " + fresh.error);
+          await page.screenshot({ path: shotAt, timeout: 15000 });
+          m.garageEvidence.frames.push({ path: shotAt, at: Date.now(), observed: await page.evaluate(() => ({
+            phase: document.getElementById("loading").dataset.phase, state: __apex.info().state, exterior: __apex.garageCam().exterior })) });
+          checkpoint("garage-capture", { menu: m });
+          await page.waitForTimeout(1900);
+        }
+        m.garageEvidence.after = await page.evaluate(() => { window.__garageEvidenceOn = false;
+          return { trace: window.__garageEvidence, saved: localStorage.getItem("apex26.camMode") }; });
+        if (!m.garageEvidence.after.trace.some(x => x.phase === "garage" && x.exterior?.visible && x.exterior.weather === m.garageEvidence.before.weather && x.exterior.tod === m.garageEvidence.before.tod)) throw new Error("Garage exterior was not drawn");
+        if (m.garageEvidence.before.saved !== m.garageEvidence.after.saved) throw new Error("Garage changed saved driving camera");
+      }
       m.ok = true;
     } catch (e) {
       m.ok = false; m.error = String((e && e.message) || e).slice(0, 160);
@@ -850,7 +892,7 @@ try {
 
   // menu-full: PLAYER PACE (LoadingScreen.isAutomation honours ?fullIntro=1) —
   // the garage drive-out and the flyby a harness otherwise skips.
-  await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1${entry === "menu-full" ? "&fullIntro=1" : ""}`,
+  await page.goto(`http://127.0.0.1:${port}/index.html?${garageCapture ? "" : "gfxdebug=1&"}${entry === "menu-full" ? "fullIntro=1" : ""}`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
   // 120 s. This was once raised to 300 s on the theory that windows-latest was
@@ -905,6 +947,7 @@ try {
   } else {
     out.menu = await enterViaMenu(tod);
     checkpoint("menu-entry", { menu: out.menu });
+    if (garageCapture && !out.menu.ok) throw new Error("Garage capture failed: " + out.menu.error);
   }
   out.timeOfDay = tod || "(default)";
   checkpoint("race-called");
@@ -1794,6 +1837,14 @@ try {
     out.profile.probeArmedAtClose = armed || null;
     out.profile.proofWaitMs = Date.now() - t;
   }
+  if (garageCapture) {
+    out.garageCameraControl = { before: await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on })) };
+    if (out.garageCameraControl.before.garageOn) throw new Error("Garage still owns race camera");
+    if (garageCapture === "phone") await page.locator("#btn-cam").tap();
+    else await page.locator("#btn-cam").click();
+    await page.waitForFunction(saved => localStorage.getItem("apex26.camMode") !== saved, out.garageCameraControl.before.saved, { polling: 100, timeout: 5000 });
+    out.garageCameraControl.after = await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on }));
+  }
   out.ok = true;
   checkpoint("done");
 } catch (e) {
@@ -1806,6 +1857,13 @@ try {
   // meant every failure threw them away.
   out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
   out.root = ROOT;
+  if (captureVideo) {
+    try {
+      await Promise.race([captureContext.close(), new Promise((_, reject) => setTimeout(() => reject(new Error("video context close timeout")), 20000))]);
+      out.garageVideo = (jsonAt || "game-capture.json").replace(/\.json$/, ".garage.webm");
+      await Promise.race([captureVideo.saveAs(out.garageVideo), new Promise((_, reject) => setTimeout(() => reject(new Error("video save timeout")), 20000))]);
+    } catch (e) { out.garageVideoError = String(e); out.ok = false; }
+  }
   // browser.close() HANGS after a WebGPU/Metal session: run 4's WebGPU check
   // reached phase "done" at +42.4s and the step was then killed at 20 minutes
   // with the process still in this line. A teardown hang must not masquerade

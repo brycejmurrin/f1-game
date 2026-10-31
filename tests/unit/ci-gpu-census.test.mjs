@@ -18,7 +18,9 @@ const RELAUNCH_NAME = "Game check — three.js / WebGPU, first and second launch
 const RELAUNCH_STEP = /\n      - name: Game check — three\.js \/ WebGPU, first and second launch \(one profile\)[\s\S]*?\n          done\n/;
 // The opt-in mem-cycles step (A·H12) is a measurement, not a control leg: cut out like the relaunch step.
 const MEMCYCLES_STEP = /\n      - name: Memory cycles — three\.js race to quit[\s\S]*?\n          done\n/;
-const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n");
+// Opt-in paired photography is likewise separate from the four renderer controls.
+const GARAGE_CAPTURE_STEP = /\n      - name: Capture paired desktop garage departure[\s\S]*?\n            --json game-garage-desktop.json --shot game-garage-desktop.png\n/;
+const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n").replace(GARAGE_CAPTURE_STEP, "\n");
 
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with

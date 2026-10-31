@@ -91,7 +91,7 @@ const TrackBuildProps = (function () {
   // THE PROPS PASS AS STEPS (Tracks.buildSteps delegates to it): it yields only
   // between whole emission phases, so build() — which runs it straight through —
   // produces byte-identical buffers.
-  function* buildSteps(track) {
+  function* buildSteps(track, buildOptions) {
     Log.info("track", "buildProps start " + (track.def && track.def.id));
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
             MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF,
@@ -111,9 +111,11 @@ const TrackBuildProps = (function () {
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
     // Props run ~70-290 verts per metre of lap (median ~130; 52-circuit sweep): start at 100/m so a
     // typical build grows once, not seven times from 8192. Glass and water stay small.
-    const out = TrackModels.scratch(Math.round(track.total * 100));
+    const out = TrackModels.scratch(buildOptions && buildOptions.region ? 8192 : Math.round(track.total * 100));
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
+    const region = buildOptions && buildOptions.region ? TrackSceneryRegion.create(buildOptions.region, [out, glassBuf, waterBuf], RAW) : null;
+    const raw = region ? region.raw : RAW, emit = region ? region.emit : TrackGeom.emit, addMesh = region ? region.addMesh : TrackGeom.addMesh;
     // Cells already emitted this build — overlapping waterBand/waterField calls
     // skip duplicates instead of stacking coplanar quads (docs/BUGS.md S7).
     const waterOccupied = new Set();
@@ -352,7 +354,9 @@ const TrackBuildProps = (function () {
     };
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const guards = SceneryGuards.create({ track, n, px, py, pz, hw, ds, grid });
-    const { pitKeep, pitSide, inPitFootprint, onRoadHit, rejBox, rejRad, onTrack } = guards;
+    const { pitKeep, pitSide, inPitFootprint, onRoadHit, onTrack } = guards;
+    const rejBox = region ? (c, size, basis) => guards.rejBox(c, size, basis) || !region.box(c, size, basis) : guards.rejBox;
+    const rejRad = region ? (c, radius, height, basis, base) => guards.rejRad(c, radius, height, basis, base) || !region.radial(c, radius, height, basis) : guards.rejRad;
     const badPrimitive = (kind, c, size) => {
       // COPY c: graph.xform hands out a pooled triple, and this record outlives the op.
       diagnostics.invalid.push({ id: kind, reason: "non-finite primitive dimensions",
@@ -371,7 +375,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
-      RAW.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
+      raw.addBox(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addCyl = (o, c, rad, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
@@ -383,7 +387,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
-      RAW.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
+      raw.addCyl(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addCone = (o, c, rad, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
@@ -395,7 +399,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbUp(c, rad, h); return true; }
-      RAW.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
+      raw.addCone(o, c, rad, h, col, seg, basis); absorbUp(c, rad, h); return true;
     };
     const addFrustum = (o, c, rB, rT, h, col, seg, basis) => {
       const tv = o._replayVerdicts;
@@ -407,7 +411,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbUp(c, __M.max(rB, rT), h); return true; }
-      RAW.addFrustum(o, c, rB, rT, h, col, seg, basis);
+      raw.addFrustum(o, c, rB, rT, h, col, seg, basis);
       absorbUp(c, __M.max(rB, rT), h); return true;
     };
     const addPrism = (o, c, sz, col, basis) => {
@@ -420,7 +424,7 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
-      RAW.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
+      raw.addPrism(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addPyramid = (o, c, sz, col, basis) => {
       const tv = o._replayVerdicts;
@@ -432,23 +436,24 @@ const TrackBuildProps = (function () {
         if (o._dryRun) return true;
       }
       if (o._absorbOnly) { absorbBox(c, sz); return true; }
-      RAW.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
+      raw.addPyramid(o, c, sz, col, basis); absorbBox(c, sz); return true;
     };
     const addMountain = (o, c, baseR, h, opts) => {
       if (!finiteVec(c, 3, false) || !__isFinite(baseR) || baseR <= 0 || !__isFinite(h) || h <= 0) return badPrimitive("mountain", c, [baseR, h]);
+      if (region && !region.mountain(c, baseR, h, opts)) return false;
       if (onRoadHit(c[0], c[2], c[1] + h, baseR, 0, 0, 0, 0, 0, 0)) { _culled++; return false; }
-      RAW.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
+      raw.addMountain(o, c, baseR, h, opts); absorbUp(c, baseR, h); return true;
     };
     const graph = TrackGraph.create({ raw: RAW });
     track.graph = graph;
     const GUARDED = { addBox, addCyl, addCone, addFrustum, addPrism, addPyramid };
     const rawOk = (fn) => (o, ...rest) => {
-      if (o && (o._dryRun || o._absorbOnly)) return true;
-      fn(o, ...rest); return true;
+      if (o && (o._dryRun || o._absorbOnly) && !region) return true;
+      return fn(o, ...rest) !== false;
     };
     const UNGUARDED = {
-      addBox: rawOk(RAW.addBox), addCyl: rawOk(RAW.addCyl), addCone: rawOk(RAW.addCone),
-      addFrustum: rawOk(RAW.addFrustum), addPrism: rawOk(RAW.addPrism), addPyramid: rawOk(RAW.addPyramid),
+      addBox: rawOk(raw.addBox), addCyl: rawOk(raw.addCyl), addCone: rawOk(raw.addCone),
+      addFrustum: rawOk(raw.addFrustum), addPrism: rawOk(raw.addPrism), addPyramid: rawOk(raw.addPyramid),
     };
     // instance(key, place, build, meta, opts?) — returns the number of primitives
     // that survived the guards (0 = wholly suppressed, so the caller skips its
@@ -465,9 +470,9 @@ const TrackBuildProps = (function () {
       // Opt-in crown recipes require the same rounded normals in the fused
       // fallback and canonical instance. Legacy recipes keep their emit path.
       const emit = opts && opts.roundNormals
-        ? { ...baseEmit, roundNormals: RAW.roundNormals } : baseEmit;
-      if (buf === out && G && G.createInstancedBatch) buf._preferInstance = true;
-      const n = graph.instance(key, place, build, meta, emit, buf);
+        ? { ...baseEmit, roundNormals: raw.roundNormals } : baseEmit;
+      if (!region && buf === out && G && G.createInstancedBatch) buf._preferInstance = true;
+      const n = region ? region.instance(graph, key, place, build, () => graph.instance(key, place, build, meta, emit, buf)) : graph.instance(key, place, build, meta, emit, buf);
       if (buf === out) buf._preferInstance = false;
       return n;
     };
@@ -532,7 +537,7 @@ const TrackBuildProps = (function () {
       // true = clear; false = on the road; "pit" = inside the pit complex, which
       // modelGroup records as superseded rather than as a required failure.
       preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (guards.pitRejected() ? "pit" : false)),
-      emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
+      emitBox: (buf, c, size, col, basis) => raw.addBox(buf, c, size, col, basis),
       // A grounded point (node, side, metres beyond the edge, half-width)
       // inside the pit complex: the RAW landform emitters ask this chord by
       // chord, since they never pass the footprint guard.
@@ -571,6 +576,16 @@ const TrackBuildProps = (function () {
       },
     };
     const models = TrackModels.create(modelsOpts);
+    if (region) {
+      const group = models.modelGroup, span = models.overheadSpan;
+      models.modelGroup = (id, bounds, emit, opts) => region.whole(bounds, () => group(id, bounds, emit, opts));
+      models.overheadSpan = (spec) => {
+        const s = spec || {}, f = frameAt(s.frac || 0);
+        if (!f) return span(spec);
+        const height = 2 * Math.abs(f.c[1] - (surface.floorY || 0)) + 2 * Math.abs(s.clearance || 5) + 20;
+        return region.whole({ center: f.c, size: [Math.abs(s.span || f.hw * 2 + 6) + 2 * Math.abs(s.offset || 0), height, Math.abs(s.depth || 1.4) + 4], basis: [f.r, f.u, f.t] }, () => span(spec));
+      };
+    }
     let sceneryTheme = null, landmarkKit = null, circuitKit = null;
     try {
       if (typeof SceneryThemes !== "undefined" && SceneryThemes &&
@@ -1275,7 +1290,7 @@ const TrackBuildProps = (function () {
       pyMin, NIGHT, MAT, lod,
       // guarded emitters + the raw escape hatch
       addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, addMountain,
-      emit, RAW, rejBox, rejRad,
+      emit, RAW: raw, rejBox, rejRad,
       graph, instance,
       // guard / grounding / boundary core
       markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
@@ -1753,7 +1768,7 @@ const TrackBuildProps = (function () {
       rec.tint.push(tn ? tn[0] : 1, tn ? tn[1] : 1, tn ? tn[2] : 1);
       if (tn) rec.anyTint = true;
       if (INST_MODELS) return true;
-      return TrackGeom.addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
+      return addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
     }
     // A pack model placed N times is N copies of its triangles in the soup;
     // when the backend draws instanced batches (G.createInstancedBatch — the
@@ -1765,7 +1780,7 @@ const TrackBuildProps = (function () {
     // with its own draw, shadow caster and (TLX) ~64 KB padded instance block.
     const MODEL_INST_MIN_SAVED = 1024;
     const INST_MODELS = (() => {
-      if (!(G && G.createInstancedBatch)) return false;
+      if (region || !(G && G.createInstancedBatch)) return false;
       try { if (localStorage.getItem("apex26.modelInst") === "0") return false; } catch (_) { /* no storage */ }
       return true;
     })();
@@ -1774,12 +1789,12 @@ const TrackBuildProps = (function () {
       const rec = {};
       for (const [key, m] of _pendingModels) {
         const n = m.xf.length / 5;
-        const g = graph.meshModel(key, m.mesh, m.mat);
+        const g = region ? { verts: m.mesh.pos.length / 3, tris: m.mesh.idx.length / 3 } : graph.meshModel(key, m.mesh, m.mat);
         const inst = INST_MODELS && n >= 2 && (n - 1) * g.verts >= MODEL_INST_MIN_SAVED;
         for (let i = 0; INST_MODELS && i < n; i++) {   // off: the copies were emitted at call time
           const b = i * 5, t = m.anyTint ? [m.tint[i * 3], m.tint[i * 3 + 1], m.tint[i * 3 + 2]] : null;
           if (inst) graph.meshPlace(key, m.xf[b], m.xf[b + 1], m.xf[b + 2], m.xf[b + 3], m.xf[b + 4], t);
-          else TrackGeom.addMesh(out, m.mesh, { x: m.xf[b], y: m.xf[b + 1], z: m.xf[b + 2], rotY: m.xf[b + 3], scale: m.xf[b + 4], tint: t, mat: m.mat });
+          else addMesh(out, m.mesh, { x: m.xf[b], y: m.xf[b + 1], z: m.xf[b + 2], rotY: m.xf[b + 3], scale: m.xf[b + 4], tint: t, mat: m.mat });
         }
         rec[key] = { id: m.id, mat: m.mat, verts: g.verts, tris: g.tris, n, inst,
                      xf: Float32Array.from(m.xf), tint: m.anyTint ? Float32Array.from(m.tint) : null };
@@ -2116,7 +2131,7 @@ const TrackBuildProps = (function () {
           const base = Number.isFinite(gy) ? gy : 0;
           if (deckY - base < 1) continue;
           const top = deckY - 0.1, bot = base - 0.5;
-          RAW.addBox(out, [x, (top + bot) / 2, z],
+          raw.addBox(out, [x, (top + bot) / 2, z],
                  [1.6, top - bot, 1.6], [0.42, 0.42, 0.47], [r, [0, 1, 0], tg]);
           blockAt(k, side, 2.0, 1);   // solid pillar at the deck edge
         }
@@ -2149,8 +2164,8 @@ const TrackBuildProps = (function () {
     // dressing have been kept out of it. Platform, wall, boards, lights and
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
-    if (typeof SceneryPits !== "undefined" && track.pit) {
-      const pitCtx = { track, out, rawBox: RAW.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
+    if (!(buildOptions && buildOptions.skipPits) && typeof SceneryPits !== "undefined" && track.pit) {
+      const pitCtx = { track, out, rawBox: raw.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
                        night: NIGHT, lensAlbedo, registerLamp: registerPitLamp };
       // Stepped (perf hunt 7: the complex was one 100-380 VM ms step); build() is the same generator drained.
       const pits = SceneryPits.buildSteps ? yield* SceneryPits.buildSteps(pitCtx) : SceneryPits.build(pitCtx);
@@ -2160,6 +2175,8 @@ const TrackBuildProps = (function () {
       track.pitBuilt = pits;   // kept, not just logged: `wall` false is invisible from the buffers
       Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
+    // Model groups catch emitter failures; the sticky region cap must still abort publication.
+    if (region) { region.check(); track.sceneryRegion = region.stats(); }
     track.props.count = propList.length;
     track.props.spanCount = spanList.length;
     track.props.dropped = propDropped;

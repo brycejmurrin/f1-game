@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/agent/apex.js": {
+      "codeLines": 1,
+      "lines": 1
+    },
+    "js/game.js": {
+      "codeLines": 5,
+      "lines": 5
+    }
+  }
+}

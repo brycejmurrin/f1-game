@@ -336,7 +336,7 @@ const GaragePrebuild = (function () {
       const dbg = typeof GarageScene !== "undefined" && GarageScene.debug ? GarageScene.debug() : null;
       return { enabled, ready: ready(), garageReady: !!gate.garageReady, prepped: !!prepped, garageWarm: gate.garageWarm, key: gate.garageKey || "",
         running, kind: kind(), blockers: blockers(env("title")), programsWarm: warmed, room: !!cam.roomReady(),
-        previewMeshes: dbg ? dbg.previewMeshes : null, last, firstFrame };
+        previewMeshes: dbg ? dbg.previewMeshes : null, exterior: cam.exteriorState ? cam.exteriorState() : null, last, firstFrame };
     }
     // true also RE-ARMS: readiness and the last run are forgotten, so the next idle
     // title runs a fresh cycle (a spec on a shared page never reads a stale one).

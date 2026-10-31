@@ -30,6 +30,7 @@ const TRACK_BUILD = [
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
   "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
   "js/track/scenery/build-props.js",
 ];
 

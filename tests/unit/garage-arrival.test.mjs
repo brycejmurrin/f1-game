@@ -830,7 +830,7 @@ test('a refused garage begin returns false and cannot reveal the unpresented fra
     _spVP: [], _spView: [], _spProj: [], _spInvProj: [], eye: [],
     _spSun: [0, 0.86, 0.51], lightsRig: [],
     GarageScene: { live: () => [], SKYLIGHT: [], AMB_SKY: [], AMB_GROUND: [], BACKDROP: [] },
-    _spLiv() {}, garageNow() {}, garageCtx() {}, sceneTime: 0, context: {},
+    _spLiv() {}, garageNow() {}, garageCtx() {}, sceneTime: 0, context: {}, outside: null,
   });
   vm.runInContext('function refusedFrame() {\n' + introCameraSource.slice(at, end) +
     '\n gfx.present(); return true; }', refusal);
@@ -1145,7 +1145,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,
     els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
-    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false,
+    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false, garageCtx: () => ({ sceneNow: 0 }),
     pinGarageRes: noop, endGarageRes: noop, setupCam: { endGarageRes: noop }, studioShown: noop,
     window: { addEventListener: noop }, requestAnimationFrame: noop,
     previewFrames: [], worldFrames: [],
@@ -1635,7 +1635,7 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   const engine = [], fed = [];
   const c = vm.createContext({ GarageScene: { mood: (id) => (id === undefined ? cur : (cur = id)), setMood() { saved++; } },
     document: { body: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } },
-    driveOut: null, preview: null, G: { state: 'menu' }, _outEngine: false, performance: { now: () => 1000 + fed.length * 50 },
+    driveOut: null, preview: null, exteriorHeld: { trackId: 'old' }, exteriorSequence: true, exteriorVisible: true, G: { state: 'menu' }, _outEngine: false, performance: { now: () => 1000 + fed.length * 50 },
     driveOutEngine(on) { engine.push(on); c._outEngine = on; }, driveOutSound(p, gap) { fed.push(gap); } });
   vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
   const look = vm.runInContext('sequenceLook', c);
@@ -1646,6 +1646,9 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   assert.equal(cur, 'shipped', 'the garage mood is back when the sequence ends');
   assert.equal(cls.has('data-ga-bars'), false);
   look({ active: true, mood: 'showroom' }); look(null);
+  assert.equal(c.exteriorHeld, null, 'stop drops the selected exterior without another render');
+  assert.equal(c.exteriorSequence, false, 'the next sequence can latch its new selection');
+  assert.equal(c.exteriorVisible, false);
   assert.equal(cur, 'shipped', 'a stop (null) restores too');
   assert.equal(saved, 0, 'nothing is written to the player\'s LIGHTING');
   // ENGINE SOUND ON ARRIVAL: on while a driven car arrives, fed each frame, off after.
@@ -1844,6 +1847,21 @@ test('departure wheels cache fitted layers and rotate rims while calipers remain
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 4, 'repeat launch restores released wheels');
 });
 
+// Downstream lane fitting may mutate the sampled object, including during a final hold.
+test('garage engine speed retains scalar samples across mirrored or narrowed lane fitting', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('function driveOutSound('), cam.indexOf('// THE ARRIVAL PREVIEW'));
+  const feeds = [], c = vm.createContext({ _outEngine: true, _outPrev: null,
+    GameAudio: { setEngine: (...args) => feeds.push(args), setSkid() {} } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const sound = vm.runInContext('driveOutSound', c);
+  const first = { x: 4, z: 12 }; sound(first, .05);
+  first.x = -4; first.z = 11; // exterior fits the same render pose later
+  sound({ x: 4, z: 12 }, .05);
+  assert.equal(feeds.at(-1)[0], .12, 'a held pose stays at idle after downstream fitting');
+  sound({ x: 4.05, z: 12 }, .05);
+  assert.ok(feeds.at(-1)[0] > .22 && feeds.at(-1)[0] < .26, 'small authored motion keeps its small speed');
+});
 // ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
 test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
   assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary']);
