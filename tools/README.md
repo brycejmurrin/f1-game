@@ -499,6 +499,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/catalog.mjs** | UI explorer mission recipes and independent-browser task briefs. | — |
 | **ui/explorer/core.mjs** | Validated UI replay data, semantic atlas states and bounded delta debugging without executable input. | — |
 | **ui/explorer/css-evidence.mjs** | Bounded CDP inherited and container CSS candidates with explicit unavailable evidence. | — |
+| **ui/explorer/fault-schedule.mjs** | Replay bounded lazy-script faults through an existing session/action adapter; no browser controller. | — |
 | **ui/explorer/inspector.mjs** | Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences. | — |
 | **ui/explorer/modes.mjs** | Eight UI exploration modes sharing bounded evidence, replay and a real navigation graph. | — |
 | **ui/explorer/report.mjs** | Offline UI explorer evidence report with native navigation, linked state graph and safe local artifacts. | — |
