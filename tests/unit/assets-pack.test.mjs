@@ -1189,6 +1189,17 @@ test("the shader's layer count matches the MAT table size", () => {
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   assert.match(wgx, new RegExp(`MAT_TEX_LAYERS = ${MAT_N}\\b`), "WGX material resources must cover all MAT ids");
   assert.match(wgx, /size: \[1, 1, MAT_TEX_LAYERS\]/, "WGX fallback arrays must have the full material depth");
+  // The literals the skill's workflow.md used to call "NOT pinned": the top MAT id (MAT_N - 1) and the vec4 count.
+  const top = MAT_N - 1;
+  const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
+  const pins = [
+    [tlx, `clamp\\(mid, float\\(0\\.0\\), float\\(${top}\\.0\\)\\)`, "tsl-lit.js matTexLayer clamp must end at the top MAT id"],
+    [wgsl, `mid > ${top}\\b`, "wgsl-chunks.js mid bound must be the top MAT id"],
+    [wgsl, `struct MatScaleU \\{ s : array<vec4<f32>, ${Math.ceil(MAT_N / 4)}> \\};`, "MatScaleU must hold all MAT scales"],
+    [lit, `mid > ${top}\\b`, "glsl-lit.js mid bound must be the top MAT id"],
+  ];
+  const unpinned = pins.filter(([src, re]) => !new RegExp(re).test(src)).map(([, , why]) => why);
+  assert.deepEqual(unpinned, []);
 });
 
 test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
