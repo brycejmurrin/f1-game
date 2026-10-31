@@ -56,6 +56,7 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     await page.reload();
     await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.headless(true));
+    const doorHeights = await page.locator("#mb-career, #mb-daily").evaluateAll(nodes => nodes.map(node => node.offsetHeight));
     await page.locator("#daily-history > summary").tap();
     await expect(page.locator("#daily-history")).toContainText(today);
     await expect(page.locator("#daily-history")).toContainText(yesterday);
@@ -67,6 +68,7 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     }));
     expect(dailyFit.clipped).toBe(false);
     expect(dailyFit.tapHeight).toBeGreaterThanOrEqual(44);
+    expect(await page.locator("#mb-career, #mb-daily").evaluateAll(nodes => nodes.map(node => node.offsetHeight))).toEqual(doorHeights);
     await testInfo.attach("daily-history-phone", { body: await page.screenshot(), contentType: "image/png" });
     await page.locator("#daily-history > summary").tap();
 

@@ -2316,12 +2316,12 @@
       <button id="mb-continue" class="bigbtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M10 8L16 12L10 16L10 8Z"/></svg><span>CONTINUE <span id="mb-continue-sub" class="mb-sub"></span></span></button>
       <button id="mb-daily" class="bigbtn" aria-label="Daily time trial — Today's challenge"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4 M16 2v4 M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/></svg><span>DAILY TIME TRIAL <span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></span></button>
     </div>
-    <details id="daily-history" class="adv-help">
+    </div>
+    <details id="daily-history" class="adv-help" style="grid-column:1 / -1;min-width:0">
       <summary class="adv-more-btn">DAILY HISTORY · RECENT DAYS</summary>
       <p id="daily-history-note">Up to 7 saved days and 4 classes per day on this device. Class numbers are local to each day, not a comparison across days. Historical medals are not available.</p>
       <ul id="daily-history-list" style="overflow-wrap:anywhere"><li>No saved Daily laps yet. Complete a valid Daily lap to start your history.</li></ul>
     </details>
-    </div>
     <!-- DESTINATIONS, AS SHIPPED: the grouping js/ui/title-menu.js organize()
          used to build at game.js eval. On Slow 4G that was ~12 s after this grid
          first painted, and every door moved under the thumb as the groups landed

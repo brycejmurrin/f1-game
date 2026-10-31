@@ -523,7 +523,7 @@ test("Daily history is reachable on Home, keeps classes separate and tolerates d
   const history = dom.document.createElement("details"); history.id = "daily-history";
   const summary = dom.document.createElement("summary"); summary.style.minHeight = "44px";
   const list = dom.document.createElement("ul"); list.id = "daily-history-list";
-  history.appendChild(summary); history.appendChild(list); hero.appendChild(history);
+  history.appendChild(summary); history.appendChild(list); dom.byId("menu-buttons").appendChild(history);
   let data = { days: { "2026-10-30": { best: 70, classes: { standard: { best: 71.2 }, open: { best: 70 } } },
     "2026-10-29": { best: 72 }, "2026-02-30": { best: 50 }, bad: { best: 20 }, "2026-10-28": 42 } };
   const before = structuredClone(data);
@@ -532,7 +532,7 @@ test("Daily history is reachable on Home, keeps classes separate and tolerates d
   vm.runInContext(read("js/ui/title-menu.js"), sandbox, { filename: absSrc("js/ui/title-menu.js") });
   const api = vm.runInContext("TitleMenu", sandbox).create({ $: dom.byId, store: {}, daily: { data: () => data,
     plan: () => ({ trackName: "Monza", weather: "dry" }) }, openDailyPicker() {} });
-  assert.equal(hero.querySelector("#daily-history"), history); assert.equal(history.children[0].style.minHeight, "44px");
+  assert.equal(dom.byId("menu-buttons").querySelector("#daily-history"), history); assert.equal(history.children[0].style.minHeight, "44px");
   history.open = true; dom.dispatch(history, { type: "toggle" });
   const rows = history.querySelectorAll("li").map(li => li.textContent);
   assert.equal(history.children.length, 2, "the static blueprint is populated, not rebuilt");
