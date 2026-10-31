@@ -142,6 +142,9 @@
       ],
       "pollOnce": [
         "tests/unit/apex-bridge.test.mjs"
+      ],
+      "*": [
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/agent/apex-cam.js": {

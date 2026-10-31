@@ -159,7 +159,7 @@ test("a <body> or #hud child is never searched for unscoped (write `:has(> #id�
 // (selector stats, phone race: a third of all selector time; docs/notes/PERF-P2-2026-10-18.md).
 // Scoped to `> dialog` plus `> :where(#datahub) > dialog`, which holds only while every shell
 // <dialog> is a body child and the ones built at runtime are #datahub's (the telemetry popup) or
-// <body>'s (the share-card preview, js/share/share-card-chips.js).
+// <body>'s (the share-card preview, js/share/share-card-chips.js; the phone-bridge LINK box, js/agent/apex-bridge.js).
 test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; runtime ones hang off #datahub or <body>", () => {
   const dialogs = ELS.filter((e) => e.tag === "dialog");
   assert.ok(dialogs.length >= 15, "dialogs found");
@@ -170,7 +170,7 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; ru
     if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /(?:createElement|\bel)\(\s*["']dialog["']/.test(read(rel))) built.push(rel);
   } };
   walk("js");
-  assert.deepEqual(built, ["js/data/telemetry.js", "js/share/share-card-chips.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.deepEqual(built, ["js/agent/apex-bridge.js", "js/data/telemetry.js", "js/share/share-card-chips.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
   assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true, "the share-card preview is a <body> child");
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
   const bad = [];
