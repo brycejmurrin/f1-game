@@ -630,6 +630,8 @@ const { invalidateLaneRects, dropLaneRects, announceLane, announceLaneTick, radi
 // box depends on reads it, so it cannot feed back. Run inside the fit: a move
 // re-fits through HudLayout.apply, and hud-mirror-on is in the fit key.
 const MIR_COL = 230;   // half-width of the centre column, px: the widest card at 440 plus its air
+/** F-04: the one writer of --dock-r-w (screen-independent px, clamped at 0). */
+function setDockRW(root, v) { hStyle(root, "--dock-r-w", (v > 0 ? v : 0).toFixed(1) + "px"); }
 let _mirEl;
 function mirrorClear(root) {
   if (_mirEl === undefined) _mirEl = document.getElementById("hud-mirror");
@@ -762,7 +764,7 @@ function phoneFitStampSync(scale, force) {
       Math.max(0, (window.innerWidth - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
       midCap
     );
-    hStyle(root, "--dock-r-w", (need > 0 ? need : 0).toFixed(1) + "px");
+    setDockRW(root, need);
     if (els.hudSectors) void els.hudSectors.offsetHeight;
     if (_dockR) void _dockR.offsetHeight;
     return true;
@@ -1595,7 +1597,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // one painted correction against a RIGHT-side BOOST only.
   let zTop = zPaint();
   let dockRW = insetFor(dockLeftOf(), zTop);
-  hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+  setDockRW(root, dockRW);
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
   if (!placedSectors && !document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
@@ -1608,14 +1610,13 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         // Absolute clear from the right-dock edge — never stack += grow on a
         // stale plate, and never aim at a left-column BOOST (tilt).
         dockRW = insetFor(left, zTop);
-        hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+        setDockRW(root, dockRW);
         void els.hudSectors.offsetHeight;
         if (_dockR) void _dockR.offsetHeight;
       }
     }
   }
-  mirrorClear(root);
-  // Refresh automatic pieces; manually owned geometry remains untouched.
+  // Refresh automatic pieces; manually owned geometry remains untouched. (mirrorClear runs once, at the end of the fit — F-15.)
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).
@@ -1656,7 +1657,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         zTop = zPaint();
         if (zTop > 0) {
           dockRW = insetFor(left, zTop);
-          hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+          setDockRW(root, dockRW);
         }
       }
     }

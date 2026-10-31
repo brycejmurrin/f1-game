@@ -220,7 +220,7 @@ body:not(.hud-prof-broadcast) #hud-best { color: var(--hud-glance); }
      without breaking the top-left cluster; docking under `.hud-top` was tried
      and rejected for that reason. */
   top: calc(8px + var(--sat) / var(--hud-z));
-  left: calc(146px + var(--sal) / var(--hud-z));
+  left: calc(var(--hud-map-x) + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
      floor) and deliberately so: that scale is calibrated for menu chrome a
      stopped player reads, while this is a peripheral glance during a lap, in
@@ -285,12 +285,12 @@ body:not(.hud-prof-broadcast) #hud-best { color: var(--hud-glance); }
    (both ride --hud-z-top), so the strip now sits 4px under wherever the band
    actually ends. The 54px fallback is the old 62 less the shared 8px top. */
 :root[data-gap-drop] .hud-gaps {
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px);
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 4px);
 }
 /* The dropped strip landed in the mirror's row (portrait cockpit, #3271): js/ui/hud.js gapMirrorDrop
    sets data-gap-mir only on a painted overlap; park it under the frame (--mir-paint-b, screen px). */
 :root[data-gap-mir] .hud-gaps {
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px), calc(var(--mir-paint-b, 0px) / var(--hud-z) + 4px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 4px), calc(var(--mir-paint-b, 0px) / var(--hud-z) + 4px));
 }
 .hud-bottom {
   position: absolute;
@@ -372,6 +372,8 @@ body[data-hl-set="helmet"] #hud-gearbox {
   clip-path: inset(0 calc((1 - var(--rpm, 0)) * 100%) 0 0);
 }
 :root { --hud-pulse: 0.8s; }
+/* F-14 tokens: unfitted tower height, and the gap strip's left anchor (minimap 10 + 128 wide + 8 gap). */
+:root { --hud-top-h-0: 54px; --hud-map-x: 146px; }
 @keyframes pulse { 50% { opacity: 0.55; } }
 /* REDLINE. dc40f95a unified every other pulse onto --hud-pulse but DELETED this
    rule instead of converting it, so the tach stopped flashing at redline while
@@ -852,7 +854,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
 @media (orientation: portrait) and (max-width: 500px) {
   #minimap,
   .hud-gaps {
-    top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
+    top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 8px);
   }
   /* Helmet touch: the PLAN row under TYRES read as a plate on GEAR (390×844). */
   body[data-hl-set="helmet"]:not(.desktop) #hud-plan:not(:empty) { display: none; }
@@ -941,7 +943,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
 #hud-mirror {
   --mir-w: clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px);
   position: absolute;
-  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 8px);
   left: 50%; transform: translateX(-50%);
   width: var(--mir-w); height: calc(var(--mir-w) * 2 / 7);
   box-sizing: border-box;
@@ -955,7 +957,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
    under --tap) and converts the mirror's zoomed top into screen pixels. */
 #hud-mirror-chip {
   position: absolute;
-  top: calc(var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)));
+  top: calc(var(--sat) + (16px + var(--hud-top-h, var(--hud-top-h-0))) * var(--hud-z-top, var(--hud-scale)));
   left: 50%; transform: translateX(-50%);
   min-height: var(--tap); padding: 0 var(--gap);
   border-radius: var(--r-md);
@@ -977,7 +979,7 @@ body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z))
    0 unless it crosses this centre column): MOVE & SIZE can grow or lower the
    mirror past its shipped box, and the max() follows it down, never up. */
 body.hud-mirror-on :is(#announce, #hud-flag) {
-  --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
+  --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 8px);
   --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px) * 2 / 7),
     calc(var(--mir-paint-b, 0px) / var(--hud-z)));
 }
@@ -1060,7 +1062,7 @@ body:is(.hud-radio-top, [data-radio-corner]) #announce-body {
 }
 /* The chip is unzoomed (screen px): its bottom edge divided into this zoom. */
 body:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
-  --mir-bot: calc((var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)) + var(--tap)) / var(--hud-z));
+  --mir-bot: calc((var(--sat) + (16px + var(--hud-top-h, var(--hud-top-h-0))) * var(--hud-z-top, var(--hud-scale)) + var(--tap)) / var(--hud-z));
 }
 body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
   --mir-bot: calc((8px + var(--sat) + var(--tap)) / var(--hud-z));
@@ -1166,7 +1168,7 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
    the radio card ~30px lower than needed, mid-road on every phone (visual
    review 2026-10-14). */
 :root[data-gap-drop] #hud-flag {
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 44px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
 }
 /* …and under the SECTOR PLATE when that plate reaches the flag's columns (fitHud
    sets data-flag-low: a wide dock inset on a narrow phone), the same measured
@@ -1321,7 +1323,7 @@ body[data-density="compact"] #hud-flag {
    row — with smaller type. It used to keep the billboard's 36svh, which put
    the card in the middle of the road on a phone (reported with screenshots). */
 body[data-density="compact"] #announce {
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 6px), calc(var(--mir-bot, 0px) + 8px));
   font-size: var(--fs-2);
   --radio-num: 22px;   /* the plate steps down with the card, so it never outgrows two lines of type */
 }
@@ -1342,7 +1344,7 @@ body[data-density="compact"] #announce { --flag-slot-top: max(calc(72px + var(--
    plate and the WHO line still read in full, and the card stays in the band
    under the tower. The box model is the one every engine ships for clamping. */
 body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-:root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
+:root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 :root[data-flag-low] #announce { --flag-slot-top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(> :where(#hud) > #hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
 body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(> :where(#hud) > #hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
@@ -1425,7 +1427,7 @@ body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
   /* Undropped flag home; gap-drop / compact override --flag-slot-top above. */
   --flag-slot-top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--hud-gaps-b, 0px) + 8px));
   position: fixed;
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, var(--hud-top-h-0)) + 10px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
   left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: row; align-items: stretch;
   min-width: 200px;
@@ -1496,7 +1498,7 @@ html[data-caption-pos="bottom"] #captions.cap-strip {
    the vw/svh terms of --mir-w already divide by it, so they appear bare. */
 html[data-caption-pos="mirror"] #captions.cap-strip {
   --cap-mz: var(--hud-z-top, var(--hud-scale, 1));
-  --cap-mir-top: calc(var(--sat, 0px) + (8px + var(--hud-top-h, 54px) + 8px) * var(--cap-mz));
+  --cap-mir-top: calc(var(--sat, 0px) + (8px + var(--hud-top-h, var(--hud-top-h-0)) + 8px) * var(--cap-mz));
   --cap-mir-half: calc(clamp(calc(120px * var(--cap-mz)), min(18vw, 36svh), calc(300px * var(--cap-mz))) / 2);
   top: var(--cap-mir-top);
   bottom: auto;
@@ -2606,7 +2608,7 @@ body:is(.hud-hidden, .bc-on, .hud-prof-broadcast.hud-bcam) [data-hl-bottom] { di
 .hud-top[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: 50% !important; transform: translateX(-50%) !important; flex-wrap: nowrap; }
 body.hud-prof-broadcast .hud-top[data-hl-v4] { left: calc(10px + var(--sal) / var(--hud-z)) !important; transform: none !important; }
 #minimap[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; width: 128px !important; height: 128px !important; }
-.hud-gaps[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: calc(146px + var(--sal) / var(--hud-z)) !important; }
+.hud-gaps[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: calc(var(--hud-map-x) + var(--sal) / var(--hud-z)) !important; }
 :is(#hud-sectors, #hud-limits, #hud-damage, #hud-rel)[data-hl-v4] { right: calc(10px + var(--sar) / var(--hud-z)) !important; left: auto !important; }
 #hud-sectors[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z)) !important; }
 #hud-limits[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 4.8em + 15px) !important; }
