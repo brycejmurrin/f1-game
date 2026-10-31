@@ -152,14 +152,15 @@ const DataSchedule = (function () {
       tick();
       if (typeof MutationObserver === "undefined" || typeof document === "undefined") return dispose;
       observer = new MutationObserver(sync);
-      // `hidden` anywhere (an ancestor can hide the hub), but child lists only inside the hub, where this
-      // node is attached and detached. Watching every child list of the document ran sync() after each HUD
-      // text write for the rest of the session once the hub had been opened (it keeps this node cached).
-      // Observing one target twice replaces its options, hence two targets or the original single call.
+      // visible() reads only this node's ancestor chain, which runs through the hub: watch `hidden` and child
+      // lists inside the hub, and `hidden` on the hub's own ancestors (body, html) — nothing else. Watching
+      // every child list of the document ran sync() after each HUD text write for the rest of the session once
+      // the hub had been opened (it keeps this node cached); watching `hidden` on the whole document did the
+      // same for every HUD show/hide after the hub CLOSED, the observer living on with the cached node.
       const hub = typeof document.getElementById === "function" ? document.getElementById("datahub") : null;
       if (hub && hub !== document.documentElement) {
-        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], subtree: true });
-        observer.observe(hub, { childList: true, subtree: true });
+        observer.observe(hub, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
+        for (let n = hub.parentElement; n; n = n.parentElement) observer.observe(n, { attributes: true, attributeFilter: ["hidden"] });
       } else {
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true });
       }

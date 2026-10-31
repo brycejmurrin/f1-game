@@ -108,7 +108,52 @@ test("a poll runs the owner's command once and answers with its comment id", asy
   assert.equal(await b.api.pollOnce(), 0);
   const last = gh.calls.at(-1);
   assert.ok(last.opts.headers["If-None-Match"]);
-  assert.equal(new URL(last.url).searchParams.get("since"), HELLO_AT);
+  assert.equal(new URL(last.url).searchParams.get("since"), "2026-10-30T20:00:05Z", "the window moved up to the newest comment read");
+  assert.equal(await b.api.pollOnce(), 0, "the boundary command comes back (since is inclusive) and is not rerun");
+  assert.equal(gh.thread.filter((c) => c.body.includes('"re":77')).length, 1, "answered exactly once");
+});
+
+// A thread like GitHub's: oldest first, `since` (inclusive, on updated_at) and per_page honoured.
+function pagedGitHub() {
+  const thread = [];
+  const calls = [];
+  let n = 0;
+  const at = (s) => new Date(Date.parse(HELLO_AT) + s * 1000).toISOString().replace(".000Z", "Z");
+  const fetch = async (url, opts) => {
+    calls.push({ url, opts });
+    const json = (status, body) => ({ status, ok: status < 300, json: async () => body, headers: { get: () => null } });
+    if (opts.method === "POST") {
+      const c = { id: 5000 + thread.length, created_at: at(n), updated_at: at(n++), author_association: "OWNER", body: JSON.parse(opts.body).body };
+      thread.push(c);
+      return json(201, c);
+    }
+    const q = new URL(url).searchParams;
+    const since = q.get("since");
+    return json(200, thread.filter((c) => c.updated_at >= since).slice(0, +q.get("per_page")));
+  };
+  const add = (c) => { const t = at(n++); thread.push({ created_at: t, updated_at: t, author_association: "OWNER", ...c }); };
+  return { fetch, calls, thread, add };
+}
+
+test("a command past the first page of 100 is served, and the poll window moves past what it read", async () => {
+  const gh = pagedGitHub();
+  const b = load({ tok: "tok", gh, apex: {} });
+  await flush();
+  for (let i = 0; i < 120; i++) gh.add({ id: 100 + i, body: "chatter " + i, author_association: "NONE" });
+  gh.add({ id: 999, body: "```apex-cmd\n" + JSON.stringify({ cmd: "ping" }) + "\n```" });
+  let served = 0;
+  for (let i = 0; i < 4 && !served; i++) served += await b.api.pollOnce();
+  assert.equal(served, 1, "the command on page 2 was never served");
+  assert.equal(gh.thread.filter((c) => c.body.includes('"re":999')).length, 1);
+  const polls = gh.calls.filter((c) => !c.opts.method || c.opts.method === "GET");
+  const sinces = polls.map((c) => new URL(c.url).searchParams.get("since"));
+  assert.equal(sinces[0], HELLO_AT);
+  assert.ok(sinces[1] > HELLO_AT, `the second poll reads past the hello (${sinces[1]})`);
+  const before = gh.calls.length;
+  await b.api.pollOnce();
+  const lastPage = gh.calls.at(-1);
+  assert.equal(gh.calls.length, before + 1, "a quiet poll posts nothing");
+  assert.ok(new URL(lastPage.url).searchParams.get("since") > sinces[1]);
 });
 
 test("a token GitHub rejects never links", async () => {

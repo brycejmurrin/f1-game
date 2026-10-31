@@ -106,6 +106,20 @@ var ErsLayer = (function () {
     ctx = dest = null;
     wasBoost = false;
     lastCueT = -1e9;
+    idled = false;
+  }
+
+  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // idle(true) unplugs the four output gains from the bus once silence() has
+  // faded them; idle(false) plugs them back. Same nodes, same ctx.
+  let idled = false;
+  function idle(on) {
+    if (!ctx || !dest || !deployG || !!on === idled) return;
+    const outs = [deployG, harvestG, sustainG, cueG];
+    for (let i = 0; i < outs.length; i++) {
+      try { if (outs[i]) { if (on) outs[i].disconnect(); else outs[i].connect(dest); } } catch (e) { /* torn down */ }
+    }
+    idled = !!on;
   }
 
   function attach(ac, bus) {
@@ -238,7 +252,7 @@ var ErsLayer = (function () {
   }
 
   return {
-    attach, detach, silence, update, cueBoost, inspect, attached,
+    attach, detach, silence, update, cueBoost, inspect, attached, idle,
     deployLevel, harvestLevel, sustainLevel, cueCount, builds,
     deployHz, harvestHz, isLive,
   };

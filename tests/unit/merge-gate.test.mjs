@@ -597,7 +597,7 @@ function ghExpr(src, github) {
   const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
   const startsWith = (a, b) => String(a ?? "").startsWith(b);
   const cancelled = () => false;
-  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs);
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs, github?.steps, () => github?.success !== false);
 }
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
@@ -612,8 +612,8 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 });
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
-  assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry", "sweep"]);
-  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm", "sync"]);
+  assert.deepEqual(jobsWhere(writes), ["post", "retry", "sweep"]);
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "sync"]);
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
   assert.deepEqual(LAND.jobs["land-gate"].permissions, readOnly);
@@ -684,6 +684,7 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
 function runStep(script, env, files = {}) {
   const stub = [
     `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a data args=("$@");`,
+    `  if [ "\${GH_STALL:-}" = true ]; then read -r -t 60 _ <&9; fi;`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
     `  case " \${args[*]} " in`,
     `    *" --method POST "*) case " \${args[*]} " in *" --input "*) echo "body $(jq -c .)" >> "$GH_LOG" ;; esac; return "\${GH_POST_RC:-0}" ;;`,
@@ -693,7 +694,7 @@ function runStep(script, env, files = {}) {
     `    *"/issues/"*"/comments"*) data=\${FAKE_COMMENTS:-[]} ;;`,
 `    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
     `    *"/branches/"*) if [ "$(grep -c '/branches/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}"; else echo "\${NOW_TIP:-}"; fi; return 0 ;;`,
-    `    *" pr merge "*) [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
+    `    *" pr merge "*) echo "merge-token=\${GH_TOKEN:-}" >> "$GH_LOG"; [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
         `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
@@ -711,9 +712,9 @@ function runStep(script, env, files = {}) {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
     fs.writeFileSync(path.join(dir, rel), text);
   }
-  const r = spawnSync("bash", ["-c", `${stub}\n${script}`], { encoding: "utf8", cwd: dir,
-    env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
-      RETRY_MAX: String(LAND.env.RETRY_MAX), SYNC_MAX: String(LAND.env.SYNC_MAX), ...logs, ...env } });
+  const r = spawnSync("bash", ["-c", `${stub}\nexport -f gh\n${script}`], { encoding: "utf8", cwd: dir,
+    env: { ...process.env, GH_TOKEN: "fixture-read-token", GITHUB_TOKEN: "fixture-read-token", LAND_TOKEN: "", GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
+      POST_DEADLINE: String(Math.floor(Date.now() / 1000) + 600), RETRY_MAX: String(LAND.env.RETRY_MAX), SYNC_MAX: String(LAND.env.SYNC_MAX), ...logs, ...env } });
   const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   const calls = fs.readFileSync(logs.GH_LOG, "utf8").split("\n").filter(Boolean);
   const summary = fs.readFileSync(logs.GITHUB_STEP_SUMMARY, "utf8");
@@ -736,18 +737,184 @@ test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's o
 test("land.yml retry job: actions write only, no checkout, no repo code, no secret; runs after post and arm", () => {
   const j = LAND.jobs.retry;
   assert.deepEqual(j.permissions, { actions: "write" });
-  assert.deepEqual(j.needs, ["resolve", "post", "arm"]);
+  assert.deepEqual(j.needs, ["resolve", "post"]);
   assert.equal(runsRepoCode(j), false);
   assert.equal(usesSecret(j), false, "GITHUB_TOKEN: its workflow_dispatch is one of the two events it may start");
-  const needs = (post, arm) => ({ needs: { resolve: { result: "success" }, post: { outputs: { retry: post } }, arm: { outputs: { retry: arm } } } });
+  const needs = (post, arm) => ({ needs: { resolve: { result: "success" }, post: { outputs: { retry: post, arm_retry: arm } } } });
   assert.equal(ghExpr(j.if, needs("[]", "")), false);
   assert.equal(ghExpr(j.if, needs("", "")), false, "post skipped");
   assert.equal(ghExpr(j.if, needs('[{"number":7}]', "")), true);
   assert.equal(ghExpr(j.if, needs("[]", '{"number":7}')), true);
+  assert.equal(j.steps[0].env.POST_RETRY, "${{ needs.post.outputs.retry }}");
+  assert.equal(j.steps[0].env.ARM_RETRY, "${{ needs.post.outputs.arm_retry }}");
+  for (const result of ["success", "failure", "skipped"]) {
+    const ctx = needs('[{"number":7}]', ""); ctx.needs.post.result = result;
+    assert.equal(ghExpr(j.if, ctx), true, `${result}: available post retry survives an arm failure or skip`);
+  }
+
+});
+
+test("land.yml post and arm share one no-checkout runner with stage caps and independent retry outputs", () => {
+  const j = LAND.jobs.post, post = j.steps.find(s => s.id === "post"), arm = j.steps.find(s => s.id === "arm");
+  assert.equal(LAND.jobs.arm, undefined, "no separate arm scheduling boundary");
+  assert.equal(j["timeout-minutes"], 13, "old 10-minute post plus 3-minute arm allowance");
+  assert.equal(post["timeout-minutes"], 10);
+  assert.equal(arm["timeout-minutes"], 3);
+  assert.equal(j.steps.find(s => /download-artifact/.test(s.uses || ""))["timeout-minutes"], 10, "artifact download retains its old job's ceiling");
+  assert.ok(j.steps.findIndex(s => s.id === "post_budget") < j.steps.findIndex(s => /download-artifact/.test(s.uses || "")));
+  assert.equal(post.env.POST_DEADLINE, "${{ steps.post_budget.outputs.deadline }}");
+  assert.deepEqual(j.steps.map(s => s.id || "download"), ["post_budget", "download", "post", "arm"]);
+  assert.equal(arm.if, "success() && steps.post.outputs.arm != ''");
+  assert.equal(arm.env.ARM, "${{ steps.post.outputs.arm }}");
+  assert.deepEqual(j.outputs, { arm: "${{ steps.post.outputs.arm }}", retry: "${{ steps.post.outputs.retry }}", arm_retry: "${{ steps.arm.outputs.retry }}" });
+  assert.deepEqual(j.permissions, { statuses: "write", checks: "read", contents: "write", "pull-requests": "write", actions: "read", issues: "read" });
+  assert.equal(j.env, undefined, "LAND_TOKEN is never job-scoped");
+  assert.equal(arm.env.LAND_TOKEN, "${{ secrets.LAND_TOKEN }}");
+  assert.equal(runsRepoCode(j), false);
+  assert.equal(Number(LAND.env.RETRY_MAX), 3, "the per-head retry budget is unchanged");
+});
+
+// Execute both production shell steps with separate processes, as Actions does.
+// The production step expression decides whether the second shell may execute.
+function postThenArm(postEnv = {}, armEnv = {}, files) {
+  const post = LAND.jobs.post.steps.find(s => s.id === "post"), arm = LAND.jobs.post.steps.find(s => s.id === "arm");
+  const p = runStep(post.run, postEnv, files);
+  const shouldArm = ghExpr(arm.if, { success: p.status === 0, steps: { post: { outputs: { arm: p.out.arm || "" } } } });
+  const a = shouldArm ? runStep(arm.run, { GITHUB_TOKEN: "read-token", LAND_TOKEN: "land-token", ...armEnv, ARM: p.out.arm }) : null;
+  return { post: p, arm: a, retry: p.out.retry || "", arm_retry: a?.out.retry || "", result: p.status === 0 && (!a || a.status === 0) ? "success" : "failure" };
+}
+
+function postFixture() {
+  const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok distance=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
+  const env = { GH_TOKEN: "read-token", DISARM_TOKEN: "land-token", PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), NOTASKED: "[]", DISARM: "[]",
+    PAUSED: "false", AT: "2026-10-27T10:00:05Z", TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 0, line, tip: TIP_A }]),
+    NOW_TIP: TIP_A, FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1 }] }),
+    FAKE_CHECKS: JSON.stringify({ check_runs: [{ id: 1, app: { slug: "github-actions" }, check_suite: { id: 1 }, conclusion: "success" }] }) };
+  return { env, files: { "verdicts/7.json": JSON.stringify({ number: 7, head: HEAD7, code: 0, line, tip: TIP_A, out: "rows" }) } };
+}
+
+test("land.yml combined steps: failed post or rejected status write cannot arm", () => {
+  const { env, files } = postFixture();
+  const missing = { ...env }; delete missing.PAUSED;
+  let r = postThenArm(missing, {}, files);
+  assert.notEqual(r.post.status, 0, r.post.stderr);
+  assert.equal(r.arm, null);
+  assert.equal(r.result, "failure");
+  assert.equal(ghExpr(LAND.jobs.post.steps.find(s => s.id === "arm").if,
+    { success: false, steps: { post: { outputs: { arm: '{"number":7}' } } } }), false, "a failed step's partial candidate never arms");
+  r = postThenArm({ ...env, GH_POST_RC: "1" }, {}, files);
+  assert.equal(r.arm, null, "status POST failed: no gated head was emitted");
+  assert.equal(r.post.out.arm, "");
+});
+
+test("land.yml combined steps: live veto and head/tip races survive the removed queue boundary", () => {
+  const { env, files } = postFixture();
+  for (const changed of [
+    { PAUSED: "true" }, { FAKE_PR: pr7({ state: "closed" }) }, { FAKE_PR: pr7({ draft: true }) },
+    { FAKE_PR: pr7({ head: { sha: TIP_B } }) }, { FAKE_PR: pr7({ labels: [] }) },
+    { FAKE_PR: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) },
+  ]) {
+    const r = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), ...changed }, files);
+    assert.ok(r.post.out.arm, "post selected the candidate before the state changed");
+    assert.equal(r.arm.status, 0, r.arm.stderr);
+    assert.equal(r.arm.calls.some(c => c.includes("pr merge ")), false, JSON.stringify(changed));
+    assert.equal(r.arm_retry, "", "a veto is not a tip retry");
+  }
+  const moved = postThenArm(env, { NOW_TIP: TIP_B, FAKE_PR: pr7() }, files);
+  assert.deepEqual(JSON.parse(moved.arm_retry), { number: 7, head: HEAD7 });
+  assert.equal(moved.arm.calls.some(c => c.includes("pr merge ")), false);
+});
+
+test("land.yml combined steps: token fallback, one pinned merge and unknown errors retain terminal outcomes", () => {
+  const { env, files } = postFixture();
+  for (const token of ["land-token", ""]) {
+    const r = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), LAND_TOKEN: token }, files);
+    assert.equal(r.result, "success");
+    assert.equal(r.arm.calls.filter(c => c.includes("pr merge ")).length, 1);
+    assert.deepEqual(r.arm.calls.filter(c => c.startsWith("gh pr merge ")),
+      [`gh pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`]);
+    assert.deepEqual(r.arm.calls.filter(c => c.startsWith("merge-token=")), [`merge-token=${token || "read-token"}`]);
+    const warning = token ? "" : "::warning::a merge made by GITHUB_TOKEN will not start pages.yml; set LAND_TOKEN, see docs/WORKERS.md\n";
+    assert.equal(r.arm.stdout, `${warning}\narmed (or merged) #7 @ ${HEAD7.slice(0, 12)} onto ${TIP_A.slice(0, 12)} with ${token ? "LAND_TOKEN" : "GITHUB_TOKEN"}\n`);
+  }
+  const failed = postThenArm(env, { NOW_TIP: TIP_A, FAKE_PR: pr7(), GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" }, files);
+  assert.equal(failed.result, "failure");
+  assert.equal(failed.arm.status, 17);
+  assert.equal(failed.arm.stderr, "unknown merge failure\n");
+  assert.equal(failed.arm_retry, "");
+  assert.equal(failed.arm.calls.filter(c => c.includes("pr merge ")).length, 1);
+});
+
+test("land.yml post phase: one deadline includes download, expires closed and preserves core failure status", () => {
+  const job = LAND.jobs.post, budget = job.steps.find(s => s.id === "post_budget"), post = job.steps.find(s => s.id === "post");
+  const before = Math.floor(Date.now() / 1000);
+  const clock = runStep(budget.run, {});
+  const after = Math.floor(Date.now() / 1000);
+  assert.equal(clock.status, 0, clock.stderr);
+  assert.ok(Number(clock.out.deadline) >= before + 600 && Number(clock.out.deadline) <= after + 600);
+  assert.equal(clock.calls.length, 0, "trusted budget clock needs no API or repo code");
+  const { env, files } = postFixture();
+  for (const [deadline, status] of [[String(before - 1), 124], ["invalid", 1], ["", 1]]) {
+    const r = postThenArm({ ...env, POST_DEADLINE: deadline }, {}, files);
+    assert.equal(r.post.status, status, r.post.stderr);
+    assert.equal(r.post.calls.length, 0, "expired or invalid phase budget cannot post or arm");
+    assert.equal(r.arm, null);
+    assert.equal(r.retry, "");
+  }
+  const core = post.run.split("<<'LAND_POST'\n")[1].split("\nLAND_POST")[0];
+  const failedEnv = { ...env, TRUSTED: "malformed" };
+  const original = runStep("set -e -o pipefail\n" + core, failedEnv, files);
+  const wrapped = runStep(post.run, failedEnv, files);
+  assert.notEqual(original.status, 0, "jq fails in the original Actions Bash failure mode");
+  assert.equal(wrapped.status, original.status, "the envelope preserves the core's exact non-timeout status");
+  assert.deepEqual(wrapped.out, original.out, "the envelope preserves file-command outputs on failure");
+  assert.ok(wrapped.stderr.length > 0, "core diagnostics remain visible");
+});
+
+test("land.yml post phase: timeout stops blocked API work without arming and does not re-source BASH_ENV", () => {
+  const post = LAND.jobs.post.steps.find(s => s.id === "post"), { env, files } = postFixture();
+  const r = runStep(`mkfifo wait; exec 9<>wait\nexport POST_DEADLINE=$(( $(date -u +%s) + 4 ))\n${post.run}`,
+    { ...env, GH_STALL: "true" }, files);
+  assert.equal(r.status, 124, r.stderr);
+  assert.ok(r.calls.length > 0, "the real timeout interrupted a started API call");
+  assert.equal(r.out.arm, undefined);
+  assert.equal(r.calls.some(c => c.includes("pr merge ")), false);
+  const clean = runStep(`export BASH_ENV="$PWD/startup.sh"\n${post.run}`, env,
+    { ...files, "startup.sh": 'echo "unexpected second startup" >> "$GH_LOG"' });
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.deepEqual(JSON.parse(clean.out.arm), { number: 7, head: HEAD7, tip: TIP_A });
+  assert.equal(clean.calls.filter(c => c === "unexpected second startup").length, 0);
+});
+
+test("land.yml combined outputs: retries survive a skipped or failed arm and stay deduplicated and bounded", () => {
+  const { env, files } = postFixture();
+  const retry = r => runStep(LAND.jobs.retry.steps[0].run, { ATTEMPT: "0", POST_RETRY: r.retry, ARM_RETRY: r.arm_retry });
+  let combined = postThenArm(env, { NOW_TIP: TIP_A, NOW_TIP_AFTER: TIP_B, FAKE_PR: pr7(), GH_MERGE_RC: "17",
+    GH_MERGE_STDERR: "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)" }, files);
+  assert.equal(combined.result, "success", "the known race hands off to re-gating, never repeats merge");
+  assert.deepEqual(JSON.parse(combined.arm_retry), { number: 7, head: HEAD7 });
+  let dispatched = retry(combined);
+  assert.equal(dispatched.status, 0, dispatched.stderr);
+  assert.equal(dispatched.calls.filter(c => c.includes("--method POST")).length, 1);
+  combined = postThenArm({ ...env, NOW_TIP: TIP_B }, {}, files);
+  assert.equal(combined.arm, null, "stale post tip skips arm");
+  dispatched = retry(combined);
+  assert.equal(dispatched.calls.filter(c => c.includes("--method POST")).length, 1, "post's retry propagates without an arm step");
+  combined = postThenArm({ ...env, PRS: JSON.stringify([{ number: 7, head: HEAD7 }, { number: 8, head: TIP_B }]) },
+    { NOW_TIP: TIP_A, FAKE_PR: pr7(), GH_MERGE_RC: "17", GH_MERGE_STDERR: "unknown merge failure" }, files);
+  assert.equal(combined.result, "failure");
+  assert.equal(combined.arm.status, 17);
+  assert.deepEqual(JSON.parse(combined.retry), [{ number: 8, head: TIP_B }], "earlier post output survives the later arm failure");
+  assert.equal(combined.arm_retry, "");
+  dispatched = retry(combined);
+  assert.equal(dispatched.calls.filter(c => c.includes("--method POST")).length, 1);
+  assert.deepEqual(dispatched.calls.filter(c => c.includes("--method POST")),
+    [`gh api --method POST repos/o/r/actions/workflows/land.yml/dispatches -f ref=${DEPLOY_BRANCH} -f inputs[pr]=8 -f inputs[head]=${TIP_B} -f inputs[attempt]=1`],
+    "the retry still reaches the API despite failed arm");
 });
 
 test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other veto is not", () => {
-  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
   const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
   const go = (pr, now) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t" });
   let r = go(pr7(), TIP_B);
@@ -765,7 +932,7 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
 });
 
 test("land.yml arm: only a proven base-modified race re-gates after a failed single merge call", () => {
-  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
   const error = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
   const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
   const go = (extra = {}) => runStep(run, {

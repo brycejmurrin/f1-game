@@ -4120,6 +4120,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/explorer/fault-schedule.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/explorer/inspector.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

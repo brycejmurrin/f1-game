@@ -198,6 +198,79 @@ test("LiveRegion speaks inside the topmost open modal, through an empty polite t
   assert.equal(settings.kids.length, 1, "the twin is made once per modal");
 });
 
+// RESTART from the pause dialog calls LiveRegion.reset while #pausemenu is still
+// :modal (clearMenuScreens runs later). region() then owns the twin, so the
+// last race call stayed in #announce-live for browse mode. A dialog that opens
+// or closes during the 60 ms beat must not leave the line on the node that
+// just became inert.
+function liveModalHarness() {
+  const timers = [];
+  let seq = 0;
+  const node = (tag) => ({ tagName: tag, attrs: {}, kids: [], textContent: "",
+    setAttribute(k, v) { this.attrs[k] = v; }, appendChild(n) { this.kids.push(n); return n; },
+    querySelector(sel) { return sel === ":scope > [data-announce-modal]" ? this.kids.find((k) => "data-announce-modal" in k.attrs) || null : null; } });
+  const page = node("div");
+  const dialogs = [];
+  let modals = [];
+  const sb = {
+    document: {
+      getElementById: (id) => (id === "announce-live" ? page : null),
+      querySelectorAll: (sel) => {
+        if (sel === ":modal") return modals.slice();
+        if (sel === "[data-announce-modal]") return dialogs.map((d) => d.querySelector(":scope > [data-announce-modal]")).filter(Boolean);
+        return [];
+      },
+      createElement: (t) => node(t),
+    },
+    setTimeout: (fn) => { timers.push({ id: ++seq, fn }); return seq; },
+    clearTimeout: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); },
+    performance: { now: () => 0 },
+  };
+  vm.runInNewContext(read("js/ui/live-region.js") + ";this.LiveRegion=LiveRegion;", sb, { filename: absSrc("js/ui/live-region.js") });
+  const fire = () => { const t = timers.shift(); if (t) t.fn(); };
+  return { L: sb.LiveRegion, page, dialogs, timers, fire, node, setModals: (m) => { modals = m; } };
+}
+
+test("LiveRegion.reset clears the page region while a dialog still owns the twin", () => {
+  const h = liveModalHarness();
+  const pause = h.node("dialog");
+  h.dialogs.push(pause);
+  h.setModals([pause]);
+  h.L.say("Gears is unavailable", "save");
+  h.fire();
+  const twin = pause.querySelector(":scope > [data-announce-modal]");
+  assert.equal(twin.textContent, "Gears is unavailable");
+  h.page.textContent = "RACE CONTROL: SAFETY CAR";
+  h.L.reset();
+  assert.equal(h.page.textContent, "", "the race call is gone from #announce-live, not only from the dialog twin");
+  assert.equal(twin.textContent, "", "the twin does not keep the settings line for the next open");
+  assert.equal(h.timers.length, 0, "a beat still in flight cannot rewrite the region after reset");
+  h.setModals([]);
+  const closed = h.node("dialog");
+  h.dialogs.push(closed);
+  const stale = h.node("div");
+  stale.setAttribute("data-announce-modal", "");
+  stale.textContent = "P3, gap 1.2 seconds";
+  closed.appendChild(stale);
+  h.L.reset();
+  assert.equal(stale.textContent, "", "a twin inside a dialog that has already closed is cleared too");
+});
+
+test("LiveRegion retargets a line when a dialog opens during the clear-then-write beat", () => {
+  const h = liveModalHarness();
+  const settings = h.node("dialog");
+  h.dialogs.push(settings);
+  h.L.say("RACE CONTROL: SAFETY CAR", "flag");
+  assert.equal(h.page.textContent, "", "the beat starts on the page region");
+  h.setModals([settings]);
+  h.fire();
+  h.fire();
+  const twin = settings.querySelector(":scope > [data-announce-modal]");
+  assert.ok(twin, "the open dialog gets a twin");
+  assert.equal(twin.textContent, "RACE CONTROL: SAFETY CAR", "the line is spoken where the reader can hear it");
+  assert.equal(h.page.textContent, "", "it is not left on the now-inert page region");
+});
+
 test("both radio slots size the card to the slot, not to the dock lane announceLane still publishes (UI-HUNT-2-HUD)", () => {
   const rules = cssRules(read("css/hud.css"));
   const slotRules = (prefix) => rules.filter((r) => r.selector.startsWith(prefix) && String(r.decls.get("max-width") || "").includes("--radio-top-w"));
