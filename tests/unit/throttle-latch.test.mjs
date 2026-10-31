@@ -383,7 +383,7 @@ test("a driving key released after focus moves into a HUD tap button clears its 
 });
 
 for (const id of ["pausebtn", "btn-cam", "hud-restore", "pc-restore"]) {
-  test(id + " leaves native activation keys to the button and preserves movement releases", () => {
+  test(`${id} leaves native activation keys to the button and preserves movement releases`, () => {
     const { Input, sb, listeners } = boot(), button = sb.document.getElementById(id);
     let clicks = 0;
     Object.assign(button, { tagName: "BUTTON", matches: (selector) => selector.split(", ").includes("#" + id),

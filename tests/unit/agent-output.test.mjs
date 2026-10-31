@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { spawnAgentProcess } from '../../tools/agent/process.mjs';
 import { fileURLToPath } from 'node:url';
-import { OUTPUT_LEVELS, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/agent/output.mjs';
+import { OUTPUT_LEVELS, ARTIFACT_TTL_MS, NATIVE_MAX, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/agent/output.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = path.join(ROOT, 'tools/agent-run.mjs');
 function fixture(t) {
@@ -265,6 +265,50 @@ test('a mid-size answer the summary cannot shrink stays native; one it can shrin
   const summarized = presentMcpResult(big, { root });
   assert.equal(summarized.structuredContent.outputLevel, 'compact');
   assert.ok(JSON.stringify(summarized).length < JSON.stringify(big).length / 4);
+});
+
+test('fenced JSON after a prose lead-in (chrome-devtools evaluate_script) is summarized and paged structurally', t => {
+  const root = fixture(t);
+  const value = { apiVersion: 1, hooks: Array.from({ length: 160 }, (_, i) => ({ name: `hook${i}`, doc: 'd'.repeat(80) })), notes: ['stale under headless(true)'] };
+  const original = { content: [{ type: 'text', text: 'Script ran on page and returned:\n```json\n' + JSON.stringify(value) + '\n```' }] };
+  const result = presentMcpResult(original, { root });
+  const block = result.structuredContent.summary.content[0];
+  assert.equal(block.lead, 'Script ran on page and returned:');
+  assert.equal(block.data.apiVersion, 1);
+  assert.equal(block.data.hooks.at(-1).totalItems, 160);
+  assert.equal(block.data.hooks.at(-1).sourcePointer, '/content/0/text/hooks');
+  const page = readOutputCollection({ root, artifact: result.structuredContent.artifact, pointer: '/content/0/text/hooks', offset: 158, limit: 5 });
+  assert.deepEqual(page.items.map(row => row.name), ['hook158', 'hook159']);
+  // Prose that merely mentions a fence stays text, and a broken fence is never half-parsed.
+  for (const text of ['see ```json\n{"a":1}\n``` then more', 'returned:\n```json\n{"a":\n```']) {
+    assert.equal(summarizeOutput({ content: [{ type: 'text', text }] }).content[0].text, text);
+  }
+});
+
+test('row text is cut on whole lines and keeps its paging footer; mid-size answers stay native', t => {
+  const root = fixture(t);
+  const rows = Array.from({ length: 300 }, (_, i) => `js/track/file${i}.js:${i + 1}:5 [use] (Mod › fn${i})`);
+  const text = `${rows.length} references\n${rows.join('\n')}\n… 41 more (offset:300)`;
+  const shown = summarizeOutput({ content: [{ type: 'text', text }] }).content[0].text.split('\n');
+  assert.ok(shown.every(line => line === `${rows.length} references` || rows.includes(line) || /^\[omitted \d+ lines\]$/.test(line) || line === '… 41 more (offset:300)'));
+  assert.equal(shown.at(-1), '… 41 more (offset:300)');
+  // ~6 KB: summarizing would force a follow-up read that costs more than sending it whole.
+  const mid = { content: [{ type: 'text', text: rows.slice(0, 120).join('\n') }] };
+  assert.ok(JSON.stringify(mid).length > 4000 && JSON.stringify(mid).length <= NATIVE_MAX);
+  assert.equal(presentMcpResult(mid, { root }).content[0].text, mid.content[0].text);
+});
+
+test('the first save in a process reaps artifacts older than the TTL and keeps fresh ones', t => {
+  const root = fixture(t);
+  const dir = path.join(root, 'artifacts/agent-output');
+  fs.mkdirSync(dir, { recursive: true });
+  const stale = path.join(dir, 'stale.json'), fresh = path.join(dir, 'fresh.json');
+  fs.writeFileSync(stale, '{}'); fs.writeFileSync(fresh, '{}');
+  const old = (Date.now() - ARTIFACT_TTL_MS - 60000) / 1000;
+  fs.utimesSync(stale, old, old);
+  saveOutputArtifact({ a: 1 }, { root });
+  assert.equal(fs.existsSync(stale), false);
+  assert.equal(fs.existsSync(fresh), true);
 });
 
 test('exact collection pages recover all omitted rows without advancing upstream cursors', t => {

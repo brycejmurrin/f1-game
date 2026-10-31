@@ -29,6 +29,9 @@ and never sits here, `js/input/phone-pad.js`) > on-screen buttons (`steerMode
 | `controller.html` (repo root) | the phone's own page: tilt via `tilt-roll.js`, steering strip, CONNECT tap (gyro permission) |
 | `controller-profiles.js` | `ControllerProfiles`: per-device pad maps (`padProfiles`, bounded); pin `controller-profiles.test.mjs` |
 | `hold-buttons.js` | Hold-button FACTORY (hold sets, `lostCaptureShouldRelease`, `reset()`); the steer buttons and window release nets are wired in `input.js` init |
+| `pedal-travel.js` | `PedalTravel`: shared stamp-then-ease thumb travel for the on-screen GAS/BRAKE and the phone wheel |
+| `phone-pad-codec.js` | `PhonePadCodec`: the PHONE AS CONTROLLER wire format (samples, dash packets, edges, pairing URL) |
+| `phone-pad-page.js` | `PhonePadPage`: the phone wheel's LCD paint and `controller.html` DOM |
 | `haptics.js` | `Input.vibrate` / `rumble` throttles |
 
 `game.js` reads `steerMode` from store, calls `Input.steer(stepDt)` in the physics step, and

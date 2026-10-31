@@ -15,7 +15,7 @@ const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
 
 // Own the clock so stalled bodies test the actual 15 s attempt deadline,
 // not a shortened timeout or a second timer started after headers.
-function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, controller = true, headersDelay = 0 } = {}) {
+function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, controller = true, controllerType = AbortController, headersDelay = 0 } = {}) {
   let now = 1_000_000, nextId = 0;
   const timers = new Map(), calls = [], writes = [], lateBodies = [];
   const url = "https://api.openf1.org/v1/weather?session_key=7";
@@ -23,7 +23,7 @@ function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, 
   const stale = JSON.stringify({ t: now - 1000, data: [{ rainfall: 99 }] });
   class Clock extends Date { static now() { return now; } }
   const context = vm.createContext({
-    Date: Clock, AbortController: controller ? AbortController : undefined,
+    Date: Clock, AbortController: controller ? controllerType : undefined,
     setTimeout(fn, ms) { const id = ++nextId; timers.set(id, { fn, at: now + ms }); return id; },
     clearTimeout(id) { timers.delete(id); },
     localStorage: { getItem: (k) => k === key ? stale : null,
@@ -60,7 +60,7 @@ function bodyFailureHarness({ status = 403, body = "reject", retryAfter = null, 
     }
     now = target; await flush();
   }
-  return { api: context.api, calls, writes, timers, lateBodies, flush, advance };
+  return { api: context.api, context, calls, writes, timers, lateBodies, flush, advance };
 }
 
 for (const status of [401, 403]) {
@@ -1441,4 +1441,88 @@ test("constructorStandings also refuses a mismatched StandingsLists season", asy
   context.api.forget("https://api.jolpi.ca/ergast/f1/2026/constructorstandings.json");
   const ok = await context.api.constructorStandings(2026);
   assert.equal(ok[0].name, "McLaren");
+});
+
+
+function trackedControllers() {
+  const records = [];
+  class Controller extends AbortController {
+    constructor() {
+      super();
+      const record = { controller: this, listeners: new Set() };
+      records.push(record);
+      const add = this.signal.addEventListener.bind(this.signal);
+      const remove = this.signal.removeEventListener.bind(this.signal);
+      this.signal.addEventListener = (type, listener, options) => {
+        if (type === "abort") record.listeners.add(listener);
+        return add(type, listener, options);
+      };
+      this.signal.removeEventListener = (type, listener, options) => {
+        if (type === "abort") record.listeners.delete(listener);
+        return remove(type, listener, options);
+      };
+    }
+  }
+  return { Controller, records };
+}
+
+test("transport owns attempt resources through body settlement and releases listeners on success", async () => {
+  const { Controller, records } = trackedControllers();
+  const h = bodyFailureHarness({ status: 200, body: "stall", controllerType: Controller });
+  const request = h.api.request("https://api.openf1.org/v1/weather?session_key=71", 60000);
+  await h.flush();
+  assert.equal(records.length, 1);
+  assert.equal(records[0].listeners.size, 1);
+  assert.equal(h.timers.size, 1, "headers do not release the body deadline");
+  h.lateBodies[0].resolve([{ rainfall: 2 }]);
+  assert.equal((await request)[0].rainfall, 2);
+  assert.equal(records[0].listeners.size, 0);
+  assert.equal(records[0].controller.signal.aborted, false);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.api.cancelAll(), 0, "settled attempts cannot be aborted later");
+  assert.equal(h.writes.length, 1);
+});
+
+test("transport reclaims resources after a synchronous host fetch failure and accepts a replacement host", async () => {
+  const { Controller, records } = trackedControllers();
+  const h = bodyFailureHarness({ status: 200, controllerType: Controller });
+  h.context.fetch = function () { throw new TypeError("host fetch unavailable"); };
+  await assert.rejects(h.api.request("https://example.test/first", 0, { cache: false }), /host fetch unavailable/);
+  assert.equal(records[0].listeners.size, 0);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.api.cancelAll(), 0);
+  let calls = 0;
+  h.context.fetch = function () {
+    calls++;
+    return Promise.resolve({ ok: true, json: async () => ["replacement"] });
+  };
+  const answer = await h.api.request("https://api.openf1.org/v1/second", 0, { cache: false });
+  assert.equal(answer[0], "replacement");
+  assert.equal(calls, 1, "effects preserve live lookup of host methods");
+  assert.equal(records[1].listeners.size, 0);
+  assert.equal(h.timers.size, 0);
+});
+
+test("transport instances own independent cancellation scopes and late bodies cannot write cancelled cache", async () => {
+  const { Controller, records } = trackedControllers();
+  const h = bodyFailureHarness({ status: 200, body: "stall", controllerType: Controller });
+  const sibling = vm.runInContext('F1Transport.create("https://api.openf1.org/v1", 604800000)', h.context);
+  const first = h.api.request("https://api.openf1.org/v1/first", 60000).catch(error => error);
+  const other = sibling.request("https://api.openf1.org/v1/other", 60000);
+  await h.flush();
+  assert.equal(h.lateBodies.length, 2);
+  assert.equal(h.api.cancelAll(), 1);
+  assert.equal((await first).cancelled, true);
+  assert.equal(records[0].listeners.size, 0);
+  assert.equal(records[1].controller.signal.aborted, false, "one instance cannot abort its sibling");
+  assert.equal(h.timers.size, 1, "only the sibling still owns a deadline");
+  h.lateBodies[0].resolve([{ rainfall: 1 }]);
+  h.lateBodies[1].resolve([{ rainfall: 3 }]);
+  assert.equal((await other)[0].rainfall, 3);
+  await h.flush();
+  assert.equal(h.writes.length, 1, "late cancelled completion never enters cache policy");
+  assert.ok(h.writes[0].k.endsWith("/other"));
+  assert.equal(records[1].listeners.size, 0);
+  assert.equal(h.timers.size, 0);
+  assert.equal(sibling.cancelAll(), 0);
 });

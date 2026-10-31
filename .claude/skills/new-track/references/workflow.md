@@ -122,7 +122,7 @@ Load from the SKILL.md index when the task needs this detail.
    from `api`), a node index out of range, or bad track data.
 
 4. **Visual check** — `__apex.tracks()` lists the id; then load and screenshot it
-   (the `playwright-probe` skill's `shot.mjs`):
+   (the `playwright-probe` skill's `shot.mjs`; main session only — in a subagent list this step as not run, AGENTS.md rule 10):
    ```js
    __apex.race("<id>"); __apex.park(0.1);          // stationary at 10% lap
    __apex.orbit(0.1, 45, 15, 40);                  // inspect from all sides
