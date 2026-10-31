@@ -116,30 +116,14 @@ const evaluated = new Set();
 // bundle. Both are strict loads of the same top-level const, so they must
 // share the pending insertion as well as the completed evaluation.
 const evaluating = new Map();
-function create() {
-const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
-function loadBackendScripts(files, edges, opts) {
-  const strict = !!(opts && opts.strict);
-  const generationScope = {};   // legacy-worker timeout fallback belongs only to this load
-  const loaded = opts && opts.loaded;
-  const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
-  const done = new Set(loaded || []), inflight = new Set();
-  const preds = new Map(files.map((f) => [f, []]));
-  for (const [a, b] of (edges || BACKEND_EDGES)) {
-    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
-  }
-  const injectOnce = (src, cacheBust) => {
-    if (typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad()) {
-      if (typeof Log !== "undefined") Log.warn("game", "lazy load refused, a newer build is active: " + src);
-      return Promise.resolve({ ok: false, retry: false });
-    }
-    const sri = integrity(src);
-    if (sri === false) return Promise.resolve({ ok: false, retry: false });
-    return new Promise((resolve) => {
+// One admitted browser attempt owns only its element and responsive-time timers.
+// It knows nothing about bundles, strict sharing, evaluated scripts or retries.
+// onLoad runs IN the load event (not a later promise turn): readiness must be
+// checked before dependent scripts can become eligible in the graph.
+function browserAttempt(src, href, sri, opts, onLoad) {
+  return new Promise((resolve) => {
     const el = document.createElement("script");
     if (sri) el.integrity = sri;
-    let href = url(src);
-    if (cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + cacheBust;
     el.src = href;
     el.crossOrigin = "anonymous";
     // MARKED so index.html's broken-install repair (sweeps every SW cache and
@@ -178,15 +162,78 @@ function loadBackendScripts(files, edges, opts) {
     deadT = W.setTimeout(beat, tickMs);
     }
     el.onload = () => {
-      let ready = true;
-      try { if (opts && opts.ready) ready = !!opts.ready(src); }
-      catch (e) { ready = false; }
-      if (ready) evaluated.add(src);
+      const ready = onLoad();
       settle(ready, false);
     };
     el.onerror = () => { if (el.remove) el.remove(); settle(false, true); };
     document.head.appendChild(el);
   });
+}
+
+// Group lifecycle: drain started siblings before resolving a strict failure,
+// admit successors only after success (or graceful non-strict failure), and
+// preserve the caller's partial-success set. No browser/timer effects here.
+function runLoadGraph(files, preds, pending, done, inflight, strict, loaded, opts, inject) {
+  return new Promise((finish) => {
+    let failed = false;
+    const pump = () => {
+      if (failed && strict) { if (!inflight.size) finish(false); return; }
+      if (!pending.size && !inflight.size) { finish(!failed); return; }
+      for (const src of files) {
+        if (!pending.has(src)) continue;
+        if (!preds.get(src).every((p) => done.has(p))) continue;
+        pending.delete(src);
+        inflight.add(src);
+        // A throw in UpdateCheck.prepareLazyLoad (or the Promise executor) rejects
+        // inject(); unhandled, inflight never drained and pump() never finished,
+        // so the caller awaited forever. Count it as a failed file instead.
+        inject(src).catch((e) => {
+          if (typeof Log !== "undefined") Log.warn("game", "lazy load threw: " + src + " — " + (e && e.message));
+          return false;
+        }).then((ok) => {
+          inflight.delete(src);
+          if (ok) {
+            done.add(src);
+            if (loaded) loaded.add(src);
+            try { if (opts && opts.onSettled) opts.onSettled(src); } catch (_) { /* boot progress hook */ }
+          }
+          else { failed = true; if (!strict) done.add(src); }
+          pump();
+        });
+      }
+    };
+    pump();
+  });
+}
+
+function create() {
+const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
+function loadBackendScripts(files, edges, opts) {
+  const strict = !!(opts && opts.strict);
+  const generationScope = {};   // legacy-worker timeout fallback belongs only to this load
+  const loaded = opts && opts.loaded;
+  const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
+  const done = new Set(loaded || []), inflight = new Set();
+  const preds = new Map(files.map((f) => [f, []]));
+  for (const [a, b] of (edges || BACKEND_EDGES)) {
+    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
+  }
+  const injectOnce = (src, cacheBust) => {
+    if (typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad()) {
+      if (typeof Log !== "undefined") Log.warn("game", "lazy load refused, a newer build is active: " + src);
+      return Promise.resolve({ ok: false, retry: false });
+    }
+    const sri = integrity(src);
+    if (sri === false) return Promise.resolve({ ok: false, retry: false });
+    let href = url(src);
+    if (cacheBust) href += (href.indexOf("?") >= 0 ? "&" : "?") + "retry=" + cacheBust;
+    return browserAttempt(src, href, sri, opts, () => {
+      let ready = true;
+      try { if (opts && opts.ready) ready = !!opts.ready(src); }
+      catch (_) { ready = false; }
+      if (ready) evaluated.add(src);
+      return ready;
+    });
   };
   // Strict bundles with a `loaded` set (ensureDataHub / ensureNet / …) keep one inject
   // per file per load attempt so a miss leaves siblings resident and the next ensure*
@@ -232,36 +279,7 @@ function loadBackendScripts(files, edges, opts) {
   // Only files that WAIT for a predecessor: the first wave is injected below at once.
   const blocked = typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad && UpdateCheck.blocksLazyLoad();
   if (!blocked) preload([...pending].filter((f) => preds.get(f).some((p) => !done.has(p))));
-  return new Promise((finish) => {
-    let failed = false;
-    const pump = () => {
-      if (failed && strict) { if (!inflight.size) finish(false); return; }
-      if (!pending.size && !inflight.size) { finish(!failed); return; }
-      for (const src of files) {
-        if (!pending.has(src)) continue;
-        if (!preds.get(src).every((p) => done.has(p))) continue;
-        pending.delete(src);
-        inflight.add(src);
-        // A throw in UpdateCheck.prepareLazyLoad (or the Promise executor) rejects
-        // inject(); unhandled, inflight never drained and pump() never finished,
-        // so the caller awaited forever. Count it as a failed file instead.
-        inject(src).catch((e) => {
-          if (typeof Log !== "undefined") Log.warn("game", "lazy load threw: " + src + " — " + (e && e.message));
-          return false;
-        }).then((ok) => {
-          inflight.delete(src);
-          if (ok) {
-            done.add(src);
-            if (loaded) loaded.add(src);
-            try { if (opts && opts.onSettled) opts.onSettled(src); } catch (_) { /* boot progress hook */ }
-          }
-          else { failed = true; if (!strict) done.add(src); }
-          pump();
-        });
-      }
-    };
-    pump();
-  });
+  return runLoadGraph(files, preds, pending, done, inflight, strict, loaded, opts, inject);
 }
 
 return { load: loadBackendScripts };

@@ -82,11 +82,12 @@ test("a record pending at recompute never turns the fresh answer into undefined/
   // custom-tracks' door and experience's photo swap compare top() before/after a
   // load, so `undefined !== null` read as "another screen took over" (#3888).
   const t = boot();
+  t.els.get("overlay").hidden = true;   // top() finds layers by id (uihunt4 #6): really closed
   t.mutate(t.els.get("pausemenu"));
   assert.strictEqual(t.U.top(), null, "top() with nothing open is null, never undefined");
   t.advance(1000); t.mutate(t.els.get("pausemenu"));
   assert.strictEqual(t.U.top(), null, "an expired memo plus a pending record still answers null");
   const overlay = t.els.get("overlay");
-  overlay.shown = true; t.advance(1000); t.mutate(overlay);
+  overlay.hidden = false; overlay.shown = true; t.advance(1000); t.mutate(overlay);
   assert.strictEqual(t.U.navOpen(), true, "navOpen returns the fresh answer, not the memo the drain dropped");
 });

@@ -391,7 +391,7 @@ test("the speed digits, energy bar and sector red are set up to be read at a gla
   // (css/tokens.css measures it at ~2.6:1 on the page). No HUD text may use it.
   const hud = read("js/ui/hud.js").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(hud, /#e10600/i, "hud.js writes no text in the brand red");
-  assert.match(hud, /var\(--slower\)/, "the ghost delta reads the shared --slower token");
+  assert.match(hud, /var\(--slower-ink\)/, "the ghost delta reads the shared red TEXT ink, --slower-ink (#4258)");
   assert.match(hud, /var\(--faster\)/, "and --faster");
 });
 
@@ -1085,7 +1085,7 @@ test("an empty timing tower still fits the bottom band and writes the dock cap",
  * (236 px) beside BRAKE/GAS, the left one row of steer arrows (72 px). The right cap is the
  * joint height solve, 329 / (236 + 44) = 1.175 — measured live as 85 px pedals from 150 % up. */
 function dockHarness(btn, opts = {}) {
-  const W = opts.portrait ? 390 : 844, H = opts.portrait ? 844 : 390;
+  const W = opts.width || (opts.portrait ? 390 : 844), H = opts.height || (opts.portrait ? 844 : 390);
   const b = boot({ innerWidth: W });
   b.sb.innerHeight = H;
   const { dom } = b, root = dom.documentElement;
@@ -1139,11 +1139,12 @@ test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap
     assert.ok(72 * h.zL + 44 * Math.min(1.5, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: steer + CAM fit the height`);
     assert.ok(236 * h.zR + 44 * Math.min(2, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: taps + PAUSE fit the height`);
     assert.ok(152 * h.zL + 134 * h.zR + 240 * h.zBot + 2 * 8 + 20 <= h.W - 94 + 1, `${tag}: steer, cluster and pedals share the bar (1 px: --hud-z-bot ceils onto 0.01 at 245 %)`);
-    assert.ok(h.zBot >= 10 / 14 - 1e-9, `${tag}: the gear/speed cluster keeps its readable floor (${h.zBot})`);
+    // UI hunt #3: budgeted at the 10 px floor, BUTTON 245 painted SPEED at 10.1 px over the owner's HUD 155.
+    assert.ok(h.zBot >= 1 - 1e-9, `${tag}: BUTTON SIZE never shrinks the gear/speed cluster below its shipped size (${h.zBot})`);
   }
   const owner = dockHarness(2.45), max = dockHarness(3);
-  assert.equal(owner.zL, 2.45, "the owner's 245 % paints 245 % steer arrows");
-  assert.ok(max.zL > 2.45 && max.zL < 3, `300 % stops at the bar's width budget (${max.zL})`);
+  assert.ok(owner.zL > 1.5 && owner.zL <= 2.45, `the owner's 245 % still paints steer arrows well past the pedals (${owner.zL})`);
+  assert.equal(max.zL, owner.zL, `300 % stops at the same bar-width budget (${max.zL})`);
 });
 
 test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait keeps the shared cap", () => {
@@ -1542,4 +1543,18 @@ test("broadcast height fitting reserves control space without changing button zo
   assert.ok(+got["--hud-z-top"] <= 1, "the tall broadcast column is capped into the viewport");
   assert.ok(+got["--hud-z-top"] >= 1 / 1.4 - .001, "14px text retains an approximately 10px painted floor");
   assert.equal(h.refit()["--hud-z-dock"], base["--hud-z-dock"], "repeated fits keep the controls independent");
+});
+
+
+test("emergency dock fit keeps small targets usable when a short viewport exhausts the height budget", () => {
+  // These heights force the joint solver below its emergency floor. Exercise
+  // the real GameHud through the existing VM, including mirrored controls.
+  for (const height of [120, 160, 180]) for (const mirror of [false, true]) {
+    const h = dockHarness(2.45, { height, mirror });
+    assert.ok(h.zR >= 0.5, `pedal dock at height ${height} cannot shrink below the target floor`);
+    assert.ok(h.zL >= 0.5, `steering dock at height ${height} uses the same minimum`);
+    assert.ok(48 * Math.min(h.zL, h.zR) >= 24, "even the narrow tier's smallest 48px tap stays at least 24px");
+    assert.ok(h.zBot >= 0.4, "readouts retain their separate fit floor");
+  }
+  assert.equal(dockHarness(2.45).zR, 1.175, "normal 844×390 pedal sizing is unchanged");
 });

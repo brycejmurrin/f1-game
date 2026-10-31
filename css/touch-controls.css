@@ -522,6 +522,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The floor is now the zoom at which the 54px tap paints 44px (Apple HIG /
      WCAG 2.5.5); the 72px holds paint 59. The narrow tier below restates it
      for its 48px taps. js/ui/hud.js reads the same token to size the dock cap. */
+  /* fitHud may reduce the preferred 44px rung on a crowded viewport, but
+     its independent 24/48 emergency floor keeps even narrow-tier taps at 24px. */
   :root { --hud-btn-floor: 0.82; }
   /* The label is bounded by the circle: TEXT SIZE Larger lifts --fs-micro to
      18px, and BOOST at 800 weight is ~59px wide at that size — past a 54px

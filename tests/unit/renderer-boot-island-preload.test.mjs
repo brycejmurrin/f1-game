@@ -15,9 +15,9 @@ const bootSrc = readFileSync(new URL("../../js/render/renderer-boot.js", import.
 const settle = () => new Promise((r) => setImmediate(r));
 
 const ISLAND = [
-  "vendor/three-0.186.1/three.webgpu.min.js",
-  "vendor/three-0.186.1/three.core.min.js",
-  "vendor/three-0.186.1/three.tsl.min.js",
+  "vendor/three-0.187.0/three.webgpu.min.js",
+  "vendor/three-0.187.0/three.core.min.js",
+  "vendor/three-0.187.0/three.tsl.min.js",
 ];
 
 function evalBoot(opts = {}) {

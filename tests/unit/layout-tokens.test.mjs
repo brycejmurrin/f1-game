@@ -51,7 +51,7 @@ test("width-tier tokens, the media queries, and scale.js name the same pixels", 
   assert.match(responsive, /horizontal-viewport-segments: 2/);
   assert.match(responsive, /vertical-viewport-segments: 2/);
   assert.match(tokens, /--safe-w: calc\(100svw - var\(--safe-l\) - var\(--safe-r\)\)/);
-  assert.equal(tokenDecl("--touch-label-floor"), "10px");
+  assert.equal(tokenDecl("--touch-label-floor"), "11px");
   assert.equal(tokenDecl("--touch-pedal-radius"), "28%");
   assert.equal(tokenDecl("--touch-tablet-btn"), "96px");
   assert.equal(tokenDecl("--touch-tablet-steer"), "108px");
