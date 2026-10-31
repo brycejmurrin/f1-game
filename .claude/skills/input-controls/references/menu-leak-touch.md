@@ -50,5 +50,5 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
   amber → red from the player's speed, so it stays red while you are over the target);
   colour/opacity/brake-cue prefs are `js/ui/driving-line-opts.js`; pins
   `tests/unit/driving-line*.test.mjs`. The steering PULL toward the line is the `raceLine`
-  assist (table above). Fix the held button first; re-check the line only if it outlives the release.
+  assist (table in `assists.md`). Fix the held button first; re-check the line only if it outlives the release.
 - Reproduce at phone landscape (844×390) with touch first.

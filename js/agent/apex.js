@@ -143,7 +143,7 @@ function simCareerRound() {
   for (let i = 0; i < rows.length; i++) {
     const car = byId.get(rows[i].driverId);
     if (!car) continue;
-    car.gridPos = i + 1;
+    car.gridPos = i + 1; delete car.classified; delete car.dsq;   // this simulated round owns its result
     if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
     const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
     // Race day is not qualifying. Pace order is a strong prior; craft is how much
@@ -392,6 +392,10 @@ const api = {
     lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
+    // tickBody's holds: while `warming`, real frames charge neither the countdown nor
+    // physics; go() skips the lights, so wait for liveTicks past go() and !warming
+    // before driving a rendered race (#4253). step() is not held.
+    ...(({ warming, liveTicks }) => ({ warming, liveTicks }))(G.cameraDampingState()),
   }),
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
@@ -699,6 +703,13 @@ const api = {
     if (hit === "reset") Damage.reset(c);
     else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
     return Damage.state(c);
+  },
+  // The manual sector ERS plan (#1580, js/race/energy-plan.js): ["manual"|"deploy"|"save"] × 3.
+  // ersPlan() reads it; ersPlan([...]) sets it for this session (not persisted) and returns
+  // {plan, ok} — ok false keeps the old plan. MANUAL ×3 is the neutral, shipped plan.
+  ersPlan(p) {
+    const ok = p === undefined ? true : EnergyPlan.setPlan(p);
+    return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() };
   },
   setPhysics(o) {
     o = o || {};
