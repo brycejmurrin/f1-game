@@ -1478,7 +1478,7 @@ return {
     if (typeof releaseExterior === "function") releaseExterior(); GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
-  get meshKey() { return _spMeshKey; },
+  get meshKey() { return _spMeshKey.endsWith("|wheels") ? _spMeshKey.slice(0, -7) : _spMeshKey; },   // the split-wheels suffix is internal: callers compare this to previewKey()
   set meshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
 };
 }
