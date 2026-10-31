@@ -10,7 +10,7 @@ A new session starts with no memory and an unfetched branch, so the hand-off
 carries everything it needs. Never write a `HANDOFF` file to the repo root: a
 cold clone cannot see it.
 
-Every session hands off at 300k context, attended, dispatcher or worker alike (PR #4230 efficiency review
+Every session hands off at its brief's `STOP AT` (300k by default; `.claude/hooks/context-cap.py` enforces the last `STOP AT: <N>k`, hard cap = soft + delta), attended, dispatcher or worker alike (PR #4230 efficiency review
 finding 1: every wake re-reads the whole context). Before idling, write the follow-up prompts into the PR's Hand-off
 block. Model names and messaging routes are host-specific; use only exposed host capabilities.
 
