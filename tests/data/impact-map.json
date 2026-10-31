@@ -14326,6 +14326,7 @@
         "tests/unit/puddles.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
+        "tests/unit/sw-build-meta.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ]
