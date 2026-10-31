@@ -1246,7 +1246,8 @@ var PitLane = (function () {
     /** Racing laps still owed including the lap the car is ON.
      *  `c.lap` counts S/F crossings (grid 0; winner flags at lapsTarget+1), so
      *  remaining = lapsTarget - lap + 1. pickFor / think / wetLapsToStop once
-     *  used lapsTarget - lap and were one short of the flag. */
+     *  used lapsTarget - lap and were one short of the flag. think's fits
+     *  guard adds this lap only when a stop is pulled forward of the plan. */
     function lapsToFlag(c) {
       return Math.max(0, (G.lapsTarget || 0) - ((c && c.lap) || 0) + 1);
     }
@@ -1607,7 +1608,15 @@ var PitLane = (function () {
         const nextCls = wetRun ? TyreModel.classForTread(wantTread) : plan.seq[(c.pitStops || 0) + 1];
         const nextStop = wetRun ? null : plan.lapsAt[(c.pitStops || 0) + 1];
         const life = nextCls && TyreModel.AI_CLASS[nextCls] ? G.tyres.planLaps(TyreModel.AI_CLASS[nextCls].life, G.lapsTarget) / (plan.loadK || 1) : Infinity;
-        fits = (nextStop != null ? nextStop : G.lapsTarget) - (c.lap || 0) <= life * 1.1;
+        // Plan units: a later stop is a c.lap index, and the flag closes at
+        // lapsTarget (stints sum to it). Pulled FORWARD, the new set also
+        // finishes the lap the car is already on, so the flag is lapsToFlag.
+        // On the plan's own lap that lap is the stint the plan already priced
+        // (Bahrain 12, stop lap 7, soft life 5: 5 ≤ 5.5, the safety car still
+        // wins). Charging it again rejected that stop.
+        const end = nextStop != null ? nextStop : (G.lapsTarget || 0);
+        const need = end - (c.lap || 0) + (nextStop == null && lapsToStop > 0 ? 1 : 0);
+        fits = need <= life * 1.1;
       }
       // ONE context, every field rewritten per call (pitNow is pure and keeps nothing):
       // a 13-field literal per AI per tick was ~1.3k objects/s of garbage.
