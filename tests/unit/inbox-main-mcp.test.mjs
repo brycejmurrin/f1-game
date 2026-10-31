@@ -41,9 +41,10 @@ test('existing server dry-run never opens cache or fetches; invalid inbox argume
   assert.equal(rows[2].result.isError, true);
 });
 test('main adapter preserves core status/get payload, pagination and error semantics using a local SQLite fixture', async () => {
+  const body = 'cached fixture ' + 'é🧭"\n'.repeat(4000);
   const openStore = () => {
     const store = new InboxStore(':memory:');
-    store.replaceThread(4387, 'issue', [{ id: 12, body: 'cached fixture ' + 'é'.repeat(4000), actor: 'fixture', envelope: null, parseError: null,
+    store.replaceThread(4387, 'issue', [{ id: 12, body, actor: 'fixture', envelope: null, parseError: null,
       updatedAt: '2026-10-30T12:00:00Z', url: 'https://github.com/brycejmurrin/f1-game/issues/4387#issuecomment-12' }], '2026-10-30T12:00:00Z', 0);
     return store;
   };
@@ -58,14 +59,25 @@ test('main adapter preserves core status/get payload, pagination and error seman
   }
   const status = await handleInbox('apex_inbox_status', { issue: 4387 }, { handle });
   assert.equal(status.structuredContent.generation, 1);
-  const got = await handleInbox('apex_inbox_get', { issue: 4387, id: 12, maxBytes: 2048 }, { handle });
-  assert.match(JSON.stringify(got.structuredContent), /cached fixture/);
-  assert.ok(Buffer.byteLength(got.content[0].text) <= 2048);
-  assert.ok(got.structuredContent.nextBodyCursor > 0);
-  const next = await handleInbox('apex_inbox_get', { issue: 4387, id: 12, maxBytes: 2048,
-    afterCodePoint: got.structuredContent.nextBodyCursor, bodyVersion: got.structuredContent.bodyVersion }, { handle });
-  assert.equal(next.isError, false);
-  assert.ok(next.structuredContent.content.startsWith('é'));
+  let afterCodePoint = 0, bodyVersion, joined = '', chunks = 0;
+  do {
+    const got = await handleInbox('apex_inbox_get', { issue: 4387, id: 12, maxBytes: 2048,
+      afterCodePoint, ...(bodyVersion ? { bodyVersion } : {}) }, { handle });
+    assert.equal(got.isError, false);
+    assert.ok(Buffer.byteLength(got.content[0].text) <= 2048);
+    const part = got.structuredContent;
+    assert.deepEqual(part, JSON.parse(got.content[0].text));
+    assert.ok(part.content.length > 0);
+    joined += part.content;
+    chunks++;
+    assert.ok(chunks <= Array.from(body).length, 'pagination must terminate');
+    if (bodyVersion) assert.equal(part.bodyVersion, bodyVersion);
+    bodyVersion = part.bodyVersion;
+    if (part.nextBodyCursor !== null) assert.ok(part.nextBodyCursor > afterCodePoint);
+    afterCodePoint = part.nextBodyCursor;
+  } while (afterCodePoint !== null);
+  assert.ok(chunks > 1);
+  assert.equal(joined, body);
 });
 
 test('existing server listing and inbox dryRun stay available without SQLite support', () => {

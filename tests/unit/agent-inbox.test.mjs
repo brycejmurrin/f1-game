@@ -84,7 +84,10 @@ test('malformed/scope-forged envelopes stay visible as diagnostics and never bec
   const result=refresh(store,[comment(1,'```apex-message\n{bad}\n```'),comment(2,formatMessage(wrong)),comment(3,formatMessage(envelope()))]);
   assert.equal(result.validMessages,1); assert.equal(result.invalidMessages,2);
   const rows=store.list(42,{now:Date.parse('2026-11-02T00:00:00Z')}).items;
-  assert.match(rows[0].parseError,/malformed/); assert.match(rows[1].parseError,/scope/);
+  assert.deepEqual(rows.slice(0,2).map(({id,message,parseError})=>({id,message,parseError})),[
+    {id:1,message:null,parseError:'Invalid agent message: malformed envelope JSON'},
+    {id:2,message:null,parseError:'Invalid agent message: issue scope mismatch'},
+  ]);
   assert.deepEqual(store.list(42,{recipient:'grok:owner'}).items.map(x=>x.id),[3]);
   assert.equal(rows[2].message.identity,'claimed');
   assert.equal(rows[2].message.expired,true,'expiry is reported, not delivery authority');
@@ -201,10 +204,24 @@ test('slow refresh cannot overwrite a newer process snapshot or its success stat
   assert.equal(first.status(42).lastError,null,'older failure cannot mark a newer successful snapshot stale');
 });
 
-test('CLI exposes a bounded read-only surface and structured nonzero errors',()=>{
-  assert.match(run(['--help']).help,/No provider sends/);
+test('CLI exposes a bounded read-only surface and structured nonzero errors',t=>{
+  const root=scratch(t), entry=path.join(root,'tools','agent','inbox.mjs');
+  fs.mkdirSync(path.dirname(entry),{recursive:true});
+  fs.copyFileSync(path.join(ROOT,'tools','agent','inbox.mjs'),entry);
+  fs.symlinkSync(path.join(ROOT,'tools','agent','inbox-store.mjs'),path.join(path.dirname(entry),'inbox-store.mjs'));
+  const invoke=args=>spawnSync(process.execPath,[entry,...args],{cwd:root,encoding:'utf8',timeout:10000});
+  const help=invoke(['--help']);
+  assert.equal(help.status,0,help.stderr);
+  assert.equal(help.stdout,run(['--help']).help+'\n');
+  assert.equal(fs.existsSync(path.join(root,'scratch')),false,'help needs no cache initialization');
+  for(const verb of ['send','launch','permissions']) {
+    const result=invoke([verb]);
+    assert.equal(result.status,1,result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout),{ok:false,error:'Unknown inbox verb; use --help'});
+  }
+  const cold=invoke(['status','--issue','42']);
+  assert.equal(cold.status,1,cold.stderr);
+  assert.deepEqual(JSON.parse(cold.stdout),{ok:false,error:'Inbox cache missing; run sync first'});
+  assert.equal(fs.existsSync(path.join(root,'scratch')),false,'cold reads and rejected verbs create no cache');
   for(const args of [['send'],['list','--issue','42','--recipient'],['list','--issue','42','--issue','43'],['list','--issue','42','--unknown','x']]) assert.throws(()=>run(args));
-  const result=spawnSync(process.execPath,['tools/agent/inbox.mjs','send'],{cwd:ROOT,encoding:'utf8'});
-  assert.equal(result.status,1);
-  assert.equal(JSON.parse(result.stdout).ok,false);
 });

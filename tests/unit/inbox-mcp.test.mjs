@@ -138,5 +138,5 @@ test('inbox MCP descriptors and discovery do not load SQLite; real inbox calls f
   const data=JSON.parse(child.stdout);
   assert.equal(data.count,4);assert.equal(data.listed.result.tools.length,4);
   assert.equal(data.called.result.isError,true);
-  assert.match(data.called.result.content[0].text,/SQLite deliberately unavailable/);
+  assert.deepEqual(JSON.parse(data.called.result.content[0].text),{ok:false,error:'SQLite deliberately unavailable'});
 });
