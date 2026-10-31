@@ -1,6 +1,6 @@
 ---
 name: phone-bridge
-description: "Use when measuring or driving the LIVE game on Bryce's iPhone through the GitHub-issue bridge (apex-cmd)."
+description: "Use when measuring live play on Bryce's iPhone (GitHub-issue bridge, apex-cmd)."
 ---
 
 # Phone bridge — Claude drives the live game on Bryce's phone
