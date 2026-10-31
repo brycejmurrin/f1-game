@@ -229,6 +229,34 @@ export function tapFailureDetail(text) {
   return out;
 }
 
+/** Workflow commands use different escaping for data and properties.
+ * https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message */
+const workflowEscape = (value, property = false) => {
+  const escaped = String(value).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  return property ? escaped.replace(/:/g, "%3A").replace(/,/g, "%2C") : escaped;
+};
+
+/** Only structured terminal failures become commands; TAP remains ordinary log data.
+ * Nine file errors leave one of Actions' ten per-step errors for the omission count. */
+export function workflowFailureAnnotations(results, env = process.env) {
+  if (env.GITHUB_ACTIONS !== "true") return [];
+  const failed = results.filter((r) => r.ok === false);
+  const annotation = (file, message) => `::error file=${workflowEscape(file, true)},title=Tooling-fast failure::${workflowEscape(message.slice(0, 1024))}`;
+  const commands = failed.slice(0, 9).map((r) => {
+    const safe = typeof r.file === "string" && r.file.length <= 256
+      && /^(?:[A-Za-z0-9_.%, -]+\/)*[A-Za-z0-9_.%, -]+$/.test(r.file)
+      && r.file.split("/").every((part) => part !== "." && part !== "..");
+    const file = safe ? r.file : "tools/ci/tooling-fast.mjs";
+    const exit = Number.isInteger(r.exit) ? r.exit : "unknown";
+    const signal = typeof r.signal === "string" && /^[A-Z0-9]{1,24}$/.test(r.signal) ? r.signal : "none";
+    const duration = Number.isFinite(r.durationMs) && r.durationMs >= 0 ? Math.round(r.durationMs) : "unknown";
+    const reason = r.missing ? "missing-file" : r.timedOut ? "timeout" : r.empty ? "empty-run" : "exit";
+    return annotation(file, `${safe ? r.file : "Unavailable or unsafe test path"}: ${reason}; exit=${exit}; signal=${signal}; durationMs=${duration}`);
+  });
+  if (failed.length > 9) commands.push(annotation("tools/ci/tooling-fast.mjs", `${failed.length - 9} additional failed files omitted from annotations; see the tooling-fast log.`));
+  return commands;
+}
+
 /* A HUNG FILE FAILS BY NAME. Without a bound a file that never exits (an open
  * handle, a never-settled await) runs until the CI job's timeout-minutes, and
  * the job reports `cancelled` with every START line but no verdict — the shape
@@ -275,7 +303,7 @@ const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 
 /**
  * Run the structural suites one file at a time.
  * @param {string[]} [files]
- * @param {{ logPath?: string, isolatedFiles?: string[] }} [opts]
+ * @param {{ logPath?: string, isolatedFiles?: string[], workflowAnnotations?: boolean }} [opts]
  * @returns {{ ok: boolean, passed: number, failed: number, results: object[], notStarted: number }}
  */
 export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
@@ -411,7 +439,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
         for (const L of tail) emit(`  | ${L}`);
       }
     }
-    results.push({ file: rel, ok, durationMs: dur, exit: r.status });
+    results.push({ file: rel, ok, durationMs: dur, exit: r.status,
+      ...(signal ? { signal } : {}), ...(timedOut ? { timedOut: true } : {}), ...(empty ? { empty: true } : {}) });
       resolve();
     });
   });
@@ -465,6 +494,9 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     const bad = results.filter((r) => !r.ok).map((r) => r.file);
     emit(`failing files: ${bad.join(" ") || "(none finished)"}`);
     emit(`log: ${path.relative(ROOT, logPath) || logPath}`);
+    // Imported runners often exercise intentional failure fixtures inside a
+    // passing unit suite. Only the CLI opts into publishing their outcomes.
+    if (opts.workflowAnnotations === true) for (const command of workflowFailureAnnotations(results)) console.log(command);
   }
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
@@ -1270,6 +1302,7 @@ if (isMain) {
   }
   const { ok, failed: nFailed } = await runToolingFast(files, {
     verification: true,
+    workflowAnnotations: true,
     jobs: parsed.jobs,
     bail: parsed.bail,
     quiet: parsed.quiet,
