@@ -5,6 +5,7 @@ import { MISSIONS, missionBrief, MODE_TITLES } from "../../tools/ui/explorer/cat
 import { validateScenario } from "../../tools/ui/explorer/core.mjs";
 import { matchesOracle, checkFeedback, performAction, installFault, inspectUI, captureSceneDiagnostics } from "../../tools/ui/explorer/browser.mjs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("explorer CLI rejects unbounded probes, typo modes and credential URLs before browser acquisition", () => {
   for (const args of [["all", "--max-shots", "26"], ["all", "--max-shots", "NaN"], ["all", "--max-attempts", "0"], ["all", "--frac", "1.1"], ["all", "--out"], ["all", "--modes", "typo"], ["all", "--url", "https://secret:password@example.com/"], ["all", "--unknown"], ["all", "extra"]]) assert.throws(() => parseOptions(args));
@@ -673,7 +674,7 @@ test("feedback collector retains hidden text but separates rendered content and 
   const context = vm.createContext({ document, window: {}, innerWidth: 844, innerHeight: 390,
     location: { href: "http://localhost/" }, CSS: { escape: s => s }, matchMedia: () => ({ matches: false }),
     getComputedStyle: e => e === feedback ? style : e === parent ? parentStyle : style });
-  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})({root:'#status'})`, context)));
+  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})({root:'#status'})`, context, { filename: absSrc("tools/ui/explorer/browser.mjs") })));
   const first = inspect();
   assert.equal(first.controls.length, 0, "feedback is not a tiny tap target");
   assert.equal(first.feedback[0].text, "Hidden error Other");
@@ -713,7 +714,7 @@ test("MCP feedback summaries distinguish missing coverage and bound advisory sam
   const result = summarizeUIInspection({ controls: [], feedback, coverage: { feedback: { total: 12, inspected: 11, omitted: 1 } } });
   const row = result.records[0];
   assert.equal(row.feedback.observed, 11); assert.equal(row.feedback.samples.length, 10);
-  assert.match(row.feedback.samples[0].text, /truncated/); assert.equal(row.feedback.truncated, true); assert.equal(row.truncated, true);
+  assert.equal(row.feedback.samples[0].text.includes("truncated"), true); assert.equal(row.feedback.truncated, true); assert.equal(row.truncated, true);
   assert.equal(row.advisoryTotal, 0, "hidden feedback observations do not become automatic defects");
   assert.throws(() => summarizeUIInspection({ controls: [], feedback: [null] }), /feedback/);
 });
