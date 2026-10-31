@@ -59,6 +59,7 @@
   const POST_VIZ = ["ssao", "bloom", "shafts", "godray", "composite-off", "scene"];
 
   function postChain(THREE, TSL, ctx) {
+    const softwareGL = !!(ctx && ctx.softwareGL);
     const renderer = ctx.renderer;
     // Manual experiment, read once per chain; opt-in takes effect on reload.
     let sharpenLimit = 0;
@@ -1237,9 +1238,15 @@
     }
 
     async function warm(opts, frame) {
-      // Collect enabled passes first, then compile serially with stable targets.
+      // Collect enabled passes first, then warm each with the same runPass path
+      // present() uses (1x1 scissor draw, or serialised canvas compileAsync).
+      // compileAsync alone keyed depth from renderer.depth (true) while every
+      // post RT has depthBuffer: false — the same mismatch W7 fixed for the
+      // sky cache (TLX-WEBGPU-PERF-3-2026-10-30.md follow-on); WebGL2 warmPlus
+      // ran this every menu/race entry and the race rebuilt on first live draw.
       const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
       const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest;
+      const sc0 = renderer.getScissorTest(), ac0 = renderer.autoClear;
       try {
         compileJobs = jobs;
         try { present(opts, frame); } finally { compileJobs = null; }
@@ -1249,20 +1256,27 @@
         // (gpu-census 206). Whatever startProgramWarm has set is what runPass
         // will see; do not touch it here.
         const deadline = performance.now() + 3000;
-        for (const job of jobs) {
-          renderer.setRenderTarget(job.target);
-          // THE LIVE QUAD, not a snapshot: a fresh QuadMesh per job does not
-          // share a render-object cache key with the one present() draws, so
-          // the race built the same 16 post programs AGAIN through runPass
-          // (gpu-census 205 on macos-latest Metal: x16 tagged warm, x16 tagged
-          // runPass, the same eight sites). Compiling `quad` itself with the job's material is
-          // exactly what runPass does, so the hit is guaranteed whatever the key
-          // contains.
-          setQuadMat(job.mat);
-          await renderer.compileAsync(quad, quad.camera);
-          if (performance.now() >= deadline) break;
+        if (softwareGL) {
+          // SwiftShader / CI: compileAsync only — no scissor draws (hunt 4b A-W1).
+          for (const job of jobs) {
+            renderer.setRenderTarget(job.target);
+            setQuadMat(job.mat);
+            await renderer.compileAsync(quad, quad.camera);
+            if (performance.now() >= deadline) break;
+          }
+        } else {
+          renderer.setScissorTest(true);
+          _scissorWarm = true;
+          for (const job of jobs) {
+            runPass(job.mat, job.target, false);
+            if (performance.now() >= deadline) break;
+          }
+          await _warmCompiles;
         }
       } finally {
+        _scissorWarm = false;
+        renderer.setScissorTest(sc0);
+        renderer.autoClear = ac0;
         Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
         renderer.setMRT(mrt); renderer.setRenderTarget(target);
       }

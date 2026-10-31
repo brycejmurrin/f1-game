@@ -462,7 +462,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
   const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: false,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+    softwareGL: soft, wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
   post.resize(320, 180);
   t.after(() => post.dispose());
   const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
@@ -554,7 +554,7 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
   assert.ok(forced.calls.length > 3, "=1 draws on any adapter (the A/B handle)");
   const off = await warmRig(t, { ls: { "apex26.tlxDrawWarm": "0" } });
   await off.warm();
-  assert.equal(off.calls.length, 0, "=0: no draw stage");
+  assert.ok(off.calls.length > 0, "=0: no A-W1 draw stage, but post warm scissor-draws RT passes on hardware");
   assert.equal(off.W1.stages.drawn, null);
 });
 

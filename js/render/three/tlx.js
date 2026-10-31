@@ -1412,6 +1412,7 @@ const TLX = (function () {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
               softDest: function () { return softOutRT(); },
+              softwareGL: !!softwareGL,
               wantSpatialUpscale, getPresentSize,
               fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the

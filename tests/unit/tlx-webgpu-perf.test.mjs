@@ -10,7 +10,8 @@
  *   W5  frame-varying uniforms nothing reads skip their write: hazeTime with no haze, godray time on a clear sky
  *   (round 3, three r187, docs/notes/TLX-WEBGPU-PERF-3-2026-10-30.md)
  *   W6  the draw warm compiles the canvas passes, both sides of the upscale switch: the live present builds none
- *   W7  the sky cache's bake pipeline is warmed by a draw keyed like cacheStep's (no depth), not only by a compile */
+ *   W7  the sky cache's bake pipeline is warmed by a draw keyed like cacheStep's (no depth), not only by a compile
+ *   W9  post warm() keys RT passes with depth off (scissor runPass), not compileAsync (depth on) */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -275,6 +276,31 @@ test("W7: the sky cache bake is warmed by a draw keyed like cacheStep's (depth o
   assert.ok(warmed.has(false), `the warm built the bake's no-depth pipeline (warm saw depth ${[...warmed]})`);
 });
 
+
+test("W9: post warm() keys RT passes with depth off via scissor draw, not compileAsync depth on", async (t) => {
+  const h = await postRig(t);
+  const opts = { ssao: 0.8, contact: 0, godray: 0, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };
+  let into = null;
+  const getForRender = h.renderer._pipelines.getForRender;
+  const rtPassKey = (k) => k === "tlx-post-ssao" || (k && k.startsWith("tlx-post-blur-ao"));
+  h.renderer._pipelines.getForRender = function (ro, ...rest) {
+    if (into && ro.material.customProgramCacheKey) {
+      const k = ro.material.customProgramCacheKey();
+      if (rtPassKey(k)) into.add(ro.context.depth);
+    }
+    return getForRender.call(this, ro, ...rest);
+  };
+  const warmed = new Set();
+  into = warmed;
+  await h.post.warm(opts, h.frame);
+  into = null;
+  assert.ok(warmed.has(false), `post warm built the no-depth pipeline (warm saw depth ${[...warmed]})`);
+  assert.equal(warmed.has(true), false, "compileAsync depth-on variant is not warmed");
+  const built = pipelineBuilds(h.renderer);
+  h.present(opts);
+  await settle();
+  assert.deepEqual(built, [], "the live present reuses the warmed pipelines");
+});
 
 test("W8: the production draw warm awaits the queued canvas compiles before it settles and opens the live present", () => {
   // drawWarm only QUEUES the SGSR/FXAA canvas compiles (serialised); _gpuSettled waits on submitted GPU work, not on them.

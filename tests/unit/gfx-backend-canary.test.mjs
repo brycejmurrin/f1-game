@@ -6156,9 +6156,11 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
   // (target === q.material) is unchanged and now checks the live object.
   const quad = new THREE.QuadMesh(null);
   const setQuadMat = (m) => { quad.material = m; };   // tlx-post's vertex-node pin, inert here
+  let _warmCompiles = Promise.resolve();
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
+    getScissorTest: () => false, setScissorTest() {}, autoClear: true,
     compileAsync: async q => {
       assert.equal(++active, 1); calls++;
       await Promise.resolve();
@@ -6177,7 +6179,7 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
   // node's id, and present() runs the post chain under the scene MRT; a warm
   // that nulled it built sixteen programs the race never drew (gpu-census 206).
   assert.doesNotMatch(body, /setMRT\(\s*null\s*\)/, "post.warm must not null the MRT — it compiles the variant present() draws");
-  const warm = eval("(async function(opts, frame){" + body + "})");
+  const warm = eval("(async function(opts, frame){ const softwareGL = true; let _scissorWarm = false; " + body + "})");
   await assert.rejects(warm({}, {}), /compile failed/);
   assert.equal(calls, 2); assert.equal(compileJobs, null);
   assert.equal(target, "scene"); assert.equal(mrt, "tag");
