@@ -1,0 +1,30 @@
+[
+{
+"query": "/orchestrate auto #4150",
+"expect": "orchestrate"
+},
+{
+"query": "orchestrate this task and drive each PR to land, ask me only when needed",
+"expect": "orchestrate"
+},
+{
+"query": "/orchestrate ask+ redesign the skills README",
+"expect": "orchestrate"
+},
+{
+"query": "run an orchestrator on autopilot until it merges",
+"expect": "orchestrate"
+},
+{
+"query": "set up an orchestrator that fans out workers",
+"expect": "orchestrate"
+},
+{
+"query": "I am the hourly dispatcher run the cycle",
+"expect": "dispatcher"
+},
+{
+"query": "write a handoff prompt",
+"expect": "handoff"
+}
+]

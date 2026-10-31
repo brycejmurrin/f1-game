@@ -28,7 +28,7 @@ const TLX = read("js/render/three/tlx.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
@@ -154,9 +154,11 @@ test("A-H4: sun -> lamp -> lamp -> car rewrites in ONE frame: each draw sees its
   }
 });
 
-test("A-H4 control: the same instrument catches the hazard — a Stream InstancedMesh caster redrawn after a rewrite draws stale rows", async (t) => {
-  // tlxCasterAttr=0 with the caster's InstancedBufferAttribute forced to Stream: three relays its matrices into the
-  // buffer it draws once per frame per render object, so the second lamp pass of the frame reads the first's rows.
+test("r187: a Stream InstancedMesh caster redrawn after a rewrite draws the NEW rows (the per-frame relay is gone)", async (t) => {
+  // r186 relayed an InstancedMesh's matrices into a separate buffer once per frame per render object, so a second
+  // Stream draw in one frame read the first's rows (the hazard A-H1/A-H4 designed around). r187's
+  // createInstanceMatrixNode reads the columns straight from instanceMatrix's own buffer, so the rewrite reaches the
+  // GPU through the attribute version. The attribute caster stays the default (A-H4); this pins the upstream change.
   const IBA = THREE.InstancedBufferAttribute.prototype, own = Object.prototype.hasOwnProperty.call(IBA, "setUsage"), base = IBA.setUsage;
   IBA.setUsage = function () { return base.call(this, THREE.StreamDrawUsage); };
   try {
@@ -164,16 +166,15 @@ test("A-H4 control: the same instrument catches the hazard — a Stream Instance
     const b = batchOf(40);
     h.pass("sun", [[b, mats(40, 1), 40]]); h.pass("lamp", [[b, mats(9, 1), 9]]);
     await h.frame();
-    // The buffer it draws is three's relay of instanceMatrix (InstanceNode): the one GL buffer of the padded size.
     const pad = h.caster(b).instanceMatrix.count * 64;
     const drawn = [...h.gm.mem.entries()].filter(([, u8]) => u8.length === pad).map(([k]) => k);
     assert.equal(drawn.length, 1, "one padded instance buffer");
     h.gm.watch = drawn[0];
     const rows = (k) => { const s = h.gm.draws[0].snap; return Array.from(new Float32Array(s.buffer, 0, k * 16)); };
     h.bytes(() => h.pass("lamp", [[b, mats(9, 3), 9]]));
-    assert.deepEqual(rows(9), Array.from(mats(9, 3)), "the frame's first lamp draw is relayed");
+    assert.deepEqual(rows(9), Array.from(mats(9, 3)), "the frame's first lamp draw");
     h.bytes(() => h.pass("lamp", [[b, mats(9, 4), 9]]));
-    assert.deepEqual(rows(9), Array.from(mats(9, 3)), "the second draws the FIRST pass's rows: stale — what the attribute caster cannot do");
+    assert.deepEqual(rows(9), Array.from(mats(9, 4)), "the second draw reads its own rows under Stream on r187");
   } finally { if (own) IBA.setUsage = base; else delete IBA.setUsage; }
 });
 

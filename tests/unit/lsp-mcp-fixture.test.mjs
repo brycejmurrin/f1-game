@@ -24,7 +24,7 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
   const text = async (name, args) => { const r = await callTool(lsp, name, args); return { err: r.isError, t: r.content[0].text }; };
   try {
     let r = await text("lsp_definition", { symbol: "Alpha.ping" });
-    assert.match(r.t, /query at src\/b\.js:5:/, "the code use on line 5, not the comment (2) or the string (3)");
+    assert.match(r.t, /\(Alpha\.ping resolved from a use at src\/b\.js:5:\d+; declared at src\/a\.js:3:\d+\)/, "the code use on line 5, not the comment (2) or the string (3); the header names the declaration");
     assert.match(r.t.split("\n")[1], /^src\/a\.js:3:\d+ {2}\[def\] function ping\(x\)/, "declaration listed before the export");
 
     r = await text("lsp_definition", { symbol: "wrap" });
@@ -146,6 +146,41 @@ test("fixture workspace: callers, outline, body, paging, concise, diagnostics ne
     // The pragma never leaks: an ordinary query afterwards sees the disk text.
     r = await text("lsp_definition", { symbol: "Alpha.ping" });
     assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] function ping/);
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Field test 2026-10-30 (scratch/mcp-field-lsp-debugger-gateway.md A): callers at an
+// exported declaration kept only the export's uses; an out-of-range file+line answered
+// for another name; Head.member references lost the [def] behind a destructured re-export.
+test("fixture: callers merge same-file uses, positions are bounds-checked, re-export chains reach the def", { timeout: 60000 }, async () => {
+  const { dir, w } = lspFixture("lsp-mcp5-");
+  w("jsconfig.json", jsconfig());
+  w("src/a.js", `"use strict";\nconst Alpha = (function () {\n  function ping(x) { return x + 1; }\n  function twice(x) { return ping(ping(x)); }\n  return { ping, twice };\n})();\n`);
+  w("src/s.js", `"use strict";\nconst Spline = (function () {\n  function curv(t) { return t * 2; }\n  return { curv };\n})();\n`);
+  w("src/t.js", `"use strict";\nconst Trk = (function () {\n  const { curv } = Spline;\n  return { curv };\n})();\n`);
+  w("src/b.js", `"use strict";\nconst v = Alpha.ping(1);\nconst k = Trk.curv(2) + Trk.curv(3);\n`);
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const text = async (name, args) => { const r = await callTool(lsp, name, args); return { err: r.isError, t: r.content[0].text }; };
+  try {
+    let r = await text("lsp_callers", { file: "src/a.js", line: 3, column: 12 });
+    // Same-file calls (twice) survive the re-anchor on Alpha.ping; its export's use stays.
+    assert.equal(r.t, "3 uses in 2 functions across 2 files (query at src/a.js:3:12)\nsrc/a.js:4  Alpha › twice  ×2  (line 4)\nsrc/b.js:2  top level  ×1");
+
+    r = await text("lsp_hover", { file: "src/a.js", line: 3, column: 500 });
+    assert.equal(r.err, true);
+    assert.equal(r.t, "line 3 of src/a.js has 36 characters; column 500 is past its end");
+    r = await text("lsp_definition", { file: "src/a.js", line: 999999 });
+    assert.equal(r.err, true);
+    assert.equal(r.t, "src/a.js has 6 lines; line 999999 is out of range");
+    r = await text("lsp_hover", { file: "src/a.js", line: 3, column: 37 });
+    assert.equal(r.err, false, "the end-of-line cursor stays valid");
+
+    r = await text("lsp_references", { symbol: "Trk.curv" });
+    // Trk's export → its `curv` alias of Spline → Spline's export → the [def]; the header names both ends.
+    assert.equal(r.t, "6 references in 3 files (Trk.curv resolved from a use at src/b.js:3:15; declared at src/s.js:3:12)\n" +
+      "src/b.js:3:15  [use] (top level)  const k = Trk.curv(2) + Trk.curv(3);\nsrc/b.js:3:29  [use] (top level)  const k = Trk.curv(2) + Trk.curv(3);\n" +
+      "src/s.js:3:12  [def] (Spline)  function curv(t) { return t * 2; }\nsrc/s.js:4:12  [export] (Spline)  return { curv };\n" +
+      "src/t.js:3:11  [alias] (Trk)  const { curv } = Spline;\nsrc/t.js:4:12  [export] (Trk)  return { curv };");
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

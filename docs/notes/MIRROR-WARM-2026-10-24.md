@@ -39,7 +39,7 @@ cull and winding. They were built, destroyed, and built again.
 How they were destroyed:
 
 - three r186 destroys a render pipeline, and its programs, when the last RenderObject using it is deleted.
-  `Pipelines.delete` calls `_releasePipeline` once `usedTimes` reaches 0 (`vendor/three-0.186.1/three.webgpu.min.js`).
+  `Pipelines.delete` calls `_releasePipeline` once `usedTimes` reaches 0 (`vendor/three-0.187.0/three.webgpu.min.js`).
   Switching a RenderObject to another pipeline frees the old one in the same way (`getForRender`).
 - TLX's `prunePool` (`js/render/three/tlx.js`) drops every pooled wrapper not drawn for 20 s (`PRUNE_IDLE_MS`).
   `dropWrapper` dispatches `dispose`, which deletes the wrapper's RenderObject.

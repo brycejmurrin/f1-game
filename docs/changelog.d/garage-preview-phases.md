@@ -1,0 +1,1 @@
+Improved: The GARAGE ENTER & LEAVE preview scrubber now marks each phase of the sequence: the shutter opening, the lane run, the pause, backing in, parked and the crew, or for the race start the hold, the roll-out and the empty lane. In EDIT, JUMP TO goes straight to the start of a phase, and the marks move when you change a timing setting such as HOLD BEAT.

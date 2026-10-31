@@ -30,7 +30,7 @@ try {
    await page.addScriptTag({content});
   }
   const result=await page.evaluate(async()=>{
-   const T=await import('/vendor/three-0.186.1/three.webgpu.min.js'),S=T.TSL;
+   const T=await import('/vendor/three-0.187.0/three.webgpu.min.js'),S=T.TSL;
    const renderer=new T.WebGPURenderer({forceWebGL:true,antialias:false});await renderer.init();renderer.setSize(2,2);
    const lit=TLXShaders.lit(T,S,{chunks:TLXShaders.chunks(T,S),maxLights:16});
    const wp=S.uniform(new T.Vector3(.5,0,.5));

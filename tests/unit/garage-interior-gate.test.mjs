@@ -75,8 +75,8 @@ it("garage tabs split performance and finishing work into named rows", () => {
  * min-height:0, caused by
  *   grid-template-rows: repeat(2, calc(var(--tap-min) + 4px))
  * plus `.cs-tab { min-height: 0 }` overriding components.css --tap.
- * Compact must keep the painted --tap / --tap-paint floor (logical +
- * physical), pan/snap instead of a 2-row tap-min grid, and leave livery
+ * Compact must keep a painted 44px floor (logical + physical; design pass 3d
+ * lowered it from --tap-paint, never below WCAG 2.5.8's 24px), pan/snap instead of a 2-row tap-min grid, and leave livery
  * ⧉ chips on --chip-h / --tap-min. Folded #973's snap/width pins here. */
 it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)", () => {
   const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
@@ -96,16 +96,16 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
   const stripPane = /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*,\s*#cs-inner:not\(\[data-pair="on"\]\)\[data-shape="tall"\] #cs-tabs\s*\{/;
   assert.match(
     css,
-    new RegExp(stripTab.source + /[^}]*min-block-size:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
-    "compact/tall category tabs floor block size at --tap-paint / --tap");
+    new RegExp(stripTab.source + /[^}]*min-block-size:\s*44px/s.source, "s"),
+    "compact/tall category tabs floor block size at 44px");
   assert.match(
     css,
-    new RegExp(stripTab.source + /[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
-    "compact/tall category tabs also keep physical min-height at the tap rung");
+    new RegExp(stripTab.source + /[^}]*min-height:\s*44px/s.source, "s"),
+    "compact/tall category tabs also keep physical min-height at 44px");
   assert.match(
     css,
-    new RegExp(stripTab.source + /[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
-    "compact/tall category tabs also floor width at the tap rung");
+    new RegExp(stripTab.source + /[^}]*min-width:\s*44px/s.source, "s"),
+    "compact/tall category tabs also floor width at 44px");
   assert.match(
     css,
     new RegExp(stripPane.source + /[^}]*scroll-snap-type:\s*x\s+mandatory/s.source, "s"),

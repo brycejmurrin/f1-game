@@ -2420,7 +2420,7 @@ test("codeHost never reveals a dead code when invite or publish fails", async ()
 
 
 for (const outcome of [false, { kind: "canceled" }]) {
-  test("failed guest start restores rules and releases session/pump: " + JSON.stringify(outcome), async () => {
+  test(`failed guest start restores rules and releases session/pump: ${JSON.stringify(outcome)}`, async () => {
     const { h, s } = await connectedGuest();
     let closes = 0, pumps = 0;
     s.close = () => { closes++; }; s.pump = () => { pumps++; };
