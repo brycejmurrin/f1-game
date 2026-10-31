@@ -516,6 +516,17 @@ test("--changed fail-safes to the full list on infra paths", () => {
   assert.deepEqual(r.files, all);
 });
 
+test("--changed: a tests/data file selects the unit files that pin it; an unpinned one fail-safes to full", () => {
+  const a = "tests/unit/" + "a.test.mjs";
+  const all = [a, "tests/unit/" + "b.test.mjs"];
+  const pinIndex = new Map([["tests/data/flaky-quarantine.json", new Set([a])]]);
+  const pinned = selectToolingFastChanged(["tests/data/flaky-quarantine.json"], { allFiles: all, pinIndex });
+  assert.deepEqual(pinned.files, [a]);
+  const unpinned = selectToolingFastChanged(["tests/data/flaky-quarantine.json"], { allFiles: all, pinIndex: new Map() });
+  assert.equal(unpinned.reason, "tests-data-unpinned");
+  assert.deepEqual(unpinned.files, all);
+});
+
 test("--changed selector: one case per branch (empty, docs-only, tracked, unmatched, no-pin-match, matched)", () => {
   const scripts = { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" };
   const all = ["tests/unit/" + "a.test.mjs", "tests/unit/docs-integrity.test.mjs", "tests/unit/" + "b.test.mjs"];

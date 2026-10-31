@@ -952,6 +952,18 @@ export function topicalPool(groups = loadGroups().groups, floor = TOOLING_FAST_F
   return [...out].sort();
 }
 
+const TESTS_DATA_RE = /^tests\/data\//;
+
+/** tests/helpers/ files whose source names `rel`, as repo-relative paths. */
+function helpersNaming(rel, root = ROOT) {
+  const dir = path.join(root, "tests/helpers");
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch (_) { return []; }
+  return names.filter((n) => {
+    try { return fs.readFileSync(path.join(dir, n), "utf8").includes(rel); } catch (_) { return false; }
+  }).map((n) => `tests/helpers/${n}`);
+}
+
 /** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
@@ -1017,7 +1029,22 @@ export function selectToolingFastChanged(changed, opts = {}) {
     return r;
   };
 
-  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  // tests/data/ is TRACKED for the CI browser selector ("no import graph sees these"), but the unit floor has the
+  // pin index: a data file widens only when NO unit file names it (fail-safe), else exactly those files run. A
+  // one-line flaky-quarantine.json edit selected all 733 files and timed the pre-flip probe out at 900 s.
+  const dataPinned = new Map();
+  for (const f of changed) {
+    const norm = f.replace(/\\/g, "/");
+    if (!TESTS_DATA_RE.test(norm) || circ.dataResolved.includes(f)) continue;
+    const idx = opts.pinIndex || pinIndex();
+    const hits = new Set(idx.get(norm) || []);
+    // A helper that names the file (tests/helpers/flaky-policy.mjs) is imported by relative path: its importers read it too.
+    for (const h of helpersNaming(norm, opts.root)) for (const t of (idx.get(h) || [])) hits.add(t);
+    if (!hits.size) return full("tests-data-unpinned", { because: norm });
+    dataPinned.set(norm, hits);
+  }
+  const trackedRaw = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f)
+    && !dataPinned.has(f.replace(/\\/g, "/")));
   const tracked = [];
   for (const f of trackedRaw) {
     const norm = f.replace(/\\/g, "/");
@@ -1063,6 +1090,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
     if (benignNarrow.has(norm)) continue;
+    if (dataPinned.has(norm)) { for (const t of dataPinned.get(norm)) selected.add(t); continue; }
     if (tfSet.has(norm) || poolSet.has(norm)) selected.add(norm);
     // A file edit has a precise dependency key and may also inherit its
     // nearest directory pins. Do not fall through to the bare top-level
