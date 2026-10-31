@@ -296,7 +296,7 @@ test('race settings pre-builds the garage, hidden, so the drive-out\'s first fra
   assert.ok(run.indexOf('await d.menuIdle(current)') > 0 && run.indexOf('await d.menuIdle(current)') < run.indexOf('G.gfx.warm()'), 'only once the menu is idle');
   assert.ok(run.indexOf('G.gfx.warm()') > 0 && run.indexOf('G.gfx.warm()') < run.indexOf('gate.garageWarm = 2'), 'the program warm is requested before the hidden frames are armed');
   assert.match(game, /await menuFinish\(current, key\);\n\s*await garagePrewarm\(current\);/, 'after the circuit is done');
-  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4000);
+  const render = game.slice(game.indexOf('function render(dt) {'), game.indexOf('function render(dt) {') + 4500);
   const gate = render.indexOf('const vis = menuBlank'), hidden = render.indexOf('if (menuBlank && _menuGate.garageWarm > 0');
   assert.ok(gate > 0 && hidden > gate, 'drawn after the visibility gate: the canvas stays hidden under race settings');
 });
@@ -793,6 +793,26 @@ test('hidden garage prewarming records readiness only after a successful present
   assert.equal(h.presents(), 1);
   assert.equal(h.c._menuGate.garageReady, true);
   assert.equal(h.c.canvas.style.visibility, 'hidden');
+});
+
+test('a regular garage preview stays veiled while shader warm blocks present()', async () => {
+  const h = garageEntryRegressionHarness();
+  h.c.setupPreviewOn = true;
+  h.c._studio = null;
+  h.c.canvas.style.visibility = 'hidden';
+  h.c._softEl.style.visibility = 'hidden';
+  h.eval('renderSetupPreview = () => { gfx.present(); return !gfx.warming(); };');
+  await h.advance(16);
+  assert.equal(h.c.gfx.warming(), true);
+  let veiledWhileWarm = true;
+  for (let i = 0; i < 200 && h.c.gfx.warming(); i++) {
+    if (h.c.canvas.style.visibility !== 'hidden') veiledWhileWarm = false;
+    await h.advance(100);
+  }
+  assert.ok(veiledWhileWarm, 'warming must not reveal #game');
+  await h.advance(16);
+  assert.ok(h.presents() >= 1);
+  assert.equal(h.c.canvas.style.visibility, '', 'first successful present reveals #game');
 });
 
 test('a refused garage begin returns false and cannot reveal the unpresented frame', async () => {
