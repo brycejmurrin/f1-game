@@ -48,7 +48,11 @@ const SceneryPits = (function () {
     return m;
   }
 
-  function build(ctx) {
+  // THE COMPLEX AS STEPS (perf hunt 7): build-props yield*s it from Tracks.buildSteps,
+  // yielding after the wall and after each bay's pass; build() drains it. Every
+  // yield sits between whole emissions into `out` (nothing half-written), and
+  // the deferred boards / panels / crests still emit after the bays, in order.
+  function* buildSteps(ctx) {
     const { track, out, rawBox, rawEmit, upOf, bankOffsetAt } = ctx;
     const p = track && track.pit;
     if (!p || !out) return { bays: 0, wall: false, lamps: 0 };
@@ -389,12 +393,16 @@ const SceneryPits = (function () {
       const v0 = b.verge, v1 = b.verge + b.platform;
       // Platform: 35 cm above the lane (FIM §9.2).
       sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE, null, "pit-platform");
+      yield;
       // The pit wall on the TRACK side of the platform: 25 cm thick, 1 m high.
       sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE, null, "pit-wall");
+      yield;
       sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL, null, "pit-wall-cap");
+      yield;
       // The 65 cm barrier between the platform and the lane.
       sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL, null, "pit-lane-barrier");
       wallBuilt = ks.length >= 2;
+      yield;
 
       // ── 1b. THE EXIT WALL: the pit wall carried on down the exit road ────
       // From the platform's line at the exit line to the road edge as the
@@ -408,6 +416,7 @@ const SceneryPits = (function () {
       const slide = (k) => v0 * p.v[k];
       sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide, "pit-exit-wall");
       sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide, "pit-exit-wall-cap");
+      yield;
 
       // ── 1d. THE OUTER WALL: the lane's far side, wherever a bay is not ────
       // Along the ribbon's outer edge — the garage line, scaled by the
@@ -435,6 +444,7 @@ const SceneryPits = (function () {
       } else {
         outerWall(nodesFrom(wrap(p.sA + 6), hasRibbon, wrap(p.sB - p.sA) - 6));
       }
+      yield;
 
       // ── 1c. CONES down the entry road's inner edge ───────────────────────
       // Where the wall has not grown the peel is a painted line, and a line
@@ -592,6 +602,7 @@ const SceneryPits = (function () {
         rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + rise - 0.05, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], stop, bs);
       }
     }
+    yield;
 
     // ── 3. The garages: the setup screen's bay, once per team, on the row ──
     let bays = 0, lamps = 0, roof = null;
@@ -689,6 +700,7 @@ const SceneryPits = (function () {
           rawBox(out, [ce[0] + bs[2][0] * along, ce[1] + bs[2][1] * along, ce[2] + bs[2][2] * along],
                  [B.depth + 0.5, B.h + 0.38, 0.3], SHELL, bs);
         }
+        yield;
       }
       // ── 4. The canopy over the working lane, and its luminaires ─────────
       // A slab 2.6 m proud of the doors continuing the roof line, one slice
@@ -755,6 +767,7 @@ const SceneryPits = (function () {
           if (ctx.registerLamp({ pos: lens, k, side: sd, kind: "led", radius: 18,
                                  aimAt: [wc[0] + bs[2][0] * along, wc[1] + bs[2][1] * along, wc[2] + bs[2][2] * along] })) lamps++;
         }
+        yield;
       }
       roof = foldedRoof();
       // Race control, stepped up at the exit end of the row: 12 m square,
@@ -776,6 +789,7 @@ const SceneryPits = (function () {
       }
     }
     if (p.row) p.row.placed = placed;
+    yield;
     for (const b of boardsWanted) emitBoard(b[0], b[1], b[2], b[3]);
     for (const q of panelsWanted) emitPanel(q[0], q[1], q[2]);
     for (const q of crestsWanted) emitCrest(q[0], q[1], q[2], q[3]);
@@ -786,6 +800,11 @@ const SceneryPits = (function () {
              panels: signs.panels.length, crests: signs.crests.length, ...(roof ? { roof } : {}) };
   }
 
-  return { build, packBay, bayCacheSize: () => BAY_CACHE.size };
+  function build(ctx) {
+    const it = buildSteps(ctx);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
+  }
+
+  return { build, buildSteps, packBay, bayCacheSize: () => BAY_CACHE.size };
 })();
 Object.freeze(SceneryPits);

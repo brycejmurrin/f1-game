@@ -54,11 +54,12 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors/turns: curated apexes as RACING-LAP fractions, never fmap'd.
+    // The 2026-10-18 start move (0.9625 → 0.9160) must add `_sceneryShift`
+    // (~0.0479), then re-sort. Adding 0.1916 instead left Turn 1 on the
+    // straight (k ≈ 0 at 108 m). These are the pre-move peaks plus that shift.
     sectors: [0.28, 0.62],
-    turns: [0.0176, 0.0671, 0.1891, 0.3641, 0.3736, 0.3971, 0.4481, 0.4576, 0.4681, 0.4776, 0.4916, 0.5106, 0.5201, 0.5446, 0.5611, 0.6706, 0.6781, 0.6866, 0.6991, 0.7466, 0.7696, 0.7851, 0.7961, 0.8031, 0.8301, 0.9796, 0.9961],
+    turns: [0.0454, 0.2204, 0.2299, 0.2534, 0.3044, 0.3139, 0.3244, 0.3339, 0.3479, 0.3669, 0.3764, 0.4009, 0.4174, 0.5269, 0.5344, 0.5429, 0.5554, 0.6029, 0.6259, 0.6414, 0.6524, 0.6594, 0.6864, 0.8359, 0.8524, 0.8739, 0.9234],
     // Jeddah night: pale grey concrete rail (not solid green) + green/gold day accents
     barrier: { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.42, 0.44, 0.48], tyre: [0.05, 0.52, 0.28] },
     furniture: { tree: "none",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },

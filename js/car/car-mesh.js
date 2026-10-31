@@ -673,19 +673,23 @@ const _flapKeyMemo = new WeakMap(), FLAP_DEF_COL = Object.freeze([0.9, 0.9, 0.1]
 // Finish is part of the key: the same element/level/colour renders a different
 // MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
 function _flapKey(g, aLvl, style, c, finish, surface) {
-  const ck = colKey3(c), fin = (finish || "") + "|" + (surface === "carbon" ? "carbon" : "paint");
+  const ck = colKey3(c), carbon = surface === "carbon";
   if (!g.cacheKey) {
     return g.id + aLvl + "|" + (style ? [
       style.frontSweep, style.frontTaper, style.frontRise,
-      style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d") + "|" + ck + "|" + fin;
+      style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d") + "|" + ck + "|" + (finish || "") + "|" + (carbon ? "carbon" : "paint");
   }
   let byCol = _flapKeyMemo.get(g);
   if (!byCol || byCol.size > 64) { byCol = new Map(); _flapKeyMemo.set(g, byCol); }
   let byFin = byCol.get(ck);
   if (!byFin) { byFin = new Map(); byCol.set(ck, byFin); }
-  let key = byFin.get(fin);
-  if (key === undefined) { key = g.cacheKey + "|" + ck + "|" + fin; byFin.set(fin, key); }
-  return key;
+  // Keyed on the finish, then the surface as a slot: a hit builds no string (the `finish|surface` concat ran
+  // before the lookup, twice per drawn car per frame — perf hunt 9).
+  const f = finish || "";
+  let pair = byFin.get(f);
+  if (!pair) { pair = [undefined, undefined]; byFin.set(f, pair); }
+  const i = carbon ? 1 : 0;
+  return pair[i] || (pair[i] = g.cacheKey + "|" + ck + "|" + f + "|" + (carbon ? "carbon" : "paint"));
 }
 // THE GARAGE FREES THE PAINT JOBS IT LEFT BEHIND. The caps are sized for a race
 // grid, where every set is drawn every frame. The garage livery editor mints a

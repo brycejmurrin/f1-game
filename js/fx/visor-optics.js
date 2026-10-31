@@ -7,7 +7,7 @@
  *   LIGHT   a <canvas id="fx-visor"> composited with mix-blend-mode: plus-lighter (screen where unsupported), so
  *           reflections are ADDED light and can never grey the scene — on WebGPU. On the WebGL2 path (TLX's WebGL2
  *           backend, GLX) the layer composites as plain "over" instead (blendMode(), #3657). Repainted at ~15 Hz
- *           from the scene lighting the game already publishes through window.__apex (visorScene(), else camState() + lightState()):
+ *           from the scene lighting game.js publishes on G (sceneFromG; else window.__apex visorScene() / camState() + lightState()):
  *           the sun's glint and its double-reflection ghost, a Fresnel rim sheen on the sun's side, one glint per
  *           flood / street lamp / tail-light in view (projected through the camera, so they slide with heading),
  *           and a chromatic fringe along the rim that scales with VISOR REFRACTION. Every term is proportional to
@@ -302,7 +302,13 @@ const VisorOptics = (function () {
     return _knobs;
   }
 
+  // The scene comes from game.js's G façade (the script-scope `const G`, read by name like
+  // js/perf/race-entry-profile.js does) — NOT only through window.__apex: the agent surface is LAZY_AGENT, absent
+  // on a player's Pages build, and gating on it left the visor glint unpainted for every player.
   function readScene() {
+    try {
+      if (typeof G !== "undefined" && G && G.frame) return sceneFromG(G);
+    } catch (_) { /* G mid-boot: try the agent surface */ }
     const A = typeof window !== "undefined" ? window.__apex : null;
     if (!A) return null;
     try {
@@ -676,7 +682,6 @@ const VisorOptics = (function () {
     if (_size()) resized = true;                               // idempotent: sizes a canvas _lookup just made (visor first turned on mid-helmet)
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
-    _show(true);
     const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
     if (!resized && _acc < 1 / hz) return;
@@ -684,7 +689,8 @@ const VisorOptics = (function () {
     _acc = resized || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
-    if (!scene) return;
+    if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
+    _show(true);
     const fringe = _budget < 2 ? FRINGE[_opt("visorRefraction", "off")] || 0 : 0;
     const beams = budget.beams ? _beams() : 0;
     const kn = readKnobs(t0 || 0);

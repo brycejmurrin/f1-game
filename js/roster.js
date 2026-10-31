@@ -204,7 +204,8 @@
     ]
   ],
     LAZY_RACE: [
-    "js/lighting/presets.js"
+    "js/lighting/presets.js",
+    "js/garage/garage-data.js"
   ],
     LAZY_RACE_SESSION: [
     "js/data/garage-departure-motion.js",

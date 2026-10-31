@@ -393,3 +393,40 @@ test("the side slot stops at a touch dock group in the card's rows (cockpit BOOS
   tight.render();
   assert.ok(!tight.classes.has("hud-mirror-side"), "87px is no room: the card stacks, never over BOOST");
 });
+
+// #4219 (perf hunt 7): the mirror target outlived the race into the menu and garage. Quit-to-menu's
+// releaseTrack(true) asks the backend to free it; a race-setup releaseTrack() keeps it.
+test("releaseTrack(true) frees the backend's mirror target when it can; plain releaseTrack and a backend without it do not", () => {
+  const rig = boot({ mode: "on" });
+  let freed = 0;
+  rig.gfx.releaseMirror = () => { freed++; return true; };
+  rig.render();
+  rig.mp.releaseTrack();
+  assert.equal(freed, 0, "race setup keeps the target");
+  rig.mp.releaseTrack(true);
+  assert.equal(freed, 1, "quit-to-menu frees it");
+  delete rig.gfx.releaseMirror;
+  assert.doesNotThrow(() => rig.mp.releaseTrack(true), "a backend without releaseMirror is tolerated");
+  rig.G.gfx = null;
+  assert.doesNotThrow(() => rig.mp.releaseTrack(true), "and no backend at all");
+});
+
+test("GLX releaseMirror deletes the mirror FBO, texture and depth, is idempotent, refuses mid-pass, and re-allocates lazily", () => {
+  const h = bootGlx();
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true);
+  assert.equal(h.GLX.releaseMirror(), false, "never while the mirror pass is open");
+  h.GLX.mirrorEnd();
+  assert.equal(h.GLX.mirrorState().ready, true);
+  h.reset();
+  assert.equal(h.GLX.releaseMirror(), true);
+  assert.deepEqual([h.count("deleteFramebuffer"), h.count("deleteTexture"), h.count("deleteRenderbuffer")], [1, 1, 1]);
+  const st = h.GLX.mirrorState();
+  assert.deepEqual([st.ready, st.w, st.h, st.dead], [false, 0, 0, false], "no target held, and not dead");
+  h.reset();
+  assert.equal(h.GLX.releaseMirror(), true, "a second release is safe");
+  assert.equal(h.count("deleteTexture") + h.count("deleteFramebuffer") + h.count("deleteRenderbuffer"), 0);
+  assert.equal(h.GLX.mirrorBegin(h.frame(), 256, 128), true, "the next mirror pass re-allocates");
+  h.GLX.mirrorEnd();
+  assert.deepEqual([h.count("createTexture"), h.count("createFramebuffer"), h.count("createRenderbuffer")], [1, 1, 1]);
+  assert.equal(h.GLX.mirrorState().w, 256);
+});

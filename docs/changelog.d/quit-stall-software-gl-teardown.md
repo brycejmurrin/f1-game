@@ -1,0 +1,1 @@
+Fixed: on software GL, quit-to-menu no longer keeps drawing the race world or queueing TLX soft readbacks while MenuTeardown covers teardown — the title overlay stays responsive under SwiftShader (#4395).

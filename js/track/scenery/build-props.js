@@ -1624,6 +1624,7 @@ const TrackBuildProps = (function () {
           neonTower(k, side, 13 + s * 12, w, h, d, cn(HK(k), side), pickKind(HK(k), side, na), toneFor(HK(k), side), na);
         }
       });
+      yield;   // perf hunt 7: the street rows were one 200-400 VM ms step; each row is whole before the next reads its masses
       // Back row — taller, set further back, staggered, for skyline depth.
       every(26, (k) => {
         for (const side of [-1, 1]) {
@@ -1633,6 +1634,7 @@ const TrackBuildProps = (function () {
           neonTower(k, side, 40 + s * 30, w, h, d, cn(HK(k) * 1.7, side), pickKind(HK(k) * 1.9, side, na), toneFor(HK(k) * 1.7, side), na);
         }
       });
+      yield;
       // Sign blades + low retail boxes dressing the gaps.
       every(34, (k) => {
         const side = hash(HK(k) * 13) < 0.5 ? -1 : 1;
@@ -2163,8 +2165,10 @@ const TrackBuildProps = (function () {
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     if (!(buildOptions && buildOptions.skipPits) && typeof SceneryPits !== "undefined" && track.pit) {
-      const pits = SceneryPits.build({ track, out, rawBox: raw.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
-                                       night: NIGHT, lensAlbedo, registerLamp: registerPitLamp });
+      const pitCtx = { track, out, rawBox: raw.addBox, rawEmit: emit, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
+                       night: NIGHT, lensAlbedo, registerLamp: registerPitLamp };
+      // Stepped (perf hunt 7: the complex was one 100-380 VM ms step); build() is the same generator drained.
+      const pits = SceneryPits.buildSteps ? yield* SceneryPits.buildSteps(pitCtx) : SceneryPits.build(pitCtx);
       // The mast/custom concat above has run; nothing reads lampPosts before
       // buildProps returns (the bake is per frame), so the canopy goes on last.
       for (const lamp of pitLamps) track.lampPosts.push(lamp);

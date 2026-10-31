@@ -1514,6 +1514,12 @@ const NetLobby = (function () {
     // acceptAnswer's signalingState check (NetHandshake.acceptAnswer): a
     // connection that has already taken an offer is past "stable".
     let answering = null;        // the transport an answer is being built for
+    function inviteError(message, result) {
+      say(message, true);
+      const body = $("vs-body");
+      if (body) body.scrollTop = body.scrollHeight;
+      return result;
+    }
     async function makeAnswer(codeIn) {
       const e = els();
       // The button reads the box, and the box holds whatever got there — a
@@ -1524,13 +1530,13 @@ const NetLobby = (function () {
       const code = typeof resolved === "string" ? resolved : await resolved;
       if (!operationCurrent(readingGen)) return cancelledResult();
       if (e.inviteIn) e.inviteIn.value = code;
-      if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
+      if (!code.trim()) return inviteError("Paste their invite code first.", { ok: false, error: "empty" });
       // Shape first, connection second: a typo is refused as a typo even while
       // join() is still waiting on the ICE prefetch (the transport arrives up
       // to ICE_WAIT_MS after the tap). Transport-first reports "That attempt
       // has ended" for junk and races every slow network.
       const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };
-      if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
+      if (!peek.ok) return inviteError(peek.message, { ok: false, error: peek.error, message: peek.message });
       // A join still waiting on the relay credentials is not "no connection":
       // wait for the transport it is about to build (joinP, above join()).
       if (!transport && joinP) {

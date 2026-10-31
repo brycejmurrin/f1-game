@@ -201,6 +201,36 @@ const CarMaterials = (function () {
     if (typeof CarGeometry !== "undefined") { out.pos = base.pos.slice(); out.idx = base.idx.slice(); CarGeometry.weld(out); }
     return out;
   }
+  /* A TEAM'S SECOND SEAT FROM ITS FIRST (#4219, Car3D.build opts.seats). A Map whose
+     keys are teammates' numbers; each value becomes that seat's data, byte-identical
+     to build({...opts, num}) (car-presentation-vm.test), or stays null: build it.
+     opts.num reaches only the lid and an "auto" T-cam, so the first seat keeps its
+     pre-finish arrays (refinish), `lid(num)` re-emits the lid alone, which must match
+     vertex for vertex but colour, and a recoloured copy runs the same finishPass
+     (CarShade's kept prep: same geometry, same surfaces) and weld. */
+  const seatable = (o) => !(o.measure || o.refinish || o.noWeld || o.cockpit || o.noDriver || o.silhouette || o.shadeKeep);
+  function reseat(out, opts, lid) {
+    const f = out._refinish, liv = opts.livery || {}, tc = {};
+    delete out._refinish;
+    const sec = f.sections.find((x) => x.name === "helmet");
+    const tcam = (num) => tcamColour(liv.tcam, opts.teamId, num, tc);
+    for (const num of opts.seats.keys()) {
+      if (!sec || num === opts.num || tcam(num) !== tcam(opts.num)) continue;
+      const h = lid(num), a = sec.from, n = h.pos.length;
+      let same = a + n / 3 <= sec.to && h.mat.length === n / 3 && sec.ifrom + h.idx.length <= out.idx.length;
+      for (let i = 0; same && i < n; i++) same = h.pos[i] === out.pos[a * 3 + i] && h.nrm[i] === f.nrm[a * 3 + i];
+      for (let i = 0; same && i < n / 3; i++) same = h.mat[i] === f.mat[a + i];
+      for (let i = 0; same && i < h.idx.length; i++) same = h.idx[i] + a === out.idx[sec.ifrom + i];
+      if (!same) continue;
+      const col = f.col.slice();
+      for (let i = 0; i < n; i++) col[a * 3 + i] = h.col[i];
+      const seat = Object.assign({}, out, { pos: out.pos.slice(), idx: out.idx.slice(), mat: f.mat.slice(), col, nrm: f.nrm.slice() });
+      if (seat.flapInfo) seat.flapInfo = Object.assign({}, seat.flapInfo);
+      finishPass(seat, liv, f);
+      opts.seats.set(num, CarGeometry.weld(seat));
+    }
+    return CarGeometry.weld(out);
+  }
 
   // Shade contract (carbon / gloss / matte / metal) — see car-material-shade.js.
   // Re-exported so Car3D and tests reach one table; shaders stay hand-ported.
@@ -214,7 +244,7 @@ const CarMaterials = (function () {
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,
     smoothSkin, applyBodySplit, applyFinish, zoneColour,
-    PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish,
+    PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish, seatable, reseat,
   };
 })();
 Object.freeze(CarMaterials);
