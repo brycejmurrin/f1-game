@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 // Every WGSL program may only name the resource bindings IT declares.
 //
@@ -66,7 +67,7 @@ const declsOf = (src) => new Set(
 
 function loadChunks() {
   const context = vm.createContext({ console, Math });
-  vm.runInContext(`${CHUNKS_SOURCE}\nglobalThis.__CHUNKS = WGSLChunks;`, context);
+  vm.runInContext(`${CHUNKS_SOURCE}\nglobalThis.__CHUNKS = WGSLChunks;`, context, { filename: absSrc(P.WGSL_CHUNKS) });
   return context.__CHUNKS;
 }
 
@@ -137,4 +138,119 @@ test("a cross-program name inside a COMMENT is not a defect", () => {
   // text scan flags it; a parser does not. Prove we behave like the parser.
   const commented = chunks.SHADOW + "\n// see LIT F.pitLane and SKY U.p0 for the shape\n";
   assert.deepEqual(crossProgramRefs({ SHADOW: commented, LIT: chunks.LIT, SKY: chunks.SKY }), []);
+});
+
+// ── Exact-zero gates (perf hunt 9, issue #4270 §6) ───────────────────────────
+// Each term below is scaled by a weight that is exactly 0 in part of its range
+// (near past 90 m, brush/weave/sparkle fades past 55-60 m, the sky "life" band
+// at up >= 0.55, its azimuth at up >= 0.5, mist inside 8 m), so skipping it is
+// bit-identical. Structural on the COMPOSED program: walk the braces up to the
+// term and collect the conditions of the enclosing `if` blocks.
+
+// Conditions (split on &&) of every `if (...) {` block enclosing src[idx].
+function guardsAt(src, idx) {
+  const body = stripComments(src), stack = [];
+  let stmt = 0;
+  for (let i = 0; i < idx; i++) {
+    const ch = body[i];
+    if (ch === "{") { stack.push(body.slice(stmt, i).trim()); stmt = i + 1; }
+    else if (ch === "}") { stack.pop(); stmt = i + 1; }
+    else if (ch === ";") stmt = i + 1;
+  }
+  return stack.filter((h) => h.startsWith("if (") && h.endsWith(")"))
+    .flatMap((h) => h.slice(4, -1).split("&&").map((c) => c.trim()));
+}
+// `fn <name>(` through its matching brace, as [start, end) indices.
+function fnSpan(src, name) {
+  const s = src.indexOf(`fn ${name}(`);
+  assert.ok(s >= 0, `fn ${name} exists`);
+  let i = src.indexOf("{", s), depth = 0;
+  for (; i < src.length; i++) { if (src[i] === "{") depth++; else if (src[i] === "}" && --depth === 0) break; }
+  return [s, i + 1];
+}
+function assertGated(src, fn, cases) {
+  const [a, b] = fnSpan(src, fn);
+  const ungated = [];
+  for (const [term, guard] of cases) {
+    const at = src.indexOf(term, a);
+    assert.ok(at >= a && at < b, `${fn}: term ${term} is in the function`);
+    const g = guardsAt(src, at);
+    if (g.indexOf(guard) < 0) ungated.push(`${term} needs if (${guard}); enclosing: ${g.join(" | ") || "none"}`);
+  }
+  assert.deepEqual(ungated, [], `${fn}: terms outside their exact-zero gate`);
+}
+
+test("applyMaterial: every per-material term with an exactly-zero weight sits inside its > 0.0 gate", () => {
+  assertGated(loadChunks().LIT, "applyMaterial", [
+    ["svnoise(vec2<f32>(hc, y) * 6.0)", "near > 0.0"],            // mid 1 fine grain
+    ["abs(fract(y / 1.25) - 0.5) - 0.46", "near > 0.0"],           // mid 1 wall course line
+    ["smoothstep(mortAA, 0.0, min(bx", "near > 0.0"],              // mid 2 mortar joint (mix t == 0)
+    ["smoothstep(mullAA, 0.0, min(gx", "near > 0.0"],              // mid 3 mullion bar
+    ["mix(rough, min(rough, 0.12), near)", "near > 0.0"],          // mid 3 glass gloss (mix t == 0)
+    ["svnoise(vec2<f32>(hc * 40.0, y * 2.0))", "brushFade > 0.0"], // mid 4 brushed metal
+    ["svnoise(vec2<f32>(hc * 3.0, y * 22.0))", "near > 0.0"],      // mid 5 grain
+    ["abs(fract(hc / 0.35) - 0.5) - 0.46", "near > 0.0"],          // mid 5 plank seam
+    ["svnoise(wpos.xz * 9.0)", "near > 0.0"],                      // mid 6 fine octave
+    ["svnoise(vec2<f32>(hc, y) * 26.0)", "weaveFade > 0.0"],       // mid 7 weave
+    ["svnoise(wpos.xz * 5.0)", "near > 0.0"],                      // mid 8 fine term
+    ["svnoise(wpos.xz * 14.0)", "near > 0.0"],                     // mid 9 fine octave
+    ["svnoise(wpos.xz * 24.0)", "sparkleFade > 0.0"],              // mid 11 sparkle
+    ["floor(y / 0.34)) * 3.0)", "near > 0.0"],                     // mid 12 per-row noise
+    ["hash21(cell)", "near > 0.0"],                                // mid 13 block joint (mix t == 0)
+    ["svnoise(wpos.xz * 7.0)", "near > 0.0"],                      // mid 16 fine term
+  ]);
+});
+
+test("sky day-gradient LIFE and the lit mist cloudFBM sit inside their exact-zero gates", () => {
+  const c = loadChunks();
+  assertGated(c.SKY, "fs_main", [
+    ["mix(c, deepBlue, 0.30)", "bandLM > 0.0"],
+    ["mix(c, deepBlue, 0.30)", "overcast < 1.0"],
+    ["vnoise(vec2<f32>(atan2(dir.z, dir.x)", "azFade > 0.0"],
+    ["vnoise(vec2<f32>(atan2(dir.z, dir.x)", "overcast < 1.0"],
+  ]);
+  assertGated(c.LIT, "fs_main", [["cloudFBM(mp)", "dRamp > 0.0"]]);
+});
+
+test("cloudShadow: the second cloud octave runs only after the edge0 early-out", () => {
+  const lit = loadChunks().LIT;
+  const [a, b] = fnSpan(lit, "cloudShadow");
+  const body = stripComments(lit.slice(a, b));
+  const exit = body.indexOf("<= edge0) { return 0.0; }");
+  assert.ok(exit > 0, "cloudShadow has the edge0 early-out");
+  const calls = [];
+  for (let i = body.indexOf("svnoise("); i >= 0; i = body.indexOf("svnoise(", i + 1)) calls.push(i < exit);
+  assert.deepEqual(calls, [true, false], "one octave before the exit, one after");
+});
+
+test("cloudShadow edge0 early-out is exact: it fires only where the full smoothstep is 0 (float32)", () => {
+  const f = Math.fround;
+  const fract = (x) => f(x - Math.floor(x));
+  const hash21 = (x, y) => {
+    let px = fract(f(x * f(123.34))), py = fract(f(y * f(456.21)));
+    const d = f(f(px * f(px + f(45.32))) + f(py * f(py + f(45.32))));
+    px = f(px + d); py = f(py + d);
+    return fract(f(px * py));
+  };
+  const mix = (a, b, t) => f(f(a * f(1 - t)) + f(b * t));
+  const svnoise = (x, y) => {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    let fx = fract(x), fy = fract(y);
+    fx = f(f(fx * fx) * f(3 - f(2 * fx))); fy = f(f(fy * fy) * f(3 - f(2 * fy)));
+    return mix(mix(hash21(ix, iy), hash21(ix + 1, iy), fx), mix(hash21(ix, iy + 1), hash21(ix + 1, iy + 1), fx), fy);
+  };
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, f(f(x - e0) / f(e1 - e0)))); return f(f(t * t) * f(3 - f(2 * t))); };
+  let fired = 0, seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let n = 0; n < 20000; n++) {
+    const x = f(rnd() * 400 - 200), y = f(rnd() * 400 - 200), cover = f(0.002 + rnd() * 0.998);
+    const edge0 = f(0.54 - f(cover * 0.4));
+    const s1 = f(0.5 * svnoise(x, y));
+    const s = f(s1 + f(0.25 * svnoise(f(f(x * 2.03) + 1.7), f(f(y * 2.03) + 1.7))));
+    if (f(s1 + 0.2501) <= edge0) {
+      fired++;
+      assert.equal(f(smooth(edge0, 0.92, s) * cover), 0, `x=${x} y=${y} cover=${cover}`);
+    }
+  }
+  assert.ok(fired > 1000, `the early-out fires on a real share of samples (${fired}/20000)`);
 });

@@ -403,7 +403,8 @@ const GLXPost = (function () {
       }
       // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny).
       // Physical levels follow the cover (aw/ah); lv.w/h stay LOGICAL for
-      // viewports + texels; uUVScale maps sampling into the cover rect.
+      // viewports, lv.pw/ph are the PHYSICAL size the tap texels use: vUV is
+      // physical UV, so one source texel is 1/pw (== 1/w off the cover path).
       for (const lv of bloomLv) { if (lv.tex) gl.deleteTexture(lv.tex); if (lv.fbo) gl.deleteFramebuffer(lv.fbo); }
       bloomLv = [];
       let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
@@ -423,7 +424,7 @@ const GLXPost = (function () {
           postEnabled = false;
           return;
         }
-        bloomLv.push({ fbo, tex, w: bw, h: bh });
+        bloomLv.push({ fbo, tex, w: bw, h: bh, pw: abw, ph: abh });
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
         abw = Math.max(1, abw >> 1); abh = Math.max(1, abh >> 1);
       }
@@ -556,8 +557,21 @@ const GLXPost = (function () {
     const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
     const _invFbo = _canInvalidate;
     const _invDefault = _invFbo && !_webkit;
+    // COVER MODE CLEARS INSTEAD (iPhone GLX black canvas, perf hunt 9): a phone's
+    // square cover target is drawn only inside its w×h viewport, but the taps of
+    // the next pass cross that edge. The whole-attachment DontCare left the
+    // outside undefined each frame on ANGLE-Metal (RGBA16F may read NaN, and the
+    // Karis/bright pass carries it down the bloom chain). A full clear is a
+    // loadAction Clear: as cheap as DontCare on a tiler, and defined (AO = 1).
+    let _coverClr = -1;
+    const halfPx = (a) => Math.max(1, Math.floor(a / 2));   // half-res PHYSICAL size
     function bindOverwrite(fbo) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      if (coverMode && fbo && fbo !== core.outputFBO()) {
+        const v = (fbo === ssaoFBO || fbo === ssaoBlurFBO) ? 1 : 0;
+        if (_coverClr !== v) { gl.clearColor(v, v, v, v); _coverClr = v; }
+        gl.clear(gl.COLOR_BUFFER_BIT); return;
+      }
       // A clipped output viewport is a SUBSET of a shared target (XR layer).
       // DontCare on the whole attachment would wipe the sibling eye.
       if ((fbo ? _invFbo : _invDefault) && !(core.outputClipped && core.outputClipped())) {
@@ -595,6 +609,7 @@ const GLXPost = (function () {
       if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
       setCoverScale(width, height);   // #3311: POST_VS uUVScale for cover sampling
+      _coverClr = -1;                 // begin() re-set the clear colour for the scene
       let threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       let bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
       // Software GL often lacks real HDR headroom (8-bit scene, or float that still
@@ -693,11 +708,11 @@ const GLXPost = (function () {
         gl.uniform1i(blurU.uTex, 0);
         bindOverwrite(ssaoBlurFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoTex);
-        gl.uniform2f(blurU.uDir, 1 / ssaoW, 0);
+        gl.uniform2f(blurU.uDir, 1 / halfPx(allocW), 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         bindOverwrite(ssaoFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoBlurTex);
-        gl.uniform2f(blurU.uDir, 0, 1 / ssaoH);
+        gl.uniform2f(blurU.uDir, 0, 1 / halfPx(allocH));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -798,11 +813,11 @@ const GLXPost = (function () {
         for (let bp = 0; bp < grPairs; bp++) {
           bindOverwrite(godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
-          gl.uniform2f(blurU.uDir, (1 + bp) / godrayW, 0);
+          gl.uniform2f(blurU.uDir, (1 + bp) / halfPx(allocW), 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
           bindOverwrite(godrayFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
-          gl.uniform2f(blurU.uDir, 0, (1 + bp) / godrayH);
+          gl.uniform2f(blurU.uDir, 0, (1 + bp) / halfPx(allocH));
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
       }
@@ -843,7 +858,7 @@ const GLXPost = (function () {
           bindOverwrite(bloomLv[i].fbo);
           gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
-          gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+          gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].pw, 1 / bloomLv[i - 1].ph);
           // Karis partial luma weighting on the FIRST downsample only — that's
           // where sub-pixel HDR spikes (the bloom "fireflies") get averaged in;
           // later mips are already low-pass and keep the plain 13-tap kernel.
@@ -866,7 +881,7 @@ const GLXPost = (function () {
           if (last) bindOverwrite(bloomLv[i - 1].fbo); else gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
           gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
-          gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
+          gl.uniform2f(upU.uTexel, 1 / bloomLv[i].pw, 1 / bloomLv[i].ph);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -911,7 +926,7 @@ const GLXPost = (function () {
       gl.uniform1i(compU.uSSAO, 2);
       // Half-res AO grid texel for the composite's depth-aware bilateral upsample;
       // zeroed when AO is off so the shader takes the plain (1×1 white) fetch.
-      gl.uniform2f(compU.uAOTexel, haveAO ? 1 / ssaoW : 0, haveAO ? 1 / ssaoH : 0);
+      gl.uniform2f(compU.uAOTexel, haveAO ? 1 / halfPx(allocW) : 0, haveAO ? 1 / halfPx(allocH) : 0);
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
@@ -1072,7 +1087,7 @@ const GLXPost = (function () {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
         gl.uniform1i(fxaaU.uTex, 0);
-        gl.uniform2f(fxaaU.uTexel, 1 / width, 1 / height);
+        gl.uniform2f(fxaaU.uTexel, 1 / allocW, 1 / allocH);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 

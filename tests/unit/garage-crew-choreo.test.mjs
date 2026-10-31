@@ -254,6 +254,25 @@ test("PitCrewAnim draws the player's stop, deterministically, and leaves AI cars
   assert.equal(Pit.draw({ ...G, pits: { stopAnim: () => ({ u: -1, lift: 0, off: 0 }) } }, c, base, {}), false);
 });
 
+test("PitCrewAnim frees the evicted rigs' meshes when a third team colour arrives (perf hunt 9)", () => {
+  const { Pit, gfx } = load();
+  let made = 0, freed = 0;
+  const create = gfx.createMesh;
+  gfx.createMesh = (d) => { made++; return create(d); };
+  gfx.freeMesh = () => { freed++; };
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 4, 1]);
+  const { c, G } = raceCtx(Pit, 0.5); G.gfx = gfx;
+  const colour = (col) => ({ ...c, team: { color: col, color2: [1, 1, 1] } });
+  assert.equal(Pit.draw(G, colour([0.8, 0.1, 0.1]), base, {}), true);
+  const perRig = made;
+  assert.ok(perRig > 0, "a rig builds meshes");
+  Pit.draw(G, colour([0.1, 0.8, 0.1]), base, {});
+  assert.equal(freed, 0, "two colours fit the cache");
+  Pit.draw(G, colour([0.1, 0.1, 0.8]), base, {});
+  assert.equal(made, perRig * 3, "three rigs built");
+  assert.equal(freed, perRig * 2, "the third colour frees both evicted rigs' meshes");
+});
+
 test("without the garage modules the stop falls back to the static crew", () => {
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Map });
   vm.runInContext(read("js/garage/pit-crew.js"), ctx, { filename: absSrc("js/garage/pit-crew.js") });

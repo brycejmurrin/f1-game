@@ -174,8 +174,8 @@ const CustomLiveries = (function () {
     // Car3D uses for `wingC` when it builds the baked front/rear wing planes, so the
     // moveable active-aero flap drawn over the crown matches the wing it belongs to
     // instead of being a differently-coloured bolt-on.
-    function wingColorOf(team) {
-      const liv = resolveLivery(team);
+    function wingColorOf(team) { return wingColorOfLivery(resolveLivery(team), team); }
+    function wingColorOfLivery(liv, team) {
       // The moveable elements ARE the wing's own top flaps, so they take the wing's
       // own colour — Car3D paints the baked cascade with exactly this fallback
       // chain (`wingC`). Tinting them to stand out would make the car two-tone
@@ -186,7 +186,7 @@ const CustomLiveries = (function () {
     // migrateLivery stays local: resolveLivery calls it; no caller reads api.migrateLivery.
     return {
       getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-      getLiveries, resolveLivery, wingColorOf, pickLivery,
+      getLiveries, resolveLivery, wingColorOf, wingColorOfLivery, pickLivery,
       get livDraftOverride() { return livDraftOverride; },
       set livDraftOverride(v) { livDraftOverride = v; },
     };

@@ -32,7 +32,10 @@ const PitCrewAnim = (function () {
     const key = c1.join(",") + "|" + c2.join(",");
     let r = rigs.get(key);
     if (r) return r;
-    if (rigs.size >= 2) rigs.clear();   // the old rig's meshes belong to a backend that is gone, or one car's colours
+    if (rigs.size >= 2) {   // a third colour pair: free the old rigs' meshes on this live backend, then forget them
+      for (const o of rigs.values()) { GarageCrewMotion.free(o.body, gfx); GarageCrewChoreo.freeProps(o.props, gfx); }
+      rigs.clear();
+    }
     r = { body: GarageCrewMotion.create(gfx, c1, c2, GarageCrew.helmet), props: GarageCrewChoreo.createProps(gfx, c2) };
     rigs.set(key, r);
     return r;
@@ -49,7 +52,7 @@ const PitCrewAnim = (function () {
     }
     const anim = G.pits.stopAnim(c), p = phase(anim);
     if (p.t < 0) return false;
-    if (G.gfx !== gfx) { gfx = G.gfx; rigs.clear(); }
+    if (G.gfx !== gfx) { gfx = G.gfx; rigs.clear(); }   // the old backend is gone: its meshes went with it
     const t0 = now(), r = rigFor(c);
     GarageCrewChoreo.draw(r.body, r.props, gfx, "pit", p.t, 1, p.t, false, opts, base, anim.lift || 0);
     frames++; ms += now() - t0;
