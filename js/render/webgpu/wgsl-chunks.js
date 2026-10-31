@@ -262,53 +262,75 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   let fwY = fwWpos.y;
   var albedo = *albedo_ptr;
   var rough = *rough_ptr;
+  // Exact-zero gates (perf hunt 9): near is 0 past 90 m, each named fade past
+  // its own range; a term scaled by an exactly-zero weight (or a mix() at t == 0)
+  // is skipped, so the output is bit-identical. No derivatives inside: fwWpos
+  // (fwY/fwHc) is hoisted by the caller (WGSL uniformity, WEBGPU-PARITY §5a).
   if (mid == 1) {
     albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 6.0) - 0.5) * 0.10 * near);
-    if (wall) {
-      albedo = albedo * (1.0 - smoothstep(max(0.05, fwY / 1.25), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 6.0) - 0.5) * 0.10 * near);
+      if (wall) {
+        albedo = albedo * (1.0 - smoothstep(max(0.05, fwY / 1.25), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near);
+      }
     }
     rough = min(1.0, rough + 0.08 * far);
   } else if (mid == 2) {
     let ch = 0.20; let bl = 0.42; let mort = 0.06;
     let row = floor(y / ch); let off = (row % 2.0) * 0.5 * bl;
-    let bx = fract((hc + off) / bl); let by = fract(y / ch);
-    let mortAA = max(mort, max(fwHc, fwY));
-    let joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
-                    smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
     let bh = svnoise(vec2<f32>(floor((hc + off) / bl), row) * 1.3);
     let brick = albedo * (0.82 + bh * 0.42) * vec3<f32>(1.06, 0.99, 0.92);
-    let mortar = mix(albedo, vec3<f32>(0.60, 0.58, 0.55), 0.6);
-    albedo = mix(brick, mortar, joint * near);
+    if (near > 0.0) {
+      let bx = fract((hc + off) / bl); let by = fract(y / ch);
+      let mortAA = max(mort, max(fwHc, fwY));
+      let joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
+      let mortar = mix(albedo, vec3<f32>(0.60, 0.58, 0.55), 0.6);
+      albedo = mix(brick, mortar, joint * near);
+    } else {
+      albedo = brick;   // == mix(brick, mortar, 0.0)
+    }
     rough = min(1.0, rough + 0.12 * far);
   } else if (mid == 3) {
     let pw = 1.6; let ph = 1.4; let mull = 0.11;
-    let gx = fract(hc / pw); let gy = fract(y / ph);
-    let mullAA = max(mull, max(fwHc / pw, fwY / ph));
-    let bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
-                  smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
     albedo = albedo * (1.0 + (svnoise(vec2<f32>(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far);
-    albedo = mix(albedo, albedo * 0.32, bar * near);
-    rough = mix(rough, min(rough, 0.12), near);
+    if (near > 0.0) {
+      let gx = fract(hc / pw); let gy = fract(y / ph);
+      let mullAA = max(mull, max(fwHc / pw, fwY / ph));
+      let bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
+                    smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
+      albedo = mix(albedo, albedo * 0.32, bar * near);
+      rough = mix(rough, min(rough, 0.12), near);
+    }
   } else if (mid == 4) {
     let brushFade = clamp(1.0 - (vd - 26.0) / 29.0, 0.0, 1.0);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade);
+    if (brushFade > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade);
+    }
     rough = clamp(rough - 0.15 * far, 0.05, 1.0);
   } else if (mid == 5) {
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near);
-    albedo = albedo * (1.0 - smoothstep(max(0.05, fwHc / 0.35), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near);
+      albedo = albedo * (1.0 - smoothstep(max(0.05, fwHc / 0.35), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near);
+    }
   } else if (mid == 6) {
-    let d = svnoise(wpos.xz * 2.4 + wpos.y * 1.6) * 0.6 + svnoise(wpos.xz * 9.0) * 0.4 * near;
+    var d = svnoise(wpos.xz * 2.4 + wpos.y * 1.6) * 0.6;
+    if (near > 0.0) { d = d + svnoise(wpos.xz * 9.0) * 0.4 * near; }
     albedo = albedo * (1.0 + (d - 0.5) * 0.34 * far);
     albedo.g = albedo.g * (1.0 + (d - 0.5) * 0.10 * far);
   } else if (mid == 7) {
     let weaveFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade);
+    if (weaveFade > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade);
+    }
   } else if (mid == 8) {
-    albedo = albedo * (1.0 + (svnoise(wpos.xz * 5.0) - 0.5) * 0.12 * near
-                          + sin(wpos.x * 0.7 + svnoise(wpos.xz * 0.2) * 6.0) * 0.05 * far);
+    var m8 = 1.0;
+    if (near > 0.0) { m8 = m8 + (svnoise(wpos.xz * 5.0) - 0.5) * 0.12 * near; }
+    albedo = albedo * (m8 + sin(wpos.x * 0.7 + svnoise(wpos.xz * 0.2) * 6.0) * 0.05 * far);
   } else if (mid == 9) {
-    let g = svnoise(wpos.xz * 3.5) * 0.6 + svnoise(wpos.xz * 14.0) * 0.4 * near - 0.5;
+    var g = svnoise(wpos.xz * 3.5) * 0.6;
+    if (near > 0.0) { g = g + svnoise(wpos.xz * 14.0) * 0.4 * near; }
+    g = g - 0.5;
     albedo = albedo * (1.0 + g * 0.22 * far);
     albedo.g = albedo.g * (1.0 + g * 0.08 * far);
   } else if (mid == 10) {
@@ -320,23 +342,31 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     albedo = albedo * (1.0 + s * 0.10 * far);
     albedo.b = albedo.b * (1.0 - s * 0.05 * far);
     let sparkleFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);
-    albedo = albedo * (1.0 + (svnoise(wpos.xz * 24.0) - 0.5) * 0.06 * sparkleFade);
+    if (sparkleFade > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(wpos.xz * 24.0) - 0.5) * 0.06 * sparkleFade);
+    }
     rough = clamp(rough - 0.10 * far, 0.05, 1.0);
   } else if (mid == 12) {
     let ty = fract(y / 0.34);
     let shadeAA = clamp(1.0 - (fwY / 0.34) * 6.0, 0.0, 1.0);
     albedo = albedo * (0.88 + sin(ty * 3.14159) * shadeAA * 0.16);
-    albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(vec2<f32>(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near);
+    }
     rough = min(1.0, rough + 0.10 * far);
   } else if (mid == 13) {
-    let cell = floor(vec2<f32>(hc, y) * 1.3);
-    let f = fract(vec2<f32>(hc, y) * 1.3) - hash21(cell) * 0.12;
-    let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-    let jointAA = max(0.16, max(fwHc * 1.3, fwY * 1.3));
-    let joint = smoothstep(0.0, jointAA, d);
-    let block = albedo * (0.80 + hash21(cell) * 0.4);
     let mortar = mix(albedo, vec3<f32>(0.42, 0.40, 0.37), 0.65);
-    albedo = mix(mortar, block, joint * near);
+    if (near > 0.0) {
+      let cell = floor(vec2<f32>(hc, y) * 1.3);
+      let f = fract(vec2<f32>(hc, y) * 1.3) - hash21(cell) * 0.12;
+      let d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+      let jointAA = max(0.16, max(fwHc * 1.3, fwY * 1.3));
+      let joint = smoothstep(0.0, jointAA, d);
+      let block = albedo * (0.80 + hash21(cell) * 0.4);
+      albedo = mix(mortar, block, joint * near);
+    } else {
+      albedo = mortar;   // == mix(mortar, block, 0.0)
+    }
     rough = min(1.0, rough + 0.18 * far);
   } else if (mid == 14) {
     let ridgePhase = hc * 7.5;
@@ -347,7 +377,9 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
     rough = min(1.0, rough + 0.14 * far);
   } else if (mid == 16) {
     albedo = albedo * (1.0 + (svnoise(wpos.xz * 0.035) - 0.5) * 0.10 * far);
-    albedo = albedo * (1.0 + (svnoise(wpos.xz * 7.0) - 0.5) * 0.13 * near);
+    if (near > 0.0) {
+      albedo = albedo * (1.0 + (svnoise(wpos.xz * 7.0) - 0.5) * 0.13 * near);
+    }
     rough = min(1.0, rough + 0.10 * far);
   }
   var tuv = vec2<f32>(0.0);
@@ -745,7 +777,15 @@ fn cloudShadow(wp: vec3<f32>) -> f32 {
   let t = (360.0 - wp.y) / max(F.sunDir.y, 0.15);
   let cT = F.params0.z * F.params5.y;
   let cp = (wp.xz + F.sunDir.xz * t) * 0.0052 + vec2<f32>(cT * 0.012, cT * 0.005);
-  return smoothstep(0.54 - cover * 0.40, 0.92, cloudFBM(cp)) * cover;
+  // cloudFBM(cp) unrolled with an edge0 early-out (perf hunt 9): octave 2 adds
+  // 0.25 * svnoise <= 0.25 (svnoise is a mix of fract() hashes, <= 1), so when
+  // octave 1 plus 0.2501 cannot pass edge0 the smoothstep is exactly 0 and the
+  // second octave is skipped. Same ops and order as cloudFBM otherwise.
+  let edge0 = 0.54 - cover * 0.40;
+  let s1 = 0.0 + 0.5 * svnoise(cp);
+  if (s1 + 0.2501 <= edge0) { return 0.0; }
+  let s = s1 + 0.25 * svnoise(cp * 2.03 + 1.7);
+  return smoothstep(edge0, 0.92, s) * cover;
 }
 
 // NEAREST reads (GLX's blocker sampler): the map is r32float, unfilterable.
@@ -2159,7 +2199,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // mistDensity (uploaded wgx.js d[78], == GLX uGroundMist) and gates the whole block
     // exactly like GLX (if uGroundMist > 0.001) — no fogDensity proxy, so clear/dry
     // air is a true no-op. MIST HEIGHT (params3.w) sets the vertical falloff.
-    if (mistK > 0.001) {
+    // dRamp is 0 inside 8 m: mistAmt is then exactly 0 and mix(color, mistCol, 0)
+    // == color, so the cloudFBM mist patch is skipped there (perf hunt 9).
+    let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
+    if (mistK > 0.001 && dRamp > 0.0) {
       let mh = max(F.params3.w, 0.05);
       let lowH = max(in.wpos.y - (F.eye.y - 5.0), 0.0);
       // GLX parity (glsl-lit.js): band = exp(-lowH * (0.09 / mh)). The old WGX form
@@ -2168,7 +2211,6 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       // ceiling — a washed translucent band over the road on misty day circuits.
       let band = exp(-lowH * (0.09 / mh));
       let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
-      let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
       // HEAVY MIST fill (GLX parity, glsl-lit.js): fog-weather mist closes its gaps.
       let mistFill = smoothstep(1.1, 1.5, mistK);
       let mistPatch = smoothstep(0.35, 0.72, cloudFBM(mp));
@@ -2419,12 +2461,20 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     // a flat pale wash, plus faint azimuthal variation. Day-only and faded under
     // overcast, so dusk/dawn/night and grey days are untouched. DAY SKY BLUE knob
     // scales the band; clamp keeps the blend valid when the knob pushes past 1.
-    if (daytime > 0.0) {
+    // Exact-zero gates (perf hunt 9): both terms carry (1 - overcast), so a full
+    // overcast (cloud >= 1) skips the block; the band is 0 at bandLM == 0 (up >=
+    // 0.55) and the vnoise azimuth at azFade == 0 (up >= 0.5). Bit-identical.
+    if (daytime > 0.0 && overcast < 1.0) {
       let bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
-      let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
-      c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
-      let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
-      c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up)));
+      if (bandLM > 0.0) {
+        let deepBlue = vec3<f32>(0.10, 0.30, 0.72);
+        c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * daySkyBlue, 0.0, 1.0));
+      }
+      let azFade = 1.0 - smoothstep(0.0, 0.5, up);
+      if (azFade > 0.0) {
+        let az = vnoise(vec2<f32>(atan2(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
+        c = c * (1.0 + az * 0.05 * daytime * (1.0 - overcast) * azFade);
+      }
     }
     // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
     // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.

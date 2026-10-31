@@ -1,3 +1,4 @@
+import { makeDom } from "../helpers/mini-dom.mjs";
 /* title-menu-even.test.mjs — title doors stay even without px-capped columns. */
 import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
@@ -514,4 +515,33 @@ test("title refresh counts saves without cloning them and skips unchanged door t
   paint();
   assert.ok(writes.length > painted, "a real career change still repaints");
   assert.equal(nodes["mb-career-sub"].textContent, "YOU · FERRARI · 2027 R3  ·  2 SAVED");
+});
+
+test("Daily history populates the Saves and Data blueprint, keeps classes separate and tolerates damaged saves", () => {
+  const dom = makeDom(); dom.byId("menu-buttons").dataset.destinations = "true";
+  const hero = dom.byId("menu-hero"), row = dom.byId("menu-retention"); hero.appendChild(row); row.appendChild(dom.byId("mb-daily"));
+  const history = dom.document.createElement("details"); history.id = "daily-history";
+  const summary = dom.document.createElement("summary"); summary.style.minHeight = "44px";
+  const list = dom.document.createElement("ul"); list.id = "daily-history-list";
+  history.appendChild(summary); history.appendChild(list); dom.byId("pm-panel-files").appendChild(history);
+  let data = { days: { "2026-10-30": { best: 70, classes: { standard: { best: 71.2 }, open: { best: 70 } } },
+    "2026-10-29": { best: 72 }, "2026-02-30": { best: 50 }, bad: { best: 20 }, "2026-10-28": 42 } };
+  const before = structuredClone(data);
+  const sandbox = vm.createContext({ document: dom.document, Log: { info() {} }, Career: { data: () => null },
+    Tracks: { SEASON: [] }, Teams: { LIST: [] } });
+  vm.runInContext(read("js/ui/title-menu.js"), sandbox, { filename: absSrc("js/ui/title-menu.js") });
+  const api = vm.runInContext("TitleMenu", sandbox).create({ $: dom.byId, store: {}, daily: { data: () => data,
+    plan: () => ({ trackName: "Monza", weather: "dry" }) }, openDailyPicker() {} });
+  assert.equal(dom.byId("pm-panel-files").querySelector("#daily-history"), history);
+  assert.equal(dom.byId("menu-buttons").querySelector("#daily-history"), null); assert.equal(history.children[0].style.minHeight, "44px");
+  history.open = true; dom.dispatch(history, { type: "toggle" });
+  const rows = history.querySelectorAll("li").map(li => li.textContent);
+  assert.equal(history.children.length, 2, "the static blueprint is populated, not rebuilt");
+  assert.deepEqual(rows, [
+    "2026-10-30 · Saved class 1: 70.000s · Saved class 2: 71.200s",
+    "2026-10-29 · Day best (legacy / mixed classes): 72.000s",
+  ]);
+  assert.deepEqual(data, before);
+  data = { days: [] }; api["refresh"]();
+  assert.equal(history.querySelector("li").textContent, "No saved Daily laps yet. Complete a valid Daily lap to start your history.");
 });

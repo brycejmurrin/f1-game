@@ -224,15 +224,21 @@ async function shellAtLeast(b) {
 // OPPORTUNISTIC SWEEP. `activate` deletes older generations once, but a worker
 // that outlives a deploy — or a fetch that opened a newer build's cache before
 // that build's worker installed — leaves stale apex26-* caches behind until
-// the next activate. Swept from the fetch path, at most once per worker
-// lifetime once it succeeds, under the same rules `activate` keeps:
+// the next activate. Swept from the fetch path under the same rules `activate`
+// keeps:
 //   - only when the CURRENT generation finished its install (never strand a
 //     client on an incomplete cache — the test holds activate to that too), and
 //   - only generations OLDER than the current one (and never the single prior
 //     SETTLED generation while a window client remains — #2194 lazy ?v= keys):
 //     a worker whose memoised name is stale must never delete the newer cache
 //     the next worker is installing into.
-let _sweepDone = false, _sweepBusy = false;
+// A sweep that had to KEEP that predecessor (a window was still open) does not
+// latch done. Asset fetches stay quiet; the next navigation rechecks. Once
+// matchAll is empty the predecessor goes. Latching done on the first sweep
+// left that generation on disk for the rest of the worker's life, which is
+// the common case: the first fetch happens while the tab that installed it
+// is still open.
+let _sweepDone = false, _sweepBusy = false, _sweepHeld = false;
 async function sweepStaleCaches() {
   const name = _cacheNameKnown;
   const build = cacheBuild(name);
@@ -271,10 +277,16 @@ async function sweepStaleCaches() {
   });
   await Promise.all(stale.map((k) => caches.delete(k)));
   if (stale.length) invalidateCacheOrder();
-  _sweepDone = true;
+  // Held, not done: a later navigation retries once the windows are gone.
+  // Done: nothing older remains that a closed tab would still need.
+  if (retainPrev) _sweepHeld = true;
+  else { _sweepHeld = false; _sweepDone = true; }
 }
-function maybeSweep(event) {
+function maybeSweep(event, navigate) {
   if (_sweepDone || _sweepBusy || !_cacheNameKnown) return;
+  // The predecessor is retained for an open window. Recheck on navigation
+  // only — an asset fetch must not walk caches.keys() again.
+  if (_sweepHeld && !navigate) return;
   _sweepBusy = true;
   event.waitUntil(sweepStaleCaches().catch((e) => { swLog("warn", "stale-cache sweep failed: " + errMsg(e)); }).finally(() => { _sweepBusy = false; }));
 }
@@ -357,6 +369,7 @@ async function precacheAssetLists() {
     "js/render/three/tlx.js",
     // LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline
     "js/lighting/presets.js",
+    "js/garage/garage-data.js",
     "js/circuits/bahrain.js",
     "js/circuits/monaco.js",
     "js/circuits/silverstone.js",
@@ -800,7 +813,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/departure-wheels\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail)\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/garage\/departure-wheels\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail)\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
@@ -1018,7 +1031,7 @@ self.addEventListener("fetch", (event) => {
   // the guard is here so that stays true if it ever does.
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
   if (url.origin !== self.location.origin) return;   // never touch cross-origin (Jolpica/OpenF1 data hub)
-  maybeSweep(event);
+  maybeSweep(event, req.mode === "navigate");
 
   // STREAMED MUSIC ASKS FOR BYTE RANGES (perf-memory M-4b). A phone plays
   // assets/music/ through an <audio> element (js/audio/soundtrack.js

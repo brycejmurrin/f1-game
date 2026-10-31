@@ -871,13 +871,19 @@ const Collide = (() => {
   }
 
   // The nearest PARKED retirement (#2162) ahead of (or still beside) `c` on
-  // the road, within `reach` metres of arc, or null. `parked` is game.js's short per-step list.
+  // the road, within `reach` metres of arc, or null. `parked` is game.js's
+  // short per-step list. Nearest is absolute arc distance inside the window:
+  // a car a length behind is still beside you, but it must not hide a closer
+  // car ahead, and two cars you are passing must not resolve to the one
+  // furthest back (the old minimum signed d).
   function parkedAhead(c, parked, L, reach) {
-    let best = null, bestD = reach;
+    let best = null, bestAbs = Infinity;
     for (let i = 0; i < parked.length; i++) {
       const o = parked[i];
       const d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;   // signed: still alongside until a car length past
-      if (d > -LCAR && d < bestD) { best = o; bestD = d; }
+      if (!(d > -LCAR && d < reach)) continue;
+      const ad = d < 0 ? -d : d;
+      if (ad < bestAbs) { best = o; bestAbs = ad; }
     }
     return best;
   }

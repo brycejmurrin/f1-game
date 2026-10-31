@@ -23,7 +23,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import * as espree from "espree";
+import * as eslintScope from "eslint-scope";
+import { findTsc } from "../../tools/check/check-gctx.mjs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -38,10 +42,10 @@ const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8"
 // The module declares `const RaceControl`, which lands in the context's global
 // LEXICAL scope rather than on the global object — so it is read back by
 // evaluating its name. Same shape as tests/unit/agentview-api-contract.test.mjs.
-function load(debris) {
+function load(debris, globals = {}) {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, isNaN, isFinite, console,
-    DebrisWorld: debris,
+    DebrisWorld: debris, ...globals,
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx,
@@ -1035,4 +1039,101 @@ test("holdCap reads c.rank's slot and falls back to indexOf when the slot is not
   assert.equal(R.holdCap(me, [a, me], null), 40);
   me.rank = 1;   // stale rank (a finisher's slot): the scan still finds it
   assert.equal(R.holdCap(me, [a, me], null), 40);
+});
+
+
+// This pilot keeps create(G) public; the machine gets only these capabilities.
+const CONTROL_SRC = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
+const MACHINE = fnSource(CONTROL_SRC, "function createControl(port)");
+const MACHINE_GLOBALS = ["Log", "blank", "logFlag", "LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD",
+  "RED_STOP", "RED_HOLD", "QUERY_EVERY", "DebrisWorld", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN",
+  "MIN_HOLD", "Storm", "TyreModel", "Number", "Math", "Array"];
+function freeNames(source) {
+  const ast = espree.parse(source, { ecmaVersion: 2022, range: true });
+  return [...new Set(eslintScope.analyze(ast, { ecmaVersion: 2022 }).globalScope.through.map((r) => r.identifier.name))];
+}
+
+test("the private caution machine cannot reach G or unrelated ambient capabilities", () => {
+  const allowed = new Set(MACHINE_GLOBALS);
+  const rejected = (source) => freeNames(source).filter((name) => !allowed.has(name));
+  assert.deepEqual(rejected(MACHINE), []);
+  assert.deepEqual(rejected(MACHINE.replace("let caution = blank();", "G.state = 'menu'; let caution = blank();")), ["G"]);
+  assert.deepEqual(rejected(MACHINE.replace("let caution = blank();", "window.G.player.retired = true; let caution = blank();")), ["window"]);
+});
+
+test("the compatibility adapter exposes frozen live scalars and retains effect receivers", () => {
+  const G = makeCtx({ ranked: [{ lap: 1 }], raceT: 2, state: "race" });
+  const originalStore = G.store;
+  const port = vm.runInNewContext(fnSource(CONTROL_SRC, "function create(G)") + ";create(G)", { G, createControl: (p) => p },
+    { filename: absSrc("js/race/race-control.js") });
+  assert.ok(Object.isFrozen(port));
+  assert.throws(() => { port.state = "menu"; }, TypeError);
+  for (const key of ["ranked", "player", "cars", "netPlay", "store"]) assert.equal(key in port, false, key);
+  G.ranked = [{ lap: 2.5 }]; G.raceT = 7; G.state = "count";
+  assert.equal(port.leaderLap, 2.5); assert.equal(port.raceT, 7); assert.equal(port.state, "count");
+  G.ranked = []; assert.equal(port.leaderLap, null);
+  G.ranked = [{}]; assert.equal(port.leaderLap, undefined);
+  G.netPlay = { active() { assert.equal(this, G.netPlay); return true; },
+    ownsRaceControl() { assert.equal(this, G.netPlay); return false; },
+    reportCaution(d) { assert.equal(this, G.netPlay); this.payload = d; } };
+  assert.equal(port.networkActive(), true); assert.equal(port.ownsRaceControl(), false);
+  const payload = { level: 2 }; port.reportCaution(payload); assert.equal(G.netPlay.payload, payload);
+  assert.equal(port.announce("wet", 3, "warning"), false, "absence must not consume the notification");
+  G.announce = function () { assert.equal(this, G); return false; };
+  assert.equal(port.announce("wet", 3, "warning"), false);
+  G.announce = function () { assert.equal(this, G); return true; };
+  assert.equal(port.announce("wet", 3, "warning"), true);
+  G.trackWetness = function () { assert.equal(this, G); return 0.7; };
+  assert.equal(port.wetness(), 0.7);
+  G.store = { get() { throw Error("replacement store must not be used"); }, set() { throw Error("replacement store must not be used"); } };
+  port.writeCaution(false); assert.equal(originalStore._saved.get("caution"), false);
+  assert.equal(port.readCaution(), false);
+});
+
+test("guest low-grip retry and local reset precede authority gating through the adapter", () => {
+  const events = [];
+  const G = makeCtx({ raceWeather: { wet: true },
+    netPlay: { active: () => true, ownsRaceControl: () => { events.push("authority"); return false; }, reportCaution() {} } });
+  const rc = load({ active() { throw Error("guest queried hazards"); } }, { TyreModel: { treadFor: () => 1 } }).create(G);
+  rc.update(1 / 60); // no banner yet; must retry after the service appears
+  G.announce = () => { events.push("rejected"); return false; };
+  events.length = 0; rc.update(1 / 60); assert.deepEqual(events, ["rejected", "authority"]);
+  G.announce = () => { events.push("accepted"); return true; };
+  events.length = 0; rc.update(1 / 60); assert.deepEqual(events, ["accepted", "authority"]);
+  events.length = 0; rc.update(1 / 60); assert.deepEqual(events, ["authority"]);
+  rc.apply({ level: 3 }); G.state = "menu"; events.length = 0;
+  rc.update(1 / 60); assert.equal(rc.level, 0); assert.deepEqual(events, []);
+  G.state = "race"; rc.update(1 / 60); assert.deepEqual(events, ["accepted", "authority"], "new race notifies locally again");
+});
+
+test("the actual private machine checks against its port and rejects authority expansion", (t) => {
+  const compiler = findTsc();
+  assert.ok(compiler, "the repository TypeScript compiler is required for this boundary");
+  const base = join(ROOT, "artifacts", "race-control-types"); mkdirSync(base, { recursive: true });
+  const dir = mkdtempSync(join(base, "check-")); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // Check the REAL factory body. Legacy collaborators stay declared separately;
+  // noImplicitAny/strictNullChecks remain off for its existing untyped internals.
+  const helpers = ["function blank()", "function logFlag(prev, next)"].map((decl) => fnSource(CONTROL_SRC, decl)).join("\n");
+  const constants = ["LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD", "RED_STOP", "RED_HOLD", "QUERY_EVERY", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN", "MIN_HOLD"];
+  const ast = espree.parse(CONTROL_SRC, { ecmaVersion: 2022, range: true });
+  const body = ast.body[0].declarations[0].init.callee.body.body;
+  const declarations = body.filter((n) => n.type === "VariableDeclaration" && n.declarations.some((d) => constants.includes(d.id.name)))
+    .map((n) => CONTROL_SRC.slice(...n.range)).join("\n");
+  writeFileSync(join(dir, "legacy.d.ts"), `declare const Log: { info(scope: string, message: string): void };
+    declare const DebrisWorld: { active(): boolean; hazards(): { total: number; redTotal?: number; sectors: number[]; worst: { count: number; sector: number; frac: number } } };
+    declare const Storm: { is(weather: unknown): boolean; SC_START_S: number; SC_ROLL_S: number };
+    declare const TyreModel: { treadFor(weather: unknown, wetness?: number): number };`);
+  writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: true, noEmit: true,
+    strict: false, target: "ES2022", types: [], skipLibCheck: true }, files: ["machine.js", "legacy.d.ts",
+    join(ROOT, "types/game-ctx.d.ts"), join(ROOT, "types/race-control-port.d.ts")] }));
+  const check = (extra) => {
+    writeFileSync(join(dir, "machine.js"), declarations + "\n" + helpers + "\n/** @param {RaceControlPort} port */\n" +
+      MACHINE.replace("let caution = blank();", extra + " let caution = blank();"));
+    return spawnSync(compiler.cmd, [...compiler.args, "-p", join(dir, "tsconfig.json")], { encoding: "utf8" });
+  };
+  const valid = check(""); assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+  const invalid = check("port.player.retired = true; port.state = 'menu'; port.ownsRaceControl = () => true;");
+  assert.notEqual(invalid.status, 0);
+  const codes = [...invalid.stdout.matchAll(/error TS(\d+):/g)].map((m) => +m[1]);
+  assert.deepEqual(codes, [2339, 2540, 2540], "unknown capability, readonly state and readonly command must each be rejected");
 });

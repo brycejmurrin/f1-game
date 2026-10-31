@@ -104,7 +104,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1226,7 +1226,7 @@ function saveTeamParts(teamId, parts) {
 const customLiv = CustomLiveries.create({ store });
 const {
   getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-  getLiveries, resolveLivery, wingColorOf,
+  getLiveries, resolveLivery, wingColorOfLivery,
 } = customLiv;
 
 // Draw a car's MOVEABLE wing elements (active aero) at flap blend `blend`
@@ -1240,11 +1240,13 @@ const _flapWorld = new Float32Array(16);
 // skips the rear assembly entirely, so drawing the rear plane there would hang
 // it in mid-air behind a car that has no rear wing.
 function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still, viewLivery) {
-  const col = wingColorOf(team), b = clamp(blend, 0, 1);
+  // One resolveLivery per car per frame (wingColorOf resolved it a second time): the wing colour always
+  // follows the team's own livery, the finish and surface the viewed one.
+  const own = resolveLivery(team), col = wingColorOfLivery(own, team), b = clamp(blend, 0, 1);
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const livery = viewLivery || resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
+  const livery = viewLivery || own, finish = CarMaterials.finishOf(livery, "wingFinish");
   const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   // The flown drs plane (paint "rearWing") keeps the livery's REAR WING colour, as Car3D.build painted it baked.
   const rearCol = surface === "carbon" ? col : (livery.rearWing || livery.c2 || team.color2);
@@ -1724,6 +1726,10 @@ function redFlagRestart() {
   seedPlayerPose();
   raceCtl.rewound();   // the leader re-runs its lap: a pending Overtake hold follows it (#2166)
   feel.restartPending = true; replayBuf.breakTimeline();   // same clock, every car teleported: a scrub must not blend track position into the grid box
+  // takeRestart() returns before the results clock, and state "count" never ticks it, so a countdown already in hand
+  // (the 2.2 s all-done arm, or the 0.1 s cap) would classify the restart a second after the lights. postFinish.since
+  // is the moment the human was done: raceT keeps running under the flag, and the 75 s cap would already be expired.
+  resultT = 0; postFinish.since = -1;
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; feel.startHold = 0;
   els.lights.hidden = false;
   for (const l of els.lights.children) l.classList.remove("on");
@@ -2740,7 +2746,7 @@ const _customTrackStarts = new WeakSet();
 // Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
 // startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
 // LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
-function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
+function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -3358,7 +3364,7 @@ const G = {
   // (js/physics/incident-sim.js). trackFrom is the LOCAL predictor+Newton read (never
   // a global search — see its comment), worldFromTrack its exact inverse.
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
-  worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
+  worldFromTrack: (s, x, out) => worldFromTrack(s, x, out || smp2),   // `out` (a Tracks.sample record) keeps the sample at s
   GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
   raceProfile,   // the race-entry stopwatch (startRace), read by __apex.raceProfile()
   // The friction-circle constants, for js/race/quali-model.js: it runs a quasi-steady
@@ -4646,6 +4652,7 @@ function update(dt) {
   parked.length = 0;
   for (let i = 0; i < cars.length; i++) if (cars[i].retired && cars[i].parkedOnRoad) parked.push(cars[i]);
   _windStep.st = null;   // updateCar's Wind.sync, once per step (#3109 row 9)
+  if (aiLod) aiLod.step(cars, state === "race" && session === "race" && !isPractice() && !netPlay.active(), raceCtl.level, raceT, player, track ? track.total : 0);
   PerfSpans.begin("ai"); for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (jumpStartPenalty.reactWindowOpen()) {
@@ -4693,7 +4700,13 @@ function update(dt) {
   // human race an AI/other player crossing first must NOT start a 3.5 s result
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
-  if (resultT === 0) {
+  // A red flag that can still restart (nobody has finished; redFlagRestart
+  // declines otherwise) stays state "race" for RED_STOP+RED_HOLD, 14 s. The
+  // countdown below would hit zero in that window and endRace() would run
+  // before takeRestart() ever asked. Once anyone has finished the restart is
+  // off the table and the countdown stands.
+  if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
+  else if (resultT === 0) {
     postFinish.solo = session === "race" && !netPlay.active() && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
@@ -4756,8 +4769,8 @@ function update(dt) {
 }
 
 // CarFields.warmDoubles: the named fields are born Double (a 0 default is a Smi; the first fraction re-mapped the object mid-race and deopted every optimized reader, PERF-HUNT-5).
-const _aiBoost = CarFields.warmDoubles({ traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0, vTop: 0, trailT: 0 }, ["chaserSpeed", "trailT"]);
-const _aiOtFire = CarFields.warmDoubles({ traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0 }, ["blockerGap", "gapAhead", "roomL", "roomR", "speed", "aheadSpeed", "kAhead", "vTop"]);
+const _aiBoost = CarFields.warmDoubles({ traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0, vTop: 0, trailT: 0, street: false, towVmax: 0, ourVmax: 0, ourPace: 0, towPace: 0 }, ["chaserSpeed", "trailT", "towVmax", "ourVmax", "ourPace", "towPace"]);
+const _aiOtFire = CarFields.warmDoubles({ traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0, queueT: 0, blockerVmax: 0, ourVmax: 0, ourPace: 0, blockerPace: 0 }, ["blockerGap", "gapAhead", "roomL", "roomR", "speed", "aheadSpeed", "kAhead", "vTop", "queueT", "blockerVmax", "ourVmax", "ourPace", "blockerPace"]);
 // AI lateral controller (updateCar, "--- lateral ---"): heading state, not a
 // position P-loop. Tunables, not model numbers — see the block for the why.
 const AI_PASS_LATCH_M = 16;    // m: the pass latch's window, read by BOTH ends. The release always
@@ -4773,15 +4786,15 @@ const AI_LOOK_CAP = 64;        // samples the per-car look-ahead cache keeps (16
 // WallClamp.apply's ctx, pooled like _aiBr: a fresh literal + addShake closure per car per tick was ~1,300 objects/s at 22 cars.
 const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromTrack, soundOn: false, incidentSim, addShake(d) { feel.shake = Math.min(1, feel.shake + d); } };
 const _blueCtx = { total: 0, vRef: 0, caution: 0, race: true };   // blueWatch.tick reads it, never keeps it
-const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 }, ["errMul"]);
+const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1, diffCorner: 0, pace: 0, vmax: 0 }, ["errMul", "diffCorner", "pace", "vmax"]);
 const _aiLane = CarFields.warmDoubles({ traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 }, ["queueT"]);
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 // PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
 const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false, axTarget: 0,
   surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, modsBraking: 1, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
   weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null, damage: null };
-const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0, trailT: 0 }, ["freeSpeed", "queueT", "kTurn", "trailT"]);
-const _aiDefend = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0 }, ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR"]);
+const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0, trailT: 0, roadL: 0, roadR: 0, ourVmax: 0, ourPace: 0, blockerPace: 0 }, ["freeSpeed", "queueT", "kTurn", "trailT", "roadL", "roadR", "ourVmax", "ourPace", "blockerPace"]);
+const _aiDefend = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0, chaserVmax: 0, ourVmax: 0, chaserPace: 0, ourPace: 0 }, ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR", "chaserVmax", "ourVmax", "chaserPace", "ourPace"]);
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
@@ -4833,6 +4846,8 @@ const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, in
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
+// C10 far-car AI LOD, an OPT-IN lab read once here (`?lab=aiLod`, a comma list): off, aiLod is null and the sim is untouched (AiDrive.lodLab).
+const aiLod = (() => { try { return new URLSearchParams(location.search).get("lab").split(",").includes("aiLod") ? AiDrive.lodLab() : null; } catch (_) { return null; } })();
 function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
@@ -5369,6 +5384,8 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     const look = clamp(c.speed * 1.7, 30, 160);
     AiDrive.beginLook();
     let kMax = 0;
+    // The ?lab=aiLod far car reuses last step's corner plan on alternate steps (AiDrive.lodLab); traffic below still runs.
+    if (aiLod && aiLod.skip(c, player, pits.inLane(c), blockerGap, unstuckActive)) { braking = aiLod.braking(c); brakeLvl = aiLod.level(c); kMax = aiLod.kMax(c); } else {
     // ON THE LINE the brake target reads the PATH's curvature (TrackLine.pathK:
     // the larger radius the line buys), off it the road's — so a car fighting
     // off-line is slower through the corner, as a real one is.
@@ -5425,6 +5442,8 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     const br = AiDrive.brakeDecision(_aiBr);
     braking = br.braking;
     brakeLvl = br.brakeLvl;
+    if (aiLod) aiLod.put(c, braking, brakeLvl, kMax);
+    }
     // Slipstream: in the wake ahead on a straight, shed drag and gain top speed —
     // what lets a following car CLOSE and pull out to pass instead of queueing.
     // Applied BEFORE the queue cap, so it never rams the car directly ahead (the
@@ -8913,7 +8932,7 @@ function openSettings() {
   // LAZY_AUDIO: kick ensureAudio but reveal Settings sync — awaiting the
   // ~449 KB bundle before #pmsettings unhides broke ui-scale (probe ~400ms
   // after mb-settings click). MUSIC & SOUND waits in settings-tabs.js.
-  ensureAudio(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown
+  ensureAudio(); ensureGarageData(); paintHudDetailsSummary(); // pm-settings click is not a pointerdown; GARAGE ENTER & LEAVE previews the Blender rigs
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
   // showModal() runs after the hidden flip; defer so hub focus beats the dialog's
@@ -9080,7 +9099,7 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  loadingScreen.stop(); garagePre.markOpen(from);   // stale busy/prep plate (z 36) must not cover #carsetup
+  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;

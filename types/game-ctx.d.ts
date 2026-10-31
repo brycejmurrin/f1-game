@@ -674,7 +674,7 @@ interface GameCtx {
   readonly gfx: GfxBackend | null;
   /** LOCAL predictor + Newton read — never a global search. See its comment. */
   readonly trackFrom: (px: number, pz: number, sPredicted: number) => { s: number; x: number };
-  readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
+  readonly worldFromTrack: (s: number, x: number, out?: { p: number[]; t: number[]; r: number[] }) => { x: number; z: number };
 
   // ── Model constants published for js/race/quali-model.js and the net layer ──────
   /** The race-entry stopwatch (js/game.js startRace): one row per phase, in
