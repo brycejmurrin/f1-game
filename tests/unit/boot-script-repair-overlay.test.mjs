@@ -24,8 +24,8 @@ function faultRig() {
   let request, pending;
   return { context, calls, clock, timers,
     session: { context, page: { url: () => 'http://localhost/' } },
-    start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false } = {}) {
-      request = { url: () => origin + pathname + '?v=dev' };
+    start({ pathname = lazyPath, origin = 'http://localhost', failRoute = false, resourceType = 'script' } = {}) {
+      request = { url: () => origin + pathname + '?v=dev', resourceType: () => resourceType };
       pending = handler({ request: () => request,
         fallback: async () => { calls.push('continue'); if (failRoute) throw Error('route failed'); },
         abort: async () => { calls.push('reject'); context.emit('requestfailed', request); },
@@ -125,6 +125,22 @@ test('fault fixture routing composes, requires an actual terminal transfer and d
   g.context.unroute = async () => { throw Error('unroute failed'); };
   await assert.rejects(held.close(), error => error.message === 'unroute failed');
   await g.drain(); assert.deepEqual(g.calls, ['reject']);
+});
+
+test('warming fetches and XHRs of the held pathname do not consume a lazy script hold', async () => {
+  const f = faultRig(), s = await installFaultSchedule(f.context, 'http://localhost', f.clock);
+  s.hold(faultHold());
+  for (const resourceType of ['fetch', 'xhr']) await f.start({ resourceType });
+  assert.deepEqual(f.calls, ['continue', 'continue']);
+  assert.deepEqual(s.events.map(event => event.state), ['armed']);
+  assert.throws(() => s.assertComplete());
+  void f.start({ resourceType: 'script' });
+  await s.wait('circuit');
+  await s.release('circuit', 'reject');
+  s.assertComplete();
+  assert.deepEqual(s.events.map(event => event.state), ['armed', 'observed', 'reject', 'settled', 'failed']);
+  await s.close();
+  assert.equal(f.timers.size, 0);
 });
 
 test('fault route errors and missing terminal events fail with bounded cleanup', async () => {

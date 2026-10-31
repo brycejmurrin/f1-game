@@ -1,6 +1,7 @@
 // @doc Replay bounded lazy-script faults through an existing session/action adapter; no browser controller.
 // Contracts inspected 2026-10-30: https://playwright.dev/docs/api/class-route
 // https://playwright.dev/docs/api/class-browsercontext
+// https://playwright.dev/docs/api/class-request#request-resource-type (inspected 2026-10-31)
 import { validateScenario } from './core.mjs';
 
 const ID = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
@@ -65,6 +66,8 @@ export async function installFaultSchedule(context, origin, { setTimer = setTime
   };
   const handler = async route => {
     const request = route.request(), url = new URL(request.url());
+    // A cache-warming fetch of a script URL is not classic-script evaluation.
+    if (request.resourceType() !== 'script') return route.fallback();
     const h = [...holds.values()].find(h => !h.outcome && !h.request && url.origin === origin && url.pathname === h.path);
     if (!h) return route.fallback();
     h.request = request; event(h, 'observed'); h.signalObserved(true);

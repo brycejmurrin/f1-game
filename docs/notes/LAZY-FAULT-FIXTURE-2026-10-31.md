@@ -28,7 +28,9 @@ There are at most four unique holds/paths and 256 total actions. Paths are exact
 same-origin root-mounted JavaScript pathnames under /js/, without traversal,
 queries or wildcards. Request cache-busting queries do not affect matching.
 Watchdogs begin when armed and accept integer deadlines from 100 to 30000 ms.
-Each hold intercepts its first matching request only. Continue falls back to
+Only renderer-classified script requests qualify; same-URL fetch/XHR cache warms
+pass through without consuming a hold. Each hold intercepts its first matching
+script request only. Continue falls back to
 earlier routes; reject aborts with the generic network-failure code.
 
 Wait requires actual interception. Release requires that observation and waits
@@ -39,8 +41,11 @@ removes only the fixture's handler and drains intercepted route operations.
 
 Terminal transfer does not prove application consumption. Scenario authors must
 choose an observable application readiness condition and a meaningful oracle.
-The browser acceptance checks Monaco residency after continue and the loader's
-failure acknowledgement after reject, then verifies Home/menu remains active.
+The browser acceptance proves the payload remains pending at an explicit
+read-only checkpoint before leaving the picker. It then checks Monaco residency
+after continue, or failure acknowledgement/successful recovery after reject,
+and verifies Home/menu remains active. The attachment records both residency
+and the loader's retained warning, independent of console printing.
 It also proves that holding an already-loaded script fails as unobserved.
 
 This is a reusable fixture API. The explorer replay CLI and minimizer do not
@@ -70,6 +75,11 @@ Playwright documentation checked 2026-10-30 during this implementation:
   a specific handler without clearing another fixture's routes.
 - [Network guide](https://playwright.dev/docs/network): context routing and
   service-worker visibility constraints motivate the explicit SW-blocked scope.
+- [Request API](https://playwright.dev/docs/api/class-request#request-resource-type),
+  checked 2026-10-31: resourceType distinguishes renderer-classified script,
+  fetch and XHR requests. Real browser acceptance exposed a background cache
+  warm requesting an already-evaluated script's URL; URL matching alone was
+  insufficient evidence of lazy-script interception.
 
 Independent review also inspected the installed Playwright implementation:
 fallback reports this handler complete before invoking older handlers. This is

@@ -5136,7 +5136,6 @@
         "tests/unit/no-bare-console.test.mjs"
       ],
       "*": [
-        "tests/specs/boot-guard.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/data-lifecycle.spec.js",
         "tests/specs/logging.spec.js",
@@ -18804,6 +18803,7 @@
         "tests/unit/ctx-lost-menu-restore.test.mjs"
       ],
       "*": [
+        "tests/specs/boot-guard.spec.js",
         "tests/unit/share-code.test.mjs"
       ]
     },

@@ -28,24 +28,31 @@ test("saved lazy fault schedules continue and reject Monaco hydration after leav
       { type: "click", selector: "#mb-race" },
       { type: "click", selector: '#sel-tracks button.track-row[aria-label="MONACO"]' },
       { type: "faultWait", id: "monaco" },
+      { type: "checkpoint", label: "Circuit payload pending" },
       { type: "click", selector: "#sel-back" },
       { type: "faultRelease", id: "monaco", outcome },
     ], oracle: { type: "game", state: "menu" } };
     try {
-      const evidence = await replayFaultScenario(session, scenario, { performAction, matchesOracle });
+      const actionAdapter = async (current, action) => {
+        await performAction(current, action);
+        if (action.type === "checkpoint" && action.label === "Circuit payload pending") {
+          expect(await current.page.evaluate(() => Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco")))).toBe(false);
+        }
+      };
+      const evidence = await replayFaultScenario(session, scenario, { performAction: actionAdapter, matchesOracle });
       // Terminal network transfer is not proof that the application consumed it.
-      if (outcome === "continue") {
-        await session.page.waitForFunction(() => Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco")),
-          null, { polling: 100, timeout: 15000 });
-      } else {
-        await expect.poll(() => session.logs.errors.map(e => e.message).join("\n"), { timeout: 15000 })
-          .toContain("circuit payload failed to load: monaco");
-      }
+      await session.page.waitForFunction(rejected => Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco"))
+        || rejected && Log.records({ ns: "track", level: "warn" }).some(record => record.msg === "circuit payload failed to load: monaco"),
+        outcome === "reject", { polling: 100, timeout: 15000 });
+      const application = await session.page.evaluate(() => ({
+        payloadResident: Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco")),
+        loaderFailureObserved: Log.records({ ns: "track", level: "warn" }).some(record => record.msg === "circuit payload failed to load: monaco"),
+      }));
       await expect(session.page.locator("#overlay")).toBeVisible();
       await expect(session.page.locator("#select")).toBeHidden();
       await expect(session.page.locator("#race-settings")).toBeHidden();
       expect(await matchesOracle(session, { type: "game", state: "menu" })).toBe(true);
-      await testInfo.attach(`lazy-${outcome}`, { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+      await testInfo.attach(`lazy-${outcome}`, { body: JSON.stringify({ ...evidence, application }, null, 2), contentType: "application/json" });
     } catch (error) {
       if (error.faultEvidence) await testInfo.attach(`lazy-${outcome}-failed`, { body: JSON.stringify(error.faultEvidence, null, 2), contentType: "application/json" });
       throw error;
@@ -55,8 +62,9 @@ test("saved lazy fault schedules continue and reject Monaco hydration after leav
 
 test("a saved lazy fault schedule cannot pass when its request never occurs", async ({ browser, baseURL }, testInfo) => {
   const session = await openSession(browser, baseURL, { backend: "glx", touch: true });
+  expect(await session.page.evaluate(() => typeof TitleMenu !== "undefined")).toBe(true);
   const scenario = { version: 1, id: "unused-script", goal: "An installed rule is not evidence of interception", actions: [
-    { type: "faultHold", id: "unused", path: "/js/core/log.js", timeoutMs: 1000 },
+    { type: "faultHold", id: "unused", path: "/js/ui/title-menu.js", timeoutMs: 1000 },
     { type: "faultWait", id: "unused" },
     { type: "faultRelease", id: "unused", outcome: "continue" },
   ] };
