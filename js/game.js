@@ -2278,6 +2278,7 @@ function scheduleFlybyTrack(settle) {
       // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
+      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // picker/sheet up: RACE! is next (not the title warm)
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first
@@ -2736,6 +2737,10 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 const _customTrackStarts = new WeakSet();
+// Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
+// startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
+// LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
+function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -2756,6 +2761,7 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
+  kickRaceBundles(true);
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
@@ -2905,7 +2911,7 @@ function netOrder(order) {
   return sorted;
 }
 
-function endRace(forcedOrder) {
+function endRace(forcedOrder) { if (state !== "race" && state !== "count") return;   // one settlement per session
   Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
   GfxEscalation.resetReloadBudget();   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
@@ -2978,7 +2984,7 @@ function endRace(forcedOrder) {
   // TWO DRY COMPOUNDS (FIA 2026 SR B6.3.6), every car: a finished Grand Prix the
   // rule covers (PitLane.twoCompoundApplies — the AI planner's own test). Not in
   // a room: a remote car's compound is not replicated.
-  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && cars.some((c) => c.finished && !c.retired) && cmpApplies;
+  const cmpOn = !netPlay.active() && !isPractice() && !duelOn() && (suspended || cars.some((c) => c.finished && !c.retired)) && cmpApplies;
   // WATCH uses the published classification, not the simulated tyre log.
   const dsq = realRace.status().watch ? cars.filter((c) => c.dsq) : SportingRegs.applyCompoundRule(cars, { applies: cmpOn, suspended });
   for (const c of dsq) Log.info("game", "DSQ car=" + c.code + " why=" + c.dsq);   // B6.3.6: a suspended race pays +30 s instead, carried in c.penalty
@@ -3027,6 +3033,7 @@ function endRace(forcedOrder) {
   dbgCam = null; resultsCam.onFlag();
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   RaceCeremony.afterClassify(G, order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // opt-in ceremony; else #results now
+  setupCam.noteResult(order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // AFTER THE RACE: the next garage visit brings the car home
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
@@ -3445,7 +3452,8 @@ const G = {
   cameraDampingState() {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
       previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
-      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT };
+      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT,
+      warming: !!((gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) || mirrorPass.preparing()), liveTicks: PerfGov.ticks() };   // tickBody's holds; PerfGov.tick runs only on the live race frames (__apex.info())
   },
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (lapRec.ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
@@ -4020,13 +4028,14 @@ function raceIntroFromSheet(go, sheet, btn) {
   // A DAILY picked before LAZY_RACE_SESSION landed ran the stub's no-op prepareDaily; the bundle's hook
   // (onRaceSessionReady) then moves teamIdx/driverIdx/difficulty, entrySettings with them, and the intro
   // it lands in went stale and handed START back with no garage-out (#3591, the 9 s idle prefetch).
-  const sessionLate = typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub;
+  const sessionLate = typeof GarageDepartureMotion === "undefined" || typeof GarageDepartureWheels === "undefined"
+    || (typeof daily !== "undefined" && daily.isActive() && daily.current().class === "standard" && typeof SessionRecords !== "undefined" && !!SessionRecords._stub);
   try { if (!sessionLate && !(gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued())))) { intro(); return; } } catch (e) { failed(e); return; }
   const n = ++_introRun;
   let settings = entrySettings();
   const live = () => n === _introRun && state === "menu" && settings === entrySettings();
   (async () => { try {
-    if (sessionLate) { await ensureRaceSession(); if (_introSheet !== owner || n !== _introRun) return; settings = entrySettings(); }
+    if (sessionLate) { if (!(await ensureRaceSession())) throw new Error("Race session preparation failed"); if (_introSheet !== owner || n !== _introRun) return; settings = entrySettings(); }
     if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.afterPaint) await RaceEntryProfile.afterPaint();
     if (await awaitIntroWarm(live)) intro(); else if (_introSheet === owner) { Log.warn("game", "intro released without a garage-out", { stage: "sheet:warm", state }); sheetRelease(false); }
   } catch (e) { failed(e); } })();
@@ -5032,7 +5041,7 @@ function updateCar(c, dt, ranked) {
 
   // --- electric deploy ---
   let deploy = 0;
-  const boostToggle = c.isPlayer && Input.consumeBoostToggle();
+  const boostToggle = c.isPlayer && !!(EnergyPlan.toggleFor(c, isTimeTrial()) | Input.consumeBoostToggle());   // #1580: the sector plan asks for the same toggle a press makes
   if (S.recordInput) S.recordInput.boost = !!boostToggle;
   if (boostToggle) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
@@ -8751,7 +8760,9 @@ $("mb-data").onclick = () => {
   // The click sound fires immediately — the bundle is one network round trip
   // on a cold tap and the button must not feel dead while it lands.
   if (soundOn) GameAudio.uiSelect();
-  openDataHub();
+  // A one-shot tab from the NEXT GP shortcut (js/ui/deep-link.js): the hub opens ON it, however slow the bundle.
+  const door = $("mb-data"), tab = door.dataset.openTab; delete door.dataset.openTab;
+  openDataHub(tab);
 };
 CustomTracks.create(G, { load: loadBackendScripts, door: $("mb-designer") });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
@@ -9094,7 +9105,7 @@ function openGarage(from) {
   // another present. Unhide and draw one garage frame inside the same vt
   // callback as openSetup — not a timer mask, the frame entry owes the player.
   const enterGarage = () => {
-    openSetup();
+    openSetup(); setupCam.startHome(from);   // AFTER THE RACE (never from a pit stop): its first frame is this one
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";

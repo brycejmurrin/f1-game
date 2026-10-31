@@ -1,0 +1,26 @@
+[
+{
+"query": "/challenge 4242",
+"expect": "challenge"
+},
+{
+"query": "adversarially review PR 4240 and try to refute its claims",
+"expect": "challenge"
+},
+{
+"query": "challenge the claims in this pull request",
+"expect": "challenge"
+},
+{
+"query": "play devil's advocate on this PR's verified list",
+"expect": "challenge"
+},
+{
+"query": "find correctness bugs in my diff",
+"expect": "steward"
+},
+{
+"query": "is my PR green",
+"expect": "check"
+}
+]

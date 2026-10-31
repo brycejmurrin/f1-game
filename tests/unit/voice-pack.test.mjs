@@ -397,13 +397,13 @@ test("every tyre and pit call the engineer (js/race/engineer.js) makes composes 
 
 test("the positions, gaps and spotter calls a line can carry are all recorded", () => {
   for (let p = 1; p <= 22; p++) assert.ok(hasKey("p " + p), "P" + p);
-  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g);
+  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9, 9.96, 9.99, 10]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g + " -> " + RadioLines.gapText(g));
   for (const k of Object.keys(Spotter.KEYS)) assert.ok(hasKey(k), "spotter: " + k);
 });
 
 // ── 3. RadioVoice hands a covered line to the pack ──────────────────────────
 
-function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null } = {}) {
+function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTune = null, announcer = undefined } = {}) {
   const spoken = [], packCalls = [], ensures = [], kept = [];
   const synth = { speaking: false, speak(u) { spoken.push(u.text); }, cancel() {}, resume() {}, getVoices: () => [] };
   let onEnd = null;
@@ -422,7 +422,7 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   });
   const saved = new Map(packOn == null ? [] : [["radioPack", packOn]]);
   if (voiceTune) saved.set("voiceTune", voiceTune);
-  const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
+  const G = { soundOn: true, state: "race", announcer, store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   const v = sb.RadioVoice.create(G);
   v.setEnabled(true);
   return { v, spoken, packCalls, ensures, kept, ducks, saved, reload: () => sb.RadioVoice.create(G), end: () => onEnd && onEnd() };
@@ -1433,4 +1433,17 @@ test("a twin naming an unknown container or a path is ignored", async () => {
     assert.equal(P.debug().formats.george.fmt, "mp3");
     assert.ok(!urls.some((u) => u.includes("..") || u.endsWith("opus.bin")), urls.join());
   }
+});
+
+// Perf hunt 7: the announcer's pack (fable, ~4-6 MB kept in the JS heap) speaks only commentary, which say()
+// mutes with the ANNOUNCER switch off — TEAM RADIO alone used to fetch and keep it anyway.
+test("the announcer pack is fetched only while the announcer speaks", () => {
+  const staged = (r, id) => r.ensures.some((x) => x === id);
+  const off = radio({ announcer: { enabled: () => false } });
+  off.v.prepare();
+  assert.equal(staged(off, "george"), true, "the race radio still prepares its own pack");
+  assert.equal(staged(off, "fable"), false, "announcer off: no presenter pack");
+  const on = radio({ announcer: { enabled: () => true } });
+  on.v.prepare();
+  assert.equal(staged(on, "fable"), true, "announcer on: the presenter pack is staged");
 });

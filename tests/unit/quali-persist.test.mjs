@@ -140,6 +140,34 @@ test("begin() restores a driven persist instead of resimming", () => {
   assert.equal(G.season.qualiOrder[0].t, 69.9, "begin must not overwrite persist with a sim");
 });
 
+test("restoring a saved grid projects live metadata without modifying its inputs", () => {
+  const raw = Object.freeze([
+    Object.freeze({ id: "p2", t: 70.1, human: 1, code: "OLD", name: "Old name" }),
+    Object.freeze({ id: "p1", t: "71.4", human: 0, noTime: 1 }),
+  ]);
+  const cars = [car("p1", "NEW", "Current driver", "new-team", true), car("p2", "HAM", "Hamilton", "me", false)];
+  const beforeCars = structuredClone(cars), beforeRaw = structuredClone(raw);
+  const { q } = loadQuali({ season: { qualiOrder: raw, round: 0 }, cars });
+  const rows = q.results();
+  assert.equal(rows[0].code, "HAM");
+  assert.equal(rows[0].name, "Hamilton");
+  assert.equal(rows[0].human, true);
+  assert.equal(Object.hasOwn(rows[0], "noTime"), false);
+  assert.equal(rows[1].code, "NEW");
+  assert.equal(rows[1].name, "Current driver");
+  assert.equal(rows[1].team, "new-team");
+  assert.equal(rows[1].isPlayer, true);
+  assert.equal(rows[1].human, false);
+  assert.equal(rows[1].t, "71.4", "legacy positive strings retain their stored representation");
+  assert.equal(rows[1].gap, 1.3, "gap arithmetic still coerces the legacy stored time");
+  assert.equal(rows[1].noTime, true);
+  assert.deepEqual(cars, beforeCars);
+  assert.deepEqual(raw, beforeRaw);
+  rows[1].name = "Changed sheet row";
+  assert.equal(cars[0].name, "Current driver");
+  assert.equal(q.results()[1].name, "Current driver", "public rows remain detached from cached classification");
+});
+
 test("simulate(0) does not persist an all-AI provisional", () => {
   const { q, G } = loadQuali({ season: { round: 0 } });
   const rows = q.simulate(0);
@@ -299,7 +327,7 @@ test("persistOrder skips a conflicted career save", () => {
 // what is pinned is the row shape the sheet consumes and what it draws from it.
 const SHEET_SRC = fs.readFileSync(path.join(ROOT, "js/ui/quali-sheet.js"), "utf8");
 
-function loadSheet({ dom = false } = {}) {
+function loadSheet({ dom = false, globals = {} } = {}) {
   class El {
     constructor(tag) { this.tag = tag; this.className = ""; this.style = {}; this.children = []; this.hidden = true; this._t = ""; }
     get textContent() { return this._t; }
@@ -315,6 +343,7 @@ function loadSheet({ dom = false } = {}) {
     Teams: { LIST: [{ id: "rb", color: [1, 0, 0] }, { id: "me", color: [0, 0, 1] }] },
     ScrollFade: { refresh() { refreshed++; } },
     document: { createElement: (tag) => new El(tag) },
+    ...globals,
   };
   vm.createContext(ctx);
   seedLog(ctx);
@@ -323,6 +352,23 @@ function loadSheet({ dom = false } = {}) {
   vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/quali-sheet.js") });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
 }
+
+// UI hunt 3: the pole BADGE card is built already filled, which a screen
+// reader does not announce; open() says it once the sheet is up.
+test("a driven pole's badge is spoken when the sheet opens; no badge, no line", () => {
+  const said = [], timers = [];
+  const globals = { LiveRegion: { say: (t, k) => said.push([t, k]) }, setTimeout: (fn) => timers.push(fn),
+    Badges: { onPole: () => ["pole"], labelOf: () => "POLE SITTER" } };
+  const { sheet, els } = loadSheet({ globals });
+  sheet.open([{ pos: 1, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 60, gap: 0 }]);
+  assert.equal(els.get("q-table").children.at(-1).className, "res-personal", "the card is on the sheet");
+  timers.splice(0).forEach((fn) => fn());
+  assert.deepEqual(said, [["BADGE UNLOCKED POLE SITTER", "save"]]);
+  const quiet = loadSheet({ globals: { ...globals, Badges: { onPole: () => [], labelOf: () => "" } } });
+  quiet.sheet.open([{ pos: 2, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 61, gap: 1 }]);
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1);
+});
 
 test("the sheet paints quali.rows(): a rival's DRIVEN lap is tagged, the title carries the player's P", () => {
   const { q } = loadQuali({ season: { round: 0 } });

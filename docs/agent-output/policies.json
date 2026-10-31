@@ -626,6 +626,11 @@
       "presentation": "native",
       "preserve": "Never reveal token or child auth stdout"
     },
+    "tools/ci/guards-report.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "stderr report (one block per failing guard with its fix line) and exit 1 when it listed any; the pre-commit hook reads that exit code"
+    },
     "tools/ci/guards-verdict.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -700,6 +705,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Fail-safe unmatched and any_node/driving values; plan is not execution"
+    },
+    "tools/ci/preflip-probe.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Conflict versus red step versus pass verdict line; receipt per PR; exit 0/1/2/3"
     },
     "tools/ci/playwright-occupancy.mjs": {
       "action": "keep-native",
@@ -800,6 +810,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Quota folding counts; hook errors always show; transcript is data warning"
+    },
+    "tools/ci/ship-pr.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "ready-gate's own exit code and its = ready-gate line; the two next calls printed only on exit 0"
     },
     "tools/ci/spec-staleness.mjs": {
       "action": "keep-native",
@@ -966,6 +981,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-departure.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/assets.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -981,7 +1001,22 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/blender/crew-body.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/blender/crew-choreo.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-camera-rigs.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/gen/blender/garage-light-cues.py": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"
@@ -2561,10 +2596,35 @@
       "presentation": "shared-levels",
       "preserve": "@c5"
     },
+    "tools/ui/flows.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
+    "tools/ui/flows/core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/flows/probes.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c5"
+    },
+    "tools/ui/look-diff.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "@c5"
+    },
+    "tools/ui/look-diff/core.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/ui/menu-capture.mjs": {
       "action": "no-direct-output",
@@ -2587,6 +2647,21 @@
       "preserve": "@c2"
     },
     "tools/ui/menu-screens.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/tap-floor.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/theme-axis.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/ui-reset.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
@@ -2655,6 +2730,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Exact local capture metadata, automated findings and incomplete checks, computed-token coverage, containment and comparison controls."
+    },
+    "tools/ui/reach-score.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One summary line (screens scored / not good / partial -> reach.md), the --json report bytes, and exit status (2 bad argument or unreadable input); no browser, offline over existing DOM/inspection artifacts."
     },
     "tools/ui/review-captures.mjs": {
       "action": "keep-native",
@@ -2950,6 +3030,21 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/ci/pr-wait.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Versioned snapshot, source head, all observed wait reasons, unknown/incomplete coverage and exit2; GET-only, no queue position or landing authority."
+    },
+    "tools/ci/path-overlap.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Versioned advisory inventory, observed overlaps, rename paths, incomplete/truncated coverage and exit2; no claim or path reservation."
+    },
+    "tools/ci/verification-receipt.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Source and selected-file fingerprints, log identity, historical verdict versus current/stale/unknown applicability; advisory evidence, never permission."
     }
   }
 }

@@ -16,13 +16,26 @@ async function boot(page, headless = true) {
   if (headless) await page.evaluate(() => window.__apex.headless(true));
 }
 
-async function startGp(page, headless = true) {
+async function startGp(page, headless = true, scale = 1) {
   await boot(page, headless);
+  if (scale !== 1) await page.evaluate(s => window.__apex.renderScale(s), scale);
   await page.evaluate(() => window.__apex.race("bahrain", "day", "dry", { laps: 1, grid: "tier" }));
   await page.waitForFunction(() => !!window.__apex.info().track
     && ["count", "race"].includes(window.__apex.info().state), null,
   { polling: 100, timeout: RACE_BUILD_MS });
-  await page.evaluate(() => { window.__apex.setPhysics({ pace: 1 }); window.__apex.go(); });
+  const ticks = await page.evaluate(() => {
+    window.__apex.setPhysics({ pace: 1 }); window.__apex.go();
+    return window.__apex.info().liveTicks;
+  });
+  // A rendered page holds tickBody while the race-entry program warm compiles
+  // (~30 s on SwiftShader). Stepping the race inside it left the cooldown's first
+  // real frames held, so held throttle never moved the car (#4253). liveTicks
+  // counts only frames past those holds: three of them and nothing warming mean
+  // the warm has started and settled, as the lights wait for it in play.
+  if (!headless) {
+    await page.waitForFunction(t => window.__apex.info().liveTicks >= t + 3
+      && !window.__apex.info().warming, ticks, { polling: 100, timeout: RACE_BUILD_MS });
+  }
   expect(await page.evaluate(() => window.__apex.info().lapsTarget)).toBe(1);
 }
 
@@ -311,14 +324,22 @@ test.describe("results-flow — desktop cooldown ownership", () => {
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false, isMobile: false, reducedMotion: "no-preference" });
   test.setTimeout(240_000);
   test("a naturally finished car takes native throttle without changing classification", async ({ page }) => {
-    await startGp(page, false); await crossFlag(page);
-    await page.waitForFunction(() => window.__apex.ceremony().inputOwner === "player", null,
-      { polling: 100, timeout: 5000 });
+    // Every page round trip waits out a frame. The fixture's GLX draws this 1280x720
+    // race at 0.24 fps on SwiftShader (~4 s a frame); at render scale 0.5 it is 0.6 fps
+    // (fewer pixels than the 844x390 cells), and the cell fits its budget. The
+    // viewport, layout and input stay desktop; nothing here reads a pixel.
+    await startGp(page, false, 0.5); await crossFlag(page);
+    const diag = () => page.evaluate(() => JSON.stringify({ ceremony: window.__apex.ceremony(),
+      car: window.__apex.carAt(), active: document.activeElement && (document.activeElement.id || document.activeElement.tagName),
+      layers: !!(window.UiLayers && window.UiLayers.anyOpen()), state: window.__apex.info().state }));
+    const step = (name, wait) => wait.catch(async e => { throw new Error(`${name}: ${e.message}\n${await diag()}`); });
+    await step("cooldown hands input to the player", page.waitForFunction(
+      () => window.__apex.ceremony().inputOwner === "player", null, { polling: 100, timeout: 5000 }));
     const before = await page.evaluate(() => window.__apex.carAt());
     await page.keyboard.down("ArrowUp");
     try {
-      await page.waitForFunction(prog => window.__apex.carAt().prog > prog + 1, before.prog,
-        { polling: 100, timeout: 5000 });
+      await step("held ArrowUp advances the finished car", page.waitForFunction(
+        prog => window.__apex.carAt().prog > prog + 1, before.prog, { polling: 100, timeout: 5000 }));
     } finally { await page.keyboard.up("ArrowUp"); }
     const after = await page.evaluate(() => window.__apex.carAt());
     expect(after.finished).toBe(true);

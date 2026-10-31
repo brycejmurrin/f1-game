@@ -433,15 +433,18 @@
      --tap-paint only there. Livery ⧉ chips (.cs-liv-edit) stay on
      --chip-h / the WCAG-min rung — not this rule. */
   flex: 0 0 auto; white-space: nowrap;
-  min-inline-size: var(--tap-paint, var(--tap));
-  min-block-size: var(--tap-paint, var(--tap));
-  min-width: var(--tap-paint, var(--tap));
-  min-height: var(--tap-paint, var(--tap));
-  padding: 0 calc(var(--gap) * 0.9);
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 calc(var(--gap) * 0.5);
   justify-content: center; align-items: center; text-align: center;
   scroll-snap-align: start;
   scroll-snap-stop: normal;
 }
+/* One line per compact tab: the fitted part is named in the list below and the cyan
+   underline still marks an upgrade (design pass 3d). */
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-cur { display: none; }
 @media (orientation: landscape) {
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
     grid-column: 2; grid-row: 1;
@@ -588,7 +591,9 @@
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0; color: var(--text);
 }
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
-.cs-tab.upgraded .cs-tab-lbl { color: #4df; }
+/* Upgraded = a cyan underline; the label keeps the white ink every other tab
+   uses, so the strip reads as one row instead of red + cyan (design pass 2b). */
+.cs-tab.upgraded { box-shadow: inset 0 -3px 0 #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
 .cs-tab.active { background: var(--plate-on); border-color: var(--red); }
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
@@ -1940,7 +1945,15 @@ body:not(.desktop) #carsetup #cs-customize {
 #cs-arrival-label { font-weight: 700; letter-spacing: .12em; font-size: var(--label); }
 #cs-arrival-skip { min-height: var(--tap); }
 
-#ga-enabled { width: var(--tap); height: var(--tap); accent-color: var(--red); }
+#ga-enabled, #ga-after, #ga-captions, #ga-bars { width: var(--tap); height: var(--tap); accent-color: var(--red); }
+/* CINEMA BARS (GARAGE ENTER & LEAVE): letterbox the bay while a sequence plays
+   (setup-camera.js sequenceLook). Over the canvas, under the garage sheet (35),
+   so SKIP and STOP PREVIEW stay on top and tappable. */
+body[data-ga-bars]::before, body[data-ga-bars]::after {
+  content: ""; position: fixed; left: 0; right: 0; height: 11vh; background: var(--bg); z-index: 34; pointer-events: none;
+}
+body[data-ga-bars]::before { top: 0; }
+body[data-ga-bars]::after { bottom: 0; }
 #ga-fov {
   width: 6ch; min-height: var(--tap); text-align: center;
   background: var(--carbon); color: var(--text); border: 1px solid var(--text);
@@ -2009,6 +2022,12 @@ body:not(.desktop) #carsetup #cs-customize {
 @media (prefers-reduced-transparency: reduce) {
   :root[data-look-garage-glass="glass"]:not([data-ui-contrast="high"]) #carsetup #cs-inner { background: var(--panel); }
 }
+
+/* HEADINGS: CENTRE. The shared rule (css/overlays.css) centres .sheet-head,
+   but the garage head is a stack of bands whose title row (#cs-titlebar) is a
+   flex row of its own that stretches or grows, so justify-content on the head
+   moved nothing (look-diff 2026-10-30, 0 % at 844x390). Centre the title row. */
+:root[data-look-garage-head="centre"] #carsetup #cs-titlebar { justify-content: center; text-align: center; }
 
 /* STAT BARS: HIDE. The block is an item in #cs-header's flex column, so its
    gap goes with it; the head simply gets shorter and the list taller. */

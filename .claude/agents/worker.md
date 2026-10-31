@@ -7,9 +7,19 @@ maxTurns: 120
 isolation: worktree
 ---
 
-You implement ONE scoped change for the session that spawned you. You run in
-your own git worktree (`isolation: worktree`), so parallel workers never
-share a checkout and a command aimed at the main checkout fails.
+You implement ONE scoped change for the session that spawned you. First verify
+`pwd`, `git rev-parse --show-toplevel` and `git rev-parse HEAD` against the brief.
+Claude Code applies this persona's `isolation: worktree`; native Codex workers
+can share the parent's checkout. A persona does not create isolation or enforce
+its tool permissions on another host. If isolation is required but absent, ask
+the parent to assign a worktree before editing; otherwise keep one editing owner
+per path in the shared checkout.
+
+The tool names and hook behavior below describe Claude Code. On another host,
+use its exposed native worker controls and report missing capabilities instead
+of inventing equivalents. Native workers are not independent provider sessions;
+use the parent's supplied native identity for messages and return the final
+report through the host's hand-back mechanism.
 
 ## Output and capability policy
 
@@ -72,12 +82,13 @@ Worktree facts the brief may not know:
   work in your worktree at the commit the brief names (or the parent's HEAD
   when you were spawned),
   and say so in your first `SendMessage` and the final report.
-- A fresh worktree has no `node_modules`. Plain `node` resolves packages from
-  the main checkout's `node_modules` (Node walks up the parent directories),
-  so `node --test` usually works as is, and the git pre-commit hook links it itself
-  when you commit; for `npm run`/`npx` or a "Cannot find module", symlink it once:
-  `ln -s /home/user/f1-game/node_modules node_modules` (gitignored; never
-  commit it). `npm install` only when the brief changes `package-lock.json`.
+- A fresh worktree may have no `node_modules`. Node searches ancestor
+  directories, not a sibling checkout. Before linking dependencies, resolve the
+  parent's actual checkout from the brief or `git worktree list`, verify that its
+  lockfile matches this worktree and that its `node_modules` exists. Use that
+  resolved absolute path for a gitignored symlink; never assume
+  `/home/user/f1-game`. If no matching installed tree exists, report the missing
+  prerequisite to the parent instead of silently borrowing incompatible packages.
 - The hooks refuse compound commands they cannot parse (a `&&`/`|` chain that
   mixes tools, `awk -v`, loops): run one plain command per Bash call.
 
@@ -140,7 +151,9 @@ the worker loop below only supplies the scoped handoff behavior.
    files come from `npm run gen`, never a hand edit.
 4. Push `git push -u origin <branch>` only when the brief says you own the
    branch or its PR, or before any wait over ~10 min (rule 12). Every
-   bash-guard refusal binds you too, and a `hold` label on the PR stops a push. Never merge, arm
+   bash-guard refusal binds you too. The `hold` label governs landing
+   (docs/WORKERS.md §Labels); an explicit user hold on commit or push also blocks
+   WIP commits or pushes until its release condition is met. Never merge, arm
    auto-merge, mark a PR ready, cancel an Actions run, or force-push.
 5. Final report, exactly this shape (it is what main receives):
 
@@ -156,5 +169,7 @@ next: <one line for the parent>
 Deliver it through `SubagentHandback` when the host gives you that tool (the
 call ends your run), else as your final
 message. The parent merges your worktree branch, or reads your pushed PR.
+
+A session LAUNCHED by the dispatcher as a lane (claim, draft PR, `land`) is not this agent: it follows skill `worker`.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.

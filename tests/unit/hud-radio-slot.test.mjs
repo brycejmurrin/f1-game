@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -166,4 +167,94 @@ test("css/hud.css: one radio home per profile — no leftover broadcast 14svh, f
   assert.match(css,
     /body\.hud-mirror-on\.hud-mirror-side:not\(\.hud-radio-top\):not\(\[data-radio-corner\]\) #announce/,
     "beside-the-mirror stands down for both slot markers");
+});
+
+// UI hunt 3: showModal() makes everything outside the dialog inert, so a line
+// said with Settings (or any dialog) open went to an unreadable #announce-live.
+test("LiveRegion speaks inside the topmost open modal, through an empty polite twin", () => {
+  const made = [], timers = [];
+  const node = (tag) => ({ tagName: tag, attrs: {}, kids: [], textContent: "", className: "",
+    setAttribute(k, v) { this.attrs[k] = v; }, appendChild(n) { this.kids.push(n); return n; },
+    querySelector(sel) { return sel === ":scope > [data-announce-modal]" ? this.kids.find((k) => "data-announce-modal" in k.attrs) || null : null; } });
+  const page = node("div"); let modals = [];
+  const sb = {
+    document: { getElementById: (id) => (id === "announce-live" ? page : null), querySelectorAll: (sel) => (sel === ":modal" ? modals : []),
+      createElement: (t) => { const n = node(t); made.push(n); return n; } },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, performance: { now: () => 0 },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/ui/live-region.js"), "utf8") + ";this.LiveRegion=LiveRegion;", sb, { filename: absSrc("js/ui/live-region.js") });
+  const settings = node("dialog"); modals = [settings];
+  sb.LiveRegion.say("Gears is unavailable", "save");
+  const twin = settings.kids[0];
+  assert.ok(twin && "data-announce-modal" in twin.attrs, "a twin inside the modal");
+  assert.equal(twin.attrs["aria-live"], "polite"); assert.equal(twin.attrs.role, "status");
+  assert.equal(twin.textContent, "", "empty for the beat before it speaks");
+  timers.shift()();
+  assert.equal(twin.textContent, "Gears is unavailable"); assert.equal(page.textContent, "");
+  timers.shift()();                                   // hold ends
+  modals = []; sb.LiveRegion.say("Safety car", "flag"); timers.shift()();
+  assert.equal(page.textContent, "Safety car", "no modal: the page region as before");
+  modals = [settings]; sb.LiveRegion.say("again", "flag");
+  assert.equal(settings.kids.length, 1, "the twin is made once per modal");
+});
+
+test("both radio slots size the card to the slot, not to the dock lane announceLane still publishes (UI-HUNT-2-HUD)", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const slotRules = (prefix) => rules.filter((r) => r.selector.startsWith(prefix) && String(r.decls.get("max-width") || "").includes("--radio-top-w"));
+  const widths = (prefix) => slotRules(prefix).map((r) => r.decls.get("width") || "");
+  const want = "min(max-content, calc(var(--radio-top-w) / var(--hud-z)))";
+  assert.deepEqual(widths("body.hud-radio-top #announce"), [want], "tower-row slot: width follows the slot");
+  assert.deepEqual(widths("body[data-radio-corner]"), [want], "corner slot: width follows the slot, so the base rule's lane width cannot squeeze it");
+});
+
+test("landscape radio prefers a readable outer lane and preserves a crowded fallback", () => {
+  const dom = makeDom(), root = dom.documentElement;
+  const R = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const tower = dom.document.createElement("div"), dock = dom.document.createElement("div"), group = dom.document.createElement("div");
+  tower._rect = R(250, 8, 300, 54); group._rect = R(0, 300, 100, 90); dock.appendChild(group);
+  const els = { announce: dom.byId("announce"), flag: dom.byId("hud-flag"), hudSectors: dom.byId("hud-sectors"), minimap: dom.byId("minimap") };
+  for (const el of [els.flag, els.hudSectors, els.minimap]) el.hidden = true;
+  const sb = { document: dom.document, Map, Math, Object, parseFloat, getComputedStyle: () => ({ getPropertyValue: () => "47" }) };
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js") + ";this.lane=HudRadioLane;", sb, { filename: absSrc("js/ui/hud-radio-lane.js") });
+  const lane = sb.lane.create({ els }, { vpW: () => 844, vpH: () => 390, top: () => tower, docks: () => [dock], fitKey: () => "",
+    hStyle: (el, key, value) => el.style.setProperty(key, value), hUnstyle: (el, key) => el.style.removeProperty(key), hToggle() {} });
+  lane.announceLane(root);
+  const x = () => parseFloat(root.style.getPropertyValue("--announce-lane-x")), w = () => parseFloat(root.style.getPropertyValue("--announce-lane-w"));
+  assert.ok(w() >= 160, "outer lane remains readable");
+  assert.ok(x() + w() <= 844 * 0.4 + 0.1 || x() >= 844 * 0.6, "outer lane clears the centre 20% driving corridor");
+  els.minimap.hidden = false; els.minimap._rect = R(47, 70, 253, 96);
+  els.hudSectors.hidden = false; els.hudSectors._rect = R(544, 70, 253, 96);
+  lane.invalidateLaneRects(); lane.announceLane(root);
+  assert.equal(x(), 308); assert.equal(w(), 228, "crowded case retains the original usable full lane");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the message is not discarded");
+  dom.body.setAttribute("data-radio-placed", ""); root.style.setProperty("--announce-lane-x", "123px");
+  lane.announceLane(root);
+  assert.equal(root.style.getPropertyValue("--announce-lane-x"), "123px", "manual placement stays under player control");
+  dom.body.removeAttribute("data-radio-placed");
+  els.announce.hidden = false; els.announce._rect = R(350, 220, 200, 50);
+  for (const key of ["flag", "hudLimits", "tyre"]) {
+    const obstacle = els[key] || (els[key] = dom.byId(key));
+    obstacle.hidden = false; obstacle._rect = R(360, 230, 60, 24);
+    els.announce.toggleAttribute("data-lane-collapsed", false);
+    root.style.setProperty("--announce-lane-w", "200px");
+    lane.radioPaintedCollapse(root);
+    assert.equal(els.announce.hasAttribute("data-lane-collapsed"), true, `${key} stays readable when messages compete`);
+    obstacle.hidden = true;
+  }
+  // Current tracked-export cockpit at844×390: BUTTON245 enlarges the steer
+  // pair into the outer card's actual row, below the lane's predicted band.
+  group._rect = R(59, 159.8, 365.9, 176.4);
+  els.hudSectors._rect = R(542, 64, 255, 72);
+  const pedals = dom.document.createElement("div"); pedals._rect = R(599, 80, 188, 256); dock.appendChild(pedals);
+  els.announce.getBoundingClientRect = () => w() < 200 ? R(x(), 151.9, w(), 75) : R(55, 151.9, 282.4, 50.7);
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  els.announce.toggleAttribute("data-lane-collapsed", false);
+  lane.radioPaintedCollapse(root);
+  assert.ok(x() >= 425 && x() + w() <= 599, "painted steering bounds recover the free central lane");
+  assert.ok(Math.abs(w() - 158.1) < 0.2, "sectors ending above the card do not steal its 158px central fallback");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the pit call stays visible in the available gap");
+  dom.body.setAttribute("data-radio-placed", "");
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  lane.radioPaintedCollapse(root);
+  assert.equal(w(), 282.4, "explicit manual radio placement bypasses automatic control recovery");
 });

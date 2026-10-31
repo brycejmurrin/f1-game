@@ -483,8 +483,17 @@ test("THE DIRECTIONS, FOLLOWED, MAKE THE STOP: every cue fires at the model's ow
   //    second rivals([]) only moves whoever was ~800 m ahead to just behind, so
   //    the field is retired (closingCar skips a retired car).
   g.G.cars.forEach((o, i) => { if (!o.isPlayer) a.retire(i, "bench"); });
+  // A driver already taught (any stop after the first) must not re-write pitTaught at the release:
+  // a store write bumps store.rev, and every team's livery/parts memo re-resolves on that frame (perf hunt 8).
+  const st = g.G.store, taughtBefore = !!st.get("pitTaught", 0);
+  const set0 = st.set;
+  let taughtWrites = 0;
+  st.set = function (k, ...rest) { if (k === "pitTaught") taughtWrites++; return set0.call(this, k, ...rest); };
   const go =run(a, pits, () => ({ x: a.pit().laneX, throttle: true }), (c, q) => q.state === "out", 6);
+  st.set = set0;
   assert.ok(go, "the hold never released");
+  assert.equal(taughtWrites, taughtBefore ? 0 : 1, `pitTaught writes at the release (taught before: ${taughtBefore})`);
+  assert.equal(!!st.get("pitTaught", 0), true, "the first completed stop still ends the teach");
   assert.equal(go.c.phase, "served"); assert.equal(go.c.text, "GO GO GO");
   const out = run(a, pits, (ps, q) => ({ x: q.driveX != null ? q.driveX : ps.x }), (c) => c && c.phase !== "served", 4);
   assert.ok(out, "GO GO GO never ended");

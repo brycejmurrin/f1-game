@@ -986,6 +986,15 @@ def api_endpoint(url):
     return u.split("?", 1)[0].split("#", 1)[0].strip("/")
 
 
+def _api_ready_pr(ep, hit):
+    """The PR number when `hit` is a REST draft→ready flip (`…/pulls/<n>/ccr/ready_for_review`, or a
+    `pulls/<n>` PATCH with draft=false); None for GraphQL or an opaque `X` segment, which stay a plain ask."""
+    if not hit or hit[1] is None or not hit[1].startswith("Marking a draft ready"):
+        return None
+    m = re.search(r"(^|/)pulls/(\d+)(/|$)", ep)
+    return int(m.group(2)) if m else None
+
+
 def api_classify(method, endpoint, blob):
     """(decision, ask-text, endpoint) for one GitHub API call, or None to pass. ONE policy for every door
     (gh api, curl, wget, node -e fetch, python -c; 2026-10-26 system audit §10 — user grant, Bryce 2026-10-26
@@ -1172,8 +1181,10 @@ def http_issues(text, cwd=None):
         for method, url, blob in calls:
             hit = api_classify(method, url, blob)
             if hit:
-                out.append({"cmd": " ".join(argv)[:200], "decision": hit[0], "ask": hit[1],
-                            "why": f"{b} {method} {hit[2]}"})
+                row = {"cmd": " ".join(argv)[:200], "decision": hit[0], "ask": hit[1], "why": f"{b} {method} {hit[2]}"}
+                if _api_ready_pr(hit[2], hit):
+                    row["api_ready_pr"] = _api_ready_pr(hit[2], hit)
+                out.append(row)
     return out
 
 
@@ -1206,10 +1217,16 @@ def poll_loops(text):
     not commands."""
     t = _blank_quotes(strip_heredocs(text))
     out = []
-    for m in re.finditer(r"(^|[;&|(\s])(for|while|until)\b([\s\S]*?)\bdo\b([\s\S]*?)\bdone\b", t):
-        head, body = m.group(3), m.group(4)
+    # The keyword must open a command (after ; & | ( { newline, or then/do/else), so prose such as an unquoted
+    # `echo until we sleep` or a commit message never matches (efficiency review 2026-10-30, finding 5).
+    for m in re.finditer(r"(^|[;&|({\n]|\s-[a-z]*c)\s*((?:then|do|else)\s+)?(for|while|until)\b([\s\S]*?)\bdo\b([\s\S]*?)\bdone\b", t):
+        kw, head, body = m.group(3), m.group(4), m.group(5)
         whole = head + " " + body
         if not re.search(r"\bsleep\b", whole):
+            continue
+        # Finding 5: ANY until/while loop that sleeps is a hand-written poll, whatever it watches. `while read` drains input.
+        if kw in ("until", "while") and not re.match(r"\s*(IFS=\S*\s+)?read\b", head):
+            out.append({"why": kw + " … sleep"})
             continue
         # pass-4 H12: `for i in 1 2 3; do git fetch origin && break; sleep 5; done` is a bounded retry of a
         # network call (a literal list of <= 5 items, no seq, a `break` in the body), not a poll.
@@ -1218,9 +1235,27 @@ def poll_loops(text):
             continue
         w = POLL_WATCH.search(whole)
         if w:
-            out.append({"why": m.group(2) + " … " + re.sub(r"\s+", " ", w.group(0)) + " … sleep"})
+            out.append({"why": kw + " … " + re.sub(r"\s+", " ", w.group(0)) + " … sleep"})
         elif re.search(r"\bseq\b", head):
             out.append({"why": "seq … sleep"})
+    return out
+
+
+def floor_issues(text, background):
+    """[{why}] for a test floor run the wrong way (efficiency review 2026-10-30, finding 4: `tooling-fast … | tail` hid
+    red tests behind the pipe's exit 0 for 16 min, and foreground floors ran 9-22 min). Refused: `tooling-fast` or
+    `ready-gate` piped into tail/head, and a FOREGROUND full `tooling-fast` (no --changed, no explicit test file).
+    Quoted prose and heredocs are not commands."""
+    t = _blank_quotes(strip_heredocs(text))
+    out = []
+    for m in re.finditer(r"(?:tooling-fast(?:\.mjs)?|test:tooling-fast|ready-gate(?:\.mjs)?)\b([^;&|\n]*)(\|&?\s*(?:tail|head)\b)?", t):
+        args, piped = m.group(1), m.group(2)
+        name = m.group(0).split()[0]
+        if piped:
+            out.append({"why": name.rstrip("\\") + " piped into " + piped.lstrip("|& ").strip()})
+        elif name.startswith(("tooling-fast", "test:tooling-fast")) and not background \
+                and not re.search(r"--(changed|help|print-scope|stop)\b|-h\b|\.test\.m?js\b", args):
+            out.append({"why": "foreground full tooling-fast"})
     return out
 
 
@@ -1293,7 +1328,10 @@ def gh_issues(text, cwd=None):
             method = method or ("POST" if fields else "GET")
             hit = api_classify(method, endpoint or "", blob)
             if hit:
-                out.append({"cmd": cmd, "decision": hit[0], "ask": hit[1], "why": f"gh api {method} {hit[2]}"})
+                row = {"cmd": cmd, "decision": hit[0], "ask": hit[1], "why": f"gh api {method} {hit[2]}"}
+                if _api_ready_pr(hit[2], hit):
+                    row["api_ready_pr"] = _api_ready_pr(hit[2], hit)
+                out.append(row)
     return out
 
 
@@ -1624,6 +1662,7 @@ def guard(payload, root):
         raises = ratchet_issues(cmd)
         gh = gh_issues(cmd) + http_issues(cmd)
         polls = poll_loops(cmd)
+        floors = floor_issues(cmd, bool((payload.get("tool_input") or {}).get("run_in_background")))
         browser = browser_starts(cmd, browser_groups(root)) if sub else []
     except ParseError:
         print("PARSE null")
@@ -1701,10 +1740,17 @@ def guard(payload, root):
         return 2
     if polls and os.environ.get("APEX_POLL_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_POLL_OK=1\s", cmd):
         sys.stderr.write("BLOCKED: a shell poll loop (" + "; ".join(sorted({p["why"] for p in polls})) + ") — AGENTS.md "
-                         "rules 4 and 13: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
-                         "`node tools/ci/ci-watch.mjs --sha <sha> --failures-only` / `node tools/ci/wait-for.mjs`; never "
+                         "rules 4 and 13: wait with `node tools/ci/wait-for.mjs --log-matches <log> '^= '` or a BACKGROUND "
+                         "`node tools/ci/ci-watch.mjs --sha <sha> --timeout 30` (run_in_background); never "
                          "a for/while … sleep loop (2026-10 week: three 120-iteration loops in one orchestrator). "
                          "APEX_POLL_OK=1 <command> for a bounded retry of a network call.\n")
+        return 2
+    if floors and os.environ.get("APEX_FLOOR_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_FLOOR_OK=1\s", cmd):
+        sys.stderr.write("BLOCKED: " + "; ".join(sorted({f["why"] for f in floors})) + " — a pipe into tail/head returns the PIPE's "
+                         "exit code (red tests read as 0), and a full floor runs 9-22 min in the foreground. Run `tooling-fast` with "
+                         "run_in_background: true (or `--changed`), no `| tail`, and read its closing line "
+                         "`= tooling-fast passed|failed (<n> files, <m> failed)`; `ready-gate` the same, unpiped "
+                         "(2026-10-30 efficiency review, finding 4). APEX_FLOOR_OK=1 <command> to override.\n")
         return 2
     closed = closed_pr_refusal(dests, root) if dests and os.environ.get("APEX_CLOSED_PR_PUSH_OK") != "1" else ""
     if closed:
@@ -1725,14 +1771,27 @@ def guard(payload, root):
     gated = [x for x in gh if x.get("kind") == "ready"]
     receipts = P.project_root()   # CLAUDE_PROJECT_DIR, the same root github-mcp-guard.sh reads
     for x in gated:
-        live = P.live_head(receipts, x.get("pr")) if x.get("pr") else None
-        ok, why = P.receipt_check(receipts, "ready", x.get("pr"), live, verify_files=True, require_head=True)
+        live, plan = P.live_state(receipts, x.get("pr")) if x.get("pr") else (None, None)
+        ok, why = P.receipt_check(receipts, "ready", x.get("pr"), live, verify_files=True, require_head=True, plan=plan)
         if not ok:
             P.emit("deny", P.DENY_GATE_READY + " (" + x["why"] + ": " + why + ")")
             return 0
     # 2026-10-26: no APEX_MERGE_DESK silent pass here any more (system audit §10: the env was set for EVERY session,
     # so a worker's GraphQL/REST merge-by-id or ready flip never asked). An ask asks whoever runs the session.
-    rest = [x for x in gh if x.get("kind") != "ready"]
+    # A REST ready flip (`gh api …/ccr/ready_for_review`, curl, …) passes with the same fresh ready-gate receipt
+    # as `gh pr ready` and the MCP door; without one it still asks, with the DENY_GATE_READY text.
+    rest = []
+    for x in gh:
+        if x.get("kind") == "ready":
+            continue
+        n = x.get("api_ready_pr")
+        if n and x.get("decision") == "ask":
+            live, plan = P.live_state(receipts, n)
+            ok, why = P.receipt_check(receipts, "ready", n, live, verify_files=True, require_head=True, plan=plan)
+            if ok:
+                continue
+            x = dict(x, ask=P.DENY_GATE_READY + " (" + why + ")")
+        rest.append(x)
     if rest:
         P.emit("ask", (rest[0].get("ask") or P.ASK_MERGE) + " (" + rest[0]["why"] + ")", ctx)
     elif ctx:

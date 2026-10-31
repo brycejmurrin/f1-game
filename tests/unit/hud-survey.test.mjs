@@ -220,9 +220,9 @@ test("pairwise covers every pair (or only the named ones), deterministically, un
 
 test("quick / full / leads / exhaustive: sizes, boots, coverage", () => {
   const q = M.expandMatrix("quick");
-  assert.equal(q.cells.length, 13);
+  assert.equal(q.cells.length, 14);
   assert.equal(M.bootGroups(q.cells).length, 3);
-  for (const n of ["chase-default", "cockpit-default", "visor-default", "chase-preset-clean", "phoneP-chase", "chase-hud70", "chase-hud150"])
+  for (const n of ["chase-default", "cockpit-default", "visor-default", "chase-preset-clean", "phoneP-chase", "chase-hud70", "chase-hud150", "phoneL-helmet"])
     assert.ok(q.cells.some((c) => c.id === n), n);
   const f = M.expandMatrix("full");
   assert.ok(f.cells.length <= M.FULL_CAP);
@@ -321,8 +321,8 @@ test("expected-visible rules", () => {
   assert.deepEqual([classic.ot.want, classic.tyre.want, classic.energy.want, classic.gearbox.want], [false, false, false, true],
     "touch cockpit with a screenless wheel: chips hidden, the gearbox (no LCD) shown");
   // HELMET is the visor HUD (its own layout set, never cockpit-cam): a touch
-  // helmet keeps ENERGY, TYRES and speed, leaves gear to the LCD glyph and
-  // OT / AERO to their buttons; a desktop helmet shows the lot.
+  // helmet keeps ENERGY, TYRES, GEAR and speed (its GEAR pill covers the wheel
+  // LCD's digits), leaves OT / AERO to their buttons; a desktop helmet shows the lot.
   const visor = E({ device: "phone-landscape-844x390", cam: "helmet" }, { desktop: false, cockpitCam: false });
   assert.deepEqual([visor.ot.want, visor.aero.want, visor.tyre.want, visor.energy.want, visor.gearbox.want, visor.speed.want], [false, false, true, true, true, true],
     "touch helmet: the visor keeps ENERGY / TYRES / GEAR / speed");
@@ -377,6 +377,17 @@ test("desktop-1440x900: a named 16:10 device, its own short id, not a matrix axi
   const E = M.expectedVisibility(c, { desktop: true, cockpitCam: true });
   assert.equal(E["btn-ot"].want, false, "a desktop: no touch stack");
   assert.equal(E.rotateDevice.want, false);
+});
+
+test("--settings: a LOAD SETTINGS export seeds every boot; anything else is refused before a browser", () => {
+  const p = parseArgs(["--device", "phone-landscape-844x390", "--settings", "tests/data/settings-defaults-export.json"]);
+  assert.equal(p.settings.format, "apex26-settings-v1");
+  assert.equal(p.settings.settings.display.hudBtnScale, 245, "the owner's phone export, read whole");
+  assert.equal(parseArgs(["--device", "phone-landscape-844x390"]).settings, null, "no flag: the shipped store");
+  const rf = (text) => () => text;
+  assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("{\"format\":\"other\"}") }), /apex26-settings-v1/);
+  assert.throws(() => parseArgs(["--settings", "x.json"], { readFile: rf("nope") }), /not JSON/);
+  assert.throws(() => parseArgs(["--settings", "missing.json"], { readFile: () => { throw new Error("ENOENT"); } }), /cannot read/);
 });
 
 test("portrait mode: race by default (portraitOk at boot, findings keep their severity), gate on request", () => {
@@ -894,31 +905,16 @@ test("menu-mock: OVERLAY_IDS includes photo-studio + loading so a * sweep can re
   assert.ok(OVERLAY_IDS.includes("loading"), "loading cover also sits above the title");
 });
 
-test("menu-mock: leaveToMenu dismisses ios-install and photo-studio-open", () => {
-  const hidden = {};
-  const bodyClasses = new Set(["photo-studio-open", "lt-open"]);
-  const els = {
-    "ios-install": { get hidden() { return !!hidden["ios-install"]; }, set hidden(v) { hidden["ios-install"] = !!v; } },
-    "install-chip": { get hidden() { return !!hidden["install-chip"]; }, set hidden(v) { hidden["install-chip"] = !!v; } },
-    "photo-studio": { hidden: true },
-    "lighting": { hidden: true },
-    "camtune": { hidden: true },
-    "flyby": { hidden: true },
-    "quali": { hidden: true },
-    "race-settings": { hidden: true },
-  };
-  const sandbox = {
-    window: { __apex: { info: () => ({ state: "menu", raceGrid: "grid" }) }, __mmGrid: "grid" },
-    document: {
-      getElementById: (id) => els[id] || null,
-      body: { classList: { remove: (...xs) => xs.forEach((c) => bodyClasses.delete(c)) } },
-    },
-  };
-  vm.runInNewContext(`(${MM.leaveToMenu.toString()})()`, sandbox);
-  assert.equal(els["ios-install"].hidden, true);
-  assert.equal(els["install-chip"].hidden, true);
-  assert.equal(bodyClasses.has("photo-studio-open"), false);
-  assert.equal(bodyClasses.has("lt-open"), false);
+test("menu-mock: the shared reset after leaveToMenu dismisses ios-install and photo-studio-open", async () => {
+  // Since the shared reset (tools/ui/ui-reset.mjs), leaveToMenu only quits a race and
+  // a quali sheet; menu-capture.resetToTitle runs resetOverlays with resetConfig()
+  // right after it. That config must carry the tips and the route body classes
+  // (ui-reset-tap-floor.test.mjs drives resetOverlays itself).
+  const R = await import("../../tools/ui/ui-reset.mjs");
+  const cfg = R.resetConfig();
+  const tips = new Set(cfg.tips), classes = new Set(cfg.bodyClasses);
+  assert.equal(tips.has("ios-install") && tips.has("install-chip"), true, "both install tips");
+  assert.equal(classes.has("photo-studio-open") && classes.has("lt-open"), true, "route body classes");
 });
 
 test("menu-mock --list needs no browser", () => {

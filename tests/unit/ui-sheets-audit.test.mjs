@@ -31,7 +31,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
@@ -982,19 +982,36 @@ test("friend-race labels do not outlive the race: the next solo build restores M
   assert.equal(h.els.resMenu.textContent, "MENU", "TT clears the previous friend-room action label");
 });
 
-test("RESULTS scrolls .res-row.you into view when the sheet builds", () => {
+test("RESULTS opens at the top with the winner in the head; your row sticks inside its ranking list only", () => {
   const { season, cars } = tiedSeason();
   const h = bootResults({ season, cars });
+  const head = h.dom.document.createElement("div");
+  head.appendChild(h.els.resultsTitle);
   const scrolls = [];
   const orig = h.dom.document.createElement.bind(h.dom.document);
   h.dom.document.createElement = (tag) => {
     const el = orig(tag);
-    el.scrollIntoView = (opts) => { scrolls.push({ className: el.className, opts }); };
+    el.scrollIntoView = () => { scrolls.push(el.className); };
     return el;
   };
+  h.els.resultsTable.scrollTop = 1260;
   h.api.buildResults(cars.slice());
-  assert.ok(scrolls.some((s) => /\byou\b/.test(s.className)),
-    "the player row must scrollIntoView on open (sticky alone leaves it below the fold)");
+  assert.deepEqual(scrolls, [], "no scrollIntoView: it opened 844x390 ~1260px down, podium and winner off-screen");
+  assert.equal(h.els.resultsTable.scrollTop, 0, "the sheet opens at its top");
+  const chip = head.children.find((c) => c.id === "res-winner");
+  assert.ok(chip && !chip.hidden, "a winner chip sits in the head, outside the scroller");
+  assert.equal(chip.textContent, "P1 " + cars[0].code);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  h.G.referencePole = () => 0;
+  h.api.buildTTResults();
+  assert.equal(chip.hidden, true, "Time Trial has no race winner");
+  const css = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(decl(css, "#results-table .res-row.you", "position"), "relative", "the TT headline (no list) stays in flow");
+  const pinned = ruleFor(css, '#results-table [data-results-part="ranking"] > .res-row.you', "position").decls;
+  assert.deepEqual([pinned.get("position"), pinned.get("top"), pinned.get("bottom")], ["sticky", "0", "0"], "pinned at whichever edge, within its list");
+  assert.equal(decl(css, "#results-table .res-row.you:has([data-stint-details][open])", "position"), "relative",
+    "an open TYRE STINTS fold drops the row into flow instead of covering the rows after it");
 });
 
 test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis", () => {
@@ -1065,6 +1082,28 @@ test("career settlement displays final sponsor target, MET/MISSED and reason wit
   assert.deepEqual(build(null), build(undefined), "legacy and absent verdict keep the existing debrief");
 });
 
+
+// UI hunt 3: the earnings card was a role=status region built already filled,
+// which screen readers do not announce. It is spoken once per result instead.
+test("the round's earnings are spoken once per result, as words, and a rebuild stays quiet", () => {
+  const { cars } = tiedSeason();
+  const said = [], timers = [];
+  const h = bootResults({ season: null, cars, seasonMode: false, globals: {
+    LiveRegion: { say: (text, kind) => said.push([text, kind]) }, setTimeout: (fn) => timers.push(fn) } });
+  h.els.results.hidden = false;
+  h.G.careerSettlement = { pos: 1, pts: 25, money: 500, rep: 50, sponsorPay: 0 };
+  const order = cars.slice();
+  h.api.buildResults(order);
+  const box = h.els.resultsTable.children.find((e) => e.classList.contains("res-settle"));
+  assert.equal(box.getAttribute("role"), null, "no pre-filled live region");
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1);
+  assert.equal(said[0][1], "save");
+  assert.ok(said[0][0].startsWith("ROUND SETTLED "), "heading and figures are separate words: " + said[0][0]);
+  h.api.buildResults(order);
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1, "a rebuild of the same result is not spoken again");
+});
 
 test("translated results views expose stable navigation state and replace stale champion state", () => {
   const { season, cars } = tiedSeason();

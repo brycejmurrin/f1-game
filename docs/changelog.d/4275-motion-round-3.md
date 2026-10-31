@@ -1,0 +1,3 @@
+Fixed: with reduced motion on (phone setting or MOTION: REDUCED), the "TAP TO RACE" loading hint waits its 3 s again instead of showing at once, and the in-game setting now skips staggered delays the same way the phone setting does (#4275).
+Fixed: on a phone, menu screens fade in over 120 ms instead of cutting hard; the garage shows its tab and option outline at once instead of an empty panel while the car loads (#4275).
+Fixed: first load on a slow connection — no stray eye icon in the title's top-left corner, the waiting doors stay solid so the line-art car no longer shows through their labels, the iPhone "Add to Home Screen" tip no longer covers the disclaimer, and the line-art car crossfades into the home scene (#4275).

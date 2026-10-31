@@ -271,6 +271,8 @@ const ACCENT_DECOR = {
     "`#bc-tower` border-left — the WATCH timing tower wears the same team stripe as `.hud-box`; every row's state (on camera, fastest, pit, out) is carried by its own text and fill, never by the stripe",
     "`#announce-num` background — the radio card's number PLATE. The team colour is the ground, not the message: the number on it is `--accent-ink`, picked per team to clear 4.5:1 (proved below), and the CHANNEL a message came in on is carried by the WHO line's colour, never by the plate",
     "`#captions .cap-who` — optional SPEAKER COLOUR tint on the spotter label; the call text is `--text`, and SPEAKER COLOUR off uses `--text` only (same ornament/channel split as the radio WHO line)",
+    "`#hud-box-pos` inset stripe — the `.hud-box` team stripe, drawn once on the fused timing strip's POS cell; the rank is its own text",
+    "phone `.hud-bottom` top keyline — the same team stripe on the instrument plate; every readout inside carries its own text",
   ],
   "css/tokens.css": [
     "`--accent-dim` derivation",
@@ -430,7 +432,7 @@ function themeGetter(flags, id, { keep = null } = {}) {
 // player's own choice of see-through, not a theme, so it is not modelled.
 const panelAt1 = (v) => v.replace(/calc\(([\d.]+%?) \* var\(--hud-panel-a-eff\)\)/g, "$1");
 const SCENES = { black: "#000000", asphalt: "#3a3a40", "mid-grey": "#808080" };
-const HC_PLATE = [hud, ':root[data-ui-contrast="high"] :is(.hud-box, #announce)', "background"];
+const HC_PLATE = [hud, ':root[data-ui-contrast="high"] .hud-box, :root[data-ui-contrast="high"] #announce', "background"];
 const SCOPE_SEL = ":is(#hud, #announce, #game-metrics)";
 const CASES = [
   { what: "radio card words", id: "#announce", ink: [hud, "#announce", "color"], plate: [hud, "#announce", "background"], hc: HC_PLATE },
@@ -441,6 +443,11 @@ const CASES = [
   { what: "blue flag", id: "#hud", ink: [hud, '#hud-flag[data-flag="blue"]', "color"], plate: [hud, '#hud-flag[data-flag="blue"]', "background"] },
   { what: "red flag", id: "#hud", ink: [hud, "#hud-flag.flag-red", "color"], plate: [hud, "#hud-flag.flag-red", "background"] },
   { what: "broadcast tower (inherited ink)", id: "#hud", ink: [tokens, SCOPE_SEL, "color"], plate: [hud, "body.hud-prof-broadcast .hud-top", "background"] },
+  // The timing strip's light POS cell (design pass 2a). HIGH CONTRAST's solid plate outranked its background and
+  // left dark ink on a dark plate (Bryce's iPhone, 2026-10-30), so HC names the cell's own restatement.
+  { what: "timing strip POS cell", id: "#hud", ink: [hud, "body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos)", "color"],
+    plate: [hud, "body:not(.hud-prof-broadcast) #hud-box-pos", "background"],
+    hc: [hud, ':root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *)', "background"] },
   { what: "metrics panel", id: "#game-metrics", ink: [hud, "#game-metrics", "color"], plate: [hud, "#game-metrics", "background"] },
   { what: "metrics bar buttons", id: "#game-metrics", ink: [hud, "#game-metrics-bar > button", "color"], plate: [hud, "#game-metrics", "background"] },
   // NON-TEXT (1.4.11, 3:1): the parts of a chip that carry its state.

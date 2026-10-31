@@ -320,10 +320,14 @@ var GameAudio = (function () {
     };
   }
   const WIND_GATE = 0.04;
-  function windFromSpeed(s01) {
+  // `out` (optional) is filled and returned: setEngine passes _windScratch per frame.
+  const _windScratch = { gain: 0, hz: 0 };
+  function windFromSpeed(s01, out) {
     const s = clamp01(s01);
     const u = s <= WIND_GATE ? 0 : (s - WIND_GATE) / (1 - WIND_GATE);
-    return { gain: 0.036 * u * u, hz: 450 + u * 1450 };
+    const r = out || {};
+    r.gain = 0.036 * u * u; r.hz = 450 + u * 1450;
+    return r;
   }
 
   /* ---------------- iOS audio session ----------------
@@ -355,7 +359,7 @@ var GameAudio = (function () {
 
   // These services are functions so a rebuild never leaves a module holding the old context.
   const signal = GameAudioSignal.create({ context: () => ctx, bus: () => sfxBus, sfxOk, now });
-  const { env, blip, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise } = signal;
+  const { env, blip, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise } = signal;
   const { detectPeriod, findStableLoop } = GameAudioSignal;
   const soundtrack = GameAudioSoundtrack.create({
     context: () => ctx, master: () => master, enabled, engineRunning: () => engineOn,
@@ -1948,12 +1952,13 @@ var GameAudio = (function () {
     // Electric MGU-K + boost cue live in ErsLayer (fixed nodes). When the
     // module is loaded, mute the legacy ersOsc so the two never stack.
     if (typeof ErsLayer !== "undefined" && ErsLayer.update) {
-      ErsLayer.update({
-        t, deploy, energy, brake: brkDem, ax: ph.ax || 0, speed: s,
-        layerOn: layers.ers, ersOn: ph.ersOn !== false,
-        boost: deploy > 0 || !!ph.boostOn || !!ph.otOn, otOn: !!ph.otOn,
-        boostTune: tune.boost, partBias,
-      });
+      // One record rewritten in place (the _scrubArg pattern): this runs every frame.
+      const e = _ersArg;
+      e.t = t; e.deploy = deploy; e.energy = energy; e.brake = brkDem; e.ax = ph.ax || 0; e.speed = s;
+      e.layerOn = layers.ers; e.ersOn = ph.ersOn !== false;
+      e.boost = deploy > 0 || !!ph.boostOn || !!ph.otOn; e.otOn = !!ph.otOn;
+      e.boostTune = tune.boost; e.partBias = partBias;
+      ErsLayer.update(e);
       if (ersGain && ersGain._apexErsTgt !== 0) {
         ersGain.gain.setTargetAtTime(0, t, 0.10);
         ersGain._apexErsTgt = 0;
@@ -1986,7 +1991,7 @@ var GameAudio = (function () {
     // rain hisses, a hard lift gusts (harvLevel). Peak ~0.036, an order under
     // the engine core. lastSpeed is overwritten above, so the gust is the
     // harvest smoother, not a re-diff of speed.
-    const wf = windFromSpeed(s);
+    const wf = windFromSpeed(s, _windScratch);
     const windOpen = s > WIND_GATE ? 1 : 0;
     const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
@@ -2117,6 +2122,9 @@ var GameAudio = (function () {
   // (back on the pause menu) silences engine + rivals once; setPaused calls
   // resetReplayScrub so a resume never inherits that one-shot.
   let _scrubWas = false, _scrubGear = null, _scrubRpm = null;
+  const _ersArg = { t: 0, deploy: 0, energy: 1, brake: 0, ax: 0, speed: 0, layerOn: true, ersOn: true,
+    boost: false, otOn: false, boostTune: 1, partBias: 1 };
+  const _skidQ = { gain: 0, hz: 0, lfo: 0 };
   const _scrubArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0, deploy: 0, energy: 1, ersDeploy: 0, throttle: 0, brake: 0, regen: 0.5 };
   // Every car's rpm from its replayed speed in its natural gear (no ring field
   // for revs). replay-buf's applyPose calls this so a seek re-revs at once.
@@ -2172,10 +2180,8 @@ var GameAudio = (function () {
     // whole wet session with nothing to retry it. Queue it for the teardown
     // callback instead of returning empty-handed.
     if (rainStopping) { rainPending = g; return; }
-    const dur = 4;
-    const buf = noiseBuf(dur);
     rainSrc = ctx.createBufferSource();
-    rainSrc.buffer = buf;
+    rainSrc.buffer = loopNoise("rain", 4);   // cached per context: a pause/resume or weather flip regenerated 4 s of PCM
     rainSrc.loop = true;
     rainHp = ctx.createBiquadFilter();
     rainHp.type = "highpass";
@@ -2246,11 +2252,10 @@ var GameAudio = (function () {
     } else {
       const over = clamp01(lat);
       const longL = clamp01(long || carSfxLast.lock || 0);
-      q = {
-        gain: over * (wet ? 0.10 : 0.16),
-        hz: (wet ? 480 : 760) + over * 320 + (over > 0 ? longL * 120 : 0),
-        lfo: over > 0 ? 60 : 0
-      };
+      q = _skidQ;   // every frame on the race path: rewritten, never allocated
+      q.gain = over * (wet ? 0.10 : 0.16);
+      q.hz = (wet ? 480 : 760) + over * 320 + (over > 0 ? longL * 120 : 0);
+      q.lfo = over > 0 ? 60 : 0;
     }
     const sv = layers.screech ? q.gain * tune.screech : 0;
     const sp = skidGain._apexSkidV;

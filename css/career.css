@@ -49,10 +49,21 @@
 #cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; grid-column: 1; }
 #cr-header [data-career-nav],
 #cr-header [data-career-part="nav"] { grid-column: 1 / -1; }
+/* Every other chip and door in the game is set in capitals; the hub's jump
+   chips were the one Title Case row (design pass #1). CSS, not the strings,
+   so a screen reader still reads words rather than spelling capitals. */
+#cr-header [data-career-nav] > .sel-chip { text-transform: uppercase; letter-spacing: var(--ls-2); }
 #cr-sub {
   font-size: var(--label); letter-spacing: var(--ls-5); font-weight: 700;
   color: var(--dim); text-transform: uppercase;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Your team: white ink after a skewed stripe in the team's colour. The colour
+   was the text's own (Haas red read as an alert; design pass 2b). */
+#cr-sub[data-team] { color: var(--text); }
+#cr-sub[data-team]::before {
+  content: ""; display: inline-block; width: 4px; height: 1em; margin-inline-end: 0.5em;
+  vertical-align: -0.1em; border-radius: 2px; background: var(--cr-team); transform: skewX(-12deg);
 }
 /* The three numbers that describe a career at a glance. They push to the right of
    the title and wrap under it rather than squeezing the team name. */
@@ -175,7 +186,7 @@
 :root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }
 :root[data-look-career-layout="stacked"] #cr-inner { --pair-at: 99999px; }
 
-/* COLUMN ORDER: SWAPPED mirrors the pair — the calendar/championship pane takes
+/* CALENDAR SIDE: LEFT (stored "swapped") mirrors the pair — the calendar/championship pane takes
    the left track and the contract pane, with the action bar still under it as
    `.pane-pair` places it, takes the right. The tracks swap too, so each pane
    keeps its shipped share (1.05fr for the main pane), and the divider and the
@@ -209,7 +220,7 @@
   grid-row: 2;
 }
 
-/* LEFT COLUMN is the VISUAL left track, whichever pane COLUMN ORDER put there,
+/* LEFT COLUMN is the VISUAL left track, whichever pane CALENDAR SIDE put there,
    so the slider means what its label says in both orders. The token is a
    percent of the sheet ("40%"); the right track takes what is left after the
    gutter as 1fr, so the two can never overflow the sheet. Declared after the
@@ -278,6 +289,20 @@
 }
 #cr-inner[data-density="compact"] .cr-meter-val {
   font-size: var(--fs-micro);
+}
+/* THE BROADCAST LINE (design pass 2b, 844x390): title, team and the three
+   numbers share one row, split by hairlines; the header drops 127 -> 95 px and
+   all five jump chips fit (CAREER RECORD was clipped). The sheet is 672 px at
+   844 under UI zoom 1.09; narrower compact sheets keep the stacked header. */
+@container sheet (min-width: 660px) {
+  #cr-inner[data-density="compact"] #cr-header { grid-template-columns: auto minmax(0, 1fr); }
+  #cr-inner[data-density="compact"] #cr-titlebar { flex-wrap: nowrap; white-space: nowrap; }
+  #cr-inner[data-density="compact"] #cr-sub { flex: 0 1 auto; font-size: var(--label); white-space: nowrap; letter-spacing: var(--ls-2); }
+  #cr-inner[data-density="compact"] #cr-meters { grid-column: 2; display: flex; justify-content: flex-end; gap: 0; }
+  #cr-inner[data-density="compact"] .cr-meter { padding-inline: var(--gap); border-inline-start: 1px solid var(--card-line); }
+  #cr-inner[data-density="compact"] .cr-meter-lbl { letter-spacing: var(--ls-1); }
+  #cr-inner[data-density="compact"] .cr-meter-val { font-size: var(--fs-3); }
+  #cr-inner[data-density="compact"] #cr-header [data-career-nav] > .sel-chip { letter-spacing: 0; padding-inline: calc(var(--gap) * 0.8); }
 }
 
 /* Section headings reuse .sel-label (css/components.css) — same dim uppercase
@@ -578,9 +603,10 @@
 .res-row.q-real .res-name { color: #7CFC7C; }
 .res-row.q-real .q-real-tag {
   margin-left: 0.5em;
-  font-size: 0.62rem;
+  /* The type ladder's smallest rung at full ink: 0.62rem (9.9px) at 75 %
+     opacity was the one menu text under --touch-label-floor (design pass #1). */
+  font-size: var(--fs-micro);
   letter-spacing: var(--ls-4);
-  opacity: 0.75;
 }
 
 #q-foot { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; }
@@ -708,8 +734,20 @@
 /* Sections are a heading plus one card, and the heading owns the space above it
    — so the gap between a card and the NEXT heading is set once here rather than
    fought over by two margins. */
-#cg-body .sel-label { margin-top: 14px; }
-#cg-body .sel-label:first-child { margin-top: 0; }
+/* Each section is a <details> fold (js/career/career-ui.js guideSection): the
+   outer .cr-card is the plate, the summary its 52px heading row with a ▾/▴
+   second cue beside the red slash, the inner card loses its own frame. */
+#cg-body { gap: 6px; }
+#cg-body > details { padding: 0; gap: 0; }
+#cg-body > details > summary {
+  list-style: none; cursor: pointer; margin: 0;
+  display: flex; align-items: center; gap: calc(var(--gap) * 0.5);
+  min-height: var(--tap-paint); padding-block: 0; padding-inline: calc(var(--pad) * 0.7);
+}
+#cg-body > details > summary::-webkit-details-marker { display: none; }
+#cg-body > details > summary::after { content: "\25BE"; margin-left: auto; color: var(--red); }
+#cg-body > details[open] > summary::after { content: "\25B4"; }
+#cg-body > details > .cg-card { border: 0; background: transparent; padding-top: 0; }
 .cg-card { gap: 9px; }
 /* Prose, not a data row: this is the one place in career that runs sentences, so
    it gets the line-height and measure they need. .cr-row pairs sit alongside it
@@ -925,6 +963,10 @@
 #results .sheet[data-density="compact"] .res-row {
   padding: calc(var(--gap) * 0.35) calc(var(--gap) * 0.5); gap: calc(var(--gap) * 0.5); flex-wrap: wrap; align-items: flex-start;
 }
+/* Compact wide body: the results classification is the pinned-podium list
+   (css/overlays.css, design pass #1): one centred line per row. This rule is
+   unlayered, so it outranks that layer and must say so here. */
+body[data-density="compact"][data-shape="wide"] #results .sheet[data-density="compact"] #results-table .res-row[role="listitem"] { flex-wrap: nowrap; align-items: center; padding-block: 0; }
 #career-history .sheet[data-density="compact"] .res-name,
 #career-history .sheet[data-density="compact"] .res-pts {
   white-space: normal; overflow-wrap: anywhere; width: auto; min-width: 0;
@@ -949,8 +991,10 @@
   }
   #quali .sheet[data-density="compact"]:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
 }
-#career-guide .sheet[data-density="compact"] #cg-body { gap: calc(var(--gap) * 0.2); }
-#career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: calc(var(--gap) * 0.65); }
+/* Compact wide: the fold headings ARE the contents, so the jump strip folds
+   away and the body takes its row (design pass #3, 2026-10-30). */
+#career-guide .sheet[data-density="compact"]:not([data-shape="tall"]):has(> #cg-contents) { grid-template-rows: auto minmax(0, 1fr) auto; }
+#career-guide .sheet[data-density="compact"]:not([data-shape="tall"]) > #cg-contents { display: none; }
 #career-guide .sheet[data-density="compact"] .cg-card { gap: calc(var(--gap) * 0.35); }
 #career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
 /* BACK / DRIVE MY LAP / SIMULATE painted 285x26 on a landscape iPhone

@@ -14,7 +14,7 @@
       "name": "awaitPresent",
       "group": "perceive",
       "signature": "awaitPresent(timeoutMs)?",
-      "summary": "WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome"
+      "summary": "WAIT FOR THE PIXELS — resolves once a real frame is on screen; screenshot after it (before: stale or black canvas)"
     },
     {
       "name": "field",
@@ -83,10 +83,16 @@
       "summary": "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line), plus bankingDeg/camber,…"
     },
     {
+      "name": "ersPlan",
+      "group": "act",
+      "signature": "ersPlan(plan?)",
+      "summary": "sector ERS plan, 3× manual|deploy|save; get/set"
+    },
+    {
       "name": "objective",
       "group": "act",
       "signature": "objective()",
-      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once"
+      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once"
     },
     {
       "name": "rollout",
@@ -1479,6 +1485,7 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
@@ -1496,6 +1503,7 @@
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/hud-tyres.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
@@ -2012,6 +2020,11 @@
     {
       "path": "js/agent/agentview.js",
       "global": "AgentView",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex-bridge.js",
+      "global": "ApexBridge",
       "roster": "LAZY_AGENT"
     },
     {
@@ -3150,6 +3163,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/garage-departure-motion.js",
+      "global": "GarageDepartureMotion",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/data/hub.js",
       "global": "DataHub",
       "roster": "LAZY_DATA"
@@ -3403,6 +3421,11 @@
       "path": "js/garage/crew-service.js",
       "global": "GarageCrewService",
       "roster": "tag"
+    },
+    {
+      "path": "js/garage/departure-wheels.js",
+      "global": "GarageDepartureWheels",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/garage/experience.js",
@@ -3973,6 +3996,11 @@
       "path": "js/race/duel.js",
       "global": "Duel",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/energy-plan.js",
+      "global": "EnergyPlan",
+      "roster": "tag"
     },
     {
       "path": "js/race/engineer.js",
@@ -4755,6 +4783,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/layout-presets.js",
+      "global": "LayoutPresets",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/live-region.js",
       "global": "LiveRegion",
       "roster": "tag"
@@ -4768,6 +4801,11 @@
       "path": "js/ui/loading-screen.js",
       "global": "LoadingScreen",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/look-avail.js",
+      "global": "LookAvail",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/menu-nav.js",

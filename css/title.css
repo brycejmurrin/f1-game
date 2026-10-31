@@ -202,21 +202,13 @@
    view-box, which would scale the art about (700,450) and move it as a side
    effect; 0 0 is what makes these read as the translate/scale they say. */
 #tc-frame { transform-box: view-box; transform-origin: 0 0; }
-/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is the BOX: the
-   element carries aspect-ratio 1400/900 itself, so `slice` and `meet` compute
-   the same scale and the attribute only matters on the portrait phone, whose box is
-   capped shorter than that aspect (the tall phone block below).
-   Before the box had its own aspect, MEET was the fix and SLICE the bug: Slice scales to COVER, so on a viewport
-   narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
-   the sides — measured, a 834x1194 iPad blew the 1400-unit viewBox out to
-   ~1857px, and a rotated 1080x1920 monitor got a front wing across the whole
-   lower third at FULL opacity, because it is wider than 1000px so the fade
-   above never fires. Neither width query can see either case.
-   Meet scales to FIT, so the same two land at 834x536 and 1080x694 — a band at
-   the foot of the screen instead of a blow-up — while landscape barely moves
-   (1280x800 loses 2.7%, an 860x560 window 1.3%). The layer adapts rather than
-   leaving, which is why this is an opacity step and not display:none.
-   Portrait still has the button stack down its middle, so the art yields. */
+/* ASPECT, NOT WIDTH, BREAKS THIS LAYER; the fix is the BOX. It carries
+   aspect-ratio 1400/900, so `slice` and `meet` compute the same scale except on
+   the portrait phone (capped shorter, block below). Before that, SLICE scaled
+   to cover: a 834x1194 iPad blew the viewBox to ~1857px and a rotated 1080x1920
+   monitor got a front wing across its lower third at full opacity (wider than
+   1000px, so the fade above never fires). Narrow aspects keep the art at a
+   step of opacity, not display:none: the button stack runs down the middle. */
 @media (max-aspect-ratio: 13/10) and (min-width: 700px) { #title-car { opacity: 0.26; } }
 /* Transparency is a preference, and this layer is the most transparent thing on
    the screen. prefers-reduced-transparency is not Baseline yet, so it is a
@@ -224,33 +216,21 @@
 @media (prefers-reduced-transparency: reduce) {
   #title-car { display: none; }
 }
-/* THE TITLE INTRO — one pass, over by ~2.5 s, never a loop (WCAG 2.2.2 wants a
-   pause control past 5 s; a loop would also repaint the SVG every frame on an
-   iPhone, whose SVG has no compositing). CSS only: tools/gen/title-art.mjs
-   stamps every art group with data-stage (WHAT it does) and --i (WHEN).
-     0.10 s  outlines wipe on left to right (ink, then detail), 60 ms apart
-     0.20 s  buttons grow in, CAREER first, 50 ms apart, landed by ~1.0 s
-     0.66 s  panels fade in, 40 % into the draw, so no panel pops in before
-             the outline that bounds it; the ink fill follows the panels, or
-             the dilated silhouette would flash in as a solid blob
-     1.50 s  the tyre marks sweep out behind the cars and catch the light once
-   A WIPE on the group, not a dash draw on the path: each ink path is dozens
-   of subpaths (54 M in the landscape contour), the dash pattern restarts at
-   every one, and a dash "draw" made every outline pop at once.
-   ONLY ON FIRST SHOW: every rule keys on #overlay[data-intro], which
-   js/ui/title-fx.js sets once, the first time the title is visible, and
-   removes after ~2.8 s (QUICK ~1.2 s) — coming back from a room is the
-   resting title, not a second show. TITLE INTRO OFF (html[data-title-intro])
-   skips the reveal the same way REDUCED does. Every animation fills
-   BACKWARDS only: the start state holds through the delay, and when it ends
-   the element drops back to its own declared style — no clip, no fill-opacity
-   override — so the resting title is the same pixels as without the intro.
-   Both gates, because the in-game Motion setting can only add reduction; the
-   Playwright suite runs reduced, and sees no motion at all. Paint cost is
-   transform/opacity/fill-opacity/clip-path only: no filter, no shadow, and no
-   will-change — an SVG child gets no layer from it. Fills fade by fill-opacity,
-   not group opacity, so no group is flattened into an offscreen buffer to fade
-   it. */
+/* THE TITLE INTRO — one pass, ~2.5 s, never a loop (WCAG 2.2.2 wants a pause
+   control past 5 s; an iPhone SVG has no compositing). CSS only:
+   tools/gen/title-art.mjs stamps each art group with data-stage (WHAT) and --i
+   (WHEN). 0.10 s outlines wipe on, 60 ms apart; 0.20 s buttons grow in, CAREER
+   first, 50 ms apart; 0.66 s panels fade in, 40 % into the draw, before the ink
+   fill (else the dilated silhouette flashes as a blob); 1.50 s tyre marks sweep.
+   A WIPE on the group, not a dash draw: the dash restarts at every one of a
+   path's dozens of subpaths, so every outline popped at once.
+   ONLY ON FIRST SHOW: rules key on #overlay[data-intro], which the shell ships
+   and js/ui/title-fx.js removes after ~2.8 s (QUICK ~1.2 s). TITLE INTRO OFF
+   and REDUCED skip it (both gates: the in-game setting can only add reduction;
+   Playwright runs reduced). Fills are BACKWARDS only, so the resting title is
+   the same pixels as without the intro. Paint cost is transform, opacity,
+   fill-opacity and clip-path: no filter, shadow or will-change, and fills fade
+   by fill-opacity so no group is flattened into an offscreen buffer. */
 @media (prefers-reduced-motion: no-preference) {
   /* Intro timeline tokens live on the overlay so QUICK can halve them without
      touching sheet/screen --dur-* elsewhere. FULL = shipped numbers. */
@@ -281,7 +261,7 @@
     --intro-btn: 160ms;
   }
   :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #menu-brand {
-    animation: sheet-in var(--intro-brand-dur) cubic-bezier(0.2, 0.7, 0.3, 1);
+    animation: sheet-in var(--intro-brand-dur) var(--ease-out);
   }
   :root:not([data-motion="reduce"]):not([data-title-intro="off"]) #overlay[data-intro] #title-car g[data-stage="ink"] {
     animation: tc-wipe var(--intro-draw) var(--ease-out) backwards, tc-fill var(--intro-fill) var(--ease-out) backwards;
@@ -369,4 +349,13 @@
   transform: skewX(-30deg);
   box-shadow: 0 0 18px color-mix(in oklab, var(--red) 78%, transparent);
 }
+/* PRE-BOOT: on Slow 4G these doors paint ~12 s before game.js wires them, and
+   a tap did nothing. Until html[data-booted] (js/ui/title-menu.js) they sit
+   dim and inert; the rule fills with --boot-p (index.html), held at 85 %
+   until boot: on a 4x-slowed CPU, evaluation outlasts the download by ~11 s.
+   Dimmed by filter, not opacity: a translucent grid let the line-art car show
+   through the plates and across the labels (design pass 3). */
+:root:not([data-booted]) #menu-buttons { filter: grayscale(1) brightness(.45); pointer-events: none; }
+#menu-buttons { transition: filter var(--dur-3) var(--ease-out); }
+:root:not([data-booted]) #title::after { transform: skewX(-30deg) scaleX(calc(var(--boot-p, .07) * .85)); transform-origin: left; }
 } /* @layer components */

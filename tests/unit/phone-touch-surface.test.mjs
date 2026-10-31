@@ -129,12 +129,12 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
   assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
   assert.equal(decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--hud-btn-zt"),
-    "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
+    "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
   const topZoom = decl(hudCss, ":root", "--hud-btn-z");
-  assert.equal(topZoom, "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5)",
+  assert.equal(topZoom, "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5)",
     "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
   assert.doesNotMatch(topZoom, /--hud-(?:scale|z-top|z-bot)\b/,
     "top controls must not depend on a HUD readout scale or fitted band");
@@ -209,7 +209,7 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+  assert.equal(dock.decls.get("zoom"), "min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
     "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at --hud-btn-floor (the zoom at which a tap paints 44px) so a setting never shrinks a target under the HIG minimum");
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
@@ -739,31 +739,32 @@ test("a spare pad disconnect preserves held action edge baselines", () => {
  * fitHud writes --hud-z-dock (js/ui/hud.js, not touched here). The dock then
  * `zoom`s, so an authored --fs-micro (14px) paints at 9.7px on a 390px-tall
  * landscape phone at HUD 150% (css/touch-controls.css, 2026-10-14). The floor
- * is a font-size max() that divides 10 CSS px by that zoom — width/height stay
- * on --tap/--hold, so hit areas do not grow. */
-const LABEL_FLOOR_PX = 10;
+ * is a font-size max() that divides 11 CSS px (Apple's 11 pt text minimum,
+ * #4258; was 10) by that zoom — width/height stay on --tap/--hold, so hit
+ * areas do not grow. */
+const LABEL_FLOOR_PX = 11;
 
 function paintedLabelPx(authoredPx, dockZoom) {
   const z = Math.max(0.4, +dockZoom || 1);
   return Math.max(authoredPx, LABEL_FLOOR_PX / z) * z;
 }
 
-test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
+test("dock touch labels keep an 11 CSS-px painted floor under --hud-z-dock", () => {
   const ov = css("css/touch-controls.css");
   const tk = css("css/tokens.css");
   const land = { context: /orientation:\s*landscape/ };
-  assert.equal(decl(tk, ":root", "--touch-label-floor"), "10px",
-    "--touch-label-floor is the 10 CSS-px painted minimum");
+  assert.equal(decl(tk, ":root", "--touch-label-floor"), "11px",
+    "--touch-label-floor is the 11 CSS-px painted minimum");
 
   const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
   assert.ok(dock, "landscape dock publishes zoom");
   assert.equal(dock.decls.get("--touch-label-z"),
-    "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
     "the label-z token tracks the dock's own zoom (capped or slider)");
 
   const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);
   assert.match(String(tapFont), /max\(/, "tap labels clamp with max()");
-  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the 10px floor");
+  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the label floor");
   assert.match(String(tapFont), /var\(--touch-label-z/, "tap labels divide the floor by dock zoom");
   assert.doesNotMatch(String(tapFont), /\bwidth\b|\bheight\b/, "the font rule does not restyle hit boxes");
 
@@ -777,15 +778,16 @@ test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () =
   assert.match(String(shiftFont), /var\(--touch-label-floor\)/);
 
   const pauseFont = decl(ov, "#pausebtn", "font-size");
-  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same 10px floor");
+  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same label floor");
   const camFont = decl(ov, "#btn-cam", "font-size");
-  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same 10px floor");
+  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same label floor");
 
   // The 9.7px case: authored 14px × dock zoom 0.69. Without the floor that
-  // paints 9.66; with it, 10. Width/height stay on --tap/--hold (not asserted
+  // paints 9.66; with it, 11. Width/height stay on --tap/--hold (not asserted
   // as a computed box here — the selectors above never mention them).
-  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ 10");
-  assert.ok(paintedLabelPx(14, 0.69) < 14 * 0.69 + 1, "the floor does not enlarge labels that already clear 10px by much");
+  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ the floor");
+  assert.ok(paintedLabelPx(14, 0.69) <= LABEL_FLOOR_PX + 1e-9, "the floor lifts a sub-floor label exactly to the floor, no further");
+  assert.ok(paintedLabelPx(18, 1) === 18, "a label that already clears the floor keeps its authored size");
   for (const z of [0.4, 0.5, 0.69, 0.82, 1, 1.25, 1.5]) {
     for (const authored of [11, 14, 15, 18]) {
       assert.ok(paintedLabelPx(authored, z) + 1e-9 >= LABEL_FLOOR_PX,

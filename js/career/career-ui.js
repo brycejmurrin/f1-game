@@ -43,6 +43,9 @@ function create(G) {
     root.querySelectorAll(".sel-label[id]").forEach((h) => {
       const a = el("a", "", h.textContent);
       a.href = `#${h.id}`;
+      // A guide heading is a fold's summary: the jump opens what it lands on.
+      const fold = h.closest("details");
+      if (fold) a.addEventListener("click", () => { fold.open = true; });
       nav.appendChild(a);
     });
   }
@@ -209,7 +212,6 @@ function create(G) {
     const card = el("div", `cr-slot${s.used ? " used" : " empty"}${live ? " active" : ""}`);
     const open = el("button", "cr-slot-main");
     const modeName = s.flavour === "myteam" ? "My Team" : "Driver career";
-    open.setAttribute("aria-label", `${modeName} slot ${s.i + 1}, ${s.used ? "saved" : "empty"}${live ? ", playing" : ""}`);
     open.append(el("span", "cr-slot-n", `SLOT ${s.i + 1}${live ? " · PLAYING" : ""}`));
     if (s.used) {
       const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
@@ -227,6 +229,14 @@ function create(G) {
         el("span", "cr-slot-meta", s.flavour === "myteam"
           ? "Start a team here" : "Start a career here"));
     }
+    // The name LEADS with the card's visible text, then says which mode: a
+    // speech-input user says what they see (WCAG 2.5.3; axe label-content-name-
+    // mismatch flagged "Driver career slot 1, empty" on Lighthouse, UI hunt 3).
+    const parts = [...open.children];
+    // A word break ends each block span but the last: textContent (which axe
+    // reads) ran "SLOT 1EMPTYStart…" together; a block's trailing space never renders.
+    for (const c of parts.slice(0, -1)) c.textContent += " ";
+    open.setAttribute("aria-label", `${parts.map((c) => c.textContent).join("")}, ${modeName}`);
     open.onclick = () => {
       if (writerRefused()) return;
       if (G.soundOn) GameAudio.uiSelect();
@@ -407,7 +417,7 @@ function create(G) {
     $("cr-sub").textContent = used
       ? used + (used === 1 ? " career saved" : " careers saved")
       : "Two ways to play a championship";
-    $("cr-sub").style.color = "";
+    delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
 
     modeColumn(left, "driver");
@@ -439,16 +449,21 @@ function create(G) {
   // BUDGET_MULT, OBJ_BONUS, Career.SLOTS, the free-agent asks), never typed out.
   // A guide that quotes the economy is a guide that goes stale the first time
   // the economy is tuned, and a wrong number here is worse than no number.
+  // Each section is a fold (design pass #3): its heading is the summary and the
+  // folds share a name, so one reads at a time and the guide opens as a list of
+  // its own contents — 5 screens at 844x390 where the open document was 19.
   function guideSection(title, paras) {
-    const frag = document.createDocumentFragment();
-    frag.appendChild(head(title, "cg-" + slug(title)));
+    const fold = el("details", "cr-card");
+    fold.setAttribute("name", "cg-fold");
+    const sum = el("summary", "sel-label", title);
+    sum.id = "cg-" + slug(title);
     const card = el("div", "cr-card cg-card");
     for (const p of paras) {
       if (Array.isArray(p)) card.appendChild(row(p[0], p[1]));
       else card.appendChild(el("p", "cg-p", p));
     }
-    frag.appendChild(card);
-    return frag;
+    fold.append(sum, card);
+    return fold;
   }
 
   const cr = (n) => `${I18n.n(n)} cr`;
@@ -744,6 +759,7 @@ function create(G) {
       "Your career car and your free-play car are separate builds. Nothing you do "
       + "here changes a Grand Prix or a Time Trial, and nothing there changes this.",
     ]));
+    if (body.firstElementChild) body.firstElementChild.open = true;
     fillContents("cg-contents", body);
     ScrollFade.refresh();
   }
@@ -943,6 +959,7 @@ function create(G) {
     const myTeam = draft.flavour === "myteam";
     $("cr-title").textContent = myTeam ? I18n.t("career.new.myTeam", null, "NEW MY TEAM") : I18n.t("career.new.career", null, "NEW CAREER");
     $("cr-sub").textContent = "";
+    delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
     $("cr-go").textContent = myTeam ? I18n.t("career.start.myTeam", null, "START MY TEAM") : I18n.t("career.start.career", null, "START CAREER");
     $("cr-go").hidden = false;
@@ -966,7 +983,9 @@ function create(G) {
     $("cr-title").textContent = `CAREER ${c.year}`;
     $("cr-sub").textContent = `${c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code}`
       + ` · ${team ? team.name.toUpperCase() : String(c.team == null ? "" : c.team).toUpperCase()}`;
-    if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
+    // The team colour is a stripe, not ink: brand red as text read as an alert (design pass 2b).
+    $("cr-sub").toggleAttribute("data-team", !!team);
+    if (team) $("cr-sub").style.setProperty("--cr-team", G.cssCol(team.color2 || team.color));
 
     if (Career.conflicted()) {
       const warn = el("div", "cr-card");
@@ -1671,6 +1690,10 @@ function create(G) {
     Log.info("ui", "CareerUI.close");
     ++backupReadGeneration;
     $("career").hidden = true;
+    // A draft abandoned on any route out (a refused START sent it to the picker,
+    // whose BACK lands here with draft already cleared) gives the borrowed EMPTY
+    // slot back: left live, the title showed no career and a reload re-homed it.
+    if (draftFrom && !Career.active()) Career.useSlot(draftFrom.flavour, draftFrom.i);
     draft = null; draftFrom = null; armedDelete = "";
     armedImport = ""; pendingImport = null;
     draftFieldErr = null;

@@ -277,7 +277,7 @@ export function listFiles() {
     ...(manifest.LAZY_CIRCUIT || []), ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
     ...(manifest.LAZY_NET || []), ...(manifest.LAZY_AUDIO || []), ...(manifest.LAZY_EDITOR || []),
     ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || [])];
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || [])];
   return {
     full: manifest.FULL.slice(),
     deferred: Object.fromEntries(Object.entries(manifest.DEFERRED).map(([k, v]) => [k, v.slice()])),
@@ -425,6 +425,135 @@ export function checkGraph(scan) {
 }
 
 // ---------------------------------------------------------------------------
+// Selected classic-script and private-function capability contracts.
+// node tools/check/scan-globals.mjs --boundaries [--json]
+// Contracts live in tests/data/module-boundaries.json; this mode does not scan
+// the global graph or write artifacts. It is an architecture guard, not a
+// security sandbox/purity proof: injected effects and alias/data-flow are not
+// traced. Function declarations are extracted uniquely and checked in isolation.
+// <value> permits a whole capability; <index> permits reviewed collection access.
+// Date.parse is allowed explicitly, while ambient clocks remain forbidden.
+// API: https://eslint.org/docs/latest/extend/scope-manager-interface
+const DENIED = new Set(["window", "globalThis", "self", "eval", "Function", "document", "navigator",
+  "fetch", "XMLHttpRequest", "WebSocket", "localStorage", "sessionStorage", "indexedDB", "caches",
+  "setTimeout", "setInterval", "requestAnimationFrame", "performance", "crypto"]);
+
+export function readContracts(root = ROOT) {
+  const config = JSON.parse(fs.readFileSync(path.join(root, "tests/data/module-boundaries.json"), "utf8"));
+  if (config.version !== 1 || !config.modules || !Object.keys(config.modules).length) throw new Error("invalid boundary contracts");
+  if (!config.functions || typeof config.functions !== "object") throw new Error("missing function contracts");
+  return config;
+}
+
+/** Return located violations; unresolved references are checked at ALL execution times. */
+export function checkSource(source, contract, file = "<source>") {
+  if (!contract || typeof contract.export !== "string" || !contract.globals) throw new Error("invalid module contract");
+  for (const [name, members] of Object.entries(contract.globals)) {
+    if (DENIED.has(name) || !Array.isArray(members) || members.some((m) => typeof m !== "string" || m === "*")
+      || (name === "Date" && (members.length !== 1 || members[0] !== "parse"))) {
+      throw new Error(`invalid permitted capability: ${name}`);
+    }
+  }
+  const violations = [];
+  const add = (node, rule, detail) => violations.push({ file, line: node.loc.start.line, column: node.loc.start.column + 1, rule, detail });
+  let ast;
+  try { ast = espree.parse(source, { ecmaVersion: 2022, sourceType: "script", loc: true, range: true }); }
+  catch (error) { return [{ file, line: error.lineNumber || 1, column: error.column || 1, rule: "parse", detail: error.message }]; }
+  const parents = new Map();
+  const writeTargets = new Set();
+  // Assignment patterns contain both targets and reads (computed keys/default
+  // expressions). Visit only target positions, never all pattern descendants.
+  function markTarget(node) {
+    if (!node) return;
+    if (node.type === "Identifier" || node.type === "MemberExpression") writeTargets.add(node);
+    else if (node.type === "ArrayPattern") node.elements.forEach(markTarget);
+    else if (node.type === "ObjectPattern") {
+      for (const prop of node.properties) markTarget(prop.type === "RestElement" ? prop.argument : prop.value);
+    } else if (node.type === "AssignmentPattern") markTarget(node.left);
+    else if (node.type === "RestElement") markTarget(node.argument);
+  }
+  function walk(node, parent) {
+    if (!node || typeof node.type !== "string") return;
+    if (parent) parents.set(node, parent);
+    if (node.type === "AssignmentExpression" || node.type === "ForOfStatement" || node.type === "ForInStatement") markTarget(node.left);
+    if (node.type === "UpdateExpression" || (node.type === "UnaryExpression" && node.operator === "delete")) markTarget(node.argument);
+    if (node.type === "ThisExpression" || node.type === "ImportExpression") add(node, "escape", `${node.type} is outside this classic-script contract`);
+    if (node.type === "MemberExpression") {
+      const key = node.computed ? node.property.value : node.property.name;
+      if (key === "constructor" || key === "__proto__") add(node, "escape", `reflective ${key} access is outside this contract`);
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) { for (const child of value) walk(child, node); }
+      else if (value && typeof value === "object") walk(value, node);
+    }
+  }
+  walk(ast);
+  const scopes = eslintScope.analyze(ast, { ecmaVersion: 2022, sourceType: "script", ignoreEval: true });
+  const declared = scopes.globalScope.variables.map((v) => v.name);
+  if (declared.length !== 1 || declared[0] !== contract.export) add(ast, "exports", `expected sole top-level binding ${contract.export}, found ${declared.join(", ") || "none"}`);
+  for (const ref of scopes.globalScope.through) {
+    const id = ref.identifier;
+    const allowed = Object.hasOwn(contract.globals, id.name) ? contract.globals[id.name] : undefined;
+    const parent = parents.get(id);
+    let member = "<value>";
+    if (parent?.type === "MemberExpression" && parent.object === id) {
+      member = parent.computed ? (parent.property.type === "Literal" && typeof parent.property.value === "string" ? parent.property.value : "<index>") : parent.property.name;
+    }
+    if (DENIED.has(id.name) || !allowed?.includes(member)) add(id, "global", `forbidden capability ${id.name}${member === "<value>" ? "" : `.${member}`}`);
+    let target = id;
+    while (parents.get(target)?.type === "MemberExpression" && parents.get(target).object === target) target = parents.get(target);
+    if (ref.isWrite() || writeTargets.has(target)) {
+      add(id, "global-write", `cannot write through global ${id.name}`);
+    }
+  }
+  return violations;
+}
+
+/** Check a private declaration with captured names treated as dependencies.
+ * Ambiguous/missing declarations fail closed; no arbitrary string/regex slicing.
+ */
+export function checkFunctionSource(source, name, contract, file = "<source>") {
+  let ast;
+  try { ast = espree.parse(source, { ecmaVersion: 2022, sourceType: "script", loc: true, range: true }); }
+  catch (error) { return [{ file, line: error.lineNumber || 1, column: error.column || 1, rule: "parse", detail: error.message }]; }
+  const matches = [];
+  function visit(node) {
+    if (!node || typeof node.type !== "string") return;
+    if (node.type === "FunctionDeclaration" && node.id?.name === name) matches.push(node);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === "object") visit(value);
+    }
+  }
+  visit(ast);
+  if (matches.length !== 1) return [{ file, line: 1, column: 1, rule: "function", detail: `expected one declaration ${name}, found ${matches.length}` }];
+  const node = matches[0];
+  const extracted = "\n".repeat(node.loc.start.line - 1) + " ".repeat(node.loc.start.column) + source.slice(...node.range);
+  return checkSource(extracted, { ...contract, export: name }, file).map((v) => ({ ...v, scope: name }));
+}
+
+/** Missing sources and parse errors fail closed; no dependency-graph timing inference. */
+export function checkRepo(root = ROOT, contracts = readContracts(root)) {
+  const violations = [];
+  const checked = [];
+  for (const file of new Set([...Object.keys(contracts.modules), ...Object.keys(contracts.functions)])) {
+    if (!file.startsWith("js/") || file.split("/").includes("..") || !file.endsWith(".js")) throw new Error(`invalid source path: ${file}`);
+    let source;
+    try { source = fs.readFileSync(path.join(root, file), "utf8"); }
+    catch (error) { violations.push({ file, line: 1, column: 1, rule: "source", detail: error.message }); continue; }
+    if (contracts.modules[file]) {
+      checked.push(file);
+      violations.push(...checkSource(source, contracts.modules[file], file));
+    }
+    for (const [name, contract] of Object.entries(contracts.functions[file] || {})) {
+      checked.push(`${file}#${name}`);
+      violations.push(...checkFunctionSource(source, name, contract, file));
+    }
+  }
+  return { checked, violations };
+}
+
+// ---------------------------------------------------------------------------
 // CLI.
 
 function main() {
@@ -432,7 +561,21 @@ function main() {
   if (args.has("--help") || args.has("-h")) {
     console.log("usage: node tools/check/scan-globals.mjs [--json]\n"
       + "  Scans every shipped script for global writers/readers, prints a summary and writes artifacts/dep-graph.json.\n"
+      + "  --boundaries [--json]: check selected capability contracts only; no graph artifact.\n"
       + "  --help: this text; nothing is scanned and no artifact is written.");
+    return;
+  }
+  if (args.has("--boundaries")) {
+    try {
+      if ([...args].some((arg) => arg !== "--boundaries" && arg !== "--json")) throw new Error("usage: scan-globals.mjs --boundaries [--json]");
+      const result = checkRepo();
+      if (args.has("--json")) console.log(JSON.stringify(result, null, 2));
+      else {
+        for (const v of result.violations) console.error(`${v.file}:${v.line}:${v.column} ${v.rule}: ${v.detail}`);
+        console.log(`module boundaries: ${result.checked.length} checked, ${result.violations.length} violations`);
+      }
+      process.exitCode = result.violations.length ? 1 : 0;
+    } catch (error) { console.error(error.message); process.exitCode = 1; }
     return;
   }
   const scan = scanRepo();

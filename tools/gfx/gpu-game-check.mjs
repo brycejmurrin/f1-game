@@ -42,8 +42,9 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
+import { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
@@ -90,6 +91,8 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   montreal|monza; per cycle the live GPUBuffer/GPUTexture count and MB
                                   (device-side counter, mem-cycles-lib.mjs), three's render objects and
                                   heap; out.memCycles.verdict = plateau|growing over the second half
+  --lavapipe                      Dawn on Mesa Lavapipe (the gfx-probe pair): three's WebGPU path in a
+                                  GPU-less container, for COUNTS (passes, store ops, mips), never ms
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
@@ -186,9 +189,12 @@ const log = (m) => console.log(`[game-check] ${m}`);
 const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
   glErrDrain: glErrDrainEveryPresent ? "present" : "beat", entry };
 const { server, port } = await serve();
+const LAVAPIPE = argv.includes("--lavapipe");
 const launchOpts = {
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
-  args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
+  args: LAVAPIPE ? [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"]
+    : ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
+  ...(LAVAPIPE ? { env: { ...process.env, ...WEBGPU_LAVAPE_ENV } } : {}),
 };
 // --profile: one persistent context in place of browser + newContext. `launch` says whether the
 // profile already held a run (a returning player's launch) or was empty (the first ever).
@@ -270,6 +276,31 @@ try {
     // aggregate by signature — the answer wanted is a function name in our
     // own files, below three's, so keep enough frames to walk through three.
     const _hStacks = new Map();
+    // UPLOAD ATTRIBUTION (perf hunt 6): writeBuffer / createBuffer in the armed window, keyed by the first
+    // game-side frames of the caller. 1 call in UP_EVERY is stack-sampled (n and KB are scaled back up), so the
+    // runner pays ~11 stacks a frame, not ~90; out.uploads ranks the sites by KB. Random, not every 8th call: a
+    // frame whose call count is a multiple of 8 would sample the same call sites every frame and never the rest.
+    const UP_EVERY = 8, _hUp = new Map();
+    const _upNote = (kind, kb, buf) => {
+      if (!_hArmed || Math.random() * UP_EVERY >= 1) return;
+      let site = "?", lib = "";
+      try {
+        const prevLimit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 60;
+        let raw;
+        try { raw = (new Error().stack || "").split("\n").slice(3); } finally { Error.stackTraceLimit = prevLimit; }
+        const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
+        const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl|gpu-game-check|<anonymous>/.test(l) && /\.js:/.test(l));
+        // three's own path names WHAT is uploaded (a uniform group, an attribute, an index): its function names
+        // only (the minified line:col changes per build).
+        lib = fr.filter((l) => /three\.webgpu/.test(l)).slice(0, 3).map((l) => l.split(" ")[0]).join("<");
+        site = ours.slice(0, 3).join(" <- ") || "(three only)";
+      } catch (_) { /* the totals still stand */ }
+      const tag = (buf && buf.label ? buf.label : "") + "#" + Math.round(kb * 1024) + "B";
+      const key = kind + " :: " + tag + " :: " + lib + " :: " + site, r = _hUp.get(key) || { n: 0, kb: 0 };
+      r.n += UP_EVERY; r.kb += kb * UP_EVERY;
+      _hUp.set(key, r);
+    };
     let _hStackBudget = 200;
     // createShaderModule, not createRenderPipeline: patch 7 moved the lazy
     // WebGPU path to createRenderPipelineAsync, so run 202 had nothing to
@@ -360,6 +391,10 @@ try {
       wrapCall(GD, "createShaderModule", "gpu.createShaderModule");
       wrapCall(GD, "createBindGroup", "gpu.createBindGroup");
       wrapCall(GD, "createBuffer", "gpu.createBuffer");
+      if (GD && typeof GD.createBuffer === "function") {
+        const origCB = GD.createBuffer;
+        GD.createBuffer = function (desc) { try { _upNote("createBuffer", ((desc && desc.size) || 0) / 1024, desc); } catch (_) { /* count only */ } return origCB.apply(this, arguments); };
+      }
       // The upload side: how many writes a frame makes and how many KB they
       // carry (size is elements for a typed array, bytes for an ArrayBuffer).
       const GQ = window.GPUQueue && window.GPUQueue.prototype;
@@ -371,6 +406,7 @@ try {
             const per = (data && data.BYTES_PER_ELEMENT) || 1;
             const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
             _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
+            _upNote("writeBuffer", Math.max(0, bytes) / 1024, buffer);
           } catch (_) { /* the count stands without the size */ }
           const t = performance.now();
           try { return origWB.apply(this, arguments); } finally { _bumpWorkN("gpu.writeBufferMs", performance.now() - t); }
@@ -611,7 +647,7 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
@@ -623,7 +659,9 @@ try {
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig, opsSig: _hOps, submits: _hSubs,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
                        workFrames: _hWorkFrames,
-                       stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
+                       stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30),
+                       uploads: [..._hUp.entries()].map(([k, r]) => ({ site: k, n: r.n, kb: +r.kb.toFixed(1) }))
+                         .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -1133,7 +1171,7 @@ try {
     const b = (m && m.backend) || {};
     const pick = (o, ks) => { const r = {}; for (const k of ks) if (o[k] !== undefined) r[k] = o[k]; return r; };
     return { mode, mirror: m ? { ...pick(m, ["mode", "shown", "cam", "drawn"]),
-      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull"]) } : null };
+      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull", "glassLod"]) } : null };
   }), 10000, "camera-end");
   if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
   out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };
@@ -1189,8 +1227,11 @@ try {
     out.gpuWork = (d.work && d.work.length) ? Object.fromEntries(d.work)
       : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
     out.compileStacks = d.stacks || [];
+    // Per-frame upload sites (perf hunt 6): n and KB over the armed window, divide by window.frames for /f.
+    out.uploads = d.uploads || [];
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
+    out.uploadsSummary = analyseUploads(out.uploads, out.window && out.window.frames);
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
     // made against the rest.

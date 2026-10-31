@@ -414,7 +414,7 @@ test("carbon moving flap color overrides hidden wing paint and paint returns whe
   assert.deepEqual(Array.from(liv.wingColorOf(team)), [1, 0, 0]);
 });
 
-for (const missingSource of [false, true]) test("saving a custom edit " + (missingSource ? "keeps both drafts after another tab replaced its source" : "replaces its existing row and focuses the fitted livery"), () => {
+for (const missingSource of [false, true]) test(`saving a custom edit ${missingSource ? "keeps both drafts after another tab replaced its source" : "replaces its existing row and focuses the fitted livery"}`, () => {
   const sheet = fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8");
   const old = { id: "old", name: "Original", c1: [1, 0, 0], c2: [0, 0, 1] };
   const sibling = { ...old, id: "other_tab_new", name: "Other tab edit" };

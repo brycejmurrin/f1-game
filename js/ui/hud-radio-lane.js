@@ -96,14 +96,14 @@ function laneSafeInsets(root) {
 // A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
 // css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
 const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
-function announceLane(root) {
+function announceLane(root, paintedBand) {
   if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = top() ? laneRect(top()) : null;
   const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
   const under = (el) => { if (!el || el.hidden) return 0; const r = laneRect(el); return r && r.width && r.height ? r.bottom : 0; };
   // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
-  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  const bandTop = paintedBand ? paintedBand.top : Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = paintedBand ? paintedBand.bottom : bandTop + LANE_ROWS;
   const { sal, sar } = laneSafeInsets(root);
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
@@ -124,16 +124,29 @@ function announceLane(root) {
   // Clip the RIGHT to sectors without setting `any` — desktop empty docks must
   // still clear the lane vars (CSS falls back to centred). Phone docks set
   // `any` via the group loop above.
-  if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
+  if (secR && secR.width && secR.height && (!paintedBand || (secR.top < bandBot && secR.bottom > bandTop))) right = Math.min(right, secR.left);
   clip(els.minimap && !els.minimap.hidden ? laneRect(els.minimap) : null, false);
   const gaps = document.querySelector(".hud-gaps");
   clip(gaps && !gaps.hidden ? laneRect(gaps) : null, false);
   // Primary tyre state bounds this lane. Optional panels are placed after the
   // radio card; letting them clip it first can hide an urgent pit call.
   if (els.tyre && !els.tyre.hidden && els.tyre.getBoundingClientRect) clip(laneRect(els.tyre), false);
+  // Prefer an outer lane on landscape touch: keep the central road corridor
+  // clear when either side can carry readable text. Retain the full gap when
+  // neither side fits, rather than discarding a radio call on a crowded HUD.
+  if (!document.body.classList.contains("desktop") && W > H) {
+    const leftEnd = Math.min(right, W * 0.4), rightStart = Math.max(left, W * 0.6);
+    const leftW = leftEnd - left, rightW = right - rightStart;
+    if (Math.max(leftW, rightW) >= RADIO_TOP_MIN + RADIO_TOP_GAP * 2) {
+      if (leftW >= rightW) right = leftEnd; else left = rightStart;
+    }
+  }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
-  const on = any && w > 0;
-  const collapsed = !on && any && secR && secR.width;
+  // A lane under one short word pair wraps the card into a sliver with its text cut
+  // (UI-HUNT-2-HUD: ~105 px): collapse it, and HudLayout.clearReadouts reopens the
+  // card at full width in a free slot (or radioTopSlot's corner takes it).
+  const on = any && w >= RADIO_UNDER_MIN;
+  const collapsed = !on && any && ((secR && secR.width) || w > 0);
   if (on) {
     hStyle(root, "--announce-lane-x", x.toFixed(1) + "px");
     hStyle(root, "--announce-lane-shift", "0%");
@@ -198,7 +211,7 @@ function radioTopSlot(root, bcast) {
   void bcast;
   announceLane(root);
   if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
-  let right = window.innerWidth - 10;
+  let right = vpW() - laneSafeInsets(root).sar - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   // Pause / cam share the tower's rows. Dock groups bound a wrapping card
   // (min-height is the tower; a long line grows about that far). Remaining
@@ -226,6 +239,8 @@ function radioTopSlot(root, bcast) {
   hToggle(b, "hud-radio-top", !!slot && !corner);
   if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
   if (!slot) return;
+  // The lane may have collapsed the card; a slot it fits in reopens it (the corner rule skips collapsed cards).
+  if (ann && ann.toggleAttribute) ann.toggleAttribute("data-lane-collapsed", false);
   if (slot.corner) hStyle(root, "--radio-top-r", (vpW() - slot.x - slot.w).toFixed(1) + "px");
   // MOVE & SIZE then scales the card itself (#announce, origin top left), so
   // the slot is published at 1/SIZE: the PAINTED card fills it, not s times it.
@@ -242,13 +257,13 @@ function radioTopSlot(root, bcast) {
 // (--radio-top-r) so a short message sits beside CAM; null under RADIO_TOP_MIN.
 const RADIO_UNDER_H = 36, RADIO_UNDER_MAXW = 260, RADIO_UNDER_GAP = 4, RADIO_UNDER_MIN = 96;
 function radioUnderRight(t) {
-  let R = vpW() - 10, L = Math.max(t.left, vpW() / 2 + RADIO_TOP_GAP);
+  let R = vpW() - laneSafeInsets(document.documentElement).sar - 10, L = Math.max(t.left, vpW() / 2 + RADIO_TOP_GAP);
   for (const el of [els.btnCam, els.pausebtn, els.hudSectors]) { if (!el || el.hidden) continue;
     const r = el.getBoundingClientRect(); if (r.width && r.left > t.left + t.width / 2) R = Math.min(R, r.left); }
   R -= RADIO_TOP_GAP;
   const y = t.bottom + RADIO_UNDER_GAP, bot = y + RADIO_UNDER_H;
   const obst = [document.getElementById("hud-mirror"), document.getElementById("hud-mirror-chip"),
-    els.gapA ? els.gapA.parentNode : null, els.flag];
+    els.gapA ? els.gapA.parentNode : null, els.flag, els.hudLimits, els.tyre];
   for (const d of docks()) if (d) for (const g of d.children) obst.push(g);
   for (const el of obst) {
     if (!el || el.hidden || !el.getBoundingClientRect) continue;
@@ -280,7 +295,7 @@ function radioPaintedCollapse(root) {
   if (annPaint && annPaint.hasAttribute("data-lane-collapsed") && !document.body.classList.contains("hud-radio-top")
     && root.style.getPropertyValue("--announce-lane-w") === "0px" && root.style.getPropertyValue("--announce-lane-shift") === "0%") return;
   if (annPaint && !annPaint.hidden) {
-    const a = annPaint.getBoundingClientRect();
+    let a = annPaint.getBoundingClientRect();
     const hit = (el) => {
       if (!el || el.hidden) return false;
       const r = el.getBoundingClientRect();
@@ -291,7 +306,17 @@ function radioPaintedCollapse(root) {
     const tower = top() || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
     const gear = typeof document !== "undefined" ? document.getElementById("hud-gearbox") : null;
     const speed = typeof document !== "undefined" ? document.getElementById("hud-speed") : null;
-    if (hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed)) {
+    const controls = [els.btnCam, els.pausebtn];
+    for (const dock of docks()) if (dock) controls.push(...dock.children);
+    if (controls.some(hit)) {
+      // Enlarged steering can meet the painted card below its predicted band.
+      // Re-budget that real row before hiding a call: a central gap may still fit.
+      hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner");
+      for (const prop of ["--announce-lane-w", "--hud-clear-x", "--hud-clear-y"]) hUnstyle(annPaint, prop);
+      dropLaneRects(); announceLane(root, a);
+      a = annPaint.getBoundingClientRect();
+    }
+    if (controls.some(hit) || hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed) || hit(els.flag) || hit(els.hudLimits) || hit(els.tyre)) {
       hToggle(document.body, "hud-radio-top", false);
       if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();

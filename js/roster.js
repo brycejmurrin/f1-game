@@ -170,7 +170,8 @@
     "js/agent/apex-lobby.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
-    "js/agent/apex.js"
+    "js/agent/apex.js",
+    "js/agent/apex-bridge.js"
   ],
     LAZY_EDGES: [
     [
@@ -206,6 +207,8 @@
     "js/lighting/presets.js"
   ],
     LAZY_RACE_SESSION: [
+    "js/data/garage-departure-motion.js",
+    "js/garage/departure-wheels.js",
     "js/race/reliability.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
@@ -776,6 +779,11 @@
       "js/career/career-ui.js"
     ]
   ],
+    LAZY_UI_PRESETS: [
+    "js/ui/look-avail.js",
+    "js/ui/layout-presets.js"
+  ],
+    LAZY_UI_PRESETS_EDGES: [],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

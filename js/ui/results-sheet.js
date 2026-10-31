@@ -90,22 +90,31 @@ function seasonTable(cars, season) {
 }
 function seatColor(G, c) { return c.team && c.team.color ? G.cssCol(c.team.color) : "#555"; }
 
-// Bring the player's classification row into the sheet body after open. Sticky
-// top alone only helps once the row has scrolled past the fold — on open a
-// mid/back-field finish still sits below #results-table (landscape 844x390).
-// Double-rAF: endRace shows #results after buildResults returns.
-function revealYouRow(table) {
-  if (!table || typeof table.querySelector !== "function") return;
-  const you = table.querySelector(".res-row.you");
-  if (!you || typeof you.scrollIntoView !== "function") return;
-  const run = () => { try { you.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) { /* jsdom */ } };
-  if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(() => requestAnimationFrame(run));
-  } else if (typeof setTimeout === "function") {
-    setTimeout(run, 0);
-  } else {
-    run();
+// OPEN AT THE TOP. This used to scrollIntoView the player's row, which on an
+// 844x390 phone opened the sheet ~1260px down with the podium and the winner
+// off-screen. The ranking list's .res-row.you sticks to BOTH edges of the
+// scroller (css/overlays.css), so it shows once its list is in view without
+// moving the sheet. Double-rAF: endRace shows #results after buildResults returns.
+function resultsAtTop(table) {
+  if (!table) return;
+  const run = () => { table.scrollTop = 0; };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(run));
+  else run();
+}
+// "P1 <CODE>" beside the title: in the head, outside the scroller, so the
+// winner is on screen at open. Hidden on the TT and champion views.
+function winnerChip(els, code) {
+  const head = els.resultsTitle && els.resultsTitle.parentElement;
+  if (!head) return;
+  let chip = head.querySelector("#res-winner");
+  if (!chip && code) {
+    chip = document.createElement("span");
+    chip.id = "res-winner";
+    head.appendChild(chip);
   }
+  if (!chip) return;
+  chip.hidden = !code;
+  chip.textContent = code ? tr("results.winnerChip", { code }, "P1 {code}") : "";
 }
 
 function rankingList(container, label) {
@@ -125,6 +134,23 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
   row.append(pos, sw, nm, pt);
   container.appendChild(row);
   return row;
+}
+
+// [data-say] cards are spoken once per result after the sheet shows (a pre-filled role=status is silent).
+let saidFor = null;
+function spokenText(n) {
+  const kids = n.children ? Array.from(n.children) : [];
+  return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
+}
+function sayCards(sheet, table, key) {
+  if (!table || typeof LiveRegion === "undefined" || key === saidFor) return;
+  saidFor = key;
+  const text = Array.from(table.querySelectorAll("[data-say]"), spokenText).filter(Boolean).join(". ");
+  if (!text) return;
+  const say = () => LiveRegion.say(text, "save");
+  if (!sheet || !sheet.hidden || typeof MutationObserver === "undefined") { setTimeout(say, 0); return; }
+  const mo = new MutationObserver(() => { if (!sheet.hidden) { mo.disconnect(); say(); } });
+  mo.observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
 }
 
 function create(G) {
@@ -156,7 +182,7 @@ const outLabel = (why) => (String(why).indexOf("DSQ") === 0 ? "DSQ" : "DNF");
 // New LICENCE BADGES as a card on the sheet that hides the banner toast.
 function badgeCard(ids) {
   const card = document.createElement("div"); card.className = "res-personal";
-  card.setAttribute("role", "status");
+  card.setAttribute("data-say", "");
   const heading = document.createElement("strong"); heading.textContent = ids.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED");
   const detail = document.createElement("span"); detail.textContent = ids.map(Badges.labelOf).join(" · ");
   card.append(heading, detail);
@@ -289,7 +315,7 @@ function buildResults(order, race) {
   if (timing) {
     const box = document.createElement("div");
     box.className = "sel-label";
-    box.setAttribute("role", "status");
+    box.setAttribute("data-say", "");
     box.textContent = tr("results.winnerElapsed", { code: timing.winner.code || tr("results.winner", null, "WINNER"), name: timing.winner.name || "", time: timing.text }, "OFFICIAL WINNER ELAPSED — {code}  {name}: {time}");
     els.resultsTable.appendChild(box);
   }
@@ -430,8 +456,7 @@ function buildResults(order, race) {
   if (st) {
     const box = document.createElement("div");
     box.className = "res-settle";
-    // The balance moved: say so to a screen reader too (polite live region).
-    box.setAttribute("role", "status");
+    box.setAttribute("data-say", "");
     const h = document.createElement("div");
     h.className = "res-settle-head";
     h.textContent = st.dnf ? tr("results.roundSettledDNF", { reason: st.dnf }, "ROUND SETTLED — DNF ({reason})") : tr("results.roundSettled", null, "ROUND SETTLED");
@@ -533,7 +558,9 @@ function buildResults(order, race) {
       els.resultsTable.appendChild(hint);
     }
   }
-  revealYouRow(els.resultsTable);
+  winnerChip(els, order.length && !dnfOf(order[0]) ? order[0].code || "" : "");
+  resultsAtTop(els.resultsTable);
+  sayCards(els.results, els.resultsTable, order);
 }
 
 function buildTTResults() {
@@ -545,6 +572,7 @@ function buildTTResults() {
   els.resultsTitle.style.color = "";
   if (els.resMenu) els.resMenu.textContent = tr("results.menu", null, "MENU");   // a friend race's NEW FRIEND ROOM label must not outlive it
   els.resultsTitle.textContent = tr("results.ttTitle", { track: track.def.name }, "{track} — TIME TRIAL");
+  winnerChip(els, "");
   const best = G.player.best;
 
   // headline: your best lap this session (green if it set a new track record)
@@ -577,7 +605,7 @@ function buildTTResults() {
       const gl = document.createElement("span"); gl.className = "res-name";
       gl.textContent = guestGhost ? tr("results.rivalGhost", null, "RIVAL GHOST") : tr("results.yourPB", null, "YOUR PB");
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
-      gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
+      gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower-ink)";
       const shown = +delta.toFixed(3);   // sign from the rounded value: -0.0003 reads +0.000, not -0.000
       gv.textContent = `${shown >= 0 ? "+" : ""}${shown.toFixed(3)}s`;
       gr.append(gl, gv);
@@ -843,6 +871,7 @@ function buildChampion() {
   const champ = sorted[0];
   const champColor = seatColor(G, champ);
   els.resultsTitle.textContent = tr("results.worldChampion", null, "WORLD CHAMPION");
+  winnerChip(els, "");
   els.resultsTitle.style.color = champColor;
   els.resultsTable.textContent = "";
   const banner = document.createElement("div");

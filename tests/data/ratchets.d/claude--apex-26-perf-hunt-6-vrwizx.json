@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/render/glx/glx.js": {
+      "lines": 5
+    },
+    "js/ui/hud.js": {
+      "codeLines": 12,
+      "lines": 15
+    }
+  }
+}

@@ -41,6 +41,9 @@ test('pause context reads live classification and distinguishes online practice'
   assert.equal(b.title, 'Monza'); assert.match(b.detail,/P2/); assert.match(b.detail,/LAP 2 \/ 12/); assert.match(b.detail,/PRACTICE/); assert.match(b.detail,/RACE CONTINUES/);
   G.timeTrial = true; G.session = 'tt'; G.netPlay.active=()=>false;
   assert.doesNotMatch(ctx.api.raceBrief(G).detail,/P2|\/ 12|ONLINE/);
+  // No race: the line under (or, on a short landscape phone, in place of) the PAUSED heading must not repeat it.
+  const idle = ctx.api.raceBrief({ player: null, track: null });
+  assert.equal(idle.title, 'NO RACE'); assert.doesNotMatch(idle.title + ' ' + idle.detail, /PAUSED/i);
 });
 test('pause context carries the career brief line from CareerExperience', () => {
   const local = vm.createContext({ CareerExperience: { objectiveStatus: (G) => G.session === 'race' ? 'OBJECTIVE · TARGET P6 · NOW P8' : '' } });
@@ -52,7 +55,8 @@ test('pause context carries the career brief line from CareerExperience', () => 
 test('task doors retain canonical close and settings destinations', () => {
   const html=fs.readFileSync(new URL('../../index.html',import.meta.url),'utf8');
   for(const id of ['mb-watch','mb-practice','mb-photo','menu-explore','pm-strategy','pm-review','pm-photo','pm-checkpoint-save']) assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"[\s\S]*id="mb-garage"/);
+  // The shell ships TitleMenu.organize()'s groups (design pass 2c, #4240).
+  assert.match(html,/id="menu-primary"[\s\S]*id="mb-practice"[\s\S]*id="menu-garage"[\s\S]*id="mb-garage"[\s\S]*id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="menu-create"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-garage"/);
   assert.match(html,/id="mb-photo"[\s\S]*CAPTURE/);

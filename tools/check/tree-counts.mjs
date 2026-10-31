@@ -10,6 +10,7 @@
  * ratchets.json; the ceiling history moved to docs/notes/CEILING-HISTORY.md.
  * Behaviour is unchanged — each function is the original scan, moved verbatim.
  */
+import cp from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -145,6 +146,19 @@ export function sheets() {
     .map((f) => ({ name: f, src: stripComments(fs.readFileSync(path.join(dir, f), "utf8")) }));
 }
 
+/** sheets() as they were at a git ref, read from the object store (no checkout);
+ *  memoised per ref, since every AT_REF count below reads the same sheets. */
+const atRef = new Map();
+export function sheetsAt(ref) {
+  if (!atRef.has(ref)) atRef.set(ref, readSheetsAt(ref));
+  return atRef.get(ref);
+}
+function readSheetsAt(ref) {
+  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 << 20 });
+  return git("ls-tree", "--name-only", ref, "css/").split("\n").filter((f) => f.endsWith(".css")).sort()
+    .map((f) => ({ name: path.basename(f), src: stripComments(git("show", `${ref}:${f}`)) }));
+}
+
 /* The floor comes from the sheet, not from a copy of it here: if someone raises
    --fs-micro, this guard must move with it rather than keep asserting 14. */
 export function microFloor(all = sheets()) {
@@ -158,8 +172,7 @@ export function microFloor(all = sheets()) {
 /** font-size declarations whose value carries a px literal below --fs-micro.
  *  Every px literal in the VALUE, not just a bare `font-size: 12px`: the narrow
  *  form let `min()`/`clamp()` walk straight past the floor. */
-export function subFloorFontSizeReport() {
-  const all = sheets();
+export function subFloorFontSizeReport(all = sheets()) {
   const floor = microFloor(all);
   const rows = [];
   for (const { name, src } of all)
@@ -171,9 +184,9 @@ export function subFloorFontSizeReport() {
 export const subFloorFontSize = () => subFloorFontSizeReport().length;
 
 /** padding / gap / margin declarations containing a raw px literal. */
-export function rawSpacingReport() {
+export function rawSpacingReport(all = sheets()) {
   const rows = [];
-  for (const { name, src } of sheets())
+  for (const { name, src } of all)
     for (const m of src.matchAll(/(?:padding|margin|gap|row-gap|column-gap)[a-z-]*:\s*[^;{}]*?[0-9.]+px[^;{}]*/g))
       rows.push({ file: name, value: m[0].trim().slice(0, 60) });
   return rows;
@@ -192,9 +205,9 @@ const URL_VALUE = /url\((?:"[^"]*"|'[^']*'|[^)]*)\)/g;
 
 /** Raw colour literals in declaration values. tokens.css custom-property
  *  DEFINITIONS are excluded — the definition site is the system, not drift. */
-export function colorLiterals() {
+export function colorLiterals(all = sheets()) {
   const found = [];
-  for (const { name, src } of sheets()) {
+  for (const { name, src } of all) {
     for (const d of src.matchAll(COLOR_DECL)) {
       if (name === "tokens.css" && d[1].startsWith("--")) continue;
       const lits = d[2].replace(URL_VALUE, "").match(COLOR_LIT);
@@ -224,9 +237,9 @@ export function normColor(v) {
 /** normalised value -> the spellings it is written in. A group of size > 1 is a
  *  fork: identical paint hiding behind two spellings, which is how grep-based
  *  dedup plans go wrong. */
-export function colorForks() {
+export function colorForks(all = sheets()) {
   const byNorm = new Map();
-  for (const { value } of colorLiterals()) {
+  for (const { value } of colorLiterals(all)) {
     const n = normColor(value);
     if (!byNorm.has(n)) byNorm.set(n, new Set());
     byNorm.get(n).add(value);
@@ -234,6 +247,15 @@ export function colorForks() {
   return byNorm;
 }
 export const rawColorDistinct = () => colorForks().size;
+
+/** The css/-only tree counts measured at a git ref: what ratchets.mjs needs to
+ *  tell a branch's OWN lowering (head minus merge-base) from a loose base (#4257). */
+export const AT_REF = {
+  rawColor: (ref) => colorLiterals(sheetsAt(ref)).length,
+  rawColorDistinct: (ref) => colorForks(sheetsAt(ref)).size,
+  rawSpacing: (ref) => rawSpacingReport(sheetsAt(ref)).length,
+  subFloorFontSize: (ref) => subFloorFontSizeReport(sheetsAt(ref)).length,
+};
 
 /** Sheets that space themselves entirely in raw px and read neither --pad nor
  *  --gap, so they cannot respond to the density ladder. A LIST, not a count:
@@ -269,7 +291,7 @@ export function zeroRefModulesReport(corpus) {
   for (const list of [manifest.FULL, ...Object.values(manifest.DEFERRED), manifest.LAZY_AGENT,
     manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET, manifest.LAZY_EDITOR || [],
     manifest.LAZY_XR || [], manifest.LAZY_CAM_EDITOR || [],
-    manifest.LAZY_CAREER_UI || []])
+    manifest.LAZY_CAREER_UI || [], manifest.LAZY_UI_PRESETS || []])
     for (const f of list) if (typeof f === "string" && f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
   if (corpus === undefined) {
     const files = [];

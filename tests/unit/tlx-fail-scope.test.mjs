@@ -244,8 +244,23 @@ test("WebKit kill switch: unset → AUTO may try WebGPU; a latched failure keeps
   assert.equal(fresh.isWebKit, true);
   assert.equal(fresh._webkitStayGL, false, "a fresh iPhone tries WebGPU on AUTO");
   fresh._latchWebKitGL("WebGPU init failed: x".padEnd(400, "!"));
-  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the reason is stored, capped");
+  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the stamped reason is stored, capped");
   assert.equal(webkitSwitch({ ua: IPHONE, ls: fresh.local })._webkitStayGL, true, "the next boot on this device stays on WebGL2");
+});
+
+test("WebKit kill switch expires: 7 days, a Safari update, or an unstamped legacy latch re-probe WebGPU (iPhone WebGL2-leg report)", () => {
+  const fresh = webkitSwitch({ ua: IPHONE });
+  fresh._latchWebKitGL("device lost x3");
+  const stamp = fresh.local["apex26.tlxWebKitGL"];
+  const at = +stamp.split("|")[0];
+  assert.ok(Math.abs(at - Date.now()) < 60000, "the latch is stamped with when it happened");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: { "apex26.tlxWebKitGL": stamp } })._webkitStayGL, true, "a fresh latch still holds");
+  const aged = String(at - 8 * 864e5) + stamp.slice(String(at).length);
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: { "apex26.tlxWebKitGL": aged } })._webkitStayGL, false, "after 7 days AUTO tries WebGPU again");
+  const updated = IPHONE.replace("OS 27_0", "OS 27_1").replace("Version/27.0", "Version/27.1");
+  assert.equal(webkitSwitch({ ua: updated, ls: { "apex26.tlxWebKitGL": stamp } })._webkitStayGL, false, "a Safari update re-probes WebGPU");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: { "apex26.tlxWebKitGL": "WebGPU init failed" } })._webkitStayGL, false,
+    "an unstamped latch from before the expiry re-probes once (it re-latches, stamped, if WebGPU still fails)");
 });
 
 test("WebKit kill switch: never on Chromium, never written under a pin", () => {

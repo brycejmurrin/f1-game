@@ -21,7 +21,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
-  // ES modules (vendor/rapier-0.19.3, vendor/three-0.186.1): Chromium enforces
+  // ES modules (vendor/rapier-0.19.3, vendor/three-0.187.0): Chromium enforces
   // a JavaScript MIME type for module scripts — octet-stream imports are
   // rejected outright, so .mjs must be mapped or dynamic import() fails.
   ".mjs": "text/javascript; charset=utf-8",
@@ -233,6 +233,10 @@ const env = {
   ...process.env,
   APEX_PORT: port,
   ...(managed ? { APEX_MANAGED_SERVER: "1" } : {}),
+  // playwright.config adds the webkit project from argv in the MAIN process only; the
+  // worker processes re-evaluate the config with no --project flag and need the env,
+  // or every run dies with 'Project "webkit" not found in the worker process'.
+  ...(args.some((a) => a === "--project=webkit" || /^--project=([^,]*,)*webkit(,|$)/.test(a)) ? { APEX_WEBKIT: "1" } : {}),
 };
 
 let stopping = false;

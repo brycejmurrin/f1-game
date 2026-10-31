@@ -278,6 +278,8 @@ export const RULES = [
   [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
   [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
   [/^js\/ui\/screen-looks\.js/, ["state-unit"], "screen-looks.test.mjs (also run title-layout + pause-opts: both peek through it)"],
+  [/^js\/ui\/look-avail\.js/, ["state-unit"], "screen-looks.test.mjs (VM-loads look-avail.js beside screen-looks.js)"],
+  [/^js\/ui\/layout-presets\.js/, ["state-unit"], "layout-presets.test.mjs (VM-loads screen-looks, pause-opts and title-layout too)"],
   [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it
@@ -374,7 +376,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
     ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }
@@ -432,6 +434,118 @@ export function pick(files) {
     if (/^tests\/specs\/[^/]+\.spec\.js$/.test(f)) for (const g of specOwners(f)) add(g, SPEC_OWNER_REASON);
   }
   return groups;
+}
+
+// SPECS THE GROUP RULES CANNOT NAME (orchestration review 2026-10-29, Part 2 finding 2).
+// RULES map a path to a GROUP; two cases escape them and cost a CI cycle each:
+//  1. a spec that loads a module STANDALONE (`addScriptTag({ url: "/js/ui/photo-studio.js" })`, a
+//     readFileSync of a js path) breaks when that module gains a dependency the spec never loads (#4188:
+//     photo-studio.spec.js needed a `DrivingLine` stub, found on the third CI cycle);
+//  2. the shared UI layer (a module every menu/sheet spec exercises) lands in group `ui`, which a local floor
+//     does not run (#4194: three full tiers on specs it could not run).
+const SPEC_LOAD_LINE = /addScriptTag|readFileSync|require\(|import\(|\burl\s*:|\bpath\s*:|path\.join|\bgoto\(/;
+
+/** Specs whose source loads a changed js/ or css/ file by path. @returns {{spec:string,module:string}[]} */
+export function standaloneSpecs(files, opts = {}) {
+  const mods = files.filter((f) => /^(?:js|css)\/.+\.(?:js|css)$/.test(f));
+  if (!mods.length) return [];
+  const dir = opts.specsDir || path.join(ROOT, "tests/specs");
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".spec.js")); } catch (_) { return []; }
+  const read = opts.read || ((n) => fs.readFileSync(path.join(dir, n), "utf8"));
+  const out = [];
+  for (const n of names) {
+    let text = "";
+    try { text = read(n); } catch (_) { continue; }
+    const lines = text.split("\n").filter((l) => SPEC_LOAD_LINE.test(l));
+    for (const m of mods) {
+      const hit = lines.some((l) => new RegExp(`["'\`](?:\\./|/)?${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`).test(l));
+      if (hit) out.push({ spec: `tests/specs/${n}`, module: m });
+    }
+  }
+  return out;
+}
+
+/** The shared UI layer: modules every menu/sheet/settings spec runs through, and the specs that exercise them. */
+export const SHARED_UI_LAYER = Object.freeze({
+  files: /^js\/ui\/(?:dom|modal|setting-row|menu-nav|layers|aria-state|live-region|css-zoom|key-binds|experience|dock-layout|editor-workspace)\.js$/,
+  specs: Object.freeze([
+    "tests/specs/menu-keyboard.spec.js",
+    "tests/specs/menu-traversal.spec.js",
+    "tests/specs/menu-survey.spec.js",
+    "tests/specs/settings-reload.spec.js",
+    "tests/specs/ui-audit.spec.js",
+    "tests/specs/ui-button-touch.spec.js",
+    "tests/specs/ui-resize.spec.js",
+    "tests/specs/ui-scale.spec.js",
+    "tests/specs/photo-studio.spec.js",
+  ]),
+});
+
+/** @returns {{spec:string,module:string}[]} the shared-UI specs a changed file reaches. */
+export function sharedUiSpecs(files) {
+  const hit = files.find((f) => SHARED_UI_LAYER.files.test(f));
+  return hit ? SHARED_UI_LAYER.specs.map((spec) => ({ spec, module: hit })) : [];
+}
+
+/** Every spec to name for a diff, with why: standalone loaders then the shared UI layer (deduped by spec). */
+export function extraSpecs(files, opts = {}) {
+  const seen = new Map();
+  for (const r of standaloneSpecs(files, opts)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "loads-module-standalone" });
+  for (const r of sharedUiSpecs(files)) if (!seen.has(r.spec)) seen.set(r.spec, { ...r, kind: "shared-ui-layer" });
+  return [...seen.values()].filter((r) => fs.existsSync(path.join(opts.root || ROOT, r.spec)) || opts.read);
+}
+
+// NEW-MODULE / NEW-GLOBAL CHECKLIST. The same five-point list is one paragraph in .claude/rules/game-code.md.
+export const NEW_MODULE_CHECKLIST = Object.freeze([
+  "the eager shell is at its budget (tests/unit/boot-load-budget.test.mjs): prefer the LAZY lists in tools/manifest.cjs over EAGER",
+  "VM stubs: race-session-lazy, results-cam and ui-sheets-audit load modules by hand; add the new module (and any global it reads) there",
+  "types/game-ctx.d.ts: declare what the module takes from G / exposes on it",
+  "docs/agent-index.json (`npm run gen`) and the agentHelp size ratchet (tests/unit/agent-help-size*.test.mjs)",
+  "a new tools/perf/*.mjs also needs its entry in docs/agent-output/policies.json",
+]);
+
+/** Lines of a unified diff that add a top-level IIFE global or a `window.X =` assignment. */
+export function addedGlobals(diffText) {
+  const out = [];
+  for (const line of String(diffText || "").split("\n")) {
+    if (!line.startsWith("+") || line.startsWith("+++")) continue;
+    const m = /^\+(?:(?:const|var|let)\s+([A-Z][A-Za-z0-9_]*)\s*=\s*(?:\(|function|async)|(?:window|globalThis)\.([A-Z][A-Za-z0-9_]*)\s*=)/.exec(line);
+    if (m) out.push(m[1] || m[2]);
+  }
+  return out;
+}
+
+/** Added paths (new js/ modules, new tools/perf scripts) plus names of globals added in changed js. */
+export function newModuleTriggers(added, globals = []) {
+  const mods = added.filter((f) => /^js\/.+\.js$/.test(f) || /^tools\/perf\/[^/]+\.mjs$/.test(f));
+  return { modules: mods, globals: [...new Set(globals)] };
+}
+
+function gitLines(args) {
+  try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n").filter(Boolean); }
+  catch (_) { return []; }
+}
+
+/** Added-vs-deploy paths and added globals for the working diff (best effort: no git -> nothing). */
+function addedSinceBase(explicit) {
+  let base = "";
+  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "HEAD~1"]) {
+    const b = gitLines(["merge-base", "HEAD", ref])[0];
+    if (b) { base = b; break; }
+  }
+  const added = new Set([...(base ? gitLines(["diff", "--name-only", "--diff-filter=A", base]) : []),
+    ...gitLines(["ls-files", "--others", "--exclude-standard"])]);
+  if (explicit) for (const f of explicit) if (fs.existsSync(path.join(ROOT, f)) && !gitLines(["cat-file", "-e", `HEAD:${f}`]).length && !gitLines(["ls-tree", "HEAD", f]).length) added.add(f);
+  let globals = [];
+  if (base) {
+    const diff = gitLines(["diff", "-U0", base, "--", "js"]).join("\n");
+    globals = addedGlobals(diff);
+  }
+  for (const f of added) if (/^js\/.+\.js$/.test(f)) {
+    try { globals.push(...addedGlobals(fs.readFileSync(path.join(ROOT, f), "utf8").split("\n").map((l) => `+${l}`).join("\n"))); } catch (_) { /* gone */ }
+  }
+  return { added: [...added], globals };
 }
 
 // Validate the selector before consulting git or starting any verification.
@@ -500,6 +614,23 @@ function changedFiles(argv) {
   return [...out];
 }
 
+/** Prose for the specs the group rules cannot name, and the new-module checklist when the diff adds one. */
+function printExtras(files, argv) {
+  const specs = extraSpecs(files);
+  if (specs.length) {
+    console.log(`\n${specs.length} spec(s) the group rules do not name (run each ALONE: test-bg.mjs --spec <file>):`);
+    for (const r of specs) console.log(`    ${r.spec}  (${r.kind === "shared-ui-layer" ? "shared UI layer" : "loads"} ${r.module})`);
+  }
+  const explicit = argv.filter((a, n) => !a.startsWith("--") && !(argv.indexOf("--since") >= 0 && n === argv.indexOf("--since") + 1));
+  const { added, globals } = addedSinceBase(explicit);
+  const trig = newModuleTriggers(added, globals);
+  if (trig.modules.length || trig.globals.length) {
+    console.log(`\nNEW MODULE / GLOBAL (${[...trig.modules, ...trig.globals.map((g) => `global ${g}`)].join(", ")}) - checklist:`);
+    for (const c of NEW_MODULE_CHECKLIST) console.log(`    [ ] ${c}`);
+    console.log("    (.claude/rules/game-code.md §New module)");
+  }
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
 
@@ -533,6 +664,7 @@ An unknown option prints this usage and exits 2.`;
     const g = pick(files);
     const pkgJ = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const named = [...g.keys()].filter((n) => pkgJ.scripts[`test:${n}`]).sort();
+    const specs = extraSpecs(files).map((r) => ({ spec: r.spec, kind: r.kind, because: r.module }));
     console.log(JSON.stringify({
       // "none" — nothing changed, run nothing. "unmatched" — files changed but
       // no rule claimed them, so the selection is NOT trustworthy and the
@@ -540,6 +672,9 @@ An unknown option prints this usage and exits 2.`;
       ...selectionReceipt(files, pkgJ.scripts),
       files,
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
+      specs,
+      // An empty list read as "no spec needed" to a cold agent (MCP-REFINE-2026-10-30): name where the spec comes from.
+      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: for the ONE pre-push spec run select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field)` }),
     }));
     process.exit(0);
   }
@@ -555,6 +690,7 @@ An unknown option prints this usage and exits 2.`;
 
   if (!groups.size) {
     console.log("\nno rule matched — run `npm run test:tiny` and use your judgement");
+    printExtras(files, argv);
     process.exit(0);
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -587,4 +723,5 @@ An unknown option prints this usage and exits 2.`;
   if (batches.length > 1) {
     console.log(`\nwait for each batch before starting the next:  node tools/ci/test-bg.mjs --wait`);
   }
+  printExtras(files, argv);
 }

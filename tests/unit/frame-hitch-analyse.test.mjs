@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -217,10 +217,10 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
     nodes: [
       cpuNode(1, "(root)", "", 0, [2, 4]),
       cpuNode(2, "render", "http://x/js/render/three/tlx.js?v=abc", 3400, [3]),
-      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
       cpuNode(4, "endPass", "http://x/js/render/three/tlx-shadow.js?v=abc", 260, [5, 6]),
-      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
-      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
+      cpuNode(6, "createBindings", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
     ],
     samples:    [3,      3,      5,       6,      1,     6],
     timeDeltas: [100000, 50000,  150000,  40000,  10000, 60000],
@@ -229,9 +229,9 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
   assert.equal(a.totalMs, 410, "total is the sum of the deltas");
   assert.match(a.verdict, /TOP SELF TIME: getNodeBuilderState/);
   assert.equal(a.rows[0].ms, 300, "two parents fold into one 300 ms row");
-  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.1/three.webgpu.min.js:6");
+  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.187.0/three.webgpu.min.js:6");
   assert.equal(a.rows[1].ms, 100);
-  assert.equal(a.files[0].file, "vendor/three-0.186.1/three.webgpu.min.js");
+  assert.equal(a.files[0].file, "vendor/three-0.187.0/three.webgpu.min.js");
   assert.ok(a.files[0].share > 0.97, "the per-file fold attributes 400 of 410 ms to the bundle");
 });
 
@@ -325,6 +325,27 @@ test("analysePassOps tallies each attachment's load>store and the median submits
   assert.equal(o.storedPerFrame, 2.5);                // the scene colour + 1.5 FXAA
   assert.equal(o.discardedPerFrame, 2);               // the scene tag + depth
   assert.match(analysePassOps([], []).note, /no per-frame store inventory/);
+});
+
+test("analyseUploads ranks the sampled upload sites by KB a frame and classes them by three's function names (perf hunt 6)", () => {
+  const ups = [
+    { site: "writeBuffer :: #256B :: updateBinding<updateBindings :: car.js:10 <- tlx.js:5", n: 800, kb: 200 },
+    { site: "writeBuffer :: #4096B :: updateAttribute<_update :: track.js:3", n: 100, kb: 400 },
+    { site: "writeBuffer :: #64B :: createIndexAttribute :: road.js:9", n: 80, kb: 5 },
+    { site: "createBuffer :: lights#1024B ::  :: (three only)", n: 20, kb: 20 },
+    { site: "writeBuffer :: #0B :: x :: y", n: 0, kb: 0 },           // a zero-count row is dropped
+  ];
+  const u = analyseUploads(ups, 100, 2);
+  assert.equal(u.frames, 100);
+  assert.equal(u.callsPerFrame, 10);                    // 1000 calls / 100 frames
+  assert.equal(u.kbPerFrame, 6.25);                     // 625 KB / 100 frames
+  assert.equal(u.rows.length, 2);
+  assert.equal(u.rows[0].site, ups[1].site); assert.equal(u.rows[0].kbPerFrame, 4); assert.equal(u.rows[0].nPerFrame, 1);
+  assert.equal(u.rows[0].share, 0.64);
+  assert.deepEqual(u.groups.map((c) => c.cls), ["attribute", "uniform", "other", "index"]);
+  assert.equal(u.groups[1].nPerFrame, 8); assert.equal(u.groups[1].share, 0.32);
+  assert.equal(analyseUploads([], 100).note, "no upload sites recorded");
+  assert.equal(analyseUploads(ups, 0).note, "no upload sites recorded");
 });
 
 test("analyseWindow reads the driven window in GAME frames, not callbacks or the end-of-run ring (hunt 4 I4)", () => {

@@ -27,7 +27,7 @@ const CHUNKED = read("js/render/three/tlx-chunked.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
@@ -243,7 +243,8 @@ async function mirrorRig(t, ls = {}) {
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
     const post = { hdrOk: () => true };
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; }, glass() { _mirGlassSeen = true; } };`);
+    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; },
+      glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);
   const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) });
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
   // One mirror frame: mirrorBegin's prepareMirrorTarget(w, h), then mirrorEnd's render into the target.
@@ -280,12 +281,27 @@ test("A-H5: the mirror target stores and regenerates 3 levels, not 9, while only
   assert.equal(h.M.rt().texture.mipmaps.length, 5, "no shrink at the same size (no churn)");
 });
 
-test("A-H5: the cockpit glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+test("perf hunt 5 F1: the cockpit glass grows the chain to its bounded LOD, not the full 9 levels", async (t) => {
   const h = await mirrorRig(t);
   h.M.rect(RECT);
   h.frame(461, 132);
   assert.equal(h.M.rt().texture.mipmaps.length, 3);
-  h.M.glass();   // drawMirrorGlass ran
+  h.M.glass(1.84);   // drawMirrorGlass at the live helmet pose (mip-footprint-lod.test.mjs)
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 4, "ceil(1.84 + 0.25) + 1 levels");
+  assert.equal(h.storage.filter((n) => n > 1).at(-1), 4, "re-allocated with 4 levels, not 9");
+  h.M.glass(1.2); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 4, "the session max: a smaller footprint never shrinks it");
+  h.M.glass(3.1); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 5, "a larger one grows it");
+});
+
+test("A-H5: an UNBOUNDED glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 3);
+  h.M.glass();   // drawMirrorGlass with no bound (two straddling frames, no CPU arrays)
   h.frame(461, 132);
   assert.equal(h.M.rt().texture.mipmaps.length, 0, "the full chain again (an empty mipmaps array = three's own rule)");
   assert.equal(h.storage.filter((n) => n > 1).at(-1), 9, "re-allocated with all 9 levels");
@@ -904,16 +920,19 @@ test("godray11: WebGL2 leg never takes rg11b10 (scene11 / bloom11 WebGPU-only ga
   assert.equal(h.post.state().godray11, false);
 });
 
-test("shadow depth-only: r186 keeps R8 colour bytes; r187 gate stays closed on tip", async (t) => {
-  assert.equal(+(THREE.REVISION || 0) < 187, true, "vendored tip is still pre-r187");
+test("shadow depth-only on r187: no colour attachment on the phone maps, PCSS keeps R32F (#34782, #2649)", async (t) => {
+  // The base tree (three r186) carries an R8 attachment: depthOnly false, 1024² colour bytes on a phone sun map.
+  assert.equal(+(THREE.REVISION || 0) >= 187, true, "vendored three is r187+");
   const fg = makeFakeGL(64, 64);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
   t.after(() => renderer.dispose());
   const phone = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer, isMobile: true, softwareGL: false, isWarming: () => false });
-  assert.equal(phone.S.depthOnly, false);
-  assert.equal(phone.S.sunColorBytes, 1024 * 1024, "phone 1024² R8 colour attachment");
-  assert.equal(!!phone.sunTex, true);
+  assert.equal(phone.S.depthOnly, true);
+  assert.equal(phone.S.sunColorBytes, 0, "phone 1024² sun map: 0 colour bytes (r186: 1,048,576)");
+  assert.equal(!!phone.sunTex, true, "the lit pass still samples the depth texture");
+  // The drawWarm path builds its probe targets through the same factory, and a pass renders into one.
+  assert.doesNotThrow(() => phone.drawWarm());
 });
 
 test("FB-invalidate audit: depthEnd / discardAttachments / discardHint stay on the live post chain", async (t) => {

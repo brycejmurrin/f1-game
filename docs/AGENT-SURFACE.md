@@ -69,6 +69,12 @@ does not discover, install or validate hosted tools.
    not as "NEVER" lines agents can forget.
 5. **Path-scoped rules** (`.cursor/rules/*.mdc` with globs) for renderer
    backends; keep always-on rules thin.
+6. **Server instructions are the MCP router.** They are the only per-server
+   text a deferring client loads before it searches (Claude Code keeps 4,096
+   chars), so apex-tools' `instructions` is the question → tool map, also
+   served as resource `apex://start-here`; `apex://debug-hooks/{section}` serves
+   the `__apex` reference a section at a time
+   ([MCP-REFINE-2026-10-30](notes/MCP-REFINE-2026-10-30.md)).
 
 **One-time Dashboard (not inventable from git):**
 
@@ -509,7 +515,7 @@ The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Re
 ### three.js Inspector (TLX, opt-in)
 
 `?inspector=1` (or `__apex.inspector(true)`) loads the vendored three.js Inspector panel on the TLX renderer; it is off under the Playwright
-harness and on the deployed site, and nothing under `vendor/three-0.186.1/addons/inspector/` is fetched while it is off. `__apex.inspector()` reads
+harness and on the deployed site, and nothing under `vendor/three-0.187.0/addons/inspector/` is fetched while it is off. `__apex.inspector()` reads
 `{on, supported, reason}`. Pin `apex26.gfxBackend=three` first, or a software-GL boot may answer `supported:false` (#2674). Reference:
 [DEBUG-HOOKS §inspector](DEBUG-HOOKS.md), notes in `docs/notes/THREE-INSPECTOR-2026-10-16.md`.
 
@@ -691,3 +697,12 @@ API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-pr
 automated accessibility, offline screenshot review, existing interactive viewers,
 procedural room drafts and local glTF validation. Reuse the existing skills and
 agent roles; the parent owns browser work and publication follows its review gates.
+
+## Messaging between hosts
+
+Each host's inbound/outbound channels (Claude `send_message`, subagent `SendMessage`, Cursor run follow-ups, Codex
+subagents, GitHub labels and the PR body) are compared in
+[notes/AGENT-MESSAGING-2026-10-30.md](notes/AGENT-MESSAGING-2026-10-30.md). Two facts to keep in mind when wiring a
+hook or tool: Codex runs a project's `.codex/hooks.json` only after the project is trusted and re-reviews a hook
+whose hash changed (`/hooks`), and a Cursor follow-up to a running agent needs `delivery: "steer"` (a plain one is
+`BUSY`; `tools/ci/cursor-agents.mjs followup` does not send it yet).

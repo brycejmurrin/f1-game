@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
+import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
@@ -110,7 +111,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
-  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.duration\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
+  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play, motion: \{ eye: \[0, 0, 0\], aim: \[0, 0, 0\] \} \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.wallSeconds\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed, SLOW-MO included');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
@@ -241,7 +242,7 @@ test('the first presented garage frame takes over its preparation cover, then ha
       menuSlice: async () => { now += 1000; if (!c.gfx.warming()) c.studioShown(); if (mode === 'quit' && now >= 2000) c.state = 'race'; if (mode === 'skip' && now === 2000) c._skip();  },
       raceIntro: () => events.push(c._introSkip === c._introRun ? 'skip:' + c._introKey : 'fly:' + c._introKey), go: () => events.push('go'), Log: { warn() {} },
       RaceEntryProfile: raceEntryProfileStub({ budgetMs: 1e9, now: () => now }), PerfGov: PERF_GOV_STUB,
-      UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false };
+      GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false };
     vm.createContext(c); vm.runInContext(src, c);
     const took = c.introGarage(c.go);
     for (let i = 0; i < 400; i++) await Promise.resolve();
@@ -308,12 +309,12 @@ function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}
   $('carsetup').hidden = !carsetupOpen; $('garrival-inner').hidden = false; $('garrival').hidden = false;
   const frames = [], keys = [];
   const G = { setupPreviewOn: was, store: { get: (k, d) => (k === 'garageArrival' ? saved : d) } };
-  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, reducedMotion: () => false, Log: { info() {} },
+  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, sequenceLook() {}, reducedMotion: () => false, Log: { info() {} },
     requestAnimationFrame: (fn) => frames.push(fn), render: (dt) => frames.push('render:' + dt),
     window: { addEventListener: (t, fn) => { if (t === 'keydown') keys.push(fn); } } });
   vm.runInContext(src, c);
   const fn = (n) => vm.runInContext(n, c);
-  return { $, G, c, frames, keys, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
+  return { $, G, c, frames, keys, fn, start: fn('startArrivalPreview'), step: fn('stepPreview'), playing: () => fn('preview') };
 }
 test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canvas back', () => {
   for (const dir of ['in', 'out']) {
@@ -408,14 +409,14 @@ test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-ou
   const calls = [];
   Arrival.bindSettings($, { get: () => null, set() {} }, { preview: (dir, b) => { calls.push(dir); if (dir) return true; const was = playing; playing = false; return was; } });
   $('garrival').hidden = false;
-  $('ga-preview-in').onclick(); $('ga-preview-out').onclick();
-  assert.deepEqual(calls, ['in', 'out']);
+  $('ga-preview-in').onclick(); $('ga-preview-out').onclick(); $('ga-preview-home').onclick();
+  assert.deepEqual(calls, ['in', 'out', 'home']);
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, false, 'DONE mid-playback stops it, the panel stays');
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, true, 'the next DONE closes the tool');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW IN<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW OUT<\/button>/);
+  assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW PIT STOP<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW RACE START<\/button>/);
 });
 
 test('a circuit already raced opens RACE! on the garage: its programs are not warmed a second time', () => {
@@ -535,7 +536,7 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
       $: (id) => (id === 'rs-cancel' ? back : null), clearTimeout(t) { if (t === 7) ctx.cleared++; },
       Log: { warn() {} }, announce() { events.push(['failed']); }, gfx: { warming: () => warming }, performance: { now: () => now }, introNow: () => now,
       RaceEntryProfile: raceEntryProfileStub({ budgetMs: 30000, now: () => now }), PerfGov: PERF_GOV_STUB,
-      UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
+      GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
       entrySettings: () => ctx.settings, loadingScreen: { building: () => events.push(['card']), stop() {} }, studioSkip() {},
       cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
       // Model a successfully presented garage frame releasing the sheet.
@@ -651,7 +652,7 @@ function garageEntryRegressionHarness() {
     Log: { warn() {} },
     raceIntro() { events.push('handoff'); },
     RaceEntryProfile: raceEntryProfileStub({ budgetMs: 1e9, now: () => now }),
-    PerfGov: PERF_GOV_STUB, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
+    PerfGov: PERF_GOV_STUB, GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
     ensureScenery: async () => {}, motionReduced: () => false,
     loadTrackStepped: async () => false,
     prepareMenuCarAssets: async () => {}, warmPrograms() {},
@@ -665,6 +666,7 @@ function garageEntryRegressionHarness() {
   vm.createContext(c);
   vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/crew-draw.js') });
   vm.runInContext(introArrivalSource, c);
+  vm.runInContext(readFileSync(new URL('../../js/data/garage-departure-motion.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/data/garage-departure-motion.js') });
   const clockStart = introCameraSource.indexOf('let driveOut = null;');
   const clockEnd = introCameraSource.indexOf('// THE ARRIVAL PREVIEW', clockStart);
   assert.ok(clockStart >= 0 && clockEnd > clockStart, 'production drive-out clock extraction');
@@ -959,7 +961,7 @@ function sheetRecoveryHarness({ manual = false, pollThrows = false, syncPollThro
       if (!deferredCold) ctx.sheetRelease(true);
     },
     RaceEntryProfile: raceEntryProfileStub({ budgetMs: 30000, now: () => clock }),
-    PerfGov: PERF_GOV_STUB, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
+    PerfGov: PERF_GOV_STUB, GarageDepartureMotion: {}, GarageDepartureWheels: {}, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
   };
   vm.createContext(ctx);
   vm.runInContext(state + warm + helpers + wrapper + ';globalThis.sheetOwner = () => _introSheet;', ctx);
@@ -1120,7 +1122,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,
     els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
-    home: { active: false }, driveOut: null, endHome: noop, reducedMotion: () => false,
+    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false,
     pinGarageRes: noop, endGarageRes: noop, setupCam: { endGarageRes: noop }, studioShown: noop,
     window: { addEventListener: noop }, requestAnimationFrame: noop,
     previewFrames: [], worldFrames: [],
@@ -1303,4 +1305,518 @@ test('a covered PREP menu with no owed warm frames still presents for a queued w
   const q = body.indexOf('const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());');
   const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
   assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
+});
+test('PREVIEW transport: pause holds, scrub holds the end, LOOP replays, EDIT re-poses on a change and IN / OUT switch', () => {
+  let saved = { angle: 'left', fov: 50 };
+  const h = previewHarness();
+  h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
+  const fn = h.fn;
+  assert.equal(h.start('in'), true);
+  h.step(0.1); h.step(0.1);
+  fn('previewPause')(true);
+  const held = h.playing().t;
+  for (let i = 0; i < 5; i++) h.step(0.1);
+  assert.equal(h.playing().t, held, 'PAUSE holds the clock');
+  assert.equal(h.$('ga-play').textContent, 'PLAY');
+  assert.equal(h.$('ga-time').textContent, `0.2 / ${Arrival.duration(h.playing().cfg, 'in').toFixed(1)} s · OPENING GARAGE`, 'time, length and the caption');
+  fn('previewSeek')(Arrival.DURATION + 5);
+  const end = h.step(0.1);
+  assert.equal(h.playing() !== null, true, 'a scrub to the end holds the frame instead of closing');
+  assert.equal(end.active, true); assert.equal(end.z, 0, 'the parked pose');
+  assert.equal(h.$('ga-scrub').value, '1000');
+  fn('previewSeek')(1); fn('previewSeek')(h.playing().t - 1 / 24);
+  assert.ok(Math.abs(h.playing().t - (1 - 1 / 24)) < 1e-9, 'a frame back');
+  // LOOP: past the end it starts again rather than handing the canvas back.
+  h.playing().loop = true; fn('previewPause')(false);
+  fn('previewSeek')(Arrival.DURATION - 0.05); fn('previewPause')(false);
+  h.step(0.1);
+  assert.ok(h.playing() && h.playing().t < 0.2, 'LOOP replays from the top');
+  // EDIT: paused, the panel back, a saved change re-poses the held frame.
+  fn('previewEdit')(true);
+  assert.equal(h.playing().paused, true); assert.equal(h.$('garrival-inner').hidden, false, 'the panel is over the room');
+  saved = { angle: 'right', fov: 70 };
+  fn('refreshPreview')();
+  const now = h.step(0.1);
+  assert.equal(now.fov, 70, 'the new lens on the held frame'); assert.ok(now.eye[0] > 0, 'the new angle');
+  // From EDIT, PREVIEW OUT switches direction and plays.
+  assert.equal(h.start('out'), true);
+  assert.equal(h.playing().dir, 'out'); assert.equal(h.playing().paused, false); assert.equal(h.$('garrival-inner').hidden, true);
+  assert.equal(h.start('in'), false, 'outside EDIT a second start is still refused');
+  // Space and the arrows drive it from the keyboard; Escape still stops.
+  const key = (k, target) => { const ev = { key: k, target, preventDefault() {}, stopPropagation() {} }; for (const f of h.keys) f(ev); };
+  key(' '); assert.equal(h.playing().paused, true, 'Space pauses');
+  const t0 = h.playing().t; key('ArrowRight'); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, '→ steps a frame');
+  key('ArrowRight', { tagName: 'INPUT' }); assert.ok(Math.abs(h.playing().t - t0 - 1 / 24) < 1e-9, 'the scrub keeps its own arrows');
+  key('Escape'); assert.equal(h.playing(), null);
+});
+test('PREVIEW phase marks: the beats of the timeline on the scrub, JUMP TO in EDIT, and they move with HOLD BEAT', () => {
+  let saved = { angle: 'left', hold: 1 };
+  const h = previewHarness();
+  h.G.store.get = (k, d) => (k === 'garageArrival' ? saved : d);
+  const fn = h.fn;
+  assert.equal(h.start('in'), true);
+  const p = h.playing(), T = Arrival.timeline(p.cfg, 'in'), len = Arrival.duration(p.cfg, 'in');
+  const marks = fn('previewPhases')(p);
+  assert.deepEqual([...marks].slice(0, 5).map((m) => [m.id, m.t]),
+    [['door', 0], ['lane', T.door], ['pause', T.door + T.lane], ['back', T.door + T.lane + T.pause], ['park', T.park]]);
+  assert.ok(marks.every((m, i) => m.t < len && (i === 0 || m.t > marks[i - 1].t)), 'in order, inside the show');
+  assert.ok(h.$('ga-marks').innerHTML.includes(`data-phase="back" style="left:${((T.door + T.lane + T.pause) / len * 100).toFixed(2)}%"`));
+  assert.equal(h.$('ga-phase').hidden, true, 'JUMP TO only in EDIT');
+  // EDIT: JUMP TO holds the first frame of a phase and names the held one.
+  fn('previewEdit')(true);
+  assert.equal(h.$('ga-phase').hidden, false);
+  fn('previewPhase')('back');
+  assert.equal(h.playing().t, T.door + T.lane + T.pause); assert.equal(h.playing().paused, true);
+  assert.equal(h.$('ga-phase').value, 'back');
+  assert.equal(h.step(0).label, 'BRINGING CAR IN');
+  fn('previewSeek')(T.door + 0.1);
+  assert.equal(h.$('ga-phase').value, 'lane', 'the readout follows the scrub');
+  // HOLD BEAT NONE: the pause has no length, so its mark gives way to BACK IN.
+  saved = { angle: 'left', hold: 0 };
+  fn('refreshPreview')();
+  assert.ok(!h.$('ga-marks').innerHTML.includes('data-phase="pause"'));
+  assert.ok(!h.$('ga-phase').innerHTML.includes('PAUSE'));
+  // RACE START: shutter, hold, roll-out, empty lane.
+  assert.equal(h.start('out'), true);
+  const out = fn('previewPhases')(h.playing()), To = Arrival.timeline(h.playing().cfg, 'out');
+  assert.deepEqual([...out].map((m) => m.id).slice(0, 2), ['door', 'run'], 'HOLD BEAT NONE: straight from the shutter to the roll-out');
+  assert.ok(Math.abs(out[1].t - (To.door + To.hold + Arrival.duration(h.playing().cfg, 'out') - To.base)) < 1e-9);
+  assert.equal(out[out.length - 1].id, 'gone');
+});
+test('bindSettings tells a running preview about every saved edit and RESET', () => {
+  const { $ } = harness(); let n = 0;
+  Arrival.bindSettings($, { get: () => null, set() {} }, { preview() {}, changed: () => n++ });
+  $('ga-fov').value = '60'; $('ga-fov').onchange();
+  $('ga-reset').onclick();
+  assert.equal(n, 2);
+});
+
+// ── CAMERAS, SHOT LENGTHS, AFTER THE RACE (#garrival's 2026-10-30 controls) ──
+test('every camera, preset and sequence keeps the eye inside the bay and ends where the sequence ends', () => {
+  const seqs = [['in', null], ['out', null]].concat(Object.keys(Arrival.RESULTS).map((r) => ['home', r]));
+  for (const angle of Arrival.ANGLES) for (const [dir, result] of seqs) for (const calm of [true, false]) for (const [height, move] of [[-1, 'push'], [0, 'still'], [1.5, 'pull'], [0.5, 'drift']]) {
+    const cfg = Object.assign(Arrival.settings({ angle, height, move, sway: 2, zoom: 20, shots: ['door', 'high', 'low'], enterCrew: 'none', leaveCrew: 'none', homeCrew: 'none', result }), { pos: 4 });
+    const fn = Arrival.poseFor(dir), end = Arrival.duration(cfg, dir);
+    for (let t = 0; t <= end + 0.5; t += 0.05) {
+      const p = fn(t, cfg, calm), tag = `${angle} ${dir}${result ? ':' + result : ''} t${t.toFixed(2)}`;
+      assert.ok(p.eye[0] > -5.4 && p.eye[0] < 5.4 && p.eye[2] > -6.4 && p.eye[2] < 6.4, tag + ': eye inside the walls');
+      assert.ok(p.eye[1] > 0.25 && p.eye[1] < 3.65, tag + ': eye above the floor and under the overhead rig');
+      assert.ok(p.aim.every(Number.isFinite) && [p.x, p.z, p.yaw].every(Number.isFinite), tag + ': finite');
+      assert.ok((p.camera in Arrival.CAMS) || (p.camera in Arrival.RIG_LABEL), tag + ': a known camera or rig');
+    }
+    const last = fn(end + 0.5, cfg, true);
+    assert.equal(last.active, false);
+    if (dir !== 'out') assert.deepEqual([last.x + 0, last.z + 0, last.yaw + 0], [0, 0, 0], `${angle} ${dir}: parked`);
+  }
+});
+test('presets cut on the shot boundaries; CUSTOM films each shot with its own camera', () => {
+  const cfg = Arrival.settings({ angle: 'custom', shots: ['high', 'low', 'door'], enterCrew: 'none', leaveCrew: 'none' });
+  const T = Arrival.timeline(cfg, 'in');
+  assert.equal(Arrival.pose(T.door - 0.01, cfg).camera, 'high', 'shot 1: the shutter');
+  assert.equal(Arrival.pose(T.door + 0.01, cfg).camera, 'low', 'shot 2: up the lane');
+  assert.equal(Arrival.pose(T.door + T.lane + T.pause + 0.01, cfg).camera, 'door', 'shot 3: the back-in');
+  const O = Arrival.timeline(cfg, 'out'), go = O.door + O.hold;
+  assert.equal(Arrival.poseOut(go - 0.01, cfg).camera, 'high');
+  assert.equal(Arrival.poseOut(go + 0.5, cfg).camera, 'low', 'shot 2: rolling to the doorway');
+  assert.equal(Arrival.poseOut(O.settle, cfg).camera, 'door', 'shot 3: out of the door and away');
+  assert.deepEqual([...Arrival.shotsFor(Arrival.settings({ angle: 'cut' }), 'in')], ['left', 'right', 'right'], 'the shipped cut (VM-realm arrays spread)');
+  assert.deepEqual([...Arrival.shotsFor(Arrival.settings({ angle: 'high' }), 'out')], ['high', 'high', 'high']);
+  assert.equal(new Set(Arrival.shotsFor(Arrival.settings({ angle: 'director' }), 'in')).size, 3, 'DIRECTOR uses three cameras');
+  // The car turns away from the eye that watches it: a left-side last shot sends it right (+1).
+  assert.equal(Arrival.pose(T.park - 0.5, Arrival.settings({ angle: 'high' })).side, 1);
+  assert.equal(Arrival.pose(T.park - 0.5, Arrival.settings({ angle: 'low' })).side, -1);
+  // The map lights one eye per camera used, numbered by the first shot it films.
+  const lit = (svg) => svg.split('fill="#e10600"').length - 1;
+  assert.equal(lit(Arrival.angleMap('director')), 3);
+  assert.equal(lit(Arrival.angleMap('custom', ['low', 'low', 'low'])), 1);
+  const nums = (svg) => [...svg.matchAll(/>(\d)<\/text>/g)].map((m) => m[1]).sort().join('');
+  assert.equal(nums(Arrival.angleMap('custom', ['door', 'high', 'door'])), '12', 'two eyes, labelled by the first shot each films');
+});
+test('SHUTTER SHOT, HOLD BEAT, CAR SPEED and END BEAT set the shot lengths; defaults are the shipped timing', () => {
+  const base = Arrival.settings(null), none = { enterCrew: 'none', leaveCrew: 'none' };
+  assert.equal(Arrival.timeline(base, 'in').base, Arrival.DURATION, 'default in');
+  assert.equal(Arrival.timeline(base, 'out').settle, Arrival.OUT_SETTLE, 'default out');
+  assert.equal(Arrival.timeline(base, 'out').base, Arrival.OUT_DURATION);
+  const slow = Arrival.settings(Object.assign({ door: 3.5, hold: 2, carSpeed: 0.5, endBeat: 3 }, none));
+  const a = Arrival.timeline(base, 'in'), b = Arrival.timeline(slow, 'in');
+  assert.equal(b.door, 3.5); assert.equal(b.pause, 2);
+  assert.ok(Math.abs(b.lane - 2 * a.lane) < 1e-9 && Math.abs(b.back - 2 * a.back) < 1e-9, 'half the car speed, twice the drive');
+  assert.ok(Math.abs(b.base - (b.park + 0.3 + 3)) < 1e-9, 'the end beat lingers on the last shot');
+  assert.equal(Arrival.pose(3.5, slow).door, 1, 'the shutter is up exactly at the end of SHUTTER SHOT');
+  assert.ok(Arrival.pose(3.4, slow).door < 1);
+  const fast = Arrival.settings(Object.assign({ carSpeed: 2, hold: 0 }, none)), o1 = Arrival.timeline(base, 'out'), o2 = Arrival.timeline(fast, 'out');
+  assert.equal(o2.hold, 0); assert.ok(Math.abs(o2.run - o1.run / 2) < 1e-9 && Math.abs(o2.v - 2 * o1.v) < 1e-9, 'twice as fast out');
+  assert.ok(Arrival.duration(fast, 'out') < Arrival.duration(base, 'out'));
+  // Every shot length is clamped; HOLD keeps null (AUTO) apart from 0 (NONE).
+  const wild = Arrival.settings({ door: 99, hold: -4, carSpeed: 0, endBeat: 50, height: 9, shots: ['moon', 'high', 1] });
+  assert.deepEqual([wild.door, wild.hold, wild.carSpeed, wild.endBeat, wild.height], [4, 0, 0.5, 3, 1.5]);
+  assert.deepEqual([...wild.shots], ['left', 'high', 'right'], 'an unknown camera falls back to the shipped one for that shot');
+  assert.equal(Arrival.settings({ hold: 'x' }).hold, null);
+  assert.equal(Arrival.settings({ angle: 'director' }).angle, 'director');
+});
+test('AFTER THE RACE: the result sets the drive, the beats, the crew and the captions', () => {
+  assert.deepEqual([[1, false], [2, false], [3, false], [7, false], [10, false], [11, false], [9, false, true], [8, false, true], [1, true]].map(([p, out, sprint]) => Arrival.resultKind(p, out, sprint)),
+    ['win', 'podium', 'podium', 'points', 'points', 'finish', 'finish', 'points', 'dnf']);
+  const cfg = (result, extra) => Object.assign(Arrival.settings({ result, homeCrew: 'none' }), extra);
+  const d = (r) => Arrival.duration(cfg(r), 'home');
+  assert.ok(d('win') > d('podium') && d('podium') > d('points') && d('points') > d('finish'), 'a better result lingers longer');
+  assert.ok(Math.abs(d('finish') - Arrival.DURATION) < 1e-9, 'a plain finish is the pit-stop arrival\'s length');
+  // A retired car is pushed: no engine, and it starts from rest (smoothstep, not the braking curve).
+  const dnf = cfg('dnf'), T = Arrival.timeline(dnf, 'home');
+  const p0 = Arrival.poseHome(T.door, dnf, true), p1 = Arrival.poseHome(T.door + 0.1, dnf, true);
+  assert.equal(p1.engine, false);
+  assert.ok(Math.abs(p1.x - p0.x) < 0.05, 'pushed from a standstill');
+  const fin = cfg('finish'), F = Arrival.timeline(fin, 'home');
+  assert.ok(Math.abs(Arrival.poseHome(F.door + 0.1, fin, true).x - Arrival.poseHome(F.door, fin, true).x) > 0.5, 'a running car arrives at the limiter');
+  assert.equal(Arrival.poseHome(F.door + 0.1, fin).engine, true);
+  const win = cfg('win', { pos: 1 }), W = Arrival.timeline(win, 'home');
+  assert.equal(Arrival.poseHome(W.door + 0.2, win).label, 'RACE WINNER · COMING HOME');
+  assert.equal(Arrival.poseHome(W.park + 0.5, win).label, 'P1 · RACE WINNER');
+  assert.equal(Arrival.poseHome(T.park + 0.2, cfg('dnf', { pos: 18 })).label, 'RETIRED', 'no position on a retirement');
+  assert.equal(Arrival.poseHome(1, win).sequence, 'home'); assert.equal(Arrival.poseHome(1, win).direction, 'in', 'the crew reads it as an arrival');
+  // HOME CREW AUTO picks by result; an explicit crew wins.
+  assert.equal(Arrival.crewFor(Arrival.settings({ result: 'win' }), 'home'), 'welcome');
+  assert.equal(Arrival.crewFor(Arrival.settings({ result: 'dnf' }), 'home'), 'guides');
+  assert.equal(Arrival.crewFor(Arrival.settings({ result: 'win', homeCrew: 'none' }), 'home'), 'none');
+});
+test('the WORK ON CAR player plays AFTER THE RACE when started with a result, with its own sheet lock and skip', () => {
+  const { $, arrival } = harness();
+  arrival.start({ home: { result: 'podium', pos: 3 } });
+  assert.equal($('cs-inner').inert, true);
+  assert.equal(arrival.state.sequence, 'home');
+  const end = Arrival.duration(Object.assign(Arrival.settings(null), { result: 'podium' }), 'home');
+  for (let i = 0; i < Math.ceil(end / 0.1) + 2; i++) arrival.step(0.1);
+  assert.equal(arrival.state.active, false); assert.equal(arrival.state.label, 'P3 · PODIUM FINISH');
+  assert.equal($('cs-inner').inert, false);
+  arrival.start(); assert.equal(arrival.state.sequence, 'in', 'a plain start() is the pit stop again');
+});
+test('the tuner binds the camera, shot-length and after-race controls; CUSTOM reveals its shot pickers', () => {
+  const { $ } = harness();
+  let saved = null;
+  const read = Arrival.bindSettings($, { get: () => saved, set: (_, value) => { saved = value; } });
+  assert.equal($('ga-shots-row').hidden, true, 'per-shot pickers hide under a preset');
+  $('ga-angle').value = 'custom'; $('ga-angle').onchange();
+  assert.equal($('ga-shots-row').hidden, false);
+  $('ga-shot2').value = 'high'; $('ga-shot2').onchange();
+  for (const [id, v] of [['ga-height', '0.5'], ['ga-door', '2.5'], ['ga-hold', '1'], ['ga-carspeed', '0.75'], ['ga-endbeat', '2'], ['ga-crew-home', 'service'], ['ga-result', 'dnf']]) { $(id).value = v; $(id).onchange(); }
+  $('ga-after').checked = false; $('ga-after').onchange();
+  const v = read();
+  assert.deepEqual([v.angle, v.shots[1], v.height, v.door, v.hold, v.carSpeed, v.endBeat, v.homeCrew, v.result, v.afterRace],
+    ['custom', 'high', 0.5, 2.5, 1, 0.75, 2, 'service', 'dnf', false]);
+  $('ga-hold').value = 'auto'; $('ga-hold').onchange();
+  assert.equal(read().hold, null, 'AUTO is the sequence\'s own beat');
+  assert.equal($('ga-hold').value, 'auto');
+});
+test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and FIELD OF VIEW', () => {
+  const dom = makeDom(), doc = dom.document;
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, goldenhour: {}, night: {} } } });
+  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
+  const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
+  const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
+  const angle = row('ga-angle', 'select');
+  for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
+  row('ga-crew-in', 'select'); row('ga-fov', 'input'); row('ga-crew-out', 'select');
+  const foot = add(doc.getElementById('garrival-inner'), 'div');
+  for (const id of ['ga-preview-in', 'ga-preview-out', 'ga-reset']) add(foot, 'button', id);
+  const $ = (id) => doc.getElementById(id);
+  A.bindSettings($, { get: () => null, set() {} });
+  A.bindSettings($, { get: () => null, set() {} });
+  assert.deepEqual(angle.children.map((o) => o.value), [...A.ANGLES], 'every preset offered, once');
+  const order = rows.children.map((r) => r.id || (r.querySelector('select, input') || r).id || r.tagName);
+  const at = (id) => order.indexOf(id);
+  assert.ok(at('ga-angle') < at('ga-shots-row') && at('ga-shots-row') < at('ga-height') && at('ga-height') < at('ga-crew-in'), order.join(' '));
+  assert.ok(at('ga-fov') < at('ga-door') && at('ga-door') < at('ga-result') && at('ga-result') < at('ga-crew-out'), 'shot lengths and AFTER THE RACE follow FIELD OF VIEW');
+  const shots = $('ga-shots-row');
+  assert.equal(shots.hidden, true, 'CUSTOM\'s pickers start hidden');
+  assert.deepEqual(shots.querySelectorAll('select').map((e) => e.id), ['ga-shot1', 'ga-shot2', 'ga-shot3']);
+  assert.deepEqual($('ga-shot2').children.map((o) => o.value), [...A.CAM_IDS]);
+  assert.equal($('ga-after').type, 'checkbox');
+  assert.deepEqual($('ga-light').children.map((o) => o.textContent), ['AS THE GARAGE', 'STANDARD', 'GOLDEN HOUR', 'NIGHT'], 'the garage\'s own moods');
+  assert.deepEqual($('ga-light-home').children.map((o) => o.value).slice(0, 2), ['auto', 'asset']);
+  for (const id of ['ga-move', 'ga-sway', 'ga-zoom', 'ga-swell']) assert.equal($(id).tagName, 'SELECT', id);
+  for (const id of ['ga-captions', 'ga-bars']) assert.equal($(id).type, 'checkbox', id);
+  assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview-in', 'ga-preview-out', 'ga-preview-home', 'ga-reset'], 'PREVIEW AFTER RACE joins the other previews');
+  assert.equal(rows.querySelector('label[for="ga-carspeed"]').textContent, 'CAR SPEED');
+});
+test('endRace notes the result; the next non-pit garage visit plays it once (gated, never for the harness)', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// AFTER THE RACE: endRace notes'), cam.indexOf('const arrivalCar'));
+  let now = 1000, saved = null, automation = false;
+  const started = [], player = { retired: false };
+  const c = vm.createContext({ GarageArrival: Arrival, G: { player, store: { get: () => saved } }, endHome() {}, performance: { now: () => now },
+    RaceCeremony: { eligible: (_, m) => !m.duel }, LoadingScreen: { isAutomation: () => automation }, arrival: { start: (o) => started.push(o.home) } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const note = vm.runInContext('noteResult', c), home = vm.runInContext('startHome', c);
+  const order = [{}, player, {}];
+  assert.deepEqual(note(order, {}).result, 'podium');
+  assert.equal(home('pit'), false, 'a pit stop is not the way home');
+  assert.equal(home('menu'), true);
+  assert.deepEqual([started[0].result, started[0].pos], ['podium', 2]);
+  assert.equal(home('menu'), false, 'once');
+  assert.equal(note(order, { duel: true }), null, 'not after a session the ceremony skips');
+  player.retired = true; note(order, {}); player.retired = false;
+  saved = { afterRace: false }; assert.equal(home('career'), false, 'PLAY AFTER A RACE off'); saved = null;
+  note(order, {}); now += 31 * 60e3; assert.equal(home('select'), false, 'stale after half an hour');
+  note(order, {}); automation = true; assert.equal(home('select'), false, 'the harness never waits on it');
+});
+
+test('CAMERA MOVE, HANDHELD and FINAL SHOT ZOOM shape each shot; reduce motion and the defaults leave the shipped framing', () => {
+  const base = { angle: 'high', enterCrew: 'none', leaveCrew: 'none' };
+  const at = (extra, t, calm = false) => Arrival.pose(t, Arrival.settings(Object.assign({}, base, extra)), calm);
+  const T = Arrival.timeline(Arrival.settings(base), 'in'), s2 = T.door + T.lane + T.pause;
+  const dist = (p) => Math.hypot(p.aim[0] - p.eye[0], p.aim[1] - p.eye[1], p.aim[2] - p.eye[2]);
+  const still = (t) => at({ move: 'still', sway: 0 }, t);
+  assert.ok(dist(at({ move: 'push', sway: 0 }, T.door - 0.01)) < dist(still(T.door - 0.01)) - 1, 'PUSH IN ends shot 1 a metre-plus closer');
+  assert.ok(Math.abs(dist(at({ move: 'push', sway: 0 }, 0.001)) - dist(still(0.001))) < 0.01, 'and starts where STILL does');
+  assert.ok(dist(at({ move: 'pull', sway: 0 }, 0.001)) < dist(still(0.001)) - 1, 'PULL OUT starts close');
+  const d0 = at({ move: 'drift', sway: 0 }, T.door + 0.01), d1 = at({ move: 'drift', sway: 0 }, s2 - 0.01);
+  assert.ok(Math.hypot(d1.eye[0] - d0.eye[0], d1.eye[2] - d0.eye[2]) > 0.6, 'DRIFT crosses the shot');
+  assert.deepEqual([...at({ move: 'push', sway: 0 }, T.door - 0.01, true).eye], [...Arrival.CAMS.high], 'reduce motion: no move');
+  assert.deepEqual([...at({ sway: 0 }, 3.3).eye], [...Arrival.CAMS.high], 'HANDHELD OFF holds the eye still');
+  const sway = (a) => at({ sway: a }, 3.3).eye[0] - Arrival.CAMS.high[0];
+  assert.ok(Math.abs(sway(2) - 2 * sway(1)) < 1e-12 && sway(1) !== 0, 'HEAVY is twice NORMAL');
+  const end = Arrival.duration(Arrival.settings(base), 'in');
+  assert.equal(at({ zoom: 12 }, s2 - 0.1).fov, 54, 'no zoom before the last shot');
+  assert.ok(Math.abs(at({ zoom: 12 }, end - 1e-6).fov - 42) < 1e-3, 'FINAL SHOT ZOOM closes the lens by its degrees');
+  assert.equal(at({ zoom: 12 }, end - 0.01, true).fov, 54, 'not under reduce motion');
+  const o = Arrival.settings({ move: 'warp', sway: 9, zoom: -3, swell: 7 });
+  assert.deepEqual([o.move, o.sway, o.zoom, o.swell], ['still', 2, 0, 2]);
+});
+test('SEQUENCE LIGHTING, DOOR GLOW, CAPTIONS and CINEMA BARS ride the pose; after the race the light follows the result', () => {
+  context.GarageScene = { MOODS: { shipped: {}, night: {}, showroom: {}, broadcast: {}, inspection: {} } };
+  try {
+    assert.equal(Arrival.settings({ light: 'night' }).light, 'night');
+    assert.equal(Arrival.settings({ light: 'disco' }).light, 'asset', 'a mood the garage lacks falls back to its own');
+    assert.equal(Arrival.pose(1, Arrival.settings({ light: 'night' })).mood, 'night');
+    assert.equal(Arrival.poseOut(1, Arrival.settings({ light: 'night' })).mood, 'night', 'the race start too');
+    assert.equal(Arrival.pose(1, Arrival.settings(null)).mood, null, 'AS THE GARAGE by default: no change');
+    const home = (result, homeLight) => Arrival.poseHome(1, Arrival.settings({ result, homeLight })).mood;
+    assert.deepEqual(['win', 'podium', 'points', 'dnf'].map((r) => home(r)), ['showroom', 'broadcast', null, 'inspection'], 'BY RESULT');
+    assert.equal(home('win', 'asset'), null); assert.equal(home('dnf', 'night'), 'night');
+  } finally { delete context.GarageScene; }
+  const p = Arrival.pose(1, Arrival.settings({ swell: 2, bars: true, captions: false }));
+  assert.deepEqual([p.swell, p.bars, p.captions], [2, true, false]);
+  assert.deepEqual([Arrival.pose(1, Arrival.settings(null)).swell, Arrival.pose(1, Arrival.settings(null)).bars], [1, false], 'shipped glow, no bars');
+  const { $, arrival } = harness();
+  arrival.start(); assert.equal($('cs-arrival-label').hidden, false);
+  const quiet = Arrival.create($, () => false, () => ({ captions: false })); quiet.start();
+  assert.equal($('cs-arrival-label').hidden, true, 'CAPTIONS off hides the words, SKIP stays');
+  assert.equal($('cs-arrival').hidden, false);
+});
+test('a sequence holds its mood and bars, and the garage gets its own back (never saved)', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// SEQUENCE LIGHTING and CINEMA BARS'), cam.indexOf('function renderSetupPreview('));
+  let cur = 'shipped', saved = 0;
+  const cls = new Set();
+  const engine = [], fed = [];
+  const c = vm.createContext({ GarageScene: { mood: (id) => (id === undefined ? cur : (cur = id)), setMood() { saved++; } },
+    document: { body: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } },
+    driveOut: null, preview: null, G: { state: 'menu' }, _outEngine: false, performance: { now: () => 1000 + fed.length * 50 },
+    driveOutEngine(on) { engine.push(on); c._outEngine = on; }, driveOutSound(p, gap) { fed.push(gap); } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const look = vm.runInContext('sequenceLook', c);
+  look({ active: true, mood: 'night', bars: true });
+  assert.equal(cur, 'night'); assert.equal(cls.has('data-ga-bars'), true);
+  look({ active: true, mood: 'night', bars: true });
+  look({ active: false, mood: 'night', bars: true });
+  assert.equal(cur, 'shipped', 'the garage mood is back when the sequence ends');
+  assert.equal(cls.has('data-ga-bars'), false);
+  look({ active: true, mood: 'showroom' }); look(null);
+  assert.equal(cur, 'shipped', 'a stop (null) restores too');
+  assert.equal(saved, 0, 'nothing is written to the player\'s LIGHTING');
+  // ENGINE SOUND ON ARRIVAL: on while a driven car arrives, fed each frame, off after.
+  look({ active: true, sound: true, engine: true }); look({ active: true, sound: true, engine: true });
+  assert.deepEqual(engine, [true]); assert.equal(fed.length, 2);
+  look({ active: false, sound: true, engine: true });
+  assert.deepEqual(engine, [true, false], 'stops with the sequence');
+  look({ active: true, sound: true, engine: false });
+  assert.deepEqual(engine, [true, false], 'a pushed (retired) car is silent');
+  look({ active: true, sound: false, engine: true });
+  assert.deepEqual(engine, [true, false], 'ENGINE SOUND off');
+  c.preview = {}; c.G.state = 'race'; look({ active: true, sound: true, engine: true });
+  assert.deepEqual(engine, [true, false], 'a preview over a race in progress leaves its engine alone');
+  c.preview = null; c.G.state = 'menu'; c.driveOut = {}; look({ active: true, sound: true, engine: true });
+  assert.deepEqual(engine, [true, false], 'the RACE! drive-out runs its own engine');
+});
+
+test('REAR LIGHT: AUTO keeps the night-or-wet rule; ON, OFF and FLASH override it', () => {
+  const at = (rearLight, seconds = 1) => Arrival.pose(seconds, Arrival.settings({ rearLight }));
+  assert.equal(Arrival.settings(null).rearLight, 'auto'); assert.equal(Arrival.settings({ rearLight: 'disco' }).rearLight, 'auto');
+  assert.deepEqual([Arrival.rearLightOn(at('auto'), true), Arrival.rearLightOn(at('auto'), false)], [true, false], 'the shipped rule');
+  assert.deepEqual([Arrival.rearLightOn(at('on'), false), Arrival.rearLightOn(at('off'), true)], [true, false]);
+  const blink = [0, 0.125, 0.25, 0.375].map((s) => Arrival.rearLightOn(at('flash', s), false));
+  assert.deepEqual(blink, [true, false, true, false], 'FLASH blinks at ~4 Hz');
+  assert.equal(Arrival.poseOut(2, Arrival.settings({ rearLight: 'on' })).rearLight, 'on', 'the race start too');
+  assert.equal(Arrival.poseHome(2, Arrival.settings({ rearLight: 'flash' })).rearLight, 'flash');
+});
+
+test('SLOW-MO AT THE DOOR slows the door crossing only; the wall clock and the RACE! wait account for it', () => {
+  const none = { enterCrew: 'none', leaveCrew: 'none', homeCrew: 'none' };
+  const off = Arrival.settings(none), half = Arrival.settings(Object.assign({ slowmo: 0.5 }, none));
+  assert.equal(Arrival.slowWindow(off, 'in'), null);
+  assert.equal(Arrival.wallSeconds(off, 'out'), Arrival.duration(off, 'out'), 'off: wall = show time');
+  for (const dir of ['in', 'out', 'home']) {
+    const w = Arrival.slowWindow(half, dir), d = Arrival.duration(half, dir);
+    assert.ok(w && w[0] > 0 && w[1] < d, dir + ': inside the sequence');
+    const z = Arrival.poseFor(dir)((w[0] + w[1]) / 2, half, true).z;
+    assert.ok(z > 4.5 && z < 8.5, `${dir}: the window is at the door (z ${z.toFixed(2)})`);
+    assert.equal(Arrival.rate(half, dir, w[0] - 0.01), 1); assert.equal(Arrival.rate(half, dir, (w[0] + w[1]) / 2), 0.5);
+    assert.ok(Math.abs(Arrival.wallSeconds(half, dir) - (d + 1.2)) < 1e-9, dir + ': 1.2 s at half speed costs 1.2 s more');
+    assert.ok(Math.abs(Arrival.wallLeft(half, dir, w[1]) - (d - w[1])) < 1e-9, 'past the window, wall = show time');
+    assert.ok(Math.abs(Arrival.wallLeft(half, dir, (w[0] + w[1]) / 2) - (d - (w[0] + w[1]) / 2 + 0.6)) < 1e-9, 'half the window left');
+  }
+  // The WORK ON CAR player integrates the rate: a half-speed window takes 1.2 s longer to reach the end.
+  let wall = 0;
+  const { $ } = harness(), player = Arrival.create($, () => false, () => Object.assign({ slowmo: 0.5 }, none), () => wall);
+  player.start(); let n = 0;
+  while (player.state.active && n < 2000) { wall += 0.05; player.step(0.05); n++; }
+  assert.ok(Math.abs(n * 0.05 - Arrival.wallSeconds(half, 'in')) < 0.11, `played in ${(n * 0.05).toFixed(2)} s`);
+  assert.deepEqual([Arrival.settings({ slowmo: 0.25 }).slowmo, Arrival.settings({ slowmo: 1 }).slowmo, Arrival.settings({ slowmo: -1 }).slowmo], [0.25, 0, 0]);
+});
+
+test('LIGHT CUE: off by default; a pick rides the pose; after the race BY RESULT flashes a win and turns the beacon for a retirement', () => {
+  context.GarageScene = { MOODS: {}, CUES: ['lightsup', 'flashes', 'beacon', 'pulse', 'lightsout'] };
+  try {
+    assert.equal(Arrival.pose(1, Arrival.settings(null)).cue, null, 'the shipped lighting: no cue');
+    assert.equal(Arrival.settings({ cue: 'strobe' }).cue, 'none');
+    assert.equal(Arrival.pose(1, Arrival.settings({ cue: 'lightsup' })).cue, 'lightsup');
+    assert.equal(Arrival.poseOut(1, Arrival.settings({ cue: 'lightsout' })).cue, 'lightsout');
+    const home = (result, homeCue) => Arrival.poseHome(1, Arrival.settings({ result, homeCue })).cue;
+    assert.deepEqual(['win', 'podium', 'points', 'finish', 'dnf'].map((r) => home(r)), ['flashes', 'pulse', null, null, 'beacon']);
+    assert.equal(home('win', 'none'), null); assert.equal(home('finish', 'lightsup'), 'lightsup');
+  } finally { delete context.GarageScene; }
+});
+
+test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, the aim settles on the live car', () => {
+  assert.deepEqual([...Arrival.RIG_IDS].sort(), ['crane', 'dolly', 'orbit', 'rear']);
+  for (const id of Arrival.RIG_IDS) {
+    assert.equal(Arrival.settings({ angle: id }).angle, id);
+    for (const [dir, fn] of [['in', Arrival.pose], ['out', Arrival.poseOut], ['home', Arrival.poseHome]]) {
+      const cfg = Arrival.settings({ angle: id, enterCrew: 'marshal', leaveCrew: 'check', homeCrew: 'service', result: 'dnf', sway: 0 });
+      const end = Arrival.duration(cfg, dir);
+      for (let t = 2.5; t < end; t += 0.25) {
+        const p = fn(t, cfg, true), s = Arrival.rigSample(id, dir, Arrival.rigU(cfg, dir, t), p.side);
+        assert.equal(p.camera, id);
+        assert.deepEqual(p.eye.map((v) => +v.toFixed(6)), s.eye.map((v) => +v.toFixed(6)), `${id} ${dir} t${t}: the rig's eye`);
+        assert.ok(Math.abs(p.fov - s.fov) < 1e-9, 'the rig\'s lens at FIELD OF VIEW 54');
+        // Once the shutter shot is over, the aim is ON the car whatever crew or result stretches the timing.
+        if (dir !== 'out' && t > Arrival.timeline(cfg, dir).door + 0.8)
+          assert.ok(Math.abs(p.aim[0] - Math.max(-8, Math.min(8, p.x))) < 1e-9 && Math.abs(p.aim[2] - Math.max(-3, Math.min(14, p.z))) < 1e-9, `${id} ${dir} t${t}: aimed at the car`);
+      }
+    }
+    assert.equal(Arrival.angleMap(id).split('<polyline').length, 2, id + ': the map draws the rig\'s path, once');
+  }
+  assert.ok(Math.abs(Arrival.pose(5, Arrival.settings({ angle: 'crane', fov: 64 })).fov - Arrival.rigSample('crane', 'in', Arrival.rigU(Arrival.settings({ angle: 'crane' }), 'in', 5)).fov - 10) < 1e-6, 'FIELD OF VIEW offsets the rig lens');
+});
+
+test('BLENDER rigs keep their beats: a slow RETIRED push or a long shutter shot meets each key on time', () => {
+  // The keys were authored on crew "current", a win; every result, crew and timing maps its beats onto those.
+  const auth = Arrival.settings({ angle: 'left', enterCrew: 'current', homeCrew: 'current', result: 'win' });
+  for (const dir of ['in', 'home']) {
+    const A = Arrival.timeline(auth, dir), aEnd = Arrival.duration(auth, dir);
+    const beats = (T, end) => [T.door, T.door + T.lane, T.door + T.lane + T.pause, T.park, end];
+    const want = beats(A, aEnd).map((b) => b / aEnd);
+    for (const cfg of [Arrival.settings({ angle: 'dolly', result: 'dnf', homeCrew: 'auto' }), Arrival.settings({ angle: 'dolly', door: 3.5, carSpeed: 0.5, hold: 1.2, result: 'points' }), auth]) {
+      const T = Arrival.timeline(cfg, dir), end = Arrival.duration(cfg, dir);
+      beats(T, end).forEach((b, i) => assert.ok(Math.abs(Arrival.rigU(cfg, dir, b) - want[i]) < 1e-9, `${dir} ${cfg.result} beat ${i}`));
+      let last = -1;
+      for (let t = 0; t <= end; t += 0.05) { const u = Arrival.rigU(cfg, dir, t); assert.ok(u >= last - 1e-12 && u <= 1, 'u never runs backwards'); last = u; }
+    }
+    // The authoring timing itself is untouched: u = t / duration.
+    for (let t = 0; t <= aEnd; t += 0.37) assert.ok(Math.abs(Arrival.rigU(auth, dir, t) - t / aEnd) < 1e-9, `${dir} t${t}: authored timing is the identity`);
+  }
+  assert.equal(Arrival.rigU(Arrival.settings({}), 'out', 3, 6), 0.5, 'the drive-out keeps t / duration');
+});
+
+// Departure's Blender export: exercise the shipped table, including interpolation
+// between authored keys, rather than reconstructing the author's path formula.
+const departureContext = vm.createContext({});
+vm.runInContext(readFileSync(new URL('../../js/data/garage-departure-motion.js', import.meta.url), 'utf8'), departureContext, { filename: absSrc('js/data/garage-departure-motion.js') });
+const DepartureMotion = vm.runInContext('GarageDepartureMotion', departureContext);
+const departureOutput = () => ({ eye: [0, 0, 0], aim: [0, 0, 0] });
+test('departure export is deterministic, finite, mirrored and reuses caller-owned vectors', () => {
+  const a = departureOutput(), b = departureOutput(), repeat = departureOutput();
+  const eye = a.eye, aim = a.aim;
+  for (let i = 0; i <= 1000; i++) {
+    const u = i / 1000;
+    assert.equal(DepartureMotion.sample(u, 1, a), a);
+    DepartureMotion.sample(u, -1, b); DepartureMotion.sample(u, 1, repeat);
+    assert.deepEqual(a, repeat);
+    assert.equal(a.eye, eye); assert.equal(a.aim, aim);
+    for (const v of [a.x, a.z, a.yaw, a.distance, a.fov, ...a.eye, ...a.aim]) assert.ok(Number.isFinite(v));
+    assert.equal(a.x, -b.x); assert.equal(a.yaw, -b.yaw);
+    assert.equal(a.z, b.z); assert.equal(a.distance, b.distance);
+    assert.equal(a.eye[0], -b.eye[0]); assert.equal(a.aim[0], -b.aim[0]);
+    assert.deepEqual(a.eye.slice(1), b.eye.slice(1)); assert.deepEqual(a.aim.slice(1), b.aim.slice(1));
+  }
+  DepartureMotion.sample(-1, 1, a); DepartureMotion.sample(NaN, 1, b); assert.deepEqual(a, b);
+  DepartureMotion.sample(2, 1, a); DepartureMotion.sample(1, 1, b); assert.deepEqual(a, b);
+});
+test('departure swept car envelope clears the doorway on both lane sides and camera stays continuous', () => {
+  for (const side of [-1, 1]) {
+    const p = departureOutput(), previousEye = [0, 0, 0];
+    let previousDistance = 0;
+    for (let i = 0; i <= 10000; i++) {
+      DepartureMotion.sample(i / 10000, side, p);
+      assert.ok(p.distance >= previousDistance, 'wheel distance never reverses');
+      previousDistance = p.distance;
+      const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+      // Intersect all four rectangle edges with the full 30 cm door reveal;
+      // checking corners alone could miss an edge crossing the jamb.
+      const corners = [[-.95, -2.69], [.95, -2.69], [.95, 3.18], [-.95, 3.18]]
+        .map(([x, z]) => [p.x + x * c + z * s, p.z - x * s + z * c]);
+      for (const plane of [6.1, 6.25, 6.4]) {
+        for (let j = 0; j < 4; j++) {
+          const a = corners[j], b = corners[(j + 1) % 4];
+          if ((a[1] <= plane && b[1] >= plane || b[1] <= plane && a[1] >= plane) && a[1] !== b[1]) {
+            const x = a[0] + (b[0] - a[0]) * (plane - a[1]) / (b[1] - a[1]);
+            assert.ok(Math.abs(x) < 2.7, `door reveal clear at u=${i / 10000}, x=${x}`);
+          }
+        }
+      }
+      if (i) assert.ok(Math.hypot(...p.eye.map((v, j) => v - previousEye[j])) < .01, 'camera has no position cut');
+      previousEye.splice(0, 3, ...p.eye);
+      assert.ok(p.eye[1] > 1.8 && p.eye[1] < 3, 'camera remains above crew heads');
+      assert.ok(p.z < 15.1, 'car stays in front of the far pit wall');
+    }
+    assert.ok(p.distance > 24 && p.distance < 24.1);
+    assert.ok(Math.abs(p.yaw - side * Math.PI / 2) < .00001);
+  }
+});
+
+test('departure bundle failure restores Start Race and stale settlement cannot launch a newer owner', async () => {
+  for (const mode of ['false', 'reject', 'cancel']) {
+    const h = sheetRecoveryHarness({ manual: true });
+    delete h.ctx.GarageDepartureMotion;
+    const gate = sheetRecoveryDeferred();
+    h.ctx.ensureRaceSession = () => gate.promise;
+    const view = h.start(); h.assertBusy(view);
+    if (mode === 'cancel') h.ctx.cancelIntro();
+    if (mode === 'reject') gate.reject(new Error('bundle unavailable')); else gate.resolve(mode !== 'false');
+    await h.drain(); h.assertRetry(view);
+    assert.equal(h.intros.length, 0);
+  }
+});
+
+test('departure wheels cache fitted layers and rotate rims while calipers remain fixed', () => {
+  let builds = 0, freed = 0;
+  const draws = [];
+  const c = vm.createContext({ CarWheels: { tints: () => ({}) },
+    Car3D: { TYRE_BAND: [null, [1,0,0]], BRAKE_CALIPER: [null, [1,1,0]],
+      buildWheelLayers() { builds++; return { rotating: {}, fixed: {} }; } },
+    M4: { mulTo(out, _base, local) { out.set(local); } } });
+  vm.runInContext(readFileSync(new URL('../../js/garage/departure-wheels.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/departure-wheels.js') });
+  const Wheels = vm.runInContext('GarageDepartureWheels', c);
+  const wheels = Wheels.create({ createMesh: data => data, freeMesh() { freed++; },
+    draw(_mesh, matrix, opts) { draws.push({ matrix: Array.from(matrix), opts }); } });
+  wheels.prepare('one', {}, { tyres: 1, brakes: 1 });
+  wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 2);
+  wheels.draw([], .34 * Math.PI / 2, 0, {});
+  assert.equal(draws.length, 8);
+  assert.ok(Math.abs(draws[0].matrix[5]) < 1e-6); assert.equal(draws[1].matrix[5], 1);
+  assert.equal(draws[0].opts.doubleSided, true);
+  wheels.draw([], 1, 0, {}); assert.equal(builds, 2, 'rendering never rebuilds geometry');
+  wheels.release(); assert.equal(freed, 4);
+  wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 4, 'repeat launch restores released wheels');
 });

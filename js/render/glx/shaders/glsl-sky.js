@@ -227,66 +227,71 @@ void main() {
       // Firmer edges so cumulus look solid, not gauzy.
       cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
-    // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
-    // thick billowing regions = shadowed dark underside.
-    float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
-    float sl = pow(sd, 2.0);
-    float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
-    // Under heavy overcast, clamp sunBright so even a bright sun gives grey clouds.
-    float effectiveSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
-    float golden = 1.0 - smoothstep(0.0, 0.45, sunE);   // 1 near horizon, 0 high
-    // Sunlit tops: white in daylight, strongly warm/red-tinted at golden hour.
-    vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
-    cloudTop *= 0.38 + 0.62 * effectiveSunBright;
-    cloudTop = mix(cloudTop, cloudTop * uSunColor * mix(1.45, 2.6, golden),
-                   sl * (1.0 - sunE) * (0.55 + golden * 0.40) * (1.0 - overcast));
-    // Under overcast flatten tops toward medium grey.
-    cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
-    // Dark undersides: cooler/dimmer, but pick up a warm pink under-glow at sunset.
-    vec3 cloudBot = vec3(0.26, 0.27, 0.34) * (0.24 + 0.44 * effectiveSunBright);
-    cloudBot += uSunColor * vec3(0.9, 0.42, 0.5) * (0.22 * golden * (1.0 - overcast) * (1.0 + twilight * 1.3));
-    cloudBot = mix(cloudBot, vec3(0.19, 0.19, 0.22), overcast * 0.60);
-    vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
-    // Day: widen the top↔bottom contrast so cumulus get punchy sunlit caps and
-    // shadowed bases (gated; twilight clouds keep their soft warm grading).
-    {
-      float capf = clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0);
-      lit = mix(lit, mix(cloudBot * 0.80, cloudTop * 1.14, capf), daytime * 0.45);
+    // cov == 0 (clear sky between clouds, most of the dome at uCloud 0.3-0.7): the
+    // second fbm and the whole lighting stack feed only mix(c, lit, 0) = c and a
+    // cityThick every consumer multiplies by cityCov = 0 — skip it (perf hunt 7).
+    if (cov > 0.0) {
+      // Second FBM gives per-cloud "thickness": thin areas = backlit bright,
+      // thick billowing regions = shadowed dark underside.
+      float thick = clamp(fbm(cp2 * 0.55 + vec2(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
+      float sl = pow(sd, 2.0);
+      float sunBright = max(uSunColor.r, max(uSunColor.g, uSunColor.b));
+      // Under heavy overcast, clamp sunBright so even a bright sun gives grey clouds.
+      float effectiveSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
+      float golden = 1.0 - smoothstep(0.0, 0.45, sunE);   // 1 near horizon, 0 high
+      // Sunlit tops: white in daylight, strongly warm/red-tinted at golden hour.
+      vec3 cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl);
+      cloudTop *= 0.38 + 0.62 * effectiveSunBright;
+      cloudTop = mix(cloudTop, cloudTop * uSunColor * mix(1.45, 2.6, golden),
+                     sl * (1.0 - sunE) * (0.55 + golden * 0.40) * (1.0 - overcast));
+      // Under overcast flatten tops toward medium grey.
+      cloudTop = mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast * 0.65);
+      // Dark undersides: cooler/dimmer, but pick up a warm pink under-glow at sunset.
+      vec3 cloudBot = vec3(0.26, 0.27, 0.34) * (0.24 + 0.44 * effectiveSunBright);
+      cloudBot += uSunColor * vec3(0.9, 0.42, 0.5) * (0.22 * golden * (1.0 - overcast) * (1.0 + twilight * 1.3));
+      cloudBot = mix(cloudBot, vec3(0.19, 0.19, 0.22), overcast * 0.60);
+      vec3 lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
+      // Day: widen the top↔bottom contrast so cumulus get punchy sunlit caps and
+      // shadowed bases (gated; twilight clouds keep their soft warm grading).
+      {
+        float capf = clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0);
+        lit = mix(lit, mix(cloudBot * 0.80, cloudTop * 1.14, capf), daytime * 0.45);
+      }
+      // Silver lining: thin sun-facing cloud edges glow bright (backlit forward scatter),
+      // most intense at golden hour — the defining dramatic-cloud cue. Pushed much
+      // harder at twilight so sunset/sunrise clouds get blazing fire-lit rims.
+      float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
+      // CLOUD SILVER LINING knob (def 1.0 = as-shipped) scales the backlit rim glow.
+      lit += uSunColor * silver * (1.3 + twilight * 1.6) * uCloudSilver;
+      // Twilight: a broad warm wash across the sun-facing cloud field (not just the
+      // thin rim) so the whole sky catches fire at the magic hour.
+      // twilight is a uniform (sunE × !dayGate × !nightSky) — identically 0 on
+      // default day (~0.95) and night (moon-key). Default cloud is 0.4 so this
+      // block is live; skip the pow when the mix is identity. Dawn/dusk still enter.
+      if (twilight > 0.001) {
+      lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
+      }
+      // Same authored twilight radiance ratio as the grey gradient. Preserve
+      // day/night and apply before the separate moon tint and lightning energy.
+      lit *= mix(0.35 + 0.65 * daytime, 1.0, nightSky);
+      // Moon tints nearby clouds faintly blue-silver.
+      if (uMoon > 0.0) {
+        float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
+        lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
+      }
+      // LIGHTNING: during a strike (uLightning 1→0, the same decay that spikes
+      // ambient/exposure in game.js) the cloud deck itself flares — a storm flash
+      // is diffused THROUGH the clouds, so thick billowing bellies light up
+      // brightest (the bolt is inside/behind the deck) while thin wisps bleach
+      // less. Cool blue-white, HDR >1 so the flash blooms like the real thing.
+      if (uLightning > 0.001) {
+        vec3 ltFlash = vec3(0.82, 0.94, 1.30) * (1.0 + thick * 1.2);
+        lit = mix(lit, ltFlash, clamp(uLightning * (0.40 + 0.60 * thick), 0.0, 1.0));
+      }
+      c = mix(c, lit, cov);
+      cityThick = thick;
     }
-    // Silver lining: thin sun-facing cloud edges glow bright (backlit forward scatter),
-    // most intense at golden hour — the defining dramatic-cloud cue. Pushed much
-    // harder at twilight so sunset/sunrise clouds get blazing fire-lit rims.
-    float silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + golden) * (1.0 - overcast * 0.7);
-    // CLOUD SILVER LINING knob (def 1.0 = as-shipped) scales the backlit rim glow.
-    lit += uSunColor * silver * (1.3 + twilight * 1.6) * uCloudSilver;
-    // Twilight: a broad warm wash across the sun-facing cloud field (not just the
-    // thin rim) so the whole sky catches fire at the magic hour.
-    // twilight is a uniform (sunE × !dayGate × !nightSky) — identically 0 on
-    // default day (~0.95) and night (moon-key). Default cloud is 0.4 so this
-    // block is live; skip the pow when the mix is identity. Dawn/dusk still enter.
-    if (twilight > 0.001) {
-    lit += uSunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6);
-    }
-    // Same authored twilight radiance ratio as the grey gradient. Preserve
-    // day/night and apply before the separate moon tint and lightning energy.
-    lit *= mix(0.35 + 0.65 * daytime, 1.0, nightSky);
-    // Moon tints nearby clouds faintly blue-silver.
-    if (uMoon > 0.0) {
-      float moonLit = uMoon * cov * (1.0 - thick * 0.6) * 0.18;
-      lit = mix(lit, lit + vec3(0.08, 0.10, 0.16), moonLit);
-    }
-    // LIGHTNING: during a strike (uLightning 1→0, the same decay that spikes
-    // ambient/exposure in game.js) the cloud deck itself flares — a storm flash
-    // is diffused THROUGH the clouds, so thick billowing bellies light up
-    // brightest (the bolt is inside/behind the deck) while thin wisps bleach
-    // less. Cool blue-white, HDR >1 so the flash blooms like the real thing.
-    if (uLightning > 0.001) {
-      vec3 ltFlash = vec3(0.82, 0.94, 1.30) * (1.0 + thick * 1.2);
-      lit = mix(lit, ltFlash, clamp(uLightning * (0.40 + 0.60 * thick), 0.0, 1.0));
-    }
-    c = mix(c, lit, cov);
     cityCov = cov;
-    cityThick = thick;
   }
 
   // LIGHTNING sky-gradient lift: the clear dome between the clouds also picks

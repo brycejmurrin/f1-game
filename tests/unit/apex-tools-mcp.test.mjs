@@ -549,6 +549,27 @@ test("apex_agent describe passes its id as --id (agent.mjs describe needs one)",
   assert.equal(callCli("apex_agent", { dryRun: true, command: "describe", id: "--url" }).status, 1, "id is flag-guarded");
 });
 
+test("apex_select_specs files plans a hypothetical change; paths stay repo-relative", () => {
+  const r = callCli("apex_select_specs", { dryRun: true, files: ["js/ui/hud.js", "css/hud.css"] });
+  assert.equal(r.status, 0, r.stderr);
+  const argv = JSON.parse(r.stdout).argv;
+  assert.equal(argv[argv.indexOf("--files") + 1], "js/ui/hud.js,css/hud.css", argv);
+  assert.deepEqual(argv.filter((a) => a === "--since"), [], argv);
+  for (const bad of [["/etc/passwd"], ["../x.js"], ["a.js,b.js"]]) {
+    assert.equal(JSON.parse(callCli("apex_select_specs", { dryRun: true, files: bad }).stdout).error, "bad_args", bad);
+  }
+});
+
+test("a capitalised circuit id is taken as the lowercase id; catalog filter narrows the general catalog", () => {
+  const shot = JSON.parse(callCli("apex_shot", { dryRun: true, track: "Monza" }).stdout);
+  assert.ok(shot.argv.some((a) => a === "monza"), shot.argv);
+  assert.equal(JSON.parse(callCli("apex_shot", { dryRun: true, track: "Monzaa" }).stdout).error, "bad_args");
+  const cat = JSON.parse(callCli("apex_catalog", { filter: "monza" }).stdout);
+  assert.deepEqual(cat.tracks, ["monza"]);
+  assert.deepEqual(cat.cams, []);
+  assert.equal(JSON.parse(callCli("apex_nope", {}).stdout).fix.split(" ")[0], "apex_help");
+});
+
 test("apex_select_specs without since → bad_args", () => {
   const r = callCli("apex_select_specs", { dryRun: true });
   assert.equal(r.status, 1, r.stderr);
@@ -1428,14 +1449,40 @@ test("resources/list and resources/read serve the agent references", () => {
   const out = rpc([
     { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
     { jsonrpc: "2.0", id: 2, method: "resources/list", params: {} },
-    { jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "file:///docs/DEBUG-HOOKS.md" } },
+    { jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "apex://debug-hooks" } },
     { jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri: "file:///etc/passwd" } },
+    { jsonrpc: "2.0", id: 5, method: "resources/templates/list", params: {} },
+    { jsonrpc: "2.0", id: 6, method: "resources/read", params: { uri: "apex://debug-hooks/cameras" } },
+    { jsonrpc: "2.0", id: 7, method: "resources/read", params: { uri: "apex://debug-hooks/../../etc" } },
+    { jsonrpc: "2.0", id: 8, method: "resources/read", params: { uri: "apex://start-here" } },
   ]);
   const byId = (i) => out.find((m) => m.id === i);
   assert.ok(byId(1).result.capabilities.resources);
-  assert.deepEqual(byId(2).result.resources.map((r) => r.name), ["DEBUG-HOOKS.md", "AGENT-SURFACE.md", "APEX-TOOLS-MCP.md"]);
-  assert.match(byId(3).result.contents[0].text, /__apex/);
+  assert.equal(byId(1).result.instructions, byId(8).result.contents[0].text, "start-here is the instructions map");
+  assert.ok(byId(1).result.instructions.length < 3600, "room for the gateway's sentence inside Claude Code's 4,096-char cap");
+  assert.deepEqual(byId(2).result.resources.map((r) => r.name), ["start-here", "debug-hooks", "AGENT-SURFACE.md", "APEX-TOOLS-MCP.md"]);
+  const index = byId(3).result.contents[0].text;
+  const slugs = index.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2).split(" — ")[0]);
+  assert.ok(slugs.some((s) => s === "cameras"), slugs);
   assert.equal(byId(4).error.code, -32002, "only the listed docs are readable");
+  assert.equal(byId(5).result.resourceTemplates[0].uriTemplate, "apex://debug-hooks/{section}");
+  const cameras = byId(6).result.contents[0].text;
+  assert.equal(cameras.split("\n")[0], "## Cameras");
+  assert.ok(cameras.length < 50000, "a section fits under Claude Code's 50,000-char spill threshold");
+  assert.equal(byId(7).error.code, -32002);
+  // Every section the index names is readable and fits; the sections rebuild the whole file.
+  const parts = rpc(slugs.map((s, i) => ({ jsonrpc: "2.0", id: 100 + i, method: "resources/read", params: { uri: `apex://debug-hooks/${s}` } })));
+  const texts = slugs.map((_, i) => parts.find((m) => m.id === 100 + i).result.contents[0].text);
+  assert.ok(texts.every((t) => t.length < 50000), "every DEBUG-HOOKS section fits; split one that outgrows 50,000 chars");
+  assert.equal(texts.join(""), fs.readFileSync(path.join(ROOT, "docs/DEBUG-HOOKS.md"), "utf8"));
+});
+
+test("server instructions name every tool they route to, and only real ones", () => {
+  const out = rpc([{ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }]);
+  const names = new Set(out.find((m) => m.id === 2).result.tools.map((t) => t.name));
+  const routed = new Set(out.find((m) => m.id === 1).result.instructions.match(/apex_\w+/g));
+  for (const n of routed) assert.ok(names.has(n), `instructions route to unknown tool ${n}`);
+  for (const n of names) if (!["apex_job_cancel", "apex_viewer", "apex_cursor_agents", "apex_debug_chrome", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan", "apex_rotate_markings_check", "apex_diagnostics"].includes(n)) assert.ok(routed.has(n), `instructions omit ${n}`);
 });
 
 test("thumbBlock returns an MCP image block a client can render", async () => {
@@ -2710,7 +2757,8 @@ test("apex_cursor_agents publishes four properties and stays inside the tools/li
   assert.equal(t.inputSchema.properties.verb.enum, undefined);
   // The listing is paid on every session start: every byte this tool adds has to fit under the same cap as the rest,
   // so the per-verb options live in the description apex_help returns, not in the published schema.
-  assert.ok(Buffer.byteLength(JSON.stringify(t)) < 800, `the entry is ${Buffer.byteLength(JSON.stringify(t))} bytes`);
+  // 800 -> 900 (2026-10-30): descriptions keep 400 chars, not 60, since a deferred client pays them per loaded tool.
+  assert.ok(Buffer.byteLength(JSON.stringify(t)) < 900, `the entry is ${Buffer.byteLength(JSON.stringify(t))} bytes`);
   const help = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_cursor_agents" } } }])[0].result.structuredContent;
   for (const needle of ["Verbs: list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed, launch, followup, cancel, archive, delete", "options.confirm", "launch: prompt|promptFile", "transcript: run, all", "createPr, onBranch and env files are CLI-only", "never instructions"]) assert.ok(help.description.includes(needle), needle);
   assert.ok(!listed.tools.some((x) => x.name === "apex_cursor_agents" && /createPr|envFile/.test(JSON.stringify(x.inputSchema))));

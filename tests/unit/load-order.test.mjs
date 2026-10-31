@@ -27,12 +27,122 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import { stale as genShellStale, inlineScripts } from "../../tools/gen/gen-shell.mjs";
+import { checkRepo as checkModuleBoundaries, checkSource as checkBoundarySource, checkFunctionSource,
+  scanRepo as scanGlobalRepo, buildGraph } from "../../tools/check/scan-globals.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+
+test("selected classic-script modules obey explicit capability boundaries", () => {
+  const result = checkModuleBoundaries(ROOT);
+  assert.ok(result.checked.length >= 3, "keep a useful initial contract set");
+  assert.deepEqual(result.violations, []);
+});
+
+test("scan-globals boundary CLI checks contracts while default JSON retains graph behavior", () => {
+  const run = (...args) => {
+    const child = spawnSync(process.execPath, ["tools/check/scan-globals.mjs", ...args], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 30000 });
+    assert.equal(child.error, undefined);
+    assert.equal(child.status, 0, child.stderr);
+    return child.stdout;
+  };
+  const boundary = JSON.parse(run("--boundaries", "--json"));
+  assert.deepEqual(boundary, checkModuleBoundaries(ROOT));
+  assert.ok(boundary.checked.some((identity) => identity.includes("#createTransport")), "private policy contract is included");
+  assert.equal(run("--boundaries").trim(), `module boundaries: ${boundary.checked.length} checked, 0 violations`);
+  const graph = JSON.parse(run("--json"));
+  const exportedGraph = buildGraph(scanGlobalRepo(ROOT));
+  // Graph production timestamps describe separate calls, not structural changes.
+  delete graph.generatedAt; delete exportedGraph.generatedAt;
+  assert.deepEqual(graph, exportedGraph, "default CLI still exposes the original graph exports");
+});
+
+const pureFixtureContract = { export: "Pure", globals: { Math: ["imul"], Object: ["freeze"] } };
+const fixture = (body) => `const Pure = (() => { ${body}; return {}; })(); Object.freeze(Pure);`;
+
+test("boundary resolution permits lexical shadows and ignores property names, strings and comments", () => {
+  assert.deepEqual(checkBoundarySource(fixture(`
+    // fetch, G.player and window are prose, not dependencies
+    const label = "document.body";
+    function helper(fetch, G) { return { window: fetch, player: G.player }; }
+    const n = Math.imul(3, 7);
+  `), pureFixtureContract), []);
+});
+
+test("boundary rejects effect/domain access inside deferred bodies and typeof probes", () => {
+  for (const body of ["function later() { return fetch('/x'); }", "function later() { return G.player; }",
+    "const exists = typeof document !== 'undefined'", "const n = Math.random()",
+    "const { random } = Math", "const alias = Math; alias.random()", "toString()"] ) {
+    const violations = checkBoundarySource(fixture(body), pureFixtureContract, "fixture.js");
+    assert.ok(violations.some((v) => v.rule === "global"), body);
+    assert.ok(violations.every((v) => v.file === "fixture.js" && v.line > 0 && v.column > 0));
+  }
+});
+
+test("boundary rejects window aliases, computed global access and code-generation escapes", () => {
+  for (const body of ["const w = window; w['fetch']('/x')", "globalThis[key]()", "self.fetch('/x')",
+    "eval('G.player')", "const e = eval; e('fetch()')", "new Function('return window')()",
+    "Math[key](1)", "const root = this", "import('./effect.js')", "({}).constructor.constructor('return this')()"] ) {
+    assert.ok(checkBoundarySource(fixture(body), pureFixtureContract).length > 0, body);
+  }
+});
+
+test("boundary rejects writes through permitted globals, extra exports and syntax errors", () => {
+  for (const body of ["Math.imul = () => 1", "Math.imul.x++", "delete Math.imul", "Math = {}"] ) {
+    assert.ok(checkBoundarySource(fixture(body), pureFixtureContract).some((v) => v.rule === "global-write"), body);
+  }
+  assert.ok(checkBoundarySource(`${fixture("")} const Extra = {};`, pureFixtureContract).some((v) => v.rule === "exports"));
+  assert.ok(checkBoundarySource("const Pure = (", pureFixtureContract).some((v) => v.rule === "parse"));
+  assert.throws(() => checkBoundarySource(fixture(""), { export: "Pure", globals: { window: ["<value>"] } }), /invalid permitted/);
+  const missingFixture = ["js", "core", "does-not-exist.js"].join("/");
+  const missing = checkModuleBoundaries(ROOT, { modules: { [missingFixture]: pureFixtureContract }, functions: {} });
+  assert.equal(missing.violations[0].rule, "source");
+});
+
+test("private function boundaries reject captured domain/effect globals and ambient clocks", () => {
+  const contract = { globals: { Date: ["parse"] } };
+  const wrapper = (body) => `const Outer = (() => { const Career = {}, Parts = {};\n  function policy(effects) { ${body} }\n  return {}; })();`;
+  for (const body of ["return Career.hash(1)", "return Parts.resolveSetup({})", "return fetch('/x')",
+    "return Date.now()", "return new Date()", "return Date()", "const clock = Date; return clock.now()"] ) {
+    const violations = checkFunctionSource(wrapper(body), "policy", contract, "private.js");
+    assert.ok(violations.some((v) => v.rule === "global" && v.scope === "policy"), body);
+    assert.ok(violations.every((v) => v.line === 2), "diagnostic retains original line");
+  }
+  assert.deepEqual(checkFunctionSource(wrapper("return Date.parse(effects.header) - effects.now()"), "policy", contract), []);
+  assert.deepEqual(checkFunctionSource(wrapper("const Career = effects; return Career.hash()"), "policy", contract), [], "injected/local names resolve lexically");
+  assert.equal(checkFunctionSource(wrapper("return 1"), "missing", contract)[0].rule, "function");
+  assert.equal(checkFunctionSource(`${wrapper("return 1")} function policy() {}`, "policy", contract)[0].rule, "function");
+  assert.throws(() => checkBoundarySource(fixture(""), { export: "Pure", globals: { Date: ["now"] } }), /invalid permitted/);
+});
+
+test("collection capabilities permit indexing only where explicitly contracted", () => {
+  const contract = { globals: { TABLE: ["length", "<index>"] } };
+  assert.deepEqual(checkFunctionSource("function policy(i) { return TABLE[i % TABLE.length]; }", "policy", contract), []);
+  assert.ok(checkFunctionSource("function policy(i) { return TABLE.map(i); }", "policy", contract).some((v) => v.rule === "global"));
+  assert.ok(checkFunctionSource("function policy(i) { TABLE[i] = 1; }", "policy", contract).some((v) => v.rule === "global-write"));
+});
+
+test("boundary distinguishes nested assignment targets from computed keys and defaults", () => {
+  for (const body of [
+    "({ x: Math.imul } = input)", "[Math.imul] = input", "({ x: { y: Math.imul = fallback } } = input)",
+    "({...Math.imul} = input)", "[...Math.imul] = input", "for (Math.imul of input) {}",
+    "for (Math.imul in input) {}", "for ({x: Math.imul} of input) {}",
+  ]) {
+    const source = fixture(`const input = [], fallback = 0; ${body}`);
+    assert.ok(checkBoundarySource(source, pureFixtureContract).some((v) => v.rule === "global-write"), body);
+  }
+  const reads = fixture(`
+    const input = {}, output = {}; let local;
+    ({ [Math.imul(1, 2)]: local = Math.imul(3, 4) } = input);
+    output[Math.imul(2, 3)] = 1;
+    for (output[Math.imul(1, 2)] of []) {}
+  `);
+  assert.deepEqual(checkBoundarySource(reads, pureFixtureContract), [], "keys/default RHS remain reads, not global writes");
+});
 
 // Extracted list blocks carry inline comments, and a bare /"…"/g pull treats a
 // quoted phrase INSIDE a comment as a listed file — a round-6 audit measured
@@ -288,7 +398,7 @@ function lazyFiles() {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -338,7 +448,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
                    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-                   ...(MANIFEST.LAZY_CAREER_UI || [])]) {
+                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -362,7 +472,7 @@ test("sw.js stamps every injected asset it seeds", () => {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);

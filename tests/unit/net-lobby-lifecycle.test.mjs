@@ -2420,7 +2420,7 @@ test("codeHost never reveals a dead code when invite or publish fails", async ()
 
 
 for (const outcome of [false, { kind: "canceled" }]) {
-  test("failed guest start restores rules and releases session/pump: " + JSON.stringify(outcome), async () => {
+  test(`failed guest start restores rules and releases session/pump: ${JSON.stringify(outcome)}`, async () => {
     const { h, s } = await connectedGuest();
     let closes = 0, pumps = 0;
     s.close = () => { closes++; }; s.pump = () => { pumps++; };
@@ -2681,5 +2681,24 @@ test("BACK from a HOST step drops only that attempt and returns to the HOST/JOIN
     assert.equal(h.lobby.status().pending, false, "the half-built offer is torn down");
     await h.lobby.join();
     assert.deepEqual(h.transports, ["host", "guest"], "the other path starts fresh");
+  } finally { h.lobby.cancel(); }
+});
+
+// UI hunt 3: Escape / the back gesture press data-esc-close, which named CLOSE
+// on every step, so they threw the lobby away where the on-screen BACK stepped back.
+test("Escape follows the visible BACK on a sub-step and CLOSE on the choice; BACK re-offers every route", async () => {
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }) });
+  try {
+    h.lobby.wire();
+    h.lobby.open();
+    const door = () => h.elements.get("vsfriend")["data-esc-close"];
+    assert.equal(door(), "vs-close", "the choice: Escape closes the lobby");
+    assert.equal((await h.lobby.host()).ok, true);
+    assert.equal(door(), "vs-back", "a HOST step: Escape steps back like BACK");
+    h.elements.get("vs-join").hidden = true; h.elements.get("vs-code-join").hidden = true;   // an emptied room's INVITE ANOTHER
+    h.click("vs-back");
+    assert.equal(door(), "vs-close");
+    assert.equal(h.elements.get("vs-join").hidden, false, "JOIN is offered again");
+    assert.equal(h.elements.get("vs-code-join").hidden, false);
   } finally { h.lobby.cancel(); }
 });

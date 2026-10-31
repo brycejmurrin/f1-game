@@ -112,10 +112,10 @@ const HudLayout = (function () {
   const HELMET_STRIP = Object.assign({}, COCKPIT_STRIP, { gearbox: { x: -30, y: -20, s: 100 }, speed: { x: -30, y: -30, s: 100 } });
   // GEAR and SPEED on a touch helmet replace the LCD: the gearbox chip sits
   // where the wheel's screen is (the chase row's own centre, one step down),
-  // SPEED moves right of it (the owner asked for the chip on the visor,
-  // 2026-10-05; the LCD's digits are a few pixels tall on a phone).
+  // SPEED sits right of it and one step up, clear of ENERGY and AERO (the owner asked for the chip on the visor,
+  // 2026-10-05; the opaque pill covers the LCD's speed digits, so SPEED stays).
   const HELMET_TOUCH = { energy: { x: 0, y: -6, s: 100 }, tyre: { x: 0, y: -2, s: 100 },
-    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: 0, s: 100 } };
+    gearbox: { x: 0, y: 0, s: 100 }, speed: { x: 12, y: -5, s: 100 } };
   const SHIPPED = Object.freeze({
     standard: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
     minimal: Object.freeze({ cockpit: fz(Object.assign({}, COCKPIT_STRIP)), helmet: fz(Object.assign({}, HELMET_STRIP)), other: fz({}) }),
@@ -789,7 +789,7 @@ const HudLayout = (function () {
         && mapBox.top < r.bottom - 0.5 && mapBox.bottom > r.top + 0.5;
     });
     const blocks = [];
-    for (const el of doc.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
+    for (const el of doc.querySelectorAll(".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
       if (autoMap && el === mapEl) continue;
       const r = box(el); if (r) blocks.push(r);
     }
@@ -844,9 +844,10 @@ const HudLayout = (function () {
       // fixed obstacles, retaining their saved offset and dimensions.
       if (id === "map" && !autoMap) continue;
       if (id === "announce" && placedRadio) { blocks.push(r); continue; }
-      // SPEED moves only for the desktop visor, where its shipped vertical
-      // offset can meet the enlarged gearbox. Everywhere else it has priority.
-      if (id === "speed" && !(has("desktop") && shown() === "helmet")) { blocks.push(r); continue; }
+      // SPEED moves only on the visor (HELMET), where its shipped offset can meet the
+      // enlarged gearbox (desktop) or, on touch, OT / AERO once TEXT LARGER or a big
+      // BUTTON SIZE widens the row (UI-HUNT-2-HUD). Everywhere else it has priority.
+      if (id === "speed" && shown() !== "helmet") { blocks.push(r); continue; }
       let best = findSlot(r);
       // A narrow dock lane can wrap a long call beyond the available height.
       // Let placement try the card's normal width before accepting a collision.
@@ -854,6 +855,22 @@ const HudLayout = (function () {
         el.style.setProperty("--announce-lane-w", Math.max(0, bounds.right - bounds.left) + "px");
         r = box(el);
         best = r && findSlot(r);
+        if (!best && r) {
+          // Wrapping can fit a call between enlarged controls when its normal
+          // width cannot. Derive a few real gaps, not repeated global shrink steps.
+          const intervals = blocks.filter(b => b.top - EDGE < r.bottom && b.bottom + EDGE > r.top)
+            .map(b => [Math.max(bounds.left, b.left - EDGE), Math.min(bounds.right, b.right + EDGE)])
+            .filter(([left, right]) => right > left).sort((a, b) => a[0] - b[0]);
+          const widths = []; let cursor = bounds.left;
+          for (const [left, right] of intervals) { if (left - cursor >= 96) widths.push(left - cursor); cursor = Math.max(cursor, right); }
+          if (bounds.right - cursor >= 96) widths.push(bounds.right - cursor);
+          for (const width of [...new Set(widths)].sort((a, b) => b - a)) {
+            el.style.setProperty("--announce-lane-w", width + "px");
+            const wrapped = box(el), slot = wrapped && findSlot(wrapped);
+            if (slot) { r = wrapped; best = slot; break; }
+          }
+        }
+        if (!best) { el.setAttribute("data-lane-collapsed", ""); continue; }
       }
       if (!best && id === "inputs") { el.setAttribute("data-col-drop", ""); continue; }
       if (!best && id === "damage") {
@@ -1035,7 +1052,7 @@ const HudLayout = (function () {
   const BOTTOM = ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"];
   const CHIPS = ["energy", "ot", "aero"];
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
-  /** body[data-*] presence (mode-switch sets data-helmet-cam / data-wheel-lcd). */
+  /** body[data-*] presence (mode-switch sets data-helmet-cam). */
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
   // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
   // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
@@ -1074,9 +1091,6 @@ const HudLayout = (function () {
     [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
     [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
     [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
-    // css/track-detail.css: body[data-helmet-cam][data-wheel-lcd] soft-hides SPEED until placed.
-    [["speed"], (h, a) => !h("desktop") && !a && bodyAttr("data-helmet-cam") && bodyAttr("data-wheel-lcd"),
-      "touch helmet: the wheel LCD shows it — move it to show it", true],
     [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
     [["flag"], () => true, "shows when a flag is out", true],
     [["limits"], () => true, "shows on a track-limits strike", true],

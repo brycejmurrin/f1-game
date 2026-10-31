@@ -334,7 +334,7 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "node tools/ci/verify-change.mjs --fast --json",
     "node tools/ci/verify-change.mjs --plan",
     "npm run test:guards",
-    "npm run test:tooling-fast",
+    "npm run test:tooling-fast -- --changed",
     "node --test tests/unit/ratchets.test.mjs",
     "node tools/track/verify-track.cjs monza",
     "tools/mcp/js-debugger-mcp.sh list-tools",
@@ -701,9 +701,11 @@ test("the always-on instruction surface stays inside its budget", () => {
     const { fm } = stripFrontmatter(read(`.claude/skills/${d.name}/SKILL.md`));
     // Measure the described surface, not YAML keys, name fields or scalar
     // quoting/folding syntax. Parsing also refuses malformed descriptions.
-    const description = parseYAML(fm)?.description;
+    const parsed = parseYAML(fm);
+    const description = parsed?.description;
     assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
-    descWords += description.split(/\s+/).filter(Boolean).length;
+    // user-only skills (disable-model-invocation) are not in context: see the budgets file comment
+    descWords += parsed["disable-model-invocation"] === true ? 0 : description.split(/\s+/).filter(Boolean).length;
   }
   // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
   // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
@@ -758,10 +760,11 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
     .map((f) => f.replace(/\.md$/, ""));
   let chars = 0;
   for (const name of skills) {
-    const desc = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm).description;
+    const meta = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm);
+    const desc = meta.description;
     // The Agent Skills spec caps a description at 1,024 characters.
     assert.ok(desc.length <= BUDGET.skillDescriptionCharsEach, `${name}: description is ${desc.length} chars (spec max ${BUDGET.skillDescriptionCharsEach})`);
-    chars += desc.length;
+    if (meta["disable-model-invocation"] !== true) chars += desc.length; // user-only: not always-on
     for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
       assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
     assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
@@ -1025,5 +1028,10 @@ test("claude plugin validate accepts project skills and rejects malformed skill 
   const invalid = validate();
   assert.equal(invalid.error, undefined, `validator must execute, not fail to launch: ${invalid.error}`);
   assert.equal(invalid.signal, null, "malformed frontmatter must return a verdict, not time out");
+  // ENVIRONMENT PRECONDITION, not a quarantine: a `claude` whose validator accepts the malformed control (exit 0)
+  // cannot validate here at all (the cloud containers' CLI, 2.1.314, 2026-10-30), so the assertion below would
+  // measure the CLI, not our skills. Where the validator rejects the control, the assertion stays and a real
+  // failure of it is still red. Known container-only reds: docs/TESTING.md.
+  if (invalid.status === 0) return t.skip("claude CLI cannot validate here: it accepted malformed skill frontmatter (exit 0)");
   assert.equal(invalid.status, 1, "malformed frontmatter must fail validation (not an unexpected validator error)");
 });

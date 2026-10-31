@@ -116,6 +116,26 @@ name: Land
 # description only picks candidates: a forged refusal (any workflow with statuses: write can post one) costs at
 # worst one throttled CI run.
 #
+# EDITED BODY. `pull_request_target` also fires on `edited` ("The title or body of a pull request was edited, or the base
+# branch of a pull request was changed", https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request;
+# the payload's `changes` object names what changed, so `changes.body` is set only for a body edit; the workflow-trigger
+# page lists `edited` among the types, https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target,
+# read 2026-10-30). Ticking or striking a Plan item re-gates a `land` PR at once (#3981 sat on "plan=FAIL" for 5 h after
+# its Plan closed). resolve acts only on an edit whose payload has `changes.body`; a title or base edit runs alone in a
+# noise group like a stray label. Trust is unchanged: the payload is read, no PR code runs, and the gate still reads the body
+# through the API.
+#
+# STALE GATE (`sweep` job). A `gate` older than the PR's last green `CI` run, or `pending` 15 min after CI finished, left
+# #3970 stuck (a label flip or a push was the only cure). On a schedule (`schedule` runs on the default branch, same page
+# as above) `sweep` re-gates up to STALE_MAX such `land` PRs per run through the existing dispatch path, at most
+# RETRY_MAX times per head since its CI finished. Removing and re-adding `land` does the same by hand, and so does a
+# dispatch on the deploy branch with `stale=true` (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f stale=true`).
+# GitHub delays scheduled runs under load (this repo's other cron workflows fire hours apart), so the dispatch is also
+# how the sweep is proven live.
+#
+# DRAFT + `land`. A draft that carries `land` gets `gate` failure "draft: flip ready first …" and, once per head, a
+# comment with the route (ready-gate, `update_pull_request` draft:false, `land`); `ready_for_review` re-gates it.
+#
 # MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing, syncs nothing and disarms
 # what this event touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train
 # run does.
@@ -131,8 +151,11 @@ on:
   # branch with a read-only token and no secret, merge-gate runs the merge result's scripts under untrustedEnv, and
   # the jobs that write (post, arm) run no repo code. tests/unit/merge-gate.test.mjs pins all of this.
   pull_request_target:   # zizmor: ignore[dangerous-triggers] see the three lines above: no PR checkout, PR scripts get no write token or secret
-    types: [labeled, unlabeled, ready_for_review, converted_to_draft, synchronize, reopened]
+    types: [labeled, unlabeled, ready_for_review, converted_to_draft, synchronize, reopened, edited]
     branches: [claude/f1-game-project-26h3ng]
+  # The stale-gate sweep (`sweep` job, STALE GATE in the header): reads `gate` and CI, dispatches re-gates, runs no PR code.
+  schedule:
+    - cron: "17,47 * * * *"
   workflow_run:   # zizmor: ignore[dangerous-triggers] same as pull_request_target above
     workflows: ["CI", "Deploy to GitHub Pages"]
     types: [completed]
@@ -161,12 +184,19 @@ on:
         required: false
         default: "false"
         type: string
+      stale:
+        description: "true = run the stale-gate sweep now (the `sweep` job; pr, head, attempt and sync are ignored)"
+        required: false
+        default: "false"
+        type: string
 
 env:
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
   RETRY_MAX: 3
   # AUTO-SYNC: at most 6 `land` PRs may wait on a ci.yml run at once after a sync (THROTTLE in the header).
   SYNC_MAX: 6
+  # STALE GATE: at most 4 re-gate dispatches per sweep run; the per-head budget is RETRY_MAX (see `sweep`).
+  STALE_MAX: 4
 
 # ONE group per PR (a CI run on a PR head carries the PR number); the deploy branch's train runs share `land-tip`; a
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
@@ -183,9 +213,10 @@ env:
 # A dispatched AUTO-SYNC sweep gets `land-sync`: in `land-tip` it would replace a pending train re-gate.
 concurrency:
   group: >-
-    ${{ (github.event_name == 'pull_request_target' && (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold')
+    ${{ (github.event_name == 'pull_request_target' && (((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold')
+    || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
-    || format('land-{0}', github.event.pull_request.number || (github.event.inputs.sync == 'true' && 'sync') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
+    || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event.inputs.stale == 'true') && 'stale-sweep') || (github.event.inputs.sync == 'true' && 'sync') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 permissions: {}
@@ -198,10 +229,11 @@ jobs:
       (github.event_name == 'pull_request_target' && (
         ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'land' || github.event.label.name == 'hold'))
         || github.event.action == 'converted_to_draft'
-        || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land'))))
+        || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land')
+            && (github.event.action != 'edited' || github.event.changes.body))))
       || (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.display_title, 'CI ignored')
         && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')
-      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale != 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -309,6 +341,8 @@ jobs:
             elif [ "$draft" = true ]; then why="the PR is a draft"
             elif ! has land; then why="no \`land\` label"
             fi
+            # `land` on a DRAFT does nothing until the flip: post (below) says so on `gate` and once per head in a comment.
+            dl=false; [ "$draft" = true ] && has land && ! has hold && dl=true
             if [ -z "$why" ]; then
               if [ "$paused" = true ] && [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
               prio=1; has priority && prio=0
@@ -332,7 +366,7 @@ jobs:
               fi
               rows=$(jq -c --argjson n "$n" --arg h "$head" --argjson p "$prio" --arg c "$created" '. + [{number: $n, head: $h, prio: $p, created: $c}]' <<<"$rows")
             else
-              notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" '. + [{number: $n, head: $h, why: $w}]' <<<"$notasked")
+              notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" --argjson d "$dl" '. + [{number: $n, head: $h, why: $w, draft: $d}]' <<<"$notasked")
               if [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
             fi
           done
@@ -534,7 +568,18 @@ jobs:
           # A PR that no longer asks to land: an existing `gate` status turns red ("not asked" is not a pass).
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); why=$(jq -r .why <<<"$row")
-            if gh api "repos/$R/commits/$head/statuses?per_page=100" --jq '[.[] | select(.context == "gate")] | length > 0' | grep -qx true; then
+            if [ "$(jq -r '.draft // false' <<<"$row")" = true ]; then
+              # `land` on a draft: always say so (an agent waited 108 min believing GitHub would merge it), even with no
+              # `gate` yet, and comment once per head.
+              write_gate "$head" completed failure "= merge-gate not asked — draft: flip ready first — ready-gate, then update_pull_request draft:false" \
+                "PR #$n carries \`land\` but is a draft: nothing lands until it is ready." || echo "::warning::PR #$n: could not update gate"
+              marker="<!-- land-draft:$head -->"
+              if [ "$(gh api "repos/$R/issues/$n/comments?per_page=100" 2>/dev/null | jq -r --arg m "$marker" '[.[].body | contains($m)] | any' 2>/dev/null || echo error)" = false ]; then
+                # shellcheck disable=SC2016 # the backticks are Markdown in the comment text, not a command substitution
+                msg=$(printf '%s\n`land` is on this **draft**, so nothing will land. Flip it ready first: `node tools/ci/ready-gate.mjs --pr %s`, then `update_pull_request` with `draft:false`, then add `land` again (removing and re-adding it re-gates).' "$marker" "$n")
+                gh api --method POST "repos/$R/issues/$n/comments" --input - >/dev/null <<<"$(jq -n --arg b "$msg" '{body: $b}')" || echo "::warning::PR #$n: could not comment"
+              fi
+            elif gh api "repos/$R/commits/$head/statuses?per_page=100" --jq '[.[] | select(.context == "gate")] | length > 0' | grep -qx true; then
               write_gate "$head" completed failure "= merge-gate not asked — $why" "PR #$n does not ask to land: $why." || echo "::warning::PR #$n: could not update gate"
             fi
           done 3< <(jq -c '.[]' <<<"$NOTASKED")
@@ -817,3 +862,60 @@ jobs:
             fi
           done 3< <(jq -c '.[]' <<<"$SYNC")
           echo "synced=$synced" >> "$GITHUB_OUTPUT"
+
+  # SWEEP: STALE GATE in the header. On the schedule, re-gates (through the existing dispatch path) each open, ready
+  # `land` PR whose newest `gate` status is older than its newest successful ci.yml run, or has sat `pending` for over
+  # 15 min with CI finished. No checkout, no repo code, no secret: gh and jq with a token that may only dispatch.
+  # Bounded: STALE_MAX dispatches per run, and per head at most RETRY_MAX re-gates since CI finished (counted as the
+  # `gate` statuses written after that CI run, since every re-gate writes one; nothing is counted in repo files).
+  sweep:
+    name: sweep
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      pull-requests: read
+      issues: read
+      statuses: read
+    steps:
+      - name: Re-gate the land PRs whose gate is older than their last green CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          R="$GITHUB_REPOSITORY"
+          say() { echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          paused=$(gh api --method GET "repos/$R/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || paused=unreadable
+          if [ "$paused" != false ]; then say "stale-gate sweep skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
+          now=$(date -u +%s)
+          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json number,headRefOid,isDraft,labels \
+            --jq '.[] | select(.isDraft | not) | select([.labels[].name] | index("hold") | not) | {number, head: .headRefOid} | @json') \
+            || { say "stale-gate sweep skipped: could not list the land PRs"; exit 0; }
+          sent=0
+          while IFS= read -r c <&3; do
+            [ -n "$c" ] || continue
+            if [ "$sent" -ge "$STALE_MAX" ]; then say "stale-gate sweep: cap of $STALE_MAX re-gates reached; the rest wait for the next sweep"; break; fi
+            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c")
+            runs=$(gh api "repos/$R/actions/workflows/ci.yml/runs?head_sha=$head&per_page=100" \
+              --jq '[.workflow_runs[] | select(.display_title | startswith("CI ignored") | not)]') || { say "#$n: could not read the CI runs"; continue; }
+            if jq -e 'any(.[]; .status != "completed")' <<<"$runs" >/dev/null; then echo "#$n: CI still running"; continue; fi
+            ci_done=$(jq -r 'sort_by(.created_at) | last // {} | if .conclusion == "success" then (.updated_at | fromdateiso8601) else 0 end' <<<"$runs")
+            [ "${ci_done:-0}" -gt 0 ] || { echo "#$n: no successful CI on ${head:0:12}"; continue; }
+            g=$(gh api "repos/$R/commits/$head/statuses?per_page=100" \
+              --jq '[.[] | select(.context == "gate") | {s: .state, t: (.created_at | fromdateiso8601)}]') || { say "#$n: could not read the gate status"; continue; }
+            newest_t=$(jq -r '.[0].t // 0' <<<"$g"); newest_s=$(jq -r '.[0].s // ""' <<<"$g")
+            spent=$(jq -r --argjson c "$ci_done" '[.[] | select(.t > $c)] | length' <<<"$g")
+            if [ "$newest_t" -lt "$ci_done" ]; then why="gate (${newest_s:-none}) is older than the last green CI"
+            elif [ "$newest_s" = pending ] && [ $((now - newest_t)) -gt 900 ]; then why="gate has been pending for $(((now - newest_t) / 60)) min with CI finished"
+            else echo "#$n: gate is current"; continue
+            fi
+            if [ "$spent" -ge "$RETRY_MAX" ]; then say "#$n: $why, but $spent re-gates since CI finished spent the budget of $RETRY_MAX; a push, a label flip or the next train re-gates"; continue; fi
+            if gh api --method POST "repos/$R/actions/workflows/land.yml/dispatches" \
+                 -f ref="$DEPLOY_BRANCH" -f "inputs[pr]=$n" -f "inputs[head]=$head" -f "inputs[attempt]=$spent" >/dev/null; then
+              sent=$((sent + 1)); say "#$n: $why; re-gate dispatched ($((spent + 1)) of $RETRY_MAX on ${head:0:12})"
+            else
+              say "::warning::#$n: could not dispatch the re-gate"
+            fi
+          done 3< <(printf '%s\n' "$lands")

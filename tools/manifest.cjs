@@ -272,7 +272,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
-  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply
+  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply, the Blender-authored body (tools/gen/blender/crew-body.py)
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
   "js/garage/crew-choreo.js",           // GarageCrewChoreo: Blender-authored crew clips (tools/gen/blender/crew-choreo.py)
@@ -353,6 +353,7 @@ const FULL = [
   "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/energy-plan.js",    // EnergyPlan: manual per-sector ERS policy (#1580); neutral = no effect
   "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
   "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
   "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
@@ -1049,6 +1050,7 @@ const LAZY_AGENT = [
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/agent/apex.js",
+  "js/agent/apex-bridge.js", // ApexBridge: postMessage commands from a framing claude.ai page (?bridge=1), reads __apex at call time
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
@@ -1078,6 +1080,8 @@ const LAZY_RACE = [
 // Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
 // Hub WATCH / Director eval SHOTS).
 const LAZY_RACE_SESSION = [
+  "js/data/garage-departure-motion.js",
+  "js/garage/departure-wheels.js",
   "js/race/reliability.js",
   "js/race/damage.js",
   "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
@@ -1284,6 +1288,16 @@ const LAZY_CAREER_UI = [
   "js/career/career-ui.js",   // CareerScreen
 ];
 const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
+
+// LAYOUT PRESET row (G9, ~14 KB): SETTINGS › APPEARANCE's one-tap whole-UI
+// layout. js/ui/settings-tabs.js loads it on the first APPEARANCE enter; every
+// global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
+// is FULL and read at call time, so it has no edges and no boot stub.
+const LAZY_UI_PRESETS = [
+  "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
+  "js/ui/layout-presets.js", // LayoutPresets
+];
+const LAZY_UI_PRESETS_EDGES = [];
 
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
@@ -1767,6 +1781,7 @@ module.exports = {
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
+  LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,

@@ -197,14 +197,14 @@ test("XrSession.sessionInit lists webgpu only when preferred; featureGranted rea
 
 test("vendor ships XRButton / VRButton / WebGLXRFallback and pinned IWER under tests/vendor", () => {
   for (const f of [
-    "vendor/three-0.186.1/addons/webxr/XRButton.js",
-    "vendor/three-0.186.1/addons/webxr/VRButton.js",
-    "vendor/three-0.186.1/addons/webxr/WebGLXRFallback.js",
+    "vendor/three-0.187.0/addons/webxr/XRButton.js",
+    "vendor/three-0.187.0/addons/webxr/VRButton.js",
+    "vendor/three-0.187.0/addons/webxr/WebGLXRFallback.js",
     "tests/vendor/iwer-2.5.0.min.js",
   ]) {
     assert.ok(fs.existsSync(path.join(ROOT, f)), f);
   }
-  const m = JSON.parse(read("vendor/three-0.186.1/MANIFEST.json"));
+  const m = JSON.parse(read("vendor/three-0.187.0/MANIFEST.json"));
   assert.ok(m.files["addons/webxr/XRButton.js"]);
   assert.ok(m.files["addons/webxr/VRButton.js"]);
   assert.ok(m.files["addons/webxr/WebGLXRFallback.js"]);

@@ -300,18 +300,12 @@ window.MenuNav = (function () {
     const sign = dx + dy;
     let best = null, bestAlong = Infinity, bestAcross = Infinity;
     let edge = null, edgeDist = 0;
-    // The NEAREST ROW wins, then the straightest candidate in it. "Directly
-    // below" means the candidate's box SPANS your centre, not that its centre
-    // is near yours: across is the gap from your centre to the candidate's
-    // cross-axis interval, 0 when you are inside it. With centre distance a
-    // wide control (the hero's map button under the flag strip) lost
-    // ArrowDown to a narrow foot button that happened to sit closer to
-    // straight-down (measured: NEXT beat a 568px-wide hero). And across must
-    // only ever break ties INSIDE a row: scored as along + across * 2, a
-    // full-width slider two rows down beat the chevron cluster in the very
-    // next row (the DISPLAY page's METRICS rows: from the fold header, Down
-    // skipped every one of them and no arrow could enter them — measured
-    // 2026-09-08). Candidates within `tol` of the nearest along are one row.
+    // The NEAREST ROW wins (candidates within `tol` of the nearest along), then
+    // the straightest in it: across is the gap from your centre to the box's
+    // cross-axis span, 0 inside it, so a wide control is "directly below" (a
+    // 568px hero lost to a narrow NEXT by centre distance). across only breaks
+    // ties inside a row: as along + across * 2 a slider two rows down beat the
+    // next row's chevrons (DISPLAY METRICS, 2026-09-08).
     const tol = Math.max(8, (dx ? a.r - a.l : a.b - a.t) * 0.6);
     for (const el of list) {
       if (el === from) continue;
@@ -367,14 +361,30 @@ window.MenuNav = (function () {
         if (foot) return foot;
       }
     }
+    // Up off a TAB RAIL with nothing above in its band: the sheet head's
+    // controls come before the wrap. A roving rail is ONE stop (the selected
+    // tab), so the Data Hub ✕ at the head's far end sat in no tab's band and
+    // no arrow reached it (UI hunt 2026-10-29 #10). Nearest row above wins.
+    if (dy < 0 && from.getAttribute && from.getAttribute("role") === "tab") {
+      let head = null, headCost = Infinity;
+      for (const el of list) {
+        const b = centre(el), along = a.y - b.y;
+        if (el === from || along <= 1) continue;
+        const cost = along + gap(a.x, b.l, b.r) * 0.25;
+        if (cost < headCost) { head = el; headCost = cost; }
+      }
+      if (head) return head;
+    }
     if (dy && edge) return edge;
-    // No band, or a sideways end: DOM / reading order. Wrap so Left from the
-    // first item and Right from the last are never a no-op — a pad D-pad press
-    // always lands somewhere.
-    const i = list.indexOf(from);
-    const n = list.length;
+    // No band, or a sideways end: DOM order, wrapping, so a pad press always lands.
+    // Up/Down off a tab over an empty panel skips the rail's own tabs: focus on an
+    // unselected tab reads as selected (uihunt4 #1).
+    const rail = dy && from.getAttribute && from.getAttribute("role") === "tab" && from.closest && from.closest("[role='tablist']");
+    const ring = rail ? list.filter((el) => el === from || !rail.contains(el)) : list;
+    const i = ring.indexOf(from);
+    const n = ring.length;
     const j = i + (sign > 0 ? 1 : -1);
-    return n ? list[((j % n) + n) % n] : null;
+    return n ? ring[((j % n) + n) % n] : null;
   }
 
   // Where focus lands on the first arrow press: whatever the screen is already
@@ -534,12 +544,8 @@ window.MenuNav = (function () {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
   };
 
-  // The measurement cache below is scoped to ONE press (see centre()), but it
-  // was only ever REPLACED at the top of the next press — so between presses a
-  // Map of element -> box sat retained, holding a strong reference to every
-  // focusable row it measured, including rows of a layer since torn down. The
-  // finally is what makes "fresh per press" also mean "gone after the press",
-  // across the handler's dozen early returns.
+  // The box cache is per press (centre()); the finally drops it after every
+  // press, so no Map keeps rows of a torn-down layer alive between presses.
   function onKeyDown(e) {
     try { navKey(e); } finally { _boxes = null; }
   }
@@ -549,7 +555,9 @@ window.MenuNav = (function () {
     const key = e.key;
     const dir = DIRS[key];
     const paging = key === "PageDown" || key === "PageUp" || key === "Home" || key === "End";
-    if (!dir && !paging) return;
+    // Enter/Space with nothing focused (the title at first boot) seeds focus like an arrow (uihunt4 #3).
+    const seed = (key === "Enter" || key === " ") && document.activeElement === document.body;
+    if (!dir && !paging && !seed) return;
     const layer = activeLayer();
     if (!layer) return;
     const active = document.activeElement;
@@ -561,6 +569,7 @@ window.MenuNav = (function () {
     if (!list.length) return;
     _boxes = new Map();   // fresh per press — see centre()
     const inLayer = active && layer.contains(active) && list.indexOf(active) >= 0;
+    if (seed) { e.preventDefault(); focusItem(currentItem(layer, list), layer); return; }
 
     if (paging) {
       // THE REGION HOLDING FOCUS OWNS THESE KEYS. Addressing the whole layer,

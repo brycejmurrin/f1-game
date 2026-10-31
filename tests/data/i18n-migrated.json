@@ -36,7 +36,6 @@
     "#pm-feel-label"
   ],
   "allow": {
-    "js/career/career-ui.js::setAttribute(aria-label)::`${modeName} slot ${s.i + 1}, ${s.used ? \"saved\" : \"empty\"}${li…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
     "js/career/career-ui.js::setAttribute(aria-label)::`Export all career saves (backup from ${modeName} slot ${s.i + …": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
     "js/career/career-ui.js::setAttribute(aria-label)::otherArmed ? `Confirm: import the other career mode too` : (arm…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
     "js/career/career-ui.js::setAttribute(aria-label)::armed ? `Confirm: delete ${what}. Press again to delete` : `Del…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",

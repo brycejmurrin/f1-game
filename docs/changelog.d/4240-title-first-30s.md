@@ -1,0 +1,1 @@
+Fixed: on a slow connection the title doors no longer reshuffle about 12 s after they appear; until the game is ready they show dimmed, with the wordmark rule filling as it loads, and the disclaimer no longer looks like a button (#4240).

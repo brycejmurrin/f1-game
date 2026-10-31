@@ -60,7 +60,7 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
      Same contract as `.sheet`: zoom on the card, not the full-bleed overlay,
      so safe-area insets on `.dh-overlay` stay in viewport px. Heights below
      use --svhz / --vwz so they stay a constant fraction of the screen. */
-  /* var(--sheet-scale, …): the card is fit-managed (js/game/sheetshape.js
+  /* var(--sheet-scale, …): the card is fit-managed (js/ui/sheet-shape.js
      scans .fit-managed alongside .sheet), so a short window at high UI SIZE
      shrinks the card instead of leaving header+tabs ~45% of a 196px local
      box. The overlays layer beats components, so the sheet's own zoom rule
@@ -175,6 +175,35 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   color: var(--text);
   font-weight: 800;
 }
+/* ONE BAR (design pass #2d, #4241): hub.js puts the tab strip and the ⋯ developer
+   menu inside .sheet-head, so title, destinations and ✕ share one row and the
+   panel gets the height (844x390: 56 % -> 86 % of the card, standings 5 -> 9 rows).
+   Tabs read as broadcast underline tabs, not a second row of plates. The strip
+   still WRAPS: where the row cannot hold it (narrow phones, big UI SIZE) it drops
+   under the title, which is the old two-row layout. */
+.dh-card > .sheet-head { flex-wrap: wrap; gap: 0 calc(var(--gap) * 0.5); }
+.dh-card > .sheet-head > h2 { flex: 0 0 auto; white-space: nowrap; }
+.dh-card > .sheet-head > .dh-tabs {
+  flex: 1 1 0; align-self: stretch; align-items: stretch;
+  padding: 0; gap: 0; border-bottom: 0;
+}
+.sheet-head > .dh-tabs .dh-tab {
+  background: none; border: 0; border-radius: 0; box-shadow: none;
+  padding: 0 calc(var(--gap) * 0.75); letter-spacing: var(--ls-1);
+  border-bottom: 3px solid transparent; color: var(--dim);
+}
+.sheet-head > .dh-tabs .dh-tab.active { background: none; border-bottom-color: var(--red); color: var(--text); }
+/* ⋯ holds GPS TRACE EXPORT. !important: menu-destinations.css (responsive layer,
+   outranks this one) pads the old full-width row. */
+.sheet-head > .dh-developer-tools { position: relative; flex: 0 0 auto; align-self: center; }
+.sheet-head > .dh-developer-tools > summary {
+  list-style: none; display: grid; place-items: center;
+  width: var(--tap-paint); font-size: var(--fs-4); line-height: 1;
+}
+.sheet-head > .dh-developer-tools > summary::-webkit-details-marker { display: none; }
+.sheet-head > .dh-developer-tools > button { position: absolute; right: 0; top: 100%; z-index: 2; white-space: nowrap; }
+/* Narrow: destinations take their own row under the title (the tall grid below still lays them out). */
+body[data-width="narrow"] .dh-card > .sheet-head > .dh-tabs { flex-basis: 100%; order: 3; }
 /* UI SIZE can turn a physically short screen into a very short LOCAL card.
    body[data-density] is measured in those same zoom-adjusted units; compact
    chrome keeps the destination strip and loading state from consuming the
@@ -354,7 +383,7 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 .dh-retry { padding: calc(var(--gap) * 2 / 3) var(--pad); min-height: var(--tap); }
 .dh-empty { padding: 30px var(--gap); text-align: center; color: var(--dim); font-size: var(--fs-4); }
 /* Meta ink: #6a6a75 / #7a7a85 were WCAG AA fails on the hub panel (~3.7:1 and
-   ~4.1–4.4:1 on --panel composites). --dim (#9a9aa8) clears 4.5:1 — same
+   ~4.1–4.4:1 on --panel composites). --dim clears 4.5:1 — same
    migration as --steel (steel-role.test.mjs). */
 .dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: var(--dim); text-align: right; }
 body[data-density="compact"] .dh-footnote {
@@ -384,6 +413,8 @@ body[data-density="compact"] .dh-footnote {
 /* Localized date/time + timezone can exceed a five-column phone cell. Wrap
    within that session instead of painting across the next session's time. */
 [data-nextgp="session-time"] { color: var(--text); font-size: var(--fs-1); white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+/* Wide: five session cells hold "Sat, 05:30 PM UTC" on one line; wrapping left a lone "UTC" row. */
+body[data-shape="wide"] [data-nextgp="session-time"] { white-space: nowrap; font-variant-numeric: tabular-nums; }
 body[data-width="narrow"] [data-nextgp="tile"] { grid-template-columns: 1fr; }
 body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: auto; }
 /* schedule: ADD TO CALENDAR bar (iCalendar file) — touch-sized, wraps on a 390px-tall phone */
@@ -584,6 +615,15 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 /* WIDTH — a share of the card's own 760px cap, never past the overlay. The
    foldable-hinge max-width (css/components.css) still clamps it. */
 :root[data-look-datahub-w] #datahub .dh-card { width: min(calc(760px * var(--look-datahub-w, 1)), 100%); }
+
+/* BUTTON HEIGHT on a compact hub. The shared rule (css/overlays.css) scales
+   --tap / --chip-h, but a compact card's ✕ and tabs size off --tap-paint,
+   which .dh-card re-derives above — so at 844x390 touch the knob painted
+   nothing (look-diff 2026-10-30, 0 % at 80 and 150). Scale the painted
+   floor the same way, against the card's own zoom. */
+:root[data-look-datahub-btn] #datahub .dh-card {
+  --tap-paint: max(24px, calc(var(--tap-paint-at) * var(--look-datahub-btn, 1) / var(--sheet-scale, var(--ui-scale))));
+}
 
 /* ROW HEIGHT — one answer for the three row kinds the tabs draw: standings /
    live / telemetry rows (.dh-row), schedule rows (.dh-race) and the results
@@ -818,7 +858,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
    driver green and the leading one red — while the lane-board pair fifty lines
    down, keyed on the identical expression, had it right. Keep them matched;
    delta-sign-colour asserts it. */
-.dh-gdelta.dh-pos { color: var(--slower); }   /* behind the compare reference */
+.dh-gdelta.dh-pos { color: var(--slower-ink); }   /* behind the compare reference */
 .dh-gdelta.dh-neg { color: var(--faster); }   /* ahead of it */
 
 /* ---------- live controls + sortable classification ---------- */
@@ -869,7 +909,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--dim);
 }
-.dh-laneboard-dl.dh-pos { color: var(--slower); }   /* behind the reference */
+.dh-laneboard-dl.dh-pos { color: var(--slower-ink); }   /* behind the reference */
 .dh-laneboard-dl.dh-neg { color: var(--faster); }   /* ahead of the reference */
 .dh-live-updated { font-size: var(--fs-2); color: var(--steel); margin-left: auto; }
 .dh-class-head { gap: 10px; }
@@ -1352,6 +1392,24 @@ body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
 }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs::-webkit-scrollbar { display: none; }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tab { scroll-snap-align: start; }
+/* THUMB REACH (reach round 2026-10-30): on a phone held sideways the strip sat
+   top-centre (844x390: 4 of 7 tabs in the far reach of both thumbs). On the
+   phone band — touch plus the zoom-aware compact wide body, never a viewport
+   max-height (ui-improve-pass pin) — it becomes a BOTTOM bar: the same one
+   scrolling row, so it costs no extra height, and unlike a left rail
+   (~120 px of 734) it costs the tables no width — they already scroll
+   sideways at 36rem. Flex `order` only: DOM and Tab order (tabs, then the
+   panel they control) are unchanged; MenuNav reaches the bar with Down off
+   the panel's last row. The pill / underline / rows / stripes looks style the
+   tabs themselves and still apply. */
+@media (pointer: coarse) {
+  body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
+    order: 1;
+    border-bottom: 0;
+    border-top: 1px solid color-mix(in oklab, var(--plate-line) 50%, transparent);
+    padding-bottom: calc(var(--gap) * 0.4);
+  }
+}
 
 /* Classification tables scroll sideways on a phone instead of crushing the
    driver column. Data tables are the WCAG 1.4.10 two-dimensional exception. */

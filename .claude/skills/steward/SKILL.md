@@ -5,7 +5,7 @@ description: "Use when you own, pick up or are handed a PR, or a PR or the deplo
 
 # Driving a PR to green in Apex 26
 
-This file is the OVERRIDES, not the protocol: everything not listed here is `AGENTS.md` and `docs/WORKERS.md`.
+This file is the OVERRIDES, not the protocol: everything not listed here is `AGENTS.md` and skill `worker` (the lane contract; shared reference `docs/WORKERS.md`).
 Routes: failed-CI triage → agent `ci-red-triage`; pre-push validation → skill `check-changes`; live `version.json`
 or anything on github.io → agent `deploy-research` (the only route there); review, hunt or survey findings on the
 PR → agent `finding-verifier` before you fix any of them.
@@ -51,7 +51,7 @@ PR → agent `finding-verifier` before you fix any of them.
    state, failing jobs, owner). Search open PR titles, branches and the Board issue for the failing test name, and
    the `deploy:red` label on the Board issue. This overrides "port the fix now and push" (AGENTS.md §Git branch &
    deploy).
-4. **Deploy branch** — never pushed to (AGENTS.md §Git branch & deploy). A deploy is a MERGE of other sessions'
+4. **Deploy branch** — never pushed to (AGENTS.md §Git branch & deploy); a red deploy branch is claimed through the Board (override 3), fixed by a PR. A deploy is a MERGE of other sessions'
    work: re-measure on the merged tree. A worker's change lands through the `land` label (§12).
 5. **Flakes** — do not re-run a browser group to chase one: AGENTS.md rules 8 and 9.
 6. **Fix push** — validate at the floor (docs/WORKERS.md §3; AGENTS.md rule 3); the fast tier (`run-ci` on the
@@ -62,12 +62,14 @@ PR → agent `finding-verifier` before you fix any of them.
    only a Bryce-attended session adds a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30
    --failures-only` (`--pages` after a deploy-branch push). Live means your commit is an ANCESTOR of the live
    `apex-sha` (agent `deploy-research`). Detail: `references/ci-verdicts.md`.
+   If `subscribe_pr_activity` fails, keep one background `ci-watch.mjs --sha <head> --timeout 30` and tell the dispatcher
+   (skill `worker`, contract item 4).
 8. **CI wake** — re-read `headRefOid`, then `ci-watch --once`, and act on the verdict: `references/ci-verdicts.md`
    (also the `gate` commit status, which ci-watch never shows).
 9. **Host-neutral watch** — ownership is the claim comment plus `claimed`, or the Hand-off `owner:` line; watch per
    host (docs/WORKERS.md §4 and §Per vendor). Without a subscription: `references/host-watch.md`. Record missing
    capabilities as unverified.
-10. **Sweeping many PRs** is the dispatcher's job (docs/WORKERS.md §The dispatcher). A session reads
+10. **Sweeping many PRs** is the dispatcher's job (skill `dispatcher`). A session reads
     `node tools/ci/pr-board.mjs --json` (read-only; exit 3 = no token) to find who owns a red (§3); it does not
     sweep, disarm or take over another lane's PR.
 11. **Browser runs** — `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10.
