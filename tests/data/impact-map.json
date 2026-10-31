@@ -4068,6 +4068,9 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
+      "hash": [
+        "tests/unit/reliability.test.mjs"
+      ],
       "hireDriver": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
@@ -5487,6 +5490,9 @@
       ]
     },
     "js/core/script-loader.js": {
+      "browserAttempt": [
+        "tests/unit/script-loader-retry-eval.test.mjs"
+      ],
       "create": [
         "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -5508,6 +5514,9 @@
       ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
+      ],
+      "runLoadGraph": [
+        "tests/unit/script-loader-retry-eval.test.mjs"
       ],
       "warm": [
         "tests/unit/script-loader-preload.test.mjs"
@@ -7013,6 +7022,9 @@
         "tests/unit/ui-sheets-audit.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "applyCaution": [
+        "tests/unit/sporting-regs.test.mjs"
+      ],
       "applyLightTune": [
         "tests/unit/flyby-intro.test.mjs"
       ],
@@ -7093,6 +7105,8 @@
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/ghost.test.mjs",
+        "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
       ],
@@ -15249,6 +15263,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs"
       ],
+      "_gpuSettled": [
+        "tests/unit/tlx-webgpu-perf.test.mjs"
+      ],
       "_gpuSupported": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -15399,6 +15416,9 @@
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "drawWarmStage": [
+        "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "dropWrapper": [
         "tests/unit/render-final-contracts.test.mjs",

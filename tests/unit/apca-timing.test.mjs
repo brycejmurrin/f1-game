@@ -173,3 +173,79 @@ test("personal-best green and the player's lime are different hues", () => {
     `--faster ${token("--faster")} and --you ${token("--you")} are ${gap.toFixed(0)}° of hue apart; ` +
     `a personal best must not read as "you"`);
 });
+
+/* ── secondary and red TEXT inks (#4258) ─────────────────────────────────────
+ * --dim labels most secondary copy at 14–16 px/700, where APCA asks Lc 60; at
+ * #9a9aa8 it was Lc 48. --slower is the red FILL (#ff3b30, Lc 40 as text), so
+ * red TEXT reads --slower-ink: --slower mixed toward --text in OKLab, which
+ * keeps the hue, follows the colour-vision remaps of --slower, and darkens
+ * under LIGHT because --text does. The grounds: --bg, and the HUD plate
+ * (rgb(8 8 14 / .78)) over a mid-grey scene, the darkest ink's worst case. */
+const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const unlin = (c) => Math.round(255 * Math.min(1, Math.max(0,
+  c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055)));
+function toOklab(rgb) {
+  const [r, g, b] = rgb.map(lin);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+function fromOklab([L, a, b]) {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s].map(unlin);
+}
+/** --slower-ink for a given --slower and --text, from its declared mix. */
+function slowerInk(slower, text) {
+  const v = token("--slower-ink");
+  const m = v.match(/^color-mix\(in oklab, var\(--slower\) (\d+(?:\.\d+)?)%, var\(--text\)\)$/);
+  assert.ok(m, `--slower-ink must be color-mix(in oklab, var(--slower) N%, var(--text)), got ${v}`);
+  const p = +m[1] / 100, A = toOklab(slower), B = toOklab(text);
+  return fromOklab(A.map((x, i) => x * p + B[i] * (1 - p)));
+}
+const hudPlate = [8, 8, 14].map((c) => Math.round(c * 0.78 + 128 * 0.22));
+
+test("--dim, the secondary label ink, clears APCA Lc 60 on --bg and the HUD plate", () => {
+  assert.ok(Math.abs(apca(hex("#9a9aa8"), hex(token("--bg")))) < 60, "anti-vacuity: the old --dim must fail this bar");
+  for (const [name, ground] of [["--bg", hex(token("--bg"))], ["HUD plate", hudPlate]]) {
+    const v = lc("--dim", ground);
+    assert.ok(v >= 60, `--dim ${token("--dim")} is Lc ${v.toFixed(1)} on ${name}; secondary labels need Lc 60`);
+  }
+  // The HUD scope restates the dark ladder; its --dim must be the same ink.
+  const hud = tokens.match(/:is\(#hud, #announce, #game-metrics\) \{[^}]*?--dim:\s*([^;]+);/);
+  assert.ok(hud, "the HUD scope restates --dim");
+  assert.equal(hud[1].trim(), token("--dim"), "the HUD scope's --dim matches :root's");
+});
+
+test("--slower-ink, red as TEXT, clears Lc 60 and sits inside the timing family band", () => {
+  const bg = hex(token("--bg")), text = hex(token("--text"));
+  assert.ok(lc("--slower", bg) < 60, "anti-vacuity: --slower as text must fail this bar");
+  const ink = slowerInk(hex(token("--slower")), text);
+  const fam = [lc("--sec-best", bg), lc("--faster", bg), lc("--sec-slow", bg), Math.abs(apca(ink, bg))];
+  const spread = Math.max(...fam) - Math.min(...fam);
+  assert.ok(spread <= 20, `with --slower-ink the timing family spans ${spread.toFixed(1)} Lc (${fam.map((x) => x.toFixed(1))})`);
+  for (const [name, ground] of [["--bg", bg], ["HUD plate", hudPlate]]) {
+    const v = Math.abs(apca(ink, ground));
+    assert.ok(v >= 60, `--slower-ink is Lc ${v.toFixed(1)} on ${name}; red text needs Lc 60`);
+  }
+  const [r, g, b] = ink;
+  assert.ok(r > g && r > b && r - Math.max(g, b) >= 80, `--slower-ink rgb(${ink}) must still read red`);
+  // Every colour-vision remap of --slower gets the same treatment.
+  for (const [, mode, body] of tokens.matchAll(/:root\[data-cvd="(\w+)"\][^{]*\{([^}]*)\}/g)) {
+    const s = body.match(/--slower:\s*(#[0-9a-fA-F]{6})/);
+    if (!s) continue;
+    const v = Math.abs(apca(slowerInk(hex(s[1]), text), bg));
+    assert.ok(v >= 60, `[data-cvd="${mode}"] --slower-ink is Lc ${v.toFixed(1)} on --bg`);
+  }
+  // LIGHT: the same mix toward the light theme's dark --text, on its --bg.
+  const light = tokens.match(/:root\[data-ui-theme="light"\] \{([^}]*)\}/)[1];
+  const lt = (n) => hex(light.match(new RegExp(n + ":\\s*(#[0-9a-fA-F]{6})"))[1]);
+  const lv = Math.abs(apca(slowerInk(hex(token("--slower")), lt("--text")), lt("--bg")));
+  assert.ok(lv >= 60, `under LIGHT --slower-ink is Lc ${lv.toFixed(1)} on --bg`);
+});

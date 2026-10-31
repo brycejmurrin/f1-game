@@ -100,8 +100,12 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduce"]) [data-results-part="story"] { animation: career-reveal 240ms ease-out both; }
-  :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: career-reveal 240ms ease-out backwards; animation-delay: calc(var(--podium-place) * 55ms); }
+  /* PODIUM COUNTDOWN (design pass 3E): P3, then P2, then P1, the order a real
+     podium is called, so the winner lands last (~0.64 s). Tiles only: RACE
+     AGAIN sits in the sheet foot and takes a tap from the first frame. */
+  :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: podium-in var(--dur-3) var(--ease-spring) calc((3 - var(--podium-place)) * 160ms) both; }
   :root:not([data-motion="reduce"]) [data-career-part="calendar"] > li[aria-current] { animation: career-reveal 240ms ease-out; }
 }
+@keyframes podium-in { from { opacity: 0; transform: translateY(18px); } }
 @keyframes career-reveal { from { opacity: 0.7; transform: translateY(calc(var(--gap) * 0.5)); } to { opacity: 1; transform: translateY(0); } }
 }
