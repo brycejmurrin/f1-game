@@ -1647,7 +1647,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         // they cast nothing. biasTerm × params6.y (= carBoxScale when armed, 0
         // when not — same gate as GLX uCarBiasScale); carLightVP is the
         // Z01-remapped matrix the car map was rasterised with.
-        if (F.params6.y > 0.5) {
+        // S2 exact-zero gate: csh >= 0, so min(0.0, csh) == 0 — skip the car taps when every static tap read 0.
+        if (F.params6.y > 0.5 && sh > 0.0) {
           let cc = F.carLightVP * vec4<f32>(in.wpos, 1.0);
           let cn = cc.xyz / cc.w;
           let cuv = vec2<f32>(cn.x * 0.5 + 0.5, 0.5 - cn.y * 0.5);
@@ -1673,7 +1674,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // matching glsl-lit.js (cloudShadow is skipped on back-faces too).
     // CLOUD SHADOW DEPTH knob (F.params5.z; GLX parity). _writeFrame always packs
     // the resolved value (0.80 default), so 0 here means a real "no cloud shade".
-    shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z);
+    // S1 exact-zero gate: shadow >= 0 here, and 0 * (1 - cloud * dim) == 0 — skip cloudShadow's FBM there.
+    if (shadow > 0.0) { shadow = shadow * (1.0 - cloudShadow(in.wpos) * F.params5.z); }
   }
   let litNoL = NoL * keyMul * shadow;
   var color = albedo * (amb + F.sunColor.xyz * litNoL * (1.0 - metalness));

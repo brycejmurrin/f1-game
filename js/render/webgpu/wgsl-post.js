@@ -779,8 +779,10 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // (bloomSample), so it only appears where the frame carries bright energy (sun,
   // floodlights, neon) — a dark scene stays clean. The dirt value is reused by the
   // flare modulation below (declared here so it stays in scope).
+  // Exact gate (uniform): dirt feeds only bloomSample (vec3(0) with bloom off) and the on-screen flare.
   var dirt = 0.0;
-  if (lensDirt > 0.001) {
+  if (lensDirt > 0.001 && (bloomAmt > 0.001 || (flareStr > 0.0 && sunUV.x >= 0.0 && sunUV.x <= 1.0
+      && sunUV.y >= 0.0 && sunUV.y <= 1.0))) {
     dirt = textureSampleLevel(dirtTex, samp, in.uv, 0.0).r;
     c = c + bloomSample * exposure * dirt * lensDirt * 2.2;
   }
