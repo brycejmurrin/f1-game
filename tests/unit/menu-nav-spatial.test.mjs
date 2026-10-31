@@ -374,3 +374,12 @@ test("step(): Up/Down off a tab over an empty panel leaves the rail instead of f
   const row = el("row", 199, 285, 210, 48);
   assert.equal(step(schedule, 0, 1, [schedule, standings, more, close, row]).id, "row", "a panel control in band still wins");
 });
+
+test("MenuNav: a focused range keeps physical PageUp/PageDown, synthetic pad paging still pages the pane", () => {
+  const { ownsArrows } = loadMenuNav();
+  const range = { tagName: "INPUT", type: "range", dataset: {}, getAttribute: () => null };
+  for (const key of ["PageUp", "PageDown"]) {
+    assert.equal(ownsArrows(range, key, { isTrusted: true }), true, key + " steps the range natively");
+    assert.equal(ownsArrows(range, key, { isTrusted: false }), false, key + " from the pad pages the pane");
+  }
+});

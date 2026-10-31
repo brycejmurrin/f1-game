@@ -809,7 +809,10 @@ const TrackDesigner = (function () {
     ui.export = btn("EXPORT", "sel-chip", () => exportFile());
     ui.import = btn("IMPORT", "sel-chip", () => ui.file.click());
     ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
-    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
+    // A native chooser can leave focus on <body> when it closes; hand it back to the menu that opened it.
+    const refocusFiles = () => { const t = ui.filesTrigger, a = document.activeElement; if (t && root && !root.hidden && (!a || a === document.body || !root.contains(a))) t.focus({ preventScroll: true }); };
+    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; refocusFiles(); if (f) Promise.resolve(importFile(f)).then(refocusFiles, refocusFiles); });
+    ui.file.addEventListener("cancel", refocusFiles);
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
     const files = el("div", "td-chips"); files.dataset.role = "file-actions";
     files.append(ui.share, ui.card, ui.export, ui.import);
@@ -910,6 +913,7 @@ const TrackDesigner = (function () {
   function showPane(pane) {
     if (workspace) workspace.remember();
     if (pane !== "library" && pane !== "howto") pane = "design";
+    if (pane !== "library") confirmDel = null;
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
@@ -1083,13 +1087,13 @@ const TrackDesigner = (function () {
     ui.prevPt = btn("PREV POINT", "sel-chip", () => cyclePoint(-1));
     ui.nextPt = btn("NEXT POINT", "sel-chip", () => cyclePoint(1));
     ui.spanEnd = btn("SELECT END", "sel-chip", () => armSpanEnd());
-    ui.prevPt.setAttribute("aria-label", "Select previous control point");
-    ui.nextPt.setAttribute("aria-label", "Select next control point");
-    ui.spanEnd.setAttribute("aria-label", "Next tap sets the end of a selected span (group move, elevate, or replace)");
+    ui.prevPt.setAttribute("aria-label", "Prev point: select previous control point");
+    ui.nextPt.setAttribute("aria-label", "Next point: select next control point");
+    ui.spanEnd.setAttribute("aria-label", "Select end: next tap sets the end of a selected span (group move, elevate, or replace)");
     ui.spanEnd.setAttribute("aria-pressed", "false");
     actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.prevPt, ui.nextPt, ui.spanEnd);
     ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
-    ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
+    ui.testHere.setAttribute("aria-label", "Test here: test drive from the selected point");
     actions.appendChild(ui.testHere);
     circuit.appendChild(actions);
     // Elevation presets (always built; shown in elevation mode).
@@ -1142,7 +1146,7 @@ const TrackDesigner = (function () {
     // The label row carries FIX ALL (shown while a red issue has an automatic fix).
     const head = el("div", "td-chips");
     ui.fixAll = btn("FIX ALL", "sel-chip", () => fixEverything());
-    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix every issue the designer can repair");
+    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix all: fix every issue the designer can repair");
     head.append(el("div", "td-label", "CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
@@ -1500,12 +1504,16 @@ const TrackDesigner = (function () {
   }
   function renderLibrary() {
     if (!ui.lib) return;
+    const active = document.activeElement, cards = Array.from(ui.lib.children);
+    const at = cards.findIndex((card) => card.contains(active));
+    const action = at < 0 ? -1 : Array.from(cards[at].querySelectorAll("button")).indexOf(active);
+    const focusedId = at < 0 ? null : cards[at].dataset.trackId;
     if (ui.recoverDraft) ui.recoverDraft.hidden = !draftItem(true);
     while (ui.lib.firstChild) ui.lib.removeChild(ui.lib.firstChild);
     const items = custom.list();
-    if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
+    if (!items.length) ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker."));
     for (const it of items) {
-      const card = el("div", "td-card");
+      const card = el("div", "td-card"); card.dataset.trackId = it.id;
       const c = el("canvas"); c.width = 320; c.height = 220; c.setAttribute("aria-hidden", "true");
       const def = Tracks.LIST.find((t) => t.id === it.id);
       try { if (def) TrackMaps.draw(c, def, { width: 3, color: "#f6f6f9" }); } catch (e) { Log.warn("track", "library thumbnail failed: " + (e && e.message)); }
@@ -1526,6 +1534,13 @@ const TrackDesigner = (function () {
       );
       card.append(c, name, meta, row);
       ui.lib.appendChild(card);
+    }
+    if (action >= 0 && openFlag && !ui.paneLib.hidden) {
+      const same = items.findIndex((it) => it.id === focusedId);
+      const card = ui.lib.children[same < 0 ? Math.min(at, items.length - 1) : same];
+      // A removed row lands on EDIT, so repeating Enter cannot delete its neighbour.
+      const target = card && card.querySelectorAll("button")[same < 0 ? 0 : action];
+      (target || ui.tabLib).focus();
     }
   }
 

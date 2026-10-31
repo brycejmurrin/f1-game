@@ -8954,6 +8954,7 @@
       ],
       "poll": [
         "tests/specs/gamepad.spec.js",
+        "tests/specs/menu-keyboard.spec.js",
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -9173,7 +9174,6 @@
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "*": [
-        "tests/specs/menu-keyboard.spec.js",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/ratchets.test.mjs",
@@ -18124,6 +18124,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "items": [
+        "tests/specs/menu-keyboard.spec.js",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs"
       ],
