@@ -517,6 +517,16 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
       transform 0.08s ease;
   }
 }
+/* PRESSED = LIT (design pass 3E). On touch the thumb hides the face it presses,
+   so a plate one step lighter (all tabs and chips had) read as no press at all.
+   A red ring and base rule show AROUND the thumb; in at once, out on the
+   control's own fade. The red CAREER hero keeps its key travel (.bigbtn:active). */
+:is(.bigbtn.alt, button[role="tab"], .sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
+    .cs-opt, .dh-pill, .dh-dchip):active:not(:disabled) {
+  background: color-mix(in oklab, var(--red) 24%, var(--plate-opaque));
+  box-shadow: var(--press-lit);
+  transition-duration: 0s;
+}
 
 /* ---------- BALANCED CONTROL ROWS ----------
    A control group must answer the room it actually gets, not a remembered

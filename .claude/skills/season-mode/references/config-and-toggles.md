@@ -27,8 +27,8 @@ preferences AND `activeCfg`). Use it rather than `setConfig()` + `restart()` + `
   `toggleSprint`) → `draft.sprint` (`false|true|"rounds"`) + `draft.sprintIds` → APPLY
   (`applyConfig`: `normalize()` + `setConfig` + `activeCfg = snap`) → `rulesConfig()` →
   `sprintOn(season)` (false unless flow is `"season"`) → `stage(season)`.
-- A weekend that shows no sprint session: check the flow gate, the frozen config (FIRST CHECK in
-  SKILL.md), and `sprintIds` for the round's track. `sprint:"rounds"` with no round marked is
+- A weekend that shows no sprint session: check the flow gate, the frozen config (the FIRST CHECK in
+  SKILL.md step 2), and `sprintIds` for the round's track. `sprint:"rounds"` with no round marked is
   `sprintOn` false (the SETUP note counts the marked rounds).
 - Sprint distance: `lapsFor()` divides the race laps (`SPRINT_FRAC`, floor `SPRINT_MIN`) only on the
   sprint stage; NEXT ROUND's distance is `roundLaps()` (both called from `js/game.js`).

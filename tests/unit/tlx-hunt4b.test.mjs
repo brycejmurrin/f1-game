@@ -27,7 +27,7 @@ const CHUNKED = read("js/render/three/tlx-chunked.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
   "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
@@ -920,16 +920,19 @@ test("godray11: WebGL2 leg never takes rg11b10 (scene11 / bloom11 WebGPU-only ga
   assert.equal(h.post.state().godray11, false);
 });
 
-test("shadow depth-only: r186 keeps R8 colour bytes; r187 gate stays closed on tip", async (t) => {
-  assert.equal(+(THREE.REVISION || 0) < 187, true, "vendored tip is still pre-r187");
+test("shadow depth-only on r187: no colour attachment on the phone maps, PCSS keeps R32F (#34782, #2649)", async (t) => {
+  // The base tree (three r186) carries an R8 attachment: depthOnly false, 1024² colour bytes on a phone sun map.
+  assert.equal(+(THREE.REVISION || 0) >= 187, true, "vendored three is r187+");
   const fg = makeFakeGL(64, 64);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
   t.after(() => renderer.dispose());
   const phone = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer, isMobile: true, softwareGL: false, isWarming: () => false });
-  assert.equal(phone.S.depthOnly, false);
-  assert.equal(phone.S.sunColorBytes, 1024 * 1024, "phone 1024² R8 colour attachment");
-  assert.equal(!!phone.sunTex, true);
+  assert.equal(phone.S.depthOnly, true);
+  assert.equal(phone.S.sunColorBytes, 0, "phone 1024² sun map: 0 colour bytes (r186: 1,048,576)");
+  assert.equal(!!phone.sunTex, true, "the lit pass still samples the depth texture");
+  // The drawWarm path builds its probe targets through the same factory, and a pass renders into one.
+  assert.doesNotThrow(() => phone.drawWarm());
 });
 
 test("FB-invalidate audit: depthEnd / discardAttachments / discardHint stay on the live post chain", async (t) => {

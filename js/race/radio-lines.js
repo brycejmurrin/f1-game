@@ -147,7 +147,12 @@ var RadioLines = (function () {
   function gapText(s) {
     if (!(s >= 0) || !Number.isFinite(s)) return null;
     // Never "0.0": two cars that close are a tenth apart on any real timing screen.
-    return s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s));
+    // 9.96.toFixed(1) is "10.0". The voice reads that as "ten point zero", and the
+    // recorded pack has "9.9" and "10" but no "10.0" clip, so a gap that sits in
+    // that band (a matched car, a whole stint) drops every line that names it.
+    // The announcer already maps the same rounding to "10" (announcer.js secs).
+    const r = s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s));
+    return r === "10.0" ? "10" : r;
   }
   /** "1:32.4" — the tenth is what an engineer reads out, not the thousandth. */
   function timeText(s) {

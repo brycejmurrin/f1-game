@@ -28,9 +28,38 @@ var Reliability = (function () {
 
   function draw(seed, ...parts) { return Career.hash(seed, ...parts); }
 
-  function devNorm(teamId) {
-    const span = Career.TDEV_MAX * Career.TDEV_TO_PACE;
-    return span ? clamp((Career.paceMult(teamId) - 1) / span, -1, 1) : 0;
+  /**
+   * Private policy core: scalar snapshots and sampled values in, values out.
+   * No Career/Parts reads, random draws, logging or car mutation belong here.
+   * The adapter keeps sampling conditional, so non-retiring cars still consume
+   * exactly one hash draw and retiring cars consume exactly three, in order.
+   * @param {{tier: number, pace: number, developmentSpan: number,
+   *   scale: number, isPlayer: boolean, build: number, networked: boolean}} input
+   */
+  function retirementRisk(input) {
+    if (!input.scale) return 0;
+    const tier = clamp(input.tier | 0, 0, TIER_RISK.length - 1);
+    const development = input.developmentSpan
+      ? clamp((input.pace - 1) / input.developmentSpan, -1, 1) : 0;
+    let risk = TIER_RISK[tier] * (1 - DEV_RELIEF * development);
+    if (input.isPlayer && input.build > 0 && !input.networked)
+      risk *= 1 - BUILD_RELIEF * clamp(input.build, 0, 1);
+    return clamp(risk * input.scale, 0, 1);
+  }
+
+  /** @param {number} atSample @param {number} reasonSample */
+  function retirementPlan(atSample, reasonSample) {
+    return {
+      at: AT_LO + atSample * (AT_HI - AT_LO),
+      why: REASONS[Math.min(REASONS.length - 1, Math.floor(reasonSample * REASONS.length))],
+    };
+  }
+
+  /** Cost pairs are resolved by the Parts adapter, never by the policy. */
+  function qualityFor(costs) {
+    let sum = 0;
+    for (const [cost, top] of costs) sum += clamp(cost / top, 0, 1);
+    return costs.length ? sum / costs.length : 0;
   }
 
   // How developed a fitted build's power unit and gearbox are, 0..1, as a fraction
@@ -41,25 +70,15 @@ var Reliability = (function () {
   function buildQuality(setup, team) {
     if (!setup) return 0;
     const resolved = Parts.resolveSetup(setup, team);
-    let sum = 0, n = 0;
+    const costs = [];
     for (const cat of Parts.CATALOG) {
       if (BUILD_CATS.indexOf(cat.id) < 0) continue;
       const top = cat.options.reduce((m, o) => Math.max(m, o.cost || 0), 0);
       const opt = resolved.options[cat.id];
       if (!top || !opt) continue;
-      sum += clamp((opt.cost || 0) / top, 0, 1);
-      n++;
+      costs.push([opt.cost || 0, top]);
     }
-    return n ? sum / n : 0;
-  }
-
-  function riskFor(car, scale, build, networked) {
-    if (!scale) return 0;
-    const tier = clamp(car.tier | 0, 0, TIER_RISK.length - 1);
-    let risk = TIER_RISK[tier];
-    risk *= 1 - DEV_RELIEF * devNorm(car.team && car.team.id);
-    if (car.isPlayer && build > 0 && !networked) risk *= 1 - BUILD_RELIEF * clamp(build, 0, 1);
-    return clamp(risk * scale, 0, 1);
+    return qualityFor(costs);
   }
 
   function arm(cars, opts = {}) {
@@ -76,10 +95,18 @@ var Reliability = (function () {
       // Prefer a letter-prefixed index — a bare "#" pathologically hashes cold
       // under FNV-1a for this seed family.
       const who = c.driverId || c.code || ("i" + i);
-      if (draw(seed, "dnf", round, who) >= riskFor(c, scale, opts.build, opts.networked)) continue;
-      c.dnfAt = AT_LO + draw(seed, "dnfAt", round, who) * (AT_HI - AT_LO);
-      c.dnfWhy = REASONS[Math.min(REASONS.length - 1,
-        Math.floor(draw(seed, "dnfWhy", round, who) * REASONS.length))];
+      const failureSample = draw(seed, "dnf", round, who);
+      // Snapshot external development AFTER the first draw, matching the old
+      // evaluation order; a zero span must not read Career.paceMult at all.
+      const developmentSpan = Career.TDEV_MAX * Career.TDEV_TO_PACE;
+      const risk = retirementRisk({
+        tier: c.tier, pace: developmentSpan ? Career.paceMult(c.team && c.team.id) : 1,
+        developmentSpan, scale, isPlayer: c.isPlayer, build: opts.build, networked: opts.networked,
+      });
+      if (failureSample >= risk) continue;
+      const retirement = retirementPlan(draw(seed, "dnfAt", round, who), draw(seed, "dnfWhy", round, who));
+      c.dnfAt = retirement.at;
+      c.dnfWhy = retirement.why;
       planned++;
       Log.info("game", "Reliability DNF plan " + who + " why=" + c.dnfWhy);
     }

@@ -61,7 +61,7 @@ for (const [name, startRace] of [
   ["cancelled start", async () => ({ kind: "canceled", reason: "superseded" })],
   ["failed start", async () => { throw new Error("scenery failed"); }],
 ]) {
-  test("friendQualifying after a " + name, async () => {
+  test(`friendQualifying after a ${name}`, async () => {
     const { G, lobby } = await hostUp(startRace);
     try {
       assert.equal(lobby.startFromRoom(), true, "race started from the room");

@@ -21,6 +21,7 @@
 //   node tools/ci/select-specs.mjs --since <ref>            # spec list, one per line
 //   node tools/ci/select-specs.mjs --since <ref> --json
 //   node tools/ci/select-specs.mjs --since <ref> --budget-min 10
+//   node tools/ci/select-specs.mjs --files js/ui/hud.js       # a hypothetical change, on any tree
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -1317,7 +1318,7 @@ export function specsAffectedBySource(changed, root = ROOT) {
 // and the graph covers helper/spec -> spec PRECISELY, which is exactly where
 // the RULES are weakest (^tests/ routes to `audit` and nothing else).
 export function specsImporting(changed, root = ROOT) {
-  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.js$/.test(f));
+  const narrow = changed.filter((f) => /^tests\/helpers\/.+\.[cm]?js$/.test(f));
   if (!narrow.length) return [];
   const reverse = new Map(), specs = new Set();
   function scan(rel) {
@@ -1326,7 +1327,7 @@ export function specsImporting(changed, root = ROOT) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const file = `${rel}/${entry.name}`;
       if (entry.isDirectory()) { scan(file); continue; }
-      if (!entry.name.endsWith(".js")) continue;
+      if (!/\.[cm]?js$/.test(entry.name)) continue;
       if (file.endsWith(".spec.js")) specs.add(file);
       let refs = [];
       try { refs = referencesIn(fs.readFileSync(path.join(root, file), "utf8"), file).refs || []; }
@@ -1432,7 +1433,8 @@ export function cssSpecs(changed) {
 }
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
-  const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
+  // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.
+  const changed = opts.files ?? changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
@@ -1498,15 +1500,22 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
   r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed);
+  // AGENTS.md rule 3's pre-push floor is ONE spec. Name it only when the diff evidences one (edited, failed before,
+  // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.
+  const best = [...r.selected, ...r.oversize].filter((x) => x.rank <= 2).sort((a, b) => a.rank - b.rank)[0];
+  r.floor = best ? best.file : null;
+  if (!best) r.floorReason = r.selected.length ? `no spec imports or is pinned to these files; ${r.selected.length} are routed by group (${browserGroups.join(", ")}) — pick by name, or run the group on the PR` : "no browser spec is routed";
   return r;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
-  const usage = "usage: node tools/ci/select-specs.mjs --since <ref> [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
+  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--failed-from file] [--stale-first] [--json]";
   if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
-  if (si < 0 || !argv[si + 1]) {
+  const fl = argv.indexOf("--files");
+  const files = fl >= 0 && argv[fl + 1] ? argv[fl + 1].split(",").map((f) => f.trim()).filter(Boolean) : undefined;
+  if ((si < 0 || !argv[si + 1]) && !files) {
     console.error(usage);
     process.exit(2);
   }
@@ -1521,8 +1530,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const oi = argv.indexOf("--overflow-shards");
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
-  const r = select(argv[si + 1], bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first") });
+  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
+  console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(
     `SELECTION NARROWER THAN THE CHANGE: this diff touches ${r.tracked.length} tracked/infra path(s) ` +
