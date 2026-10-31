@@ -1463,9 +1463,10 @@ test("the host relays every other guest's car in ONE aged datagram per guest, ea
     const got = ss[name].states;
     const relays = got.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
     assert.equal(relays.length, 1, `guest ${name}: one relay datagram per publish, not one per car`);
-    assert.deepEqual(relays[0].cars.map((c) => c.id).sort(), [1, 2, 3].filter((i) => i !== own),
-      `guest ${name}: every OTHER guest, never its own car`);
-    assert.equal(got.length, 2, `guest ${name}: the host's own car + ONE relay (was 1 + 2)`);
+    assert.deepEqual(relays[0].cars.map((c) => c.id).sort(), [0, 1, 2, 3].filter((i) => i !== own),
+      `guest ${name}: the host and every OTHER guest, never its own car`);
+    assert.equal(got.length, 1, `guest ${name}: ONE datagram, the host's own car inside the relay (was own + relay, before that 1 + 2)`);
+    assert.equal(relays[0].cars.find((c) => c.id === 0).age, 0, `guest ${name}: the host's car is the newest pose (age 0)`);
   }
   net.stop();
 });
@@ -1477,7 +1478,8 @@ test("the host stops relaying a rival that has gone quiet instead of stamping it
   assert.equal(net.start({ role: "host", session: ss.a,
     sessions: Object.entries(ss).map(([id, session]) => ({ id, session })),
     peers: [{ id: "a" }, { id: "b" }, { id: "c" }] }).ok, true);
-  const relayedIds = (s) => s.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED).flatMap((p) => p.cars.map((c) => c.id));
+  // Relayed RIVALS: the host's own car (id 0) rides the same packet since perf hunt 9.
+  const relayedIds = (s) => s.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED).flatMap((p) => p.cars.map((c) => c.id)).filter((id) => id !== 0);
   let t = 10_000;
   for (let k = 0; k < 12; k++, t += 50) {
     ss.a.feed(t - 30, 1, lapPose(100 + k), t - 10);
@@ -1500,6 +1502,30 @@ test("the host stops relaying a rival that has gone quiet instead of stamping it
     }
   }
   net.stop();
+});
+
+test("poseRemote samples the spline once per pose: the world position's sample feeds the yaw (perf hunt 9)", () => {
+  const G = poseG(3);
+  const orig = globalThis.Tracks.sample;
+  let samples = 0;
+  globalThis.Tracks.sample = (t, sv, out) => { samples++; return orig(t, sv, out); };
+  // The real façade (game.js worldFromTrack) fills `out` with the sample at s when the caller hands one in.
+  G.worldFromTrack = (sv, x, out) => { samples++; if (out) orig(null, sv, out); return { x, z: sv }; };
+  try {
+    const net = NetPlay.create(G);
+    const s = stateSession();
+    assert.equal(net.start({ role: "guest", session: s }).ok, true);
+    let poses = 0;
+    for (let k = 0; k < 20; k++) {
+      const tick = 10_000 + k * 50;
+      s.feed(tick, 1, lapPose(100 + k), tick + 30);
+      G.netNow = tick + 130; samples = 0; net.tick(tick + 130);
+      if (G.cars[1].s > 0) { poses++; assert.equal(samples, 1, "one sample per posed remote per tick (was 2)"); }
+    }
+    assert.ok(poses > 10, "the remote was posed: " + poses);
+    assert.ok(Math.abs(G.cars[1].yawVis) < 1e-9, "yaw from the shared sample (tangent +z, head 0)");
+    net.stop();
+  } finally { globalThis.Tracks.sample = orig; }
 });
 
 test("a guest poses each entry of an aged relay at ITS OWN stamp (tick − age)", () => {
@@ -1564,8 +1590,10 @@ test("the host publishes its AI field at 10 Hz in each guest's aged packet, neve
   for (let k = 0; k < 20; k++, t += 50) { G.netNow = t; net.tick(t); }   // 20 publishes = 1 s
   const aged = a.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED);
   assert.equal(aged.length, 10, "AI rides every other publish: 10 Hz");
-  for (const p of aged) assert.deepEqual(p.cars.map((c) => c.id).sort(), [2, 3, 4], "the AI only — not the host (own packet), not guest a's own car");
-  assert.equal(a.states.filter((p) => p && p.type === NetSnapshot.TYPE_SNAPSHOT).length, 20, "the host's own car still at 20 Hz");
+  for (const p of aged) assert.deepEqual(p.cars.map((c) => c.id).sort(), [0, 2, 3, 4], "the AI and the host's own car — never guest a's own car");
+  assert.equal(a.states.filter((p) => p && p.type === NetSnapshot.TYPE_SNAPSHOT).length, 10, "the plain own snapshot only on the publishes without the AI field");
+  assert.equal(a.states.filter((p) => p && p.cars.some((c) => c.id === 0)).length, 20, "the host's own car still at 20 Hz");
+  assert.equal(a.states.length, 20, "perf hunt 9: 20 datagrams a second to the guest (was 30: 20 own + 10 aged)");
   net.stop();
 });
 

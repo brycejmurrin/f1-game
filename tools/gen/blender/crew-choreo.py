@@ -426,10 +426,14 @@ if opts.render:   # top-down stills: proxies at the crew empties, Cycles CPU
             scene.frame_set(1 + int(clip_len(name, c) * frac * FPS) - 1)
             scene.render.filepath = str(out / ('%s-%d.png' % (name, k))); bpy.ops.render.render(write_still=True)
 
-if opts.write_runtime:
-    p = root / 'js/garage/crew-choreo.js'; text = p.read_text()
-    start = text.index('  // @blender-choreo:start'); end = text.index('  // @blender-choreo:end', start)
-    block = ('  // @blender-choreo:start\n  // ' + meta['authoring'] + '; tools/gen/blender/crew-choreo.py; SINE ease-in-out keys.\n'
-             '  // Source SHA256: ' + source_hash + '\n  const CLIPS = ' + json.dumps(clips_out, separators=(',', ':')) + ';\n')
+def splice(rel, marker, block):
+    p = root / rel; text = p.read_text()
+    start = text.index('  // @' + marker + ':start'); end = text.index('  // @' + marker + ':end', start)
     p.write_text(text[:start] + block + text[end:])
+if opts.write_runtime:   # the key tables are lazy (js/garage/garage-data.js); the eager crew-choreo.js keeps the index
+    splice('js/garage/garage-data.js', 'blender-choreo', '  // @blender-choreo:start\n  // ' + meta['authoring'] + '; tools/gen/blender/crew-choreo.py; SINE ease-in-out keys.\n'
+           '  // Source SHA256: ' + source_hash + '\n  const CLIPS = ' + json.dumps(clips_out, separators=(',', ':')) + ';\n')
+    index = {cid: {k: v for k, v in c.items() if k != 'actors'} for cid, c in clips_out.items()}
+    splice('js/garage/crew-choreo.js', 'blender-choreo-index', "  // @blender-choreo-index:start\n  // tools/gen/blender/crew-choreo.py: each clip's direction, timing and label; the key tables are js/garage/garage-data.js (lazy).\n"
+           '  const CLIPS = ' + json.dumps(index, separators=(',', ':')) + ';\n')
 print(json.dumps(dict(blend=str(blend), clips=meta['clips'], maxHandTarget=meta['maxHandTarget'])))

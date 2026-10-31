@@ -548,11 +548,11 @@ function live(liv, now, ctx) {
   liveNow = now;
   nightNow = !!(ctx && ctx.night);
   for (let k = 0; k < 3; k++) BACKDROP[k] = MD.bd ? MD.bd[k] : _bdBase[k] * MD.backdrop;
-  const ge = nightNow ? 6.5 * E * MD.gantry : 0;
+  const ge = nightNow && !(ctx && ctx.realExterior) ? 6.5 * E * MD.gantry : 0;
   for (let i = 0; i < 4; i++) {
     const o = (GANTRY_AT + i) * 15;
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
-    rig[o + 14] = nightNow ? 1.2 : 0;
+    rig[o + 14] = ge ? 1.2 : 0;
   }
   // THE SHUTTER SWELL: the two team-colour dado uplights rise to ~3x and fall
   // back as the door lifts on an arrival or the RACE! drive-out (ctx.door, 0..1;
@@ -1103,7 +1103,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
+let exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -1167,7 +1167,51 @@ function buildStatic(liv, opts) {
 // The room's build identity. `geom` rebuilds meshes, `live` repaints the 512
 // screens, `dressId` repaints the crest, and `key` is the whole thing plus the
 // spec boards. rebuild() and prepared() share it.
+//
+// Every garage frame asks, and the answer almost never moves, so a raw-input
+// stamp gates the string work (perf hunt 9). The stamp holds EVERY value the
+// strings below read — roomKeys itself, ctxKey, GarageExperience.careerKey and,
+// through `info`'s identity, boardKey (boardInfo returns one frozen-by-convention
+// object per stamp and builds a fresh one on any change). Values compare with
+// ===, which is stricter than the toFixed(3) strings: a sub-rounding wobble
+// recomputes the strings and lands on the same key, never a stale one.
+const _rkNow = [], _rkWas = [];
+let _rkKeys = null;
+function rkColour(out, c) {
+  if (!c) { out.push(null, null, null, 0); return; }
+  const v = rgb(c, [0, 0, 0]);
+  out.push(v[0], v[1], v[2], 1);
+}
+function roomStamp(team, liv, info, ctx) {
+  const o = _rkNow;
+  o.length = 0;
+  const d0 = seatDriverAt(team, 0), d1 = seatDriverAt(team, 1);
+  o.push(team && team.id, (team && team.legend) || "", info, d0 && d0.num, d1 && d1.num, logoGen, GaragePrims.lookId());
+  rkColour(o, liv && liv.c1); rkColour(o, liv && (liv.accent || liv.stripe || liv.c2)); rkColour(o, liv && liv.c2);
+  rkColour(o, liv && liv.logo); rkColour(o, liv && liv.logo2); rkColour(o, liv && liv.logo3);
+  o.push((liv && liv.sponsors) || "-", !!ctx);
+  if (ctx) {
+    const last = ctx.last, a = ctx.achievements, sp = ctx.sponsor;
+    const hyd = ctx.track && typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(ctx.track) ? 1 : 0;
+    o.push(ctx.track ? ctx.track.id : "-", hyd, ctx.weather, ctx.tod, ctx.wins | 0, !!ctx.night, !!ctx.career, ctx.round | 0,
+      !!last, last && last.dnf, last && (last.p | 0), last && (last.pts | 0), sp && sp.label, !!ctx.studio,
+      !!(a && a.active), a && a.facility, a && a.wins, a && a.podiums, a && a.titles);
+  }
+  return o;
+}
 function roomKeys(team, liv, info, ctx) {
+  const st = roomStamp(team, liv, info, ctx);
+  if (_rkKeys && st.length === _rkWas.length) {
+    let same = true;
+    for (let i = 0; i < st.length; i++) if (st[i] !== _rkWas[i]) { same = false; break; }
+    if (same) return _rkKeys;
+  }
+  _rkWas.length = st.length;
+  for (let i = 0; i < st.length; i++) _rkWas[i] = st[i];
+  _rkKeys = roomKeyStrings(team, liv, info, ctx);
+  return _rkKeys;
+}
+function roomKeyStrings(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
@@ -1182,7 +1226,8 @@ function roomKeys(team, liv, info, ctx) {
                + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
-  return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
+  const board = boardKey(info);
+  return { geom, live, dressId, board, key: `${geom}|${live}|${dressId}|${board}` };
 }
 // A paint edit repaints a bay atlas of the SAME size: a backend that can (TLX refillTexture) re-fills the live
 // handle in place, so nothing is allocated. Free-then-create leaned on the TLX retire pool, and a handle retired
@@ -1219,7 +1264,7 @@ function uploadLive(team, liv, ctx, now) {
     liveFail++; liveRetryAt = now + 1000; liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
 function rebuild(team, liv, info, ctx) {
-  const { geom, live, dressId, key } = roomKeys(team, liv, info, ctx);
+  const { geom, live, dressId, board, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   const uploads = !!(_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined");
   if (live !== liveKey) { liveFail = 0; liveRetryAt = 0; }
@@ -1235,6 +1280,7 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
     if (floorMesh) _gfx.freeMesh(floorMesh);
+    if (exteriorFallbackMesh) _gfx.freeMesh(exteriorFallbackMesh);
     if (mirrorFadeMesh) { _gfx.freeMesh(mirrorFadeMesh); mirrorFadeMesh = null; }
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
@@ -1258,7 +1304,9 @@ function rebuild(team, liv, info, ctx) {
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
-    buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv, look);
+    buildBayFloor(flr, liv, look);
+    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, !!(ctx && ctx.night));
+    exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
@@ -1284,7 +1332,7 @@ function rebuild(team, liv, info, ctx) {
     liveKey = live;
   }
   if (dressId !== dressIdKey) { dressCanvas = null; dressIdKey = dressId; }
-  const dressFull = dressId + "|" + boardKey(info);
+  const dressFull = dressId + "|" + board;
   if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
@@ -1346,6 +1394,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   ensureDynamic();
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+  if (!(ctx && ctx.realExterior)) _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
   const studio = !!(ctx && ctx.studio);
   // Room first so its depth is in the buffer: the reflection then depth-tests
   // against props/shell (they win) and only needs bias to clear the floor.
@@ -1623,7 +1672,7 @@ function release() {
   let n = typeof GarageCrew !== "undefined" && GarageCrew.free ? GarageCrew.free() : 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
-  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
+  shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);

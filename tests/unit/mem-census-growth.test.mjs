@@ -5,6 +5,55 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { sustainedGrowthMB } from "../../tools/lib/mem-census.mjs";
+import { postWarmSlope, robustHeapSlope, cycleCensusIssues, HEAP_SLOPE_HARD_MB } from "../helpers/race-cycle-memory.mjs";
+
+test("race-cycle census rejects fallback or absent telemetry before interpreting retention", () => {
+  const sample = () => ({ backend: { renderer: "three", api: "webgl2" }, instrumentation: { tracksReady: true },
+    heapMB: 50, audioMB: 0, three: { geometries: 1, textures: 2 } });
+  assert.deepEqual(cycleCensusIssues(sample()), []);
+  const gpu = sample(); gpu.backend.api = "webgpu";
+  assert.deepEqual(cycleCensusIssues(gpu), []);
+  for (const mutate of [
+    (s) => { s.backend.renderer = "webgl2"; },
+    (s) => { s.backend.api = null; },
+    (s) => { s.instrumentation.tracksReady = false; },
+    (s) => { s.heapMB = null; },
+    (s) => { s.audioMB = NaN; },
+    (s) => { s.three = null; },
+    (s) => { s.three.textures = Infinity; },
+  ]) {
+    const s = sample(); mutate(s);
+    assert.ok(cycleCensusIssues(s).length > 0, JSON.stringify(s));
+  }
+  assert.ok(cycleCensusIssues(null).length > 0);
+});
+
+test("race-cycle slope requires finite post-warm heap and audio observations", () => {
+  for (const field of ["heapMB", "audioMB"]) for (const cycle of [5, 6]) {
+    for (const value of [null, undefined, NaN, Infinity, -Infinity, -1, "50"]) {
+      const rows = { 5: { heapMB: 50, audioMB: 2 }, 6: { heapMB: 51, audioMB: 3 } };
+      rows[cycle][field] = value;
+      const result = postWarmSlope(rows);
+      assert.equal(result.ok, false, `${cycle}:${field}=${String(value)} is unavailable, not a pass`);
+      assert.equal(result.reason, "finite nonnegative post-warm heap and audio observations required");
+    }
+  }
+});
+
+test("race-cycle slope retains signed deltas and the existing leak boundaries", () => {
+  const rows = new Map([[5, { heapMB: 50, audioMB: 2 }], [6, { heapMB: 61, audioMB: 8 }]]);
+  const leak = postWarmSlope(rows);
+  assert.equal(leak.ok, true);
+  assert.equal(leak.heapDelta, 11);
+  assert.equal(leak.heapHardFail, true);
+  assert.equal(leak.audioSoftFail, true);
+  rows.set(6, { heapMB: 60, audioMB: 7 });
+  assert.equal(postWarmSlope(rows).heapHardFail, false);
+  assert.equal(postWarmSlope(rows).audioSoftFail, false);
+  rows.set(6, { heapMB: 49, audioMB: 0 });
+  assert.equal(postWarmSlope(rows).heapDelta, -1);
+  assert.equal(postWarmSlope(rows).audioDelta, -2);
+});
 
 const GROWTH_MB = +/const GROWTH_MB = (\d+);/.exec(readFileSync(new URL("../specs/track-switch-memory.spec.js", import.meta.url), "utf8"))[1];
 const leaks = (heaps) => sustainedGrowthMB(heaps).median > GROWTH_MB;
@@ -355,3 +404,17 @@ test('repeated same-track builds cannot reuse an earlier build submission receip
   assert.equal(pickerReceiptStatus('monza').ok, false);
   assert.match(pickerReceiptStatus('monza').error, /no proven submission/);
 }));
+
+test("robust post-warm slope outvotes one odd reading but still catches the H12 leak", () => {
+  const ser = (heaps) => heaps.map((heapMB, i) => ({ cycle: i + 1, heapMB }));
+  // Pages #4577: cycle 5 dipped, cycle 6 back on the plateau (pair = +14.3), two confirming cycles flat.
+  assert.ok(robustHeapSlope(ser([148.2, 145.7, 148.1, 148.1, 134.9, 149.2, 149.0, 149.1])).slope <= HEAP_SLOPE_HARD_MB);
+  // PR #4316: flat, then a one-time step at cycle 6 (+15.5), plateau after.
+  assert.ok(robustHeapSlope(ser([143.8, 145, 146, 146.5, 146.9, 162.4, 162.3, 162.5])).slope <= HEAP_SLOPE_HARD_MB);
+  // H12: ~12 MiB every cycle must stay over the bound with the same readings count.
+  const leak = robustHeapSlope(ser([100, 112, 124, 136, 148, 160, 172, 184]));
+  assert.ok(leak.slope > HEAP_SLOPE_HARD_MB, `leak slope ${leak.slope}`);
+  // ...also with noise on each reading.
+  assert.ok(robustHeapSlope(ser([100, 112, 124, 136, 141, 163, 170, 186])).slope > HEAP_SLOPE_HARD_MB);
+  assert.equal(robustHeapSlope(ser([100, 101, 102, 103])).slope, null);
+});

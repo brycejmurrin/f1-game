@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { parseOptions, main } from "../../tools/ui/explorer.mjs";
 import { MISSIONS, missionBrief, MODE_TITLES } from "../../tools/ui/explorer/catalog.mjs";
 import { validateScenario } from "../../tools/ui/explorer/core.mjs";
-import { matchesOracle, performAction, installFault, inspectUI, captureSceneDiagnostics } from "../../tools/ui/explorer/browser.mjs";
+import { matchesOracle, checkFeedback, performAction, installFault, inspectUI, captureSceneDiagnostics } from "../../tools/ui/explorer/browser.mjs";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 test("explorer CLI rejects unbounded probes, typo modes and credential URLs before browser acquisition", () => {
   for (const args of [["all", "--max-shots", "26"], ["all", "--max-shots", "NaN"], ["all", "--max-attempts", "0"], ["all", "--frac", "1.1"], ["all", "--out"], ["all", "--modes", "typo"], ["all", "--url", "https://secret:password@example.com/"], ["all", "--unknown"], ["all", "extra"]]) assert.throws(() => parseOptions(args));
@@ -37,6 +38,70 @@ test("minimizer oracle matches the same console finding rather than any error", 
   const session = { logs: { errors: [{ kind: "pageerror", message: "Unrelated problem" }, { kind: "console", message: "Expected marker" }] } };
   assert.equal(await matchesOracle(session, { type: "console", kind: "pageerror", pattern: "Expected marker" }), false);
   assert.equal(await matchesOracle(session, { type: "console", kind: "console", pattern: "Expected marker" }), true);
+});
+
+test("feedback requires one target and distinguishes missing from ambiguous without inspecting either", async () => {
+  const oracle = { type: "feedback", selector: "#status", text: "Expected message" };
+  for (const [count, reason] of [[0, "missing-target"], [2, "ambiguous-target"]]) {
+    const session = { page: {
+      locator: selector => { assert.equal(selector, oracle.selector); return { count: async () => count }; },
+      evaluate: async () => { throw new Error("An absent or ambiguous target cannot be measured"); },
+    } };
+    assert.deepEqual(await checkFeedback(session, oracle), { matches: false, actual: { count, reason } });
+  }
+});
+
+test("feedback matches only the explicitly inspected root with complete visible text", async () => {
+  const oracle = { type: "feedback", selector: "[role=status]", text: "Expected message" };
+  const root = { selector: "#status", isRoot: true, text: "Expected message — retry available", renderedText: "Expected message — retry available", renderedTextTruncated: false,
+    visibility: "fully-inside", box: { x: 10, y: 20, width: 200, height: 44 } };
+  const child = { ...root, selector: "#status-child", isRoot: false };
+  let rows = [child, root];
+  const session = { page: {
+    locator: selector => { assert.equal(selector, oracle.selector); return { count: async () => 1 }; },
+    evaluate: async (fn, args) => { assert.equal(fn, inspectUI); assert.deepEqual(args, { root: oracle.selector }); return { feedback: rows }; },
+  } };
+  const pass = await checkFeedback(session, oracle);
+  assert.equal(pass.matches, true, "a root found by a role selector may have a generated ID selector in its report");
+  assert.equal(pass.actual, root, "retain the measured row as evidence");
+  for (const patch of [
+    { visibility: "hidden" }, { visibility: "partly-inside" }, { visibility: "outside" },
+    { visibility: "unmeasured-clip" }, { visibility: undefined },
+    { renderedText: "A different message" }, { renderedText: "" }, { renderedText: undefined }, { renderedTextTruncated: true },
+  ]) {
+    const actual = { ...root, ...patch }; rows = [child, actual];
+    const result = await checkFeedback(session, oracle);
+    assert.equal(result.matches, false, JSON.stringify(patch));
+    assert.equal(result.actual, actual, "a passing child cannot substitute for the failed root");
+  }
+  for (const absent of [[], [child]]) {
+    rows = absent;
+    assert.deepEqual(await checkFeedback(session, oracle), {
+      matches: false, actual: { count: 1, reason: "not-a-populated-feedback-region" },
+    });
+  }
+});
+
+test("replay feedback assertions preserve measured failure evidence and accept the repaired root", async () => {
+  const oracle = { type: "feedback", selector: "#status", text: "Expected message" };
+  const actual = { selector: "#status", isRoot: true, text: oracle.text, renderedText: oracle.text, renderedTextTruncated: false,
+    visibility: "partly-inside", visibleFraction: 0.4, clippedBy: [{ selector: "#body", axis: "y" }] };
+  const session = { page: { locator: () => ({ count: async () => 1 }), evaluate: async () => ({ feedback: [actual] }) } };
+  await assert.rejects(() => performAction(session, { type: "assert", oracle }), error => {
+    const prefix = "Replay assertion failed: ";
+    assert.ok(error.message.startsWith(prefix));
+    assert.deepEqual(JSON.parse(error.message.slice(prefix.length)), { expected: oracle, actual });
+    return true;
+  });
+  actual.visibility = "fully-inside"; actual.visibleFraction = 1; actual.clippedBy = [];
+  await performAction(session, { type: "assert", oracle });
+});
+
+test("existing selector visibility and literal text oracles keep their distinct meanings", async () => {
+  const session = { page: { locator: () => ({ isVisible: async () => false, textContent: async () => "Expected message" }) } };
+  assert.equal(await matchesOracle(session, { type: "selector", selector: "#status" }), false);
+  assert.equal(await matchesOracle(session, { type: "selector", selector: "#status", state: "hidden" }), true);
+  assert.equal(await matchesOracle(session, { type: "text", selector: "#status", text: "Expected message" }), true);
 });
 
 test("race mission verifies actual track and weather instead of just a visible HUD", async () => {
@@ -593,4 +658,151 @@ test("MCP UI summary retains bounded console and request evidence without claimi
   assert.equal(result.diagnostics.truncated, true);
   assert.match(result.limitation, /not a UI pass/);
   assert.equal(summarizeUIInspection({ controls: [], errors: [], requests: [] }).diagnostics.consoleErrors, 0);
+});
+
+
+test("feedback collector retains hidden text but separates rendered content and conservative clipping", () => {
+  const rect = { x: 10, y: 20, width: 200, height: 44, right: 210, bottom: 64 };
+  const style = { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible", clip: "auto", clipPath: "none", transform: "none", maskImage: "none" };
+  const parent = { id: "parent", tagName: "DIV", parentElement: null, getBoundingClientRect: () => rect };
+  const feedback = { id: "status", tagName: "DIV", parentElement: parent, textContent: "Hidden error Other", innerText: "Other",
+    scrollWidth: 200, clientWidth: 200, scrollHeight: 44, clientHeight: 44,
+    matches: q => q.includes('[role="status"]'), querySelectorAll: () => [], closest: () => null,
+    getAttribute: k => k === "role" ? "status" : null, getBoundingClientRect: () => rect };
+  const document = { querySelectorAll: q => q === "#status" ? [feedback] : [], documentElement: { scrollWidth: 844, dataset: {} }, activeElement: null };
+  const parentStyle = { ...style };
+  const context = vm.createContext({ document, window: {}, innerWidth: 844, innerHeight: 390,
+    location: { href: "http://localhost/" }, CSS: { escape: s => s }, matchMedia: () => ({ matches: false }),
+    getComputedStyle: e => e === feedback ? style : e === parent ? parentStyle : style });
+  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})({root:'#status'})`, context, { filename: absSrc("tools/ui/explorer/browser.mjs") })));
+  const first = inspect();
+  assert.equal(first.controls.length, 0, "feedback is not a tiny tap target");
+  assert.equal(first.feedback[0].text, "Hidden error Other");
+  assert.equal(first.feedback[0].renderedText, "Other", "hidden child text cannot satisfy the visible-feedback oracle");
+  assert.equal(first.feedback[0].visibility, "fully-inside");
+  context.window.visualViewport = { width: 100, height: 800, offsetLeft: 0, offsetTop: 0 };
+  assert.equal(inspect().feedback[0].visibility, "partly-inside", "a wider layout viewport must not hide a narrow visual viewport");
+  assert.equal(inspect().feedbackViewport.source, "visual-viewport");
+  context.window.visualViewport = { width: 844, height: 390, offsetLeft: 0, offsetTop: 80 };
+  assert.equal(inspect().feedback[0].visibility, "outside", "visual viewport offsets share layout CSS-pixel coordinates");
+  context.window.visualViewport = { width: 0, height: 0, offsetLeft: 0, offsetTop: 0 };
+  assert.equal(inspect().feedbackViewport.source, "layout-viewport-fallback");
+  assert.equal(inspect().feedback[0].visibility, "fully-inside");
+  delete context.window.visualViewport;
+  style.display = "none";
+  assert.equal(inspect().feedback[0].visibility, "hidden");
+  assert.equal(inspect().feedback[0].renderedText, "");
+  assert.equal(inspect().feedback[0].reasons[0].kind, "display-none");
+  style.display = "block"; feedback.scrollHeight = 45;
+  assert.equal(inspect().feedback[0].visibility, "unmeasured-text-overflow", "self-clipped or overflowing text needs line-bound measurements");
+  feedback.scrollHeight = 44; parentStyle.maskImage = "linear-gradient(transparent,transparent)";
+  assert.equal(inspect().feedback[0].visibility, "unmeasured-clip");
+  parentStyle.maskImage = "none"; parentStyle.transform = "matrix(0, 1, -1, 0, 0, 0)";
+  assert.equal(inspect().feedback[0].visibility, "unmeasured-transform");
+  parentStyle.transform = "none"; parentStyle.overflowY = "hidden";
+  parent.getBoundingClientRect = () => ({ ...rect, height: 20, bottom: 40 });
+  assert.equal(inspect().feedback[0].visibility, "partly-inside");
+  assert.deepEqual(inspect().feedback[0].clippedBy, ["#parent"]);
+});
+
+
+test("MCP feedback summaries distinguish missing coverage and bound advisory samples", async () => {
+  const { summarizeUIInspection } = await import("../../tools/mcp/ui-tools.mjs");
+  const legacy = summarizeUIInspection({ controls: [] }).records[0].feedback;
+  assert.equal(legacy.available, false); assert.equal(legacy.observed, null); assert.equal(legacy.samples, null);
+  const feedback = Array.from({ length: 11 }, (_, n) => ({ selector: `#status-${n}`, text: "x".repeat(2048), visibility: "hidden" }));
+  const result = summarizeUIInspection({ controls: [], feedback, coverage: { feedback: { total: 12, inspected: 11, omitted: 1 } } });
+  const row = result.records[0];
+  assert.equal(row.feedback.observed, 11); assert.equal(row.feedback.samples.length, 10);
+  assert.equal(row.feedback.samples[0].text.includes("truncated"), true); assert.equal(row.feedback.truncated, true); assert.equal(row.truncated, true);
+  assert.equal(row.advisoryTotal, 0, "hidden feedback observations do not become automatic defects");
+  assert.throws(() => summarizeUIInspection({ controls: [], feedback: [null] }), /feedback/);
+});
+
+test('focus sampling waits for replacement and resets on focus, identity and sampling gaps', async () => {
+  const { sampleFocus } = await import('../../tools/ui/explorer/browser.mjs');
+  let now = 0;
+  const old = { isConnected: true, id: 'old', tagName: 'BUTTON', getAttribute: () => null }, target = { id: 'team', tagName: 'BUTTON', getAttribute: () => null };
+  const doc = { activeElement: target, querySelectorAll: () => [target] };
+  const environment = { document: doc, now: () => now };
+  const fresh = () => ({ previous: old, started: 0, last: null, since: null, lastAt: null, maxGapMs: 0, samples: [], omitted: 0 });
+  let probe = fresh();
+  const poll = time => { now = time; return sampleFocus({ probe, selector: '#team', stableMs: 150 }, environment); };
+  assert.equal(poll(0), false); assert.equal(poll(150), false, 'an already focused target cannot prove the update happened');
+  assert.equal(probe.actual.reason, 'replacement-not-observed');
+  old.isConnected = false; assert.equal(poll(200), false);
+  assert.equal(poll(250), false); assert.equal(poll(300), false); assert.equal(poll(350), true);
+  assert.equal(probe.actual.reason, 'focus-stable');
+  old.isConnected = true; assert.equal(poll(400), false, 'reinsertion invalidates the replacement boundary');
+  old.isConnected = false; probe = fresh(); assert.equal(poll(0), false);
+  assert.equal(poll(50), false); doc.activeElement = null; assert.equal(poll(100), false);
+  doc.activeElement = target; assert.equal(poll(150), false); assert.equal(poll(200), false); assert.equal(poll(250), false); assert.equal(poll(300), true);
+  probe = fresh(); assert.equal(poll(0), false); assert.equal(poll(50), false);
+  const replacement = { ...target }; doc.querySelectorAll = () => [replacement]; doc.activeElement = replacement;
+  assert.equal(poll(100), false); assert.equal(poll(150), false); assert.equal(poll(200), false); assert.equal(poll(250), true, 'same selector does not retain the prior object dwell');
+  probe = fresh(); assert.equal(poll(0), false); assert.equal(poll(200), false, 'a long unsampled gap cannot establish stability');
+  assert.equal(probe.actual.maxSampleGapMs, 200);
+  assert.equal(poll(250), false); assert.equal(poll(300), false); assert.equal(poll(350), true);
+  doc.querySelectorAll = () => []; assert.equal(poll(400), false); assert.equal(probe.actual.reason, 'missing-target');
+  doc.querySelectorAll = () => [target, replacement]; assert.equal(poll(450), false); assert.equal(probe.actual.reason, 'ambiguous-target');
+  doc.querySelectorAll = () => [old]; doc.activeElement = old; assert.equal(poll(500), false, 'the remembered node itself never qualifies');
+  doc.querySelectorAll = () => [replacement]; doc.activeElement = replacement; probe = fresh();
+  old.isConnected = true;
+  for (let i = 0; i < 100; i++) assert.equal(poll(i * 50), false);
+  assert.equal(probe.samples.length, 64); assert.equal(probe.omitted, 36); assert.equal(probe.samples[63].elapsedMs, 4950);
+});
+
+test('focus witness capture is atomic, capped, reused and invalidated on reload', async () => {
+  const { rememberFocus, captureFocusedNode } = await import('../../tools/ui/explorer/browser.mjs');
+  const node = {}, doc = { activeElement: node, querySelectorAll: () => [node] };
+  let disposed = 0, close;
+  const session = { context: { once: (name, callback) => { assert.equal(name, 'close'); close = callback; } }, page: {
+    evaluateHandle: async (fn, selector) => {
+      assert.equal(fn, captureFocusedNode);
+      const result = fn(selector, doc);
+      assert.equal(result, node); return { dispose: async () => { disposed++; } };
+    }, reload: async () => {}, waitForFunction: async () => {},
+  }, background: true };
+  await rememberFocus(session, { id: 'before', selector: '#team' });
+  await rememberFocus(session, { id: 'before', selector: '#team' }); assert.equal(disposed, 1);
+  doc.activeElement = null; await assert.rejects(() => rememberFocus(session, { id: 'other', selector: '#team' }), /not currently focused/);
+  doc.activeElement = node; doc.querySelectorAll = () => [];
+  await assert.rejects(() => rememberFocus(session, { id: 'other', selector: '#team' }), /matched 0/);
+  doc.querySelectorAll = () => [node];
+  for (let i = 0; i < 15; i++) await rememberFocus(session, { id: `other${i}`, selector: '#team' });
+  await assert.rejects(() => rememberFocus(session, { id: 'too-many', selector: '#team' }), /limit is 16/);
+  await performAction(session, { type: 'reload' }); assert.equal(session.focusWitnesses.size, 0); assert.equal(disposed, 17);
+  await rememberFocus(session, { id: 'new', selector: '#team' }); close(); assert.equal(session.focusWitnesses.size, 0);
+});
+
+test('focus assertion retains sampled evidence and disposes handles without swallowing evaluation failures', async () => {
+  const { checkFocus } = await import('../../tools/ui/explorer/browser.mjs');
+  const oracle = { type: 'focus', selector: '#team', afterReplacement: 'before', timeoutMs: 400, stableMs: 150 };
+  assert.equal((await checkFocus({}, oracle)).actual.reason, 'missing-witness');
+  await assert.rejects(() => checkFocus({}, { ...oracle, timeoutMs: 0 }), TypeError);
+  await assert.rejects(() => checkFocus({}, { ...oracle, stableMs: 10001 }), TypeError);
+  let disposed = 0, witnessDisposed = 0, timedOut = false, unexpected = false;
+  const witness = { dispose: async () => { witnessDisposed++; } };
+  const state = { actual: { reason: 'settling-focus', replaced: true, focused: true, stableForMs: 50 }, samples: [{ elapsedMs: 0 }], omitted: 0 };
+  const probe = { evaluate: async fn => fn(state), dispose: async () => { disposed++; } };
+  const session = { focusWitnesses: new Map([['before', witness]]), page: {
+    evaluateHandle: async () => probe,
+    waitForFunction: async (fn, args, opts) => {
+      assert.equal(args.probe, probe); assert.equal(args.selector, '#team'); assert.deepEqual(opts, { polling: 50, timeout: 400 });
+      if (unexpected) throw new Error('Execution context was destroyed');
+      if (timedOut) { const error = new Error('budget'); error.name = 'TimeoutError'; throw error; }
+      state.actual = { ...state.actual, reason: 'focus-stable', stableForMs: 150 };
+      return { dispose: async () => { disposed++; } };
+    },
+  } };
+  assert.equal((await checkFocus(session, oracle)).matches, true); assert.equal(disposed, 2);
+  assert.equal(witnessDisposed, 1); assert.equal((await checkFocus(session, oracle)).actual.reason, 'missing-witness', 'a consumed boundary cannot bless another update');
+  session.focusWitnesses.set('before', witness); state.actual = { ...state.actual, reason: 'settling-focus', stableForMs: 50 }; timedOut = true; const failure = await checkFocus(session, oracle);
+  assert.equal(failure.matches, false); assert.equal(failure.actual.reason, 'stability-not-observed'); assert.equal(failure.actual.samples.length, 1); assert.equal(disposed, 3);
+  session.focusWitnesses.set('before', witness); state.actual.maxSampleGapMs = 200;
+  assert.equal((await checkFocus(session, oracle)).actual.reason, 'unmeasured-sampling-gaps');
+  state.actual.maxSampleGapMs = 50;
+  session.focusWitnesses.set('before', witness);
+  await assert.rejects(() => performAction(session, { type: 'assert', oracle }), /Replay assertion failed:.*stability-not-observed/);
+  session.focusWitnesses.set('before', witness); unexpected = true; await assert.rejects(() => checkFocus(session, oracle), /Execution context was destroyed/); assert.equal(disposed, 6); assert.equal(witnessDisposed, 5);
 });

@@ -1198,6 +1198,41 @@ test("the WGX mirror pass runs with the lamp shadow off; the main pass after it 
   gfx.present({});
 });
 
+// #4219 (perf hunt 7): quit-to-menu frees the mirror's colour + depth textures, and no bind group the next
+// frame builds may name them (WebKit holds a destroyed texture while one does). mirrorBegin re-allocates.
+test("WGX releaseMirror destroys the mirror textures, drops their bind groups, is idempotent, and re-allocates lazily", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const groups = [], createBindGroup = h.device.createBindGroup;
+  h.device.createBindGroup = (desc) => { groups.push(desc); return createBindGroup(desc); };
+  const t0 = h.textures.length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  const mir = h.textures.slice(t0);
+  assert.equal(mir.length, 2, "colour + depth");
+  assert.equal(gfx.releaseMirror(), false, "never while the mirror pass records");
+  gfx.mirrorEnd();
+  gfx.mirrorRect([0.1, 0.1, 0.3, 0.1]);
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  const names = (g) => g.entries.some((e) => e.resource && mir.includes(e.resource.texture));
+  assert.ok(groups.some(names), "the composite's group names the mirror view");
+  assert.equal(gfx.releaseMirror(), true);
+  assert.ok(mir.every((t) => t.destroyed), "both textures destroyed");
+  const st = gfx.mirrorState();
+  assert.deepEqual([st.ready, st.w, st.h, st.dead], [false, 0, 0, false]);
+  assert.equal(gfx.releaseMirror(), true, "a second release is safe");
+  groups.length = 0;
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  assert.ok(!groups.some(names), "no bind group built after the release names a freed texture");
+  const t1 = h.textures.length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true, "the next mirror pass re-allocates");
+  gfx.mirrorEnd();
+  assert.equal(h.textures.length - t1, 2);
+  assert.equal(gfx.mirrorState().w, 64);
+  gfx.begin({}); gfx.present({});
+  assert.ok(groups.some((g) => g.entries.some((e) => e.resource && e.resource.texture === h.textures[t1])), "a fresh composite group on the new view");
+});
+
 // 1b-F4 (hunt 3): frame.allLights is ONE buffer refilled in place (frame-lights.js), so a rebuild:true
 // tuner edit (LAMP DENSITY / POOL RADIUS) re-orders it under the same identity while the caster keeps
 // Night + mirror (the phone's onboard default): the mirror packs its own re-ranked lamp list and the forward

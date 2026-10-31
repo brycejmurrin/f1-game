@@ -188,3 +188,21 @@ test("startRaceBody locks the career brief only once the session loaded, no conf
   r = await runStartRaceBody();
   assert.equal(r.v, "built"); assert.equal(r.season.startedRound, r.season.round, "a race that reaches makeCars locks the brief");
 });
+
+
+test("optional garage exterior coalesces loading and retries without holding a race-session promise", async () => {
+  const manifest = require("../../tools/manifest.cjs"), files = manifest.LAZY_GARAGE_EXTERIOR;
+  assert.deepEqual(files, ["js/garage/exterior-geometry.js", "js/garage/exterior.js"]);
+  let settle, calls = 0;
+  const pending = new Promise(resolve => { settle = resolve; });
+  const ctx = vm.createContext({ ApexRoster: { ...manifest, LAZY_RACE_SESSION: ["test-session.js"] }, window: {}, Log: {warn(){}},
+    loadScripts(list, _edges, options) { calls++; assert.deepEqual(Array.from(list), files); assert.equal(options.strict, true); if (calls === 1) return pending; ctx.GarageExterior = {}; ctx.GarageExteriorGeometry = {}; return Promise.resolve(true); } });
+  vm.runInContext(src("js/core/lazy-bundles.js"), ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  const bundles = vm.runInContext("LazyBundles", ctx).create({els:{},loadBackendScripts:ctx.loadScripts});
+  const first = bundles.ensureGarageExterior();
+  assert.equal(bundles.ensureGarageExterior(), first); assert.equal(calls, 1);
+  assert.equal(await bundles.ensureRaceSession(), true, "resident race session never waits for optional exterior");
+  settle(false); assert.equal(await first, false);
+  assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "a failed optional fetch can retry");
+  assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "resident globals need no extra fetch");
+});

@@ -34,6 +34,17 @@ test("summariseWindows reports median ms/call and the window spread", () => {
   assert.ok(strict.cap <= STRICT_RATIO + 1e-9);
 });
 
+test("the cap judges the fastest window: one noisy window passes, a hang in every window fails", () => {
+  const base = { msPerCall: 0.011 };   // cap 0.066 ms/call at 6x
+  const noisy = summariseWindows([13.871, 12.058, 24.743], 200);   // Pages #4559: median 0.069, fastest 0.060
+  assert.ok(noisy.msPerCall > 0.066, "the median alone would have failed this run");
+  assert.equal(judgeHot(noisy, base, { strict: false }).pass, true);
+  const hung = summariseWindows([20, 22, 25], 200);   // every window slow: 0.1+ ms/call
+  const verdict = judgeHot(hung, base, { strict: false });
+  assert.equal(verdict.pass, false);
+  assert.equal(verdict.overCap, true);
+});
+
 test("the baseline matches the benches this file runs", () => {
   const base = loadBaseline();
   assert.ok(base, "tools/perf/baselines/hot-bench.json missing — node tools/perf/hot-bench.mjs --update");

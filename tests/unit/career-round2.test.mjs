@@ -512,3 +512,21 @@ test("constructors' countback: equal points rank by the best finishes of BOTH ca
     "a win beats any number of seconds, then more seconds, then (a full tie) the stable id order");
   assert.ok(SeasonCal.rankTeams({ teamPts: { x: 5, y: 9 } }, "x", "y") > 0, "points still decide first");
 });
+
+test("Career.owned() is memoised: 100 reads walk the catalog once; a research invalidates (perf hunt 9)", () => {
+  const h = started();
+  let walks = 0;
+  const opts = [{ id: "free_a", cost: 0 }, { id: "paid_b", cost: 50 }];
+  h.ctx.Parts.CATALOG = [{ id: "engine", get options() { walks++; return opts; } }];
+  const team = h.Career.data().team;
+  let s = null;
+  for (let i = 0; i < 100; i++) s = h.Career.owned(team);
+  assert.equal(walks, 1, "one catalog walk (one Set built) for 100 unchanged reads");
+  assert.equal(s.has("free_a"), true, "cost-0 options are owned");
+  assert.equal(s.has("paid_b"), false);
+  h.Career.data().owned.push("paid_b");
+  const s2 = h.Career.owned(team);
+  assert.equal(walks, 2, "a pushed id rebuilds the set");
+  assert.equal(s2.has("paid_b"), true);
+  assert.equal(h.Career.owned("not_my_team"), null, "another team is still null");
+});

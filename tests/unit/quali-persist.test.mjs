@@ -140,6 +140,34 @@ test("begin() restores a driven persist instead of resimming", () => {
   assert.equal(G.season.qualiOrder[0].t, 69.9, "begin must not overwrite persist with a sim");
 });
 
+test("restoring a saved grid projects live metadata without modifying its inputs", () => {
+  const raw = Object.freeze([
+    Object.freeze({ id: "p2", t: 70.1, human: 1, code: "OLD", name: "Old name" }),
+    Object.freeze({ id: "p1", t: "71.4", human: 0, noTime: 1 }),
+  ]);
+  const cars = [car("p1", "NEW", "Current driver", "new-team", true), car("p2", "HAM", "Hamilton", "me", false)];
+  const beforeCars = structuredClone(cars), beforeRaw = structuredClone(raw);
+  const { q } = loadQuali({ season: { qualiOrder: raw, round: 0 }, cars });
+  const rows = q.results();
+  assert.equal(rows[0].code, "HAM");
+  assert.equal(rows[0].name, "Hamilton");
+  assert.equal(rows[0].human, true);
+  assert.equal(Object.hasOwn(rows[0], "noTime"), false);
+  assert.equal(rows[1].code, "NEW");
+  assert.equal(rows[1].name, "Current driver");
+  assert.equal(rows[1].team, "new-team");
+  assert.equal(rows[1].isPlayer, true);
+  assert.equal(rows[1].human, false);
+  assert.equal(rows[1].t, "71.4", "legacy positive strings retain their stored representation");
+  assert.equal(rows[1].gap, 1.3, "gap arithmetic still coerces the legacy stored time");
+  assert.equal(rows[1].noTime, true);
+  assert.deepEqual(cars, beforeCars);
+  assert.deepEqual(raw, beforeRaw);
+  rows[1].name = "Changed sheet row";
+  assert.equal(cars[0].name, "Current driver");
+  assert.equal(q.results()[1].name, "Current driver", "public rows remain detached from cached classification");
+});
+
 test("simulate(0) does not persist an all-AI provisional", () => {
   const { q, G } = loadQuali({ season: { round: 0 } });
   const rows = q.simulate(0);

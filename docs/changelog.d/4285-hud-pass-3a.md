@@ -1,0 +1,1 @@
+Improved: Race HUD — the radio card, RELATIVE, STRATEGY and INPUTS now sit on the timing strip's plate with its hairline keyline and row rules, so the middle of the screen reads as one HUD instead of three card styles, and those panels no longer turn light under the LIGHT theme.

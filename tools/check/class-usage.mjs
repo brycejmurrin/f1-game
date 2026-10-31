@@ -45,6 +45,9 @@ const NAME = /^-?[_a-zA-Z][\w-]*$/;
 // that reads as a hook and is in fact decoration, with the selector that does
 // the real work. Adding a row is a decision; leaving one out is a test failure.
 export const KNOWN = {
+  // The phone-bridge LINK box (js/agent/apex-bridge.js askToken): styled inline, the class exists only so
+  // tests/unit/css-layers.test.mjs's el("dialog", "<class>") scan can name the runtime <dialog>.
+  "apex-bridge-link": "js/agent/apex-bridge.js LINK <dialog> — inline styles; the class names it for css-layers",
   // PHONE AS CONTROLLER page state (js/input/phone-pad-page.js pad()): both are
   // defined in controller.html's own <style>, which is a root page like
   // bench.html and not under css/ — `body.linked` swaps the pairing screen

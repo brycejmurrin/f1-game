@@ -353,6 +353,26 @@ test("phoneHold: title skips / releases on mobile; desktop and settings keep the
   assert.ok(hold.logs.includes("game: garage released for the race"));
 });
 
+test("the title poll does no work during a race; back on the title the quiet clock restarts (perf hunt 9)", async () => {
+  const timers = [];
+  const h = page({ timers });
+  let reads = 0;
+  for (const id of ["overlay", "race-settings"]) {   // create() bound G.$ already: count the element lookups it makes
+    const el = h.els[id];
+    Object.defineProperty(h.els, id, { get: () => { reads++; return el; } });
+  }
+  h.G.state = "race";
+  h.pre.start();
+  for (let i = 0; i < 60; i++) { h.advance(1000); timers.shift()(); }
+  assert.equal(reads, 0, "60 s of race ticks read no DOM");
+  assert.equal(timers.length, 1, "the poll stays armed for the return to the menu");
+  h.G.state = "menu";
+  timers.shift()();
+  assert.ok(reads > 0, "the title poll works again on the menu");
+  assert.deepEqual(h.built, [], "the first menu tick after a race is not quiet: no prebuild yet");
+  assert.ok([...h.pre.state().blockers].includes("input-recent"), "the quiet clock restarted at the return");
+});
+
 test("blocked runs build nothing: Save-Data on the title, a race start anywhere", async () => {
   const h = page();
   h.ctx.navigator = { connection: { saveData: true } };
@@ -450,7 +470,11 @@ function sceneHarness(textures = false, { crew = false } = {}) {
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
-  return { GarageScene, made, live, handles, freed, gfx };
+  // toFixed calls made inside this VM realm (the room-key builders' kc()).
+  vm.runInContext("(() => { const P = (0).constructor.prototype, f = P.toFixed; globalThis.__toFixed = 0;"
+    + " P.toFixed = function (d) { globalThis.__toFixed++; return f.call(this, d); }; })()", ctx, { filename: "garage-prebuild:toFixed" });
+  const countToFixed = () => vm.runInContext("__toFixed", ctx, { filename: "garage-prebuild:count" });
+  return { GarageScene, made, live, handles, freed, gfx, countToFixed };
 }
 const TEAM = { id: "mclaren", name: "McLaren", short: "MCL",
                drivers: [{ name: "A", code: "AAA", num: 4 }, { name: "B", code: "BBB", num: 81 }] };
@@ -470,6 +494,31 @@ test("a prepared room is the one the first garage draw uses: no rebuild on the t
   assert.equal(GarageScene.prepared(TEAM, LIV, null, 0, { ...setupCtx, studio: true }), false);
   assert.equal(GarageScene.ctxKey(setupCtx), GarageScene.ctxKey({ ...setupCtx, sceneNow: 123, ambient: true }),
     "the scene clock and ambient motion never move the room's key");
+});
+
+test("an unchanged garage frame skips the room-key strings; a paint change still rebuilds (perf hunt 9)", () => {
+  const h = sceneHarness(), { GarageScene, made } = h;
+  const count = h.countToFixed;   // toFixed calls inside the VM realm: the key builders' kc()
+  const setupCtx = { track: { id: "monza" }, weather: "dry", tod: "default", night: false,
+                     achievements: { active: true, facility: 2, wins: 1, podiums: 3, titles: 0 } };
+  const liv = { c1: [0.95, 0.45, 0.05], c2: [0.05, 0.05, 0.06], accent: [0.1, 0.7, 0.9] };
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  const meshes = () => made.filter((m) => m === "mesh").length, built = meshes();
+  const t0 = count();
+  for (let i = 0; i < 100; i++) GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, { ...setupCtx, sceneNow: i });
+  assert.equal(count() - t0, 0, "100 unchanged frames build no key strings");
+  assert.equal(meshes(), built, "and rebuild nothing");
+  liv.c1 = [0.10, 0.45, 0.95];
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  assert.ok(meshes() > built, "a new liv.c1 rebuilds the room");
+  const rebuilt = meshes();
+  liv.c1[0] = 0.5;   // an in-place edit is caught too
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  assert.ok(meshes() > rebuilt, "an in-place liv.c1 edit rebuilds the room");
+  const again = meshes();
+  setupCtx.achievements = { ...setupCtx.achievements, facility: 6 };
+  GarageScene.draw(TEAM, liv, [0, 1.6, 0], null, 0, setupCtx);
+  assert.ok(meshes() > again, "a career facility change rebuilds the room");
 });
 
 test("the A/B switch: apex26.garagePrewarm=\"off\" at boot, or setEnabled(false), stops the TITLE prebuild only", async () => {
@@ -714,4 +763,314 @@ test("quiet gate: input mid-sequence abandons the rest of a title prebuild, and 
   assert.deepEqual(h.built, ["car"], "no room after the input");
   assert.equal(await h.pre.run(titleOwned, "title"), false, "the input's own moment starts nothing");
   assert.deepEqual(h.built, ["car"]);
+});
+
+function exteriorHarness({ load, geometry, upload, surfaceHeight } = {}) {
+  const uploads = [], freed = [], draws = [], changes = [];
+  let now = 10000, builds = 0;
+  const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return {promise,resolve,reject}; };
+  const context = vm.createContext({ Date: { now: () => now }, setTimeout,
+    GarageExteriorGeometry: { sampleHeight: surfaceHeight, *buildSteps(def, opts) {
+      builds++; yield;
+      if (geometry) return geometry(def, opts);
+      const geo = () => ({pos:[0,0,7,1,0,7,0,1,7], nrm:[0,1,0,0,1,0,0,1,0],col:[1,1,1,1,1,1,1,1,1],idx:[0,1,2]});
+      return {ground:geo(),road:geo(),props:geo(),stats:{trackId:def.id},anchor:{s:0}};
+    } } });
+  vm.runInContext(read('js/garage/exterior.js'), context, {filename:absSrc('js/garage/exterior.js')});
+  const API = vm.runInContext('GarageExterior', context);
+  const freedSet = new Set();
+  const gfx = {createMesh(data) { const mesh={data,id:uploads.length}; uploads.push(mesh); if (upload) upload(mesh); return mesh; },
+    freeMesh(mesh) { assert.equal(freedSet.has(mesh),false,'owned handle freed exactly once'); freedSet.add(mesh); freed.push(mesh); },
+    draw(mesh,matrix,opts) { draws.push({mesh,matrix:Array.from(matrix),opts:{...opts}}); }};
+  const ext = API.create({gfx,load:load || (async s => ({id:s.trackId})),yieldTask:()=>Promise.resolve(),onChange:s=>changes.push(s)});
+  const selection = (id='a', weather='dry', tod='day') => ({trackId:id,teamId:'team',weather,tod});
+  return {API,ext,selection,uploads,freed,draws,changes,deferred,builds:()=>builds,advance:ms=>{now+=ms;}};
+}
+
+test('exterior coalesces work, owns its meshes, and updates weather without rebuilding geometry', async () => {
+  const h=exteriorHarness(), a=h.selection(), wet=h.selection('a','wet');
+  const first=h.ext.request(a), same=h.ext.request(a);
+  assert.equal(first,same); assert.equal(await first,true);
+  assert.equal(h.uploads.length,3); assert.equal(h.ext.ready(a),true);
+  assert.equal(h.ext.draw(),true); assert.equal(h.draws[1].opts.roughness,.85);
+  assert.equal(await h.ext.request(wet),true); assert.equal(h.builds(),1);
+  assert.equal(h.ext.ready(a),false); assert.equal(h.ext.ready(wet),true);
+  h.ext.draw(); assert.equal(h.draws[4].opts.roughness,.24);
+  h.ext.release(); assert.equal(h.freed.length,3); assert.equal(h.ext.draw(),false);
+});
+
+test('exterior owns terrain, scenery, tagged lights, glass and water across draws, weather and release', async () => {
+  const geo = () => ({ pos: [0,0,7,1,0,7,0,1,7], nrm: [0,1,0,0,1,0,0,1,0], col: [1,1,1,1,1,1,1,1,1], idx: [0,1,2] });
+  const h = exteriorHarness({ geometry: () => Object.fromEntries(['ground','terrain','road','props','scenery','sceneryLights','glass','water'].map(k => [k, geo()])) });
+  assert.equal(await h.ext.request(h.selection()), true); assert.equal(h.uploads.length, 8);
+  h.ext.draw(); assert.equal(h.draws.length, 8);
+  assert.equal(h.draws[6].opts.clearcoat, 1); assert.equal(h.draws[7].opts.roughness, .10);
+  assert.equal(h.draws[5].opts.emissive, 0, 'daylight light faces remain ordinarily lit');
+  assert.equal(await h.ext.request(h.selection('a', 'wet')), true); assert.equal(h.builds(), 1);
+  h.ext.draw(); assert.equal(h.draws[15].opts.roughness, .16);
+  assert.equal(await h.ext.request(h.selection('a', 'wet', 'night')), true);
+  h.ext.draw(); assert.equal(h.draws[19].opts.emissive, 0, 'pit frontage keeps its local lamp rig');
+  assert.equal(h.draws[20].opts.emissive, 0, 'ordinary architecture cannot become a glowing white slab');
+  assert.equal(h.draws[21].opts.emissive, .78, 'only authored light-source faces receive night emission');
+  h.ext.release(); assert.equal(h.freed.length, 16);
+});
+
+test('scenery-authored atmosphere uses its owned palette without changing the selected circuit', async () => {
+  const palette = { zenith: [.42,.48,.52], fogDensity: .0032 };
+  const geo = () => ({ pos: [0,0,7,1,0,7,0,1,7] });
+  const h = exteriorHarness({ geometry: () => ({ ground: geo(), road: geo(), props: geo(), palette }) });
+  const def = { id: 'a', pal: { zenith: [.1,.2,.3], fogDensity: .001 } };
+  assert.equal(await h.ext.request({ ...h.selection(), def }), true);
+  const lit = h.ext.lighting();
+  assert.deepEqual(Array.from(lit.sky.zenith), palette.zenith); assert.equal(lit.fogDensity, .0032);
+  assert.deepEqual(def.pal.zenith, [.1,.2,.3]); assert.equal(def.pal.fogDensity, .001);
+});
+
+test('exterior replacement cancels a suspended load without blocking the new selected circuit', async () => {
+  let settleOld;
+  const old=new Promise(resolve=>{settleOld=resolve;});
+  const h=exteriorHarness({load:s=>s.trackId==='a'?old:Promise.resolve({id:s.trackId})});
+  const first=h.ext.request(h.selection()); await Promise.resolve();
+  const next=h.ext.request(h.selection('b'));
+  assert.equal(h.ext.ready(),false); assert.equal(await first,false); assert.equal(await next,true);
+  settleOld({id:'a'}); await Promise.resolve();
+  assert.equal(h.ext.state().trackId,'b'); assert.equal(h.uploads.length,3);
+  const replacement=h.ext.request(h.selection('c'));
+  assert.equal(h.ext.draw(),false,'old world is never displayed as the new selection');
+  assert.equal(h.freed.length,3); assert.equal(await replacement,true);
+});
+
+test('exterior appearance updates during preparation publish only the latest selection', async () => {
+  let resolve;
+  const pending=new Promise(r=>{resolve=r;});
+  const h=exteriorHarness({load:()=>pending});
+  const a=h.ext.request(h.selection()); await Promise.resolve();
+  const wet=h.selection('a','storm'); const b=h.ext.request(wet);
+  assert.equal(a,b); resolve({id:'a'}); assert.equal(await a,true);
+  assert.equal(h.ext.ready(wet),true); assert.equal(h.builds(),1);
+  h.ext.draw(); assert.equal(h.draws[1].opts.roughness,.24);
+});
+
+test('exterior cancellation after upload frees partial handles and never publishes them', async () => {
+  let h;
+  h=exteriorHarness({upload:()=>h.ext.cancel()});
+  assert.equal(await h.ext.request(h.selection()),false);
+  assert.equal(h.ext.state().status,'idle'); assert.equal(h.uploads.length,1); assert.equal(h.freed.length,1);
+  assert.equal(h.ext.ready(),false);
+});
+
+test('exterior failures require explicit bounded retries and unsupported bays stay optional', async () => {
+  let loads=0;
+  const h=exteriorHarness({load:async()=>{loads++; throw new Error('offline');}}), s=h.selection();
+  assert.equal(await h.ext.request(s),false); assert.equal(h.ext.state().status,'failed');
+  for(let i=0;i<5;i++) assert.equal(await h.ext.request(s),false);
+  assert.equal(await h.ext.retry(s),false); assert.equal(loads,1,'backoff prevents immediate retries');
+  h.advance(1001); assert.equal(await h.ext.retry(s),false); assert.equal(loads,2);
+  h.advance(1001); assert.equal(await h.ext.retry(s),false); assert.equal(loads,2,'two attempts maximum for selected geometry');
+  const missing=exteriorHarness({geometry:()=>({supported:false,reason:'no real bay'})});
+  assert.equal(await missing.ext.request(missing.selection()),false);
+  assert.equal(missing.ext.state().status,'unsupported'); assert.equal(missing.uploads.length,0);
+});
+
+test('exterior rejects mismatched loads and invalid geometry, releasing prior partial uploads', async () => {
+  const mismatch=exteriorHarness({load:async()=>({id:'wrong'})});
+  assert.equal(await mismatch.ext.request(mismatch.selection()),false); assert.equal(mismatch.uploads.length,0);
+  const h=exteriorHarness({geometry:()=>({ground:{pos:[0,0,7]},road:{pos:[NaN]},props:{pos:[]}})});
+  assert.equal(await h.ext.request(h.selection()),false); assert.equal(h.freed.length,1); assert.equal(h.ext.ready(),false);
+});
+
+test('exterior lighting resolves owned day/night/weather inputs without changing circuit palettes', () => {
+  const h=exteriorHarness(), palette={sunDir:[.2,.8,.4],sunColor:[1,.9,.8],ambientSky:[.4,.5,.6],ambientGround:[.2,.2,.2],zenith:[.2,.3,.5],horizon:[.5,.6,.7],fog:[.5,.5,.5],fogDensity:.001};
+  const before=JSON.stringify(palette), def={id:'a',palette,night:true};
+  const day=h.API.lighting({...h.selection(),def});
+  const night=h.API.lighting({...h.selection('a','dry','default'),def});
+  const rain=h.API.lighting({...h.selection('a','rain'),def});
+  const fog=h.API.lighting({...h.selection('a','fog'),def});
+  assert.equal(day.night,false); assert.equal(night.night,true); assert.equal(rain.wet,true);
+  assert.ok(night.sunColor[0]<day.sunColor[0]); assert.ok(fog.fogDensity>rain.fogDensity);
+  assert.equal(h.API.lighting({...h.selection('a','dry','dawn'),def}).sky.stars,0);
+  day.sunColor[0]=99; day.sky.horizon[0]=99;
+  assert.equal(JSON.stringify(palette),before);
+});
+
+test('exterior lighting consumes real circuit pal fields and keeps palette compatibility', () => {
+  const h=exteriorHarness(), pal={sunColor:[.91,.72,.53],ambientSky:[.43,.34,.25],ambientGround:[.13,.14,.15],zenith:[.03,.04,.05],horizon:[.23,.24,.25],fogColor:[.33,.34,.35],fogDensity:.0023};
+  const selected={...h.selection(),def:{id:'a',pal}};
+  const value=h.API.lighting(selected);
+  assert.deepEqual([...value.sunColor],pal.sunColor); assert.deepEqual([...value.ambientSky],pal.ambientSky);
+  assert.deepEqual([...value.sky.zenith],pal.zenith); assert.deepEqual([...value.fogColor],pal.fogColor);
+  assert.equal(value.fogDensity,pal.fogDensity);
+  const fallback=h.API.lighting({...selected,def:{id:'a',palette:pal}});
+  assert.deepEqual([...fallback.sunColor],pal.sunColor);
+  value.fogColor[0]=0; assert.equal(pal.fogColor[0],.33);
+});
+
+test('exterior rain stays outside the bay, owns a bounded mesh and uses transform-only motion', async () => {
+  const h=exteriorHarness(), rainy=h.selection('a','rain');
+  await h.ext.request(rainy);
+  assert.equal(h.ext.state().weather,'rain'); assert.equal(h.ext.state().rain,true);
+  assert.equal(h.uploads.length,4);
+  const data=h.uploads[3].data;
+  assert.ok(data.idx.length/6<=96);
+  for(let i=2;i<data.pos.length;i+=3) assert.ok(data.pos[i]>=6.82,'rain never enters dry service box');
+  assert.equal(h.ext.drawWeather(100,false),true); assert.equal(h.ext.drawWeather(200,false),true);
+  assert.notEqual(h.draws[0].matrix[13],h.draws[1].matrix[13]);
+  assert.equal(h.ext.drawWeather(.3,true),true); assert.equal(h.ext.drawWeather(12,true),true);
+  assert.deepEqual(h.draws[2].matrix,h.draws[3].matrix,'reduced motion holds the weather');
+  assert.equal(h.uploads.length,4,'animation creates no geometry');
+  assert.ok(h.draws[0].opts.alpha>0&&h.draws[0].opts.alpha<1);
+  await h.ext.request(h.selection('a','storm')); assert.equal(h.uploads.length,4,'storm shares static precipitation');
+  assert.equal(h.ext.state().weather,'storm');
+  await h.ext.request(h.selection('a','wet'));
+  assert.equal(h.ext.drawWeather(2,false),false,'wet road alone has no falling rain');
+  assert.equal(h.freed.length,1,'appearance change releases rain only');
+  await h.ext.request(rainy); assert.equal(h.uploads.length,5);
+  h.ext.cancel(); assert.equal(h.freed.length,5,'all exterior and rain resources released once');
+  assert.equal(h.ext.drawWeather(3,false),false);
+});
+
+test('exterior fitPose mirrors every sequence and preserves caller camera vector identity', () => {
+  const h=exteriorHarness(), eye=[-3,2,5], aim=[1,.6,8];
+  const pose={side:1,x:2,z:10,yaw:.3,eye,aim};
+  assert.equal(h.API.fitPose(pose,{side:-1},false),pose);
+  assert.equal(pose.side,-1); assert.equal(pose.x,-2); assert.equal(pose.yaw,-.3);
+  assert.equal(pose.z,10); assert.equal(pose.eye,eye); assert.equal(pose.aim,aim);
+  assert.deepEqual(eye,[3,2,5]); assert.deepEqual(aim,[-1,.6,8]);
+  h.API.fitPose(pose,{side:-1},false); assert.equal(pose.x,-2,'matching side is stable');
+});
+
+test('authored exterior CUT clears actual standard, Monaco and left-side pit walls over 10001 swept poses each', () => {
+  const h=exteriorHarness(), c=vm.createContext({});
+  vm.runInContext(read('js/data/garage-departure-motion.js'),c,{filename:absSrc('js/data/garage-departure-motion.js')});
+  const Motion=vm.runInContext('GarageDepartureMotion',c);
+  const fixtures=[
+    {name:'standard',side:1,bands:{work:5.5,corridor:1,fast:3.5}},
+    {name:'Monaco',side:1,bands:{work:4.2,corridor:1,fast:3.2}},
+    {name:'left-side',side:-1,bands:{work:4.2,corridor:1,fast:3.2}},
+  ];
+  for(const fixture of fixtures) {
+    const anchor={...fixture,door:{z:6.4,width:5.4}}, wall=6.4+fixture.bands.work+fixture.bands.corridor+fixture.bands.fast;
+    let prior=null, largestStep=0;
+    for(let i=0;i<=10000;i++) {
+      const pose={eye:[0,0,0],aim:[0,0,0]}; Motion.sample(i/10000,1,pose); pose.side=1;
+      const eye=pose.eye,aim=pose.aim;
+      h.API.fitPose(pose,anchor,true);
+      assert.equal(pose.exteriorUnsupported,false,fixture.name+' supports a safe radius');
+      assert.equal(pose.eye,eye); assert.equal(pose.aim,aim);
+      assert.ok([...eye,...aim,pose.x,pose.z,pose.yaw].every(Number.isFinite));
+      const si=Math.sin(pose.yaw),co=Math.cos(pose.yaw);
+      const corners=[[-.95,-2.69],[.95,-2.69],[.95,3.18],[-.95,3.18]].map(([x,z])=>[pose.x+x*co+z*si,pose.z-x*si+z*co]);
+      for(const corner of corners) assert.ok(corner[1]<=wall-.2998,fixture.name+' far-wall clearance at '+i);
+      for(let edge=0;edge<4;edge++) {
+        const a=corners[edge],b=corners[(edge+1)%4];
+        if((a[1]-6.4)*(b[1]-6.4)<=0&&Math.abs(b[1]-a[1])>1e-10) {
+          const x=a[0]+(b[0]-a[0])*(6.4-a[1])/(b[1]-a[1]);
+          assert.ok(Math.abs(x)<=2.7-.01,fixture.name+' doorway clearance at '+i);
+        }
+      }
+      if(prior) largestStep=Math.max(largestStep,Math.hypot(pose.x-prior.x,pose.z-prior.z));
+      prior={x:pose.x,z:pose.z};
+    }
+    assert.ok(largestStep<.006,'continuous path through blended correction: '+fixture.name);
+  }
+});
+
+test('exterior fitPose leaves legacy/tuner paths unadapted and explicitly flags impossible lane bands', () => {
+  const h=exteriorHarness(), anchor={side:1,door:{z:6.4},bands:{work:4.2,corridor:1,fast:3.2}};
+  const legacy={side:1,x:3.2,z:13,yaw:Math.PI/2,eye:[1,2,3],aim:[4,5,6]};
+  const before=JSON.stringify(legacy);
+  h.API.fitPose(legacy,anchor,false);
+  assert.equal(JSON.stringify({...legacy,exteriorUnsupported:undefined}),before);
+  const unsafe={...legacy,eye:[1,2,3],aim:[4,5,6]};
+  h.API.fitPose(unsafe,{...anchor,bands:{work:1,corridor:.2,fast:1}},true);
+  assert.equal(unsafe.exteriorUnsupported,true);
+  const straight={side:1,x:0,z:9.8,yaw:0,eye:[1,2,3],aim:[4,5,6]};
+  h.API.fitPose(straight,anchor,true);
+  assert.equal(straight.x,0); assert.equal(straight.z,9.8,'no movement correction before steering begins');
+});
+
+test('reduced-motion exterior CUT retains its fixed camera over 10001 fitted departure poses per lane side', () => {
+  const h=exteriorHarness(), c=vm.createContext({});
+  vm.runInContext(read('js/data/garage-departure-motion.js'),c,{filename:absSrc('js/data/garage-departure-motion.js')});
+  const Motion=vm.runInContext('GarageDepartureMotion',c);
+  for(const side of [1,-1]) {
+    const anchor={side,door:{z:6.4},bands:{work:4.2,corridor:1,fast:3.2}};
+    let lastZ;
+    for(let i=0;i<=10000;i++) {
+      const pose={eye:[0,0,0],aim:[0,0,0]}; Motion.sample(i/10000,1,pose);
+      pose.side=1; pose.calm=true;
+      pose.eye[0]=-3.8; pose.eye[1]=2.1; pose.eye[2]=-4.8;
+      pose.aim[0]=0; pose.aim[1]=.8; pose.aim[2]=6.2;
+      const eye=pose.eye,aim=pose.aim;
+      h.API.fitPose(pose,anchor,true);
+      assert.equal(pose.eye,eye); assert.equal(pose.aim,aim);
+      assert.deepEqual([...eye],[-3.8*side,2.1,-4.8]);
+      assert.deepEqual([...aim].map(v=>v+0),[0,.8,6.2]);
+      assert.equal(pose.exteriorUnsupported,false);
+      lastZ=pose.z;
+    }
+    assert.ok(lastZ<13,'car still receives the narrower Monaco radius');
+  }
+});
+
+test('exterior preparation publishes bounded profiling fields without touching per-frame rendering', async () => {
+  const h=exteriorHarness(); await h.ext.request(h.selection());
+  const stats=h.ext.state().stats;
+  assert.equal(stats.trackId,'a');
+  for(const key of ['maxSliceMs','buildWallMs','uploadMs']) assert.ok(Number.isFinite(stats[key])&&stats[key]>=0,key);
+  h.ext.draw(); h.ext.draw();
+  assert.equal(h.ext.state().stats,stats,'draws retain the preparation record');
+});
+
+test('garage road frame keeps four tyre contacts on a sloping plane after either lane direction and turn', () => {
+  const plane=(surface,x,z)=>.11+.012*x+.025*z, h=exteriorHarness({surfaceHeight:plane});
+  const surface={bounds:[-55,55,6.4,110]};
+  for(const yaw of [0,.7,Math.PI/2,-Math.PI/2]) {
+    const pose={x:8,z:13,yaw,eye:[2,3,4],aim:[5,1,6]}, eye=pose.eye, aim=pose.aim;
+    h.API.groundPose(pose,surface,true);
+    const matrix=new Float64Array(16); h.API.poseMatrix(pose,matrix);
+    assert.equal(pose.eye,eye); assert.equal(pose.aim,aim);
+    assert.ok(Math.abs(eye[1]-3-pose.groundY)<1e-12);
+    for(const x of [-.79,.79])for(const z of [-1.6,1.7]) {
+      const wx=matrix[0]*x+matrix[8]*z+matrix[12], wy=matrix[1]*x+matrix[9]*z+matrix[13], wz=matrix[2]*x+matrix[10]*z+matrix[14];
+      assert.ok(Math.abs(wy-plane(surface,wx,wz))<1e-10,'each contact lies on the actual plane');
+    }
+    assert.ok(Math.abs(Math.hypot(matrix[0],matrix[1],matrix[2])-1)<1e-12);
+    assert.ok(Math.abs(matrix[0]*matrix[4]+matrix[1]*matrix[5]+matrix[2]*matrix[6])<1e-12);
+  }
+  assert.equal(h.uploads.length,0,'pose fitting builds no meshes');
+});
+
+test('ground contact crosses the sill continuously and leaves the reduced-motion camera fixed', () => {
+  const h=exteriorHarness({surfaceHeight:(surface,x,z)=>z<6.4?0:.03}), surface={bounds:[-55,55,6.4,110]};
+  let prior=0;
+  for(let i=0;i<=1000;i++){
+    const pose={x:0,z:i*.01,yaw:0,calm:true,eye:[-4,3.2,15.7],aim:[3.5,.65,7]};
+    h.API.groundPose(pose,surface,true);
+    assert.deepEqual([...pose.eye],[-4,3.2,15.7]);assert.deepEqual([...pose.aim],[3.5,.65,7]);
+    assert.ok(Math.abs(pose.groundY-prior)<.001,'no single-frame height step');prior=pose.groundY;
+  }
+  assert.ok(Math.abs(prior-.03)<1e-12);
+});
+
+test('explicit daylight replaces a night circuit default sky without mutating its authored palette', () => {
+  const h=exteriorHarness(), def={night:true,palette:{zenith:[.06,.05,.16],horizon:[.2,.1,.05],sunDir:[.76,.21,.61],fogDensity:.0028}};
+  const before=JSON.stringify(def);
+  const day=h.API.lighting({def,tod:'day',weather:'dry'}), night=h.API.lighting({def,tod:'default',weather:'dry'});
+  assert.equal(day.night,false);assert.equal(night.night,true);
+  assert.ok(day.sky.horizon[2]>day.sky.horizon[0],'selected day is blue rather than the authored night orange');
+  assert.ok(day.sunDir[1]>.6,'daylight key rises above the authored dusk angle');
+  assert.equal(day.fogDensity,.0008);assert.equal(JSON.stringify(def),before);
+});
+
+test('rainy night keeps the sky shader night gate while hiding stars beneath cloud', () => {
+  const h=exteriorHarness(), sky=h.API.lighting({tod:'night',weather:'rain'}).sky;
+  assert.equal(sky.stars,1,'uStars selects the shader night branch');
+  assert.equal(sky.starBright,0,'cloud hides stars without enabling daylight scattering');
+  assert.equal(sky.moon,.85);
+});
+
+test('night pit frontage receives lighting without a whole-mesh emissive override', async () => {
+  const h=exteriorHarness();await h.ext.request(h.selection('a','rain','night'));h.ext.draw();
+  assert.equal(h.draws[2].opts.emissive,0);h.ext.release();
 });

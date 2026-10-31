@@ -1,0 +1,1 @@
+Fixed: pause QUIT/RESTART confirm arms expire after five seconds of wall-clock idle, ghost double-taps use wall time instead of event timeStamp, and pointerup confirms when a slow frame loop delays click delivery (#4395 follow-up).

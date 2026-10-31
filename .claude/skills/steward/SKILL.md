@@ -51,7 +51,7 @@ PR → agent `finding-verifier` before you fix any of them.
    state, failing jobs, owner). Search open PR titles, branches and the Board issue for the failing test name, and
    the `deploy:red` label on the Board issue. This overrides "port the fix now and push" (AGENTS.md §Git branch &
    deploy).
-4. **Deploy branch** — never pushed to (AGENTS.md §Git branch & deploy). A deploy is a MERGE of other sessions'
+4. **Deploy branch** — never pushed to (AGENTS.md §Git branch & deploy); a red deploy branch is claimed through the Board (override 3), fixed by a PR. A deploy is a MERGE of other sessions'
    work: re-measure on the merged tree. A worker's change lands through the `land` label (§12).
 5. **Flakes** — do not re-run a browser group to chase one: AGENTS.md rules 8 and 9.
 6. **Fix push** — validate at the floor (docs/WORKERS.md §3; AGENTS.md rule 3); the fast tier (`run-ci` on the

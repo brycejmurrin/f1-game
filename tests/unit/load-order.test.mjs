@@ -393,7 +393,7 @@ function lazyFiles() {
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
-    ...(MANIFEST.LAZY_TRACK_BUILD || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -442,7 +442,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_RACE_SESSION || []),
-                   ...(MANIFEST.LAZY_TRACK_BUILD || []),
+                   ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
                    ...(MANIFEST.LAZY_CIRCUIT || []),
                    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
@@ -467,7 +467,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
-    ...(MANIFEST.LAZY_TRACK_BUILD || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -568,6 +568,7 @@ test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the build files", () => {
     "js/track/scenery/venue.js", "js/track/scenery/circuit-kit.js", "js/track/scenery/landmark-kit.js",
     "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/region.js",
   ];
   assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, want.length);
   for (const f of want) {

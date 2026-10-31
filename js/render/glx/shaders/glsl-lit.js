@@ -894,7 +894,8 @@ float sampleShadow(vec3 wpos) {
   // its declaration above); a small fixed 4-tap PCF (the map is tiny and its
   // content moves every frame, so the static map's dither/PCSS machinery buys
   // nothing here).
-  if (uCarShadowOn > 0.5) {
+  // S2 exact-zero gate: csh >= 0, so min(0.0, csh) == 0 — skip the car taps when every static tap read 0.
+  if (uCarShadowOn > 0.5 && sh > 0.0) {
     vec4 cc = uCarLightVP * vec4(wpos, 1.0);
     vec3 cs = cc.xyz * 0.5 + 0.5;
     if (cs.x > 0.0 && cs.x < 1.0 && cs.y > 0.0 && cs.y < 1.0 && cs.z < 1.0) {
@@ -1527,7 +1528,9 @@ void main() {
   float keySpecNoL = max(dot(N, L), 0.0);   // includes pooled-water ripples; diffuse keeps NoL
   float shadow = 1.0;
   if (NoL > 0.0 || keySpecNoL > 0.0 || clearcoat > 0.001) {
-    shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim);
+    // S1 exact-zero gate: sampleShadow() >= 0, and 0 * (1 - cloud * dim) == 0 — skip cloudShadow's FBM there.
+    shadow = sampleShadow(vWorldPos);
+    if (shadow > 0.0) { shadow *= (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim); }
   }
   // uKeyMul (KEY LIGHT tuner slider, default 1.0) scales all DIRECT sun lighting
   // — diffuse, GGX spec, clearcoat glint, car-paint glint — without touching

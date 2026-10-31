@@ -146,13 +146,18 @@ test("new-module checklist: triggers on an added js module, a tools/perf script 
 });
 
 test("pick-tests prints the checklist for a new js module on the command line", () => {
-  const f = path.join(process.cwd(), PROBE_REL);
-  fs.writeFileSync(f, '"use strict";\nconst ProbeNew = (() => ({}))();\n');
+  const artifacts = path.join(process.cwd(), "artifacts"); fs.mkdirSync(artifacts, { recursive: true });
+  const fixture = fs.mkdtempSync(path.join(artifacts, "pick-tests-cli-"));
   try {
-    const out = execFileSync("node", ["tools/ci/pick-tests.mjs", PROBE_REL], { cwd: process.cwd(), encoding: "utf8" });
+    for (const dir of ["tools/ci", "tools/lib", "js"]) fs.mkdirSync(path.join(fixture, dir), { recursive: true });
+    for (const rel of ["tools/ci/pick-tests.mjs", "tools/lib/changed-files.mjs"])
+      fs.copyFileSync(path.join(process.cwd(), rel), path.join(fixture, rel));
+    fs.writeFileSync(path.join(fixture, "package.json"), JSON.stringify({ scripts: {} }));
+    fs.writeFileSync(path.join(fixture, PROBE_REL), '\"use strict\";\nconst ProbeNew = (() => ({}))();\n');
+    const out = execFileSync("node", ["tools/ci/pick-tests.mjs", PROBE_REL], { cwd: fixture, encoding: "utf8" });
     matches(out, /NEW MODULE \/ GLOBAL/);
     matches(out, /boot-load-budget/);
-  } finally { fs.rmSync(f, { force: true }); }
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });
 
 test("probeSteps: ratchets, fixture audit, assert-pin ratchet, then units (dropped by --skip-units)", () => {

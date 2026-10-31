@@ -42,7 +42,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
 import { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
@@ -95,6 +95,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   GPU-less container, for COUNTS (passes, store ops, mips), never ms
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
+  --ls apex26.garageEvidence=phone|desktop  opt-in menu-full TLX/WebGPU garage trace, six frames and video
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
   --boot-timeout MS  --race-timeout MS
   --profile DIR  --port N         a PERSISTENT browser profile and a fixed server port: run twice
@@ -199,6 +200,12 @@ const launchOpts = {
 // --profile: one persistent context in place of browser + newContext. `launch` says whether the
 // profile already held a run (a returning player's launch) or was empty (the first ever).
 const PROFILE = flag("--profile", null);
+// Diagnostic-only capture; the existing workflow forwards --ls without another dispatch input.
+// https://playwright.dev/docs/videos and /docs/api/class-video (context close flushes video).
+const garageCapture = !PROFILE && entry === "menu-full" && backend === "three" && path3 === "webgpu"
+  ? (extraLs.join(" ").match(/apex26\.garageEvidence=(phone|desktop)\b/) || [])[1] : null;
+const garageViewport = garageCapture === "phone" ? { width: 844, height: 390 } : { width: 1280, height: 720 };
+let captureContext = null, captureVideo = null;
 let persistent = null, browser;
 if (PROFILE) {
   out.profile = { dir: PROFILE, launch: existsSync(join(PROFILE, "Default")) ? "warm" : "cold", port };
@@ -218,8 +225,12 @@ checkpoint("browser-launched");
 // written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
 const console_ = [];
 try {
-  const ctx = persistent || await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctx = persistent || await browser.newContext({ viewport: garageViewport,
+    ...(garageCapture ? { recordVideo: { dir: dirname(jsonAt || "."), size: garageViewport } } : {}),
+    ...(garageCapture === "phone" ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2,
+      userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36" } : {}) });
   const page = await ctx.newPage();
+  if (garageCapture) { captureContext = ctx; captureVideo = page.video(); }
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));
   // A renderer crash makes every later page.evaluate hang FOREVER rather than
@@ -281,6 +292,18 @@ try {
     // runner pays ~11 stacks a frame, not ~90; out.uploads ranks the sites by KB. Random, not every 8th call: a
     // frame whose call count is a multiple of 8 would sample the same call sites every frame and never the rest.
     const UP_EVERY = 8, _hUp = new Map();
+    // GPU hunt 3: EVERY armed writeBuffer (and createBuffer, keyed "create:<group>") by its buffer's group (three labels a uniform buffer
+    // "bindingBuffer<id>_<group>_(stages)"; the id is per buffer, so the sampled rows above scatter one
+    // group over hundreds of keys and the top-60 cut drops most of it). Exact, unsampled; unlabeled = "(none)".
+    const _hUpGroup = new Map();
+    const _upGroup = (bytes, buf, kind) => {
+      if (!_hArmed) return;
+      const l = (buf && buf.label) || "", g = l ? l.replace(/^bindingBuffer\d+_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
+      const k = kind ? kind + ":" + g : g;
+      const r = _hUpGroup.get(k) || { n: 0, b: 0 };
+      r.n++; r.b += bytes;
+      _hUpGroup.set(k, r);
+    };
     const _upNote = (kind, kb, buf) => {
       if (!_hArmed || Math.random() * UP_EVERY >= 1) return;
       let site = "?", lib = "";
@@ -393,7 +416,7 @@ try {
       wrapCall(GD, "createBuffer", "gpu.createBuffer");
       if (GD && typeof GD.createBuffer === "function") {
         const origCB = GD.createBuffer;
-        GD.createBuffer = function (desc) { try { _upNote("createBuffer", ((desc && desc.size) || 0) / 1024, desc); } catch (_) { /* count only */ } return origCB.apply(this, arguments); };
+        GD.createBuffer = function (desc) { try { _upNote("createBuffer", ((desc && desc.size) || 0) / 1024, desc); _upGroup((desc && desc.size) || 0, desc, "create"); } catch (_) { /* count only */ } return origCB.apply(this, arguments); };
       }
       // The upload side: how many writes a frame makes and how many KB they
       // carry (size is elements for a typed array, bytes for an ArrayBuffer).
@@ -407,6 +430,7 @@ try {
             const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
             _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
             _upNote("writeBuffer", Math.max(0, bytes) / 1024, buffer);
+            _upGroup(Math.max(0, bytes), buffer);
           } catch (_) { /* the count stands without the size */ }
           const t = performance.now();
           try { return origWB.apply(this, arguments); } finally { _bumpWorkN("gpu.writeBufferMs", performance.now() - t); }
@@ -647,7 +671,7 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hUpGroup.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
@@ -661,7 +685,9 @@ try {
                        workFrames: _hWorkFrames,
                        stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30),
                        uploads: [..._hUp.entries()].map(([k, r]) => ({ site: k, n: r.n, kb: +r.kb.toFixed(1) }))
-                         .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60) }),
+                         .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60),
+                       uploadGroups: [..._hUpGroup.entries()].map(([g, r]) => ({ group: g, n: r.n, kb: +(r.b / 1024).toFixed(2) }))
+                         .sort((a, b) => b.n - a.n) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -803,6 +829,7 @@ try {
         try { await page.selectOption("#rs-time-sel", tod, { timeout: 10000 }); m.tod = await page.$eval("#rs-time-sel", (s) => s.value); }
         catch (e) { m.todError = String((e && e.message) || e).slice(0, 100); }
       }
+      if (garageCapture) await page.selectOption("#rs-weather-sel", garageCapture === "phone" ? "rain" : "dry");
       const tw = Date.now();
       await page.evaluate(prepTimelineStart).catch(() => {});
       try { await page.waitForFunction(menuPrepReady, null, { polling: 100, timeout: menuTimeout }); m.prepReady = true; }
@@ -822,9 +849,39 @@ try {
       m.atGo = await prep();
       m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
         return g ? { ready: g.ready, garageReady: g.garageReady, last: g.last } : null; }).catch(() => null);
+      if (garageCapture) {
+        await page.waitForFunction(() => { const e = window.__apex.garageCam().exterior;
+          return e?.status === "ready" && e.weather === document.getElementById("rs-weather-sel").value && e.tod === document.getElementById("rs-time-sel").value;
+        }, null, { polling: 100, timeout: 30000 });
+        m.garageEvidence = { profile: garageCapture, viewport: garageViewport, source: process.env.GITHUB_SHA || null, frames: [],
+          before: await page.evaluate(() => ({ exterior: __apex.garageCam().exterior, saved: localStorage.getItem("apex26.camMode"),
+            weather: document.getElementById("rs-weather-sel").value, tod: document.getElementById("rs-time-sel").value, help: __apex.agentHelp() })) };
+        await page.evaluate(() => { window.__garageEvidence = []; window.__garageEvidenceOn = true;
+          const at = performance.now(); function tick() { if (!window.__garageEvidenceOn) return;
+            if (window.__garageEvidence.length < 1200) window.__garageEvidence.push({ t: performance.now() - at,
+              phase: document.getElementById("loading").dataset.phase, exterior: __apex.garageCam().exterior, state: __apex.info().state });
+            requestAnimationFrame(tick); } requestAnimationFrame(tick); });
+      }
       await page.evaluate(() => window.__apexMark("raceCall"));
       await page.locator("#rs-go").click({ timeout: 60000 });
       step("start-race");
+      if (garageCapture) {
+        await page.waitForFunction(() => document.getElementById("loading").dataset.phase === "garage", null, { polling: 100, timeout: 60000 });
+        for (let i = 0; i < 6; i++) {
+          const shotAt = (jsonAt || "game-capture.json").replace(/\.json$/, ".garage-" + i + ".png");
+          const fresh = await freshFrame("garage-" + i);
+          if (fresh && fresh.error) throw new Error("Garage frame refresh failed: " + fresh.error);
+          await page.screenshot({ path: shotAt, timeout: 15000 });
+          m.garageEvidence.frames.push({ path: shotAt, at: Date.now(), observed: await page.evaluate(() => ({
+            phase: document.getElementById("loading").dataset.phase, state: __apex.info().state, exterior: __apex.garageCam().exterior })) });
+          checkpoint("garage-capture", { menu: m });
+          await page.waitForTimeout(1900);
+        }
+        m.garageEvidence.after = await page.evaluate(() => { window.__garageEvidenceOn = false;
+          return { trace: window.__garageEvidence, saved: localStorage.getItem("apex26.camMode") }; });
+        if (!m.garageEvidence.after.trace.some(x => x.phase === "garage" && x.exterior?.visible && x.exterior.weather === m.garageEvidence.before.weather && x.exterior.tod === m.garageEvidence.before.tod)) throw new Error("Garage exterior was not drawn");
+        if (m.garageEvidence.before.saved !== m.garageEvidence.after.saved) throw new Error("Garage changed saved driving camera");
+      }
       m.ok = true;
     } catch (e) {
       m.ok = false; m.error = String((e && e.message) || e).slice(0, 160);
@@ -835,7 +892,7 @@ try {
 
   // menu-full: PLAYER PACE (LoadingScreen.isAutomation honours ?fullIntro=1) —
   // the garage drive-out and the flyby a harness otherwise skips.
-  await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1${entry === "menu-full" ? "&fullIntro=1" : ""}`,
+  await page.goto(`http://127.0.0.1:${port}/index.html?${garageCapture ? "" : "gfxdebug=1&"}${entry === "menu-full" ? "fullIntro=1" : ""}`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
   // 120 s. This was once raised to 300 s on the theory that windows-latest was
@@ -890,6 +947,7 @@ try {
   } else {
     out.menu = await enterViaMenu(tod);
     checkpoint("menu-entry", { menu: out.menu });
+    if (garageCapture && !out.menu.ok) throw new Error("Garage capture failed: " + out.menu.error);
   }
   out.timeOfDay = tod || "(default)";
   checkpoint("race-called");
@@ -1057,6 +1115,18 @@ try {
     const s = t.postState();
     return s ? Object.assign({ on: s.on !== false }, s.depth || {}) : null;
   }), 10000, "depth-read");
+  // GPU hunt 3: the mirror's and the TLX churn counters at BOTH ends of the armed window. The
+  // backends' mirror `renders` is reset by a target re-allocation on WGX and GLX (a lifetime count
+  // on TLX), so one end-of-window read cannot compare cadence across legs; the deltas can.
+  const readMirChurn = () => bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    let m = null, c = null;
+    try { m = A.mirror ? A.mirror() : null; } catch (_) { /* no mirror pass */ }
+    try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const s = t && t.memState ? t.memState() : null; c = s && s.churn ? Object.assign({}, s.churn) : null; } catch (_) { /* not TLX */ }
+    const b = (m && m.backend) || {};
+    return { drawn: m ? m.drawn : null, quality: m ? m.quality : null, renders: b.renders, glass: b.glass, allocs: b.allocs, churn: c };
+  }), 10000, "mirror-churn-read").catch((e) => ({ error: String((e && e.message) || e).slice(0, 80) }));
+  const _mc0 = await readMirChurn();
   const _depth0 = await readDepth();
   try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
   // WHERE THE CPU TIME GOES over the same window, by function. Census 201
@@ -1160,6 +1230,7 @@ try {
   // The driven window ends with the last beat (hunt 4 I4).
   await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
   const _depth1 = await readDepth();
+  const _mc1 = await readMirChurn();
   // WHICH CAMERA THE WINDOW DROVE, and the mirror it left (hunt 4 H5): the
   // director or a cut could have moved it, and mipFull says whether the
   // cockpit glass latched the full chain. backend fields per gfx.mirrorState().
@@ -1232,6 +1303,11 @@ try {
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
     out.uploadsSummary = analyseUploads(out.uploads, out.window && out.window.frames);
+    out.mirrorWindow = analyseMirrorChurn(_mc0, _mc1, out.window && out.window.frames);
+    // GPU hunt 3: writeBuffer per frame by buffer group, every call counted (not sampled).
+    { const f = out.window && out.window.frames;
+      out.uploadGroups = f > 0 && d.uploadGroups ? d.uploadGroups.map((r) => ({ group: r.group, nPerFrame: +(r.n / f).toFixed(2), kbPerFrame: +(r.kb / f).toFixed(3) }))
+        : { note: "no writeBuffer groups recorded" }; }
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
     // made against the rest.
@@ -1761,6 +1837,14 @@ try {
     out.profile.probeArmedAtClose = armed || null;
     out.profile.proofWaitMs = Date.now() - t;
   }
+  if (garageCapture) {
+    out.garageCameraControl = { before: await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on })) };
+    if (out.garageCameraControl.before.garageOn) throw new Error("Garage still owns race camera");
+    if (garageCapture === "phone") await page.locator("#btn-cam").tap();
+    else await page.locator("#btn-cam").click();
+    await page.waitForFunction(saved => localStorage.getItem("apex26.camMode") !== saved, out.garageCameraControl.before.saved, { polling: 100, timeout: 5000 });
+    out.garageCameraControl.after = await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on }));
+  }
   out.ok = true;
   checkpoint("done");
 } catch (e) {
@@ -1773,6 +1857,13 @@ try {
   // meant every failure threw them away.
   out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
   out.root = ROOT;
+  if (captureVideo) {
+    try {
+      await Promise.race([captureContext.close(), new Promise((_, reject) => setTimeout(() => reject(new Error("video context close timeout")), 20000))]);
+      out.garageVideo = (jsonAt || "game-capture.json").replace(/\.json$/, ".garage.webm");
+      await Promise.race([captureVideo.saveAs(out.garageVideo), new Promise((_, reject) => setTimeout(() => reject(new Error("video save timeout")), 20000))]);
+    } catch (e) { out.garageVideoError = String(e); out.ok = false; }
+  }
   // browser.close() HANGS after a WebGPU/Metal session: run 4's WebGPU check
   // reached phase "done" at +42.4s and the step was then killed at 20 minutes
   // with the process still in this line. A teardown hang must not masquerade

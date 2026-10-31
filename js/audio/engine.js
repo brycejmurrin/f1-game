@@ -219,8 +219,42 @@ var GameAudio = (function () {
     if (node._apexMuteUntil === undefined) node._apexMuteUntil = t + 10 * tau;
     return t < node._apexMuteUntil;
   }
+  // LAB audioIdle (OFF by default; Bryce's opt-in listening pass, 2026-10-30).
+  // Try: https://brycejmurrin.github.io/f1-game/?lab=audioIdle
+  // The rival pass-by pool, the crowd bed + cheers and the ERS layer keep looping
+  // through menus at gain 0 (battery). With the lab on, stopEngineGraph() waits
+  // out their 0.06-0.08 s silence fades, then each module DISCONNECTS its output
+  // gains from the bus (idle(true)); startEngineGraph() reconnects them before
+  // the first param write. The AudioContext is never closed or created here, so
+  // the iOS unlock path is untouched. Read once, from the URL only (no store key).
+  const LAB_AUDIO_IDLE = (() => {
+    try {
+      if (typeof location === "undefined" || !location) return false;
+      const v = new URLSearchParams(location.search).get("lab");
+      return !!v && v.split(",").some((s) => s.trim() === "audioIdle");
+    } catch (e) { return false; }
+  })();
+  let layerIdleTimer = null;
+  function idleLayers(on) {
+    const mods = [typeof RivalAudio !== "undefined" ? RivalAudio : null,
+      typeof CrowdAudio !== "undefined" ? CrowdAudio : null, typeof ErsLayer !== "undefined" ? ErsLayer : null];
+    for (const m of mods) {
+      try { if (m && typeof m.idle === "function") m.idle(on); } catch (e) { /* stub / mid-teardown */ }
+    }
+  }
+  function scheduleLayerIdle() {
+    if (!LAB_AUDIO_IDLE) return;
+    if (layerIdleTimer) clearTimeout(layerIdleTimer);
+    // 500 ms: ≥ 6 time constants of the slowest silence fade (crowd bed, tau 0.08).
+    layerIdleTimer = setTimeout(() => { layerIdleTimer = null; if (!engineOn) idleLayers(true); }, 500);
+  }
+  function wakeLayers() {
+    if (!LAB_AUDIO_IDLE) return;
+    if (layerIdleTimer) { clearTimeout(layerIdleTimer); layerIdleTimer = null; }
+    idleLayers(false);
+  }
   let engineOn = false;
-  let engineWanted = false;          // a race wants the engine graph but SFX are off: built when they come on (perf hunt 4)
+  let engineWanted = false;         // a race wants the engine graph but SFX are off: built when they come on (perf hunt 4)
   let sfxOffArmed = false;           // field contact was armed when SFX OFF tore the graph down
   let mutedSuspended = false;        // the context was suspended BY setEnabled(false), not by iOS or a hidden tab
   let engineActionGeneration = 0;   // every explicit start/stop transfers engine ownership
@@ -1448,6 +1482,7 @@ var GameAudio = (function () {
     if (!sfxOk()) { engineWanted = true; return; }
     engineWanted = false;
     engineOn = true;
+    wakeLayers();   // LAB audioIdle: reconnect before the body's first param write
     try { startEngineBody(); }
     // ...and the flag comes back down even if the teardown ITSELF throws on the
     // half-built graph (stopEngine touches engGain/whineGain, either of which
@@ -1469,7 +1504,8 @@ var GameAudio = (function () {
   function stopEngineGraph() {
     if (!engineOn) return;
     const t0 = now();
-    soundtrack.releaseEngineDuck(t0, true);   // a line still on air keeps its own duck
+    scheduleLayerIdle();   // LAB audioIdle: disconnects after the fades below
+    soundtrack.releaseEngineDuck(t0, true);  // a line still on air keeps its own duck
     // Every node is guarded: startEngine's catch calls this on a HALF-built
     // graph, and one throw here skipped the stopAt()s below, leaking every
     // oscillator already started.
