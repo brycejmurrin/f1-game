@@ -202,6 +202,22 @@ test("helmet impact: newborn water is visible with small satellites in its arriv
   assert.equal(calls.rotate, 0, "the impact has not become a runoff streak");
 });
 
+test("helmet rain: phone-sized impact beads remain visibly larger and stronger than classic lens rain", () => {
+  for (const seed of [1,2,100,0xd809]) {
+    const sample = helmet => {
+      const {D,calls,el} = makeDroplets({helmet,mobile:true,recordDraws:true,seed});
+      D.tick(0.06,true,1,false,0,false); // one bead, same random sequence for either camera
+      D.tick(0.1,true,0,false,0,false); // visible envelope settled, still within the pinned impact
+      const main = calls.frameDraws.reduce((a,b) => a.dest[2]*a.dest[3] > b.dest[2]*b.dest[3] ? a : b);
+      return {n:D.stats().n, viewport:[el.width,el.height], width:main.dest[2], alpha:main.alpha};
+    };
+    const helmet = sample(true), classic = sample(false);
+    assert.deepEqual([helmet.n,classic.n,helmet.viewport,classic.viewport],[1,1,[844,390],[844,390]],"compare the same single arrival in native phone pixels");
+    assert.ok(helmet.width>=8.5 && helmet.width>classic.width*2.5,`seed ${seed}: helmet ${helmet.width}px is clearly larger than classic ${classic.width}px`);
+    assert.ok(helmet.alpha>=0.7 && helmet.alpha>classic.alpha,`seed ${seed}: helmet ${helmet.alpha} has stronger ink than classic ${classic.alpha}`);
+  }
+});
+
 test("helmet impact: physical hit clock ignores runoff and speed, pins the hit, then releases water", () => {
   const cases = [{runoff:"slow",speed:0}, {runoff:"fast",speed:80}];
   for (const {runoff,speed} of cases) {

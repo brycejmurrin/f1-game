@@ -137,12 +137,12 @@ const Droplets = (function () {
     const i = _n++;
     _x[i] = 0.04 + Math.random() * 0.92;
     _y[i] = 0.04 + Math.random() * 0.80;   // not the very bottom: the cockpit/HUD sits there
-    _r[i] = (helmet ? 0.005 : 0.0025) + Math.random() * Math.random() * (helmet ? 0.018 : 0.009);
+    _r[i] = (helmet ? 0.011 : 0.0025) + Math.random() * Math.random() * (helmet ? 0.026 : 0.009);
     _variant[i] = Math.floor(Math.random() * 3);
     _age[i] = _hit[i] = 0;
     _life[i] = reduced ? 1.8 + Math.random() * 1.6 : helmet ? 12 + Math.random() * 10 : 2.5 + Math.random() * 3.5;
     _vx[i] = _vy[i] = 0;
-    _a[i] = 0.55 + Math.random() * 0.35;
+    _a[i] = (helmet ? 0.74 : 0.55) + Math.random() * (helmet ? 0.22 : 0.35);
   }
 
   function _kill(i) {
@@ -168,7 +168,7 @@ const Droplets = (function () {
         // Surface tension pins small beads more strongly than large beads.
         // Gravity and aerodynamic pressure compete; pressure scales with v².
         const release = Math.min(1, _r[i] / 0.010);
-        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.023, _r[i] + dt * rain * 0.00035);
+        if (helmet && rain >= RAIN_MIN) _r[i] = Math.min(0.037, _r[i] + dt * rain * 0.00035);
         const push = air * (0.18 + 0.82 * release) * runoff;
         const tx = (_x[i] - 0.5) * 2.8 * push;
         const ty = helmet ? ((0.025 + 0.085 * release) * (1 - 0.8 * air) - 0.035 * air) * runoff
