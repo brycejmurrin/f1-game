@@ -16,6 +16,59 @@
 // fix the transient, but bounded hard enough that a genuinely absent file
 // cannot put the page in a reload loop.
 import { test, expect } from "@playwright/test";
+import { openSession, performAction, matchesOracle } from "../../tools/ui/explorer/browser.mjs";
+import { replayFaultScenario } from "../../tools/ui/explorer/fault-schedule.mjs";
+
+test("saved lazy fault schedules continue and reject Monaco hydration after leaving the picker", async ({ browser, baseURL }, testInfo) => {
+  test.setTimeout(60000);
+  for (const outcome of ["continue", "reject"]) {
+    const session = await openSession(browser, baseURL, { backend: "glx", touch: true });
+    const scenario = { version: 1, id: `monaco-${outcome}`, goal: "Leave a held circuit preview and retain Home", actions: [
+      { type: "faultHold", id: "monaco", path: "/js/circuits/monaco.js", timeoutMs: 30000 },
+      { type: "click", selector: "#mb-race" },
+      { type: "click", selector: '#sel-tracks button.track-row[aria-label="MONACO"]' },
+      { type: "faultWait", id: "monaco" },
+      { type: "click", selector: "#sel-back" },
+      { type: "faultRelease", id: "monaco", outcome },
+    ], oracle: { type: "game", state: "menu" } };
+    try {
+      const evidence = await replayFaultScenario(session, scenario, { performAction, matchesOracle });
+      // Terminal network transfer is not proof that the application consumed it.
+      if (outcome === "continue") {
+        await session.page.waitForFunction(() => Tracks.circuitPayloadResident(Tracks.LIST.find(d => d.id === "monaco")),
+          null, { polling: 100, timeout: 15000 });
+      } else {
+        await expect.poll(() => session.logs.errors.map(e => e.message).join("\n"), { timeout: 15000 })
+          .toContain("circuit payload failed to load: monaco");
+      }
+      await expect(session.page.locator("#overlay")).toBeVisible();
+      await expect(session.page.locator("#select")).toBeHidden();
+      await expect(session.page.locator("#race-settings")).toBeHidden();
+      expect(await matchesOracle(session, { type: "game", state: "menu" })).toBe(true);
+      await testInfo.attach(`lazy-${outcome}`, { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+    } catch (error) {
+      if (error.faultEvidence) await testInfo.attach(`lazy-${outcome}-failed`, { body: JSON.stringify(error.faultEvidence, null, 2), contentType: "application/json" });
+      throw error;
+    } finally { await session.context.close(); }
+  }
+});
+
+test("a saved lazy fault schedule cannot pass when its request never occurs", async ({ browser, baseURL }, testInfo) => {
+  const session = await openSession(browser, baseURL, { backend: "glx", touch: true });
+  const scenario = { version: 1, id: "unused-script", goal: "An installed rule is not evidence of interception", actions: [
+    { type: "faultHold", id: "unused", path: "/js/core/log.js", timeoutMs: 1000 },
+    { type: "faultWait", id: "unused" },
+    { type: "faultRelease", id: "unused", outcome: "continue" },
+  ] };
+  let evidence;
+  try {
+    await expect(replayFaultScenario(session, scenario, { performAction, matchesOracle }).catch(error => {
+      evidence = error.faultEvidence; throw error;
+    })).rejects.toThrow(/not observed/);
+    expect(evidence.events.some(e => e.state === "observed")).toBe(false);
+    await testInfo.attach("unused-script", { body: JSON.stringify(evidence, null, 2), contentType: "application/json" });
+  } finally { await session.context.close(); }
+});
 
 const MODULE = "**/js/career/season-cal.js*";
 

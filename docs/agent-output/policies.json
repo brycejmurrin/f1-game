@@ -2556,6 +2556,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/explorer/fault-schedule.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Validated bounded fault scenarios, exact held-request terminal transfers, failure evidence and unconditional owned-route cleanup; application readiness remains an explicit oracle."
+    },
     "tools/ui/explorer/inspector.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

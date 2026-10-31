@@ -4709,8 +4709,10 @@
     },
     "js/circuits/monaco.js": {
       "*": [
+        "tests/specs/boot-guard.spec.js",
         "tests/specs/monaco-foundation.spec.js",
         "tests/specs/season.spec.js",
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/camera-ride.test.mjs"
       ]
     },
@@ -4991,6 +4993,7 @@
         "tests/unit/storm-weather.test.mjs"
       ],
       "*": [
+        "tests/unit/boot-script-repair-overlay.test.mjs",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
@@ -5133,6 +5136,7 @@
         "tests/unit/no-bare-console.test.mjs"
       ],
       "*": [
+        "tests/specs/boot-guard.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/data-lifecycle.spec.js",
         "tests/specs/logging.spec.js",
