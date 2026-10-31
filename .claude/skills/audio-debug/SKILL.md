@@ -19,6 +19,8 @@ Muting music does **not** silence the engine — it sits on the sfx bus.
 
 ## Quick inspection
 
+These run in a live page: main session via skill `mcp-probe` (or `apex_eval`); in a subagent report them as not run (AGENTS.md rule 10).
+
 ```js
 GameAudio._stub                     // true = LAZY_AUDIO not landed yet: every call below is a stub (enabled() is absent)
 GameAudio.context()?.state          // "running" | "suspended" — the live AudioContext (null before init)

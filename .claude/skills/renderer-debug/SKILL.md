@@ -88,4 +88,4 @@ DEFAULT), **GLX** (`js/render/glx/`, explicit WebGL2 and the universal fallback)
   under IWER.
 - [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md) — read
   only for heap-leak or LCP work on the PWA shell (not a renderer task; memory
-  census tools, not `gpu-census`, are in `../mcp-probe/SKILL.md` §Census tools).
+  census tools, not `gpu-census`, are in `../mcp-probe/SKILL.md`, the **Census tools** paragraph).
