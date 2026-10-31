@@ -166,6 +166,26 @@ const GarageArrival = (function () {
   }
   const rigFor = (config) => pinned(config, "rig", () => rigData(config.angle) ? config.angle : null);
   const crewFor = (config, dir) => pinned(config, "crew:" + dir, () => crewNow(config, dir));
+  /** A preview re-reading its settings mid-playback (a FOV or speed edit) builds a fresh config: carry
+   *  the playback's pins and MIX deal over, so it keeps its camera family, crew, path and timing. The
+   *  rig moves only while ANGLE is unchanged, and each crew only while its own pick is unchanged; an
+   *  explicit angle or crew edit may choose again. Returns `next`. */
+  const CREW_KEY = { in: "enterCrew", out: "leaveCrew", home: "homeCrew" };
+  function carryPlayback(prev, next) {
+    if (!prev || !next || typeof prev !== "object" || typeof next !== "object" || prev === next) return next;
+    const from = _pinned.get(prev), deal = _picked.get(prev);
+    const to = {}, dealTo = {};
+    if (from && "rig" in from && prev.angle === next.angle) to.rig = from.rig;
+    for (const dir of Object.keys(CREW_KEY)) {
+      const k = CREW_KEY[dir];
+      if (prev[k] !== next[k] || (dir === "home" && prev.result !== next.result)) continue;
+      if (from && ("crew:" + dir) in from) to["crew:" + dir] = from["crew:" + dir];
+      if (deal && deal[k]) dealTo[k] = deal[k];
+    }
+    if (Object.keys(to).length) _pinned.set(next, Object.assign(_pinned.get(next) || {}, to));
+    if (Object.keys(dealTo).length) _picked.set(next, Object.assign(_picked.get(next) || {}, dealTo));
+    return next;
+  }
   function crewNow(config, dir) {
     const key = dir === "out" ? "leaveCrew" : dir === "home" ? "homeCrew" : "enterCrew";
     let v = config && config[key];
@@ -804,6 +824,6 @@ const GarageArrival = (function () {
     if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
     return m === "auto" && !!wet;
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
+  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
     CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

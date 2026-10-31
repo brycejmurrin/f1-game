@@ -357,3 +357,22 @@ test("a late GarageData load never swaps a playing sequence's camera or crew; th
     assert.equal(fresh.camera, "crane", dir + ": the next playback plays the rig");
   }
 });
+
+// carryPlayback: a preview refresh (FOV / speed edit) builds a fresh config; it keeps the playback's
+// camera family, crew deal, path and timing, while an angle or crew edit may choose again.
+test("carryPlayback keeps a refreshed preview's family, MIX deal and timing; angle and crew edits re-choose", () => {
+  const { Arrival } = load();
+  const a = Arrival.settings({ angle: "crane", leaveCrew: "mix" });
+  const crew = Arrival.crewFor(a, "out"), len = Arrival.duration(a, "out"), held = Arrival.poseFor("out")(4, a, true);
+  const b = Arrival.carryPlayback(a, Arrival.settings({ angle: "crane", leaveCrew: "mix", fov: 70, speed: 2 }));
+  assert.equal(Arrival.crewFor(b, "out"), crew, "the MIX deal is not re-rolled");
+  assert.equal(Arrival.duration(b, "out"), len, "nor the timing");
+  const now = Arrival.poseFor("out")(4, b, true);
+  assert.deepEqual([now.camera, now.crew, now.x, now.z, now.yaw], [held.camera, held.crew, held.x, held.z, held.yaw], "same family, crew and path");
+  assert.equal(now.fov !== held.fov, true, "the lens edit itself applies");
+  const c = Arrival.carryPlayback(a, Arrival.settings({ angle: "orbit", leaveCrew: "mix" }));
+  assert.equal(Arrival.poseFor("out")(4, c, true).camera, "orbit", "an angle edit picks its own family");
+  const d = Arrival.carryPlayback(a, Arrival.settings({ angle: "crane", leaveCrew: "pushout" }));
+  assert.equal(Arrival.crewFor(d, "out"), "pushout", "an explicit crew edit re-chooses");
+  assert.equal(Arrival.carryPlayback(a, null), null);
+});

@@ -7639,6 +7639,9 @@
       "cancel": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "carryPlayback": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
