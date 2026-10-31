@@ -4265,10 +4265,10 @@ test("software GL quit-to-menu and garage-close use MenuTeardown readback cover"
   assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
   const game = gameSource();
   assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0")
-    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.teardownActive()") && game.includes("PerfGov.softwareRaster()"));
+    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.quitRenderHold()") && game.includes("PerfGov.softwareRaster()"));
   assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
   const tlx = readFile("js/render/three/tlx.js");
-  assert.ok(tlx.includes("softwareGlUiReadbackDefer") && tlx.includes("_queueSoftBlit"));
+  assert.ok(tlx.includes("softwareGlSoftPresentDefer") && tlx.includes("_queueSoftBlit"));
   const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");
   const quitOracle = readFile("tools/gfx/readback-quit-menu-oracle.mjs");
   assert.ok(garageOracle.includes("garageClose") && garageOracle.includes("#sel-go"));
@@ -4506,7 +4506,7 @@ test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry s
   const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
   assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
   const gov = read("js/perf/governor.js");
-  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("MenuTeardown.cover"), "quit/garage MenuTeardown cover must defer readback like race-entry sheets");
+  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("quitReadbackDefer"), "quit MenuTeardown defer must not leak garage mask into readback");
 });
 
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {

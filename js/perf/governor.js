@@ -1260,13 +1260,20 @@ return {
     return want;
   },
   softwareRaceScaleChosen() { return _swRaceScale; },
+  softwareGlSoftPresentDefer() {
+    if (!PerfGov.softwareRaster()) return false;
+    try {
+      if (typeof MenuTeardown !== "undefined" && MenuTeardown.quitReadbackDefer && MenuTeardown.quitReadbackDefer()) return true;
+    } catch (_) { /* harness */ }
+    return false;
+  },
   softwareGlUiReadbackDefer() {
     if (!PerfGov.softwareRaster()) return false;
     try {
       if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stallHandoffCover && RaceEntryProfile.stallHandoffCover()) return true;
     } catch (_) { /* harness */ }
     try {
-      if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover && MenuTeardown.cover()) return true;
+      if (typeof MenuTeardown !== "undefined" && MenuTeardown.quitReadbackDefer && MenuTeardown.quitReadbackDefer()) return true;
     } catch (_) { /* harness */ }
     try {
       const g = typeof document !== "undefined" && document.getElementById;

@@ -4877,7 +4877,7 @@ const TLX = (function () {
       function _queueSoftBlit(rt) {
         if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
         try {
-          if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
+          if (typeof PerfGov !== "undefined" && PerfGov.softwareGlSoftPresentDefer && PerfGov.softwareGlSoftPresentDefer()) {
             if (_softPresentWaiters.length) _softBlitNotify();
             return;
           }

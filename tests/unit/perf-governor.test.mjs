@@ -70,8 +70,8 @@ test("software GL UI readback deferral preserves the Document receiver", async (
   });
 });
 
-test("software GL readback defer covers MenuTeardown quit and garage-close", () => {
-  function defer(softwareGL, cover) {
+test("software GL readback defer covers MenuTeardown quit (not garage mask leak)", () => {
+  function defer(softwareGL, quitHold) {
     const document = {
       getElementById() {
         assert.equal(this, document, "native Document methods require their receiver");
@@ -82,14 +82,14 @@ test("software GL readback defer covers MenuTeardown quit and garage-close", () 
       document,
       Log: { info() {} },
       GameStore: { store: { raw: () => null } },
-      MenuTeardown: { cover: () => cover },
+      MenuTeardown: { quitReadbackDefer: () => quitHold },
     });
     const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
     governor.init({ backendState: () => ({ softwareGL }) });
     return governor.softwareGlUiReadbackDefer();
   }
-  assert.equal(defer(true, true), true, "MenuTeardown.cover defers pack readback on software GL");
-  assert.equal(defer(true, false), false, "quit cover off with hidden sheets does not defer");
+  assert.equal(defer(true, true), true, "quit readback defer on software GL");
+  assert.equal(defer(true, false), false, "quit off with hidden sheets does not defer");
   assert.equal(defer(false, true), false, "hardware keeps the readback");
 });
 

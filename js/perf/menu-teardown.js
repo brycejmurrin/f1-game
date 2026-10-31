@@ -8,6 +8,7 @@ const MenuTeardown = (function () {
   const MAX_MS = 180000;
   const SYNC_WARN_MS = 50;
   let mask = 0;
+  let quitInProgress = false;
   let timer = 0;
   let lastSync = null;
   const syncLog = [];
@@ -61,6 +62,14 @@ const MenuTeardown = (function () {
   function teardownActive() {
     return software() && mask !== 0;
   }
+  function quitRenderHold() {
+    return software() && quitInProgress;
+  }
+  function quitReadbackDefer() {
+    if (!software()) return false;
+    if ((mask & QUIT) !== 0) return true;
+    return pauseSheetUp();
+  }
   function garageBusyPlate() {
     return !software();
   }
@@ -72,16 +81,18 @@ const MenuTeardown = (function () {
   }
   function beginQuit() {
     try { if (typeof PauseOpts !== "undefined" && PauseOpts.disarm) PauseOpts.disarm(); } catch (_) { /* harness */ }
+    quitInProgress = true;
     arm(QUIT);
   }
   function endQuit() {
+    quitInProgress = false;
     if (!software()) { release(QUIT); return; }
     clearTimer();
     const finish = () => release(QUIT);
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(finish));
     else setTimeout(finish, 32);
   }
-  function beginGarageClose() { arm(GARAGE); }
+  function beginGarageClose() { release(GARAGE); }   // legacy mask cleared; #carsetup hidden gates readback
   function endGarageClose() { release(GARAGE); }
   function deferQuitTail(fn) {
     if (!software()) return false;
@@ -100,7 +111,7 @@ const MenuTeardown = (function () {
 
   // pauseSheetUp stays module-local (cover/report call it); report remains the probe seam.
   return {
-    cover, teardownActive, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
+    cover, teardownActive, quitRenderHold, quitReadbackDefer, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
     beginQuit, endQuit, beginGarageClose, endGarageClose,
   };
 })();
