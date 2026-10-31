@@ -434,7 +434,13 @@ function noteResult(order, meta) {
   pendingHome = null;
   if (!pl || !Array.isArray(order) || typeof RaceCeremony === "undefined" || !RaceCeremony.eligible(G, meta)) return null;
   const pos = order.indexOf(pl) + 1;
-  pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now() };
+  // The race's facts for the held title and BY RESULT lighting: the driver, the
+  // fastest lap (the quickest finite best of a classified car), wet, night.
+  let fast = null;
+  for (const c of order) if (c && !c.retired && !c.dsq && Number.isFinite(c.best) && c.best > 0 && (!fast || c.best < fast.best)) fast = c;
+  const t = typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST[G.trackIdx] : null, night = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night));
+  pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now(),
+    driver: String(pl.name || pl.code || ""), fastest: fast === pl, wet: /rain|wet|storm/.test(String(G.raceWeather || "")), night };
   return pendingHome;
 }
 function startHome(from) {
@@ -699,8 +705,9 @@ let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWh
 // the bust goes. Released at the bust itself, the old job (drawn a frame ago)
 // survived unless frames had stalled 2 s, so 1 or 2 sets stayed by frame timing.
 let _flapBustAt = 0;
+const _pk = { now: [], was: [], val: null };   // previewKey's stamp memo (below)
 function spMeshBust() {
-  _spMeshKey = ""; GarageScene.dropPreviewMeshes();
+  _spMeshKey = ""; _pk.val = null; GarageScene.dropPreviewMeshes();
   _flapBustAt = typeof performance !== "undefined" ? performance.now() : 0;
 }
 function garageSeat() {
@@ -717,9 +724,29 @@ function garageSeat() {
 // pair when a second driver is hired.
 // Ten legends share num 1, so the player's Legends slot keys on the code too.
 function seatTag(team, seat) { return (seat && seat.num) + (team.legends && seat ? ":" + seat.code : ""); }
+// previewKey runs 2x per Home frame (getSetupPreviewMesh, prebuildKey) and
+// partsVisualKey resolves the whole setup (Parts.getVisualTiers) each time. A
+// raw-input stamp gates it (perf hunt 9): the team (its engine picks the
+// supplier-locked fallbacks; legends what seatTag adds), every fitted part id, the
+// legality era, the livery id, the seat (num + code, what seatTag reads), the
+// career save, the store revision and the live paint draft. spMeshBust clears it.
 function previewKey() {
-  const team = Teams.LIST[G.teamIdx], seat = garageSeat();
-  return team.id + ":" + partsVisualKey(team.id) + ":" + seatTag(team, seat);
+  const team = Teams.LIST[G.teamIdx], seat = garageSeat(), st = _pk.now;
+  st.length = 0;
+  st.push(team, team.id, team.engine, team.legends, G.getLiveryId(team.id), seat && seat.num, seat && seat.code,
+    Parts.legalityKey ? Parts.legalityKey() : "", typeof GameStore !== "undefined" && GameStore.store ? GameStore.store.rev : 0,
+    Career.inCareer() ? Career.data() : null, G.livDraftOverride);
+  const parts = getTeamParts(team.id) || {};
+  for (const k in parts) st.push(k, parts[k]);
+  if (_pk.val !== null && st.length === _pk.was.length) {
+    let same = true;
+    for (let i = 0; i < st.length; i++) if (st[i] !== _pk.was[i]) { same = false; break; }
+    if (same) return _pk.val;
+  }
+  _pk.was.length = st.length;
+  for (let i = 0; i < st.length; i++) _pk.was[i] = st[i];
+  _pk.val = team.id + ":" + partsVisualKey(team.id) + ":" + seatTag(team, seat);
+  return _pk.val;
 }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];

@@ -343,6 +343,7 @@ and report comparison do not launch Chromium.
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
 | `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
+| `apex_claude_agents` | `ci/claude-agents.mjs` | tree | steward |
 | `apex_codex_agents` | `ci/codex-cloud.py` | tree | steward |
 | `apex_codex_control` | `ci/codex-cloud.py` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |

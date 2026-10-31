@@ -1,6 +1,7 @@
 // The Blender-authored garage camera rigs (tools/gen/blender/garage-camera-rigs.py → the
-// @blender-rigs block of js/garage/arrival.js): every rig, every sequence, every u keeps
-// the eye inside the bay and moving smoothly; side -1 mirrors x; the block is current.
+// @blender-rigs block of the lazy js/garage/garage-data.js, ids and labels in arrival.js's
+// @blender-rigs-index): every rig, every sequence, every u keeps the eye inside the bay and
+// moving smoothly; side -1 mirrors x; the block is current; before the data lands, no rig plays.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -12,16 +13,20 @@ const read = (p) => readFileSync(new URL('../../' + p, import.meta.url), 'utf8')
 const context = vm.createContext({});
 vm.runInContext(read('js/garage/crew-draw.js'), context, { filename: absSrc('js/garage/crew-draw.js') });
 // rigSample is module-private: evaluate arrival.js with one accessor appended after the
-// generated block (a closure, so the sampler's consts are read after the IIFE ran).
-const END = '  // @blender-rigs:end\n';
-vm.runInContext(read('js/garage/arrival.js').replace(END, END + '  globalThis.__rigs = () => ({ RIGS, RIG_IDS, RIG_LABEL, rigSample });\n'),
-  context, { filename: absSrc('js/garage/arrival.js') });
-const { RIGS, RIG_IDS, RIG_LABEL, rigSample } = vm.runInContext('__rigs()', context);
+// index block (a closure, so the sampler's consts are read after the IIFE ran).
+const END = '  // @blender-rigs-index:end\n';
+const ARRIVAL = read('js/garage/arrival.js').replace(END, END + '  globalThis.__rigs = () => ({ RIGS, RIG_IDS, RIG_LABEL, rigSample, rigData });\n');
+vm.runInContext(ARRIVAL, context, { filename: absSrc('js/garage/arrival.js') });
+const before = vm.runInContext('__rigs()', context);
+const NOT_YET = { ids: [...before.RIG_IDS], sample: before.rigSample('crane', 'in', 0.5) };
+vm.runInContext(read('js/garage/garage-data.js'), context, { filename: absSrc('js/garage/garage-data.js') });
+const { RIG_IDS, RIG_LABEL, rigSample, rigData } = vm.runInContext('__rigs()', context);
+const RIGS = Object.fromEntries(RIG_IDS.map((id) => [id, rigData(id)]));
 const DIRS = ['in', 'out', 'home'];
 const us = Array.from({ length: 101 }, (_, i) => i / 100);
 
-test('four rigs, each with an uppercase label and a table for every sequence', () => {
-  assert.deepEqual([...RIG_IDS], ['crane', 'orbit', 'dolly', 'rear']);
+test('six rigs (crane, orbit, dolly, rear, drone, steadicam), each with an uppercase label and a table for every sequence', () => {
+  assert.deepEqual([...RIG_IDS], ['crane', 'orbit', 'dolly', 'rear', 'drone', 'steadicam']);
   assert.ok(Object.isFrozen(RIG_IDS));
   for (const id of RIG_IDS) {
     assert.equal(RIG_LABEL[id], RIG_LABEL[id].toUpperCase());
@@ -72,7 +77,14 @@ test('side -1 mirrors x of the eye and the aim, nothing else', () => {
 
 test('the generated block was written by the current generator (SHA256 of the .py)', () => {
   const want = createHash('sha256').update(readFileSync(new URL('../../tools/gen/blender/garage-camera-rigs.py', import.meta.url))).digest('hex');
-  const block = read('js/garage/arrival.js').split('// @blender-rigs:start')[1].split('// @blender-rigs:end')[0];
+  const block = read('js/garage/garage-data.js').split('// @blender-rigs:start')[1].split('// @blender-rigs:end')[0];
   const got = (block.split('Source SHA256: ')[1] || '').slice(0, 64);
   assert.equal(got, want, 'rerun tools/gen/blender/garage-camera-rigs.py -- --output-dir artifacts/garage-camera-rigs --write-runtime');
+});
+
+test('lazy: the ids and labels are eager, the samples land with js/garage/garage-data.js, and the index matches them', () => {
+  assert.deepEqual(NOT_YET, { ids: ['crane', 'orbit', 'dolly', 'rear', 'drone', 'steadicam'], sample: null }, 'before the data: every id listed, no rig plays');
+  const data = vm.runInContext('GarageData.RIGS', context);
+  const index = JSON.parse(read('js/garage/arrival.js').split('// @blender-rigs-index:start')[1].split('const RIGS = ')[1].split(';\n')[0]);
+  assert.deepEqual(index, Object.fromEntries(Object.entries(data).map(([id, r]) => [id, { label: r.label, n: r.n }])), 'rerun garage-camera-rigs.py --write-runtime');
 });

@@ -874,6 +874,21 @@
       ]
     },
     {
+      "path": "tools/ci/claude-agents.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/ci/claude-transcript.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/ci/codex-cloud.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2830,6 +2845,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/mcp/apex-claude-agents.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/mcp/apex-codex-agents.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
@@ -4127,6 +4147,11 @@
     },
     {
       "path": "tools/ui/explorer/css-evidence.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/explorer/fault-schedule.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
     },

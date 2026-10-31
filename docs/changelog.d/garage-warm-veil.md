@@ -1,0 +1,1 @@
+Fixed: opening the garage no longer flashes a half-painted 3D frame for tens of seconds while shader programs compile on software GL — the game canvas stays hidden until the first complete garage frame is ready.
