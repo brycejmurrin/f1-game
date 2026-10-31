@@ -157,7 +157,7 @@ const HudRelative = (function () {
       if (c.who !== car) { c.who = car; dom.code.textContent = car.code || "---"; dirty = true; }
       const team = teamCss(G, car.team);
       if (c.team !== team) { c.team = team; dom.el.style.setProperty("--rel-team", team || "transparent"); }
-      const tyre = car.pitState === "lane" || car.pitState === "box" ? "PIT" : (car.tyre && car.tyre.code) || "-";
+      const tyre = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(car) ? "PIT" : (car.tyre && car.tyre.code) || "-";
       if (c.tyre !== tyre) { c.tyre = tyre; dom.tyre.textContent = tyre; dirty = true; }
       if (c.lap !== r.laps) {
         c.lap = r.laps; dirty = true;

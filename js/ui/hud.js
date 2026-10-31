@@ -1289,7 +1289,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       // measures from whichever is lower — the map/strip edge or the panel's bottom.
       const leftFilled = Math.max(leftBot, gmBot);
       const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
-      limLeft = hitsRight && leftRoom;
+      limLeft = hitsRight && leftRoom && (typeof HudElements === "undefined" || HudElements.isOn("limits"));   // F-09: no re-stack for a chip the LIMITS toggle hides
       // LIMITS on the left lands under --hud-left-h; a dock-top TYRES still sits
       // in that slot at HUD ≤125% (phoneL survey: limits×tyre): stack it and re-publish so the chip hangs below.
       if (limLeft && tyreFree && !tyreStack && stackTyre(true)) {

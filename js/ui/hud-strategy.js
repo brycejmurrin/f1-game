@@ -160,7 +160,7 @@ const HudStrategy = (function () {
       const dist = (a.prog || 0) - (player.prog || 0);
       ctx.gapS = dist / vFloor;
       ctx.rivalLapped = total > 0 && dist >= total;   // a lap or more up the road: not a fight for this place
-      ctx.rivalInPit = !!(a.pitState && a.pitState !== "none");
+      ctx.rivalInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(a);
       ctx.rivalWear = tyres.spent(a);
     }
     ctx.myWear = spent;
@@ -180,7 +180,7 @@ const HudStrategy = (function () {
     if (bctx.hasBehind) {
       const backDist = (player.prog || 0) - (behind.prog || 0);
       bctx.gapS = backDist / vFloor;
-      bctx.behindInPit = !!(behind.pitState && behind.pitState !== "none");
+      bctx.behindInPit = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(behind);
       bctx.behindWear = tyres.spent(behind);
       bctx.behindLap = behind.lap || 0;
       bctx.behindWindow = pit && pit.windowOf ? pit.windowOf(behind) : "";
