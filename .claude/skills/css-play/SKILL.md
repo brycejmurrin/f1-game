@@ -59,7 +59,7 @@ An edit that changes nothing on screen: a LATER `@layer` or a more specific rule
 3. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
 4. **Do not run `layout-audit` per edit or for one screen.** That is the matrix: once, as a restructure's before-count only.
 5. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
-   commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the
+   commit.** `tests/specs/menu-baseline.spec.js` holds the blessed PNGs (`ls tests/specs/menu-baseline.spec.js-snapshots`); the
    title, select and garage screens are pixel-compared at a 1% tolerance. A
    font-size, tracking, weight or gap change relays text and blows that budget.
    Which sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`
@@ -70,7 +70,7 @@ An edit that changes nothing on screen: a LATER `@layer` or a more specific rule
 
    ```sh
    node tools/ci/test-bg.mjs --spec tests/specs/menu-baseline.spec.js   # does it still match?
-   npm run test:baseline -- --update-snapshots              # re-bless all six; only the moved one changes
+   npm run test:baseline -- --update-snapshots              # re-bless all; only the moved one changes
    ```
 
    Skipping the re-bless has left `menu-baseline` red on the deploy branch and blocked Pages.

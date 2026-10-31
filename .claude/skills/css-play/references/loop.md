@@ -30,24 +30,7 @@ const g = document.querySelector("#game");
 if (g) g.style.visibility = "hidden";
 ```
 
-Catalog (`node tools/ui/css-play.mjs --list`):
-
-| id | root | clicks |
-|---|---|---|
-| title | `#overlay` | (boot) |
-| select | `#select` | `#mb-race` |
-| garage | `#carsetup` | `#mb-garage` |
-| settings | `#pmsettings` | `#mb-settings` |
-| career | `#career` | `#mb-career` |
-| datahub | `#datahub` | `#mb-data` |
-| howtoplay | `#howtoplay` | `#mb-help` |
-| vsfriend | `#vsfriend` | `#mb-vs` |
-| pause | `#pausemenu` | `__apex.race` → `#pausebtn` (boots a Monza race) |
-| hud / hudpause | `#hud` / `#pausemenu` | `?APEX_SURVEY_HUD=1`, no race (cheaper for pause-sheet work) |
-
-Aliases: `overlay`/`menu` → title, `pmsettings` → settings, `carsetup` →
-garage, `help` → howtoplay, `vs` → vsfriend, `paused`/`pausemenu` → pause.
-`--list` is the truth when this table drifts.
+Catalog: `node tools/ui/css-play.mjs --list` is the truth (ids, roots, clicks and aliases such as `menu` → title, `help` → howtoplay, `paused` → pause); `pause` boots a Monza race, `hud`/`hudpause` use `?APEX_SURVEY_HUD=1` with no race.
 
 Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
 (`--click` replaces the catalog path, so include `#mb-settings`).
