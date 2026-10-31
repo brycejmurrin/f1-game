@@ -514,8 +514,12 @@
       "kind": "node",
       "files": [
         "tests/unit/agent-experiment.test.mjs",
+        "tests/unit/agent-inbox.test.mjs",
+        "tests/unit/agent-message-contract.test.mjs",
         "tests/unit/agent-output-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
+        "tests/unit/inbox-main-mcp.test.mjs",
+        "tests/unit/inbox-mcp.test.mjs",
         "tests/unit/output-level-mcp.test.mjs",
         "tests/unit/output-surface.test.mjs"
       ],
