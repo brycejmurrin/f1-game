@@ -280,9 +280,18 @@ const AppearanceStudio = (function () {
     // copy of theme, accents, sizes and contrast; the studio adopts them rather
     // than building second rows. HUD style / size / layout and reduce motion
     // live on HUD & CAMERA and ACCESSIBILITY: the studio jumps there.
-    const adopt = (box, id) => { const home = document.querySelector("#" + id); if (home) box.appendChild(home); };
+    const adopt = (box, id) => { const home = document.querySelector("#" + id); if (home) box.appendChild(home); return home; };
     const jump = (box, text, page, target) => { const b = node("button", "as-jump", text + " \u203a"); b.className = "adv-more-btn"; b.type = "button"; b.dataset.settingsJump = page; b.dataset.jumpTarget = target; box.appendChild(b); };
-    const menu = group(controls, "MENU · GLOBAL"); adopt(menu, "pm-appearance-menu"); jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
+    const menu = group(controls, "MENU CUSTOMIZATION"); menu.id = "ap-menu-customization";
+    controls.insertBefore(menu, profile);
+    // Reuse the real editor door: its owner keeps Home-only gating, Escape
+    // and focus restoration, including after the door moves out of its fold.
+    if (typeof TitleLayout !== "undefined" && TitleLayout.build) TitleLayout.build();
+    const editMenu = adopt(menu, "pm-tl-edit"); if (editMenu) editMenu.textContent = "EDIT MAIN MENU";
+    menu.appendChild(node("p", "as-note", "From Home, move and size buttons, title and artwork. Landscape and portrait save separately."));
+    const titleScreen = adopt(menu, "pm-titlescreen"); if (titleScreen) titleScreen.dataset.studioHome = "title";
+    adopt(menu, "pm-appearance-menu");
+    jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
     const hud = group(controls, "RACE HUD"); adopt(hud, "pm-appearance-hud"); jump(hud, "HUD STYLE is in HUD & CAMERA", "display", "pm-hudprofile-sel"); jump(hud, "HUD SIZE is in HUD & CAMERA", "display", "pm-hudscale"); jump(hud, "HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel");
     const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
     ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
@@ -334,6 +343,7 @@ const AppearanceStudio = (function () {
     }
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
+      { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
       { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system colour color" },
       { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
       { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },

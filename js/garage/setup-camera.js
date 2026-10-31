@@ -699,6 +699,7 @@ function resetSetupCam() {
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
 let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
+let _spWheelDistance = 0, _spWheelSteer = 0;
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of
@@ -710,6 +711,7 @@ let _flapBustAt = 0;
 const _pk = { now: [], was: [], val: null };   // previewKey's stamp memo (below)
 function spMeshBust() {
   _spMeshKey = ""; _pk.val = null; GarageScene.dropPreviewMeshes();
+  if (departureWheels) departureWheels.release();
   _flapBustAt = typeof performance !== "undefined" ? performance.now() : 0;
 }
 function garageSeat() {
@@ -753,11 +755,11 @@ function previewKey() {
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
   const seat = garageSeat();
-  const split = !!driveOut && typeof GarageDepartureWheels !== "undefined";
-  const key = previewKey() + (split ? "|departure" : "");
+  const split = typeof CarWheels !== "undefined" && typeof CarWheels.createGarage === "function";
+  const key = previewKey() + (split ? "|wheels" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
-    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|departure" : "");
+    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|wheels" : "");
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
@@ -773,7 +775,7 @@ function getSetupPreviewMesh() {
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
       }) }).data);
     if (split) {
-      if (!departureWheels) departureWheels = GarageDepartureWheels.create(gfx);
+      if (!departureWheels) departureWheels = CarWheels.createGarage(gfx);
       departureWheels.prepare(key, liv, Parts.getVisualTiers(getTeamParts(team.id), team));
     }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
@@ -969,8 +971,7 @@ function sequenceLook(p) {
   if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
 }
 function drawDepartureReflection(matrix, material) {
-  if (driveOut && departureWheels) departureWheels.draw(matrix, driveOut.motion.distance || 0,
-    -.45 * Math.sin(2 * (driveOut.motion.yaw || 0)), material);
+  if (departureWheels) departureWheels.draw(matrix, _spWheelDistance, _spWheelSteer, material);
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
   exteriorDrawn = false;
@@ -1018,6 +1019,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
       driveOut.motion.distance = arriving.distance = previous.distance; driveOut.motion.yaw = arriving.yaw;
     }
   }
+  _spWheelDistance = arriving && Number.isFinite(arriving.distance) ? arriving.distance : 0;
+  _spWheelSteer = arriving ? -.45 * Math.sin(2 * (arriving.yaw || 0)) : 0;
   sequenceLook(arriving);
   _bayBusy = home.active || !!driveOut || !!preview || !!(arriving && arriving.active);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
@@ -1182,11 +1185,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (context.realExterior && arriving) GarageExterior.poseMatrix(arriving, arrivalCar);
   const team = Teams.LIST[G.teamIdx];
   const carMesh = getSetupPreviewMesh();
-  context.departureWheels = driveOut && departureWheels ? drawDepartureReflection : null;
+  context.departureWheels = departureWheels ? drawDepartureReflection : null;
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
-  if (driveOut && departureWheels && arriving) departureWheels.draw(arrivalCar, arriving.distance || 0,
-    -.45 * Math.sin(2 * arriving.yaw), spMat);
+  drawDepartureReflection(arrivalCar, spMat);
   // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
   // the grid (js/game.js drawRearLights); parked in the bay it stays dark. The
   // tuner's REAR LIGHT can force it on, off or flashing (GarageArrival.rearLightOn).
@@ -1472,10 +1474,11 @@ return {
   // garage is on screen. The cleared key makes the next getSetupPreviewMesh rebuild.
   release() {
     if (G.setupPreviewOn) return false;
+    if (departureWheels) departureWheels.release();
     if (typeof releaseExterior === "function") releaseExterior(); GarageScene.release(); _spMesh = null; _spMeshKey = ""; _spBase = null;   // the hull is CPU-only and frames the next visit
     return true;
   },
-  get meshKey() { return _spMeshKey; },
+  get meshKey() { return _spMeshKey.endsWith("|wheels") ? _spMeshKey.slice(0, -7) : _spMeshKey; },   // the split-wheels suffix is internal: callers compare this to previewKey()
   set meshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
 };
 }

@@ -213,7 +213,7 @@ test("previewKey resolves the setup once across unchanged frames; a store write 
   const Parts = { legalityKey: () => "" };
   const partsVisualKey = (id) => { resolves++; return Object.values(parts).join("|") + "|L:" + G.getLiveryId(id); };
   const make = new Function("Teams", "G", "garageSeat", "seatTag", "partsVisualKey", "Parts", "GameStore", "Career", "getTeamParts", "GarageScene", "performance",
-    "let _spMeshKey = '', _flapBustAt = 0; const _pk = { now: [], was: [], val: null };\n"
+    "let _spMeshKey = '', _flapBustAt = 0, departureWheels = null; const _pk = { now: [], was: [], val: null };\n"
     + fnSource(source, "function previewKey()") + "\n" + fnSource(source, "function spMeshBust()") + "\nreturn { previewKey, spMeshBust };");
   const cam = make({ LIST: [team] }, G, () => team.drivers[0], (t, seat) => String(seat && seat.num), partsVisualKey, Parts,
     { store }, { inCareer: () => false, data: () => null }, () => parts, { dropPreviewMeshes() {} }, { now: () => 0 });

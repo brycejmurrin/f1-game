@@ -6,7 +6,29 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
+// Appearance adopts existing controls; mini-dom's default insertions omit
+// detaching. These fixtures need the browser's single-parent DOM ownership.
+function movingDom(document) {
+  if (!document || !document.createElement) return;
+  const wrapped = new WeakSet(), move = el => {
+    if (!el || wrapped.has(el)) return el;
+    wrapped.add(el);
+    const append = el.appendChild, insert = el.insertBefore;
+    el.appendChild = child => { if (child.parentNode) child.parentNode.removeChild(child); return append(child); };
+    el.insertBefore = (child, before) => {
+      if (child === before) return child;
+      if (child.parentNode) child.parentNode.removeChild(child);
+      return insert(child, before);
+    };
+    return el;
+  };
+  for (const el of [document.documentElement, document.body, document.head]) move(el);
+  const get = document.getElementById, create = document.createElement;
+  document.getElementById = id => move(get(id));
+  document.createElement = tag => move(create(tag));
+}
 function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
+  movingDom(document);
   const values = structuredClone(initial), writes = [], owners = [];
   const store = { get: (k, d) => k in values ? values[k] : d, set: (k, v) => { values[k] = v; writes.push(k); return durable; },
     write: (k, v) => { values[k] = v; return { ok: true, durable, reason: durable ? null : "QuotaExceededError" }; } };
@@ -51,8 +73,9 @@ test("game's Studio integration refreshes touch button size after profile apply,
   studio.undo(); assertButtons(200, "2", "200");
 });
 
-function loadWithControls() {
+function loadWithControls(moving = false) {
   const dom = makeDom(), values = {};
+  if (moving) movingDom(dom.document);
   const panel = dom.byId("pm-panel-appearance"), titleFold = dom.byId("pm-titlescreen"), titleBody = dom.byId("pm-titlescreen-body");
   titleFold.appendChild(dom.byId("pm-titlescreen-sum")); titleFold.appendChild(titleBody); panel.appendChild(titleFold);
   titleBody.appendChild(dom.byId("pm-replay-intro"));
@@ -73,8 +96,54 @@ function loadWithControls() {
   // use their real owners and real SettingRow selects.
   context.document = { readyState: "loading", addEventListener() {} };
   vm.runInContext(source, context); context.document = dom.document;
-  return { studio: context.AppearanceStudio, appearance: context.AppearanceOpts, dom, values };
+  return { studio: context.AppearanceStudio, appearance: context.AppearanceOpts, dom, values, title: context.TitleLayout };
 }
+
+test("Menu customization exposes the existing editor and retains persistence, focus and Home-only ownership", async () => {
+  const { studio, title, dom, values } = loadWithControls(true);
+  const panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  for (const id of ["pmsettings", "tl-editor", "tl-done", "menu-buttons", "menu-brand"]) {
+    const el = dom.document.createElement(id === "tl-done" ? "button" : "div"); el.id = id; dom.body.appendChild(el);
+  }
+  dom.byId("tl-editor").appendChild(dom.byId("tl-done"));
+  const edit = dom.byId("pm-tl-edit"), fold = dom.byId("pm-titlescreen");
+  studio.initUI();
+  const menu = dom.byId("ap-menu-customization"), controls = menu.parentNode;
+  assert.equal(edit.textContent, "EDIT MAIN MENU");
+  assert.ok(edit.parentNode === menu, "reuse the original launcher, including its focus and disabled-state owner");
+  assert.ok(fold.parentNode === menu, "menu controls are outside the Advanced fold");
+  const profile = controls.children.find(child => child.children.some(node => node.textContent === "APPEARANCE PROFILE"));
+  const order = Array.from(controls.children); const menuAt = order.indexOf(menu), profileAt = order.indexOf(profile);
+  assert.ok(menuAt >= 0 && menuAt < profileAt, "menu tools precede profile management");
+  assert.equal(dom.document.querySelectorAll("#pm-tl-edit").length, 1);
+  edit.click();
+  assert.equal(title.editing, true);
+  assert.equal(panel.hidden, true);
+  assert.equal(dom.byId("pmsettings").hidden, true);
+  dom.byId("tl-size-up").click();
+  assert.equal(values.titleLayout.wide.btns.size, 105, "real editor writes the existing landscape preference");
+  dom.byId("tl-done").click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(title.editing, false);
+  assert.equal(panel.hidden, false);
+  assert.equal(dom.byId("pmsettings").hidden, false);
+  assert.ok(dom.document.activeElement === edit, "Done returns focus to the visible Menu customization launcher");
+  studio.saveProfile("My menu"); studio.reset();
+  assert.equal(title.current().btns.size, 100);
+  studio.loadProfile("profile-1"); assert.equal(title.current().btns.size, 105);
+  studio.undo(); assert.equal(title.current().btns.size, 100);
+  const x = dom.byId("pm-tl-btns-x"); x.value = "11";
+  dom.dispatch(x, { type: "input", bubbles: true });
+  assert.equal(title.current().btns.x, 11);
+  await new Promise(resolve => setTimeout(resolve, 360));
+  assert.equal(studio.undo(), true, "the adopted fold still records owner input for Undo");
+  assert.equal(title.current().btns.x, 0);
+  dom.byId("overlay").hidden = true; title.build();
+  assert.equal(edit.disabled, true, "main-menu editing is unavailable during a race");
+  assert.equal(title.enter(), false);
+  assert.equal(panel.hidden, false, "a rejected entry preserves Settings");
+  studio.initUI(); assert.equal(dom.document.querySelectorAll("#pm-tl-edit").length, 1, "reopening does not duplicate controls");
+});
 
 test("Colour Vision profiles, reset and Undo update the actual owner, palette and select; screen scope retains the global choice", () => {
   const { studio, appearance, dom, values } = loadWithControls();

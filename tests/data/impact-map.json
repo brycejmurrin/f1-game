@@ -3014,6 +3014,8 @@
       "buildWheelLayers": [
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
@@ -3021,9 +3023,29 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs"
       ],
+      "createGarage": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "draw": [
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "prepare": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs"
+      ],
+      "release": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "tints": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
@@ -5253,6 +5275,8 @@
       ],
       "ident": [
         "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/shared-math.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
@@ -7838,16 +7862,7 @@
     },
     "js/garage/departure-wheels.js": {
       "create": [
-        "tests/unit/garage-arrival.test.mjs"
-      ],
-      "draw": [
-        "tests/unit/garage-arrival.test.mjs"
-      ],
-      "prepare": [
-        "tests/unit/garage-arrival.test.mjs"
-      ],
-      "release": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-mesh.test.mjs"
       ]
     },
     "js/garage/experience.js": {
@@ -7906,6 +7921,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "create": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
       ],
@@ -8250,6 +8266,7 @@
         "tests/unit/surface-id-parity.test.mjs"
       ],
       "dropPreviewMeshes": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs"
       ],
       "framingHull": [
@@ -8344,12 +8361,16 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
+      ],
+      "drawDepartureReflection": [
+        "tests/unit/garage-mesh.test.mjs"
       ],
       "driveOutEngine": [
         "tests/unit/garage-arrival.test.mjs",
@@ -8378,6 +8399,7 @@
       ],
       "getSetupPreviewMesh": [
         "tests/unit/garage-finish-remap.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "glareScale": [
@@ -8418,6 +8440,7 @@
         "tests/unit/garage-aero-no-camera.test.mjs"
       ],
       "spMeshBust": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs"
       ],
       "startArrivalPreview": [
@@ -8438,7 +8461,6 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs"
       ]
     },
@@ -17117,6 +17139,9 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "homeCamera": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "initUI": [
         "tests/unit/appearance-studio.test.mjs"
       ],
       "loadProfile": [

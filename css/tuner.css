@@ -1529,6 +1529,7 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 }
 .editor-workspace .ew-note { margin: 0; color: var(--dim); font-size: var(--fs-micro); flex: 0 0 auto; }
 .editor-workspace .ew-tools { display: contents; }
+.editor-workspace [data-editor-sequences] { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; gap: calc(var(--gap) * .5); flex: 0 0 auto; }   /* one row: the angle map below keeps its height on a short phone */
 .editor-workspace .ew-tools > summary { display: none; cursor: pointer; align-content: center; }
 :is(#lighting-inner, #camtune-inner, #flyby-inner).editor-workspace[data-editor-view] :is(#lt-rail, #ct-rail, #fb-rail) {
   display: flex; flex-direction: column; max-height: none; overflow: visible;
