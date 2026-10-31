@@ -100,3 +100,28 @@ export function postWarmSlope(byCycle, laterCycle = WARM_CYCLES + 1) {
     series,
   };
 }
+
+/** Extra post-warm cycles raced only when the single pair (cycle WARM+1 − WARM) exceeds the hard bound. */
+export const CONFIRM_CYCLES = 2;
+
+/**
+ * Robust post-warm heap slope (Theil–Sen: median of every pairwise slope) over the cycles after the warm-up
+ * baseline (cycle WARM_CYCLES onward). One forced-GC reading can dip or step by 12–15 MiB on a real GPU leg
+ * (Pages #4577: 148.1 → 134.9 → 149.2; PR #4316: 146.9 → 162.4), so a single pair measures that reading, not
+ * growth. A steady leak (H12: ~12 MiB/cycle) makes EVERY pairwise slope ≈ its rate, so the median stays at
+ * the rate; a one-reading dip or a one-time step is outvoted by the later readings.
+ * @param {Array<{ cycle: number, heapMB: number|null }>} series
+ * @returns {{ slope: number|null, points: number }}
+ */
+export function robustHeapSlope(series) {
+  const pts = series.filter((r) => r.cycle >= WARM_CYCLES && available(r.heapMB));
+  const slopes = [];
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+    slopes.push((pts[j].heapMB - pts[i].heapMB) / (pts[j].cycle - pts[i].cycle));
+  }
+  if (!slopes.length) return { slope: null, points: pts.length };
+  slopes.sort((a, b) => a - b);
+  const m = slopes.length >> 1;
+  const med = slopes.length % 2 ? slopes[m] : (slopes[m - 1] + slopes[m]) / 2;
+  return { slope: +med.toFixed(1), points: pts.length };
+}

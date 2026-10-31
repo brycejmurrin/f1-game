@@ -9,17 +9,6 @@
   ],
   "quarantine": [
     {
-      "spec": "tests/specs/race-cycle-memory.spec.js",
-      "since": "2026-10-31",
-      "owner": "brycejmurrin",
-      "why": "Post-warm menu heap pair cycle6-cycle5 over the 10 MiB bound on one odd forced-GC reading: Pages #4577 (cdd6bd53, macOS Metal) cycle 5 dipped 148.1 -> 134.9 (pair 14.3); PR #4316 failed first try on all three heads with a cycle-6 step 146.9 -> 162.4. Passes on retry. Only the heap-slope message is exempt; track-identity assertions stay blocking.",
-      "title": "racing circuit after circuit keeps at most one world in memory",
-      "signature": "^post-warm menu heap cycle\\d+.cycle\\d+=",
-      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41158673444",
-      "expires": "2026-11-14",
-      "review": "By 2026-11-14 the robust-slope fix (PR #4426) lands and removes this row; do not extend without fresh failed-run evidence and a new deadline."
-    },
-    {
       "spec": "tests/specs/hud-mirror.spec.js",
       "since": "2026-10-02",
       "owner": "brycejmurrin",
