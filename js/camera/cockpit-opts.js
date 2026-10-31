@@ -387,7 +387,7 @@ function initUI() {
     "Water accumulating on the shield in HELMET camera with CLEAR or TINTED visor. Actual rain controls new drops; OFF clears the water. LOW graphics disables droplets.", visorRain, setVisorRain);
   slider("pm-visor-drop-size", "DROPLET SIZE", "Visor droplet size",
     "Size of collected rain on the HELMET visor. 50% is small, 100% is standard and 200% is large. Updates existing drops while paused. Requires CLEAR or TINTED visor with VISOR RAIN on.",
-    200, 10, visorDropSize, setVisorDropSize, 50);
+    200, 1, visorDropSize, setVisorDropSize, 50);
   row("pm-visor-runoff", "WATER RUNOFF", C.visorRunoff.values, C.visorRunoff.labels,
     "How quickly visor water slides away. Airflow moves drops at speed; stopped drops sag downward. REDUCED MOTION keeps drops still.", visorRunoff, setVisorRunoff);
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,

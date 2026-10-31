@@ -337,7 +337,7 @@ test("Cockpit droplet slider has its own minimum and native input persistence; o
   doc.createTextNode=text=>({nodeType:3,textContent:text});
   const disk=new Map(), opts=loadCockpitOpts(disk,{document:doc,SettingRow:{build:()=>({row:doc.createElement("div")}),wire(){},paint(){}}});
   const slider=doc.getElementById("pm-visor-drop-size");
-  assert.deepEqual([slider.type,slider.min,slider.max,slider.step,slider.value,slider.getAttribute("aria-label")],["range","50","200","10","100","Visor droplet size"]);
+  assert.deepEqual([slider.type,slider.min,slider.max,slider.step,slider.value,slider.getAttribute("aria-label")],["range","50","200","1","100","Visor droplet size"]);
   assert.deepEqual([doc.getElementById("pm-visor-beams").min,doc.getElementById("pm-turnchase").min],["0","0"]);
   slider.value="170"; slider.oninput();
   assert.deepEqual([opts.visorDropSize(),disk.get("apex26.helmetVisorDropSize"),doc.getElementById("pm-visor-drop-size-v").textContent],[1.7,"170","170%"]);
