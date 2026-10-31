@@ -871,6 +871,15 @@
       ]
     },
     {
+      "path": "tools/ci/claude-agents.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2745,6 +2754,11 @@
     },
     {
       "path": "tools/manifest.cjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/mcp/apex-claude-agents.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
     },

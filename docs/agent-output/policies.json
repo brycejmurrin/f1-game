@@ -561,6 +561,11 @@
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
     },
+    "tools/ci/claude-agents.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, queued versus unknown delivery, replyRetrieved and retrySafe. Never expose message stdin or credentials."
+    },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1605,6 +1610,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/mcp/apex-claude-agents.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Existing-server descriptor and handler exports; MCP text must mirror structuredContent and preserve isError and dryRun. Not a standalone server."
     },
     "tools/mcp/apex-extras.mjs": {
       "action": "job-status",
