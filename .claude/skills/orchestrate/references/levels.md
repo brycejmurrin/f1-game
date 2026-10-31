@@ -5,8 +5,8 @@ labels, launch comments only. Verification: every PR in scope shows `land` and a
 
 ## auto (cloud session, never asks)
 
-1. From the attended chat: launch yourself with `create_session` (same launch gate), `append_system_prompt` naming
-   level=auto, the task, the caps and the NEVER list; reply with the session link and stop. In the launched session,
+1. From the attended chat: launch yourself per `dispatcher` §launch: the `get_session` receipt, `launch-gate.mjs` (exit 0), `create_session` with `append_system_prompt` naming
+   level=auto, the task, the caps and the NEVER list, then the `RECORD_LAUNCH` line; reply with the session link and stop. In the launched session,
    continue below.
 2. Plan, fan out, answer children from repo > Plan > quoted relays > own judgement (record each pick in the PR body).
 3. A reserved item (NEVER list 3–4) never blocks the rest: label the PR `needs-decision`, comment once with options
