@@ -5,21 +5,16 @@ description: "Use when AI cars or rivals race wrong: overtakes/dive-bombs too ag
 
 # AI racecraft — `AiDrive`, not the bicycle model
 
-`js/physics/ai-drive.js` holds the pure rules (rating → behaviour maps); `game.js` keeps
-the traffic scan, the seeded rolls and the integration. Terms: OT = overtake; ERS =
+`js/physics/ai-drive.js` holds the pure rules (rating → behaviour maps); what stays in `game.js`:
+`references/ratings.md`. Terms: OT = overtake; ERS =
 energy recovery system (deploy and regen); X-mode = low-drag active aero.
 
 ## Gotchas
 
-- Never add a `simRnd()` draw in `ai-drive.js`: the seeded stream is drawn in `game.js`
-  (`makeCars()` / `updateCar`). Tune a map's lerp endpoints (a constant) instead.
-- Some `AiDrive` exports are test-only (`_t`) or have no game.js caller: find the caller
-  with apex-lsp `lsp_references` (skill code-nav) first, or the tune changes nothing.
-- "Dive-bombs" are NOT `otFireRate`: they come from `attackOK`/`passReach`, game.js's
-  lunge rule and `brakeTarget`'s late brake. Prove a fix on two circuits, never per-track.
-- Every `AiDrive` function runs per car per tick: no per-call allocation; keep game.js's
-  call order around `trailStep` / `trailYieldStep`.
-- A wedged car with caution level != 0 is race-incidents-control, not this skill.
+- No `simRnd()` draw in `ai-drive.js`, and some exports are test-only: both in `references/ratings.md`.
+- "Dive-bombs" are NOT `otFireRate`: `references/tactics.md` §Lap-1 / Turn-1 melee. Prove a fix on
+  two circuits, never per-track.
+- Hot path (per car per tick, no allocation, `trailStep` order): `references/ratings.md` §Hot path.
 
 ## Workflow
 

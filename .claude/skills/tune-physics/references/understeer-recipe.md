@@ -1,10 +1,8 @@
 # Recipe: "it understeers in slow corners — make turn-in snappier, prove it"
 
-Node VM only, no browser (AGENTS.md rule 10 applies to Chromium; this boots none).
+Node VM only, no browser.
 
-0. Rule out assists/input: read `__apex.tuning()` and the reporter's store (`gripSteer`, `drivingHelp`, `carWeight`,
-   touch rows). A phone reporter drives `carWeight` 10 (heavier `YAW_INERTIA` + its `YAW_DAMP`, js/input/steer-tuning.js
-   `applySteerTuning`); the VM boots the desktop car (5). Measure BOTH and label each row.
+0. Rule out assists/input and label both cars (phone `carWeight` 10, desktop 5): SKILL.md §Which car?.
 1. Baseline: `node tools/check/player-dyn.mjs --json > scratch/pd-base.json` (desktop car). `TRACK`/`FRAC` only pick the
    straight the car is pinned to (position only), so they do not select a corner. Slow corner = `skidpad` rows whose
    STANDARD speed `vStd(v) = v / PACE` (read `g.apex.tuning().pace`) falls in the `lockTaper` blend (vStd 15-30): at
@@ -35,9 +33,6 @@ Node VM only, no browser (AGENTS.md rule 10 applies to Chromium; this boots none
    (rear not the new limit). `skidpad` is steady state and `stepSteer` (`rise_ms`) runs at 50 m/s only, so "snappier" at slow speed
    is proven as more steady-state yaw, not a faster rise; no slow-speed transient probe exists (a scratch step at `reset(20-30)` copying that block would add one). Report the before/after rows; never assert absolute magnitudes.
 5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold), then ONE browser spec:
-   `node tools/ci/test-bg.mjs --spec tests/specs/understeer-cue.spec.js` (or `physics-characterization.spec.js`); a subagent
-   reports it not run.
-6. Landing a winner: `setPhysics` is an A/B only. `FRONT_GRIP` / `PLAYER_GRIP` defaults live in
-   `js/physics/drive-tune.js` (`DriveTune.create`); a slider-backed knob (`YAW_INERTIA`/`YAW_DAMP` via CAR WEIGHT, steer
-   rows) is set at boot by `js/input/steer-tuning.js` / `js/ui/settings-export.js` (input-controls owns the slider);
-   fixed constants live in `js/physics/consts.js`. Report the win for the phone car and the desktop car separately.
+   `node tools/ci/test-bg.mjs --spec tests/specs/understeer-cue.spec.js` (or `physics-characterization.spec.js`); parent only (SKILL.md).
+6. Landing a winner: `setPhysics` is an A/B only; land it where SKILL.md says the defaults live (input-controls owns the
+   sliders). Report the win for the phone car and the desktop car separately.

@@ -25,11 +25,10 @@ Only at the year rollover (within an hour of New Year): a `MAX_AGE` tab node or 
 different year: its key is `CACHE_PREFIX` + the URL, and the URL embeds the year.
 
 Cache check (rollover only): API bodies live in localStorage under the prefix `apex26.api.`
-(`CACHE_PREFIX`, `js/data/api-transport.js`; past-year TTL `TTL_HISTORIC` in `api.js`). To rule a
+(`CACHE_PREFIX`, `js/data/api-transport.js`). To rule a
 stale entry out, remove every key with that prefix in the page and reload the
 hub (a live-page step: mcp-probe `evaluate_script`, session only — a subagent
 cannot run it).
 Base URLs are the `JOLPICA` / `OPENF1` constants in `js/data/api.js`. From this
-container outbound HTTPS goes through the agent proxy: use `curl` (it honours
-`HTTPS_PROXY` and the CA bundle, `/root/.ccr/README.md`); a 403/407 or TLS error
-there is the proxy, not the API returning nothing.
+container outbound HTTPS goes through the agent proxy (`/root/.ccr/README.md`); a 403/407
+or TLS error there is the proxy, not the API returning nothing.

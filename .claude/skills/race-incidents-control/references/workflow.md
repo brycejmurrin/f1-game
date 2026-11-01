@@ -22,9 +22,7 @@ Load from the SKILL.md index when the task needs this detail.
    - It must not write `px`, `pz`, `head`, speed, or `(s,x)`.
    - Gameplay-adjacent outputs are read-only scalars/state: hazards, panels,
      marble grip. The bespoke collision/barrier model remains authoritative.
-   - Marble grip is the exception that FEEDS THE PLAYER (SKILL.md, Marbles): its
-     input must be AI car state, never curvature; classify any change against
-     docs/PHYSICS.md's marble row.
+   - Marble grip is the exception that feeds the player: SKILL.md, Marbles.
 
 3. **Treat IncidentSim as the bounded exception.**
    - A takeover starts from a clear trigger and always hands back by settle or
@@ -38,7 +36,7 @@ Load from the SKILL.md index when the task needs this detail.
    - `RaceControl.update()` reads `DebrisWorld.hazards()` at about 4 Hz.
    - It raises caution immediately but lowers with hysteresis/minimum hold and
      hard caps to avoid flicker or permanent neutralization.
-   - In multiplayer, only the host computes; guests adopt host `apply()` state.
+   - In multiplayer only the host computes (step 4 of "SC never deploys").
    - The ONE place for the SC/overtake facts this file relies on:
      - OVERTAKE: the Safety Car / red flag disables it until the leader's next
        line crossing after it ends (`otHoldLap`, Art. B7.2.2), so `otEnabled`
@@ -60,30 +58,17 @@ Load from the SKILL.md index when the task needs this detail.
      incident sequence, round/driver keys.
    - Keep fixed insertion/order guarantees when interacting with Rapier.
 
-6. **Use hooks to inspect the exact layer.**
-   - `__apex.debris()` for side-world enabled/ready/active (`DebrisWorld.active`,
-     `apex26.debris` localStorage key).
-   - `__apex.incident()` / `incident({reset:true})` for R2/R3/C1 takeover state.
-   - `__apex.caution({hazards:true})` for flag state plus hazard list.
-   - `__apex.retirements()` after `seed()`/`reliability()`/`race()` for DNF plan.
-   - `carAt(i).otEnabled` to confirm overtake gating under cautions.
+6. **Use hooks to inspect the exact layer:** the SKILL.md Hooks table (`carAt(i).otEnabled` confirms overtake gating under cautions).
 
 7. **Verify narrowly, then with browser coverage.**
-   - Rules: `node --test tests/unit/race-control.test.mjs` after race-control
-     logic changes.
-   - Takeovers (R2/R3/C1): `node --test tests/unit/incident-gate.test.mjs`
-     (promote, handback, window, budget, `release`). `race-control.spec.js` and
+   - Commands: SKILL.md Commands (race-control and incident-gate unit tests, `test-bg.mjs --spec`, `remote-group.mjs`).
+   - `race-control.spec.js` and
      `debris.spec.js` do NOT exercise IncidentSim; `collisions-deep.spec.js` /
      `collisions-deep-vm.test.mjs` switch every takeover OFF via
      `incident({flags})` to test the bespoke clamp, so a takeover change can
      break them through that hook.
-   - Browser coverage: a single spec (`node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js`) or, for the whole
-     `physics-core` group, `node tools/ci/remote-group.mjs physics-core` on the pushed branch (AGENTS.md verification table).
-   - Use `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet` for docs/hooks/unit inventory checks.
 
 ## Traces
-
-Takeover never released, reset after handback, lap-1 DNF, SC never deploys, SC stuck out.
 
 ### Takeover never released (cars frozen / floating after a pile-up)
 
@@ -118,10 +103,6 @@ A car stuck *after* handback is bespoke-model state (off-track, low speed, bad
 heading): use `__apex.resetPlayer()` or `__apex.jump(frac, speed, x)`. Reach for
 `incident({reset:true})` only while `incident().count > 0`.
 
-### Reliability: lap-1 / every-race DNF
-
-Moved to [reliability-trace.md](reliability-trace.md) (team-car retirements, `__apex.retirements()`, `DNS_AT`).
-
 ### SC never deploys
 
 **"SC never deploys" checklist** (steps 1-3 also run through `createGame()` in `tools/lib/game-vm.cjs`; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
@@ -132,12 +113,9 @@ Moved to [reliability-trace.md](reliability-trace.md) (team-car retirements, `__
 2. `debris().active` — flags are computed ONLY from `DebrisWorld.hazards()`, and `update()` returns early (level frozen, only the hard cap ages) while `DebrisWorld.active()` is false: `apex26.debris` is `"1"`, and the Rapier wasm must have loaded (`_loadState === 2`; a trapped step latches it off).
 3. `caution({hazards:true})` — hazard `total` vs `YELLOW_MIN` (one sector) / `VSC_MIN` / `SC_MIN`, and `RED_MIN` on
    `redTotal` (needs ≥ 2 source cars), all in `js/race/race-control.js` (read the values there).
-   3a. What counts and when it drops out (`DebrisWorld.hazards`): only SLEEPING shards, disturbed cones and broken
-   panels on the road surface within `HAZARD_Y_TOL` of road height — never the stopped or pile-up CARS. A shard
-   leaves `REST_DESPAWN_S` after it sleeps (or past `FAR_DESPAWN_M` from the player); the pool is
-   `CAP_DESKTOP`/`CAP_MOBILE` with oldest-recycle. So sample `caution({hazards:true})` every 0.25 s through the
-   settle window and report the PEAK; a below-`SC_MIN` peak after a big pile-up is a hazards() design gap (cars
-   are not hazards), not "works as designed" — say so instead of retuning a threshold.
+   3a. What counts and when it drops out: SKILL.md "What `hazards()` counts". Sample `caution({hazards:true})`
+   every 0.25 s through the settle window and report the PEAK; a below-`SC_MIN` peak after a big pile-up is a
+   hazards() design gap (cars are not hazards), not "works as designed" — say so instead of retuning a threshold.
    3b. `debris({burst:n})` spawns at the PLAYER with NO `sourceCars`: a burst repro can reach SC but never RED.
 4. Multiplayer: only the **host** computes flags; guests adopt host `apply()`.
    **`__apex.net()` does NOT carry caution** — compare `__apex.caution()` on
@@ -163,12 +141,11 @@ Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` i
   the bespoke model or bounded IncidentSim only.
 - Adding an IncidentSim path without a hard handback cap and last-good fallback.
 - Changing tire grip/friction ellipse from IncidentSim; the header forbids it.
-- Computing race control on guests; debris is local, so only host flags define
-  the shared race. Inspect `caution()` on each peer — `net()` omits it.
+- Computing race control on guests (step 4 of "SC never deploys": host only).
 - Lowering flags directly on hazard count with no hysteresis, causing flicker as
   debris despawns.
 - Assuming `RaceControl.update()` slows cars: it only sets the flag and gates
-  overtake; the speed cap is game.js's (step 4). Do not drive cars from here.
+  overtake; the speed cap is game.js's (Workflow step 4).
 - Using wall-clock time or global random sources, breaking seeded determinism.
 - Reporting a timeout-shaped browser failure as logic before checking load and
   re-running the specific spec alone if needed.

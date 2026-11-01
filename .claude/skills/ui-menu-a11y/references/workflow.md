@@ -61,10 +61,8 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet`, then the one spec for the surface:
-   `node tools/ci/test-bg.mjs --spec tests/specs/<menu-keyboard|ui-button-touch|ui-scale>.spec.js`, or
-   `remote-group.mjs ui` on the pushed branch (AGENTS.md verification table). Shell/cache:
-   [bump.md](../../check-changes/references/bump.md).
+8. **Verify.** Commands: SKILL.md §Quick Reference (spec: `menu-keyboard`, `ui-button-touch` or `ui-scale`).
+   Shell/cache: [bump.md](../../check-changes/references/bump.md).
 
 ### Escape path / Escape does nothing
 
@@ -79,12 +77,10 @@ toggling pause behind a sheet: "Escape toggles pause instead" starts in `modal.j
 1. `e.defaultPrevented`: an earlier capture listener took it (armed key-bind, a game.js inner disclosure).
 2. Alt/Ctrl/Meta held: `onEscape` returns without acting.
 3. `UiLayers.top()` is null, or names another layer than the one on screen (step 1).
-4. A nested `:modal` inside the layer stands aside (`topModalInside`); its own `cancel` must close it.
-5. The door is missing or `disabled`: swallowed, no click (step 2). Native `cancel` (`wire()`) clicks a
-   disabled door, which does nothing either.
+4. A nested `:modal` inside the layer stands aside (`topModalInside`, back-stack item 2).
+5. The door is missing or `disabled` (step 2); native `cancel` (`wire()`) clicks a disabled door to no effect.
 6. On a Settings sub-page, BACK pops to `home` and does not close — by design (`SettingsNav.back()`).
-`menu-a11y-audit.test.mjs` pins these statically only (door existence, the onEscape -> click shape);
-behaviour needs `menu-keyboard` / `ui-button-touch`.
+Static pins only (SKILL.md §Quick Reference); behaviour needs `menu-keyboard` / `ui-button-touch`.
 
 ### Pause settings overlay
 
@@ -152,9 +148,7 @@ should add a source-regex pin to that unit file.
 Static route: `SheetShape` writes `data-density="compact"` on the sheet
 (`#sel-inner`); `css/select.css` `#sel-inner[data-density="compact"] ...` drops
 row names, elevation, and the `.track-row` `min-height` (deliberately below the
-`--tap` rung, flags-only strip). Rungs live in `css/tokens.css`: `--tap` and
-`--chip-h`, one value for a mouse pointer and a larger one on `body:not(.desktop)`
-(read the file; the touch `--chip-h` is scale-clamped). Pins: `menu-a11y-audit.test.mjs` (tap/chip rungs
+`--tap` rung, flags-only strip). Rungs: `css/tokens.css` (`--tap`, `--chip-h`). Pins: `menu-a11y-audit.test.mjs` (tap/chip rungs
 and the `.sel-chip` boxes), `ui-improve-pass.test.mjs` ("compact catalogue
 keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
 density). Measured fit is BROWSER-only (`tools/ui/layout-audit.mjs`;

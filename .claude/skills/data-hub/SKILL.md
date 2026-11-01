@@ -27,11 +27,8 @@ follow-owner state → [f1-animation-cameras replay workflow](../f1-animation-ca
 `MAX_AGE` (per tab, `js/data/hub.js`) controls reuse of tab DOM nodes (the check is `showTab`:
 `st.node` younger than `maxAge` and not past its own `nextFlipAt`); it is independent of the
 API cache TTLs (`TTL_*` in `js/data/api.js`). Refreshing a tab can reuse a cached API response.
-A standings table tagged `LAST SEASON · <y> FINAL` is intended ONLY from January to the
-season opener (`loadStandings` in `js/data/standings.js`: the current year is empty, so it
-fetches `season() − 1`). MID-SEASON IT IS A BUG: `driverStandings()` for `season()` returned
-[] — fetch Jolpica `/<season()>/driverstandings.json` and check `jStandingsList` (`js/data/api.js`).
-Never a stale cache: the cache key is `CACHE_PREFIX` + the URL, and the URL holds the year.
+Standings tagged `LAST SEASON · <y> FINAL` are intended only January → opener; mid-season it is a bug →
+`references/season-year.md`.
 
 RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
 script `js/race/real-race.js` replays (grid, per-lap pace, stops, flags,
@@ -53,23 +50,15 @@ that kills DataHub.
 - Empty-tab copy is the `NO_RESULT_MSG` / `NO_LIVE_MSG` / `NO_TELEM_MSG` constants — an
   empty tab with no error is delayed free data, not a fetch bug.
 - Tests mock the hub (`tests/helpers/f1-api-mock.js`); a missed path
-  rewrite fails **open** (empty hub, green UI). The mock answers every year as
-  `season: "2026"`, so a browser spec can never show the `LAST SEASON` fallback.
+  rewrite fails **open** (empty hub, green UI).
 
-Export tab (`loadExport`): not a CSV, not the in-race trace buffer; OpenF1-only gather, hand-rolled zip,
-pinned by `tests/unit/data-export.test.mjs` (mock OpenF1 → unzip: file list, CRC32, JSON shape, empty/failed) → `references/export.md`.
-
-Season/year (schedule/results take no year, standings an optional one; `LAST SEASON` tag, wrong clock,
-stale `apex26.api.*` cache, mock answering every year as 2026) → `references/season-year.md`.
+Export tab (`loadExport`) → `references/export.md`.
+Season/year, stale-standings triage → `references/season-year.md`.
 
 Start with `tests/specs/data-lifecycle.spec.js` or `tests/specs/telemetry-compare.spec.js`
-through `node tools/ci/test-bg.mjs --spec <path>` (one background spec, log in `artifacts/logs/`;
-a subagent reports it not run). Reserve the
+through `node tools/ci/test-bg.mjs --spec <path>` (AGENTS.md §The loop). Reserve the
 `test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
 `lifecycle-unit` is not the hub spec: its file list is `tests/groups.json`
 `test:lifecycle-unit` (only `async-lifecycle` reads `api.js`/`live.js`).
-
-Run `node tools/ci/pick-tests.mjs <changed files>` (or no args: the diff) for the groups. Layout of
-the hub chrome → **ui-menu-a11y** / **survey-ui-matrix**.

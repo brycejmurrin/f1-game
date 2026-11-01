@@ -53,10 +53,9 @@ threshold: sample `caution({hazards:true})` every 0.25 s through the settle wind
 **Marbles are not cosmetic.** AI cars drop marbles through `DebrisWorld.tyreMarble`, and
 `marbleGrip` then cuts the player's grip in the force path (`js/physics/player-forces.js`, floor
 0.93). Arc-rule class: **surface** (pass-4 audit DECISIONS #4): the drop signal must be the AI
-car's own measured lateral acceleration / tyre slip, never track curvature or the racing line — a
-curvature-derived drop is an arc-rule leak. The classification home is the marble row of
-docs/PHYSICS.md's legitimate-columns table; point there, do not copy it. Changing marbles is a
-physics change: tune-physics' arc check and agent `physics-contract-auditor`.
+car's own measured lateral acceleration / tyre slip, never curvature or the racing line. Classify
+changes against the marble row of docs/PHYSICS.md's legitimate-columns table (do not copy it); a
+marble change is a physics change: tune-physics' arc check and agent `physics-contract-auditor`.
 
 Flags / storage:
 

@@ -28,7 +28,7 @@ compare equal sim time and equal wall time separately.
 ## Common mistakes
 
 - Adding a second shake accumulator — feed `feel.shake`; `vantage.js` owns only the onboard kerb shiver.
-- Shipping a kerb "punch" as shake or vibrate only — touch comfort zeroes shake and iOS has no vibrate.
+- Shipping a kerb "punch" as shake or vibrate only — see SKILL.md (touch phone).
 - Using `Particles.sparks`/`kickup` to fix kerb feel — kerb is `onKerb`.
 - Editing physics constants because an impact feels soft. Layer audio/shake
   first; **tune-physics** only when measured behaviour is wrong.

@@ -54,11 +54,9 @@ During a race `#soundbtn` is **hidden**. Open pause → MUSIC & SOUND
 | Volumes | `#as-mvol` / `#as-svol` | `setMusicVolume` / `setSfxVolume` |
 | Radio FX | `#as-rfx` | `setRadioFx` — sfx bus, so it is independent of the TEAM RADIO voice switch |
 
-Turning **music** off and expecting silence is the common mistake — the
-engine idle still hums on the **sfx** bus. That is correct.
+Music OFF leaves the engine humming on the sfx bus (SKILL.md table); that is correct.
 
-`setPaused(true)` calls `GameAudio.stopEngine()`; resume calls
-`GameAudio.startEngine()` again when `soundOn` is true (independent of music).
+`setPaused(true)` / resume: see §Music cuts out on pause.
 
 ## Pitch curve
 
@@ -69,10 +67,6 @@ oscillator frequencies. After an edit, reload — WebAudio does not hot-reload
 same speed. A player-side complaint about the SHAPE of the curve (idle too
 high, top not high enough) is a tune question first: `__apex.audioTune({ idle,
 revRange, curve, pitch })` covers a 50:1 spread before any code changes.
-
-```js
-GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
-```
 
 ## Diagnosing silence or flat pitch
 
@@ -108,16 +102,11 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` caps at
    `MAX_RPM·1.04` — `rpmFor` in `js/race/pace-math.js`; `MAX_RPM` 15000 /
    `IDLE_RPM` 5000 in `js/physics/consts.js`; `revFrac` is clamped 0..1 in
-   `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. Above 98.5%
-   revs the limiter chops, and in top gear it fades to a steady note after
-   `LIM_HOLD` + `LIM_FADE` (`limiterHeld()`, `limiterDepth()`). Read
+   `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. The limiter
+   fade in top gear is in the Layers table. Read
    `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:
-   equal = pinned by design. `apex_eval` boots Chromium (AGENTS.md rule 10); the
-   Node VM has no AudioContext, so `rate()` is 0 there. To
+   equal = pinned by design. The Node VM has no AudioContext, so `rate()` is 0 there. To
    widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
-
-`GameAudio.context()` returns the live AudioContext (read `.state`);
-`GameAudio.debug().contextState` is the same value as a string.
 
 ## Gear-shift cue silent
 
@@ -144,8 +133,7 @@ look at the callers.
 cracks; the heel-and-toe pitch flare (`revFlare`) is DOWNSHIFT-only (`shift(false)`),
 so a missing blip on an upshift is by design. For a missing downshift blip check
 `shiftState().fired` rises, then that the engine is running (`debug().engineOn`;
-`shift()` sets the flare only when `engineOn`). The flare is +5% playbackRate
-decaying over ~90 ms on the sample core only (the synth fallback ignores it; `GameAudio.carSfx().revFlare` reads it) and is not scaled by the SHIFT trim
+`shift()` sets the flare only when `engineOn`). The flare (Layers table) is sample core only (the synth fallback ignores it; `GameAudio.carSfx().revFlare` reads it) and is not scaled by the SHIFT trim
 (a trim of 0 silences the crack, not the flare).
 
 ## Music cuts out on pause / never resumes

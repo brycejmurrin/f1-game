@@ -13,16 +13,9 @@ replay identically, so feedback may *read* physics state but never write it.
 
 ## Map juice to Apex systems
 
-- **Shake** → accumulator `feel.shake` in `js/game.js`; applied by `CamFeel.shake` (`js/camera/feel.js`)
-  through `CamTune.shakeOffset` (`js/camera/offsets.js`). The onboard KERB RIB SHIVER is
-  `js/camera/vantage.js` `onboardAttitude` (`KERB_AMP`). Never write shake into `car.px/pz`, `s`, `x`, or `psi`.
-- **Particles** → `js/fx/particles.js`. Render-path only.
-- **Audio** → `js/audio/engine.js` (shifts, wall, ERS, sector/lap). Kerb audio is the CONTINUOUS kerb loop
-  (`kerbSrc`/`kerbGain`, driven by `setEngine`'s `onKerb`); legacy `GameAudio.rumble()` returns at once while
-  `kerbLive`, so tuning it changes nothing.
-- **Tyre marks** → `js/fx/skidmarks.js` from real slip/contact.
-- **Chassis motion** → `js/physics/body-attitude.js` — visual only.
-- **Budget** → `js/perf/governor.js` / `PerfGov`. Cap and decay.
+Shake, kerb, sfx, sparks, kickup, tyre marks, body attitude, HUD pops and the perf budget each have one
+start file: the channel table in [references/workflow.md](references/workflow.md). Every channel is
+render/audio only; never write shake into `car.px/pz`, `s`, `x`, or `psi`.
 
 **Bryce plays on a touch phone (iPhone).** Touch auto-comfort (`js/camera/cam-comfort.js`) turns shake, the kerb
 shiver and the onboard buzz OFF on first touch boot, and iOS Safari has no `navigator.vibrate`. So a phone "punch"
@@ -41,13 +34,11 @@ must be AUDIO or VISUAL (body attitude, particles, HUD); shake and haptics alone
    node --test tests/unit/determinism-replay-vm.test.mjs   # same seed twice, AI finishing order: catches FX RNG/state leaks
    ```
    The first two pin the player model only; the third is the race-level check.
-   Never regenerate `tests/data/physics-baseline.json` to make it pass. Then, in a
-   session (a subagent reports it unverified), the single specs, one at a time in the background
-   (AGENTS.md rule 5): `node tools/ci/test-bg.mjs --spec tests/specs/physics-characterization.spec.js`, then
-   `--spec tests/specs/agent-determinism.spec.js`. Touching `feel.hitStop`:
+   Never regenerate `tests/data/physics-baseline.json` to make it pass. Then the single specs
+   (AGENTS.md §Verification, rules 5 and 10): `node tools/ci/test-bg.mjs --spec tests/specs/physics-characterization.spec.js`,
+   then `--spec tests/specs/agent-determinism.spec.js`. Touching `feel.hitStop`:
    compare `__apex.obs()` and lap time before/after on a seeded run.
 4. See / hear it live at 844×390 touch: skill **mcp-probe** (`__apex.obs()`/`physState()` for kerb state).
-   A subagent reports it unverified.
 
 ## When NOT to use
 
@@ -55,8 +46,8 @@ must be AUDIO or VISUAL (body attitude, particles, HUD); shake and haptics alone
 - The car's measured behaviour is wrong (understeer, grip, pace) → **tune-physics**.
 - Camera lag: measure → **playwright-probe**, fix → **f1-animation-cameras** (also replay/broadcast cuts).
 - Rumble/haptics *mapping* on a gamepad → **input-controls**.
-- FX allocation or an RNG draw inside `updateCar` (setting flags/scalars there, like the kerb cue block, is fine), or shake/freeze that changes `obs()`/`act()`
-  (a new hit-stop holds the render, never the sim clock: references/workflow.md).
+- FX allocation or an RNG draw inside `updateCar`, or shake/freeze that changes `obs()`/`act()`:
+  forbidden, see references/workflow.md §Common mistakes.
 
 ## Load on demand
 

@@ -9,9 +9,6 @@
 | `gripSteer` (slider `pm-gripsteer`) | GRIP STEER: notch 1 = OFF. This skill owns the slider, its default and migration only; the cap maths, A/B and which lock it receives (the shaped `og.shaped`, so expo/maxSlip reach it) are **tune-physics** |
 | `STEER_SCHEMA` | per-version migration ladder in `steer-tuning.js` — do not flatten to one gate |
 
-The STEER LOCK / LINEARITY / SPEED STEER sliders (`maxSlip` / `expo` / `speedRef`) are owned here as player
-settings; **tune-physics** owns them only as `setPhysics` A/B knobs.
-
 ## Changing a default
 
 Changing an assist **default** does not reach existing players (`store.get` keeps the stored value). A new default

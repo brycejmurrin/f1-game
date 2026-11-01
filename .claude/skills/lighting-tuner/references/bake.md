@@ -13,16 +13,13 @@
 | `window.LightEdits = {…}` | a DELTA — only the player's own overrides, what COPY VALUES emits | `merge-proposals.mjs` (merge) |
 | `window.LightPresets = {…}` | a full SNAPSHOT of every profile | `bake.mjs` (full replace) |
 
-COPY VALUES exports only the local overrides, as `window.LightEdits`, current condition first.
-That is a DELTA: feeding it to `bake.mjs` would write those few keys and delete every other, so
-`bake.mjs` refuses it by name. Either way this skill writes shipped `js/lighting/presets.js` (no
-cache bump). localStorage still outranks the file until RESET.
+COPY VALUES exports `window.LightEdits`, a DELTA that `bake.mjs` refuses by name. Either tool
+writes shipped `js/lighting/presets.js` (no cache bump; localStorage outranks it until RESET).
 
 Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
 
-Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
-`node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs` (validates + merges;
-does not bump cache). Never let a subagent write `js/lighting/presets.js`.
+Per-track agent proposals: see the merge path below. Never let a subagent write
+`js/lighting/presets.js`.
 
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 
@@ -33,15 +30,7 @@ WARNING (incoming < half of shipped) is a stop sign, not a block; a
 `window.LightEdits` paste is refused outright, because that shape is now an
 expected input and guessing wrong destroys the file.
 
-```sh
-node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt   # SNAPSHOT only
-```
-
-A player's paste is the other shape, and merges:
-
-```sh
-node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edits.js
-```
+Commands: Steps (snapshot, `bake.mjs`) and The merge path (`merge-proposals.mjs`) below.
 
 ## Capture, review, ship
 
@@ -122,9 +111,7 @@ Values are partial `{knobId: number}` maps (only non-default knobs).
 
 ### Dry run (no write into js/)
 
-Add `--check` (alias `--dry-run`) to either script: validates and prints a receipt, writes nothing.
-
-Verdict: `Merged N incoming profile(s): W written, K knob(s).` rc 0; any error lists
+`--check` (see Read-only preflight receipts) prints a receipt and writes nothing. Verdict: `Merged N incoming profile(s): W written, K knob(s).` rc 0; any error lists
 `file: key.id …` and rc 1 with nothing written. `bake.mjs` reads bare JSON or a JS
 literal only: a leading `//` comment line fails to parse, so strip comments from a
 `window.LightPresets` paste first (`window.LightEdits` goes through `merge-proposals`, which tolerates them).
@@ -132,8 +119,6 @@ literal only: a leading `//` comment line fails to parse, so strip comments from
 ### Notes
 
 - Helper takes a file arg OR stdin (`bake.mjs - < blob`).
-- Only `js/lighting/presets.js` changes the shipped look; a player's
-  localStorage still overrides until RESET.
 - Parse failure writes nothing — usually a stray trailing comma.
 - Regex failure (`Could not find the window.LightPresets assignment`): the
   file must contain a line-anchored `window.LightPresets = {` … `};` on its

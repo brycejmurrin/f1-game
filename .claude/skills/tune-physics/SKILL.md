@@ -54,9 +54,7 @@ contract says, not the raw stick; an `expo` A/B is exactly what makes the two di
 `node --test tests/unit/grip-steer.test.mjs`. `player-dyn.mjs` measures a bare seat (GRIP STEER off), so A/B it
 with `--seat shipped` plus a GRIP STEER on/off pair and say which seat each row came from.
 
-**`ROAD_FOLLOW` ships at `0` (OFF)** on purpose. The DRIVING HELP slider maps
-notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
-design reversal, not a tweak — flag it.
+DRIVING HELP maps notch 1..10 to `ROAD_FOLLOW` `0..0.70`; raising its OFF default is a design reversal, not a tweak — flag it.
 
 Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
@@ -78,7 +76,7 @@ node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SH
 [references/understeer-recipe.md](references/understeer-recipe.md) step 2 and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; understeer =
 front slip `aF` past its peak with `uR` settled below ~1). `tools/check/physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
-same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
+same tables.
 
 Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.

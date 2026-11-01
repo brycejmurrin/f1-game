@@ -16,8 +16,7 @@
 
 - One-track complaint → that track's `"<id>|tod|wx"` row.
 - `"*|tod|wx"` stamp or `lightCopy()` → EVERY circuit; only for a fleet complaint, named in the PR.
-- Just one number to change, no blob → edit that one key by hand in `presets.js`; never hand
-  `bake.mjs` a one-key object (it is a FULL REPLACE).
+- Just one number to change, no blob → hand-edit that key ([bake.md](bake.md)).
 - `applyRaceSettings` (`js/lighting/atmosphere.js`) only for STRUCTURAL changes.
 
 ## localStorage and live sliders

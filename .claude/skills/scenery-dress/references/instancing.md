@@ -58,11 +58,7 @@ judging a `graph-parity` mismatch.
    - Use `NODE_COLOR` (`"@node"`) + `place.col` for per-placement tint.
 
 3. **Parity gate** — geometry must match exactly:
-   ```sh
-   node tools/track/graph-parity.cjs <id>
-   BASE=<pre-migration-ref> node tools/track/graph-parity.cjs --all
-   ```
-   Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2, "nothing to compare"; the MCP tool requires `base`).
+   Commands: Quick Reference (use `BASE=<pre-migration-ref>`). Default `BASE=HEAD` only checks working-tree drift; on a clean `js/track`+`js/circuits` it refuses (exit 2, "nothing to compare"; the MCP tool requires `base`).
    Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.
 
    Pine parity vs a pre-re-param `HEAD` is *expected* to fail (a documented look change,
@@ -79,11 +75,7 @@ judging a `graph-parity` mismatch.
    discrete keys) before expecting instancing savings.
 
 5. **Fast contract** (`node --test tests/unit/track-graph.test.mjs`, <1 s) **then GL wiring** (browser):
-   ```sh
-   npm run test:tooling-fast
-   npm test -- tests/specs/instanced-draw.spec.js   # BROWSER, one spec, background (AGENTS.md rule 4)
-   ```
-   A subagent reports it not run. The whole `gfx` group (`node tools/ci/remote-group.mjs gfx`, pushed
+   Commands: Quick Reference (the spec is browser, parent only). The whole `gfx` group (`node tools/ci/remote-group.mjs gfx`, pushed
    branch) only when the TLX/GLX instanced-draw path itself changed.
 
 6. **Ship** — `npm run gen:check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) if you edited `js/`. Visual spot-check:
@@ -99,9 +91,7 @@ result; Not run: `instanced-draw.spec.js` (browser) when you could not run it.
 
 ### Common mistakes
 
-- **Skipping `BASE=<ref>`** — `npm run test:graph-parity` (no `BASE`) diffs
-  HEAD vs the working tree, so it says nothing about a committed migration
-  (a clean tree exits 2); name the pre-migration ref.
+- **Skipping `BASE=<ref>`** — a committed migration needs the pre-migration ref (step 3).
 - **Replay through UNGUARDED emitters** — bypasses on-track rejection.
 - **Unique `key` per placement** — defeats define-once.
 - **Ignoring `bakeOnly`** — partially suppressed nodes or radial ops with

@@ -16,12 +16,9 @@ launch a browser (AGENTS.md rule 10, hook-enforced).
   eye hundreds of metres from the car means a missing `snapCam()`, not a short wait (cameras.md).
 - A still frame cannot show shimmer (headless rAF freezes at 0 fps), and a CPU chart cannot see
   fill-bound work: use `motion-capture.mjs` (trust p90) or `profile.mjs --repeat 3`.
-- Inside a tunnel bore use cam `eye` at a mid-bore frac, never `park` (the chase rig).
-- `--gpu llvmpipe` / `APEX_GL=llvmpipe` is CI-only here: it fails fast, never falls back.
-- Before/after: rule 2 forbids source edits during a capture; use `git stash apply <sha>`, never
-  `pop` (the stash stack is shared).
-- `browserType.launch: Executable doesn't exist` means the SessionStart install did not run:
-  `bash tools/env/cloud-agent-install.sh`.
+- Inside a tunnel bore use cam `eye` at a mid-bore frac, never `park` (recipes.md §Tunnel).
+- Before/after: `git stash apply <sha>`, never `pop` (commands.md §Before/after captures).
+- `browserType.launch: Executable doesn't exist`: AGENTS.md rule 1 (`cloud-agent-install.sh`).
 
 ## Workflow
 
@@ -35,8 +32,7 @@ launch a browser (AGENTS.md rule 10, hook-enforced).
 3. A multi-minute capture (GLX `webgl2` boot, `backend-compare`, `motion-capture`,
    `profile.mjs --repeat`) runs as ONE `run_in_background` task logging to `artifacts/logs/`
    (AGENTS.md rules 4, 5, 7 hold the rest).
-4. Write captures under `artifacts/` (or the tool's `scratch/` default); for A/B use
-   `artifacts/cmp/{before,after}/` with the SAME args in both states.
+4. Write captures under `artifacts/` (or the tool's `scratch/` default); A/B: commands.md §Before/after.
 5. Check the output: blank-frame / `free-cam inactive` warnings, the capture manifest, and
    console errors; view images within the image budget (recipes.md §Galleries and image budget).
 6. Return paths plus every cell left unverified.

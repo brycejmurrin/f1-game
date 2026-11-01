@@ -1,7 +1,5 @@
 # Stuck / unstuck recipe (AI wedged, never recovers)
 
-Confirm the SKILL.md discriminator first (caution level 0, `stuckT` growing).
-
 Two timers live in `updateCar` (`game.js`; search `stuckT` / `rescueT`).
 `stuckT` grows while speed is below 7 and `AiDrive.isBoxed` finds no room both
 sides or a close blocker. `AiDrive.stuckThreshold(aiT)` reads a traits object

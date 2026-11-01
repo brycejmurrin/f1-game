@@ -1,7 +1,5 @@
 # Playwright-probe commands — committed tools, `shot.mjs`, before/after, motion
 
-Load from the SKILL.md index when you need exact command lines.
-
 ## Contents
 - Committed tools (use these first)
 - Single framed screenshot (`shot.mjs`)
@@ -85,6 +83,5 @@ node tools/shot/profile-gameloop.mjs singapore render        # raw .cpuprofile o
 ```
 
 `node tools/shot/flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
-`tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair. A still frame cannot show
-shimmer and a CPU chart cannot see fill-bound work: the motion-capture and perf-profile references
-(linked from SKILL.md) say what the numbers mean before you A/B on them.
+`tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair; motion-capture.md and
+perf-profile.md say what the numbers mean.
