@@ -1,7 +1,6 @@
 # Traffic tactics recipe
 
-All in `ai-drive.js` / `ai-corridor.js`; state in game.js's per-car AI update (game.js has several
-`updateCar`s: find the caller with apex-lsp `lsp_references` on the `AiDrive` export; PHYSICS.md §Racecraft tactics).
+All in `ai-drive.js` / `ai-corridor.js`; state in game.js's per-car AI update (find the caller as in `ratings.md`; PHYSICS.md §Racecraft tactics).
 
 - **Follow gap** is a TIME (`followGap`: s0 + v·T, T 0.15-0.30 s; tight 0.05 s when a pass is
   latched/armed or towing). Queue window `max(16, follow+6)`.
@@ -44,8 +43,7 @@ race-incidents-control. "Dive-bombs" (late lunges into a corner, esp. turn 1) ar
 1. `attackOK` quality ≥ 0.32 — `startCalm` cuts it via `ctx.calm` toward `START_ATTACK`
    (it does NOT touch `otFireRate`), plus `passReach` (half alongside by the turn-in?).
 2. game.js's lunge rule abandons a move still not half alongside at `toTurnIn < 6`.
-3. `brakeTarget`'s craft late-brake (×`lerp(1, 1.07, craft)` attacking with room) and
-   optimism (±1.2 %) — how deep the dive goes.
+3. `brakeTarget` late-brake and optimism (`references/brake-target.md`) — how deep the dive goes.
 4. `startGapT` headway, the tight follow gap (`followGap`), `passSideBonus`, `sbsCommitT`.
 Measure BEFORE and after, same seeds:
 `node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5` — compare `byLap` lap 1

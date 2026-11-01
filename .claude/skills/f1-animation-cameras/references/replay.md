@@ -21,15 +21,13 @@ nothing about it. For HIGHLIGHTS, launch in the live page with `{ watch: true, r
 (skill mcp-probe), or pin `seekTo` with a reel in a node test (`reelFor`/`highlightsFor` are
 exported pure functions in `js/race/real-replay.js`).
 
-**A seek snap is designed.** `seekTo` → `reposition(T, highlight, paint=true)`: on every
-non-continuous seek a HIGHLIGHTS scrub cuts to the reel item ahead (#2196), calls `bc.onCut`
-and ends in `G.snapGameCam(paint)`. Before changing code, ask which one the user saw: the
-snap itself (by design), the wrong subject after it (follow/lock, [diagnosis](replay-diagnosis.md)),
-or a bad blend after the snap.
+**A seek snap is designed** ([diagnosis](replay-diagnosis.md)). Before changing code, ask which one
+the user saw: the snap itself (by design), the wrong subject after it (follow/lock), or a bad
+blend after the snap.
 
 2. `node tools/shot/replay-camera-probe.mjs --fixture default --track baku --backend three --viewport 640x360 --frames 1 --seed 42 --timeout-ms 900000 --out artifacts/replay-camera --plan`
 3. When a browser is available and no other rendering run is active (AGENTS.md
-   §Session shape: block-or-background, reap what you launched, busy-box timeouts), the parent runs the same probe without `--plan` as ONE
+   rule 4), the parent runs the same probe without `--plan` as ONE
    background Bash task, log in `artifacts/logs/replay-camera.log`. If it fails
    on a missing `ffmpeg-<revision>`, install it first
    ([prerequisites](replay-diagnosis.md)). Review every phase's frame/camera
@@ -39,6 +37,5 @@ or a bad blend after the snap.
    phase cannot show it.
 
 Where the anchor lives, fields to diff, non-Baku fixtures: [diagnosis](replay-diagnosis.md).
-See [the fixture and evidence contract](replay-workflow.md). Delegate only
-fixture review or artifact analysis. Software captures establish that session's
+See [the fixture and evidence contract](replay-workflow.md). Software captures establish that session's
 render behavior; native WebGPU/device behavior needs its own run.

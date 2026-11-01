@@ -1,7 +1,7 @@
 # Scenery hard rules — rejection, footprint, vertex budget
 
 Load this when a prop vanished, clipped the racing line, or a dress grew
-the mesh a lot. Placement model + helper families stay in SKILL.md.
+the mesh a lot.
 
 ## Contents
 - Survey before placing
@@ -33,7 +33,9 @@ uses. `def._sceneryShift` is the single arc number between them.
   `node -e 'const T=require("./tools/track/verify-track.cjs").buildContext(),d=T.LIST.find(x=>x.id==="spa");T.buildCenterline(d,{line:false});console.log(d.sceneryStartFrac,d._sceneryShift)'`
 - **`K(s)` is authored-frame and passes straight through.** Never pre-shift it.
   The wrapped `(k, side, …)` helpers (`anchor`, `tree`, `place`, `building`, …)
-  apply the shift themselves, exactly once.
+  apply the shift themselves, exactly once. Dropping a non-zero `sceneryStartFrac` re-bases every
+  authored frac literal at once — take a `tools/track/audit-circuit.cjs` baseline before and after,
+  never a one-line edit.
 - **`along()` hands authored-frame `k` to the callback** (`sceneryNodeToAuthored`). Wrapped helpers inside an `along` span apply the
   shift once. Table reads like `blocked(k / n)` still need care: prefer
   authored fracs / `K(s)` when testing against authored windows.
@@ -46,11 +48,8 @@ uses. `def._sceneryShift` is the single arc number between them.
 
 ## On-track rejection
 
-Every primitive emitter (`addBox`/`addCyl`/…) is wrapped in a Minkowski test
-against the road half-width (`rejBox` / `onRoadHit`). If a prop's **full
-oriented footprint** covers tarmac at **any** node it rises above, the
-**entire shape is dropped**. Too-close props silently vanish — increase
-`dist`/`gap`.
+Every primitive emitter is footprint-tested (`rejBox` / `onRoadHit`; `docs/SCENERY-API.md` §rejection):
+a footprint touching tarmac drops the **entire shape**. Too-close props silently vanish — increase `dist`/`gap`.
 
 - **Console warning is not universal.** Composite helpers (`building`,
   `tree`/`pine`/`palm`, `wall`/`fence`/`guardrail`, `tower`, `billboard`,
@@ -60,24 +59,20 @@ oriented footprint** covers tarmac at **any** node it rises above, the
   kind (`verify-track` prints them as `guard drops`). Raw primitives only
   increment `_culled` and log `Log.info("track", "<id>: culled N on-track primitive(s)")`
   — a count, not a location.
-- **Circuit-inline `onTrack(x, z, margin)`** is a single-point guard. It
-  does not prove the full footprint is clear. If a bespoke shape vanishes
-  or clips, check for a single `onTrack()` vs `rejBox(...)` over the widest
-  section.
-- **New composite emitters** (engine, `js/track/scenery/*.js`, only — `rejBox` is not on the circuit `api`) must use `rejBox(centre, [w,h,d], basis)` over
-  the widest section — not one `onTrack()` point. The "props over the racing
-  line" bug was `building()`/`neonTower`/masts testing an inner-face point
-  on a curving street.
+- **Circuit-inline `onTrack(x, z, margin)`** is a single-point guard; it does not prove the full
+  footprint is clear.
+- **New composite emitters** (engine, `js/track/scenery/*.js`, only — `rejBox` is not on the circuit `api`) must use
+  `rejBox(centre, [w,h,d], basis)` over the widest section, not one `onTrack()` point (the "props over the
+  racing line" bug: `building()`/`neonTower`/masts testing an inner-face point on a curving street).
 - **`RAW.*` (engine-internal, not on the circuit `api`) bypasses the guard.** Crowd spectators via `RAW.addBox` are not
   footprint-tested; only place them behind a shell.
 - **Regression:** `tests/specs/props-over-road.spec.js` (in `test:circuits`).
-  One track: `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots` (boots a browser: parent only).
+  One track: `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots` (browser, parent only).
 
 ## Terrain anchoring
 
-`place`/`prop`/`anchor` sit on raycast terrain when available, else
-`groundYAt`. Props >120 m out or on street circuits can float/sink — pull
-them in or use `anchor()` and read `c[1]`. Float/sunk fixes: [float-fix.md](float-fix.md).
+Props >120 m out or on street circuits can float/sink — pull them in or use `anchor()` and read `c[1]`.
+Which ground the helpers use and the fixes: [float-fix.md](float-fix.md).
 
 ## Reverse circuits
 
@@ -107,5 +102,5 @@ deck from below.
 
 ## Trees/lamps
 
-Must never book a barrier — `recordBarrier` (on the `api`) and the engine's own `blockAt`
-(`js/track/scenery/*.js` only) shrink the driving boundary. Keep furniture clear of the collision edge.
+Must never book a barrier: `recordBarrier` (on the `api`) and the engine's own `blockAt`
+(`js/track/scenery/*.js` only) shrink the driving boundary (SKILL.md §Barriers).

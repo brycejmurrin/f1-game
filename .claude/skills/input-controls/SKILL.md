@@ -13,8 +13,7 @@ paired stays here. Escape/focus paths → **ui-menu-a11y**.
 
 - A sticky gamepad is not understeer: fix the device path here, never a force. The STEER LOCK / LINEARITY /
   SPEED STEER sliders are player settings owned here; tune-physics owns them only as `setPhysics` A/B knobs.
-- A new default reaches fresh installs only (`store.get` keeps the stored value): also add a `STEER_SCHEMA`
-  migration step, and never flatten the ladder to one gate.
+- A new default reaches fresh installs only: add a `STEER_SCHEMA` step (`references/assists.md`).
 - iOS user activation comes only from `touchend` / `pointerup` / `click`: a `requestGyro()` or audio request tied
   to `input.js`'s pointerdown handlers fails on the first tap (the phone page asks inside its CONNECT tap).
 - A short decay after lift is the `KEY_RAMP_OUT` ramp, not a stuck latch: `btn.left` false with `btn.steerVal`

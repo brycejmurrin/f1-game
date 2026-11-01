@@ -8,8 +8,7 @@
 3. Footing: `place`/`prop`/`anchor` use raycast terrain, else `groundYAt`; `grandstandEx`
    (`js/track/scenery/nature.js`) seats its shell with `groundYAt(k, gap + offset)` at the stand's CENTRE node,
    so a long stand on a cross-slope or a crest does not follow the ground. Try a smaller `gap` or `len`,
-   split into two stands, or `anchor()` + `c[1]`. Primitive anchors differ: `addBox`/`addPyramid` take a
-   centre, `addPrism`/`addCyl`/`addCone`/`addFrustum` a base (`docs/SCENERY-API.md` §Grounding).
+   split into two stands, or `anchor()` + `c[1]`.
    **A floating `forestEdge` treeline is different:** the call is DEFERRED (`nature.js` pushes it to
    `deferredFoliage`; `build-props.js` runs `forestEdgeNow` after `scenery()` returns) and the ENGINE seats
    each crown, so `gap`/`len`/`anchor()` do not reach it. On steep ground (Spa's Eau Rouge climb) crowns
@@ -18,7 +17,6 @@
    (`terrainYAt`), as `js/circuits/scenery/spa.js` does (grep `Eau Rouge / Raidillon climb is too steep`
    and `forestRank`). Never reuse one ground sample across a wide span: Trap B in `docs/SCENERY-API.md`
    §Grounding (`docs/SCENERY-GROUNDING.md` is a redirect stub).
-4. A circuit-side fix: float-audit clean, ground-audit and clip-audit no worse than baseline.
-5. If the cause is the helper itself (`js/track/scenery/*.js`), the fix hits every circuit. Run
-   `float-audit.cjs --all`, `ground-audit.cjs --all --gate`, `clip-audit.cjs --all --gate` and
-   `props-tris.cjs <id>` on a dense circuit, and name the unrun ones in the PR.
+4. Done = SKILL.md "Grounded". If the cause is the helper itself (`js/track/scenery/*.js`), the fix hits
+   every circuit: run each audit with `--all`/`--gate` plus `props-tris.cjs <id>` on a dense circuit, and
+   name the unrun ones in the PR.

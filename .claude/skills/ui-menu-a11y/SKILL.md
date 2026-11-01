@@ -9,8 +9,7 @@ One shared layer question plus declared screen exits: ask `UiLayers` what is
 on top, and route Escape/back through the same button path a player would use.
 
 A screen that does not FIT or clips (short landscape phone, UI scale) is diagnosed
-and fixed here; **css-play** supplies the edit loop. A visual tweak on a NAMED element
-(padding, font-size on one control) starts in **css-play** (same rule in both descriptions).
+and fixed here; **css-play** supplies the edit loop and owns a tweak on one NAMED element.
 
 ## Where things live (HUD / menus / a11y)
 
@@ -45,7 +44,7 @@ node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
 node --test tests/unit/menu-a11y-audit.test.mjs   # STATIC Escape/door/layer pins, no browser; behaviour needs the specs
 node tools/ci/test-bg.mjs --spec tests/specs/menu-keyboard.spec.js   # BROWSER, one spec, background; also ui-button-touch, ui-scale
 node tools/ci/remote-group.mjs ui          # the whole `ui` group, on the PUSHED branch
-node tools/ci/test-bg.mjs --spec tests/specs/ui-audit.spec.js   # BROWSER: captures — read the PNGs (a subagent reports browser runs not run)
+node tools/ci/test-bg.mjs --spec tests/specs/ui-audit.spec.js   # BROWSER: captures — read the PNGs
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
 ```
 

@@ -20,11 +20,9 @@ Node-based helpers take `(k, side, dist, …)`:
 
 Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 
-`K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. Frames, `along()`
-and the `_sceneryShift` print command: [references/rules.md](references/rules.md) §Frames (one
-home; the rule itself: `.claude/rules/game-code.md`). A non-zero shift means dropping
-`sceneryStartFrac` re-bases every authored frac literal at once — a `tools/track/audit-circuit.cjs` baseline
-before and after, never a one-line edit.
+`K(s)` is AUTHORED-frame: pass it straight through. Frames, `along()` and the `_sceneryShift`
+print command: [references/rules.md](references/rules.md) §Frames (one home; rule:
+`.claude/rules/game-code.md`).
 
 ## Helper families
 
@@ -33,17 +31,16 @@ before and after, never a one-line edit.
   `forestEdge`.
 - **Structures:** `building`, `tower`, `grandstand`, `billboard`, `gantry`,
   `marshalPost`.
-- **Barriers** (tighten the driving boundary): `wall`, `fence`, `guardrail`,
-  `tyreWall`.
+- **Barriers** (tighten the driving boundary; trees/lamps must never book one — keep furniture clear of the
+  collision edge): `wall`, `fence`, `guardrail`, `tyreWall`.
 - **Terrain/raw:** `mountain`, `addBox`/`addCyl`/`addCone`/`addPrism`/
   `addPyramid`/`addFrustum`.
 - **Utilities:** `every`, `along` (walk nodes `s0→s1` every ~`stepM` — the per-tree loop), `hash`,
   `K`, `anchor`, `onTrack`.
 - **Ground and reservation** (`docs/SCENERY-API.md` §Reserving ground, §Grounding): `groundYAt(k, …)` is a
-  NODE query; `terrainYAt(x, z)` is the WORLD-XZ ground (null off the ribbon) — use it the moment a
-  placement walks away from the centreline; `groundUnder` (ribbon-aware world-XZ); `seat` / `foundation`
-  (seat a model, fill under it); `indexSolid` reserves a footprint BEFORE you plant around it;
-  `recordBarrier` books a barrier line.
+  NODE query; `terrainYAt(x, z)` is the WORLD-XZ ground (null off the ribbon) — use it once a
+  placement leaves the centreline; `groundUnder`, `seat` / `foundation`; `indexSolid` reserves a
+  footprint BEFORE you plant around it; `recordBarrier` books a barrier line.
 - Argument kinds: `grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range
   helpers take fraction endpoints; raw primitives take world coordinates.
 - **Floodlight masts/lamps:** the generic mast pass owns ordinary lamps; a hand-modelled
@@ -65,7 +62,7 @@ added props must also stay inside the clip and props-tris baselines (a denser ci
 `node tools/shot/gen-scenery-locations.cjs` (`--check` names drift); never hand-edit it
 (`tools/lib/generated-paths.mjs`). It is NOT part of `npm run gen`.
 
-Visual: **playwright-probe** `shot.mjs` (browser: parent only; a subagent reports it not run).
+Visual: **playwright-probe** `shot.mjs` (browser steps are parent-only, AGENTS.md rule 10).
 A floating or sunk prop is fixed HERE ([float-fix.md](references/float-fix.md)); picture-driven realism vs the real
 place → **survey-track**.
 

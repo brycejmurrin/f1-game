@@ -17,10 +17,10 @@ description: "Use when lighting looks wrong: night washed out or like day, dawn 
   complaint, and say so in the PR. A one-track complaint edits that track's row.
 - localStorage (`apex26.lightTune`) outranks shipped presets until RESET in the LIGHTING TUNER; a
   legacy `"*"` profile may still win.
-- `numLights` counts only `G.frame.lights`: read `perChunkLights`, `bakedLights`, `perChunkHeld`
-  and `tlxLampGrid` before calling floodlights off.
-- COPY VALUES exports a `window.LightEdits` DELTA. `bake.mjs` is a FULL REPLACE: never feed it a
-  delta or a one-key object.
+- `numLights` counts only `G.frame.lights`: read the other lamp fields (references/symptoms.md
+  §lightState) before calling floodlights off.
+- COPY VALUES exports a `window.LightEdits` DELTA; `bake.mjs` is a FULL REPLACE: never feed it a
+  delta or a one-key object (references/bake.md).
 
 ## Workflow
 
@@ -83,5 +83,5 @@ GL errors → **renderer-debug**.
   `window.LightPresets` literal in `js/lighting/presets.js`; refuses `LightEdits`.
   `node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt [--check]`
 
-Both take `--check` (dry run, writes nothing) and `--json`; neither commits or bumps cache. Read
+Both take `--check` (dry run) and `--json`; neither commits or bumps cache. Read
 [references/bake.md](references/bake.md) first.

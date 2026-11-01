@@ -22,7 +22,7 @@ Muting music does **not** silence the engine — it sits on the sfx bus.
 These run in a live page: main session via skill `mcp-probe` (or `apex_eval`); in a subagent report them as not run (AGENTS.md rule 10).
 
 ```js
-GameAudio._stub                     // true = LAZY_AUDIO not landed yet: every call below is a stub (enabled() is absent)
+GameAudio._stub                     // true = LAZY_AUDIO not landed: every call is a stub (diagnose.md step 3)
 GameAudio.context()?.state          // "running" | "suspended" — the live AudioContext (null before init)
 GameAudio.enabled()
 GameAudio.setEnabled(true)          // master gain → 0.8
@@ -48,8 +48,7 @@ user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
 change rebuilds the AudioContext; device-driven rebuilds are debounced and
 capped (`DEVICE_REBUILD_MAX` per `DEVICE_REBUILD_WINDOW_MS`). Services read
 the context through functions, so a rebuild never leaves one on the old
-context; a sound that dies after a device switch is this path. Verify with
-`engine-audio-offline.spec.js` plus `audio-smoke.spec.js`.
+context; a sound that dies after a device switch is this path.
 
 ## Which `js/audio/` file
 

@@ -24,9 +24,7 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
 
 ## Touch and tilt (phone)
 
-- Probe first: `__apex.inputState().steerMode`, then `.btn.{left,right,leftVal,rightVal,steerVal}`
-  (buttons) or `.touchSteer` / `.touchActive` (drag). `btn.left` false with `steerVal` decaying is
-  `KEY_RAMP_OUT` by design; `btn.left` still true after the lift is a stuck latch.
+- Probe first: SKILL.md Workflow step 2 (`steerMode`, then `btn.*` / `touchSteer`). Ramp vs latch: SKILL.md Gotchas.
 - On-screen buttons (`steerMode "buttons"`): the steer buttons are wired in `js/input/input.js` init
   (`wireHold("btn-steer-left"/"btn-steer-right")`); `js/input/hold-buttons.js` is the factory. A button
   stuck held is a release-net miss. The four nets:
@@ -51,4 +49,3 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
   colour/opacity/brake-cue prefs are `js/ui/driving-line-opts.js`; pins
   `tests/unit/driving-line*.test.mjs`. The steering PULL toward the line is the `raceLine`
   assist (table in `assists.md`). Fix the held button first; re-check the line only if it outlives the release.
-- Reproduce at phone landscape (844×390) with touch first.

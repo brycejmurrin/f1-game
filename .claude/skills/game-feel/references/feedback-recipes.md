@@ -2,7 +2,7 @@
 
 Detail [the game-feel SKILL.md](../SKILL.md) defers here: the shake math, which easing
 curve for which job, the rest of the feedback menu, importance tiers and accessibility.
-Plain JS/CSS for this codebase; every value is a render/audio input, never a physics one.
+Plain JS/CSS for this codebase.
 
 ## Contents
 - 1. The trauma model (why shake feels good)
@@ -21,9 +21,8 @@ Offset and roll are `max * shake * noise(t)`. Sample summed sines (or value nois
 time — never a fresh `Math.random()` per frame: that buzzes instead of shaking, and an RNG
 draw in the frame loop is how cosmetic code breaks headless determinism.
 
-Apex already implements this: `feel.shake` (js/game.js) is the accumulator and its decay,
-`CamTune.shakeOffset` (js/camera/offsets.js) the curve, `CamFeel.shakeNoise`/`shake`
-(js/camera/feel.js) the summed-sine noise. Feed `feel.shake`; never add a second accumulator.
+Apex already implements this (chain: workflow.md row 1); `CamFeel.shakeNoise`
+(js/camera/feel.js) is the summed-sine noise. Feed `feel.shake`; never add a second accumulator.
 Per-event trauma: light ≈ 0.15, heavy ≈ 0.8, as ratios of the existing kerb/wall/car-car adds.
 
 ## 2. Easing cheat sheet
@@ -47,8 +46,7 @@ damped follow (`x += (target - x) * (1 - Math.exp(-k * dt))`) is frame-rate inde
   the collision response belongs to **race-incidents-control** / **tune-physics**.
 - **Particles:** a short burst at the contact point (sparks, dust, debris) via
   `js/fx/particles.js`. Respect the `js/perf/governor.js` budget; never allocate per hit.
-- **Freeze frame:** in Apex a render-only hold (see workflow.md, hit-stop); scale duration
-  to importance (0.04 s light → 0.15 s heavy). The sim never pauses.
+- **Freeze frame:** render-only hold (workflow.md, hit-stop); duration per the tier table (§4).
 - **Audio layer:** a transient on the event (thud, scrape, shift clunk) in
   `js/audio/engine.js`, scaled from the same impact value as the shake.
 - **Chromatic/vignette/zoom punch:** post-process nudges for big moments; keep brief.
@@ -73,5 +71,4 @@ Read the existing gates instead of adding settings: `motionReduced()` (OS
 reduce-motion) and `camComfort()` (XR / reduce-motion / touch auto-comfort) in
 `js/game.js`; new settings UI is **ui-menu-a11y**'s. Honour
 `prefers-reduced-motion` for DOM effects. Haptics on the phone: iOS Safari has no
-`navigator.vibrate`, so a kerb buzz never reaches Bryce's iPhone — check
-`js/input/haptics.js` before promising one.
+`navigator.vibrate` (SKILL.md); check `js/input/haptics.js` before promising a buzz.

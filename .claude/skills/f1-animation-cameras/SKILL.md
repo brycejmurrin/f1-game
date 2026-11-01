@@ -11,10 +11,9 @@ measure the transition that prompted the change with a deterministic fixture.
 
 `node tools/check/skill-smoke.mjs --skill f1-animation-cameras --check` exercises
 the local chase-rig contract. Replay snaps and stale follow anchors (entry → seek →
-follow → exit → reentry): [references/replay.md](references/replay.md). A HIGHLIGHTS seek snap is the
-designed cut (`seekTo` → `reposition(…, paint=true)` → `G.snapGameCam`) — ask snap vs wrong subject vs bad blend first
-(anchor owners `references/replay-diagnosis.md`, evidence contract `references/replay-workflow.md`). Camera
-modes, still framing and MEASURING camera lag use [playwright-probe camera measurements](../playwright-probe/references/cameras.md); FIXING lag
+follow → exit → reentry): [references/replay.md](references/replay.md). A HIGHLIGHTS seek snap is designed
+(`references/replay-diagnosis.md`; evidence contract `references/replay-workflow.md`). MEASURING camera lag, modes and
+still framing: [playwright-probe camera measurements](../playwright-probe/references/cameras.md); FIXING lag
 (rig, blend, tuner defaults) is this skill.
 Flyby framing (cover, occlusion, sky, motion) has a no-browser node-VM report:
 `node tools/shot/frame-report.mjs --track monza --frames 6` (MCP `apex_frame_report`); it covers Flyby only, not the director or mode cuts.
