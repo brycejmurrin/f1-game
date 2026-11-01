@@ -1593,3 +1593,17 @@ test("a piped or foreground-full tooling-fast, and a piped ready-gate, are refus
     ["node tools/ci/tooling-fast.mjs --print-scope", false], ['echo "tooling-fast | tail"', false]])
     assert.equal(run(c, { run_in_background: bg }).status, 0, `allowed: ${c}`);
 });
+
+test("a /mcp?token=<value> credential URL in a shell command is refused; prose and short stubs pass", () => {
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    "curl https://x.trycloudflare.com/mcp?token=abcdef0123456789",
+    'echo "url: https://h/mcp?token=AbCd-1234_wxyz"',
+    "node tools/shot/apex-eval.mjs --url 'http://127.0.0.1:3000/mcp?token=0123456789abcdef'",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  for (const cmd of ["echo see /mcp?token= in the skill", "git log --oneline -3"])
+    assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});

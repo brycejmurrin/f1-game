@@ -56,7 +56,8 @@ The script throws, takes long, or a URL needs checking (`browser_status`, `orien
 The `…/mcp?token=…` URL lets whoever holds it run `browser_eval` (arbitrary `page.evaluate`) in a page that can reach
 this container's 127.0.0.1 services (apex-tools :3713 among them). The token rides in the query string, so it lands in
 tunnel and proxy logs. Give it to the user only; never paste it into a PR body, commit, doc, issue comment or a shared
-transcript. To rotate it: `node tools/mcp/browser-http-up.mjs --stop` (stops the recorded server and tunnel and forgets
+transcript. `bash-guard.sh` refuses a shell command that contains `/mcp?token=<8+ chars>` (Bryce's yes, 2026-11-01).
+To rotate it: `node tools/mcp/browser-http-up.mjs --stop` (stops the recorded server and tunnel and forgets
 the token — the running server keeps its old token, and the old tunnel URL keeps answering, until both are stopped),
 then re-run it and give them the `new` URL. Deleting `state.json` alone rotates nothing.
 

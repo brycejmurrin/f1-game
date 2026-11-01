@@ -169,6 +169,17 @@ fi
 # the former 14 `if: Bash(*word*)` filters, the agent runner, wget/sleep (the
 # API and poll-loop rules), `github` (a run-cancel URL in data) and the browser
 # launchers run as bare scripts.
+# --- an MCP tunnel credential URL in a shell command ---------------------------
+# Bryce, 2026-11-01 ~00:15Z (AskUserQuestion, relayed by the dispatcher): "Yes, add the
+# guard". The `…/mcp?token=<value>` URL phone-browser hands out lets its holder run
+# browser_eval in a page that reaches this container's 127.0.0.1 services, and a
+# command line lands in logs and transcripts. Raw text ($CMD, quotes kept): a token
+# of 8+ URL-safe characters is refused; the bare `/mcp?token=` in prose is not.
+if printf '%s' "$CMD" | grep -Eq '/mcp\?token=[A-Za-z0-9._~%-]{8,}'; then
+  echo "BLOCKED: this command contains an /mcp?token=<value> credential URL. Use the token from the environment or the tunnel's own client, never in a shell command line (skill phone-browser)." >&2
+  exit 2
+fi
+
 GUARD_TRIGGER='\b(git|github|gh|push|merge|commit|config|kill|pkill|killall|pgrep|curl|wget|node|nodejs|npm|npx|pnpm|pnpx|yarn|bun|bunx|deno|tsx|playwright|chrome|chromium|google-chrome|python|python3|perl|ruby|sh|bash|dash|zsh|eval|exec|source|xargs|sleep|agent-run|test-bg|test-solo|run-playwright|verify-change|probe-mcp|apex-tools-mcp|js-debugger-mcp)\b'
 if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
   exit 0
