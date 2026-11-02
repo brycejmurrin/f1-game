@@ -51,8 +51,9 @@ const CareerPlanning = (function () {
       const raw = ctx.raw();
       let stored = null;
       try { stored = JSON.parse(raw); } catch (_) { /* unreadable disk remains exportable */ }
-      const summary = (v) => v ? { year: v.year, team: v.team, round: v.season && v.season.round,
-        money: v.money, rep: v.rep, results: (v.results || []).length } : null;
+      const num = (x) => (Number.isFinite(x) ? x : 0);
+      const summary = (v) => v ? { year: v.year, team: v.team, round: num(v.season && v.season.round),
+        money: num(v.money), rep: num(v.rep), results: (v.results || []).length } : null;
       return { local: clone(c()), stored, rawStored: raw, rawLocal: ctx.protection() ? ctx.protection().raw : JSON.stringify(c()),
         localSummary: summary(c()), storedSummary: summary(stored), revision: ctx.revision(), armedRevision: ctx.armed() };
     }

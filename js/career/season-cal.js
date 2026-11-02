@@ -212,7 +212,11 @@ function applyConfig(next) {
   // even with the same rules. Always pass the revision guard above first.
   if (canRace(activeSeason) && matchesConfig(activeSeason, next)) {
     if (!matchesConfig({ config: config() }, next)) setConfig(next);
-    return Object.assign({}, lastSave, { season: activeSeason, ok: true });
+    // A refused save (invalid / unknown circuit / conflict) wrote nothing, so a
+    // no-op APPLY must not inherit it as "storage is full"; a real storage
+    // failure still carries through (the season is genuinely session-only).
+    const refused = lastSave.reason === "invalid" || lastSave.reason === "unknown circuit" || lastSave.reason === "conflict";
+    return Object.assign({}, refused ? { ok: true, durable: true, reason: null } : lastSave, { season: activeSeason, ok: true });
   }
   const snap = frozenConfig(next);
   const season = { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };

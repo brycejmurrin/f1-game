@@ -93,7 +93,7 @@ const HudStrategy = (function () {
   // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
   let root = null, nodes = null;
-  const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, cov: null, covWho: null, label: "" };
+  const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, cov: null, covWho: null };
   let short = false, shortPlayer = null, shortNext = null;
   const ctx = { hasRival: false, rivalInPit: false, rivalLapped: false, stopLeft: false, gapS: 0, lossS: 0, rivalWear: 0, myWear: 0 };
   const bctx = { hasBehind: false, behindInPit: false, stopLeft: false, gapS: 0, lossS: 0, behindWear: 0, myWear: 0, lapsToStop: null, behindWindow: "", behindLap: 0 };

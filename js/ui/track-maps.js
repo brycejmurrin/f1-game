@@ -194,8 +194,9 @@ const TrackMaps = (function () {
         const sectors = (def.sectors && def.sectors.length === 2) ? def.sectors.slice() : null;
         out = { pts: pts, py: tr.py, corners: crns, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
       }
-    } catch {
-      out = null;
+    } catch (e) {
+      Log.warn("track", "track-maps compute failed for " + def.id + ": " + (e && e.message));
+      return null; // not cached: a one-off throw must not blank the map for the page's life
     }
     cache[def.id] = out;
     return out;

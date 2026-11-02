@@ -254,7 +254,7 @@ window.ScrollFade = (function () {
   // Deliberately NOT one observer over document.body: the HUD rewrites classes
   // every frame during a race, and every callback would force a layout read.
   const contentMo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
-  const screenMo = typeof MutationObserver === "function" ? new MutationObserver(settle) : null;
+  const screenMo = typeof MutationObserver === "function" ? new MutationObserver(() => settle(false)) : null;
 
   function watch(el) {
     if (watched.has(el)) return;

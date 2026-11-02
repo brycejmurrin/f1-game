@@ -495,6 +495,11 @@ test("calendar adoption refuses newer stored revision and compares local versus 
   const cmp = Career.planning().comparison();
   assert.equal(cmp.localSummary.money, 250); assert.equal(cmp.storedSummary.money, 777);
   assert.equal(JSON.parse(cmp.rawLocal).money, 250);
+  // A stored copy missing season/money/rep must summarise as finite numbers (no NaN/undefined card).
+  disk.set("apex26.career.driver.0", JSON.stringify({ year: 2026, team: "haas" }));
+  const sparse = Career.planning().comparison().storedSummary;
+  assert.deepEqual([sparse.round, sparse.money, sparse.rep], [0, 0, 0]);
+  disk.set("apex26.career.driver.0", JSON.stringify(newer));
   foreign("apex26.career.driver.0");
   assert.equal(Career.planning().adopt(), false);
   assert.equal(JSON.parse(disk.get("apex26.career.driver.0")).money, 777);
