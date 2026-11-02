@@ -737,10 +737,17 @@ function loadAgentSurface() {
     // ApexApi.create(G) sees the real objects through the G getters.
     const netOk = await ensureNet();
     const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { loaded: agentScriptsLoaded });
-    deps.bindAgent();
+    // FAIL SOFT. A refused file (SRI: a stale shell's ?v= key answered with a newer
+    // deploy's bytes, 2026-11-02) still lets later files evaluate, so ApexApi.create
+    // throws "AgentRaster is not defined". Unguarded, that rejected this memo for the
+    // session, aborted game.js's boot tail after `await bootAgentSurface()` and
+    // painted the red overlay. __apex stays null; the next ask retries.
+    let bound = true;
+    try { deps.bindAgent(); }
+    catch (e) { bound = false; Log.warn("game", "agent surface bind failed: " + (e && e.message)); }
     // Memoised on the promise, but a FAILED load must not latch for the session:
     // METRICS / the flyby panel ask again on their next open.
-    if (netOk === false || !agentOk) {
+    if (netOk === false || !agentOk || !bound) {
       Log.warn("game", "the agent surface did not fully load — a later ask retries");
       _agentLoad = null;
     }
@@ -749,7 +756,8 @@ function loadAgentSurface() {
 }
 async function bootAgentSurface() {
   if (!wantAgentSurface()) return;
-  await loadAgentSurface();
+  try { await loadAgentSurface(); }
+  catch (e) { Log.warn("game", "bootAgentSurface failed: " + (e && e.message)); }
 }
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited at boot, on

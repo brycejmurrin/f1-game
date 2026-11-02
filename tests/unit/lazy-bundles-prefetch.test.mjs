@@ -34,8 +34,8 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 /* A page whose <script> tags are fed by `body(rel)` (the source to evaluate) and
    `failOnce` (srcs whose first request errors). Counts every injection per src. */
-function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
-  const injected = new Map(), evalErrors = [], logged = [], fail = new Set(failOnce);
+function world({ roster = {}, failOnce = [], failTimes = {}, body, globals = {}, deps = {} }) {
+  const injected = new Map(), evalErrors = [], logged = [], fail = new Set(failOnce), failLeft = new Map(Object.entries(failTimes));
   const ctx = vm.createContext({
     console, Promise, setTimeout, clearTimeout, queueMicrotask, URLSearchParams, TextEncoder, TextDecoder,
     ApexRoster: {
@@ -63,6 +63,7 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
       injected.set(rel, (injected.get(rel) || 0) + 1);
       setTimeout(() => {
         if (fail.delete(rel)) { el.onerror(); return; }
+        if (failLeft.get(rel) > 0) { failLeft.set(rel, failLeft.get(rel) - 1); el.onerror(); return; }
         try { vm.runInContext(body(rel), ctx, { filename: absSrc(rel) }); }
         catch (e) { evalErrors.push(rel + ": " + e.message); }
         el.onload();
@@ -179,6 +180,46 @@ test("loadAgentSurface: a failed load does not latch; a complete one is memoised
   assert.equal(w.injected.get("fixture-agent-b.js"), 2, "the failed one is retried");
   await w.lb.loadAgentSurface();
   assert.equal(w.injected.get("fixture-agent-b.js"), 2, "now complete: memoised");
+});
+
+// A STALE SHELL'S SRI REFUSAL (2026-11-02, live build 24284 during the 24286 roll):
+// Pages ignores ?v=, so an older shell's key answered with the newer deploy's bytes,
+// Chrome refused agentview-raster.js on integrity, the non-strict graph still evaluated
+// agentview.js / apex.js, and bindAgent's ApexApi.create threw "AgentRaster is not
+// defined". That rejection escaped loadAgentSurface, latched _agentLoad for the session,
+// aborted game.js's boot tail after `await bootAgentSurface()` and painted the red
+// overlay. The surface must fail soft, stay null, and be asked again later.
+test("loadAgentSurface: a refused file that makes bindAgent throw fails soft and does not latch", async () => {
+  let binds = 0, refuse = true;
+  const files = ["fixture-agent-raster.js", "fixture-agent-api.js"];
+  const w = world({
+    roster: { LAZY_AGENT: files, LAZY_EDGES: [] },
+    // An SRI refusal is an onerror on EVERY attempt of the first ask (the in-place
+    // retries re-key the URL, and Pages answers each key with the same newer bytes).
+    failTimes: { "fixture-agent-raster.js": 3 },
+    body: () => "",
+    globals: { NetPlay: {}, NetLobby: {} },
+    deps: {
+      bindAgent() { binds++; if (refuse) throw new ReferenceError("AgentRaster is not defined"); },
+      createNetwork: () => ({ wire() {} }),
+    },
+  });
+  const rejections = [];
+  const onRej = (e) => rejections.push(String((e && e.message) || e));
+  process.on("unhandledRejection", onRej);
+  try {
+    await assert.doesNotReject(w.lb.loadAgentSurface(),
+      "a bind that throws must not reject the loader (game.js awaits it at boot)");
+    refuse = false;
+    await w.lb.loadAgentSurface();   // METRICS / a later ask: not latched on the failure
+    assert.equal(w.injected.get("fixture-agent-raster.js"), 4, "three refused attempts, then a later ask fetches it again");
+    assert.equal(w.injected.get("fixture-agent-api.js"), 1, "a landed file is not re-injected");
+    assert.equal(binds, 2);
+    await w.lb.loadAgentSurface();
+    assert.equal(binds, 2, "now complete: memoised");
+    await tick(); await tick();
+    assert.deepEqual(rejections, []);
+  } finally { process.off("unhandledRejection", onRej); }
 });
 
 // A hook that throws must not latch a rejected promise: the call resolves false, the memo
