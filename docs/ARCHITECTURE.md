@@ -269,7 +269,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
-| `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `results-boot.js` | `GameResults` | tag | results sheet boot stub (FULL). |
 | `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — visual presets, named profiles and a readable preview. |
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
 | `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
@@ -289,6 +289,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
 
 **`js/track/core/`**
 

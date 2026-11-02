@@ -1117,8 +1117,8 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   };
   const ctx = vm.createContext({ document: { createElement: mk }, SeasonCal: S, Teams: { LIST: [], POINTS }, GameAudio: {} });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
-  ctx.GameResults.create(G).buildChampion();
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResultsSheet = GameResultsSheet;", ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  ctx.GameResultsSheet.create(G).buildChampion();
   assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
   const ranking = els.resultsTable.children.find((r) => r.getAttribute("role") === "list"
     && r.getAttribute("aria-label") === "Final driver standings");

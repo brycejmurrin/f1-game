@@ -120,7 +120,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
     netPlay,
   };
-  const api = vm.runInContext("GameResults", ctx).create(G);
+  const api = vm.runInContext("GameResultsSheet", ctx).create(G);
   return { dom, G, api, SeasonCal, els };
 }
 

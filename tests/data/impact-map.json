@@ -18470,6 +18470,11 @@
         "tests/unit/player-tools-ui.test.mjs"
       ]
     },
+    "js/ui/results-boot.js": {
+      "*": [
+        "tests/unit/results-sheet-lazy.test.mjs"
+      ]
+    },
     "js/ui/results-sheet.js": {
       "buildChampion": [
         "tests/unit/end-race-music-vm.test.mjs",
@@ -18499,7 +18504,8 @@
       "*": [
         "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs"
+        "tests/unit/mobile-native-download.test.mjs",
+        "tests/unit/results-sheet-lazy.test.mjs"
       ]
     },
     "js/ui/results-story.js": {

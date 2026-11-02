@@ -453,7 +453,7 @@ const FULL = [
   "js/ui/hud-radio-lane.js", // HudRadioLane: the radio card's top slot, corner and dock lane GameHud places (#3261)
   "js/ui/hud.js",
   "js/ui/results-story.js",
-  "js/ui/results-sheet.js",
+  "js/ui/results-boot.js", // GameResults stub; sheet body is LAZY_RESULTS_SHEET
   "js/race/quali-model.js",
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
@@ -1310,6 +1310,14 @@ const LAZY_UI_PRESETS = [
 ];
 const LAZY_UI_PRESETS_EDGES = [];
 
+// RESULTS / TT / STANDINGS / CHAMPION DOM builders (~54 KB). endRace and the
+// pause STANDINGS door call GameResults on game.js; startRace awaits
+// ensureResultsSheet so buildResults stays synchronous at the flag.
+const LAZY_RESULTS_SHEET = [
+  "js/ui/results-sheet.js",
+];
+const LAZY_RESULTS_SHEET_EDGES = [];
+
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
 // the eval order. TRACK_VM keeps the same files for verify-track / the build
@@ -1795,6 +1803,7 @@ module.exports = {
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
   LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES,
+  LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
   LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,

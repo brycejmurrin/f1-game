@@ -4897,9 +4897,14 @@
       "roster": "tag"
     },
     {
-      "path": "js/ui/results-sheet.js",
+      "path": "js/ui/results-boot.js",
       "global": "GameResults",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/results-sheet.js",
+      "global": "GameResultsSheet",
+      "roster": "LAZY_RESULTS_SHEET"
     },
     {
       "path": "js/ui/results-story.js",

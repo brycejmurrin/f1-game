@@ -787,6 +787,10 @@
     "js/ui/layout-presets.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],
+    LAZY_RESULTS_SHEET: [
+    "js/ui/results-sheet.js"
+  ],
+    LAZY_RESULTS_SHEET_EDGES: [],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

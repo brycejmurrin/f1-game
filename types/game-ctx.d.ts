@@ -883,6 +883,7 @@ declare const HudMinimap: GameModuleFactory;
 // js/ui/hud-radio-lane.js: GameHud.create builds it from the same ctx (#3261).
 declare const HudRadioLane: GameModuleFactory;
 declare const GameResults: GameModuleFactory;
+declare const GameResultsSheet: GameModuleFactory;
 declare const IncidentSim: GameModuleFactory;
 declare const LightStore: GameModuleFactory;
 declare const Menus: GameModuleFactory;
