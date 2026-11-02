@@ -1595,7 +1595,7 @@ test("the broken-install repair deletes only apex26- caches", async () => {
   const at = html.indexOf("caches.keys()");
   assert.ok(at > 0, "the repair still enumerates caches");
   const body = html.slice(at, html.indexOf("}, true);", at));
-  const filter = body.indexOf('indexOf("apex26-") === 0');
+  const filter = body.indexOf("/^apex26-\\d+$/.test(n)");
   const del = body.indexOf("caches.delete");
   assert.ok(filter > 0 && del > filter, "names are filtered to the apex26- prefix before any delete");
 });
@@ -1651,7 +1651,7 @@ test("the broken-install repair leaves apex26- caches alone when the probe rejec
 test("the broken-install repair sweeps apex26- caches and reloads once a network answer arrives", async () => {
   const r = await runRepair({ onLine: true, fetchImpl: () => Promise.resolve({ status: 404 }),
     names: ["apex26-320", "apex26-voice", "other-proj"] });
-  assert.deepEqual(r.caches, ["other-proj"], "the fixed voice cache goes with the generations (audit4 B8)");
+  assert.deepEqual(r.caches.sort(), ["apex26-voice", "other-proj"], "build generations go; the ~111 MB voice cache survives (#4479)");
   assert.equal(r.calls.reload, 1);
 });
 
