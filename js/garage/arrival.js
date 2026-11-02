@@ -89,11 +89,14 @@ const GarageArrival = (function () {
   /** The held AFTER THE RACE title: "P3 · NORRIS · PODIUM FINISH · FASTEST LAP".
    *  The place and name only when start({ home }) knew them (never retired). */
   function homeTitle(config, r) {
-    const parts = [];
-    if (Number.isFinite(config.pos) && config.pos > 0 && config.result !== "dnf") parts.push("P" + (config.pos | 0));
+    const parts = [], out = config.result === "dnf";
+    if (Number.isFinite(config.pos) && config.pos > 0 && !out) parts.push("P" + (config.pos | 0));
     if (config.driver) parts.push(String(config.driver).toUpperCase());
-    parts.push(r.title);
-    if (config.fastest && config.result !== "dnf") parts.push("FASTEST LAP");
+    parts.push(config.sprint ? r.title.replace(/^RACE /, "SPRINT ") : r.title);
+    // THE STORY OF THE RACE: a win from the front, or a climb of three places or more.
+    if (!out && config.grid === 1 && config.result === "win") parts.push("FROM POLE");
+    else if (!out && Number.isFinite(config.grid) && config.pos > 0 && config.grid - config.pos >= 3) parts.push("+" + (config.grid - config.pos) + " PLACES");
+    if (config.fastest && !out) parts.push("FASTEST LAP");
     return parts.join(" · ");
   }
   /* STYLE: a whole look in one tap, above the rows (phone UX: 33 rows is a lot
@@ -105,11 +108,16 @@ const GarageArrival = (function () {
    * 2026-10-30 844x390 capture), slow-mo at the door, GOLDEN HOUR under bars (the
    * showroom mood blacked the room out while the car was still in the lane),
    * no captions. DOCUMENTARY: a heavy handheld
-   * drifting through three cameras under the garage's own light. */
+   * drifting through three cameras under the garage's own light. SHOWCASE: the
+   * Blender orbit circling the car under the showroom mood and the SPOTLIGHT cue,
+   * a launch reveal. NIGHT SHIFT: a light handheld on the high corner, drifting,
+   * under the overnight-service mood, the way a 24-hour race's garage looks. */
   const STYLES = Object.freeze({
     broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
     cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
     documentary: Object.freeze({ label: "DOCUMENTARY", look: { angle: "custom", shots: ["door", "low", "left"], move: "drift", sway: 2, zoom: 6, fov: 58, light: "asset", cue: "none", captions: true, bars: false, slowmo: 0 } }),
+    showcase: Object.freeze({ label: "SHOWCASE", look: { angle: "orbit", move: "still", sway: 0, zoom: 8, fov: 50, light: "showroom", cue: "spotsweep", captions: false, bars: true, slowmo: 0 } }),
+    nightshift: Object.freeze({ label: "NIGHT SHIFT", look: { angle: "high", move: "drift", sway: 0.5, zoom: 0, fov: 56, light: "endurance", cue: "none", captions: true, bars: false, slowmo: 0 } }),
   });
   /** The saved settings with style `id`'s look laid over them. */
   function applyStyle(value, id) {
@@ -594,7 +602,7 @@ const GarageArrival = (function () {
     const p = authored || (back > 0 ? pathAt(OUT_PATH * (1 - back), side)
       : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN });
     const label = t < T.door ? "OPENING GARAGE"
-      : r ? (t < T.door + T.lane + T.pause ? r.arrive : t < T.park ? r.park
+      : r ? (t < T.door + T.lane + T.pause ? (config.sprint ? r.arrive.replace(/^RACE /, "SPRINT ") : r.arrive) : t < T.park ? r.park
         : dir === "home" ? homeTitle(config, r) : r.title)
       : t < T.park ? "BRINGING CAR IN" : end > T.base && t < end - .5 ? "CREW SERVICING CAR" : "READY FOR WORK";
     // The shipped LEFT / RIGHT eyes keep their own framing; the new ones aim by aimAt.
@@ -764,7 +772,8 @@ const GarageArrival = (function () {
       // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
       config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
-        driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry" });
+        driver: typeof home.driver === "string" ? home.driver : "", fastest: !!home.fastest, race: home.wet ? "wet" : home.night ? "night" : "dry",
+        grid: Number.isFinite(home.grid) && home.grid > 0 ? home.grid | 0 : null, sprint: !!home.sprint });
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;

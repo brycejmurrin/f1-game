@@ -1863,13 +1863,13 @@ test('garage engine speed retains scalar samples across mirrored or narrowed lan
 });
 // ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
 test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
-  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary']);
+  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary', 'showcase', 'nightshift']);
   for (const id of Object.keys(Arrival.STYLES)) {
     const v = Arrival.applyStyle({ enterCrew: 'current', speed: 2, door: 3.5 }, id);
     assert.deepEqual([v.enterCrew, v.speed, v.door], ['current', 2, 3.5], `${id}: crews and timing stay the player's`);
     for (const [k, want] of Object.entries(Arrival.STYLES[id].look)) if (k !== 'cue' && k !== 'light') assert.deepEqual(v[k], want, `${id}.${k}`);
   }
-  for (const id of ['cinema', 'documentary']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
+  for (const id of ['cinema', 'documentary', 'showcase', 'nightshift']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
   assert.equal(Arrival.styleOf(null), null, 'the shipped look is no style');
   assert.deepEqual(Arrival.applyStyle(null, 'nope'), Arrival.settings(null), 'an unknown style is the saved settings');
   assert.equal(Arrival.settings(null).race, 'dry', 'PREVIEW RACE defaults to the shipped dry look');
@@ -1892,7 +1892,7 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
   assert.ok(bar, 'built in JS (index.html is at its shellNodes ceiling)');
   const kids = rows.children;
   assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
-  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY']);
+  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT']);
   $('ga-style-cinema').onclick();
   assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
   assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
@@ -1908,6 +1908,12 @@ test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held t
   const held = (extra) => { const c = Object.assign(A.settings({ result: 'podium' }), extra); return A.poseFor('home')(A.duration(c, 'home') - 0.01, c, false).label; };
   assert.equal(held({ pos: 3, driver: 'Norris', fastest: true }), 'P3 · NORRIS · PODIUM FINISH · FASTEST LAP');
   assert.equal(held({ pos: 3 }), 'P3 · PODIUM FINISH', 'no name known: the shipped title');
+  assert.equal(held({ pos: 2, grid: 9 }), 'P2 · PODIUM FINISH · +7 PLACES', 'a climb of three or more is the story');
+  assert.equal(held({ pos: 3, grid: 5 }), 'P3 · PODIUM FINISH', 'two places is not');
+  assert.equal(held({ result: 'win', pos: 1, grid: 1, sprint: true, driver: 'Norris' }), 'P1 · NORRIS · SPRINT WINNER · FROM POLE', 'a sprint says so; a win from the front');
+  assert.equal(held({ result: 'dnf', pos: 18, grid: 20 }), 'RETIRED', 'a retirement has no climb');
+  const sprint = Object.assign(A.settings({ result: 'win' }), { sprint: true });
+  assert.equal(A.poseFor('home')(2.5, sprint, false).label, 'SPRINT WINNER · COMING HOME', 'the arrival caption too');
   assert.equal(held({ result: 'dnf', pos: 14, driver: 'Norris', fastest: true }), 'NORRIS · RETIRED', 'a retirement has no place and no fastest lap');
   const light = (race, result = 'win') => A.lightFor(Object.assign(A.settings({ result }), { race }), 'home');
   assert.deepEqual([light('dry'), light('wet'), light('night'), light('wet', 'dnf')], ['showroom', 'rain', 'neon', 'rain']);
@@ -1926,6 +1932,8 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
   const note = vm.runInContext('noteResult', c);
   const n = note([rival, player, out], {});
   assert.deepEqual([n.driver, n.fastest, n.wet, n.night], ['Lando Norris', true, true, true], 'a retired car\'s quicker lap does not count');
+  assert.deepEqual([n.grid, n.sprint], [null, false]);
+  player.gridPos = 6; assert.deepEqual([note([rival, player, out], { sprint: true }).grid, note([rival, player, out], { sprint: true }).sprint], [6, true], 'the grid slot and the sprint ride along');
   G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
   const d = note([rival, player], {});
   assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
