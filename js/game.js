@@ -5049,7 +5049,7 @@ function updateCar(c, dt, ranked) {
     _aiBoxed.contactT = c.contactT; _aiBoxed.roomL = roomL; _aiBoxed.roomR = roomR;
     _aiBoxed.blocker = blocker; _aiBoxed.blockerGap = blockerGap; _aiBoxed.street = !!track.street;
     const boxed = AiDrive.isBoxed(_aiBoxed);
-    if (state === "race" && c.speed < 7 && boxed && raceCtl.level < 4) c.stuckT = (c.stuckT || 0) + dt;
+    if (state === "race" && vStd(c.speed) < 7 && boxed && raceCtl.level < 4) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
     // LET PASS (AiDrive.letPass*): a quicker car on our gearbox with nothing

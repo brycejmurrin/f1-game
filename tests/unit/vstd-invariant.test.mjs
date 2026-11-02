@@ -50,20 +50,6 @@ const ALLOWED = [
   // aSp/bSp on _ct, so the .speed-literal scanner no longer sees it. The
   // 0.5 m/s noise floor remains a relative closing-direction test.)
 
-  // ── AI traffic / stuck detection ──
-  {
-    file: "js/game.js",
-    expr: "c.speed < 7",
-    code: 'if (state === "race" && c.speed < 7 && boxed && raceCtl.level < 4) c.stuckT = (c.stuckT || 0) + dt;',
-    // "Boxed in AND going nowhere". The bottom of the speed range does not move
-    // with PACE: the AI's corner speed is sqrt(LAT_MAX·bankMu·gripMult()/kMax)
-    // and LAT_MAX is one of the deliberately-absolute force constants, so even
-    // the slowest hairpin sits well above 7 m/s at every OVERALL SPEED setting.
-    // 7 m/s therefore means "crawling" at every pace, never "a fraction of top".
-    why: "crawl detector below the GRIP-limited corner floor, which carries no PACE term",
-  },
-
-  // ── divide-by-zero guards ──
   {
     file: "js/game.js",
     expr: "c.speed > 1",
