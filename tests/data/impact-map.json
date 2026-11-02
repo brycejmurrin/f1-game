@@ -6357,6 +6357,7 @@
       ],
       "sanitize": [
         "tests/unit/custom-tracks.test.mjs",
+        "tests/unit/lobby-settings.test.mjs",
         "tests/unit/track-codec.test.mjs",
         "tests/unit/track-themes-build.test.mjs"
       ],
