@@ -6,10 +6,10 @@ every perf row is an estimate. Coverage was partial (hunters hit their turn budg
 `game.js` outside 1600–3100 / 4490–4860 / 4860–6410 / 8520–8690 are still unhunted. No hunter found a physics-contract breach.
 
 ## Fixed in this PR (CONFIRMED)
+(A fourth fix, an early return in `debris-draw.js` slotPose, was tried and REVERTED: `debris-step-skip.test.mjs` #11 pins that a wake inside one generation must repack the pose, so the verifier's "generation bumps cover every change" was wrong. The per-slot `isSleeping()` call stays.)
 1. `race/sporting-regs.js` tick — retired player kept the give-back timer and got a penalty event. Guard + unit test.
 2. `game.js` redFlagRestart — did not reset `scWatch`/`blueWatch` (gridUp does) nor shake/hitStop/camRoll/thunder (startRaceBody does).
 3. `physics/collide.js` releaseArcBuckets — left `_traf`/`_tow` car refs after teardown (memory retention only).
-4. `physics/debris-draw.js` slotPose — per-slot WASM `isSleeping()` every frame; early return when generation/body/scale unchanged (verifier: safe, generation bumps after every step/spawn). Estimated ≤24 calls/frame saved.
 
 ## Follow-ups, ranked
 1. `game.js:6066` — human car computes `lateralScale`/`aeroDfMult`/`dirtyAirMul` per step, result unused (verifier: unused, AI branch only at ~6251). Needs `physics-characterization.spec`.

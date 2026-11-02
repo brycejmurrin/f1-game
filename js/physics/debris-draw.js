@@ -63,9 +63,6 @@ const DebrisDraw = (function () {
       p = { id: ++_poseId, version: 0, body: null, scale: 0, generation: -1, asleep: false, mat: new Float32Array(16) };
       _poses.set(slot, p);
     }
-    // Poses only change inside world.step / a spawn, each of which bumps the generation: same generation, body and
-    // scale means the pose is current, so skip the per-slot WASM isSleeping() call.
-    if (generation !== undefined && p.generation === generation && p.body === body && p.scale === scale) return p;
     const asleep = generation !== undefined && body.isSleeping && body.isSleeping();
     if (!asleep || !p.asleep || p.generation !== generation || p.body !== body || p.scale !== scale) {
       packBody(p.mat, 0, body, scale);
