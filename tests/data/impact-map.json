@@ -3195,6 +3195,7 @@
     },
     "js/car/custom-liveries.js": {
       "create": [
+        "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -3202,12 +3203,14 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "getCustomLiveries": [
+        "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs"
       ],
       "pickLivery": [
         "tests/unit/livery-design.test.mjs"
       ],
       "resolveLivery": [
+        "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/team-livery.test.mjs"
@@ -3432,6 +3435,7 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -6181,12 +6185,20 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "create": [
+        "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs"
       ],
       "paintFrame": [
+        "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "playAnim": [
+        "tests/unit/data-hardening-4477.test.mjs"
+      ],
+      "setPlayLabel": [
+        "tests/unit/data-hardening-4477.test.mjs"
       ],
       "updateTextSummary": [
         "tests/unit/telemetry-trace.test.mjs"
