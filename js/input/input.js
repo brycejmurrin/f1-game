@@ -1638,8 +1638,8 @@ const Input = (function () {
     // throttle/brake/steer axis is a control, not a stick (pad-menu's
     // padNavDirOf skips the mapped pedals for the same reason).
     {
-      const lookAxis = (i) => pad.mapping === "standard" ? readLookAxis(axes, i) : 0;
-      const rx = lookAxis(2), ry = lookAxis(3);
+      const std = pad.mapping === "standard";
+      const rx = std ? readLookAxis(axes, 2) : 0, ry = std ? readLookAxis(axes, 3) : 0;
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {

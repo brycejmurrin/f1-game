@@ -160,6 +160,12 @@ const PhonePad = (function () {
     if (opts.pump !== false && typeof requestAnimationFrame === "function") {
       const tick = () => { if (closed) return; pump(); raf = requestAnimationFrame(tick); };
       raf = requestAnimationFrame(tick);
+      // window rAF is not delivered inside an immersive XR session (xr-boot.js)
+      // nor in a hidden tab: a slow timer keeps the inbox draining there.
+      // pump() is idempotent, so the extra call beside a live rAF is cheap.
+      if (typeof setInterval === "function") {
+        const iv = setInterval(() => { if (closed) { clearInterval(iv); return; } pump(); }, 50);
+      }
     }
     return {
       pump,

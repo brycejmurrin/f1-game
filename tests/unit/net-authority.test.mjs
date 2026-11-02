@@ -384,6 +384,7 @@ test("a QUALI whose t is a numeric string arrives as a NUMBER; junk and implausi
   assert.equal(G.caughtQuali.length, 1, "nothing outside (20 s, 1 h) or non-numeric reaches the game");
   assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: "61" }), { driverId: "d", t: 61 });
   assert.equal(NetPlay.validQuali({ t: 61 }), null, "no driverId, no claim");
+  assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: 61, junk: "x".repeat(99) }), { driverId: "d", t: 61 }, "extra peer fields are dropped, not relayed");
   assert.equal(NetPlay.validQuali("61"), null);
   // QLIVE is bounded rather than refused — it is a clock, not a grid input.
   s.deliver("qlive", { driverId: "x", t: "12.5", frac: "2" });
