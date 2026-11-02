@@ -5109,6 +5109,9 @@
       "date": [
         "tests/unit/race-radio.test.mjs"
       ],
+      "lang": [
+        "tests/unit/i18n.test.mjs"
+      ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
       ],

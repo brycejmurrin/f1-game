@@ -12,6 +12,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { changedPaths } from "./changed-files.mjs";
 import { circuitsTouched } from "../ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -20,7 +21,7 @@ export function prChangedFiles(env = process.env) {
   try {
     const git = (...a) => execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     const ref = git("merge-base", `origin/${env.GITHUB_BASE_REF}`, "HEAD");
-    return { ref, files: git("diff", "--name-only", ref, "HEAD").split("\n").filter(Boolean) };
+    return { ref, files: changedPaths([ref, "HEAD"]) }   // rename sources included;
   } catch { return null; }
 }
 

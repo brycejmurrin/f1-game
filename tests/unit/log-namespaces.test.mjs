@@ -75,3 +75,12 @@ test("every literal Log.<level>(ns, …) namespace is declared in Log.NAMESPACES
     "undeclared Log namespace — add it to NAMESPACES in js/core/log.js " +
     "(or use an existing one): " + bad.join(", "));
 });
+
+test("an undefined or function argument is recorded as text, not a blank (hunt 2026-11-02)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8");
+  const ctx = vm.createContext({ console, Date, performance: { now: () => 0 } });
+  vm.runInContext(src + "\n;globalThis.__L = Log;", ctx, { filename: absSrc("js/core/log.js") });
+  ctx.__L.error("game", "v=", undefined, () => 1);
+  const rec = ctx.__L.records().pop();
+  assert.equal(rec.msg, "v= undefined () => 1");
+});

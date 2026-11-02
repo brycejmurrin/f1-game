@@ -122,7 +122,7 @@ const Log = (function () {
       if (typeof a === "string") out.push(a);
       else if (a instanceof Error) out.push(a.message + (a.stack ? "\n" + a.stack : ""));
       else {
-        try { out.push(JSON.stringify(a)); }
+        try { const j = JSON.stringify(a); out.push(j === undefined ? String(a) : j); }
         catch { out.push(String(a)); }
       }
     }

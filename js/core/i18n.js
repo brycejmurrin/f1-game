@@ -114,7 +114,7 @@ const I18n = (function () {
   }
 
   function formatMessage(msg, vars, lang) {
-    let s = resolvePlural(msg, lang, vars || {});
+    const s = resolvePlural(msg, lang, vars || {});
     return fillPlaceholders(s, vars);
   }
 
@@ -191,7 +191,9 @@ const I18n = (function () {
     return manifest;
   }
 
+  let loadGen = 0;
   async function loadCatalog(lang) {
+    const gen = ++loadGen;   // a newer boot supersedes this load: its late fetch must not install a stale catalog
     catalog = Object.create(null);
     fmtCache = Object.create(null);
     if (lang === "en" || lang === "en-XA") {
@@ -199,14 +201,18 @@ const I18n = (function () {
       return;
     }
     await loadManifest();
+    if (gen !== loadGen) return;
     const hash = manifestHash(lang);
     const url = "locales/" + encodeURIComponent(lang) + ".json" + (hash ? "?v=" + hash : "");
+    let loaded;
     try {
-      catalog = await fetchJson(url);
+      loaded = await fetchJson(url);
     } catch (e) {
       if (typeof Log !== "undefined") Log.warn("i18n", "locale fetch failed; falling back to English defaults", lang, e);
-      catalog = Object.create(null);
+      loaded = Object.create(null);
     }
+    if (gen !== loadGen) return;
+    catalog = loaded;
     readyDone = true;
   }
 
