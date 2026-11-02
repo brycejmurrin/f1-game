@@ -18541,6 +18541,9 @@
       "layoutOf": [
         "tests/unit/layout-tokens.test.mjs"
       ],
+      "refreshBtnFit": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
