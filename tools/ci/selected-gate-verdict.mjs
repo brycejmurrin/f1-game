@@ -76,6 +76,8 @@ function judgeSpecs(input) {
   const select = String(input.select || "");
   const selected = String(input.selected || "");
   const dropped = String(input.dropped ?? "0");
+  // "" / "?" / "abc" is an unreadable count (the select job's output went missing), not "dropped N": still fail closed, but say so.
+  const droppedKnown = /^\d+$/.test(dropped);
   const called = String(input.called ?? "false");
   const draft = String(input.draft ?? "false");
   const failedSpecs = Array.isArray(input.failedSpecs) ? [...input.failedSpecs] : [];
@@ -101,7 +103,7 @@ function judgeSpecs(input) {
       return {
         ok: true,
         reason: "draft PR: selected legs skipped (ready_for_review runs them)",
-        ...(dropped !== "0" ? { warn: `draft plan dropped ${dropped} routed spec(s); resolve the budget before ready-tier validation` } : {}),
+        ...(dropped !== "0" ? { warn: droppedKnown ? `draft plan dropped ${dropped} routed spec(s); resolve the budget before ready-tier validation` : `draft plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}); check the select job's outputs` } : {}),
         infraRetry,
         failedSpecs,
       };
@@ -155,14 +157,14 @@ function judgeSpecs(input) {
       return {
         ok: true,
         reason,
-        warn: `the train's plan dropped ${dropped} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here`,
+        warn: !droppedKnown ? `the train's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}); the fixed gates and the PRs that carried them are the answer here` : `the train's plan dropped ${dropped} routed spec(s) as unaffordable; the fixed gates and the PRs that carried them are the answer here`,
         infraRetry,
         failedSpecs,
       };
     }
     return {
       ok: false,
-      reason: `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change.`,
+      reason: !droppedKnown ? `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output` : `the plan dropped ${dropped} routed spec(s) it could not afford (named in the 'Select specs for this change' log) — they ran nowhere. Run their groups with tools/ci/remote-group.mjs, or split the change.`,
       infraRetry: false,
       failedSpecs,
     };
