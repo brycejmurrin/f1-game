@@ -527,3 +527,13 @@ test("SKIP after a player DNF under red applies the suspended-race compound tari
     assert.equal(G.player.penalty || 0, 0, "a retirement is exempt");
   } finally { game.close(); }
 });
+
+test("a player who retires with a place owed takes no give-back penalty (HUNT-2026-11-02)", () => {
+  const w = R.createPassWatch(5), f = field(2);
+  w.tick(f.p, f.all, 3, DT);
+  f.p.prog = 115;
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+  f.p.retired = true;
+  assert.deepEqual(run(w, f, 3, 10), [], "no penalty event for a retired car");
+  assert.equal(w.info().owed, 0);
+});
