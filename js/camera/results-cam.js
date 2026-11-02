@@ -136,7 +136,7 @@ const ResultsCam = (function () {
       if (!p || !G.camVantage) return null;
       const pose = G.camPoseOf ? G.camPoseOf(p) : null;
       const extra = chequeredExtra(p);
-      if (pose) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
+      if (pose && pose.carPos) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
       const s = pose ? pose.s : (p.s || 0), x = pose ? pose.x : (p.x || 0);
       // Match the side rig's smooth bank lift, including replayed highlight poses.
       const bank = G.track && typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
