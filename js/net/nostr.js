@@ -416,9 +416,10 @@ const NetNostr = (function () {
         try { w = new WebSocket(url); } catch (e) { return; }
         sockets.push(w);
         socketUrl.set(w, url);
+        let openAt = 0;
         w.onopen = () => {
           opened++;
-          attempt = 0;   // a socket that opened earns the short backoff again (a 300 s listen sees idle closes)
+          openAt = Date.now();   // backoff resets at close, and only for a socket that stayed up (a flapping relay keeps backing off)
           if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
           try {
             // Trystero stamps the REQ with `since: now()` — THIS device's clock,
@@ -437,6 +438,7 @@ const NetNostr = (function () {
           if (i >= 0) sockets.splice(i, 1);
           socketUrl.delete(w);
           if (done) return;
+          if (openAt && Date.now() - openAt >= 5000) attempt = 0;
           const n = Math.min(attempt, RECONNECT_MS.length - 1);
           later(() => { if (!done && !sockets.some((s) => socketUrl.get(s) === url)) connect(url, attempt + 1); }, RECONNECT_MS[n]);
         };

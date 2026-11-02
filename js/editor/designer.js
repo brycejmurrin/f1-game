@@ -223,7 +223,7 @@ const TrackDesigner = (function () {
     if (sel >= design.pts.length) sel = -1;
     if (span >= design.pts.length) span = -1;
     if (ctxAt >= 0) hideCtx();                         // its point index may name another point now
-    if (cv) { cv.setPoints(design.pts); cv.setSelection(sel, span); }
+    if (cv) cv.batch(() => { cv.setPoints(design.pts); cv.setSelection(sel, span); });
     schedulePreview();
     scheduleDraft();
     refreshControls();
@@ -237,8 +237,7 @@ const TrackDesigner = (function () {
     // A design the registry refuses outright (a loop under 1 km, a point out
     // of range) builds nothing and may name no red: never show "All checks pass".
     if (!verdict.ok && !verdict.red) verdict = Object.assign({}, verdict, { red: 1, issues: verdict.issues.concat([{ code: "bounds", level: "red", msg: "This loop cannot be built — make it bigger (2.5–7 km) and keep its points in range" }]) });
-    if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
-    refreshMapView();
+    if (cv) cv.batch(() => { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); refreshMapView(); });
     renderIssues(); renderStats(); announceChecks();
     if (workspace) workspace.review(verdict);
     renderInsight();
@@ -473,7 +472,7 @@ const TrackDesigner = (function () {
     const was = design, next = ensureHeights(JSON.parse(snap));
     if (was && next.lin === was.lin) {
       next.name = was.name;
-      for (const k of ["id", "originId"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
+      for (const k of ["id", "originId", "country"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
     }
     design = next; sel = -1; span = -1; nudge = null;
   }
@@ -1595,7 +1594,7 @@ const TrackDesigner = (function () {
     else if (!design) {
       const it = draftItem();
       if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; message("Draft restored"); }
-      else { design = blank(); afterChange("blank"); randomise(design.seed); randomisedOnOpen = true; }
+      else { design = blank(); afterChange("blank"); randomise(design.seed); randomisedOnOpen = true; undo.length = 0; redo.length = 0; refreshControls(); }
     }
     root.hidden = false; openFlag = true; checksSaid = null;
     if (seatFootFn) seatFootFn(true);   // a resize while closed was skipped

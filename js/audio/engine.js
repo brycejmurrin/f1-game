@@ -1933,7 +1933,7 @@ var GameAudio = (function () {
     const deploy = deploy01;
     const energy = ph.energy != null ? clamp01(ph.energy) : 1;
     let decelTarget = 0;
-    if (dt > 0) {
+    if (dt >= 0.008) {   // two calls at one clock tick would give dt 0.001 and saturate
       const decel = (lastSpeed - s) / dt;   // speed01 units shed per second
       decelTarget = clamp01(decel * 5) * Math.min(1, s * 3);
     }

@@ -304,3 +304,40 @@ test("episode metadata makes prior-episode delta requests return full worlds", (
   assert.equal(view.rollout({ seconds: 0.05 }).episodeId, 1);
   assert.equal(view.beginEpisode(), 2);
 });
+
+test("map plan() paints a continuous road on a tight hairpin at many columns", () => {
+  const R = 20, total = 2 * Math.PI * R;
+  const Tracks = {
+    sample(t, s, out) {
+      const a = s / R;
+      out.p = [R * Math.cos(a), 0, R * Math.sin(a)];
+      out.t = [-Math.sin(a), 0, Math.cos(a)]; out.r = [-Math.cos(a), 0, -Math.sin(a)]; out.hw = 6;
+    },
+    banking() { return { dy: 0 }; },
+    curvature() { return 1 / R; },
+  };
+  const get = evalGlobals(["js/agent/agentview-raster.js", "js/agent/agentview-corners.js",
+    "js/agent/agentview.js"], { Tracks, CamModes: { CAM_MODES: [{ id: "chase" }] } });
+  const player = { px: R, pz: 0, s: 0, x: 0, head: 0, speed: 0, isPlayer: true };
+  const G = { wrapS: s => ((s % total) + total) % total,
+    track: { total, n: 250, def: { id: "hairpin" }, props: { list: [] } },
+    player, cars: [player] };
+  const pl = get("AgentView").create(G).render({ what: "map", radiusM: 25, cols: 300, northUp: true });
+  const L = pl.grid.lines;
+  let roadRows = 0;
+  for (const ln of L) {
+    const a = ln.search(/[.:]/);
+    if (a < 0) continue;
+    roadRows++;
+  }
+  assert.ok(roadRows >= 15, "hairpin must paint rows: " + roadRows);
+  // Every road cell must touch another road cell (8-neighbourhood): isolated dots are the old stamp gaps.
+  const at = (y, x) => /[.:@]/.test((L[y] || "")[x] || " ");
+  let lonely = 0;
+  L.forEach((ln, y) => { for (let x = 0; x < ln.length; x++) if (/[.:]/.test(ln[x])) {
+    let n = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dy || dx) && at(y + dy, x + dx)) n++;
+    if (n < 2) lonely++;
+  } });
+  assert.equal(lonely, 0, "isolated road cells = stamp gaps");
+});

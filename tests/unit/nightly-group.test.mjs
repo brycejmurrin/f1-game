@@ -140,3 +140,18 @@ test("the CLI prints GROUP=<bare name>, which is what ci.yml's `npm run test:$GR
   assert.ok(!m[1].startsWith("test:"), `ci.yml prefixes test: itself, so the CLI must not — got ${m[1]}`);
   assert.ok(ROTATION.map(bare).includes(m[1]), `${m[1]} is not in the rotation`);
 });
+
+test("main guard fires when the script path needs URL-encoding (#4481)", async () => {
+  const { mkdtempSync, cpSync, rmSync } = fs;
+  const os = await import("node:os");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nightly dir "));   // a space → %20 in import.meta.url
+  try {
+    const root = path.resolve(import.meta.dirname, "..", "..");
+    fs.mkdirSync(path.join(dir, "tools", "ci"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+    cpSync(path.join(root, "tools/ci/nightly-group.mjs"), path.join(dir, "tools/ci/nightly-group.mjs"));
+    cpSync(path.join(root, "tests/groups.json"), path.join(dir, "tests/groups.json"));
+    const out = execFileSync(process.execPath, [path.join(dir, "tools/ci/nightly-group.mjs"), "--day=3"], { encoding: "utf8" });
+    assert.equal(out.split("=")[0], "GROUP");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

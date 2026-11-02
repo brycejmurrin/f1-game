@@ -57,3 +57,22 @@ test("jump/aiPlace refuse null-as-value and non-finite args instead of writing n
     assert.ok(Number.isFinite(G.cars[3].x) && Number.isFinite(G.cars[3].speed));
   } finally { g.close(); }
 });
+
+test("rival/rivals refuse non-finite dProg/dx/speed without moving anyone (#4478)", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    await g.race("monza");
+    const A = g.apex, G = g.G;
+    A.headless(true);
+    A.jump(0.3, 40, 0);
+    const snap = () => JSON.stringify(G.cars.map((c) => [c.prog, c.s, c.x, c.speed]));
+    const before = snap();
+    assert.equal(A.rival(NaN, 0), false);
+    assert.equal(A.rival(5, Infinity), false);
+    assert.equal(A.rivals([{ dProg: 5, speed: NaN }]), false);
+    assert.equal(A.rivals([{ dProg: 5, speed: 30 }, { speed: Infinity }]), false);
+    assert.equal(snap(), before, "refused calls leave every car alone");
+    assert.ok(A.rival(5, 0)); assert.ok(Array.isArray(A.rivals([{ dProg: 5, speed: 30 }])));
+    assert.ok(Number.isFinite(G.cars.find((c) => !c.isPlayer).speed));
+  } finally { g.close(); }
+});

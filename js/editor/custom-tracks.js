@@ -532,7 +532,7 @@ const CustomTracks = (function () {
       if (!ok) { _editorLoad = null; Log.warn("track", "the track designer bundle did not load"); return false; }
       if (typeof TrackDesigner !== "undefined" && TrackDesigner.init) TrackDesigner.init(_G, { custom: CustomTracks });
       return true;
-    });
+    }, (e) => { _editorLoad = null; throw e; });
     return _editorLoad;
   }
   // TEST HERE's way back (TrackDesigner.testHere): { id, sel, span, s } of the

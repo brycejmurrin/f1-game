@@ -231,3 +231,14 @@ test("CI selection reporter annotates unreadable specs and counts them as droppe
     assert.equal(selectedGateVerdict({ ...base, dropped: "1" }).ok, false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("an unreadable DROPPED count fails closed with an honest message (#4481)", () => {
+  const seen = [];
+  for (const dropped of ["", "?", "2"]) {
+    const v = selectedGateVerdict({ ...base, selected: "success", dropped });
+    seen.push([v.ok, v.reason.indexOf("unreadable") > 0, v.reason.indexOf("dropped 2 routed spec") > 0]);
+  }
+  const draft = selectedGateVerdict({ ...base, selected: "skipped", draft: "true", dropped: "" });
+  seen.push([draft.ok, draft.warn.indexOf("unreadable") > 0]);
+  assert.deepEqual(seen, [[false, true, false], [false, true, false], [false, false, true], [true, true]]);
+});

@@ -90,7 +90,7 @@ const CustomLiveries = (function () {
       // A MY TEAM identity captured before any livery was saved holds null here, not the [] fallback;
       // concat(null) puts a null row in the list and resolveLivery's find throws on it.
       const v = identityValue(teamId, "livery.custom." + teamId, []);
-      return Array.isArray(v) ? v : [];
+      return Array.isArray(v) ? v.filter((l) => l && typeof l === "object") : [];
     }
     function setCustomLiveries(teamId, arr) { return setIdentityValue(teamId, "livery.custom." + teamId, arr); }
     // Full paint-job list for a team: catalog (default + specials + universal) + the
