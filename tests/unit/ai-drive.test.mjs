@@ -1767,9 +1767,9 @@ test("AI heading reuses current grip without changing normal or recovery steerin
       head = (head || 0) + clamp(want - (head || 0), -max * v.dt, max * v.dt);
       steer = sm = clamp(vAbs * Math.sin(head) / Math.max(K.STEER_VMAX * latFac * lateral, 1), -1, 1);
     }
-    assert.deepEqual(got, { steer, gripScale: lateral, latFac, aiHead: head, steerSm: sm }, mode + " case " + i);
-    assert.deepEqual(calls, { weather: 1, tyre: 1, air: 1, lateral: 1, yaw: mode === "normal" ? 1 : 0 },
-      mode + ": one current grip calculation; yaw only for the normal AI controller");
+    assert.deepEqual(got, { steer, gripScale: c.human ? 1 : lateral, latFac, aiHead: head, steerSm: sm }, mode + " case " + i);
+    assert.deepEqual(calls, { weather: 1, tyre: 1, air: c.human ? 0 : 1, lateral: c.human ? 0 : 1, yaw: mode === "normal" ? 1 : 0 },
+      mode + ": one current grip calculation (none for the human: gripScale is read only by the AI step); yaw only for the normal AI controller");
   }
 });
 

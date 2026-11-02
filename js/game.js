@@ -4861,11 +4861,15 @@ const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, in
 const _windStep = { st: null };
 // C10 far-car AI LOD, an OPT-IN lab read once here (`?lab=aiLod`, a comma list): off, aiLod is null and the sim is untouched (AiDrive.lodLab).
 const aiLod = (() => { try { return new URLSearchParams(location.search).get("lab").split(",").includes("aiLod") ? AiDrive.lodLab() : null; } catch (_) { return null; } })();
+const _ttRec = { native: false, initialState: undefined, boost: undefined, overtake: undefined, aeroToggle: undefined, shiftUp: undefined, shiftDown: undefined, steer: undefined, throttle: undefined, brake: undefined, throttleLevel: undefined, brakeLevel: undefined, aero: undefined };
 function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
   // read once at its existing sites; only the TT recorder receives this copy.
-  S.recordInput = isTimeTrial() && c.isPlayer && !c.retired && !c.finished ? { native: !inputOf(c) } : null;
+  if (isTimeTrial() && c.isPlayer && !c.retired && !c.finished) {   // one reused record: InputGhost.record copies the primitives, keeps only initialState (fresh below)
+    const r = _ttRec; r.native = !inputOf(c); r.initialState = r.boost = r.overtake = r.aeroToggle = r.shiftUp = r.shiftDown = r.steer = r.throttle = r.brake = r.throttleLevel = r.brakeLevel = r.aero = undefined;
+    S.recordInput = r;
+  } else S.recordInput = null;
   if (S.recordInput && InputGhost.needsState()) {
     const state = {};
     for (const key of Object.keys(c)) if ((typeof c[key] === "number" && Number.isFinite(c[key])) || ["boolean", "string"].includes(typeof c[key]) || c[key] === null) state[key] = c[key];
@@ -6065,7 +6069,7 @@ function updateCarLateral(c, dt, ranked, S) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
-  if (gripScale === undefined) gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed), driveTune.PACE, VMAX, aeroDfMult(c));
+  if (gripScale === undefined) gripScale = c.human ? 1 : AiDrive.lateralScale(c.speed, c.aeroLoad, S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed), driveTune.PACE, VMAX, aeroDfMult(c));
   // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
   const kerbGrip = c.kerbGripSm ?? 1;
   // Banking: computed once, shared between player and AI so both get grip boost.
