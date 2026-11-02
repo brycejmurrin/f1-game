@@ -109,14 +109,15 @@ const GarageArrival = (function () {
    * showroom mood blacked the room out while the car was still in the lane),
    * no captions. DOCUMENTARY: a heavy handheld
    * drifting through three cameras under the garage's own light. SHOWCASE: the
-   * Blender orbit circling the car under the showroom mood and the SPOTLIGHT cue,
-   * a launch reveal. NIGHT SHIFT: a light handheld on the high corner, drifting,
+   * Blender orbit circling the car while the SPOTLIGHT cue dims the room and
+   * sweeps a follow-spot onto it, a launch reveal (the garage's own light: the
+   * showroom mood under the cue's dim played black, 2026-11-02 844x390 capture). NIGHT SHIFT: a light handheld on the high corner, drifting,
    * under the overnight-service mood, the way a 24-hour race's garage looks. */
   const STYLES = Object.freeze({
     broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
     cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
     documentary: Object.freeze({ label: "DOCUMENTARY", look: { angle: "custom", shots: ["door", "low", "left"], move: "drift", sway: 2, zoom: 6, fov: 58, light: "asset", cue: "none", captions: true, bars: false, slowmo: 0 } }),
-    showcase: Object.freeze({ label: "SHOWCASE", look: { angle: "orbit", move: "still", sway: 0, zoom: 8, fov: 50, light: "showroom", cue: "spotsweep", captions: false, bars: true, slowmo: 0 } }),
+    showcase: Object.freeze({ label: "SHOWCASE", look: { angle: "orbit", move: "still", sway: 0, zoom: 8, fov: 50, light: "asset", cue: "spotsweep", captions: false, bars: true, slowmo: 0 } }),
     nightshift: Object.freeze({ label: "NIGHT SHIFT", look: { angle: "high", move: "drift", sway: 0.5, zoom: 0, fov: 56, light: "endurance", cue: "none", captions: true, bars: false, slowmo: 0 } }),
   });
   /** The saved settings with style `id`'s look laid over them. */
