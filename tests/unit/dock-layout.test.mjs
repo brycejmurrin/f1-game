@@ -216,7 +216,7 @@ function bootCreate() {
       addEventListener(t, fn) { docL[t] = fn; },
     },
     MutationObserver: function (cb) { observers.push(cb); this.observe = () => {}; },
-    getComputedStyle() { return { getPropertyValue() { return "0"; } }; },
+    getComputedStyle() { ctx.gcsCalls = (ctx.gcsCalls || 0) + 1; return { getPropertyValue() { return "0"; } }; },
   };
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
   const bag = ctx.DockLayout.normalize({});
@@ -395,4 +395,26 @@ test("BUTTON SHAPE CSS: every non-AUTO shape sets a radius in the deferred overl
   }
   const eager = cssRules(fs.readFileSync(path.join(ROOT, "css/touch-controls.css"), "utf8"));
   assert.equal(eager.some((r) => r.selector.includes("data-btn-shape")), false, "the eager sheet stays off the critical-path budget");
+});
+
+test("a REPOSITION drag reads the pad once (pointerdown), not per pointermove, and fits once per frame (#4482)", () => {
+  const { ctx, api, docL, els } = bootCreate();
+  let fits = 0, rafCb = null;
+  ctx.GameHud = { invalidateFit() { fits++; } };
+  ctx.requestAnimationFrame = (cb) => { rafCb = cb; return 1; };
+  const target = { closest() { return null; } };
+  els["dock-right"].contains = (t) => t === target;
+  els["dock-left"].contains = () => false;
+  const ev = (o) => Object.assign({ target, pointerId: 1, preventDefault() {} }, o);
+  api.setEditing(true);
+  docL.pointerdown(ev({ clientX: 300, clientY: 700 }));
+  const g0 = ctx.gcsCalls, f0 = fits;
+  for (let i = 1; i <= 10; i++) docL.pointermove(ev({ clientX: 300 - i, clientY: 700 }));
+  assert.equal(ctx.gcsCalls, g0, "no getComputedStyle during pointermove");
+  assert.equal(fits, f0, "no invalidateFit per pointermove");
+  assert.equal(typeof rafCb, "function", "one fit is scheduled for the frame");
+  rafCb();
+  assert.equal(fits, f0 + 1);
+  docL.pointerup(ev({}));
+  assert.equal(fits, f0 + 2, "pointerup settles the fit");
 });
