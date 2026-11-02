@@ -1,6 +1,8 @@
 /* select-preview-defer.test.mjs — cold updateTrackPreview must not call
  * TrackMaps.corners/draw on the open's synchronous turn (D·DP5). Captions
  * paint; maps wait on cache / idle / worker.
+ * Also: a null 2D context on the elevation sparkline (or the outline canvas)
+ * must hide the sparkline and return, not throw into the error overlay (#4469).
  *
  * Run: node --test tests/unit/select-preview-defer.test.mjs
  */
@@ -53,9 +55,9 @@ function boot(o = {}) {
       cachedIds: () => cached.slice(),
       corners: () => { cornersCalls++; return [{ n: 1, v: 0.1, r: 50, ang: 90 }]; },
       direction: () => "CW",
-      elevRange: () => 10,
+      elevRange: () => (o.elevRange != null ? o.elevRange : 10),
       drsZones: () => [{ a: 0.1, b: 0.2 }],
-      elevProfile: () => null,
+      elevProfile: () => (o.elevProfile === undefined ? null : o.elevProfile),
       aspect: () => 1.5,
       fitCanvas: () => ({ w: 100, h: 60 }),
       draw() { drawCalls++; },
@@ -77,6 +79,15 @@ function boot(o = {}) {
   Object.defineProperty(hero, "clientWidth", { get: () => 400 });
   Object.defineProperty(hero, "clientHeight", { get: () => 240 });
   hero.closest = () => ({ dataset: { density: "normal" } });
+  // Pre-create the sparkline so paintTrackPreviewMaps finds this node, not an
+  // auto-created div. getContext is installed only when the test asks.
+  const elev = dom.document.createElement("canvas");
+  elev.id = "sel-preview-elev";
+  elev.width = 280;
+  elev.height = 36;
+  elev.hidden = false;
+  if (o.elevContext !== undefined) elev.getContext = () => o.elevContext;
+  dom.document.body.appendChild(elev);
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {},
     scheduleFlybyTrack() {}, getLiveryId: () => "default", getLiveries: () => [],
@@ -99,7 +110,7 @@ function boot(o = {}) {
   };
   const menus = sb.Menus.create(G);
   return {
-    G, menus, idleFns,
+    G, menus, idleFns, elev,
     stats: () => ({ cornersCalls, drawCalls }),
     flushIdle() { while (idleFns.length) idleFns.shift()(); },
   };
@@ -124,6 +135,32 @@ test("cached TrackMaps paints maps synchronously", () => {
   const s = stats();
   assert.ok(s.cornersCalls >= 1, "cache hit paints maps on this turn");
   assert.ok(s.drawCalls >= 1, "cache hit draws the outline on this turn");
+});
+
+test("a null 2D context hides the elevation sparkline and does not throw", () => {
+  const { menus, elev, stats } = boot({
+    cached: true,
+    elevProfile: [0, 12, 4, 0],
+    elevContext: null,
+  });
+  assert.equal(elev.hidden, false, "the sparkline starts visible");
+  assert.doesNotThrow(() => menus.updateTrackPreview());
+  assert.equal(elev.hidden, true, "null getContext('2d') hides #sel-preview-elev");
+  assert.ok(stats().drawCalls >= 1, "the outline paint continues after the sparkline bails");
+});
+
+test("TrackMaps.draw returns false when getContext('2d') is null", () => {
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set,
+    isFinite, Infinity, parseFloat, parseInt,
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+  };
+  sb.window = sb;
+  vm.runInNewContext(src("js/ui/track-maps.js"), sb, { filename: absSrc("js/ui/track-maps.js") });
+  const canvas = { width: 80, height: 40, getContext: () => null };
+  assert.doesNotThrow(() => {
+    assert.equal(sb.TrackMaps.draw(canvas, { id: "monza" }, {}), false);
+  });
 });
 
 test("idle flush runs the deferred map paint", () => {
