@@ -65,3 +65,13 @@ test("stop keeps parents alive until their terminated children have been reaped"
   assert.deepEqual(sent, [52, 51, 50]); assert.equal(r.forced, 0);
   assert.deepEqual([...alive], [99], "unregistered bystander survives");
 });
+
+test("pidAlive treats a zombie as gone (hunt 2026-11-02)", async () => {
+  const { spawn } = await import("node:child_process");
+  const { pidAlive } = await import("../../tools/lib/deploy-status.mjs");
+  const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise((r) => setTimeout(r, 300));   // exited, not yet reaped by us if no 'exit' listener has run wait
+  if (!fs.existsSync(`/proc/${child.pid}/stat`)) return;   // already reaped by node: nothing to assert
+  const z = /^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${child.pid}/stat`, "utf8"));
+  assert.equal(pidAlive(child.pid), !z);
+});

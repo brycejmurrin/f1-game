@@ -188,3 +188,22 @@ test("I18nDom restores English defaults when set back to en (review F1)", () => 
   assert.equal(el.textContent, "SETTINGS", "text restores from data-i18n-default");
   assert.equal(el.getAttribute("aria-label"), "SETTINGS", "attr restores from data-i18n-default-<attr>");
 });
+
+test("a superseded locale fetch cannot install its catalogue over a newer boot (hunt 2026-11-02)", async () => {
+  let releaseFr;
+  const gate = new Promise((r) => { releaseFr = r; });
+  const { I18n } = loadI18n({
+    fetch: async (url) => {
+      if (String(url).includes("manifest")) return { ok: true, status: 200, json: async () => ({ fr: { name: "F", dir: "ltr", status: "reviewed", hash: "", keys: 1 }, en: { name: "E", dir: "ltr", status: "reviewed", hash: "", keys: 0 } }) };
+      await gate;
+      return { ok: true, status: 200, json: async () => ({ "probe.key": "Bonjour" }) };
+    },
+  });
+  I18n._resetForTest();
+  const fr = I18n.set("fr", { persist: false });
+  await new Promise((r) => setTimeout(r, 0));
+  await I18n.set("en", { persist: false });
+  releaseFr();
+  await fr;
+  assert.deepEqual([I18n.lang(), I18n.t("probe.key", null, "Default")], ["en", "Default"]);
+});
