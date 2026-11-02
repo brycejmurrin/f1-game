@@ -185,33 +185,33 @@ const ReplayBuf = (function () {
         bytes: frameBytes(nCars) * count, allocatedBytes, fixedBytes,
       };
     }
+    // Chronological ring order, so the last sample at or before t is a binary search (ties keep the later one).
     function frameIndexAt(t) {
-      let best = -1, bestT = -Infinity;
-      for (let k = 0; k < count; k++) {
-        const i = (head + k) % cap;
-        const ti = times[i];
-        if (ti <= t && ti >= bestT) { bestT = ti; best = i; }
+      let lo = 0, hi = count - 1, k = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (times[(head + mid) % cap] <= t) { k = mid; lo = mid + 1; } else hi = mid - 1;
       }
-      return best;
+      return k < 0 ? -1 : (head + k) % cap;
     }
     const _a = new Float32Array(FLOATS), _b = new Float32Array(FLOATS), _o = new Float32Array(FLOATS);
-    function at(t) {
+    // `out` (apply's pooled snapshot) reuses its cars array and rows; the public at() passes none and gets fresh ones.
+    function at(t, out) {
       if (!count) return null;
       const w = windowInfo();
       const tt = Math.max(w.t0, Math.min(w.t1, t));
       let i0 = frameIndexAt(tt);
       if (i0 < 0) i0 = head;
       let i1 = i0, u = 0;
-      for (let k = 0; k < count - 1; k++) {
-        const i = (head + k) % cap;
-        if (i === i0) { i1 = (head + k + 1) % cap; break; }
-      }
+      const k0 = (i0 - head + cap) % cap;
+      if (k0 < count - 1) i1 = (i0 + 1) % cap;
       const t0 = times[i0], t1 = times[i1];
       if (i1 !== i0 && t1 > t0) u = (tt - t0) / (t1 - t0);
       // Across a break or a teleport there is no motion to blend: snap to the
       // nearer real sample (ties keep the earlier one).
       const snapU = u > 0.5 ? 1 : 0, cut = i1 !== i0 && brk[i1] === 1;
-      const cars = [], L = (G.track && G.track.total) || 0;
+      const cars = out ? out.cars : [], L = (G.track && G.track.total) || 0;
+      if (out) cars.length = nCars;
       for (let c = 0; c < nCars; c++) {
         readCar(_a, i0, c);
         readCar(_b, i1, c);
@@ -225,12 +225,14 @@ const ReplayBuf = (function () {
         }
         if (snap) _o.set(snapU ? _b : _a);   // the recorded floats, bit-exact
         else lerpCar(_o, _a, _b, u, L);
-        cars.push({
-          s: _o[0], x: _o[1], head: _o[2], speed: _o[3],
-          px: _o[4], py: _o[5], pz: _o[6], steer: _o[7], yawVis: _o[8],
-          status: status[(snap && snapU ? i1 : i0) * nCars + c],
-        });
+        const st = status[(snap && snapU ? i1 : i0) * nCars + c];
+        let row = out ? cars[c] : null;
+        if (!row) { row = {}; cars[c] = row; }
+        row.s = _o[0]; row.x = _o[1]; row.head = _o[2]; row.speed = _o[3];
+        row.px = _o[4]; row.py = _o[5]; row.pz = _o[6]; row.steer = _o[7]; row.yawVis = _o[8];
+        row.status = st;
       }
+      if (out) { out.t = tt; return out; }
       return { t: tt, cars };
     }
     function snapLive(cars) {
@@ -285,11 +287,12 @@ const ReplayBuf = (function () {
       // same complete reset as WATCH seeks (including its outer anchor).
       if (!G.photoMode && !G.dbgCam && G.snapGameCam) G.snapGameCam();
     }
+    const _applySnap = { t: 0, cars: [] };   // apply() consumes the snapshot at once (applyPose copies fields)
     function apply(t, continuous = false) {
       if (!scrubbing) return false;
       // Indexed footage belongs to the captured field, never replacement cars.
       if (!audioOwner.valid()) { audioOwner.release(); return false; }
-      const snap = at(t);
+      const snap = at(t, _applySnap);
       if (!snap || !G.cars) return false;
       scrubT = snap.t;
       applyPose(G.cars, snap.cars);
