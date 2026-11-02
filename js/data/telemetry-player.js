@@ -289,7 +289,7 @@ const DataTelemetryPlayer = (function () {
       view._raf = requestAnimationFrame(function step(ts) {
         if (!view.playing) return;
         if (!view._last) view._last = ts;
-        const dt = (ts - view._last) / 1000; view._last = ts;
+        const dt = Math.min((ts - view._last) / 1000, 0.1); view._last = ts; // hidden-tab resume must not jump
         let nt = (view.cursorT || 0) + dt * view.rate;
         if (nt >= view.tMax) nt = 0;        // loop the lap
         view.cursorT = nt;
