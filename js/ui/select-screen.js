@@ -1037,7 +1037,6 @@ function drawElevProfile(cv, t, showEl) {
   if (!cv || !target) return false;
   const py = TrackMaps.elevProfile(t);
   if (!(py && py.length > 2 && TrackMaps.elevRange(t) > 2)) { target.hidden = true; return false; }
-  target.hidden = false;
   // The HTML attributes (280x36 / 240x48) were the backing store forever while
   // CSS stretched the element to width: 100% — a 600px panel scaled the buffer
   // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
@@ -1049,7 +1048,13 @@ function drawElevProfile(cv, t, showEl) {
   const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
   if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const ew = boxW, eh = boxH;
-  const eg = cv.getContext("2d");
+  // A canvas keeps its first context type for life: getContext("2d") is null
+  // when another type is already bound, or when the browser will not allocate
+  // a 2D store. setTransform on that null is the race-select overlay (#4469,
+  // three forced to GL on SwiftShader). Hide the sparkline instead.
+  const eg = cv.getContext ? cv.getContext("2d") : null;
+  if (!eg) { target.hidden = true; return false; }
+  target.hidden = false;
   eg.setTransform(ratio, 0, 0, ratio, 0, 0);
   eg.clearRect(0, 0, ew, eh);
   let mn = Infinity, mx = -Infinity;

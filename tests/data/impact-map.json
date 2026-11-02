@@ -19073,6 +19073,7 @@
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "draw": [
+        "tests/unit/select-preview-defer.test.mjs",
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "drsZones": [

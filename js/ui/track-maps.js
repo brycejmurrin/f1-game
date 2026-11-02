@@ -438,7 +438,10 @@ const TrackMaps = (function () {
 
   function draw(canvas, def, opts) {
     opts = opts || {};
-    const g = canvas.getContext("2d");
+    // Same null as drawElevProfile (#4469): the preview outline is the next
+    // painter on that path, and clearRect on a null context throws the overlay.
+    const g = canvas && canvas.getContext && canvas.getContext("2d");
+    if (!g) return false;
     const W = canvas.width, H = canvas.height, pad = opts.pad != null ? opts.pad : 14;
     g.clearRect(0, 0, W, H);
     const data = compute(def);
