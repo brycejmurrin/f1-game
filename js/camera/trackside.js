@@ -130,11 +130,14 @@ const TracksideCams = (function () {
     return { eye: _eye, tgt: _tgt, fov: fov, index: idx, count: cams.length, n: c.n, cut: cut };
   }
 
+  /** A restart / seek is a CUT: forget the held cam so hysteresis cannot keep the old one. */
+  function reset(track) { if (track) track._tsIdx = 0; }
+
   function status(track) {
     if (!track) return { count: 0, index: 0 };
     const cams = build(track);
     return { count: cams.length, index: track._tsIdx | 0, n: cams.length ? cams[track._tsIdx | 0].n : 0 };
   }
 
-  return Object.freeze({ build, pick, pose, status, FENCE, HEIGHT, HYST_M, FOV });
+  return Object.freeze({ build, pick, pose, reset, status, FENCE, HEIGHT, HYST_M, FOV });
 })();
