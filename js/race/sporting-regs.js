@@ -129,7 +129,7 @@ const SportingRegs = (function () {
     function reset() { ahead.clear(); now.clear(); primed = false; finished = false; owed.length = 0; lostTo.length = 0; t = 0; }
     function drop(list, o) { const i = list.indexOf(o); if (i >= 0) list.splice(i, 1); }
     function tick(p, field, level, dt) {
-      if (!p) { reset(); return null; }
+      if (!p || p.retired) { reset(); return null; }   // a retired car owes no place and can take no penalty
       now.clear();
       const finishPass = p.finished && !finished;
       for (let i = 0, f = field || []; i < f.length; i++) {   // indexed: tick runs every step

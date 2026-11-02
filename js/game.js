@@ -1730,6 +1730,8 @@ function redFlagRestart() {
   // (the 2.2 s all-done arm, or the 0.1 s cap) would classify the restart a second after the lights. postFinish.since
   // is the moment the human was done: raceT keeps running under the flag, and the 75 s cap would already be expired.
   resultT = 0; postFinish.since = -1;
+  scWatch.reset(); blueWatch.reset();   // teleported grid: a give-back or blue-flag clock from before the flag must not run on
+  feel.camRoll = 0; camSlipSm = 0; feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1;
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; feel.startHold = 0;
   els.lights.hidden = false;
   for (const l of els.lights.children) l.classList.remove("on");
