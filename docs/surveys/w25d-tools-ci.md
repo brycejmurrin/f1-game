@@ -16,7 +16,7 @@ second merger runs `sync-pr.mjs`.
 | `tools/ci/js-debugger-smoke.mjs` | **NEW** — only intentional `tools/ci` source |
 | `tools/README.md` | regenerated via `npm run gen` (one `@doc` row) |
 | `docs/surveys/w25d-tools-ci.md` | NEW (this file) |
-| `docs/changelog.d/w25d-tools-ci.md` | NEW |
+| `CHANGELOG.md` | changelog entry (fragment `w25d-tools-ci` folded in by the changelog fold) |
 | `docs/README.md` | index row for `surveys/` (plural) |
 
 **Not touched:** `tools/ci/tooling-fast.mjs`, tooling-timings, timings JSON,
