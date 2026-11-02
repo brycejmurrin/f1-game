@@ -1026,53 +1026,21 @@ function updatePanels(dt, px, pz) {
   }
 }
 
-// Project ONE hazard candidate back to (s, lat), seeded by the arc the body was
-// placed at — falling back to the full scan the moment that seed is not
-// trustworthy. Leaves _smp holding the sample at the returned s, which
-// consider() reads back for hw and road height.
-//
-// WHY A HINT. Tracks.project with no hint evaluates EVERY centreline segment,
-// and n = round(total/4) (js/track/tracks.js): 824 segments on monaco, 1444 on
-// monza, 1543 on vegas, 1737 on spa. With a hint it evaluates ±16 nodes = 33
-// (js/track/core/spline.js). Unhinted, that runs for every live shard (cap 48), every
-// disturbed cone and every broken panel at the caution machine's 4 Hz
-// (QUERY_EVERY in js/race/race-control.js) — while every one of those records
-// already carries the arc it was placed at.
-//
-// WHY A FALLBACK. The hint RESTRICTS the search to ±64 m of arc rather than
-// seeding it, so a stale hint mis-projects SILENTLY instead of erroring, and a
-// shard can outrun 64 m: spawnImpact throws it at up to 0.55x the car's speed
-// along the track for the ~1 s it is airborne, before it starts sliding.
-//
-// WHY THIS TRUST TEST. It is consider()'s OWN pair of tests, applied to the
-// hinted answer: within the road half-width, and at this road's height. Trusting
-// less is always safe — the fallback is the full scan — so the guard only has
-// to be strict enough, never exact. Both halves are load-bearing:
-//   · `dist`, not `lat`: `lat` is only the component along the local `right`, so
-//     a body far past the window still reports a near-zero `lat` when the window
-//     edge happens to point at it. Trusting `lat <= hw` flips the accept/reject
-//     verdict on 131-309 of ~45k sampled placements per circuit and misplaces
-//     accepted ones by up to 1931 m of arc. `dist` is the real perpendicular.
-//   · the height test, because Tracks.project is XZ-ONLY and suzuka is a
-//     figure-of-eight: at the crossover the two legs are 1.43 m apart in XZ and
-//     8.07 m apart in Y (s=2529 over s=4893). Without it, a hint on one leg is
-//     trusted for a body on the other and mis-attributes by 2364 m of arc.
-//
-// WHAT IT COSTS. Swept over all 40 circuits (1.75M placements, every staleness
-// up to a 2 km wrong hint): on 39 of them, ZERO accept/reject verdicts change,
-// and accepted answers land within 13 m of the unhinted arc. That drift is
-// spline.js's CONT term dragging a hinted answer toward its hint by ~7% of the
-// arc gap; 13 m is 0.2% of a lap, and only the per-sector SPLIT of hazards()
-// reads it — `total`, which drives VSC_MIN, cannot move at all.
-// tests/unit/debris-hazard-hint.test.mjs pins monza/monaco/spa/miami and suzuka.
-//
-// SUZUKA IS DELIBERATELY DIFFERENT, and it is the hint that is right. Under the
-// bridge the unhinted XZ scan snaps a body resting on the upper deck onto the
-// lower road, 8 m below, and consider() then discards it as airborne. The hint
-// keeps it on the deck it is actually on. That is a behaviour change, on one
-// circuit, at one place, in the direction of correctness — and hazards() is not
-// a replicated surface (js/race/race-control.js: debris "is NOT replicated, so
-// two peers genuinely see different hazards"; the guest adopts the host's flag).
+// Project ONE hazard candidate back to (s, lat), seeded by the arc the body was placed at, falling back to the full
+// scan when the seed is not trustworthy. Leaves _smp holding the sample at the returned s (consider() reads hw and
+// road height from it).
+// HINT: unhinted Tracks.project scans every centreline segment (824 monaco .. 1737 spa); hinted is ±16 nodes = 33
+// (spline.js), and this runs for every live shard (cap 48), cone and panel at the caution machine's 4 Hz.
+// FALLBACK: the hint RESTRICTS the search to ±64 m, so a stale one mis-projects silently; a shard can outrun 64 m
+// (spawnImpact throws it at up to 0.55x car speed for ~1 s airborne).
+// TRUST TEST = consider()'s own pair, on the hinted answer: within road half-width AND at this road's height.
+// Trusting less is always safe (fallback = full scan). `dist`, not `lat`: lat is only the component along the local
+// right, so a far body can report near-zero lat (131-309 of ~45k placements flip verdict, up to 1931 m of arc off).
+// Height test: Tracks.project is XZ-only and suzuka is a figure-of-eight (legs 1.43 m apart in XZ, 8.07 m in Y).
+// COST over 40 circuits (1.75M placements): 39 change no verdict, accepted arcs within 13 m (spline CONT term);
+// only hazards()' per-sector split reads it, not `total` (VSC_MIN). tests/unit/debris-hazard-hint.test.mjs pins it.
+// SUZUKA differs on purpose: under the bridge the unhinted scan snaps an upper-deck body onto the road 8 m below and
+// consider() drops it as airborne; the hint keeps it on its deck. Not replicated (race-control.js), so peers may differ.
 function projectHazard(track, x, y, z, hint) {
   if (hint != null) {
     const pr = Tracks.project(track, x, z, hint);

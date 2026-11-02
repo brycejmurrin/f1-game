@@ -400,53 +400,19 @@ function aTop()  { return ACCEL * Math.max(driveTune.PACE, 0.05); }
 function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
 // Scripted field pace (tierV×skill) for AiDrive.pairEdgeN (pass-completion).
 function scriptPace(o) { return (o && o.tierV > 0 && o.skill > 0) ? o.tierV * o.skill : 0; }
-// These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
-// — they are the core feel levers found by emulating real drivers, not pause-menu
-// sliders. driveTune.FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
-// driveTune.YAW_DAMP: yaw damping for arcade stability. driveTune.YAW_INERTIA: rotational inertia
-// scale (<1 = snappier turn-in). driveTune.PLAYER_GRIP: forgiveness headroom over the AI.
-                            // (quicker direction changes through chicanes) without
-                            // touching steady-state grip. 0.89/0.7 washed the nose and
-                            // lagged the body; 0.94/0.58 still understeers first.
-                            // keeps the dynamic model's character but forgiving enough
-                            // that a tidy line holds the road (neutral-simcade target)
-// Steering-assist ("DRIVING HELP"): adds road-wheel steer toward the upcoming
-// curvature so the car helps drive each corner — but the assist goes THROUGH the
-// tyres (grip-limited) like the driver's own steering, it can't teleport the
-// heading. 0 = pure manual (the car runs straight off at corners), 0.9 = the
-// car nearly steers the corner for you. The driver always adds on top.
-//
-// DEFAULT 0 — OPT-IN. At 0.7, 50 m/s through a 100 m corner is ~20 % of your
-// available lock applied by the game (nearer 40 % in a slow corner): a car that
-// resists your inputs and pulls toward the road — driving against an invisible
-// hand. The assist still exists, and RELAX still turns it
-// on, but nothing steers the car by default except the driver.
-// FRENET SCALE FACTOR. The (s, x) road frame is not rigid: it stretches on the
-// outside of a corner and compresses on the inside. A line running x metres to
-// the side of a centreline of curvature k is itself an arc of curvature k/h and
-// length h × (centreline length), where
-//                              h = 1 + k·x
-// (+x is right of the centreline; k > 0 curves toward screen-left, so its centre
-// of curvature is on the -x side and moving to +x moves you AWAY from it — the
-// radius grows from R = 1/k to R + x, hence h = 1 + k·x). Everything the player's
-// physics does in the track frame needs it: arc-length progress divides by h, and
-// the curvature the car actually has to steer is k/h.
-//
-// MEASURED, not modelled. h is read off the SAME sampler that rebuilds the car's
-// world position from (s, x) — the ratio of the offset line's chord to the
-// centreline's over a ±H_D window — so the two can never disagree. Using the
-// closed form with Tracks.curvature() instead looks tidier but is wrong where it
-// matters: that k is smoothed over a ±12 m window, and at the tight corners where
-// h is furthest from 1 the smoothed value badly under-reads the real local
-// geometry (measured error at Bahrain's hairpins: ~34 % modelled vs ~2 % here).
-// The ±H_D window also gives the factor a little natural smoothing, so a
-// curvature spike can't put a step in the car's progress rate.
-//
-// Clamped because the chart is only valid inside the centre of curvature
-// (h → 0 at x = -1/k). The floor bites only where a curvature spike meets a wide
-// road — on the shipped circuits the tightest real corner at the outermost
-// drivable x lands near h ≈ 0.5, so 0.45 leaves the honest geometry untouched and
-// only tames the singular case.
+// These four are `let` so the tuning harness (setPhysics) can sweep them: the core feel levers, not pause-menu sliders.
+// driveTune.FRONT_GRIP: front friction bias (<1, understeer-safe). YAW_DAMP: arcade yaw stability. YAW_INERTIA: rotational
+// inertia scale (<1 = snappier turn-in, quicker chicanes). PLAYER_GRIP: forgiveness headroom over the AI.
+// Steering assist ("DRIVING HELP"): road-wheel steer toward the upcoming curvature, routed THROUGH the tyres (grip-limited)
+// like the driver's own steering. DEFAULT 0, OPT-IN: at 0.7 the game applied ~20-40 % of lock, an invisible hand against
+// your inputs. RELAX still turns it on; nothing else steers the car by default.
+// FRENET SCALE FACTOR h = 1 + k·x (+x right of the centreline; k > 0 curves screen-left): a line x metres off the centreline
+// is an arc of length h × centreline, so arc-length progress divides by h and the steered curvature is k/h.
+// MEASURED, not modelled: h is the chord ratio of the offset line over a ±H_D window of the SAME sampler that rebuilds the
+// car's world position, so they cannot disagree. The closed form with Tracks.curvature() is wrong where it matters (k is
+// smoothed over ±12 m; Bahrain hairpins ~34 % modelled error vs ~2 % here). The window also smooths curvature spikes.
+// Clamped (chart valid only inside the centre of curvature, h → 0 at x = -1/k); the real worst case is h ≈ 0.5, so 0.45
+// leaves honest geometry untouched.
 const H_D = 2;   // m — half-window of the central difference
 const _hA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _hB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
