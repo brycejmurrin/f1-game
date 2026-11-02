@@ -165,7 +165,8 @@ const WallClamp = (function () {
             if (key == null) {
               const id = c.team && c.team.id;
               const list = typeof Teams !== "undefined" ? Teams.LIST : [];
-              const ti = list.findIndex((t) => t.id === id);
+              let ti = -1;
+              for (let i = 0; i < list.length; i++) if (list[i].id === id) { ti = i; break; }
               key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
             }
             key = (key | 0) + 10000;
@@ -215,7 +216,8 @@ const WallClamp = (function () {
             if (key == null) {
               const id = c.team && c.team.id;
               const list = typeof Teams !== "undefined" ? Teams.LIST : [];
-              const ti = list.findIndex((t) => t.id === id);
+              let ti = -1;
+              for (let i = 0; i < list.length; i++) if (list[i].id === id) { ti = i; break; }
               key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
             }
             key = (key | 0) + 10000;
