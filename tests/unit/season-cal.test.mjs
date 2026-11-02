@@ -254,6 +254,17 @@ test("unchanged setup preserves the first qualifying grid without writing the sa
   assert.equal(changed.season.config.laps, 10);
 });
 
+test("a refused save (invalid) is not inherited by a no-op APPLY as STORAGE IS FULL", () => {
+  const { S } = load();
+  S.engage("season");
+  const season = S.restart();
+  assert.equal(S.save(null).durable, false, "invalid save is refused");
+  const result = S.applyConfig({ ...S.config(), trackIds: [...S.config().trackIds] });
+  assert.equal(result.ok, true);
+  assert.equal(result.season, season);
+  assert.equal(result.durable, true, "nothing was written, so nothing is session-only");
+});
+
 test("unchanged setup preserves round and sprint progress, and session-only save status", () => {
   for (const progress of [{ round: 2 }, { round: 0, stage: "race" }]) {
     const { S, writes, store } = load({ seasonCfg: { sprint: true } });

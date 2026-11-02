@@ -268,7 +268,10 @@ const DockLayout = (function () {
         btn.textContent = editing ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
         if (was && !editing && restore !== false && btn.focus) btn.focus();
       }
-      if (!editing) drag = null;
+      if (!editing) {
+        if (drag) save(store, bag); // a drag cut short by DONE/Escape keeps its move
+        drag = null;
+      }
       paint();
     }
 

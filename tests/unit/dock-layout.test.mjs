@@ -221,9 +221,10 @@ function bootCreate() {
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
   const bag = ctx.DockLayout.normalize({});
   bag.buttons.L = { x: 0, y: 0.35 };
-  const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set() {} };
+  const sets = [];
+  const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set(k, v) { sets.push([k, v]); } };
   const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => "buttons" });
-  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made };
+  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets };
 }
 
 test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
@@ -276,6 +277,21 @@ test("a pointerdown on #dock-right starts a drag while editing, and the move shi
   docL.pointermove(ev({ clientX: 260, clientY: 700 }));   // 40 px toward the centre
   docL.pointerup(ev({}));
   assert.equal(api.bag().buttons.R.x, 40 / 400);
+});
+
+test("DONE mid-drag persists the dragged offset (hunt 2026-11-02)", () => {
+  const { api, docL, els, sets } = bootCreate();
+  const target = { closest() { return null; } };
+  els["dock-right"].contains = (t) => t === target;
+  els["dock-left"].contains = () => false;
+  const ev = (o) => Object.assign({ target, pointerId: 1, preventDefault() {} }, o);
+  api.setEditing(true);
+  docL.pointerdown(ev({ clientX: 300, clientY: 700 }));
+  docL.pointermove(ev({ clientX: 260, clientY: 700 }));
+  const before = sets.length;
+  api.setEditing(false); // second finger / Escape ends editing before pointerup
+  assert.ok(sets.length > before, "the in-flight move was saved");
+  assert.equal(sets[sets.length - 1][1].buttons.R.x, 40 / 400);
 });
 
 test("a REPOSITION drag that starts on GAS never reaches the button: the throttle LATCH stays put (hunt3 7-F4)", () => {
