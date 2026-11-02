@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import { planSweepShards } from "../../tools/ci/sweep-shards.mjs";
 
 const files = ["a", "b", "c", "d", "e", "f"];
@@ -54,4 +55,10 @@ test("the CLI prints one shard's files as JSON for --shard/--json", async () => 
   assert.equal(out.shards, 4);
   assert.ok(out.files.length > 0 && out.files.every((f) => f.startsWith("tests/unit/")), r.stdout.slice(0, 300));
   assert.ok(out.seconds > 0);
+});
+
+test("importing the planner with no argv[1] (node -e) does not throw (#4481)", () => {
+  const url = new URL("../../tools/ci/sweep-shards.mjs", import.meta.url).href;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(url)})`], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
 });

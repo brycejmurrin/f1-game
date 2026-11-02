@@ -8,6 +8,7 @@ import { runningEndpoint } from "./debug-chrome.mjs";
 import { recordException, traceMethods, profileMethods } from "./js-debugger-trace.mjs";
 import { pathSuffixRegex, workflowMethods } from "./js-debugger-workflow.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
+import { pidAlive } from "../lib/deploy-status.mjs";   // zombie-aware (the #4458 helper)
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
 /** One-line value of an object result from V8's preview, so an agent need not chain debugger_properties for `{a, b}`. */
@@ -69,7 +70,6 @@ function operationResult(result, id) {
 const REGISTRY = "__apexDbgClients";
 const registerExpression = (gen, pid) => `(()=>{var M=globalThis.${REGISTRY}||(Object.defineProperty(globalThis,"${REGISTRY}",{value:{},configurable:true}),globalThis.${REGISTRY});var o=Object.entries(M).map(function(e){return {gen:e[0],pid:e[1].pid,since:e[1].since}});M[${JSON.stringify(gen)}]={pid:${pid},since:Date.now()};return o})()`;
 const unregisterExpression = gen => `(()=>{var M=globalThis.${REGISTRY};if(M)delete M[${JSON.stringify(gen)}];return true})()`;
-const pidAlive = pid => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
 export class DebugSession {
   constructor({ discover = targets, open = Cdp.open, sharedEndpoint = runningEndpoint } = {}) {
     this.discover = discover; this.open = open; this.sharedEndpoint = sharedEndpoint;

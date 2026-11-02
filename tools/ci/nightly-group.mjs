@@ -21,6 +21,8 @@
  *         node tools/ci/nightly-group.mjs --list     # the whole rotation
  */
 import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const GROUPS = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8")).groups;
 
@@ -95,7 +97,7 @@ export function groupForDay(day) {
   return ROTATION[((day % ROTATION.length) + ROTATION.length) % ROTATION.length];
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const arg = process.argv.slice(2).find((a) => a.startsWith("--day=")); 
   if (process.argv.includes("--list")) {
     for (let i = 0; i < ROTATION.length; i++) console.log(`${i}\t${bare(ROTATION[i])}`);
