@@ -259,15 +259,15 @@
       // Corona, aureole and disc.
       const cd = (1 - overcast * 0.92) * (1 - night);
       D.coronaDamp.value = cd;
-      const sw = [lerp(sc.x, sc.x * 1.18, golden), lerp(sc.y, sc.y * 0.52, golden), lerp(sc.z, sc.z * 0.24, golden)];
-      set3(D.sunWarm, sw[0], sw[1], sw[2]);
+      const sw0 = lerp(sc.x, sc.x * 1.18, golden), sw1 = lerp(sc.y, sc.y * 0.52, golden), sw2 = lerp(sc.z, sc.z * 0.24, golden);   // locals: no per-frame array
+      set3(D.sunWarm, sw0, sw1, sw2);
       D.aurExp.value = lerp(20.0, 8.0, golden);
       const ak = (golden * 0.55 + 0.55) * cd * U.coronaAureole.value;
-      set3(D.aurCol, sw[0] * ak, sw[1] * ak, sw[2] * ak);
+      set3(D.aurCol, sw0 * ak, sw1 * ak, sw2 * ak);
       D.squash.value = lerp(1.0, lerp(1.0, 1.6, golden), U.sunSquash.value);
       D.discOut.value = lerp(0.018, 0.028, golden) * U.sunDiscSize.value;
       D.discIn.value = U.sunDiscSize.value * 0.006;
-      set3(D.discCore, lerp(2.3, sw[0] * 2.8, golden), lerp(2.2, sw[1] * 2.8, golden), lerp(1.9, sw[2] * 2.8, golden));
+      set3(D.discCore, lerp(2.3, sw0 * 2.8, golden), lerp(2.2, sw1 * 2.8, golden), lerp(1.9, sw2 * 2.8, golden));
       // Star spawn window; the dither's time step (float32 like the GPU's floor).
       D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
       const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));

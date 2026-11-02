@@ -15648,8 +15648,7 @@
         "tests/unit/tlx-round2.test.mjs"
       ],
       "matKeyFor": [
-        "tests/unit/tlx-mat-key-memo.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-mat-key-memo.test.mjs"
       ],
       "materialArrayAnisotropy": [
         "tests/unit/assets-pack.test.mjs",
