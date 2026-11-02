@@ -518,6 +518,7 @@ const AgentRaster = (function () {
       gantry: "=", mountain: "^", peak: "^", ridge: "^", prop: "o",
     };
 
+    let walkC = null;
     function plan(opts) {
       if (!G.track) {
         return fail("NoTrackError", "no track is loaded",
@@ -571,17 +572,35 @@ const AgentRaster = (function () {
         return false;
       };
 
-      const total = G.track.total, step = Math.max(2, mPerCol * 0.5);
+      // Centreline walk cached per track (2 m spacing); each on-screen pair is
+      // subdivided to half a column so the road never has holes.
+      if (!walkC || walkC.t !== G.track) {
+        const pts = [], total = G.track.total;
+        for (let s = 0; s < total; s += 2) {
+          Tracks.sample(G.track, s, scr);
+          const [ex, ez] = unitRight(scr);
+          pts.push([scr.p[0], scr.p[2], ex, ez, scr.hw]);
+        }
+        walkC = { t: G.track, pts };
+      }
+      const total = G.track.total, wp = walkC.pts, sub = Math.max(1, Math.ceil(2 / (mPerCol * 0.5)));
       let onScreenNodes = 0;
-      for (let s = 0; s < total; s += step) {
-        Tracks.sample(G.track, s, scr);
-        if (Math.hypot(scr.p[0] - ox, scr.p[2] - oz) > radius * 1.6) continue;
-        const [ex, ez] = unitRight(scr);
-        const half = scr.hw;
-        for (let lat = -half; lat <= half; lat += mPerCol * 0.5) {
-          const c = toCell(scr.p[0] + ex * lat, scr.p[2] + ez * lat);
-          const kind = Math.abs(lat) > half - mPerCol * 0.5 ? "kerb" : "road";
-          if (put(c.cx, c.cy, kind, 5)) onScreenNodes++;
+      const rr = radius * 1.6;
+      for (let i = 0; i < wp.length; i++) {
+        const a = wp[i];
+        if (Math.hypot(a[0] - ox, a[1] - oz) > rr) continue;
+        const b = wp[(i + 1) % wp.length];
+        for (let k = 0; k < sub; k++) {
+          const u = k / sub, v = 1 - u;
+          const px = a[0] * v + b[0] * u, pz = a[1] * v + b[1] * u;
+          let ex = a[2] * v + b[2] * u, ez = a[3] * v + b[3] * u;
+          const el = Math.hypot(ex, ez) || 1; ex /= el; ez /= el;
+          const half = a[4] * v + b[4] * u;
+          for (let lat = -half; lat <= half; lat += mPerCol * 0.5) {
+            const c = toCell(px + ex * lat, pz + ez * lat);
+            const kind = Math.abs(lat) > half - mPerCol * 0.5 ? "kerb" : "road";
+            if (put(c.cx, c.cy, kind, 5)) onScreenNodes++;
+          }
         }
       }
 

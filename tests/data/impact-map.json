@@ -28,6 +28,9 @@
       ],
       "frame": [
         "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "plan": [
+        "tests/unit/agentview-api-contract.test.mjs"
       ]
     },
     "js/agent/agentview.js": {
