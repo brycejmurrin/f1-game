@@ -3,9 +3,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 
 test("manifest keeps results-sheet.js lazy and results-boot.js eager", () => {
-  const { createRequire } = require("node:module");
   const m = createRequire(import.meta.url)("../../tools/manifest.cjs");
   assert.deepEqual(
     { boot: m.FULL.includes("js/ui/results-boot.js"), sheet: m.FULL.includes("js/ui/results-sheet.js"), lazy: m.LAZY_RESULTS_SHEET },
