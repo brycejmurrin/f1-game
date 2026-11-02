@@ -623,16 +623,16 @@ test("LOBBY phase: more than five HELLOs (or READYs) in a second are dropped, pe
   // ignored — and a second later the window is open again.
   const { lobby, peerSays, settle } = await lobbyUp("host");
   try {
-    for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, tag: i });
+    for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, parts: { tag: i } });
     await settle();
-    assert.equal(lobby.roomState().peer.tag, 4, "the fifth HELLO is the last one accepted");
+    assert.equal(lobby.roomState().peer.parts.tag, 4, "the fifth HELLO is the last one accepted");
     for (let i = 0; i < 9; i++) peerSays("ready", { ready: i % 2 === 0 });
     await settle();
     assert.equal(lobby.roomState().peerReady, true, "READY #5 (index 4, true) stands; #6..9 are dropped");
     await sleep(1100);
-    peerSays("hello", { team: "bravo", driver: 1, tag: 99 });
+    peerSays("hello", { team: "bravo", driver: 1, parts: { tag: 99 } });
     await settle();
-    assert.equal(lobby.roomState().peer.tag, 99, "the window rolls: a later HELLO is accepted again");
+    assert.equal(lobby.roomState().peer.parts.tag, 99, "the window rolls: a later HELLO is accepted again");
   } finally { lobby.cancel(); }
 });
 
