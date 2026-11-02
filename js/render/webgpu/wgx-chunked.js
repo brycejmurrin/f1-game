@@ -201,6 +201,21 @@ const WGXChunked = (function () {
     }
     function freeChunkedMesh(m) {
       if (!m) return;
+      // Plain createMesh result (chunks === null: tiny mesh or the OOM upload fallback) of a ROAD: it owns a LUT
+      // storage buffer and, once split, pieces[1..] — buffers only freeMesh() used to know about, so they leaked.
+      if (m.lutSbuf) {
+        core.freeBuf(m.lutSbuf);
+        if (m.lutAttrBG && m.lutAttrBG === core.roadLutBG) { core.setRoadLutBG(null); core.setRoadLutReady(false); }
+        m.lutSbuf = null;
+      }
+      if (m.pieces) {
+        for (const p of m.pieces) {
+          if (p.vbuf && p.vbuf !== m.vbuf) core.freeBuf(p.vbuf);
+          if (p.sbuf && p.sbuf !== m.sbuf) core.freeBuf(p.sbuf);
+          if (p.ibuf && p.ibuf !== m.ibuf) core.freeBuf(p.ibuf);
+        }
+        m.pieces = null;
+      }
       // Drop the lamp-table segment (and any overflow sentinel) keyed on this
       // chunks array — a rebuilt mesh must re-resolve, not inherit stale state.
       // The cursor only ever advanced (the reset in wgx.js keys on the lamp set MOVING, and frame.allLights is one

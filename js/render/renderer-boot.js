@@ -358,6 +358,7 @@ if (!gfx) {
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
   // script must not trigger the claim-failure reload loop while offline.
   let glxVerdict = "throw";
+  let glxTimedOut = false;
   try {
     glxVerdict = await withIdleProgressTimeout(async (touch) => {
       touch();
@@ -367,8 +368,9 @@ if (!gfx) {
       }
       if (typeof GLX.init !== "function") return "no-init";
       touch();
+      if (glxTimedOut) return "no-init"; // watchdog fired mid-fetch: do not build a context behind the panel
       return GLX.init(canvas) ? "ok" : "init-fail";
-    }, BOOT_STEP_MS, BOOT_STEP_MAX_MS, "GLX boot");
+    }, BOOT_STEP_MS, BOOT_STEP_MAX_MS, "GLX boot", () => { glxTimedOut = true; });
   } catch (_) { glxVerdict = "throw"; }
   if (glxVerdict === TIMED_OUT || glxVerdict === "fetch-fail" || glxVerdict === "no-init") {
     showGraphicsUnavailable(); return null;
