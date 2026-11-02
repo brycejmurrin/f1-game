@@ -285,9 +285,11 @@ const ReplayBuf = (function () {
       // Photo/tools and results/director shots own dbgCam; a scrub must not
       // reseed their camera or clear their look state. The live rig uses the
       // same complete reset as WATCH seeks (including its outer anchor).
-      if (!G.photoMode && !G.dbgCam && G.snapGameCam) G.snapGameCam();
+      snapped = !G.photoMode && !G.dbgCam && !!G.snapGameCam;
+      if (snapped) G.snapGameCam();
     }
     const _applySnap = { t: 0, cars: [] };   // apply() consumes the snapshot at once (applyPose copies fields)
+    let snapped = false;   // last apply() ran snapGameCam, which already resets the follows (no second reset)
     function apply(t, continuous = false) {
       if (!scrubbing) return false;
       // Indexed footage belongs to the captured field, never replacement cars.
@@ -296,6 +298,7 @@ const ReplayBuf = (function () {
       if (!snap || !G.cars) return false;
       scrubT = snap.t;
       applyPose(G.cars, snap.cars);
+      snapped = false;
       if (!continuous) snapCamera();   // public apply / slider / LAST are seeks
       return true;
     }
@@ -317,7 +320,7 @@ const ReplayBuf = (function () {
       const t = adjacentFrame(scrubT, direction);
       if (t === null) { paintDock(); return false; }
       const ok = apply(t);
-      if (ok) {
+      if (ok && !snapped) {
         // A seek is a cut; never ease from the unrelated pre-step framing.
         if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
         if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
@@ -389,6 +392,7 @@ const ReplayBuf = (function () {
         if (!owns()) throw new Error("Contact sheet ownership changed");
         if (!apply(t)) throw new Error("Replay frame unavailable");
         ownedT = scrubT;
+        if (snapped) return;
         if (typeof CamFeel !== "undefined") { CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch(); }
         if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
       };

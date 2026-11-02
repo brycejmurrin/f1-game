@@ -2449,6 +2449,12 @@
       ],
       "pose": [
         "tests/unit/trackside.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/trackside.test.mjs"
+      ],
+      "status": [
+        "tests/unit/trackside.test.mjs"
       ]
     },
     "js/camera/tuner-panel.js": {
@@ -7212,8 +7218,7 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/rain-cells-vm.test.mjs",
-        "tests/unit/storm-vm.test.mjs",
-        "tests/unit/vstd-invariant.test.mjs"
+        "tests/unit/storm-vm.test.mjs"
       ],
       "hexToArr": [
         "tests/unit/livery-design.test.mjs"

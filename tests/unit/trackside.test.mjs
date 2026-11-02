@@ -116,3 +116,15 @@ test("CAM_MODES keeps trackside at its saved index 14 (apex26.camMode is the ind
   assert.equal(ids.indexOf("trackside"), 14, "saved camMode 14 must stay trackside; append, never reorder");
   assert.equal(ids[13], "visor", "visor stays directly before it");
 });
+
+test("reset forgets the held cam so a restart does not keep the old one", () => {
+  const TS = load();
+  const track = { total: 1000, id: "test" };
+  TS.pose(track, 950, 0, { snap: true });
+  const old = track._tsIdx;
+  assert.ok(old > 0, "late in the lap holds a later cam");
+  TS.reset(track);
+  assert.equal(track._tsIdx, 0);
+  assert.equal(TS.status(track).index, 0);
+  assert.doesNotThrow(() => TS.reset(null));
+});
