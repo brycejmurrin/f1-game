@@ -614,15 +614,15 @@ function live(liv, now, ctx) {
 // (not a 0..1 fraction) — a loop cue repeats every len s, a one-shot holds its
 // last key, which is the identity. Absent, live() never reaches cueRig() and the
 // rig is the mood's, bit for bit. The block below is generated (SINE ease-in-out
-// keys, the curve Blender plays; the beacon heading LINEAR): rerun the script.
+// keys, the curve Blender plays; the beacon heading and spot pan LINEAR): rerun the script.
 // @blender-cues:start
-// Blender 5.2.3 LTS; tools/gen/blender/garage-light-cues.py; SINE ease-in-out keys (angle LINEAR).
-const CUE_SHA256 = "58769b82ac5ebcfaa0984ca922ddb265f9585b96eb3961f81975b4075a40952d";
-const CUE_DATA = {"lightsup":{"label":"LIGHTS UP","len":2.4,"loop":false,"lin":[],"ch":{"key":[0.0,0.02,1.45,0.02,1.51,0.75,1.57,0.35,1.67,1.0,2.4,1.0],"fill":[0.0,0.04,0.85,0.04,0.91,0.75,0.97,0.35,1.07,1.0],"wash":[0.0,0.04,0.3,0.04,0.36,0.75,0.42,0.35,0.52,1.0],"up":[0.0,0.6,1.45,0.6,2.4,1.0]}},"flashes":{"label":"PHOTO FLASHES","len":4.0,"loop":true,"lin":[],"ch":{"key":[0.0,1.1,4.0,1.1],"up":[0.0,1.6,4.0,1.6],"flash":[0.0,0.0,0.179,0.0,0.2,1.0,0.31,0.0,0.519,0.0,0.54,0.7,0.605,0.0,0.609,0.0,0.63,0.9,0.74,0.0,1.239,0.0,1.26,1.0,1.37,0.0,1.709,0.0,1.73,0.55,1.795,0.0,1.799,0.0,1.82,0.8,1.93,0.0,2.459,0.0,2.48,1.0,2.59,0.0,2.979,0.0,3.0,0.65,3.065,0.0,3.069,0.0,3.09,0.9,3.145,0.0,3.149,0.0,3.17,0.5,3.28,0.0,3.619,0.0,3.64,1.0,3.75,0.0,4.0,0.0]}},"beacon":{"label":"AMBER BEACON","len":1.2,"loop":true,"lin":["angle"],"ch":{"key":[0.0,0.55,1.2,0.55],"fill":[0.0,0.5,1.2,0.5],"wash":[0.0,0.45,1.2,0.45],"up":[0.0,0.35,1.2,0.35],"tr":[0.0,1.06,1.2,1.06],"tg":[0.0,0.94,1.2,0.94],"tb":[0.0,0.8,1.2,0.8],"beacon":[0.0,1.0,1.2,1.0],"angle":[0.0,0.0,1.2,6.2832]}},"pulse":{"label":"PULSE","len":3.2,"loop":true,"lin":[],"ch":{"key":[0.0,1.0,1.6,0.86,3.2,1.0],"fill":[0.0,1.0,1.6,0.9,3.2,1.0],"up":[0.0,1.0,1.6,2.6,3.2,1.0]}},"lightsout":{"label":"LIGHTS OUT","len":6.0,"loop":false,"lin":[],"ch":{"key":[0.0,1.0,1.0,0.9,1.9,0.8,2.8,0.7,3.7,0.6,4.6,0.5,4.95,0.5,5.05,0.03,5.25,0.03,5.33,1.25,6.0,1.0],"fill":[0.0,1.0,1.0,0.86,1.9,0.72,2.8,0.58,3.7,0.44,4.6,0.3,4.95,0.3,5.05,0.02,5.25,0.02,5.33,1.2,6.0,1.0],"wash":[0.0,1.0,1.0,0.85,1.9,0.7,2.8,0.55,3.7,0.4,4.6,0.25,4.95,0.25,5.05,0.02,5.25,0.02,5.33,1.2,6.0,1.0],"up":[0.0,1.0,4.95,1.4,5.05,0.0,5.25,0.0,5.33,2.4,6.0,1.0],"tr":[0.0,1.0,1.0,1.08,1.9,1.16,2.8,1.24,3.7,1.32,4.6,1.4,5.25,1.4,5.33,1.0],"tg":[0.0,1.0,1.0,0.87,1.9,0.74,2.8,0.61,3.7,0.48,4.6,0.35,5.25,0.35,5.33,1.0],"tb":[0.0,1.0,1.0,0.87,1.9,0.74,2.8,0.61,3.7,0.48,4.6,0.35,5.25,0.35,5.33,1.0]}}};
+// Blender 5.2.3 LTS; tools/gen/blender/garage-light-cues.py; SINE ease-in-out keys (angle, spotx LINEAR).
+const CUE_SHA256 = "e8b353793828f76cfa69b678b4e99fccae9fb67de48b5cf35aeeccb796f5a7a9";
+const CUE_DATA = {"lightsup":{"label":"LIGHTS UP","len":2.4,"loop":false,"lin":[],"ch":{"key":[0.0,0.02,1.45,0.02,1.51,0.75,1.57,0.35,1.67,1.0,2.4,1.0],"fill":[0.0,0.04,0.85,0.04,0.91,0.75,0.97,0.35,1.07,1.0],"wash":[0.0,0.04,0.3,0.04,0.36,0.75,0.42,0.35,0.52,1.0],"up":[0.0,0.6,1.45,0.6,2.4,1.0]}},"flashes":{"label":"PHOTO FLASHES","len":4.0,"loop":true,"lin":[],"ch":{"key":[0.0,1.1,4.0,1.1],"up":[0.0,1.6,4.0,1.6],"flash":[0.0,0.0,0.179,0.0,0.2,1.0,0.31,0.0,0.519,0.0,0.54,0.7,0.605,0.0,0.609,0.0,0.63,0.9,0.74,0.0,1.239,0.0,1.26,1.0,1.37,0.0,1.709,0.0,1.73,0.55,1.795,0.0,1.799,0.0,1.82,0.8,1.93,0.0,2.459,0.0,2.48,1.0,2.59,0.0,2.979,0.0,3.0,0.65,3.065,0.0,3.069,0.0,3.09,0.9,3.145,0.0,3.149,0.0,3.17,0.5,3.28,0.0,3.619,0.0,3.64,1.0,3.75,0.0,4.0,0.0]}},"beacon":{"label":"AMBER BEACON","len":1.2,"loop":true,"lin":["angle"],"ch":{"key":[0.0,0.55,1.2,0.55],"fill":[0.0,0.5,1.2,0.5],"wash":[0.0,0.45,1.2,0.45],"up":[0.0,0.35,1.2,0.35],"tr":[0.0,1.06,1.2,1.06],"tg":[0.0,0.94,1.2,0.94],"tb":[0.0,0.8,1.2,0.8],"beacon":[0.0,1.0,1.2,1.0],"angle":[0.0,0.0,1.2,6.2832]}},"pulse":{"label":"PULSE","len":3.2,"loop":true,"lin":[],"ch":{"key":[0.0,1.0,1.6,0.86,3.2,1.0],"fill":[0.0,1.0,1.6,0.9,3.2,1.0],"up":[0.0,1.0,1.6,2.6,3.2,1.0]}},"lightsout":{"label":"LIGHTS OUT","len":6.0,"loop":false,"lin":[],"ch":{"key":[0.0,1.0,1.0,0.9,1.9,0.8,2.8,0.7,3.7,0.6,4.6,0.5,4.95,0.5,5.05,0.03,5.25,0.03,5.33,1.25,6.0,1.0],"fill":[0.0,1.0,1.0,0.86,1.9,0.72,2.8,0.58,3.7,0.44,4.6,0.3,4.95,0.3,5.05,0.02,5.25,0.02,5.33,1.2,6.0,1.0],"wash":[0.0,1.0,1.0,0.85,1.9,0.7,2.8,0.55,3.7,0.4,4.6,0.25,4.95,0.25,5.05,0.02,5.25,0.02,5.33,1.2,6.0,1.0],"up":[0.0,1.0,4.95,1.4,5.05,0.0,5.25,0.0,5.33,2.4,6.0,1.0],"tr":[0.0,1.0,1.0,1.08,1.9,1.16,2.8,1.24,3.7,1.32,4.6,1.4,5.25,1.4,5.33,1.0],"tg":[0.0,1.0,1.0,0.87,1.9,0.74,2.8,0.61,3.7,0.48,4.6,0.35,5.25,0.35,5.33,1.0],"tb":[0.0,1.0,1.0,0.87,1.9,0.74,2.8,0.61,3.7,0.48,4.6,0.35,5.25,0.35,5.33,1.0]}},"spotsweep":{"label":"SPOTLIGHT","len":4.0,"loop":false,"lin":["angle","spotx"],"ch":{"key":[0.0,1.0,0.4,0.25,3.0,0.25,4.0,0.6],"fill":[0.0,1.0,0.4,0.25,3.0,0.25,4.0,0.6],"wash":[0.0,1.0,0.4,0.25,3.0,0.25,4.0,0.6],"up":[0.0,1.0,0.4,0.4,3.0,0.4,4.0,1.0],"angle":[0.0,0.85,1.2,0.5,2.4,0.12,3.0,0.0],"spot":[0.0,0.0,0.25,1.0,4.0,1.0],"spotx":[0.0,-3.0,1.2,2.2,2.4,-0.6,3.0,0.0]}}};
 // @blender-cues:end
 const CUES = Object.freeze(Object.keys(CUE_DATA));
 const CUE_GAINS = ["key", "fill", "wash", "up", "gantry"];
-const CUE_DEF = { key: 1, fill: 1, wash: 1, up: 1, gantry: 1, tr: 1, tg: 1, tb: 1, flash: 0, beacon: 0, angle: 0 };
+const CUE_DEF = { key: 1, fill: 1, wash: 1, up: 1, gantry: 1, tr: 1, tg: 1, tb: 1, flash: 0, beacon: 0, angle: 0, spot: 0, spotx: 0 };
 const hasCue = (id) => typeof id === "string" && Object.prototype.hasOwnProperty.call(CUE_DATA, id);
 const cueLabel = (id) => hasCue(id) ? CUE_DATA[id].label : "";
 const cueLen = (id) => hasCue(id) ? CUE_DATA[id].len : 0;
@@ -637,13 +637,14 @@ function cueValue(k, t, lin) {
   const f = (t - k[i - 2]) / (k[i] - k[i - 2]), e = lin ? f : (1 - Math.cos(Math.PI * f)) / 2;
   return k[i - 1] + (k[i + 1] - k[i - 1]) * e;
 }
-const cueGains = () => ({ key: 1, fill: 1, wash: 1, up: 1, gantry: 1, tint: null, flash: 0, beacon: null, _tint: [1, 1, 1], _beacon: { angle: 0, gain: 0 } });
+const cueGains = () => ({ key: 1, fill: 1, wash: 1, up: 1, gantry: 1, tint: null, flash: 0, beacon: null, spot: 0, spotx: 0, _tint: [1, 1, 1], _beacon: { angle: 0, gain: 0 } });
 const cueClamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 function cueChan(c, name, t) { const k = c.ch[name]; return k ? cueValue(k, t, c.lin.indexOf(name) >= 0) : CUE_DEF[name]; }
 /** Cue `id` at cue seconds t into `out` (cueGains(); reused, nothing allocated):
  *  gains key/fill/wash/up/gantry multiply the mood's (1 = unchanged, 0..4);
  *  tint is an rgb multiplier on the ceiling fixtures or null; flash 0..1 is the
- *  photographers' strobe; beacon { angle rad, gain 0..1 } or null. Unknown id → identity. */
+ *  photographers' strobe; beacon { angle rad, gain 0..1 } or null; spot 0..1 is the
+ *  ceiling follow-spot, aimed at floor (spotx, 0, SPOT_Y * tan(angle)). Unknown id → identity. */
 function cueSample(id, t, out = cueGains()) {
   const c = hasCue(id) ? CUE_DATA[id] : null;
   let s = Number.isFinite(t) ? t : 0;
@@ -656,6 +657,8 @@ function cueSample(id, t, out = cueGains()) {
   const bg = c ? cueClamp(cueChan(c, "beacon", s), 0, 1) : 0;
   out._beacon.gain = bg; out._beacon.angle = c ? cueChan(c, "angle", s) : 0;
   out.beacon = bg > 0 ? out._beacon : null;
+  out.spot = c ? cueClamp(cueChan(c, "spot", s), 0, 1) : 0;
+  out.spotx = c ? cueChan(c, "spotx", s) : 0;
   return out;
 }
 // cueRig: the cue's gains multiply the mood's per bank (key 0-1, fill 2-5, wash
@@ -664,9 +667,11 @@ function cueSample(id, t, out = cueGains()) {
 // STROBE at head height in the door, aimed into the bay (a speedlight pool,
 // white, with a glare pop), and the amber recovery BEACON on the lintel, a
 // narrow beam turning at the cue's angle (the pit-lane rotating-beacon look).
+// A third, the SPOTLIGHT follow-spot, hangs on the truss over the car and aims
+// at the floor point the cue's spotx / angle pick: a hard, narrow white pool.
 const _cueRig = [];
 let _cueG = null;
-const STROBE_TINT = [1.0, 1.0, 1.04], BEACON_TINT = [1.0, 0.52, 0.06];
+const STROBE_TINT = [1.0, 1.0, 1.04], BEACON_TINT = [1.0, 0.52, 0.06], SPOT_Y = 4.4;
 function cueRig(rig, cue) {
   const g = cueSample(cue.id, cue.t, _cueG || (_cueG = cueGains())), out = _cueRig, t = g.tint;
   for (let i = 0; i < rig.length; i++) out[i] = rig[i];
@@ -686,6 +691,10 @@ function cueRig(rig, cue) {
     const a = g.beacon.angle, be = 9 * E * g.beacon.gain, dx = 0.86 * Math.sin(a), dz = -0.86 * Math.cos(a);
     out.push(0, 4.55, Z_DOOR - 0.5, BEACON_TINT[0] * be, BEACON_TINT[1] * be, BEACON_TINT[2] * be, 10,
              dx, -0.51, dz, 0.93, 0.78, 0.10, 0, g.beacon.gain * (0.35 + 0.65 * (0.5 - 0.5 * Math.cos(a))));
+  }
+  if (g.spot > 0) {
+    const se = 16 * E * g.spot, px = g.spotx, pz = SPOT_Y * Math.tan(g._beacon.angle), dl = Math.hypot(px, SPOT_Y, pz);
+    out.push(0, SPOT_Y, 0, se, se, 0.98 * se, 10, px / dl, -SPOT_Y / dl, pz / dl, 0.97, 0.90, 0.04, 0, 0.5 * g.spot);
   }
   return out;
 }
