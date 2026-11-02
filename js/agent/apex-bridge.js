@@ -317,7 +317,8 @@ const ApexBridge = (function () {
     // comment not yet listed was created after it (the list is oldest first), so its updated_at is too, while an
     // edited old comment's updated_at could jump past them. `since` is inclusive: the boundary comment comes back once
     // more and `seen` drops it.
-    for (const c of page || []) if (c && c.created_at > run.since) run.since = c.created_at;
+    let newest = run.since;
+    for (const c of page || []) if (c && c.created_at > newest) newest = c.created_at;
     const cmds = pickCommands(page, run.cutoff, run.seen);
     for (const c of cmds) {
       if (_run !== run) break;
@@ -327,6 +328,9 @@ const ApexBridge = (function () {
       paintBadge();
       await post(Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
     }
+    // Only after every command is served: a throwing post() leaves the window where it was, so the next poll re-reads
+    // the unserved commands (`seen` drops the ones already handled) instead of skipping past them.
+    if (_run === run) run.since = newest;
     return cmds.length;
   }
 
@@ -339,7 +343,7 @@ const ApexBridge = (function () {
       if (!hidden && Date.now() >= run.backoff) {
         try { await pollOnce(); } catch (e) { run.backoff = Date.now() + POLL_MS * 3; say("poll failed " + e.message); }
       }
-      schedule();
+      if (_run === run) schedule();   // a stop()+start() during the poll already armed the new run's own chain
     }, POLL_MS);
   }
 

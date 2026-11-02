@@ -77,6 +77,8 @@ const OverlayPublisher = (function () {
       try { info = apex.info(); } catch (_) { /* not ready */ }
       try { sectors = apex.sectorState(); } catch (_) { /* not ready */ }
       if (field && field.ok === false) field = null;
+      // Expire silent peers: report() otherwise runs only on an incoming message, so a crashed overlay tab kept this loop alive.
+      if (typeof deps.bridge.peers === "function") deps.bridge.peers();
       if (deps.bridge.takeFresh()) differ.reset();
       const frame = OverlayFeed.frame(input({ seq: ++seq, field, info, sectors, caption, teams: deps.teams }));
       const patch = differ.next(frame, Date.now());

@@ -37,3 +37,23 @@ test("reset(): cars keep fast properties and CarFields keys read undefined", asy
     assert.equal(G.cars[5].kCur, undefined);
   } finally { g.close(); }
 });
+
+test("jump/aiPlace refuse null-as-value and non-finite args instead of writing null/NaN (HUNT-2026-11-02)", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    await g.race("monza");
+    const A = g.apex, G = g.G;
+    A.headless(true);
+    A.jump(0.3, 40, 0);
+    const x0 = G.player.x, v0 = G.player.speed;
+    assert.ok(A.jump(0.5, null, null), "null means 'leave as is'");
+    assert.equal(G.player.x, x0); assert.equal(G.player.speed, v0);
+    assert.doesNotThrow(() => A.obs());
+    const s3 = G.cars[3].s;
+    assert.equal(A.aiPlace(3, NaN, 40), false);
+    assert.equal(A.aiPlace(3, 0.5, NaN), false);
+    assert.equal(G.cars[3].s, s3, "a refused aiPlace leaves the car alone");
+    assert.ok(A.aiPlace(3, 0.5, null, null));
+    assert.ok(Number.isFinite(G.cars[3].x) && Number.isFinite(G.cars[3].speed));
+  } finally { g.close(); }
+});
