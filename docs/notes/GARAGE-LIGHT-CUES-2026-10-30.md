@@ -13,25 +13,33 @@ reaches `GarageScene.live(liv, now, ctx)`:
 - `id` — one of `GarageScene.CUES` (an ids array).
 - `t` — cue SECONDS since the cue started, not a 0..1 fraction. A loop cue
   (`flashes`, `beacon`, `pulse`) repeats every `cueLen(id)` seconds; a one-shot cue
-  (`lightsup`, `lightsout`) holds its last key, which is the identity (gain 1).
+  (`lightsup`, `lightsout`, `spotsweep`) holds its last key. For `lightsup` and
+  `lightsout` that is the identity (gain 1); `spotsweep` holds its reveal (spot on,
+  room at 0.6) until the sequence drops the cue.
 - Absent, null or an unknown id: live() skips the cue path completely and returns
   exactly the rig it returned before cues existed. Checked bit for bit against the
   pre-change scene.js (ea672ace): 512 frames (8 moods × night × door × time × ambient,
   the part-fit chase included), and in `tests/unit/garage-light-cues.test.mjs`.
 
-`GarageScene.cueSample(id, t, out)` → `{ key, fill, wash, up, gantry, tint, flash, beacon }`:
+`GarageScene.cueSample(id, t, out)` → `{ key, fill, wash, up, gantry, tint, flash, beacon, spot, spotx }`:
 the gains multiply the mood's banks (key fixtures 0-1, fill 2-5, wash 6-9), the two
 team dado uplights and the night gantry (1 = unchanged, clamped 0..4); `tint` is an
 rgb multiplier on the ceiling fixtures or `null`; `flash` 0..1 is the press strobe;
-`beacon` is `{ angle, gain }` or `null`. `out` comes from a first call
+`beacon` is `{ angle, gain }` or `null`; `spot` 0..1 is the ceiling follow-spot's gain
+and `spotx` (metres) its lateral aim, with the shared `angle` channel as its tilt toward
+the door (floor target `(spotx, 0, 4.4 * tan(angle))`); every other cue reports `spot` 0,
+`spotx` 0. `out` comes from a first call
 (`cueSample(id, t)` allocates one) and is reused; nothing allocates per frame.
 `cueLabel(id)` gives the display name. The cue applies to a copy of the cached rig
 (`cueRig`), so a cue never leaks into the mood's rig.
 
-No geometry is added. Two light records exist only while a cue lights them
+No geometry is added. Three light records exist only while a cue lights them
 (`litRig` drops dark records): the photographers' STROBE at head height in the door,
 aimed into the bay, with a glare pop; and the amber BEACON on the door lintel, a
-narrow beam turning at the cue's angle, its glare orb brightening as it turns.
+narrow beam turning at the cue's angle, its glare orb brightening as it turns;
+and the SPOTLIGHT follow-spot on the truss over the car (y 4.4), a narrow (cos 0.97 /
+0.90) neutral-white beam at 16 × E, under the strobe's 34 × E and over the beacon's
+9 × E, so the car keeps its highlights at the end key.
 
 ## Cues
 
@@ -42,6 +50,7 @@ narrow beam turning at the cue's angle, its glare orb brightening as it turns.
 | `beacon` | AMBER BEACON | 1.2 s loop | Retired car: the bay dims warm (key 0.55, fill 0.5, wash 0.45, uplights 0.35) and an amber beacon turns once per loop (50 rev/min). |
 | `pulse` | PULSE | 3.2 s loop | Team-colour breathing: the uplights swell to 2.6× while the keys ease to 0.86. |
 | `lightsout` | LIGHTS OUT | 6.0 s one-shot | Before the RACE! drive-out: five red beats 0.9 s apart deepen the ceiling tint to red while the room dims, then a 0.2 s blackout at 5.05 s and a slam back to full (1.25× overshoot) as the car goes. |
+| `spotsweep` | SPOTLIGHT | 4.0 s one-shot | Reveal: by 0.4 s the bay drops to a quarter (uplights 0.4) and a hard white follow-spot picks up the floor by the door, pans across the bay (x -3 → 2.2 → -0.6 m) and settles straight down on the car at 3.0 s; over the last second the room comes back to 0.6 (uplights 1) under it. It holds that look. |
 
 ## Moods (GarageScene.MOODS)
 
@@ -65,8 +74,8 @@ node tools/shot/gen-scenery-locations.cjs   # scene.js is in the scenery catalog
 ```
 
 The script makes one Empty per cue and keys its custom properties (`key fill wash up
-gantry tr tg tb flash beacon angle`) with SINE / EASE_IN_OUT interpolation (`angle`
-LINEAR). It exports the keys into the `// @blender-cues:start` … `end` block of
+gantry tr tg tb flash beacon angle spot spotx`) with SINE / EASE_IN_OUT interpolation
+(`angle` and `spotx` LINEAR). It exports the keys into the `// @blender-cues:start` … `end` block of
 `js/garage/scene.js`, along with `CUE_SHA256`, the script's SHA256. Before writing,
 it evaluates every F-curve in Blender at 240 Hz and checks it against the runtime's
 ease (`cueValue`). Max error this run: 1.5e-5. It also writes
