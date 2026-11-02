@@ -878,7 +878,7 @@ const api = {
   rival(dProg, dx) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.find((c) => !c.isPlayer);
-    if (!ai) return false;
+    if (!ai || !finiteOrNil(dProg) || !finiteOrNil(dx)) return false;
     ai.prog = G.player.prog + (dProg || 0);
     ai.s = wrapS(G.player.s + (dProg || 0));
     ai.x = G.player.x + (dx || 0);
@@ -890,8 +890,8 @@ const api = {
   rivals(list) {
     if (!G.player || !G.track) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
-    const used = [];
-    (Array.isArray(list) ? list : []).forEach((spec, i) => {
+    const used = []; list = Array.isArray(list) ? list : []; if (!list.every((q) => q && finiteOrNil(q.dProg) && finiteOrNil(q.dx) && finiteOrNil(q.speed))) return false;   // refuse before moving anyone
+    list.forEach((spec, i) => {
       const c = ai[i];
       if (!c) return;
       c.prog = G.player.prog + (spec.dProg || 0);
@@ -2356,7 +2356,7 @@ const api = {
       document.body.appendChild(el);
       el._t = setInterval(() => {
         try {
-          const r = this.renderScale();
+          const r = this.renderScale({ lite: true });
           const g = this.gpuTimer();
           const a = (typeof Assets !== "undefined") ? Assets.state() : null;
           el.textContent =
