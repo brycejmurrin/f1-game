@@ -81,7 +81,7 @@ function load(gl, frame, over) {
     gl, frame, bindVAO: () => {}, setBlend: () => {}, setDepthMask: () => {}, setCull: () => {},
     setPolyOffset: () => {}, toF32: (a) => (a instanceof Float32Array ? a : new Float32Array(a)),
     createMesh: (d) => ({ plain: true, data: d }), litMaterial: () => 1,
-    invalidateVAO: () => {}, unbindVAOIf: () => {}, ctxGone: () => false,
+    invalidateVAO: () => {}, unbindVAOIf: () => {}, ctxGone: () => false, post: { mirror: { active: () => false } },
   }, over || null));
 }
 
@@ -392,4 +392,21 @@ test("eye-inside and near-plane-crossing proxies reset stale hidden results", ()
   frame.viewProj = new Float32Array(WIDE_VP); frame.viewProj[14] = -1;
   C.drawChunked(mesh, null, {}); C.occlusionPass();
   assert.equal(C.occlusionStats().culled, 0, "near-plane crossing chunks stay visible");
+});
+
+test("the rear-view mirror pass ignores main-camera HIDDEN flags (hunt 2026-11-02)", () => {
+  let mirror = false;
+  const { gl, C, mesh } = setup({ result: false });
+  // setup() builds its own core; rebuild with a controllable mirror
+  const frame = { viewProj: WIDE_VP, eye: [-10, 10, -10], cullDist: 0, perChunkLights: 0 };
+  const C2 = load(gl, frame, { post: { mirror: { active: () => mirror } } });
+  const m2 = C2.createChunkedMesh(grid(6, 400), 72);
+  C2.occlusionCull(true);
+  C2.drawChunked(m2, null, {}); C2.occlusionPass();
+  C2.drawChunked(m2, null, {}); C2.occlusionPass();
+  gl._draws = 0; C2.drawChunked(m2, null, {});
+  assert.equal(gl._draws, 0, "precondition: main pass culls hidden chunks");
+  mirror = true;
+  C2.drawChunked(m2, null, {});
+  assert.ok(gl._draws > 0, "mirror pass must still draw chunks hidden from the main camera");
 });

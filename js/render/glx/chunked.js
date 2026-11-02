@@ -269,7 +269,7 @@ const GLXChunked = (function () {
       return st;
     }
     function _occVisible(mesh, i) {
-      if (!_occOn || !_occProg) return true;
+      if (!_occOn || !_occProg || core.post.mirror.active()) return true; // flags come from the MAIN camera
       const st = _occState.get(mesh);
       return !st || st.flag[i] !== 0;
     }
@@ -439,7 +439,7 @@ const GLXChunked = (function () {
     }
 
     function drawChunkedBody(mesh, modelMat, opts) {
-      if (_occOn && mesh.chunks && _occDrawn.indexOf(mesh) < 0) _occDrawn.push(mesh);
+      if (_occOn && mesh.chunks && !core.post.mirror.active() && _occDrawn.indexOf(mesh) < 0) _occDrawn.push(mesh);
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);
