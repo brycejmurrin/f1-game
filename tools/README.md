@@ -250,7 +250,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/blender/garage-camera-rigs.py** | Blender-authors moving garage camera rigs (crane, orbit, dolly, rear track, drone, steadicam) into js/garage/arrival.js. | — |
 | **gen/blender/garage-entrance-camera.py** | Author and export editable Blender entrance camera blocking. | — |
 | **gen/blender/garage-entrance.py** | Author and export the entrance car rig from evaluated Blender scenes. | — |
-| **gen/blender/garage-light-cues.py** | Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out) into js/garage/scene.js. | — |
+| **gen/blender/garage-light-cues.py** | Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out, spot) into js/garage/scene.js. | — |
 | **gen/blender/garage-previz.py** | Editable Blender previz of the garage arrival / drive-out (bay, shutter, car, keyed camera) from arrival-poses JSON. | — |
 | **gen/blender/garage_entrance_camera_export.py** | Export saved entrance camera F-curves without rebuilding the source. | — |
 | **gen/compress-audio.mjs** | Cap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames. | — |
