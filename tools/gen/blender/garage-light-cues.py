@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# @doc Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out) into js/garage/scene.js.
+# @doc Blender-authors the garage LIGHT CUES (lights up, flashes, beacon, pulse, lights out, spot) into js/garage/scene.js.
 """Garage light cues, authored as Blender actions and exported as eased key tables.
 
   blender -b --python tools/gen/blender/garage-light-cues.py -- --output-dir artifacts/light-cues --write-runtime
@@ -13,9 +13,12 @@ channels GarageScene.live() applies (via cueSample) on top of the lighting mood:
   tr, tg, tb        a tint multiplied onto every ceiling fixture (1 = none)
   flash             0..1, the press photographers' strobe (white, from the door)
   beacon, angle     0..1 gain and heading (radians) of the amber rotating beacon
+  spot, spotx       0..1 gain of the white ceiling follow-spot; it aims at the
+                    floor point (spotx m, 0, 4.4 * tan(angle) m) from above the car
 
 Each property is keyframed with SINE / EASE_IN_OUT interpolation, except
-`angle` (LINEAR: a beacon turns at a constant rate). The runtime
+`angle` and `spotx` (LINEAR: a beacon turns at a constant rate, a follow-spot
+operator pans at one). The runtime
 (GarageScene.cueSample, js/garage/scene.js) applies the same ease between the same keys, so the
 exported keys ARE the curves; before writing, every channel is evaluated in
 Blender at 240 Hz and checked against that runtime ease (max error printed).
@@ -35,9 +38,9 @@ root = Path(__file__).resolve().parents[3]
 out = Path(opts.output_dir).resolve(); out.mkdir(parents=True, exist_ok=True)
 FPS = 24
 TAU = 2 * math.pi
-CH = ['key', 'fill', 'wash', 'up', 'gantry', 'tr', 'tg', 'tb', 'flash', 'beacon', 'angle']
-DEF = dict(key=1, fill=1, wash=1, up=1, gantry=1, tr=1, tg=1, tb=1, flash=0, beacon=0, angle=0)
-LINEAR = {'angle'}
+CH = ['key', 'fill', 'wash', 'up', 'gantry', 'tr', 'tg', 'tb', 'flash', 'beacon', 'angle', 'spot', 'spotx']
+DEF = dict(key=1, fill=1, wash=1, up=1, gantry=1, tr=1, tg=1, tb=1, flash=0, beacon=0, angle=0, spot=0, spotx=0)
+LINEAR = {'angle', 'spotx'}
 
 # ── the cues: { channel: [(t, v), …] } — unkeyed channels stay at DEF ────────
 def strike(t0, low=0.04):
@@ -91,6 +94,15 @@ CUES = {
         fill=[(0, 1)] + [(BEAT(b), 1 - .14 * b) for b in range(1, 6)] + [(4.95, .3), (5.05, .02), (5.25, .02), (5.33, 1.2), (6.0, 1.0)],
         wash=[(0, 1)] + [(BEAT(b), 1 - .15 * b) for b in range(1, 6)] + [(4.95, .25), (5.05, .02), (5.25, .02), (5.33, 1.2), (6.0, 1.0)],
         up=[(0, 1), (4.95, 1.4), (5.05, 0), (5.25, 0), (5.33, 2.4), (6.0, 1.0)])),
+    # SPOTLIGHT reveal: the bay drops to a quarter while a hard white
+    # follow-spot picks up the floor by the door, sweeps across the bay, back,
+    # and settles straight down on the car; the room comes back to 0.6 under
+    # it for the last second. It holds that look (spot on) after 4 s.
+    'spotsweep': dict(label='SPOTLIGHT', len=4.0, loop=False, ch=dict(
+        key=[(0, 1), (.4, .25), (3.0, .25), (4.0, .6)], fill=[(0, 1), (.4, .25), (3.0, .25), (4.0, .6)],
+        wash=[(0, 1), (.4, .25), (3.0, .25), (4.0, .6)], up=[(0, 1), (.4, .4), (3.0, .4), (4.0, 1.0)],
+        spot=[(0, 0), (.25, 1.0), (4.0, 1.0)],
+        angle=[(0, .85), (1.2, .5), (2.4, .12), (3.0, 0)], spotx=[(0, -3.0), (1.2, 2.2), (2.4, -.6), (3.0, 0)])),
 }
 
 # ── BLENDER: one Empty per cue, custom properties keyframed ─────────────────
@@ -160,7 +172,7 @@ meta = dict(authoring='Blender ' + bpy.app.version_string, sourceSHA256=source_h
 if opts.write_runtime:   # js/garage/scene.js owns the cues (the eager shell has no room for a module)
     p = root / 'js/garage/scene.js'; text = p.read_text()
     start = text.index('// @blender-cues:start'); end = text.index('// @blender-cues:end', start)
-    block = ('// @blender-cues:start\n// ' + meta['authoring'] + '; tools/gen/blender/garage-light-cues.py; SINE ease-in-out keys (angle LINEAR).\n'
+    block = ('// @blender-cues:start\n// ' + meta['authoring'] + '; tools/gen/blender/garage-light-cues.py; SINE ease-in-out keys (angle, spotx LINEAR).\n'
              'const CUE_SHA256 = "' + source_hash + '";\nconst CUE_DATA = ' + json.dumps(cues_out, separators=(',', ':')) + ';\n')
     p.write_text(text[:start] + block + text[end:])
 print(json.dumps(dict(blend=str(blend), cues=meta['cues'], maxEaseError=meta['maxEaseError'], authoring=meta['authoring'])))

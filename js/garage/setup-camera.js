@@ -442,7 +442,8 @@ function noteResult(order, meta) {
   for (const c of order) if (c && !c.retired && !c.dsq && Number.isFinite(c.best) && c.best > 0 && (!fast || c.best < fast.best)) fast = c;
   const t = typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST[G.trackIdx] : null, night = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night));
   pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now(),
-    driver: String(pl.name || pl.code || ""), fastest: fast === pl, wet: /rain|wet|storm/.test(String(G.raceWeather || "")), night };
+    driver: String(pl.name || pl.code || ""), fastest: fast === pl, wet: /rain|wet|storm/.test(String(G.raceWeather || "")), night,
+    grid: Number.isFinite(pl.gridPos) ? pl.gridPos : null, sprint: !!(meta && meta.sprint) };
   return pendingHome;
 }
 function startHome(from) {

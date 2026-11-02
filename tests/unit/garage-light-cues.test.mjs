@@ -4,6 +4,7 @@
  *  - every cue sample is finite and bounded, deterministic, and loops cleanly;
  *  - PHOTO FLASHES pops are brief and irregular, the AMBER BEACON turns,
  *    LIGHTS UP switches the banks on in order and ends at the identity;
+ *  - SPOTLIGHT sweeps a white follow-spot record that exists only while lit;
  *  - GarageScene.live() with no ctx.cue is the rig it was before cues existed,
  *    bit for bit, and a cue never leaks into the cached rig;
  *  - the podium / rain / neon moods are real MOODS entries.
@@ -43,9 +44,9 @@ test("runtime key tables match the current Blender authoring source", () => {
     "regenerate: <python with bpy> tools/gen/blender/garage-light-cues.py -- --output-dir artifacts/light-cues --write-runtime");
 });
 
-test("five labelled cues, finite bounded samples everywhere", () => {
+test("six labelled cues, finite bounded samples everywhere", () => {
   const { Cues } = load();
-  assert.deepEqual(Array.from(Cues.IDS), ["lightsup", "flashes", "beacon", "pulse", "lightsout"]);
+  assert.deepEqual(Array.from(Cues.IDS), ["lightsup", "flashes", "beacon", "pulse", "lightsout", "spotsweep"]);
   const g = Cues.gains();
   for (const id of Cues.IDS) {
     assert.ok(Cues.label(id) && Cues.len(id) > 0, id);
@@ -55,10 +56,12 @@ test("five labelled cues, finite bounded samples everywhere", () => {
       assert.ok(g.flash >= 0 && g.flash <= 1, `${id}.flash @${t}`);
       if (g.tint) for (const v of g.tint) assert.ok(v >= 0 && v <= 2, `${id}.tint @${t}`);
       if (g.beacon) assert.ok(Number.isFinite(g.beacon.angle) && g.beacon.gain > 0 && g.beacon.gain <= 1, `${id}.beacon @${t}`);
+      assert.ok(g.spot >= 0 && g.spot <= 1 && Number.isFinite(g.spotx), `${id}.spot @${t}`);
+      if (id !== "spotsweep") assert.ok(g.spot === 0 && g.spotx === 0, `${id} has no spot @${t}`);
     }
   }
   const id0 = Cues.sample("no-such-cue", 1, g);
-  assert.deepEqual([id0.key, id0.fill, id0.wash, id0.up, id0.gantry, id0.tint, id0.flash, id0.beacon], [1, 1, 1, 1, 1, null, 0, null]);
+  assert.deepEqual([id0.key, id0.fill, id0.wash, id0.up, id0.gantry, id0.tint, id0.flash, id0.beacon, id0.spot, id0.spotx], [1, 1, 1, 1, 1, null, 0, null, 0, 0]);
 });
 
 test("deterministic: the same (id, t) always samples the same lights; loops wrap by len", () => {
@@ -152,4 +155,42 @@ test("podium, rain and neon are MOODS entries over MOOD_DEF keys, each its own l
     assert.equal(Scene.mood(id), id);
   }
   Scene.mood("shipped");
+});
+
+test("SPOTLIGHT: one-shot; the spot is dark at t=0, bright mid-cue, sweeps, then settles straight down on the car", () => {
+  const { Cues } = load(), g = Cues.gains(), len = Cues.len("spotsweep");
+  assert.equal(Cues.label("spotsweep"), "SPOTLIGHT");
+  assert.ok(len >= 3.5 && len <= 4.5, `len ${len}`);
+  assert.equal(Cues.sample("spotsweep", 0, g).spot, 0, "dark at t=0");
+  assert.ok(Cues.sample("spotsweep", len / 2, g).spot > 0.5, "lit mid-cue");
+  assert.ok(Cues.sample("spotsweep", len / 2, g).key <= 0.3, "the room dims under the sweep");
+  const xs = []; for (let t = 0; t <= len; t += 0.05) xs.push(Cues.sample("spotsweep", t, g).spotx);
+  assert.ok(Math.max(...xs) - Math.min(...xs) > 3, "the spot sweeps across the bay");
+  const end = Cues.sample("spotsweep", len + 5, g);   // one-shot: holds the reveal, not looped
+  assert.ok(end.spot > 0.5 && end.spotx === 0 && end._beacon.angle === 0 && end.beacon === null, "settled on the car");
+  assert.ok(end.key >= 0.5 && end.key <= 0.7, `room back to ~0.6: ${end.key}`);
+  assert.notEqual(JSON.stringify(Cues.sample("spotsweep", 0.3, Cues.gains())), JSON.stringify(Cues.sample("spotsweep", 0.3 + len, Cues.gains())), "one-shot, no loop");
+});
+
+test("SPOTLIGHT adds one white record only while the spot is lit; no other cue ever adds it", () => {
+  const { Scene, Cues } = load();
+  Scene.mood("shipped");
+  const ctx = (cue) => ({ night: false, ambient: false, cue });
+  const base = Array.from(Scene.live(LIV, 0, ctx(null)));
+  assert.equal(Scene.live(LIV, 0, ctx({ id: "spotsweep", t: 0 })).length, base.length, "no spot record at t=0");
+  const mid = Array.from(Scene.live(LIV, 0, ctx({ id: "spotsweep", t: 1.0 })));
+  assert.equal(mid.length, base.length + 15, "one spot record");
+  const s = mid.slice(-15);
+  for (const [k, v] of s.entries()) assert.ok(Number.isFinite(v), `spot field ${k}`);
+  assert.ok(s[1] > 4 && Math.abs(s[3] - s[4]) < 1e-9 && s[5] < s[3] && s[5] > 0.9 * s[3], "a neutral-white beam from the ceiling");
+  assert.ok(s[3] < 34 * 0.55, "dimmer than the press strobe");
+  assert.ok(s[10] > s[11] && s[11] >= 0.85, "a narrow cone");
+  const end = Array.from(Scene.live(LIV, 0, ctx({ id: "spotsweep", t: 9 }))).slice(-15);
+  assert.ok(Math.abs(end[0]) < 1e-9 && Math.abs(end[2]) < 1e-9 && end[8] < -0.999, "aimed straight down at the car");
+  const g = Cues.gains();
+  for (const id of Cues.IDS) if (id !== "spotsweep") for (let t = 0; t < Cues.len(id); t += 0.05) {
+    const rig = Array.from(Scene.live(LIV, 0, ctx({ id, t })));
+    const extra = (Cues.sample(id, t, g).flash > 0 ? 1 : 0) + (Cues.sample(id, t, g).beacon ? 1 : 0);
+    assert.equal(rig.length, base.length + 15 * extra, `${id} @${t}: no spot record`);
+  }
 });

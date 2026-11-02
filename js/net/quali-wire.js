@@ -17,20 +17,21 @@ const QualiWire = (function () {
     // value — never as the synthetic back-of-grid time the local sheet made.
     function validQuali(d) {
       if (!d || typeof d !== "object" || d.driverId == null) return null;
-      if (d.noTime === true) return Object.assign({}, d, { t: Infinity, noTime: true });
+      if (d.noTime === true) return { driverId: d.driverId, t: Infinity, noTime: true };
       const t = Number(d.t);
       if (!(Number.isFinite(t) && t > QUALI_MIN_S && t < QUALI_MAX_S)) return null;
-      return Object.assign({}, d, { t });
+      return { driverId: d.driverId, t };
     }
     // QLIVE never reaches the classification — it is a clock on somebody
     // else's screen — so it is bounded rather than refused.
     function validQualiLive(d) {
       if (!d || typeof d !== "object" || d.driverId == null) return null;
       const t = Number(d.t), frac = Number(d.frac);
-      return Object.assign({}, d, {
+      return {
+        driverId: d.driverId,
         t: Number.isFinite(t) && t >= 0 ? Math.min(t, QUALI_MAX_S) : 0,
         frac: Number.isFinite(frac) ? Math.min(Math.max(frac, 0), 1) : 0,
-      });
+      };
     }
     // QUALI + QLIVE flood cap, shared by the lobby and the in-race relay: per
     // connection, rolling window. A real client sends ~2.5 QLIVE/s plus one QUALI.

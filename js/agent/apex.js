@@ -255,8 +255,8 @@ const api = {
     // teleport under updateCarAdvance's 20 m threshold (pole → jump(0) is 14 m)
     // was banked into prog a second time and crossed the line: lap 0 → 1.
     G.player.s = sNew; G.player._prevS = sNew;
-    if (lateral !== undefined) G.player.x = lateral;
-    if (speed !== undefined) G.player.speed = speed;
+    if (lateral != null) G.player.x = lateral;
+    if (speed != null) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
     G.player.vLat = 0; G.player.yawRateCur = 0;
@@ -1937,11 +1937,12 @@ const api = {
     if (!G.track || !G.cars[idx]) return false;
     const c = G.cars[idx];
     if (c.isPlayer) return false;
+    if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(x)) return false;   // same NaN refusal as jump()
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
     c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
-    if (x     !== undefined) { c.x = x; c.xVis = x; }
-    if (speed !== undefined) c.speed = speed;
+    if (x     != null) { c.x = x; c.xVis = x; }
+    if (speed != null) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);

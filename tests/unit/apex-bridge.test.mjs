@@ -287,3 +287,21 @@ test("tokenShape describes a pasted token without revealing it", () => {
   assert.equal(api.tokenShape("github_pat_ab​c"), "15 chars, github_pat_ prefix, 1 odd char (U+200B)");
   assert.equal(api.tokenShape(""), "0 chars, unknown prefix, 0 odd chars");
 });
+
+test("a failing reply post does not skip the queued commands behind it (HUNT-2026-11-02)", async () => {
+  const gh = pagedGitHub();
+  const real = gh.fetch;
+  let failNext = false;
+  gh.fetch = async (url, opts) => {
+    if (opts.method === "POST" && failNext) { failNext = false; return { status: 500, ok: false, json: async () => ({}), headers: { get: () => null } }; }
+    return real(url, opts);
+  };
+  const ran = [];
+  const b = load({ tok: "tok", gh, apex: { perf: (o) => { ran.push(o); return o; } } });
+  await flush();
+  for (const o of [1, 2, 3]) gh.add({ id: 200 + o, body: "```apex-cmd\n" + JSON.stringify({ cmd: "call", args: { method: "perf", args: [o] } }) + "\n```" });
+  failNext = true;
+  await assert.rejects(b.api.pollOnce());
+  for (let i = 0; i < 3; i++) await b.api.pollOnce();
+  assert.deepEqual([...new Set(ran)].sort(), [1, 2, 3], "commands 2 and 3 still ran after command 1's reply failed");
+});

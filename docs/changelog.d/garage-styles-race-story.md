@@ -1,0 +1,2 @@
+New: Two more GARAGE ENTER & LEAVE styles. SHOWCASE circles the car while a spotlight sweeps onto it, like a launch reveal. NIGHT SHIFT gives a handheld high-corner view of an overnight garage.
+New: The AFTER THE RACE caption now tells the story of your race. A sprint says SPRINT WINNER or SPRINT COMPLETE. A win from pole adds FROM POLE, and gaining three or more places adds the count, for example "P2 · PODIUM FINISH · +7 PLACES".

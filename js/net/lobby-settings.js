@@ -44,6 +44,7 @@ const LobbySettings = (function () {
     return it;
   }
 
+  let ephemeralId = null;   // id of the one circuit this module pushed
   /** Install a wire design into Tracks.LIST (ephemeral — not written to storage). */
   function installCircuit(design) {
     if (typeof CustomTracks === "undefined" || typeof TrackDef === "undefined" || !Tracks.LIST) return -1;
@@ -53,8 +54,14 @@ const LobbySettings = (function () {
     try { def = TrackDef.fromRaw(CustomTracks.toRaw(it)); }
     catch (_) { return -1; }
     let idx = Tracks.LIST.findIndex((t) => t && t.id === it.id);
-    if (idx >= 0) Tracks.LIST[idx] = def;
+    if (idx >= 0) { Tracks.LIST[idx] = def; return idx; }
+    // The id is a content hash, so a hostile host varying `seed` mints a fresh
+    // id per SETTINGS: reuse the slot of the circuit WE pushed last time
+    // rather than growing Tracks.LIST without bound.
+    const prev = ephemeralId == null ? -1 : Tracks.LIST.findIndex((t) => t && t.id === ephemeralId);
+    if (prev >= 0) { Tracks.LIST[prev] = def; idx = prev; }
     else { Tracks.LIST.push(def); idx = Tracks.LIST.length - 1; }
+    ephemeralId = it.id;
     return idx;
   }
 
