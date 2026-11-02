@@ -123,6 +123,18 @@ const NetLobby = (function () {
       };
     }
 
+    // HELLO is stored and relayed to guests: keep only localProfile() fields (+ from/rank).
+    function cleanHello(p) {
+      const out = { team: p.team, driver: p.driver, parts: null };
+      if (p.from != null) out.from = p.from;
+      if (p.rank != null) out.rank = p.rank;
+      if (p.parts && typeof p.parts === "object") {
+        out.parts = {};
+        for (const k of Object.keys(p.parts).slice(0, 24)) if (["string", "number"].includes(typeof p.parts[k])) out.parts[k] = p.parts[k];
+      }
+      return out;
+    }
+
     // Turn a peer's declared ids into multipliers, locally. Falls back to the
     // team's factory numbers if anything about the setup does not resolve —
     // a rival with an odd save must still be raceable.
@@ -572,7 +584,7 @@ const NetLobby = (function () {
       // Nothing legitimate sends more than a handful a second (a seat clash
       // settles in one round trip), so past HELLO_RATE in a rolling second
       // the rest are dropped on the floor. Separate windows per event.
-      const helloTimes = [], readyTimes = [], qualiTimes = [];
+      const helloTimes = [], readyTimes = [], qualiTimes = [], settingsTimes = [];
       const rosterWindows = new Map(), pendingRoster = new Map();
       const underRate = (times, limit = HELLO_RATE) => {
         const now = performance.now();
@@ -617,6 +629,7 @@ const NetLobby = (function () {
       // somebody else.
       made.onEvent(NetPlay.EV.HELLO, (p) => rosterEvent("hello", p, (p) => {
         if (!p) { renderRoom(); return; }
+        p = cleanHello(p);
         // WHOSE profile this is. On the host, always the connection it came in
         // on — a guest that could name itself could name somebody else. On a
         // guest, a `from` is a profile the HOST is RELAYING on behalf of
@@ -652,7 +665,7 @@ const NetLobby = (function () {
         resolveSeatClash();
         renderRoom();
       }, helloTimes));
-      made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest") applySettings(d); });
+      made.onEvent(NetPlay.EV.SETTINGS, (d) => { if (role === "guest" && underRate(settingsTimes)) applySettings(d); });
       made.onEvent(NetPlay.EV.READY, (d) => rosterEvent("ready", d, (d) => {
         // Mirror HELLO: guests have no peer link, so the host must relay READY
         // with `from`. Key by who the ready belongs to, not the connection id
@@ -930,6 +943,7 @@ const NetLobby = (function () {
       if (d.revision != null && (!Number.isSafeInteger(d.revision) || d.revision < 0)) { settingsAccepted = false; settingsNeedsReady = true; if (selfReady) setReady(false); return false; }
       const revision = d.revision == null ? 0 : d.revision;
       const fingerprint = JSON.stringify(next);
+      if (settingsAccepted && settingsFingerprint !== null && fingerprint === settingsFingerprint && revision === settingsRevision) return true;   // unchanged: no rebuild
       if (settingsFingerprint === null || fingerprint !== settingsFingerprint || revision !== settingsRevision) {
         settingsNeedsReady = true; _ready.clear(); if (selfReady) setReady(false);
       }

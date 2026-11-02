@@ -2501,13 +2501,13 @@ test("guest roster bursts settle to each peer's latest HELLO and READY without a
   try {
     for (const [from, team, driver] of [[undefined, "beta", 0], ["g2", "alpha", 1], ["g3", "beta", 1]]) {
       for (let n = 0; n < 8; n++) {
-        s.deliver("hello", { from, team, driver, label: n });
+        s.deliver("hello", { from, team, driver, parts: { label: n } });
         s.deliver("ready", { from, ready: n !== 7 });
       }
     }
     assert.equal(h.lobby.roomState().peers.length, 3, "host link does not share one aggregate window");
     await new Promise((r) => setTimeout(r, 1050));
-    assert.ok(h.lobby.roomState().peers.every((p) => p.label === 7));
+    assert.ok(h.lobby.roomState().peers.every((p) => p.parts.label === 7));
     assert.equal(h.lobby.roomState().peerReady, false, "final not-ready flushes too");
     for (const from of [undefined, "g2", "g3"]) s.deliver("ready", { from, ready: true });
     assert.equal(h.lobby.roomState().peerReady, true);
@@ -2577,7 +2577,7 @@ test("revisionless READY after a host edit explains the required client update",
 test("guest coalescing retains the last valid profile when the final HELLO is invalid", async () => {
   const { h, s } = await connectedGuest();
   try {
-    for (let n = 0; n < 8; n++) s.deliver("hello", { from: "g2", team: "beta", driver: 1, label: n });
+    for (let n = 0; n < 8; n++) s.deliver("hello", { from: "g2", team: "beta", driver: 1, parts: { label: n } });
     for (const profile of [{ team: "evil", driver: 999 }, { team: "beta", driver: 99 }, { team: "beta", driver: "1" }]) {
       s.deliver("hello", Object.assign({ from: "g2", label: "invalid-final" }, profile));
     }
@@ -2585,8 +2585,26 @@ test("guest coalescing retains the last valid profile when the final HELLO is in
     for (let n = 0; n < 7; n++) s.deliver("ready", { from: "g2", ready: true });
     s.deliver("ready", { from: "g2", ready: "invalid-final" });
     await new Promise((r) => setTimeout(r, 1050));
-    assert.equal(h.lobby.roomState().peers[0].label, 7);
+    assert.equal(h.lobby.roomState().peers[0].parts.label, 7);
     assert.equal(h.lobby.roomState().peerReady, true, "invalid READY cannot replace the pending legitimate state");
+  } finally { h.lobby.cancel(); }
+});
+
+test("HELLO keeps only the profile fields; guest SETTINGS skip unchanged snapshots and are rate-gated", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    s.deliver("hello", { from: "g2", team: "beta", driver: 1, evil: "x".repeat(5000), parts: { engine: "a", bad: { deep: 1 } } });
+    const prof = h.lobby.roomState().peers[0];
+    assert.deepEqual(Object.keys(prof).sort(), ["driver", "from", "parts", "team"]);
+    assert.equal(JSON.stringify(prof.parts), '{"engine":"a"}');
+    const laps0 = h.G.raceLaps; h.G.raceLaps = 99;
+    s.deliver("settings", initialGuestSettings({ laps: laps0 }));
+    h.G.raceLaps = 98;
+    const snap = initialGuestSettings({ laps: laps0 });
+    s.deliver("settings", snap); s.deliver("settings", snap);
+    assert.equal(h.G.raceLaps, 98, "an unchanged snapshot is not re-applied");
+    for (let n = 0; n < 10; n++) s.deliver("settings", initialGuestSettings({ laps: 5 + n % 2 }));
+    assert.ok(h.G.raceLaps === 98 || h.G.raceLaps === 5 || h.G.raceLaps === 6);
   } finally { h.lobby.cancel(); }
 });
 
