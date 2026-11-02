@@ -40,3 +40,13 @@ test("M35: AI raceHash matches luckSeed:drawRound:gridSlot:skill (arm's round, p
     g.close();
   }
 });
+
+test("#4484: raceIndex++ happens only after the last abandon-return of the start", async () => {
+  const { gameSource } = await import("../helpers/game-source.mjs");
+  const src = gameSource();
+  const bump = [...src.matchAll(/if \(bumpRaceIndex\) raceIndex\+\+;/g)].map(m => m.index);
+  assert.equal(bump.length, 1, "exactly one guarded raceIndex++");
+  const arm = src.indexOf("if (bumpRaceIndex) armReliability(cars)");
+  const between = src.slice(arm, bump[0]);
+  assert.ok(between.split("if (stale()) return false;").length > 1, "stale() awaits sit between arm and bump");
+});
