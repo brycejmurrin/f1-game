@@ -523,3 +523,19 @@ test("HEIGHT heat stays visible at whole-lap zoom: a 6 px colour ribbon and hand
   const gap = 2 * Math.PI * 750 * h.cv.view().scale / n;
   assert.ok(h.rec.arcs.length && h.rec.arcs.every((r) => r < 4.5 && r <= gap * 0.5), "idle handle dots are no wider than the point spacing");
 });
+
+test("batch() coalesces setter repaints into one render (#4476)", () => {
+  const h = boot();
+  const count = () => h.rec.fills.length + h.rec.strokes.length;
+  h.rec.fills.length = 0; h.rec.strokes.length = 0;
+  h.cv.setIssues([]); h.cv.setSelection(2, -1); h.cv.setBuilt(null);
+  const three = count();
+  h.rec.fills.length = 0; h.rec.strokes.length = 0;
+  h.cv.batch(() => { h.cv.setIssues([]); h.cv.setSelection(2, -1); h.cv.setBuilt(null); });
+  const one = count();
+  assert.ok(three > 0 && one > 0);
+  assert.ok(one <= Math.ceil(three / 3) + 1, `batched ${one} draws vs ${three} unbatched`);
+  h.rec.fills.length = 0; h.rec.strokes.length = 0;
+  h.cv.batch(() => {});
+  assert.equal(count(), 0, "a batch that changed nothing paints nothing");
+});

@@ -223,7 +223,7 @@ const TrackDesigner = (function () {
     if (sel >= design.pts.length) sel = -1;
     if (span >= design.pts.length) span = -1;
     if (ctxAt >= 0) hideCtx();                         // its point index may name another point now
-    if (cv) { cv.setPoints(design.pts); cv.setSelection(sel, span); }
+    if (cv) cv.batch(() => { cv.setPoints(design.pts); cv.setSelection(sel, span); });
     schedulePreview();
     scheduleDraft();
     refreshControls();
@@ -237,8 +237,7 @@ const TrackDesigner = (function () {
     // A design the registry refuses outright (a loop under 1 km, a point out
     // of range) builds nothing and may name no red: never show "All checks pass".
     if (!verdict.ok && !verdict.red) verdict = Object.assign({}, verdict, { red: 1, issues: verdict.issues.concat([{ code: "bounds", level: "red", msg: "This loop cannot be built — make it bigger (2.5–7 km) and keep its points in range" }]) });
-    if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
-    refreshMapView();
+    if (cv) cv.batch(() => { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); refreshMapView(); });
     renderIssues(); renderStats(); announceChecks();
     if (workspace) workspace.review(verdict);
     renderInsight();
