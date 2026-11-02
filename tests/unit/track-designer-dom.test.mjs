@@ -149,6 +149,27 @@ test("init() builds the rail before any design exists; open() randomises a green
   assert.ok(b.C.draft(), "a draft is autosaved on close");
 });
 
+test("a fresh open leaves no UNDO entry of the blank design", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  assert.equal(b.D.state().undo, 0, "nothing to undo on a fresh open");
+  assert.equal(b.D.undo(), false);
+});
+
+test("UNDO keeps a country change (it is not an undoable edit, like the name)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7);
+  b.D.setTool("corner"); assert.equal(b.D.applyStamp(3, 3), true);
+  const sel = walk(b.root).find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Country");
+  sel.value = "Japan"; sel.dispatchEvent({ type: "change" });
+  const country = b.D.state().design.country;
+  assert.ok(country, "the country was set");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.country, country, "UNDO leaves the country alone");
+});
+
 test("the rail's edits: stamp, undo/redo, reverse, start, delete floor, theme, width, name", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });

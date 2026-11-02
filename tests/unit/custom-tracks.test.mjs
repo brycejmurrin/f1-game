@@ -586,6 +586,15 @@ test("a TRACK DESIGNER retry after a partial load failure injects only the files
   assert.equal(evaluated.size, LAZY_EDITOR.length, "every file ran exactly once in the end");
 });
 
+test("a rejected editor load is not cached: the next ensureEditor retries", async () => {
+  const { ctx, C } = boot(); let calls = 0;
+  ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/shape.js"], LAZY_EDITOR_EDGES: [] };
+  const api = C.create({ soundOn: false }, { load: () => (++calls === 1 ? Promise.reject(new Error("net")) : Promise.resolve(false)) });
+  await assert.rejects(api.ensureEditor(), /net/);
+  assert.equal(await api.ensureEditor(), false);
+  assert.equal(calls, 2, "the second call asked the loader again");
+});
+
 test("overlapping share-link decodes only open and strip the latest fragment", async () => {
   const b = boot(); const pending = new Map(), opened = [], stripped = [];
   b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"], LAZY_EDITOR_EDGES: [] };
