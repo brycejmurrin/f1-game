@@ -22,7 +22,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot({ joinMs, listenMs } = {}) {
+function boot({ joinMs, listenMs, stableMs } = {}) {
   const sockets = [];
   class FakeWebSocket {
     constructor(url) {
@@ -67,6 +67,7 @@ function boot({ joinMs, listenMs } = {}) {
   // A shortened guest find-window, so the reply-deadline case runs in seconds.
   if (joinMs) patched = patched.replace("const JOIN_TIMEOUT_MS = 12000", "const JOIN_TIMEOUT_MS = " + joinMs);
   if (listenMs) patched = patched.replace("const LISTEN_TIMEOUT_MS = 300000", "const LISTEN_TIMEOUT_MS = " + listenMs);
+  if (stableMs) patched = patched.replace("Date.now() - openAt >= 5000", "Date.now() - openAt >= " + stableMs);
   vm.runInContext(patched, ctx, { filename: absSrc("js/net/nostr.js") });
   const NetNostr = vm.runInContext("NetNostr", ctx);
   const tick = () => new Promise((r) => setTimeout(r, 20));
@@ -121,6 +122,29 @@ test("a socket the browser dropped is reopened, and once at return to the foregr
   room.stop();
   await h.tick();
   assert.equal(h.listeners.size, 0, "stop() removes the visibility listener");
+});
+
+test("a relay that opens then closes keeps backing off; one that stayed up is retried at 1 s (#4472)", async () => {
+  const h = boot({ stableMs: 150 });
+  const room = await h.NetNostr.directExchange({ code: "ABCDEF", send: "OFFER", onJoiner: () => {} });
+  await h.untilSockets(2);
+  const url = h.sockets[0].url;
+  const count = () => h.sockets.filter((s) => s.url === url).length;
+  h.sockets[0].open(); h.sockets[0].drop();                      // flap 1: closes at once
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(count(), 2, "first retry after 1 s");
+  h.sockets.filter((s) => s.url === url)[1].open(); h.sockets.filter((s) => s.url === url)[1].drop();   // flap 2
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(count(), 2, "second retry waits 2 s, not 1 s: the open did not reset the backoff");
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.equal(count(), 3, "second retry after 2 s");
+  const third = h.sockets.filter((s) => s.url === url)[2];
+  third.open();
+  await new Promise((r) => setTimeout(r, 200));                  // stayed open past stableMs
+  third.drop();
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(count(), 4, "a socket that stayed up earns the 1 s backoff again");
+  room.stop();
 });
 
 test("after stop() a closing socket is not reopened", async () => {
