@@ -223,6 +223,7 @@ export function swOptionalFiles() {
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
     ...(MANIFEST.LAZY_CAM_EDITOR || []), ...(MANIFEST.LAZY_CAREER_UI || []),
     ...(MANIFEST.LAZY_UI_PRESETS || []),
+    ...(MANIFEST.LAZY_RESULTS_SHEET || []),
   ];
 }
 
@@ -253,6 +254,7 @@ function swOptionalBlock() {
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
     ["LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter", MANIFEST.LAZY_UI_PRESETS || []],
+    ["LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace", MANIFEST.LAZY_RESULTS_SHEET || []],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
@@ -291,6 +293,7 @@ function rosterSource() {
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
     ["LAZY_UI_PRESETS", MANIFEST.LAZY_UI_PRESETS], ["LAZY_UI_PRESETS_EDGES", MANIFEST.LAZY_UI_PRESETS_EDGES],
+    ["LAZY_RESULTS_SHEET", MANIFEST.LAZY_RESULTS_SHEET], ["LAZY_RESULTS_SHEET_EDGES", MANIFEST.LAZY_RESULTS_SHEET_EDGES],
     ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
     ["LAZY_GARAGE_EXTERIOR", MANIFEST.LAZY_GARAGE_EXTERIOR],
     // The build Worker's importScripts list, "@circuits" expanded in page order

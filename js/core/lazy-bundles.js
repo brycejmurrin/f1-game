@@ -816,6 +816,14 @@ function ensureGarageData() {
   });
   return garageLoad;
 }
+// LAZY_RESULTS_SHEET (~54 KB): results / TT / standings / champion DOM. The
+// boot stub (results-boot.js) owns ScriptLoader memoisation; this gate is what
+// startRace awaits so buildResults at the flag stays synchronous.
+function ensureResultsSheet() {
+  if (typeof GameResultsSheet !== "undefined") return Promise.resolve(true);
+  if (typeof GameResults !== "undefined" && GameResults.ensureLoaded) return GameResults.ensureLoaded().then((ok) => !!ok && typeof GameResultsSheet !== "undefined");
+  return Promise.resolve(false);
+}
 /** Save-Data on, or a 2G link: the title skips its idle lighting, race-session and
  *  audio prefetches (#3110); RACE! still loads them on demand. No Network Information API (Safari,
  *  Firefox) reads as a normal link. */
@@ -887,6 +895,7 @@ function raceAssets() {
   if (!lowDataLink()) {
     scheduleIdle(() => { ensureLightPresets(); }, 8000);
     scheduleIdle(() => { ensureRaceSession(); }, 9000);
+    scheduleIdle(() => { ensureResultsSheet(); }, 9500);
     scheduleIdle(() => { prefetchAudio(); }, 12000);
     if (GARAGE_FILES.length) scheduleIdle(() => { ensureGarageData(); }, 6000);   // WORK ON CAR can be the first tap
   }
@@ -912,7 +921,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

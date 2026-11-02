@@ -2468,7 +2468,7 @@ async function startRaceBody() {
   rlap("scenery");
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
-  await ensureAudio(); if (stale()) return false;   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine (false = silent race; the loader logged it)
+  await Promise.all([ensureAudio(), lazyBundles.ensureResultsSheet()]); if (stale()) return false;   // LAZY_AUDIO + LAZY_RESULTS_SHEET before startEngine / sync buildResults at the flag
   if (!window.LightPresets) { await ensureLightPresets(); if (stale()) return false; }   // LAZY_RACE presets before the first applyRaceSettings: a late landing re-lit the race mid-session (false = default lighting; logged)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -2714,7 +2714,7 @@ const _customTrackStarts = new WeakSet();
 // Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
 // startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
 // LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
-function kickRaceBundles(audio) { if (typeof setupCam !== "undefined" && setupCam.prewarmExterior) setupCam.prewarmExterior(); for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
+function kickRaceBundles(audio) { if (typeof setupCam !== "undefined" && setupCam.prewarmExterior) setupCam.prewarmExterior(); for (const p of [ensureRaceSession(), ensureLightPresets(), ensureGarageData(), lazyBundles.ensureResultsSheet(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }

@@ -185,7 +185,7 @@ test("ensureGarageData: loads garage-data.js alone, retries a dropped request, n
   const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
   ctx.__lb.raceAssets();
   await flush();
-  assert.deepEqual(idle.map((i) => i.timeout), [8000, 9000, 12000, 6000], "an idle prefetch of its own");
+  assert.deepEqual(idle.map((i) => i.timeout), [8000, 9000, 9500, 12000, 6000], "an idle prefetch of its own");
   assert.equal(await ctx.__lb.ensureLightPresets(), true);
   assert.deepEqual(attempts, ["js/lighting/presets.js"], "the presets never pull the garage tables");
   assert.equal(await ctx.__lb.ensureGarageData(), false, "the first request is dropped");

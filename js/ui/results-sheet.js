@@ -1,5 +1,5 @@
 /* Apex 26 — results / time-trial / championship-standings DOM builders for js/game.js. Pure DOM assembly from race + season state; no physics, no renderer. Live g… */
-const GameResults = (function () {
+const GameResultsSheet = (function () {
   "use strict";
 
 // I18n.t with English defaults; the bare fallback keeps VM tests that load this file alone working.
@@ -910,4 +910,4 @@ return { buildResults, buildTTResults, buildStandings, buildChampion };
 
 return { create };
 })();
-Object.freeze(GameResults);
+Object.freeze(GameResultsSheet);

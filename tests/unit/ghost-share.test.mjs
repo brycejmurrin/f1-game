@@ -585,7 +585,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     fmtTime: (value) => value.toFixed(3),
     daily: { isActive: () => false, current: () => null },
   };
-  const api = vm.runInContext("GameResults", ctx).create(G);
+  const api = vm.runInContext("GameResultsSheet", ctx).create(G);
   api.buildTTResults();
   return { dom, G, api };
 }

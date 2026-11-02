@@ -165,7 +165,7 @@ function runStartRaceBody({ sessionOk = true, conflict = false, ctxLost = false 
     RaceEntryProfile: obj, LoadingScreen: { failed: async () => "back" }, loadingScreen: obj,
     isCareer: () => true,
     Career: { conflicted: () => conflict, markWeekendStarted() { if (!conflict) season.startedRound = season.round; } },
-    ensureRaceSession: async () => sessionOk, ensureAudio: async () => true, ensureLightPresets: async () => true,
+    ensureRaceSession: async () => sessionOk, ensureAudio: async () => true, lazyBundles: { ensureResultsSheet: async () => true }, ensureLightPresets: async () => true,
     quitToMenu: () => log.push("quitToMenu"), quitToMenuAfterCtxLost: () => log.push("ctxLost"), announce: fn,
     radioVoice: obj, flow: "race", season, SeasonCal: { conflicted: () => false, canRace: () => true },
     resultsCam: obj, RaceCeremony: { resetLive: fn }, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj,
