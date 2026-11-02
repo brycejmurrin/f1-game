@@ -1,1 +1,0 @@
-Fixed: HUD audit cleanups — the WATCH tower honours the BROADCAST gap profile, REL and STRATEGY share one in-pit rule, and the track-limits chip no longer re-stacks TYRES when the LIMITS toggle is off (#4319).

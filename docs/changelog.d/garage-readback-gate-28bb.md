@@ -1,1 +1,0 @@
-Fixed: on software GL (SwiftShader / llvmpipe), opening or closing the garage no longer triggers full-frame GLX readbacks or scratch pack readbacks during `#carsetup`, and the stall watchdog treats the garage sheet like the race-entry loading cover so a slow paint does not reload the menu at ten glacial frames (#3589).

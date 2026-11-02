@@ -1,1 +1,0 @@
-Fixed: the 5.9 MB announcer voice pack (`assets/voice/fable.bin`) no longer downloads during race load on iPhone — it waits until lights-out (or first post-gate use), with silent commentary until ready.

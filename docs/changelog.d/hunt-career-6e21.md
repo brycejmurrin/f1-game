@@ -1,1 +1,0 @@
-Fixed: Selecting a newer-build career save keeps the picker open with UPDATE REQUIRED. Circuit removal preserves scored career achievements, wins and podiums without changing another circuit's round index.

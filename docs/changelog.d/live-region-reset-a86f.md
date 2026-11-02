@@ -1,1 +1,0 @@
-Fixed: restarting a race from the pause menu no longer leaves the previous race's last spoken line in the screen-reader region. A line that starts just as a dialog opens is spoken inside that dialog, where a screen reader can hear it.

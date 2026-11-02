@@ -1,1 +1,0 @@
-New: SETTINGS › LINE COLOUR now picks the driving line's main (on-pace) colour — F1 GREEN, CYAN, BLUE, WHITE, PURPLE or PINK, each keeping amber to lift and red to brake — beside COLOUR-BLIND; saved F1 and COLOUR-BLIND choices carry over.

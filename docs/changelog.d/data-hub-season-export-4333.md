@@ -1,1 +1,0 @@
-Fixed: Data Hub standings refuse a Jolpica body whose season disagrees with the asked year (silent wrong-championship paint); GPS TRACE EXPORT keeps one OpenF1 lap per circuit, preferring a Grand Prix over a second Sakhir Pre-Season Testing weekend.

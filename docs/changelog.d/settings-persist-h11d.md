@@ -1,1 +1,0 @@
-Fixed: LOAD SETTINGS now restores a calibrated controller stick centre instead of silently dropping it, and choosing FEEL › SIM on a fresh install no longer lights the PRO preset chip while the car runs STANDARD assists (B·H11, #3384).

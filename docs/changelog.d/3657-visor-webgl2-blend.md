@@ -1,1 +1,0 @@
-Fixed: on WebGL2 (iPhone and other devices without WebGPU) the HELMET visor reflections no longer push the automatic graphics quality down. The light layer is drawn with ordinary blending there; WebGPU keeps the additive blend.

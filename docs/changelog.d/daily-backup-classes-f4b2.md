@@ -1,1 +1,0 @@
-Fixed: Career backups preserve valid Daily classes and merged day histories within the existing file-byte limit; oversized or hostile Daily merges are refused before any career, selection or progress writes.

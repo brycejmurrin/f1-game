@@ -1,1 +1,0 @@
-Improved: garage departure follows Blender-authored blocking through the doorway and into the pit lane, with rolling wheels and a finished exterior frontage. Starting a race clears held garage camera gestures and preserves driving-camera preferences.

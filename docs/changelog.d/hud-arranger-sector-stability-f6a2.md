@@ -1,1 +1,0 @@
-Fixed: Keep the HUD steady after moving or shrinking sectors beside Boost in Move & Size. Saved sector placement no longer triggers automatic row fitting or width squeezing; collision checks respect panels to the right of Boost, and font rounding no longer causes tiny repeating size changes.
