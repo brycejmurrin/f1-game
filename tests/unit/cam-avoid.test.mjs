@@ -146,3 +146,14 @@ test("vantage.js calls CamAvoid for broadcast modes after look-back", () => {
   assert.match(v, /CamAvoid\.freeEye\(track, eye, cvA\)/);
   assert.match(v, /mode === "trackside"/);
 });
+
+test("freeEye: an eye in open air costs ONE insideProp query (hunt 2026-11-02)", () => {
+  let calls = 0;
+  const FlybySeq = { insideProp: () => { calls++; return null; }, clearEye: (t, e) => e };
+  const Tracks = { project: () => ({ s: 0, lat: 0 }), sample: (t, s, o) => { o.hw = 7; return o; } };
+  const CamAvoid = load(FlybySeq, Tracks);
+  const eye = [50, 10, 0];
+  CamAvoid.freeEye({ def: {} }, eye, { p: [0, 0, 0], r: [1, 0, 0], hw: 7 });
+  assert.equal(calls, 1);
+  assert.deepEqual(Array.from(eye), [50, 10, 0]);
+});

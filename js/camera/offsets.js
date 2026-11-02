@@ -367,7 +367,6 @@ function set(mode, id, v) {
   v = clamp(v, d.min, d.max);
   const prof = _store[mode] || (_store[mode] = {});
   prof[id] = v;
-  if (!Object.keys(prof).length) delete _store[mode];
   return true;
 }
 function setGlobal(id, v) {

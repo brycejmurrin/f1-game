@@ -68,7 +68,8 @@ const CamAvoid = (function () {
    */
   function freeEye(track, eye, frame) {
     if (!track || !eye) return eye;
-    if (roadClear(track, eye, MARGIN)) return eye;
+    // Not inside anything (the common frame): one query, not three.
+    if (!blocked(track, eye, MARGIN) || roadClear(track, eye, MARGIN)) return eye;
     const street = !!(track.def && track.def.street);
     if (!street && frame && frame.p && frame.r) {
       const hw = frame.hw > 0 ? frame.hw : 7;

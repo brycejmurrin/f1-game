@@ -363,7 +363,7 @@ function buildRows() {
   const head = document.createElement("h3");
   head.textContent = "SHOT"; head.className = "fb-group";
   host.appendChild(head);
-  numberRow(host, "dur", "DURATION (share of the run)", DUR, (v) => { cur().dur = v; edited(); });
+  numberRow(host, "dur", "DURATION (share of the run)", DUR, (v) => { cur().dur = v; setU(midOf(sel)); edited(); });
   selectRow(host, "ease", "EASING", EASES, (v) => { cur().ease = v; edited(); });
   numberRow(host, "fov0", "FOV FROM", FOV, (v) => { cur().fov[0] = v; edited(); });
   numberRow(host, "fov1", "FOV TO", FOV, (v) => { cur().fov[1] = v; edited(); });

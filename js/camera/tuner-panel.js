@@ -181,6 +181,7 @@ function buildTools(host) {
   let armed = false, armT = 0;
   allBtn.onclick = () => {
     if (!armed) {
+      clearTimeout(armT);
       armed = true;
       allBtn.classList.add("on");
       allBtn.textContent = "COPY TO ALL?";
@@ -195,7 +196,7 @@ function buildTools(host) {
     applyLive();
     refreshCamTunePanel();
     allBtn.textContent = "COPIED " + n + " ✓";
-    setTimeout(() => { allBtn.textContent = "HERE → ALL"; }, 1800);
+    armT = setTimeout(() => { allBtn.textContent = "HERE → ALL"; }, 1800);
   };
   copy.appendChild(allBtn);
   host.appendChild(copy);
