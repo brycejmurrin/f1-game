@@ -116,10 +116,12 @@ const DockLayout = (function () {
     return (side === "L") !== m ? 1 : -1;
   }
 
-  function apply(schemeName, bag, docks) {
+  // opts.pad: a pad measured earlier (a drag caches it at pointerdown);
+  // opts.fit === false: the caller invalidates the fit itself (once per frame).
+  function apply(schemeName, bag, docks, opts) {
     const scheme = (bag && bag[schemeName]) || emptyScheme();
     const root = (typeof document !== "undefined") ? document.documentElement : null;
-    const pad = usablePad(root);
+    const pad = (opts && opts.pad) || usablePad(root);
     for (const side of SIDES) {
       const el = docks && docks[side];
       if (!el || !el.style) continue;
@@ -137,6 +139,7 @@ const DockLayout = (function () {
     }
     // The fit (dock cap, --dock-r-w, the radio lane) budgets from the docks'
     // rects; without this it kept the pre-drag boxes for up to 3 s.
+    if (opts && opts.fit === false) return;
     if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
   }
 
@@ -155,6 +158,18 @@ const DockLayout = (function () {
       return { L: $("dock-left"), R: $("dock-right") };
     }
     function paint() { apply(schemeOf(), bag, docks()); }
+    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
+    let fitRaf = 0;
+    function fitNow() {
+      fitRaf = 0;
+      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
+    }
+    function paintDrag(pad) {
+      apply(schemeOf(), bag, docks(), { pad, fit: false });
+      if (fitRaf) return;
+      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
+      else fitNow();
+    }
     // REPOSITION needs the docks reachable. #pmsettings and #pausemenu are
     // showModal() dialogs (TopModal), so while either is open the rest of the
     // document, #dock-left/#dock-right included, is inert and a drag never
@@ -361,12 +376,13 @@ const DockLayout = (function () {
         orig: Object.assign({}, bag[s][side]),
         scheme: s,
         pid: e.pointerId,
+        pad: usablePad(document.documentElement),
       };
       try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
     }
     function onPointerMove(e) {
       if (!drag || e.pointerId !== drag.pid) return;
-      const pad = usablePad(document.documentElement);
+      const pad = drag.pad;
       const sx = inboard(drag.side);
       const dx = ((e.clientX - drag.startX) / pad.w) * sx;
       const dy = -((e.clientY - drag.startY) / pad.h);
@@ -374,12 +390,13 @@ const DockLayout = (function () {
         x: drag.orig.x + dx,
         y: drag.orig.y + dy,
       });
-      paint();
+      paintDrag(pad);
     }
     function onPointerUp(e) {
       if (!drag || e.pointerId !== drag.pid) return;
       save(store, bag);
       drag = null;
+      fitNow();
     }
     if (typeof document !== "undefined") {
       document.addEventListener("pointerdown", onPointerDown, true);

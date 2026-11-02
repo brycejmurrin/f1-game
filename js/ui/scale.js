@@ -160,8 +160,16 @@ const UiScale = (() => {
     // dock below the slider (245 % on an 844x390 phone paints ~118 %), and "245%" alone read as "broken".
     function applyBtnScale() {
       applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale");
+      refreshBtnFit();
+    }
+    // fitHud publishes --hud-z-dock on its own schedule (cap changes: rotation, HUD SIZE, a wider dock), so the
+    // "fits N%" suffix is rebuilt from the base label whenever that var moves, not only when the slider does.
+    function refreshBtnFit() {
       const out = $("pm-btnscale-v"), body = document.body;
-      if (out && body && body.classList.contains("in-race")) out.textContent = btnFitLabel(out.textContent, scalePct("hudBtnScale"), document.documentElement.style.getPropertyValue("--hud-z-dock"));
+      if (!out || !body || !body.classList.contains("in-race")) return;
+      const pct = scalePct("hudBtnScale");
+      const next = btnFitLabel(scaleLabel(pct, "hudBtnScale"), pct, document.documentElement.style.getPropertyValue("--hud-z-dock"));
+      if (out.textContent !== next) out.textContent = next;
     }
     // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
     // helper snaps to SCALE_MIN..SCALE_MAX (40..200), which is meaningless for a
@@ -238,10 +246,24 @@ const UiScale = (() => {
     applyHudScale();
     applyBtnScale();
     syncLayout();
+    // Resize events fire per frame during a drag/rotation: coalesce syncLayout to one run per animation frame.
+    let layoutRaf = 0;
+    const syncLayoutSoon = () => {
+      if (layoutRaf) return;
+      if (typeof requestAnimationFrame !== "function") { syncLayout(); return; }
+      layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; syncLayout(); });
+    };
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("resize", syncLayout, { passive: true });
+      window.addEventListener("resize", syncLayoutSoon, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
-        window.visualViewport.addEventListener("resize", syncLayout, { passive: true });
+        window.visualViewport.addEventListener("resize", syncLayoutSoon, { passive: true });
+    }
+    if (typeof MutationObserver === "function" && document.documentElement) {
+      let fitRaf = 0;
+      new MutationObserver(() => {
+        if (fitRaf || typeof requestAnimationFrame !== "function") return;
+        fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshBtnFit(); });
+      }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     }
     function setScale(key, prop, v) {
       if (v !== undefined) {

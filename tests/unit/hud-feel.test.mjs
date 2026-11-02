@@ -1558,3 +1558,13 @@ test("emergency dock fit keeps small targets usable when a short viewport exhaus
   }
   assert.equal(dockHarness(2.45).zR, 1.175, "normal 844×390 pedal sizing is unchanged");
 });
+
+test("#4483: BUTTON SIZE fit suffix follows the dock cap, syncLayout is rAF-coalesced, results sheet drops its car array on close", () => {
+  const scale = src("js/ui/scale.js"), res = src("js/ui/results-sheet.js");
+  const missing = [
+    [scale, "function refreshBtnFit()", true], [scale, 'attributeFilter: ["style"]', true],
+    [scale, 'addEventListener("resize", syncLayoutSoon', true], [scale, 'visualViewport.addEventListener("resize", syncLayoutSoon', true],
+    [scale, 'addEventListener("resize", syncLayout,', false], [res, "if (sheet.hidden) saidFor = null", true],
+  ].filter(([text, bit, want]) => text.includes(bit) !== want).map((r) => r[1]);
+  assert.deepEqual(missing, []);
+});

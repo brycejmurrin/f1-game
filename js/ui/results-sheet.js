@@ -137,7 +137,7 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
 }
 
 // [data-say] cards are spoken once per result after the sheet shows (a pre-filled role=status is silent).
-let saidFor = null;
+let saidFor = null, saidWatch = null;   // saidFor holds the finished race's car array: dropped when the sheet closes
 function spokenText(n) {
   const kids = n.children ? Array.from(n.children) : [];
   return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
@@ -145,6 +145,10 @@ function spokenText(n) {
 function sayCards(sheet, table, key) {
   if (!table || typeof LiveRegion === "undefined" || key === saidFor) return;
   saidFor = key;
+  if (sheet && saidWatch !== sheet && typeof MutationObserver !== "undefined") {
+    saidWatch = sheet;
+    new MutationObserver(() => { if (sheet.hidden) saidFor = null; }).observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
+  }
   const text = Array.from(table.querySelectorAll("[data-say]"), spokenText).filter(Boolean).join(". ");
   if (!text) return;
   const say = () => LiveRegion.say(text, "save");

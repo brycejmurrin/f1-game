@@ -799,3 +799,24 @@ test("ring byte accounting includes Float64 timestamps and separates fixed typed
   assert.equal(r.window().bytes, R.frameBytes(24) * r.window().frames);
   assert.equal(r.window().allocatedBytes, info.allocatedBytes);
 });
+
+test("at() on a wrapped ring picks the same bracket as a linear scan; the pooled form matches the public one", () => {
+  const R = boot();
+  const field = cars(3);
+  const G = { cars: field, netPlay: { active: () => false }, paused: true };
+  const api = R.create(G);
+  api.reset(field);
+  const cap = R.capacityFor(3);
+  for (let i = 0; i < cap + 37; i++) {
+    for (const c of field) c.s += 0.5;
+    api.sample(i / R.HZ, field);
+  }
+  const w = api.window();
+  for (const f of [0, 0.013, 0.5, 0.987, 1]) {
+    const t = w.t0 + (w.t1 - w.t0) * f;
+    const a = api.at(t), b = api.at(t);
+    assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)));
+    assert.notEqual(a.cars, b.cars, "the public at() returns fresh arrays");
+    assert.ok(Math.abs(a.cars[0].s - (field[0].s - 0.5 * (w.t1 - a.t) * R.HZ)) < 0.51, "frame near t=" + t);
+  }
+});

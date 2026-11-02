@@ -183,7 +183,7 @@ const HudArrange = (() => {
       bar.style.transform = "none";
       bar.style.left = boxes[best].l + "px"; bar.style.top = boxes[best].t + "px";
     }
-    function paintBar(clash, message) {
+    function paintBar(clash, message, rects) {
       if (!bar) return;
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
@@ -202,7 +202,7 @@ const HudArrange = (() => {
         SettingRow.disable(visibilityRow, !visibility);
         visibilityRow.title = visibility ? "" : "Shown automatically with race events";
       }
-      placeBar(rectsNow());
+      placeBar(rects || rectsNow());
     }
 
     /* ---- clash marks: HUD pieces against each other and against the touch controls ---- */
@@ -223,8 +223,8 @@ const HudArrange = (() => {
       }
       return out;
     }
-    function markClashes() {
-      const rects = rectsNow();
+    function markClashes(rects) {
+      rects = rects || rectsNow();
       const pairs = clashes(rects);
       const hot = new Set();
       for (const [a, b] of pairs) { hot.add(a); hot.add(b); }
@@ -238,7 +238,8 @@ const HudArrange = (() => {
     }
     function after(message) {
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
-      paintBar(markClashes(), message);
+      const rects = rectsNow();
+      paintBar(markClashes(rects), message, rects);
     }
     const current = (id) => HudLayout.get(id, context.set, context.profile);
     function dragOrig(id) {
@@ -528,7 +529,8 @@ const HudArrange = (() => {
       drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
       pinch = null;
       try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
-      paintBar(markClashes());
+      const rects0 = rectsNow();
+      paintBar(markClashes(rects0), undefined, rects0);
     }
     function onPointerMove(e) {
       if (!editing || !pointers.has(e.pointerId)) return;
