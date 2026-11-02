@@ -187,3 +187,17 @@ test("the publisher boots only on the game page and never on overlay.html", () =
   const hasFieldBest = lobby.slice(sectorAt, sectorAt + 600).includes("fieldBest:");
   assert.equal(hasFieldBest, true, "sectorState exposes fieldBest for purple sectors");
 });
+
+test("publisher tick expires a silent overlay so a crashed tab stops the publish loop (HUNT-2026-11-02)", () => {
+  const { FakeChannel } = bus();
+  const { Bridge, Pub } = load();
+  let t = 0;
+  const peers = [];
+  const host = Bridge.host({ BroadcastChannel: FakeChannel, now: () => t, onPeers: (n) => peers.push(n) });
+  Bridge.subscribe(() => {}, { BroadcastChannel: FakeChannel, timers: timers(), id: "ov-dead" });
+  const apex = { field: () => FIELD, info: () => ({ state: "race", track: "monza" }), sectorState: () => null };
+  const pub = Pub.start({ bridge: host, apex: () => apex, document: null, teams: TEAMS, timers: timers() });
+  t = Bridge.PEER_TTL_MS + 1;   // the overlay died without a bye: no message will ever arrive
+  pub.tick();
+  assert.deepEqual(j(peers), [1, 0]);
+});
