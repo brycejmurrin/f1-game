@@ -181,3 +181,13 @@ test("setEngine allocates zero nodes on a steady per-frame update", async () => 
   for (let i = 0; i < 45; i++) { ctxTime(1 / 60); A.setEngine(0.55, 0, false, 0.55, 5, ph); }
   assert.equal(created, 0, `steady setEngine allocated ${created} nodes`);
 });
+
+test("two setEngine calls at one clock tick do not fake a decel (full-pack harvest clip)", async () => {
+  const { GameAudio: A, ctxTime } = await sampleEngine();
+  const ph = { throttle: 0.9, energy: 1, deploy: 0, brake: 0 };
+  A.setEngine(0.6, 0, false, 0.60, 5, ph);
+  ctxTime(1 / 60);
+  A.setEngine(0.6, 0, false, 0.60, 5, ph);
+  A.setEngine(0.6, 0, false, 0.59, 5, ph);   // same currentTime: dt would clamp to 0.001 => decel 10/s
+  assert.equal(A.cylCutDepth(), 0, "a same-tick speed wobble must not open the harvest clip");
+});
