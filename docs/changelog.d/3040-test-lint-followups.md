@@ -1,1 +1,0 @@
-Improved: store-key tripwires share one js/ walk, the HTML-sink lint also flags srcdoc, createContextualFragment and document.write, and the save-schema test now checks literal key reads (Refs #3040).

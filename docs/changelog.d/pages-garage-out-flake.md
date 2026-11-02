@@ -1,1 +1,0 @@
-Fixed: Start Race no longer silently re-enables START when the picker's in-flight track build was a different PerfGov tier (chunk bit) than RACE! — the garage drive-out runs after that abort finishes instead of racing it.

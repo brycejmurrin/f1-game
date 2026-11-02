@@ -1,1 +1,0 @@
-New: Race Settings › DAMAGE: HANDLING (opt-in; DISPLAY stays the default). A broken front or rear wing, floor damage or a knocked suspension now costs your car grip, mostly in fast corners, until a pit stop repairs it (#1578).

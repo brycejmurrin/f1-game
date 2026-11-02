@@ -1,1 +1,0 @@
-Fixed: on WebGPU (iPhone Safari), merged terrain and road chunks no longer keep drawing the first set of visible chunks after the view moves; chunked shadow casts and unused uniform writes are cheaper.

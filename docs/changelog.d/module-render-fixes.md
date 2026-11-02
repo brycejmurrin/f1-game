@@ -1,1 +1,0 @@
-Fixed: TLX Ambient Fill now preserves a zero setting instead of restoring full sky and ground ambient light.

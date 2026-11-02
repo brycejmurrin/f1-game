@@ -1,1 +1,0 @@
-Fixed: Livery edits survive another tab replacing the original paint job. Editor areas open at the top, keyboard focus follows editing and saving, and inherited colours and palette selections expose their accessible state.
