@@ -400,6 +400,7 @@ test("renderer screenshots await native saving and report its failure", async ()
 });
 
 test("blob:<a download> click refuses a non-ok fetch instead of saving the body", async () => {
+  const toasts = [];
   const writes = [];
   const logs = [];
   let clickHandler = null;
@@ -407,10 +408,13 @@ test("blob:<a download> click refuses a non-ok fetch instead of saving the body"
     console, Promise, Date, Math, JSON, Object, Array, String, Number, Uint8Array,
     btoa: (s) => Buffer.from(s, "binary").toString("base64"),
     atob: (s) => Buffer.from(s, "base64").toString("binary"),
-    Log: { info(_ch, msg) { logs.push(String(msg)); }, warn() {} },
+    Log: { info(_ch, msg) { logs.push(String(msg)); }, warn(_ch, msg) { logs.push(String(msg)); } },
     document: {
       addEventListener(type, fn) { if (type === "click") clickHandler = fn; },
+      createElement: () => { const el = { style: {}, setAttribute() {}, remove() {} }; toasts.push(el); return el; },
+      body: { appendChild() {} },
     },
+    setTimeout: () => 0,
     location: { origin: "https://game.test" },
     Capacitor: {
       isNativePlatform: () => true,
@@ -442,7 +446,7 @@ test("blob:<a download> click refuses a non-ok fetch instead of saving the body"
   clickHandler({ target: a, preventDefault() {}, stopPropagation() {} });
   for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(writes.length, 0, "a 404 body must not be written as the download");
-  assert.ok(logs.some((m) => /native download failed:.*HTTP 404/.test(m)), logs.join(" | "));
+  assert.ok(logs.some((m) => /native download failed:.*HTTP 404/.test(m)) && toasts.length === 1 && /EXPORT FAILED.*trace\.json/.test(toasts[0].textContent), "failed export must warn and toast once: " + logs.join(" | "));
 });
 
 test("renderer screenshot refuses a non-ok fetch instead of saving the body", async () => {
