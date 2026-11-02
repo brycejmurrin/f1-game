@@ -303,21 +303,21 @@ test("quitToMenu() during a race load cancels it: the body does not go on to cou
   } finally { barrier.release(); g.ctx.RaceEntryProfile = profile; g.close(); }
 });
 
-test("a second startRace() after the first passed raceIndex++ joins it: one race, round +1, state stays count", async () => {
+test("a second startRace() while the first is in flight joins it: one race, round +1 once committed, state stays count", async () => {
   const g = await createGame({ track: "monza", carMeshes: false });
   const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
     G.quitToMenu();
     const round0 = G.raceRound;
-    // Mesh warming follows raceIndex++; keep that real entry request pending
-    // while the duplicate arrives, irrespective of the earlier await count.
+    // raceIndex++ commits after the last await (#4484); keep the real entry
+    // request pending at mesh warming while the duplicate arrives.
     g.ctx.RaceEntryProfile = { ...profile, spanAsync(name, fn) {
       return profile.spanAsync(name, name === "warmCarAssets" ? async () => { await barrier.hold(); return fn(); } : fn);
     } };
     const first = G.startRace();
     assert.equal(await g.settle(barrier.entered), true, "the first body has reached mesh warming");
-    assert.equal(G.raceRound, round0 + 1, "the first body is past raceIndex++");
+    assert.equal(G.raceRound, round0, "the first body has not committed its race yet");
     const second = G.startRace();
     assert.equal(second, first, "the in-flight request is shared, not restarted");
     barrier.release();
