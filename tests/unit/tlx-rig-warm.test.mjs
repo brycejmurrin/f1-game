@@ -324,5 +324,5 @@ test("finishes on demand: the 60-85 tint branch lives in its own lit graph, pick
   assert.ok(TLX.includes("materialFor(opts, false, undefined, fxFor(mesh.geo, opts))"), "draw() picks the variant per draw");
   assert.ok(TLX.includes("mat: materialFor(opts, false, false, fxFor(mesh.geo, opts))"), "the rig warm compiles the variant the draw will use");
   assert.ok(TLX.includes("skipBatches() || fxFor(geo, opts)) return false;"), "an fx geometry never joins a coalesced run (its program has no branch)");
-  assert.ok(TLX.includes('const key = fx ? matKeyFor(o, chunked, instanced) + "|fx" : matKeyFor(o, chunked, instanced);'), "its own cache key");
+  assert.ok(TLX.includes('if (fx) { let fk = _fxKeys.get(key); if (fk === undefined) _fxKeys.set(key, fk = key + "|fx"); key = fk; }'), "its own cache key (memoised, no per-draw concat)");
 });
