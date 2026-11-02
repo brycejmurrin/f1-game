@@ -485,8 +485,8 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
   assert.match(game, /function loadAgentSurface\(\)/);
   assert.match(game, /if \(!_agentLoad\) _agentLoad = \(async \(\) => \{/);
   assert.match(game, /GameMetrics\.setTelemetryLoader\(loadAgentSurface\)/);
-  // bootAgentSurface still gates, and now defers to the shared loader.
-  assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*await loadAgentSurface\(\);/);
+  // bootAgentSurface still gates, and now defers to the shared loader (fail-soft at boot).
+  assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*try \{ await loadAgentSurface\(\); \}\s*\n\s*catch \(e\) \{ Log\.warn\("game", "bootAgentSurface failed: " \+ \(e && e\.message\)\); \}/);
 });
 
 // THE LAYOUT PICKER MUST NOT MEASURE ITS OWN OUTPUT. Choosing wide/narrow from

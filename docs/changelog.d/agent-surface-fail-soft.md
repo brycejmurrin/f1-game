@@ -1,0 +1,1 @@
+Fixed: agent dev surface (METRICS / flyby / ?apex) no longer aborts game boot when a lazy agent script is refused (e.g. SRI mismatch on a stale shell during deploy); __apex stays null and a later ask retries.

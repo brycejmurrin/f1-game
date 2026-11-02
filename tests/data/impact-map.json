@@ -5138,6 +5138,9 @@
       "awaitPackSettled": [
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
+      "bootAgentSurface": [
+        "tests/unit/lazy-bundles-prefetch.test.mjs"
+      ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
