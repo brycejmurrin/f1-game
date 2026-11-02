@@ -2630,7 +2630,7 @@ async function startRaceBody() {
   // M35/B6: arm on the SAME raceIndex gridUp just hashed (launch/tyre/phase), THEN
   // bump. Bumping first changed AI draws and broke quali-pace-parity at PACE 1.34.
   // armReliability freezes raceDrawRound for the in-race mistake hash after the bump.
-  if (session === "race") { armReliability(cars); raceIndex++; }
+  const bumpRaceIndex = session === "race"; if (bumpRaceIndex) armReliability(cars);   // the bump waits for the start to COMMIT (below the last stale() await, #4484)
   resultT = 0; postFinish.since = -1;
   feel.camRoll = 0; camSlipSm = 0;
   feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
@@ -2726,7 +2726,7 @@ async function startRaceBody() {
     await RaceEntryProfile.spanAsync("mirrorPrepare", () => mirrorPass.prepareRace());
   if (stale()) return false; if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
   if (player !== entryPlayer || (state !== "count" && state !== "race")) return false;
-  clearRaceEntrySoften();
+  clearRaceEntrySoften(); if (bumpRaceIndex) raceIndex++;   // committed: raceDrawRound froze this race's mistake-hash round in armReliability
 
   // A flyby timer can land this in a BACKGROUND tab, after the hide handler ran in "menu" state.
   if (document.hidden) setPaused(true, "hidden-tab");
