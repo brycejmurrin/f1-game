@@ -7469,6 +7469,9 @@
       "seedPlayerPose": [
         "tests/unit/car-fields-vm.test.mjs"
       ],
+      "setFlow": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
       "setPaused": [
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/audio-recovery.test.mjs",
