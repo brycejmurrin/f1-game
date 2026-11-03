@@ -1002,6 +1002,10 @@
       C.chromAb.value = gk("chromAb");
       C.grain.value = gk("grain");
       C.grainTime.value = F.time || 0;
+      if (C.dthOff) {   // tsl-post.js: the dither's time step, float32 like the GPU's floor (tsl-sky.js D.dthOff)
+        const step60 = Math.floor(Math.fround(Math.fround(C.grainTime.value) * 60.0));
+        C.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+      }
       C.sharpen.value = gk("sharpen");
       if (C.sharpenLimit) C.sharpenLimit.value = sharpenLimit;
       C.blackLift.value = gk("blackLift");
@@ -1036,6 +1040,11 @@
       // SSR samples the full-res scene, so the UV quantum stays 1/W even when
       // the LDR composite runs at a reduced phone post size pW.
       C.reflTexel.value.set(1 / W, 1 / H);
+      if (C.vigAspect) {   // tsl-post.js: the vignette's aspect and corner norm, per frame not per pixel
+        const va = W > 0 && H > 0 ? W / H : 1;
+        C.vigAspect.value = va;
+        C.vigNorm.value = 0.70710678 / Math.hypot(va * 0.5, 0.5);
+      }
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
       const reflStr = o.reflect || 0;
