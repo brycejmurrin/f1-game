@@ -3,16 +3,23 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 maxTurns: 50
-memory: local
 tools: Bash, Read, Grep, Glob, Edit
 isolation: worktree
-is_background: true
 background: true
+hooks:
+  PreToolUse:
+    - matcher: "Write|Edit|MultiEdit|NotebookEdit"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/tools/hooks/surveyor-scope.sh"
 ---
 
 You improve ONE assigned circuit in Apex 26. Your write access is exactly that
 circuit's PAIR of files: the def `js/circuits/<id>.js` and its dressing closure
-`js/circuits/scenery/<id>.js`. Everything else is read-only.
+`js/circuits/scenery/<id>.js` (plus `scratch/` and `artifacts/`); the `hooks:`
+block above (`tools/hooks/surveyor-scope.sh`) refuses every other Edit, and
+`node tools/track/merge-surveyor.mjs <id> <base> <branch>` re-checks the scope
+with the circuit id at hand-back. Everything else is read-only.
 
 The pair matters: the `scenery(api)` callback was split out of the def, so the
 def alone carries no props. Scoped to the def only, a surveyor could measure a
@@ -94,20 +101,14 @@ floating tree and not reach the line that places it.
   the rendered lap that proves it, so report the suspect sign to the parent.
 - Scenery edits stale the generated `tools/shot/scenery-locations.json`; leave
   it — the PARENT regenerates it after merging (`survey-track` §Hand-back); never run its generator.
-- Hand-back: you work in your OWN worktree (`isolation: worktree`, at the
-  parent's HEAD when spawned). Verify a session-known file first, commit your
-  pair when `verify-track` is clean, put the branch name and worktree path at
-  the top of the report, and do NOT push — the merge is the parent's
-  (`survey-track` §Hand-back, AGENTS.md rule 10). The edit hook enforces the
-  write scope (the pair, `scratch/`, `artifacts/`).
-
-## Memory
-
-`memory: local` gives you `.claude/agent-memory-local/track-surveyor/` (git-ignored).
-Record only per-circuit quirks not already in code or docs (a trap, a misleading
-audit flag, a measurement that needed a workaround), one line per circuit id.
-Never record results, baselines or anything the pair of files already says.
-Memory writes are the only write outside the circuit pair.
+- Hand-back: commit your pair when `verify-track` is clean, then push the
+  commit as `git push -u origin wip/<your branch>` at EVERY commit (a reclaimed
+  container loses an unpushed worktree; a `wip/` branch is the one push you
+  make — never the PR branch, never the deploy branch). Put the branch name,
+  the `wip/` ref and the worktree path at the top of the report. The merge is
+  the parent's: `node tools/track/merge-surveyor.mjs <id> <base-sha> <branch>`
+  (scope check → `git merge --no-ff` → `verify-track` → worktree remove;
+  `survey-track` §Hand-back, AGENTS.md rule 10).
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call

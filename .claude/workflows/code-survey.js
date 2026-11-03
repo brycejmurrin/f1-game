@@ -76,7 +76,8 @@ const VERDICTS_SCHEMA = {
       items: {
         type: 'object',
         required: ['index', 'refuted', 'reason'],
-        properties: { index: { type: 'number' }, refuted: { type: 'boolean' }, reason: { type: 'string' } },
+        // needsBrowser: only a rendered or driven run can settle it; reported under its own heading, never counted as refuted.
+        properties: { index: { type: 'number' }, refuted: { type: 'boolean' }, needsBrowser: { type: 'boolean' }, reason: { type: 'string' } },
       },
     },
   },
@@ -147,9 +148,9 @@ const COMMON = `${COMMON_BASE}
 KNOWN FINDINGS — already recorded, queued, or deliberately deferred. Do NOT re-report these or trivial variants:
 ${KNOWN}${FOCUS}`
 
-// The agent definitions pin one model (code-hunter: opus); a slice's tier still
-// picks it, so data-shaped slices stay cheap: low → haiku, medium → sonnet,
-// high → opus (the pre-agentType tiers, kept for cost).
+// code-hunter's card pins sonnet; a slice's tier still picks the model at spawn,
+// so data-shaped slices stay cheap and the engine gets depth: low → haiku,
+// medium → sonnet, high → opus (total-audit.js carries the same table).
 const TIER_MODEL = { low: 'haiku', medium: 'sonnet', high: 'opus' }
 
 // ───────────────────────── round-1 slices, effort-tiered ─────────────────────
@@ -164,7 +165,7 @@ const R1 = [
   { k: 'game-flow',      e: 'high',   s: 'js/game.js, second half through the LAST line — read them ALL, in chunks. Same emphases as the first half. Also: the AI and race-flow sections, and every `Module.create(G)` handoff — does each module actually receive what its file reads off G?' },
   { k: 'physics',        e: 'high',   s: 'every file in js/physics/ (aero-zones, ai-drive, body-attitude, brake-cue, collide, consts, debris-world, incident-sim). Emphases: sign and unit errors (+Y up, metres, radians, arc s, lateral x +right, +k = LEFT turn), per-frame allocation in collide/debris, constants duplicated between consts.js and game.js, and the AGENTS.md rule that nothing derived from track curvature may reach the player with assists off.' },
   { k: 'render-glx',     e: 'high',   s: 'js/render/gfx.js and every file in js/render/glx/ (glx.js, post.js, shadow.js, chunked.js) — NOT the shaders/ subdir. Emphases: per-frame GL state changes and uniform uploads that could be hoisted, buffers/textures created but never deleted, draw-call batching left on the table, dead uniforms, the Gfx seam contract.' },
-  { k: 'render-wgx',     e: 'high',   s: 'every file in js/render/webgpu/ (wgx.js 6220 lines, wgsl-chunks, wgsl-post, wgsl-fx) — read wgx.js in full, in chunks. This backend has NO script tag by design (injected from ApexRoster.DEFERRED) — that is NOT dead code. Emphases: per-frame bind-group and pipeline churn, buffers written every frame that could be persistent-mapped, WGSL that diverges from the GLSL it mirrors, resources never destroyed.' },
+  { k: 'render-wgx',     e: 'high',   s: 'every file in js/render/webgpu/ (wgx.js is the big one — `wc -l` it first; wgsl-chunks, wgsl-post, wgsl-fx) — read wgx.js in full, in chunks. This backend has NO script tag by design (injected from ApexRoster.DEFERRED) — that is NOT dead code. Emphases: per-frame bind-group and pipeline churn, buffers written every frame that could be persistent-mapped, WGSL that diverges from the GLSL it mirrors, resources never destroyed.' },
   { k: 'render-tlx',     e: 'high',   s: 'every file in js/render/three/ (tlx.js, tlx-post, tlx-shadow, tlx-chunked, tsl-lit, tsl-post, tsl-sky, tsl-fx, tsl-chunks). The three.js library itself is vendored at vendor/three-0.185.1/ — NEVER audit that. Same DEFERRED caveat as WGX. Emphases: per-frame object/material allocation, node-material rebuilds, parity claims against GLX that are not true, disposal of geometries and render targets.' },
   { k: 'net',            e: 'high',   s: 'every file in js/net/ (lobby 1752, transport, netplay, nostr, handshake, rendezvous, sdp, session, snapshot, qr, scan, bytes). Emphases: data arriving from a peer or a relay that is used without validation (this is the security-facing surface); handshake/state-machine holes; reconnect paths that leak listeners or timers; snapshot encode/decode asymmetry; determinism leaks.' },
   { k: 'audio',          e: 'high',   s: 'every file in js/audio/ (engine.js 2451, spotify, panel, music-lib, rivals). Emphases: WebAudio nodes created per event and never disconnected (the classic leak), per-frame parameter writes that could be ramps, oscillators/buffers left running after a race ends, and dead layers in the engine mix.' },
@@ -188,7 +189,7 @@ const R1 = [
   { k: 'race-core',      e: 'medium', s: 'every file in js/race/ (race-control, quali-model, quali-net, race-settings, reliability, daily-challenge), every file in js/core/ (log, store, mat4, hash32) and js/roster.js. NOTE js/roster.js is GENERATED — report drift against its source but never a style nit. Emphases: shared clamps in mat4 duplicated elsewhere, store.js subscribers never unsubscribed, race-control flags set but never read.' },
   { k: 'shell-css',      e: 'low',    s: 'index.html in full, every file in css/, sw.js, manifest.json. NOTE: index.html @gen-shell blocks and the ?v=dev tags are GENERATED and deliberate (AGENTS.md) — never report them. Emphases: dead CSS selectors and dead shell ids (cross-check the STATIC RECON tables at the end of this prompt), duplicated rule blocks, a sw.js precache list that does not match the shell, and script tags whose file does not exist.' },
   { k: 'tools',          e: 'medium', s: 'the tools/ tree (~40k lines across car, check, ci, env, gen, gfx, lib, lighting, mcp, moves, net, shot, track, ui and manifest.cjs). You cannot read all of it — read every file under tools/ci/ and tools/check/ in full, then skim the rest for the emphases. Emphases: a tool that would crash against the CURRENT layout (a path or symbol it references no longer exists), helpers in tools/lib/ that nothing imports, whole tools referenced by no skill/doc/script, and duplicated logic across tools that tools/lib/ already provides.' },
-  { k: 'tests',          e: 'medium', s: 'tests/specs/ (118 spec files as of 2026-09-18 — `ls tests/specs/*.spec.js | wc -l`) and tests/helpers/. You cannot read them all in full — read every helper in full, then read specs selectively, prioritising the largest. Emphases ONLY: (a) dead code — helpers nothing imports, specs excluded from every group in tests/groups.json so they never run, skipped/commented-out tests; (b) bugs in the tests themselves — an assertion that cannot fail (expect(true), a tautology, an await-less expect), a spec that passes when the feature is broken; (c) perf — a fixture or page rebuilt per test that could be per-file. Do NOT audit what the tests assert about game semantics; that is another audit\'s job.' },
+  { k: 'tests',          e: 'medium', s: 'tests/specs/ (`ls tests/specs/*.spec.js | wc -l` for the live count) and tests/helpers/. You cannot read them all in full — read every helper in full, then read specs selectively, prioritising the largest. Emphases ONLY: (a) dead code — helpers nothing imports, specs excluded from every group in tests/groups.json so they never run, skipped/commented-out tests; (b) bugs in the tests themselves — an assertion that cannot fail (expect(true), a tautology, an await-less expect), a spec that passes when the feature is broken; (c) perf — a fixture or page rebuilt per test that could be per-file. Do NOT audit what the tests assert about game semantics; that is another audit\'s job.' },
 ]
 
 // ───────────────────────── the adversarial verify panel ──────────────────────
@@ -243,7 +244,7 @@ async function verifyBatch(fresh, round) {
     const inChunk = new Set(calls[n].rows.map((r) => r.index))
     for (const verdict of (v.verdicts || [])) {
       const i = verdict.index
-      if (inChunk.has(i)) { heard[i]++; if (verdict.refuted) { refutes[i]++; why[i].push(verdict.reason) } }
+      if (inChunk.has(i)) { heard[i]++; if (verdict.needsBrowser) why[i].push('NEEDS-BROWSER: ' + verdict.reason); else if (verdict.refuted) { refutes[i]++; why[i].push(verdict.reason) } }
     }
   })
 

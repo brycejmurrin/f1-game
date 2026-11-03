@@ -215,8 +215,8 @@ Sources: [CC] https://code.claude.com/docs/en/skills (Claude Code skills page) �
 - Evaluation already in place, ahead of most public practice:
   - trigger-rate routing eval `tools/check/skill-routing-eval.py` (8 queries per skill, 5 positive + 3
     near-miss, `--runs`, base/head `--compare`, detection "follows the skill-creator's run_eval.py");
-  - a ≥85% top-2 hint floor (`tests/unit/skill-hint-hook.test.mjs`);
-  - offline smoke recipes (`check/skill-smoke.mjs` (deleted 2026-11-03)).
+  - a ≥85% top-2 hint floor (`skill-hint-hook` (retired 2026-11-03));
+  - offline smoke recipes (`check/skill-smoke.mjs (deleted 2026-11-03)`).
   - Gaps: no held-out split, about 8 queries per skill against the recommended ~20, and **no with-skill vs
     without-skill OUTPUT-quality eval** for any skill.
 

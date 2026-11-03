@@ -360,7 +360,9 @@ test("auto memory is on, restored at SessionStart, and its tracked copy stays sm
   // (200-line index) plus a secret scan.
   const settings = JSON.parse(read(".claude/settings.json"));
   assert.equal(settings.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "0", "auto memory must be forced on (it is off in remote sessions)");
-  assert.match(read(".claude/hooks/session-start.sh"), /memory-sync\.sh" restore/, "session-start must restore memory");
+  // 2026-11-03: the restore is its own SessionStart entry in settings.json (after session-start.sh), one-way, repo wins.
+  const startHooks = JSON.stringify(JSON.parse(read(".claude/settings.json")).hooks.SessionStart);
+  assert.match(`${read(".claude/hooks/session-start.sh")}\n${startHooks}`, /memory-sync\.sh\\?" restore/, "SessionStart must restore memory (session-start.sh or a settings.json SessionStart entry)");
   assert.match(read(".gitignore"), /^!\.claude\/memory\/$/m, ".claude/memory/ must be tracked");
   const dir = path.join(ROOT, ".claude/memory");
   const index = read(".claude/memory/MEMORY.md");
@@ -491,7 +493,9 @@ test("the edit guard refuses a generated package.json block through Write as wel
   mangled.scripts["test:guards"] = "echo nope";
   assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: JSON.stringify(mangled, null, 2) } }).status, 2,
     "a Write that rewrites a test:* script must be blocked");
-  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards":', new_string: '"test:guards":' } }).status, 2,
+  // 2026-11-03: the slim guard judges the RESULT (a test:* script that changes), not the touched text, so the
+  // Edit probe has to change a script; an Edit that leaves every test:* script as it was is not a generated-block edit.
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards": "', new_string: '"test:guards": "echo nope && ' } }).status, 2,
     "the Edit path must still be blocked");
   // A LINKED WORKTREE has a second, wider rule in front of this one: the hook
   // makes package.json (and index.html, manifest.cjs, sw.js) main-session-only,

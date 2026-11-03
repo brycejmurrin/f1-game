@@ -19,8 +19,8 @@ ENFORCEMENT:
 - README row (step 5) is enforced by docs-integrity.test.mjs:765-770. It could say so.
 GAPS (ranked, each PR-sized and independently landable):
 1. .claude/skills/agent-config/SKILL.md:19-24 — point at `tests/data/agent-config-budgets.json` for the figures and fix the bytes/lines conflation (rewrite above).
-2. .claude/skills/agent-config/SKILL.md:44-45 — step 4: "copy a sibling's whole row; `check/skill-smoke.mjs` (deleted 2026-11-03) also requires `timeoutMs` ≤ 15000, `prerequisites[]` and `followups[]` with a browser and a hardware `unverified` entry".
-3. .claude/skills/agent-config/SKILL.md:54-60 — the retest list should name `tests/unit/skill-hint-hook.test.mjs` (the ≥85% top-2 floor), skill-smoke.test.mjs (deleted 2026-11-03) and `docs-integrity.test.mjs`, and drop the duplicate wording "the whole agent-surface group".
+2. .claude/skills/agent-config/SKILL.md:44-45 — step 4: "copy a sibling's whole row; `check/skill-smoke.mjs (deleted 2026-11-03)` also requires `timeoutMs` ≤ 15000, `prerequisites[]` and `followups[]` with a browser and a hardware `unverified` entry".
+3. .claude/skills/agent-config/SKILL.md:54-60 — the retest list should name `skill-hint-hook` (retired 2026-11-03) (the ≥85% top-2 floor), skill-smoke.test.mjs (deleted 2026-11-03) and `docs-integrity.test.mjs`, and drop the duplicate wording "the whole agent-surface group".
 4. .claude/skills/agent-config/SKILL.md:65-67 — add "a NEW skill: run the head side only and read its per-skill hit rate; the base has nothing to compare", and add worktree cleanup.
 5. .claude/skills/agent-config/SKILL.md:8-15 + :3 — add a `.claude/rules/` row (`paths:` frontmatter; `npm run gen` regenerates `.cursor/rules`) and the hook-grant line. Add "rule file" to the description's trigger words within the char budget.
 6. .claude/skills/agent-config/SKILL.md:29-30,42-43 — attribute the query-file check to agent-config.test.mjs:809 and mark "5+/3" as a convention (or enforce it in a test PR).
