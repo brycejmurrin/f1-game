@@ -15472,6 +15472,7 @@
         "tests/unit/tlx-hunt4.test.mjs"
       ],
       "_decalDrop": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "_fail": [
@@ -15930,6 +15931,7 @@
     },
     "js/render/three/tsl-fx.js": {
       "_decalDrop": [
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "decalMaterialFor": [

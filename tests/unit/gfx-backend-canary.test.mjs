@@ -761,6 +761,10 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const old = { __tlxFrame: 7, dispose() { disposed++; } };
   const decalCache = new Map([["current", current], ["old", old]]);
   const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  // _decalDrop keeps the texture -> glow index in step (#4556); lifted, not re-implemented.
+  const decalByTex = new Map();
+  const dropAt = fx.indexOf("    function _decalDrop(k, v) {");
+  const _decalDrop = eval("(" + fx.slice(dropAt, fx.indexOf("\n    }\n", dropAt) + 6).trim() + ")");
   eval(evict);
   assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
   assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");

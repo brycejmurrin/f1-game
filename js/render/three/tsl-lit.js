@@ -2606,7 +2606,7 @@
     const vertexMotionNode = () => Fn(() => {
       const p = vec3(positionLocal).toVar();               // anchor
       const nL = vec3(normalLocal).toVar();                // anchor (see above)
-      const matA = float(attribute("mat", "float")).toVar();
+      const matA = attribute("mat", "float");
       const mid = floor(matA.add(0.5)).toVar();
       const mfr = clamp(matA.sub(mid), 0.0, 1.0).toVar();
       const off = vec3(0.0).toVar();
