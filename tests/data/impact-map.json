@@ -6727,6 +6727,9 @@
       ]
     },
     "js/editor/scenery-preview.js": {
+      "draw": [
+        "tests/unit/designer-canvas.test.mjs"
+      ],
       "plan": [
         "tests/unit/designer-canvas.test.mjs",
         "tests/unit/designer-props.test.mjs",
