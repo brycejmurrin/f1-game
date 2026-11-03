@@ -68,6 +68,8 @@ test("a server with no instructions of its own gets its preface, then the gatewa
     assert.equal(instructions, `${SERVER_PREFACES[server]}\n\n${GATEWAY_INSTRUCTIONS}`, server);
     // 240 -> 300 (2026-10-30): the preface now names the URL and serve command a cold agent spent two calls finding.
     assert.ok(SERVER_PREFACES[server].length <= 300, `${server}: preface stays one short sentence pair`);
+    // #4290: "never beside a Playwright run" is only checkable with apex_status, so each browser preface names it.
+    assert.match(SERVER_PREFACES[server], /\bapex_status first\b/, `${server}: names the apex_status preflight`);
   }
   assert.equal((await as("unlisted")).instructions, GATEWAY_INSTRUCTIONS, "no preface invented for an unlisted server");
 });

@@ -189,8 +189,10 @@
       ]
     },
     "js/agent/apex-net.js": {
+      "hooks": [
+        "tests/unit/apex-arg-guards.test.mjs"
+      ],
       "*": [
-        "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
         "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -220,6 +222,9 @@
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/three-inspector.test.mjs"
+      ],
+      "resetStartLights": [
+        "tests/unit/apex-arg-guards.test.mjs"
       ],
       "settled": [
         "tests/specs/camera-hooks.spec.js",
@@ -534,6 +539,7 @@
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/reject-lint.test.mjs"
       ],
@@ -930,6 +936,7 @@
         "tests/unit/audio-tune.test.mjs"
       ],
       "radioVoice": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs"
       ],
@@ -2759,6 +2766,9 @@
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/daily-challenge.test.mjs"
+      ],
+      "warmBoostDraws": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "warmCarAssets": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -4819,6 +4829,7 @@
         "tests/specs/track-designer.spec.js",
         "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
+        "tests/unit/circuit-info.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -5400,6 +5411,7 @@
         "tests/unit/forecast.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/garage-camera-options.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
@@ -5803,6 +5815,44 @@
         "tests/unit/flyby-shots.test.mjs"
       ]
     },
+    "js/data/garage-camera-options.js": {
+      "applyArrival": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "bindUi": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "clampEye": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "clearJamb": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "enforceNearPlane": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "inJamb": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "maxDistInside": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "outsideBay": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "read": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "samplePath": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "settings": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "write": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ]
+    },
     "js/data/garage-defaults.js": {
       "file": [
         "tests/unit/garage-defaults.test.mjs"
@@ -5825,6 +5875,11 @@
     "js/data/garage-entrance-motion.js": {
       "*": [
         "tests/unit/garage-entrance-motion.test.mjs"
+      ]
+    },
+    "js/data/garage-entry-camera.js": {
+      "*": [
+        "tests/unit/garage-camera-options.test.mjs"
       ]
     },
     "js/data/hub.js": {
@@ -8009,7 +8064,11 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "lighting": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "lookingOut": [
+        "tests/unit/garage-mesh.test.mjs"
       ],
       "poseMatrix": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -8530,6 +8589,8 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/garage-camera-options.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs"
       ]
     },
@@ -10776,10 +10837,18 @@
     },
     "js/perf/menu-teardown.js": {
       "beginQuit": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/menu-quit-tail.test.mjs"
       ],
       "cover": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "endQuit": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "quitReadbackDefer": [
+        "tests/unit/menu-quit-tail.test.mjs"
       ],
       "quitRenderHold": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -12390,6 +12459,9 @@
         "tests/unit/hud-gap-decimals.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "inPit": [
+        "tests/unit/hud-gap-decimals.test.mjs"
+      ],
       "manual": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
@@ -13388,7 +13460,8 @@
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs",
-        "tests/unit/storm-weather.test.mjs"
+        "tests/unit/storm-weather.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "lineTransition": [
         "tests/unit/aero-zones-vm.test.mjs",
@@ -15631,6 +15704,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "drawRigPairs": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "drawWarmStage": [
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
@@ -15651,11 +15727,13 @@
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "flushDropLater": [
-        "tests/unit/render-final-contracts.test.mjs"
+        "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "flushDropped": [
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
       "freeInstancedBatch": [
@@ -17274,7 +17352,8 @@
       ],
       "push": [
         "tests/unit/announcer.test.mjs",
-        "tests/unit/captions.test.mjs"
+        "tests/unit/captions.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "radioWho": [
         "tests/unit/captions.test.mjs"
@@ -17755,6 +17834,9 @@
       "gapDecimals": [
         "tests/unit/hud-gap-decimals.test.mjs"
       ],
+      "inPit": [
+        "tests/unit/hud-gap-decimals.test.mjs"
+      ],
       "lapGapText": [
         "tests/unit/hud-readouts.test.mjs"
       ],
@@ -17897,6 +17979,9 @@
       ],
       "state": [
         "tests/unit/hud-tyres.test.mjs"
+      ],
+      "*": [
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/hud.js": {
@@ -18258,7 +18343,11 @@
       "init": [
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/data-lifecycle.spec.js",
-        "tests/specs/gamepad.spec.js"
+        "tests/specs/gamepad.spec.js",
+        "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "keepFocus": [
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "landing": [
         "tests/unit/menu-a11y-audit.test.mjs"
@@ -18288,6 +18377,7 @@
       "wire": [
         "tests/specs/gamepad.spec.js",
         "tests/unit/menu-a11y-audit.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "wireLayer": [
@@ -18727,7 +18817,8 @@
       ],
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/audio-panel-settings-ui.test.mjs"
+        "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "step": [
         "tests/specs/quali.spec.js",
