@@ -46,6 +46,12 @@ const RACE_SESSION_READY = {
   "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
+  // Post-flag ceremony (#4067-#4070). Only RaceCeremony has a title-time stub; the rest are absent until they land.
+  "js/ui/podium-beat.js": () => typeof PodiumBeat !== "undefined" && !!PodiumBeat,
+  "js/race/podium-beat.js": () => typeof RacePodium !== "undefined" && !!RacePodium,
+  "js/race/parc-ferme.js": () => typeof ParcFerme !== "undefined" && !!ParcFerme && !ParcFerme._stub,
+  "js/race/cooldown-lap.js": () => typeof CooldownLap !== "undefined" && !!CooldownLap && !CooldownLap._stub,
+  "js/race/ceremony.js": () => typeof RaceCeremony !== "undefined" && !!RaceCeremony && !RaceCeremony._stub,
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
 // idiom): a retry loads only the rest. The hook runs once, on the transition to complete.
