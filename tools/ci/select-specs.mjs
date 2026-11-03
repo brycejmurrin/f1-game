@@ -75,13 +75,23 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
 export const LANES = 24;
 
-/** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
- *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
- *  queued every ready PR while the high ones idled. Rotating the start spreads
- *  legs evenly; a run's own legs still land in distinct lanes. */
+/** First lane of a run's legs: a golden-ratio (Weyl) step of GITHUB_RUN_NUMBER
+ *  over LANES. With every run starting at lane 0, a 9-leg run only ever fed
+ *  lanes 0–8, so the low lanes queued every ready PR while the high ones idled.
+ *  The first fix, `n % LANES`, spread the starts but shifted adjacent runs by ONE
+ *  lane, and adjacent run numbers are the runs that overlap in time: two 12-leg
+ *  runs shared 11 lanes and queued behind each other while 11 others idled
+ *  (docs/notes/PERF-HUNT-P8-2026-11-03.md: run 41606130214 queued 12 legs
+ *  ~53 min in total, ~10 min of its 22-min wall). Stepping by LANES·φ⁻¹
+ *  (~14.8 lanes) puts consecutive starts far apart and still visits every
+ *  lane; a run's own legs stay in distinct lanes.
+ *  Two adjacent 12-leg runs share 11 lanes before, ≤ 3 after (pinned in
+ *  tests/unit/select-specs.test.mjs). */
+const GOLDEN = (Math.sqrt(5) - 1) / 2;
 export function laneBase(env = process.env) {
   const n = Number(env.GITHUB_RUN_NUMBER);
-  return Number.isInteger(n) && n > 0 ? n % LANES : 0;
+  if (!(Number.isInteger(n) && n > 0)) return 0;
+  return Math.floor(((n * GOLDEN) % 1) * LANES) % LANES;
 }
 
 // These specs already have their own jobs with runner-measured timeout
