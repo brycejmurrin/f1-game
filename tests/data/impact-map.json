@@ -2761,6 +2761,9 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/daily-challenge.test.mjs"
       ],
+      "warmBoostDraws": [
+        "tests/unit/tlx-rig-warm.test.mjs"
+      ],
       "warmCarAssets": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
@@ -15621,6 +15624,9 @@
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "drawRigPairs": [
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "drawWarmStage": [
         "tests/unit/tlx-webgpu-perf.test.mjs"

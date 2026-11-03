@@ -61,6 +61,8 @@ async function rig(t, { soft = false } = {}) {
     const materialFor = (o) => { let m = mats.get(o); if (!m) mats.set(o, m = lit.makeMaterial({ roughness: o.roughness })); return m; };
     const _gpuSettled = async () => {}, _ssrMrtNode = () => null, softOutRT = () => null;
     const drawList = []; drawList.n = 0;
+    const rigDraws = [];
+    function drawRigPairs(recs, usePost, useTag) { rigDraws.push(recs.map((r) => ({ geo: r.geo, mat: r.mat, sx: r.sx, m: r.m }))); return recs.length; }   // tlx.js's DRAWS them (live-only)
     ${tslice("      const _warmProbes = new WeakMap();", "      async function warmFxPrograms() {")}
     ${tslice("      // THE DRAWS NO WARM FRAME HELD", "      const ENV_PROBE_TRIES")}
     function draw(mesh, model, opts) {
@@ -76,7 +78,7 @@ async function rig(t, { soft = false } = {}) {
     }
     const warmQueued = () => !_deviceLost && !!_rigWarm && !_rigWarm.started;   // as tlx.js, pinned in the wiring test
     return { warmDraws, draw, present, warmQueued, pending: () => _warmPending, drawn: () => drawList.n, mats, requestWarm: () => { _warmRequested = true; },
-      mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages };`);
+      mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages, rigDraws };`);
   const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log, soft);
   renderer.render(scene, camera);   // three's own first-render programs (the output pass), so a count isolates ours
   const compiles = [];
@@ -277,8 +279,8 @@ test("wiring: present() dispatches the rig warm after the entry and mirror warms
   assert.ok(TLX.includes("_coAppend(mesh.geo, model, opts)) return;   // R1\n          if (_capture) { _captureRec(mesh, model, opts); return; }"), "draw() captures right after the coalesce line");
   assert.ok(TLX.includes("_capture = recs; _coOn = false;"), "coalescing is off while capturing, so _coAppend never takes a rig draw");
   assert.ok(TLX.includes("\n        warmDraws,   //"), "the backend publishes warmDraws");
-  assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },"),
-    "cockpit/helmet (wheel) and visor (no wheel)");
+  assert.ok(CAR_DRAW.includes("G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); warmBoostDraws(c, paint); },\n        { mirror: mirrorKey || null, draw: true });"),
+    "cockpit/helmet (wheel), visor (no wheel) and the first BOOST's draws, drawn once (#4514 step 2)");
   assert.ok(TLX.includes("          if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)\n          if (!_warmPending && !_deviceLost) { if (_warmRequested)"),
     "present() marks a queued job seen before its dispatch (the harness mirrors that line)");
   // A·W56: the wheel telemetry (car-independent _rigFx) is warmed with the menu's program warm, from the same draws.
@@ -325,4 +327,31 @@ test("finishes on demand: the 60-85 tint branch lives in its own lit graph, pick
   assert.ok(TLX.includes("mat: materialFor(opts, false, false, fxFor(mesh.geo, opts))"), "the rig warm compiles the variant the draw will use");
   assert.ok(TLX.includes("skipBatches() || fxFor(geo, opts)) return false;"), "an fx geometry never joins a coalesced run (its program has no branch)");
   assert.ok(TLX.includes('if (fx) { let fk = _fxKeys.get(key); if (fk === undefined) _fxKeys.set(key, fk = key + "|fx"); key = fk; }'), "its own cache key (memoised, no per-draw concat)");
+});
+
+// #4514 step 2: compileAsync builds a pipeline but never draws it, and WebKit 26.6.x stalls the FIRST DRAW of a pipeline
+// whose async compile has resolved (WebKit bug 324043); the first deploy also minted a new pool wrapper (RenderObject,
+// bind groups, uniform buffers). A job warmed with { draw: true } hands EVERY captured pair (already compiled or not),
+// once per (geometry, material), with the real model matrix copied at capture, to drawRigPairs after its compiles.
+test("#4514 step 2: { draw: true } hands every captured pair, once per (geo, mat), with its matrix, to drawRigPairs", async (t) => {
+  const h = await rig(t);
+  const bar = { geo: geo(RIG_LAYOUT) }, lamp = { geo: geo(RIG_LAYOUT) };
+  const BOOST = { roughness: 0.9, doubleSided: true, alpha: 1 };
+  // Compiled earlier, without draw: the draw job must still draw it.
+  const p0 = h.R.warmDraws(() => h.R.draw(bar, MIRRORED, FX)); h.R.present(); await p0;
+  assert.equal(h.R.rigDraws.length, 0, "a compile-only job draws nothing");
+  const scratch = new Float32Array(MIRRORED);
+  const p = h.R.warmDraws(() => {
+    h.R.draw(bar, scratch, FX); h.R.draw(bar, scratch, FX);   // a repeat pair: one draw
+    h.R.draw(bar, scratch, BOOST); h.R.draw(lamp, I, BOOST);
+    scratch[0] = 7;   // the rig reuses its scratch matrix (car-draw _digM): the capture must have copied it
+  }, { draw: true });
+  assert.equal(h.R.present(), false, "the job holds the present that starts it");
+  assert.equal(await p, true);
+  assert.equal(h.R.rigDraws.length, 1, "one draw pass per job");
+  const d = h.R.rigDraws[0];
+  assert.equal(d.length, 3, "(bar, FX) once — compiled already, still drawn — plus (bar, BOOST) and (lamp, BOOST)");
+  assert.deepEqual(d.map((r) => [r.geo === bar.geo ? "bar" : "lamp", r.sx]), [["bar", -1], ["bar", -1], ["lamp", 1]]);
+  assert.equal(d[0].m[0], -1, "the matrix was copied at capture, not aliased");
+  assert.equal(h.R.stages.rig.drawn, 3, "warm.rig.drawn reports the pairs drawn (memState)");
 });

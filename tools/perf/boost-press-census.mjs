@@ -30,6 +30,20 @@ export function hookPipelines() {
     } catch (_) { /* naming is best-effort */ }
     return o.apply(this, arguments);
   };
+  // #4514 step 2: what else a window CREATES on the device — a bind group, buffer or texture first made at the first
+  // deploy is first-use work too. Own-property wrappers on three's GPUDevice (WebGPU only; the WebGL2 leg has none).
+  P.res = { bindGroup: 0, buffer: 0, texture: 0 }; P.resLog = [];
+  const dev = be.device;
+  if (dev && typeof dev.createBindGroup === "function") {
+    for (const [fn, k] of [["createBindGroup", "bindGroup"], ["createBuffer", "buffer"], ["createTexture", "texture"]]) {
+      const f = dev[fn];
+      dev[fn] = function (desc) {
+        P.res[k]++;
+        if (P.resLog.length < 400) P.resLog.push({ at: P.frames, k, label: (desc && desc.label) || "", size: (desc && desc.size) || 0 });
+        return f.apply(this, arguments);
+      };
+    }
+  } else P.res = null;
   let api = null; try { api = T.backendState().api; } catch (_) { /* older TLX */ }
   return "ok " + (api || (be.isWebGPUBackend ? "webgpu" : "webgl2"));
 }
@@ -43,15 +57,16 @@ export async function frames(page, n) {
  *  times, each after a control window of the same length with BOOST off. Writes artifacts/perf/.
  *  `gas(true|false)` presses / releases the throttle with a REAL input device (the spec passes
  *  page.keyboard): BOOST deploys only while GAS is held, the iPhone sequence. */
-export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
-  await page.addInitScript((gl) => {
+export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} }) {
+  await page.addInitScript(([gl, extra]) => {
     try {
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.tlxForceGL", gl);
       localStorage.setItem("apex26.gfxPreset", '"medium"');
       localStorage.setItem("apex26.gfxBootStepMs", "45000");   // TLX init can exceed 8 s on a busy software-GL runner
+      for (const [k, v] of Object.entries(extra)) localStorage.setItem(k, v);   // e.g. apex26.tlxDrawWarm (#4514)
     } catch (_) { /* private mode */ }
-  }, forceGL ? "1" : "0");
+  }, [forceGL ? "1" : "0", ls]);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof GLX !== "undefined" && !!GLX.__tlx, null, { polling: 100, timeout: bootMs });
   const hook = await page.evaluate(hookPipelines);
@@ -70,22 +85,27 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
   // ordinary driving (a prop or car coming into view), not BOOST, and is reported, not asserted.
   const count = () => page.evaluate(() => window.__bpp.count);
   const slice = (a, b) => page.evaluate(([x, y]) => window.__bpp.log.slice(x, y), [a, b]);
+  const res = () => page.evaluate(() => (window.__bpp.res ? { ...window.__bpp.res, log: window.__bpp.resLog.length } : null));
+  const delta = (a, b) => (a && b ? { bindGroup: b.bindGroup - a.bindGroup, buffer: b.buffer - a.buffer, texture: b.texture - a.texture } : null);
+  const resSlice = (a, b) => (a && b ? page.evaluate(([x, y]) => window.__bpp.resLog.slice(x, y), [a.log, b.log]) : null);
+  const warmRig = await page.evaluate(() => { try { return window.GLX.__tlx.memState().warm.rig || null; } catch (_) { return null; } });
   const presses = [];
   for (let i = 1; i <= PRESSES; i++) {
-    const c0 = await count();
+    const c0 = await count(), r0 = await res();
     await frames(page, DEPLOY_FRAMES + SPACING);
-    const c1 = await count();
+    const c1 = await count(), r1 = await res();
     await page.evaluate(() => { const A = window.__apex; if (A.setEnergy) A.setEnergy(1); A.setBoost(true); });
     await frames(page, 3);
     const deployed = await page.evaluate(() => { const e = window.__apex.carEffects(); return !!(e && e.ersDeploy); });
     await frames(page, DEPLOY_FRAMES - 3);
     await page.evaluate(() => window.__apex.setBoost(false));
     await frames(page, SPACING);
-    const c2 = await count();
-    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2) });
+    const c2 = await count(), r2 = await res();
+    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2),
+      controlRes: delta(r0, r1), res: delta(r1, r2), resMade: await resSlice(r1, r2) });
   }
   await gas(false);
-  const out = { hook, forceGL, presses };
+  const out = { hook, forceGL, ls, warmRig, presses };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/boost-press-pipelines-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;

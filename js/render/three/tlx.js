@@ -3811,6 +3811,45 @@ const TLX = (function () {
           }
         })().finally(() => { _warmPending = null; if (typeof pinPipelines === "function") pinPipelines(); });
       }
+      // THE FIRST BOOST'S DRAWS, DRAWN (#4514 step 2). compileAsync builds a pipeline but never DRAWS it, and the
+      // first draw still cost the phone: WebKit 26.6.x leaves compile work after the async promise resolves that
+      // stalls the first use (WebKit bug 324043, fixed in trunk 2026-09-13), and the pool minted a new wrapper for a
+      // boost-only (geometry, material) pair at the first deploy — a new three RenderObject, its bind groups and its
+      // uniform buffers in that frame. So a warmDraws job with opts.draw (car-draw.js warmCockpitRig: the rig with
+      // BOOST and OVERTAKE forced on, and the player's ERS strip) draws each captured pair ONCE through the real pool
+      // (acquireMesh: the same wrapper, k = 0, the race's first boost frame takes) into the scene target under a 1x1
+      // scissor, after its compile — as drawWarmStage draws the scene. Only the pool root is shown; present() clears
+      // and redraws the target before any pass reads it. Gated like the draw warm (drawWarmOn; tlxDrawWarm=1 forces).
+      function drawRigPairs(recs, usePost, useTag) {
+        // _r6 off: the legacy hide loop would hide the live frame, so compile-only there.
+        if (!_r6 || !recs || !recs.length || !usePost || !post || !post.sceneTarget || !drawWarmOn()) return 0;
+        const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
+        const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
+        const kids0 = _kids, kidN0 = _kidN, kidBatch0 = _kidBatch, root0 = poolRoot.children;
+        const shown = [];
+        let n = 0;
+        try {
+          _poolBatch++;   // k restarts at 0: the wrapper the race's own first draw of each pair will take
+          const kids = [];
+          _kidsBegin(kids);
+          for (let i = 0; i < recs.length; i++) acquireMesh(recs[i].geo, recs[i].m, recs[i].mat, null).renderOrder = i;
+          poolRoot.children = kids;
+          for (const o of scene.children) if (o !== poolRoot && o.visible) { o.visible = false; shown.push(o); }
+          renderer.autoClear = false;
+          renderer.setScissorTest(true);
+          sRT.scissor.set(0, 0, 1, 1);
+          renderer.setRenderTarget(sRT);   // the MRT is the caller's (startRigWarm set it as present() does)
+          renderer.render(scene, camera); n = kids.length;
+        } finally {
+          for (const o of shown) o.visible = true;
+          poolRoot.children = root0;
+          _kids = kids0; _kidN = kidN0; _kidBatch = kidBatch0;
+          sRT.scissor.copy(sSc);
+          renderer.setScissorTest(sc0);
+          renderer.autoClear = autoClear0;
+        }
+        return n;
+      }
       // THE DRAWS NO WARM FRAME HELD (hunt 6 B·H6): the cockpit rig. The scene warm compiles what its frame drew,
       // and a chase start draws no rig — the menu path does not even run that warm (its world was warmed in the
       // menu). So the first onboard frame built the rig's programs and pipelines synchronously: switching
@@ -3837,18 +3876,21 @@ const TLX = (function () {
         finally { _capture = null; _coOn = co; }
         const todo = recs.filter((r) => { const s = _rigDone.get(r.geo); return !(s && s.has(_rigKey(r))); });
         const mirror = !!(opts && opts.mirror) && opts.mirror !== _rigMirrorKey && _rigMirrorOn() ? opts.mirror : null;
-        if (!todo.length && !mirror) return Promise.resolve(recs.length > 0);
+        // opts.draw: every captured pair (compiled or not) is also DRAWN once, deduped on (geometry, material).
+        const draws = opts && opts.draw ? recs.filter((r, i) => recs.findIndex((q) => q.geo === r.geo && q.mat === r.mat) === i) : null;
+        if (!todo.length && !mirror && !(draws && draws.length)) return Promise.resolve(recs.length > 0);
         // One job at a time. The menu's telemetry job (car-draw.js warmCockpitTelemetry) may still be queued at race
         // entry: join it, or the race's own rig pairs went unwarmed. Waiting and capturing later ran fn after the
         // track had gone (a 'def' of null per race) and held the race's car until then (race-cycle-memory heap slope).
         if (_rigWarm && !_rigWarm.started) {
           const job = _rigWarm;
           for (const r of todo) job.recs.push(r);
+          if (draws) job.draws = (job.draws || []).concat(draws);
           if (mirror && !job.mirror) job.mirror = mirror;
           return _warmRequested || _warmPending ? Promise.resolve(true) : job.finished.then(() => true);
         }
         // One already compiling is bounded: queue these pairs (captured above) right behind it.
-        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(() => { for (const r of todo) _capture.push(r); }, mirror ? { mirror } : null));
+        if (_rigWarm) return _rigWarm.finished.then(() => warmDraws(() => { for (const r of (draws ? draws.concat(todo) : todo)) _capture.push(r); }, mirror || draws ? { mirror, draw: !!draws } : null));
         // BEHIND A PROGRAM WARM, QUEUE AND RETURN. Race entry requests the program warm just before this, and the rig
         // job may only start once it is done (present() starts one warm at a time), so awaiting it held race entry for
         // the whole program warm, and on software GL (a ~17 s warm) the 20 s fallback fired first, dropped the job and
@@ -3856,7 +3898,7 @@ const TLX = (function () {
         // Queued, the job still runs before any frame paints: present() holds while either warm is pending.
         if (_warmRequested || _warmPending) {
           let fin;
-          const job = _rigWarm = { recs: todo, mirror, seen: 0, finished: new Promise((r) => { fin = r; }),
+          const job = _rigWarm = { recs: todo, draws, mirror, seen: 0, finished: new Promise((r) => { fin = r; }),
             done: () => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); } };
           // No present ever came (hidden tab, a race abandoned first): drop the queue, or every later warmDraws refuses.
           // A present that came but was held by the warm (`seen`) re-arms it: the menu's world warm runs ~29 s on an
@@ -3867,7 +3909,7 @@ const TLX = (function () {
         }
         return new Promise((resolve) => {
           let fin;
-          const job = _rigWarm = { recs: todo, mirror, finished: new Promise((r) => { fin = r; }),
+          const job = _rigWarm = { recs: todo, draws, mirror, finished: new Promise((r) => { fin = r; }),
             done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); resolve(ok); } };
           job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
         });
@@ -3876,7 +3918,7 @@ const TLX = (function () {
         if (!mesh || !mesh.geo || (opts && opts.coalesce)) return;
         const w = model;
         const neg = !!w && w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
-        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1,
+        _capture.push({ geo: mesh.geo, mat: materialFor(opts, false, false, fxFor(mesh.geo, opts)), sx: neg ? -1 : 1, m: w ? Float32Array.from(w) : null,
           key: opts && typeof matKeyFor === "function" ? matKeyFor(opts, false, false) : "" });   // memState().warm.rig.worst
       }
       function startRigWarm() {
@@ -3888,7 +3930,7 @@ const TLX = (function () {
         const useTag = usePost && (!post.tagOn || post.tagOn());
         let ok = false;
         const t0 = performance.now();
-        const sp = { pairs: 0, mirror: 0, settle: 0, probes: 0, worst: [] };   // A·W56 (#3673): where the cold 5.7 s goes
+        const sp = { pairs: 0, mirror: 0, settle: 0, probes: 0, drawn: 0, worst: [] };   // A·W56 (#3673): where the cold 5.7 s goes
         _warmPending = (async () => {
           try {
             // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.
@@ -3911,6 +3953,8 @@ const TLX = (function () {
               if (!s) _rigDone.set(r.geo, s = new Set());
               s.add(_rigKey(r));
             }
+            // #4514 step 2: the boost pairs, DRAWN under the cover once their pipelines exist (drawRigPairs).
+            if (job.draws && typeof drawRigPairs === "function") { _gpuLastOperation = "draw-rig"; sp.drawn = drawRigPairs(job.draws, usePost, useTag); }
             sp.pairs = performance.now() - t0;
             if (job.mirror) {
               if (typeof warmIdleChunks === "function" && warmIdleChunks()) await _idleYield(48);
@@ -3924,7 +3968,7 @@ const TLX = (function () {
             try { Log.warn("gfx", "TLX rig warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
             _warmStages.rig = { ms: Math.round(performance.now() - t0), pairs: job.recs.length, mirror: !!job.mirror, ok,
-              probes: sp.probes, pairsMs: Math.round(sp.pairs), mirrorMs: Math.round(sp.mirror), settleMs: Math.round(sp.settle),
+              probes: sp.probes, drawn: sp.drawn, pairsMs: Math.round(sp.pairs), mirrorMs: Math.round(sp.mirror), settleMs: Math.round(sp.settle),
               worst: sp.worst.sort((a, b) => b[0] - a[0]).slice(0, 4) };
             if (job.mirror) _mirWarmUnswap();   // warmMirrorStage showed the mirror's own instanced meshes (idempotent)
             if (lit.setSsrMrt) lit.setSsrMrt(false);
