@@ -3039,7 +3039,6 @@
         "tests/unit/wheel-phase-math.test.mjs"
       ],
       "createGarage": [
-        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
@@ -7915,8 +7914,15 @@
       ]
     },
     "js/garage/departure-wheels.js": {
+      "accumulateTravel": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "create": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
+      ],
+      "spinRadians": [
+        "tests/unit/garage-arrival.test.mjs"
       ]
     },
     "js/garage/entrance-motion.js": {

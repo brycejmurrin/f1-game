@@ -189,14 +189,18 @@ function stepDriveOut(held = false) {
   driveOut.last = now;
   if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed * GarageArrival.rate(driveOut.cfg, "out", driveOut.t);
   const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
-  if (typeof GarageDepartureMotion !== "undefined" && driveOut.cfg.angle === "cut") {
+  // CUT: Blender table owns x/z/yaw/distance (+ camera). Other angles fall through
+  // to horizontal travel below so the split wheel layers still roll.
+  if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.samplePose) {
+    const motion = GarageDepartureWheels.samplePose(pose, driveOut.t, driveOut.cfg, driveOut.motion, { calm: reducedMotion() });
+    if (motion) driveOut.motion = motion;
+  } else if (typeof GarageDepartureMotion !== "undefined" && driveOut.cfg.angle === "cut") {
     const T = GarageArrival.timeline(driveOut.cfg, "out"), delay = GarageArrival.duration(driveOut.cfg, "out") - T.base;
     const go = T.door + T.hold + delay, rolling = T.settle - T.door - T.hold;
     const u = Math.max(0, Math.min(1, (driveOut.t - go) / rolling));
     const motion = GarageDepartureMotion.sample(u, pose.side, driveOut.motion);
     pose.x = motion.x; pose.z = motion.z; pose.yaw = motion.yaw;
     pose.distance = motion.distance;
-    // Explicit tuner cameras keep their framing; the shipped shot uses the authored rig.
     if (reducedMotion()) {
       motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
       motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;
@@ -265,7 +269,33 @@ const FRAME_S = 1 / 24;
 let preview = null;
 const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
-const previewPose = (p) => GarageArrival.poseFor(p.dir)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
+function previewPose(p) {
+  const t = Math.min(p.t, previewLen(p));
+  const pose = GarageArrival.poseFor(p.dir)(t, p.cfg, reducedMotion());
+  // PREVIEW OUT must apply the same CUT sampler as Start Race, including distance
+  // for the split wheel layers — otherwise the body rolls and the spokes stay put.
+  if (p.dir === "out" || p.dir === "home") {
+    if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.samplePose) {
+      const motion = GarageDepartureWheels.samplePose(pose, t, p.cfg, p.motion || (p.motion = { eye: [0, 0, 0], aim: [0, 0, 0] }), { calm: reducedMotion() });
+      if (motion) p.motion = motion;
+    } else if (typeof GarageDepartureMotion !== "undefined" && p.cfg.angle === "cut") {
+      const T = GarageArrival.timeline(p.cfg, "out"), delay = GarageArrival.duration(p.cfg, "out") - T.base;
+      const go = T.door + T.hold + delay, rolling = Math.max(1e-9, T.settle - T.door - T.hold);
+      const u = Math.max(0, Math.min(1, (t - go) / rolling));
+      const motion = GarageDepartureMotion.sample(u, pose.side, p.motion || (p.motion = { eye: [0, 0, 0], aim: [0, 0, 0] }));
+      pose.x = motion.x; pose.z = motion.z; pose.yaw = motion.yaw; pose.distance = motion.distance;
+      if (reducedMotion()) {
+        motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
+        motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;
+        pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = 75;
+      } else {
+        pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = motion.fov + p.cfg.fov - 54;
+      }
+      p.motion = motion;
+    }
+  }
+  return pose;
+}
 /** The phases of a preview's sequence: [{ id, name, t }] by start time, inside its length. */
 function previewPhases(p) {
   const T = GarageArrival.timeline(p.cfg, p.dir), len = previewLen(p), extra = len - T.base;
@@ -339,6 +369,9 @@ function previewSeek(t) {
   if (!preview) return;
   preview.paused = true;
   preview.t = Math.max(0, Math.min(previewLen(preview), Number.isFinite(t) ? t : 0));
+  // Absolute CUT distance reseeds itself; travel accumulators must not keep a scrub jump.
+  if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.resetTravel) GarageDepartureWheels.resetTravel(preview);
+  else if (preview.travel) preview.travel.primed = false;
   previewSync();
 }
 // EDIT: hold the frame and show the panel over the room; off hides it again.
@@ -385,7 +418,11 @@ function startArrivalPreview(dir, btn) {
 function stepPreview(dt) {
   const p = preview;
   if (!p.paused) p.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * p.cfg.speed * GarageArrival.rate(p.cfg, p.dir, p.t);
-  if (p.loop && !p.paused && p.t >= previewLen(p)) p.t = 0;
+  if (p.loop && !p.paused && p.t >= previewLen(p)) {
+    p.t = 0;
+    if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.resetTravel) GarageDepartureWheels.resetTravel(p);
+    else if (p.travel) p.travel.primed = false;
+  }
   const pose = previewPose(p);
   previewSync();
   if (pose.active) return pose;
@@ -756,7 +793,8 @@ function previewKey() {
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
   const seat = garageSeat();
-  const split = typeof CarWheels !== "undefined" && typeof CarWheels.createGarage === "function";
+  const split = (typeof GarageDepartureWheels !== "undefined" && typeof GarageDepartureWheels.create === "function")
+    || (typeof CarWheels !== "undefined" && typeof CarWheels.createGarage === "function");
   const key = previewKey() + (split ? "|wheels" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
@@ -776,7 +814,10 @@ function getSetupPreviewMesh() {
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
       }) }).data);
     if (split) {
-      if (!departureWheels) departureWheels = CarWheels.createGarage(gfx);
+      if (!departureWheels) {
+        departureWheels = (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.create)
+          ? GarageDepartureWheels.create(gfx) : CarWheels.createGarage(gfx);
+      }
       departureWheels.prepare(key, liv, Parts.getVisualTiers(getTeamParts(team.id), team));
     }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
@@ -1014,10 +1055,24 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     GarageExterior.fitPose(arriving, exteriorAnchor, !!driveOut && driveOut.cfg.angle === "cut");
     if (arriving.exteriorUnsupported) context.realExterior = false;
     else exterior.groundPose(arriving, !!driveOut && driveOut.cfg.angle === "cut" && !reducedMotion());
-    if (driveOut) {
-      const previous = driveOut.travel || (driveOut.travel = { x: 0, y: 0, z: 0, distance: 0 });
-      previous.distance += Math.hypot(arriving.x - previous.x, (arriving.groundY || 0) - previous.y, arriving.z - previous.z); previous.x = arriving.x; previous.y = arriving.groundY || 0; previous.z = arriving.z;
-      driveOut.motion.distance = arriving.distance = previous.distance; driveOut.motion.yaw = arriving.yaw;
+  }
+  // Wheel roll: prefer Blender arc length; otherwise accumulate horizontal travel on
+  // the live drive-out OR the PREVIEW OUT owner (the tuner was leaving distance at 0).
+  if (arriving) {
+    const owner = driveOut || ((preview && (preview.dir === "out" || preview.dir === "home")) ? preview : null);
+    if (owner && !Number.isFinite(arriving.distance)) {
+      if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.accumulateTravel) {
+        arriving.distance = GarageDepartureWheels.accumulateTravel(owner, arriving);
+      } else {
+        const tr = owner.travel || (owner.travel = { x: arriving.x, z: arriving.z, distance: 0, primed: false });
+        if (!tr.primed) { tr.x = arriving.x; tr.z = arriving.z; tr.distance = 0; tr.primed = true; }
+        else { tr.distance += Math.hypot(arriving.x - tr.x, arriving.z - tr.z); tr.x = arriving.x; tr.z = arriving.z; }
+        arriving.distance = tr.distance;
+      }
+    }
+    if (driveOut && driveOut.motion) {
+      if (Number.isFinite(arriving.distance)) driveOut.motion.distance = arriving.distance;
+      driveOut.motion.yaw = arriving.yaw;
     }
   }
   _spWheelDistance = arriving && Number.isFinite(arriving.distance) ? arriving.distance : 0;
