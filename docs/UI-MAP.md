@@ -5,7 +5,7 @@ leads, which overlays can appear along the way, and which stable DOM roots an
 agent can inspect.
 
 For the current end-to-end routes and repeatable regression journeys, use
-[USAGE-PATHS.md](USAGE-PATHS.md). The dated navigation observations below are
+[USAGE-PATHS.md](ARCHITECTURE-MAP.md). The dated navigation observations below are
 historical; in particular, current Garage forward/back and newer title doors
 are traced in that map.
 
@@ -521,3 +521,192 @@ For the shared component grammar and viewport axes behind these files, continue
 to [COMPONENTS.md](COMPONENTS.md). For focus, Escape and menu behavior changes,
 use the `ui-menu-a11y` skill rather than treating this map as an interaction
 specification.
+
+---
+
+## UI explorer
+
+> Merged from `UI-EXPLORER.md` on 2026-11-03 (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001); links that named that page land here.
+
+`node tools/ui/explorer.mjs all` produces `artifacts/ui-explorer/index.html` and
+machine-readable evidence. Open the HTML directly in Chrome; no report server is
+needed. Use `--out /absolute/directory` to keep a run outside the checkout.
+
+The eight modes share one Chromium and run sequentially. The default screenshot
+budget is 25; `--max-shots 0` collects DOM/ARIA without images. Capture-budget
+exhaustion is partial coverage, never a pass. Probe completion and UI correctness
+are distinct: inspect the findings even when the command exits zero.
+
+Menus use the shipped Three.js path. Scene diagnostics default to explicit GLX
+(`--scene-backend webgl2`) for software-rendered inspection. Use
+`--scene-backend three` for renderer-specific investigation; its review-angle
+presentations exceeded the local deadline during development. A GLX scene pass
+does not establish Three.js pixel equivalence. The selected backend is recorded.
+Scene diagnostics use an 800 × 500 viewport; review angles hide the HUD. Fresh
+presentation and pixel checks run before pausing rendering for DOM/ARIA capture.
+
+| Mode | What it does | Evidence and limits |
+|---|---|---|
+| `missions` | Fresh-profile journeys: wet Monaco, create a livery, find controls from a race | Real actionable clicks and saved replay recipes, Playwright traces, checkpoint screenshots. Guided routes are separate from independent discoverability testing. |
+| `atlas` | Builds a graph from observed before/after states and actions | Catalog coverage, clickable state evidence and unexplored roots. Unvisited does not mean unreachable. |
+| `transitions` | Samples a real settings transition while it happens | Serial timestamped filmstrip plus Chromium performance trace. Sample spacing includes screenshot cost; this is not fixed-frame-rate video. |
+| `responsive` | Resizes an open settings sheet, rotates back, enlarges root text and samples keyboard focus in a touch context | DOM boxes, advisory target/overflow findings, ARIA and images. Chromium emulation does not establish Safari behavior; fixed-pixel text may not enlarge. |
+| `faults` | Aborts or delays asset requests, tests offline reload, restores connectivity and exercises settings | Interception receipts, failed requests and recovery evidence. No intercepted request is reported as incomplete injection. Fresh contexts block service workers, so this is not a service-worker recovery test. |
+| `accessibility` | Samples Tab traversal and Escape, captures accessible structure and names | Bounded focus history and DOM screening, not WCAG certification or a complete focus graph. Canvas geometry needs scene evidence. |
+| `minimize` | Replays an exact declarative bug oracle in a fresh context per candidate and removes unnecessary actions | Original/minimized counts, replay budget, completeness and replay JSON. Baseline false, replay errors and budget exhaustion stay explicit. Deletion-1-minimal is not globally shortest. |
+| `scene` | Reconstructs a supplied game frame, or investigates an explicit circuit station, then captures alternate views | Camera/visible-scene JSON, original reproduction, original screenshot and two orbits. Review angles use a measured local station and 600 m far plane; the original frame retains its original lens. An image alone cannot locate its world geometry. |
+
+Examples:
+
+```sh
+node tools/ui/explorer.mjs --list
+node tools/ui/explorer.mjs all --out artifacts/ui-explorer/review
+node tools/ui/explorer.mjs responsive --max-shots 4
+node tools/ui/explorer.mjs replay artifacts/ui-explorer/evidence/first-race-final.replay.json
+node tools/ui/explorer.mjs minimize failing-scenario.json --max-attempts 8
+node tools/ui/explorer.mjs scene --repro player-repro.json --reference reported-frame.jpg
+node tools/ui/explorer.mjs scene --track monaco --frac 0.4
+node tools/ui/explorer.mjs scene --track monaco --frac 0.4 --scene-views 45,225
+```
+
+A replay is data, not executable JavaScript. Actions are `click` (selector or exact
+role/name), `fill`, `select`, `press`, `viewport`, `textScale`, `offline`, `reload`,
+`wait`, `checkpoint` and explicit `scene`. The schema rejects unknown fields and
+unbounded numbers. Bug oracles select a specific visible element, text, console
+message, actual game track/weather/state, or layout finding. Console matching uses literal text, not injected code.
+Attach a specific oracle before minimizing; reaching a generic timeout does not
+prove the original defect reproduced. Every candidate begins with empty storage.
+
+### Browser plugin missions
+
+Generate a hint-free task for the connected Browser Use tool:
+
+```sh
+node tools/ui/explorer.mjs brief --mission first-race --url https://your-pinned-preview/
+```
+
+The JSON contains a bounded `task`, deadline and cost cap matching Browser Use's
+automation arguments. Run it through the connected tool, then retain its actual
+result alongside this report. A hosted browser cannot reach this container's
+localhost automatically. Use a reachable preview pinned to the intended commit.
+No independent plugin run is claimed by producing a task brief. The other mission
+IDs are `customize-car` and `return-settings`. Goals contain no selectors or debug
+API hints; compare their real action histories against guided routes to find
+discoverability problems.
+
+### Reviewing evidence
+
+The HTML uses local relative assets and inline styles, with no JavaScript, so it
+works through `file://` and script-disabled previews. Capability links navigate
+to observations; status badges retain the coverage result. Expand an observation
+for actions, DOM state, console errors and replay instructions. Report JSON and
+embedded JSON downloads use ordinary links.
+Open `*.trace.zip` using Playwright Trace Viewer. Import
+`settings-performance.trace.json` into Chrome DevTools Performance.
+Screenshots are visual evidence; DOM findings are advisory, not screenshot-based
+assertions. Do not turn a screenshot difference alone into a confirmed bug.
+
+No product files are changed by exploration. Fresh contexts isolate settings and
+liveries. The toolkit uses the repository harness, occupancy lock and teardown,
+refuses a busy software-rendering host, and does not run browsers in subagents.
+
+Sources checked during design:
+
+- [Playwright locators and ARIA snapshots](https://playwright.dev/docs/api/class-locator#locator-aria-snapshot)
+- [Context routing and service workers](https://playwright.dev/docs/api/class-browsercontext#browser-context-route)
+- [Playwright tracing](https://playwright.dev/docs/api/class-tracing)
+- [Chromium tracing protocol](https://chromedevtools.github.io/devtools-protocol/tot/Tracing/)
+- [Chrome Recorder](https://developer.chrome.com/docs/devtools/recorder/overview)
+
+---
+
+## Capture and publish a design review
+
+> Merged from `CAPTURE-REVIEW.md` on 2026-11-03 (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001); links that named that page land here.
+
+The matrix runner captures part details with one owned garage browser. Run a
+read-only plan first; it includes the source fingerprint and discovered browser
+path. Browser availability does not prove launch or native presentation.
+
+```sh
+node tools/shot/design-matrix.mjs --part=sidepod,frontWing --angles=headOn,grazing --backend=three --run=materials --plan
+node tools/shot/design-matrix.mjs --part=sidepod,frontWing --angles=headOn,grazing --backend=three --run=materials
+```
+
+Comma-separated variants are separate shots. Semicolon-separated assignments
+form a mixed-field recipe; quote the whole argument in a shell:
+
+```sh
+node tools/shot/design-matrix.mjs --run=cobalt '--variants=pod=#225bb4;podFinish=satin;coverFinish=pearl;part.aero=style_aero_spoon'
+```
+
+Other controls: `--colours=dark,mid,light`, `--lights=lamp,off,keyHi,keyLo`,
+`--baseline=podFinish=gloss`, `--fill=0.7`, `--fov=45`, `--viewport=1280x720`,
+`--phone`, `--batch=1/3`, `--bounds=@file.json`, `--out=artifacts/my-run`.
+Dimensions are limited to 1600×900 and DPR 1. The Linux software-rendering
+container's load must be below 3. As in the underlying garage tool, that
+absolute Linux load limit does not apply to shared macOS runners.
+
+Use identical arguments plus `--resume` to continue a run. Source revision,
+tracked changes, non-hidden untracked runtime/tool source, backend, camera and
+plan must match. Missing or modified images redo the whole baseline group.
+Legacy manifests without source receipts require a new run. `--index-only`
+checks and rebuilds the indexes without launching a browser and returns a
+failure when the selected coverage is incomplete. Batches share the full plan;
+the index reports full coverage while the command reports selected coverage.
+
+The runner writes `manifest.json`, `gallery.json`, `sheet.html` and PNGs under
+`artifacts/` or `scratch/`. Gallery records include image hashes, source identity,
+backend, readiness, camera and design recipe. Startup and command waits are
+bounded. Missing Chromium fails before capture output is created. The tool never
+installs a browser or replaces game frames with geometry projections.
+
+### Export a portable site collection
+
+The authored, styled Design Lab frontend is versioned under
+[`sites/design-lab/`](../sites/design-lab/README.md). Its README
+explains how to pair the exact site HTML/CSS/JS with the existing capture data
+and assets. The portable exporter below remains a separate generated view.
+
+The gallery exporter accepts matrix `gallery.json` or an existing Design Lab
+`captures.json`. It validates every file against its recorded SHA-256, decodes
+image dimensions, preserves each source revision, design recipe and historical
+status, and groups native screenshots separately from geometry previews and
+unverified visuals. Missing hashes or corrupt files fail the entire export.
+
+```sh
+node tools/shot/capture-gallery.mjs --input=artifacts/design-matrix/materials/gallery.json --assets=artifacts/design-matrix/materials --out=artifacts/materials-site --plan
+node tools/shot/capture-gallery.mjs --input=artifacts/design-matrix/materials/gallery.json --assets=artifacts/design-matrix/materials --out=artifacts/materials-site
+```
+
+Output includes `artifacts/materials-site/index.html`,
+`artifacts/materials-site/gallery.js`, `gallery.json` and
+content-addressed `assets/`. The output directory must be new or empty and
+contained in the checkout's artifact roots. These files can be included in a
+Sites deployment. Exporting does not upload, recapture, or reattribute old shots
+to a newer deploy revision. Native screenshots require recorded backend,
+readiness and capture method; a hash match alone proves only file identity.
+
+Process lifecycle reference: https://nodejs.org/api/child_process.html#event-close
+
+### When the local browser cannot run
+
+The `Capture gallery` workflow runs the same native matrix and exporter on
+`macos-latest`, matching the repository's existing garage-before capture route.
+Commit `.github/capture-gallery-request.json` on your branch, then dispatch the
+workflow from it (`gh workflow run capture-gallery.yml --ref <branch>`); a push
+alone no longer starts a run. The runner captures the exact
+workflow SHA, limits the request to 24 images and the job to 15 minutes, and
+uploads PNGs, source/camera receipts and a portable gallery for seven days.
+It grants only read access to repository contents and does not cancel a running
+capture when another request arrives. Output directories cannot be overridden.
+
+Validate the request locally with `node tools/shot/run-capture-request.mjs --plan`.
+The request is an argument array passed without a shell; semicolons in mixed
+recipes remain part of one value.
+
+An HTTP 200 response does not prove a browser archive downloaded. In this Work
+environment, the Chromium CDN returned a 195-byte HTML page titled "Site
+Unavailable" instead of a ZIP. The cloud browser also reported "WebGL2
+unavailable" in the actual car studio. Use the CI route for native captures in
+that situation; the static gallery preview alone cannot verify game rendering.

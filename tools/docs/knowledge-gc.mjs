@@ -71,11 +71,19 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const isoToday = () => process.env.APEX_TODAY || new Date().toISOString().slice(0, 10);
 const readList = (rel) => fs.existsSync(path.join(ROOT, rel)) ? JSON.parse(read(rel)) : [];
 
-/** The filename's date, else the note's last commit date (shallow clone: no first-commit date). */
+/**
+ * The filename's date, else the OLDEST commit date the clone holds for the note
+ * (a shallow clone bottoms out at its boundary commit, which only makes an old
+ * note look younger, never older). The last commit would re-date a note on every
+ * link repoint. An uncommitted note is dated today.
+ */
 export function dateOf(rel) {
   const m = /(\d{4}-\d{2}-\d{2})/.exec(path.basename(rel));
   if (m) return m[1];
-  try { return git(["log", "-1", "--format=%cs", "--", rel]).trim() || isoToday(); } catch { return isoToday(); }
+  try {
+    const dates = git(["log", "--follow", "--format=%cs", "--", rel]).trim().split("\n").filter(Boolean);
+    return dates[dates.length - 1] || isoToday();
+  } catch { return isoToday(); }
 }
 
 /** `Kind:` and `Re-measure-by:` from a note's first 20 lines. */

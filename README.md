@@ -56,7 +56,7 @@ Night races run under floodlights.
 
 ### Modes
 
-Menu routes and regression journeys: [docs/USAGE-PATHS.md](docs/USAGE-PATHS.md).
+Menu routes and regression journeys: [docs/ARCHITECTURE-MAP.md](docs/ARCHITECTURE-MAP.md).
 
 - **Season** — race the calendar in order with saved championship progress;
   **SEASON SETUP** picks rounds, qualifying and sprint weekends.

@@ -72,14 +72,8 @@ as a duplicate).
 ### Run the groups your change needs, not all of them
 
 The whole suite is roughly 40 minutes of software rendering. Which groups a
-change needs is mechanical, so ask:
-
-```sh
-node tools/ci/pick-tests.mjs                 # vs the branch point + working tree
-node tools/ci/pick-tests.mjs --staged
-node tools/ci/pick-tests.mjs js/car/parts.js # explicit paths
-node tools/ci/pick-tests.mjs --bg            # ready-to-paste background command
-```
+change needs is mechanical, so ask `pick-tests` (the command forms are
+[VERIFICATION.md](VERIFICATION.md) §1, their one home).
 
 The routing rules live in `RULES` at the top of `tools/ci/pick-tests.mjs` and are
 deliberately coarse and biased toward running too much — a rule that is too
@@ -91,12 +85,8 @@ the rest named as not-run in the PR.
 
 When the named group is much bigger than the change, select SPECS instead of
 groups — `tools/ci/select-specs.mjs` decomposes the picked groups into spec files
-under a time budget and names everything it skipped:
-
-```sh
-node tools/ci/select-specs.mjs --since <ref>              # spec list, one per line
-node tools/ci/select-specs.mjs --since <ref> --budget-min 15
-```
+under a time budget and names everything it skipped (`--since <ref>`,
+`--budget-min N`; [VERIFICATION.md](VERIFICATION.md) §1).
 
 It powers the blocking change-aware CI gate and is just as useful interactively; a
 single spec (`npm test -- tests/specs/<file>.spec.js`) is always preferable to
@@ -486,7 +476,7 @@ tools directly.)
 | `vm-page` | local compatibility alias: runs both vm-page partitions serially through `tests/unit/adapted-specs.test.mjs` |
 | `vm-page-a` | four adapted specs (Albert Park and COTA foundations, autopilot, logging), each as its own `APEX_VM_PAGE=1 node --test` child; CI slice `page-a` |
 | `vm-page-b` | six adapted specs (agent-drive bench, Imola foundation, livery contrast, physics fixes, pit lane, race control), each as its own child; CI slice `page-b` |
-| `mcp` | The bounded workflow harness (`workflow-harness`) covers frozen source, tool conditions, schemas, probes, budgets and transcripts. The listing-cost meter and the per-tool bound on what the output-level gateway adds to `tools/list` (`mcp-listing-cost`, docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md). Server defect regressions (`lsp-mcp` real-tree MCP client, `lsp-mcp-fixture` scratch workspaces (helper `tests/helpers/lsp-fixture.mjs`), `lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `lsp-navigation-efficiency`, `lsp-workflow-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); the debugger session, transport and T-series suites (`js-debugger-mcp`, `js-debugger-transport`, `js-debugger-tracks`; fixtures `tests/helpers/js-debugger-rig.mjs`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); Node targets, `debugger_node_test` (probes, captures, parallel files, child auto-attach, `node --test` runner, timeout) and the `debugger_break`/`debugger_collect` workflows against live Node inspectors (`js-debugger-node`, ~6 s, no browser); [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. Runs with `--test-concurrency=1` so parallel `tsc --lsp` cold starts cannot starve the MCP client case (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md). The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
+| `mcp` | The bounded workflow harness (`workflow-harness`) covers frozen source, tool conditions, schemas, probes, budgets and transcripts. The listing-cost meter and the per-tool bound on what the output-level gateway adds to `tools/list` (`mcp-listing-cost`, docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md). Server defect regressions (`lsp-mcp` real-tree MCP client, `lsp-mcp-fixture` scratch workspaces (helper `tests/helpers/lsp-fixture.mjs`), `lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `lsp-navigation-efficiency`, `lsp-workflow-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); the debugger session, transport and T-series suites (`js-debugger-mcp`, `js-debugger-transport`, `js-debugger-tracks`; fixtures `tests/helpers/js-debugger-rig.mjs`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); Node targets, `debugger_node_test` (probes, captures, parallel files, child auto-attach, `node --test` runner, timeout) and the `debugger_break`/`debugger_collect` workflows against live Node inspectors (`js-debugger-node`, ~6 s, no browser); [UI explorer](UI-MAP.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. Runs with `--test-concurrency=1` so parallel `tsc --lsp` cold starts cannot starve the MCP client case (docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md). The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
 | `docs-guards` | the unit files that READ the prose trees ci.yml's `paths-ignore` skips (`docs/**`, `**/*.md`, `.claude/**`, `.cursor/**`, `.codex/**`): docs-integrity, generated-docs, agent-config, skill-progressive, hooks-documented, F1 Dev Tools scene/preset/replay helper contracts and the rest of `tests/groups.json`'s list. `.github/workflows/docs-guards.yml` ran this group on every pull request from 2026-09-25 until 2026-10-15, when its required context was removed and the workflow retired (every file is in `tooling-fast`, so ci.yml's guards job already covered a prose PR; the second workflow was one job start per PR event — `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`). The group remains the local alias the docs-only fast path and the agent-config skill call. |
 | `node-slow` | the raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) plus `cover-legibility` (every pickable cover design on every car, ~160 s locally, moved here from `garage-unit` 2026-10-19) plus `flyby-fleet` (the flyby's twelve-circuit audit, ~1 min), `foundation-core-vm` (~26 s, builds all sixteen foundation circuits) and the car-mesh sweeps `car-mesh-anchors` / `cockpit-crest-stripe` (moved out of `tooling-fast`, audit4 E1) — CI guards always, locally when pick-tests names it |
 | `sweeps` | the full-fleet geometry audits (`package.json` `test:sweeps` IS the list; the enumeration that used to stand here had drifted four files behind it, so read the script). Most rebuild every circuit through `tools/lib/track-build-vm.cjs`; a few build no circuit at all (driving-line's synthetic stadium, driving-line-opts' store round-trip, track-build-vm-release.test.mjs's two-circuit harness check) and ride here beside the geometry they serve. `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
@@ -1275,45 +1265,11 @@ Every `pull_request` workflow uses a per-PR concurrency group with
 
 ### Flaky tests
 
-Playwright retries default to **1 under `CI`** when unset
-(`playwright.config.js`); the change-aware `selected` gate sets `--retries=0`
-so a flake is news, not a doubled bill — except a QUARANTINED spec, which
-`select-specs.mjs` schedules alone in its own leg with `--retries=1`
-(2026-10-10, R3-CI-HEALTH-4), so one quarantined flake cannot red an
-otherwise green leg. Under `APEX_FAIL_ON_FLAKY=1` (every
-browser job in `ci.yml`) a pass-on-retry is a red unless its exact full test
-title matches an unexpired policy in `tests/data/flaky-quarantine.json`.
-The ledger names an accountable owner, evidence, expiry and review criteria.
-The scheduler still isolates the spec, but unrelated tests in it remain blocking.
-Quarantined tests still run and permanent failures remain red. Agents fix real failures; re-run a failed job at most once and
-only for timeout / infra errors; never skip a test or loosen a tolerance to
-get green. `tests/unit/flaky-quarantine.test.mjs` pins the ledger and the
-wiring.
-
-**Detection is daily, not by hand (2026-10-16).** `.github/workflows/flake-tally.yml`
-runs `node tools/ci/flake-tally.mjs --events all --days 2 --propose --issue` every
-morning: every FAILED `ci.yml` and `pages.yml` run of the last two days (PR fast
-tiers, ready full tiers, the train, the nightly; a green run holds no unquarantined
-flake under `APEX_FAIL_ON_FLAKY=1`, a cancelled run tested nothing), only the logs of
-their failed browser jobs, tallied by spec + title, with the repeat offenders proposed
-as quarantine rows in the ledger's current shape — a test that passed only on retry in
-≥ 2 runs, or failed first-try on ≥ 3 branches (a red that follows the test, not the
-change). It rewrites one open issue labelled `flaky`; the ledger itself stays a PR with
-an owner and the evidence run.
-
-**Base-red detector (2026-10-16, CI jobs review).** The same workflow runs every
-2 hours in `--base-red` mode over the last 3 h of failed runs: a spec that failed
-first-try on 3 or more unrelated branches, or on 2 including the deploy branch
-(a train), is a red on the base, not on any one diff. It opens, refreshes or
-closes ONE issue labelled `base-red` ("Base red suspects (auto)"). Advisory: the
-label and the issue block nothing; they exist so the tenth session to meet
-the same red looks at the deploy branch first (measured: menu-keyboard
-data-esc-close, 7 PR runs and 3 trains, about 1,000 job-min, triaged ten times).
-
-CSS-only changes select a one-boot title/touch/pause reachability smoke and
-relevant menu goldens; they do not discard the browser plan. A failed or cancelled selected
-matrix is red even if sibling JUnit is clean: missing execution evidence needs a
-successful rerun, including failures before the run-step marker.
+The flake procedure — retries, `APEX_FAIL_ON_FLAKY=1`, the quarantine ledger
+`tests/data/flaky-quarantine.json`, the daily `flake-tally.yml` detector and the
+`base-red` issue — lives in [VERIFICATION.md](VERIFICATION.md) §5 (its one home
+since 2026-11-03). CSS-only changes select a one-boot title/touch/pause
+reachability smoke and relevant menu goldens; they do not discard the browser plan.
 
 ## 4. Philosophy — debug-hooks first
 

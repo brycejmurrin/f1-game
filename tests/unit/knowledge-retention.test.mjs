@@ -27,6 +27,9 @@ const name = (n) => `${n.file} (${n.date}, ${n.age} d)`;
 
 test("the scan sees the notes tree and both allow-lists", () => {
   assert.ok(r.notes.length > 100, `only ${r.notes.length} notes scanned`);
+  // Literal paths: tooling-fast's pin index reads string literals, so an allow-list edit selects this file, not the whole suite.
+  assert.equal(SIZE_ALLOW, "tests/data/notes-size-allow.json");
+  assert.equal(UNCITED_ALLOW, "tests/data/notes-uncited-allow.json");
   for (const f of [SIZE_ALLOW, UNCITED_ALLOW]) assert.ok(Array.isArray(JSON.parse(read(f))), `${f} must be a JSON array of docs/notes paths`);
   assert.equal(r.days, DAYS);
 });

@@ -22,7 +22,7 @@
       // (n - K(s)) % n with the opposite side, and the shift cancels. (A KOLD
       // index shift puts the beacon 1.4 km from the tower, and a plain arc
       // shift 33 m in the air — measured in the Node build, see
-      // docs/ARCHITECTURE-REVIEW.md §7.)
+      // docs/notes/ARCHITECTURE-REVIEW.md §7.)
       const kitNode = (s) => (n - K(s)) % n;
 
       // Shared-kit adoption: bounded race operations outside the bay hero zones.

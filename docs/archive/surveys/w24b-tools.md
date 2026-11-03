@@ -37,7 +37,7 @@ UI, save. Proposed owners below follow that split.
 | Opaque `r12` pass IDs | `js/perf/bench-capture.js` | 57–65 |
 | Pass-census SwiftShader | `tools/gfx/pass-census.mjs` | 16–17 |
 | profile.mjs SwiftShader caveat | `tools/perf/profile.mjs` | 24–25 |
-| Agent-world stub | `docs/AGENT-WORLD-API.md` | 1–6 |
+| Agent-world stub | `docs/DEBUG-HOOKS.md` | 1–6 |
 | Per-pass GPU still open (I5) | `docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md` | 143–150 |
 
 ---
@@ -227,11 +227,11 @@ diffs with `gpu-test-run` / soak fps on device.
 no scene/shadow/mirror names (`js/perf/bench-capture.js:57–65`). METRICS header
 states pages stay on canvas with no clipboard (`js/perf/metrics-overlay.js:22–23`),
 so mid-race tile state is not copyable — phone must pause → PHONE TEST SHARE.
-`docs/AGENT-WORLD-API.md` is a stub redirect, so the “world API” entry agents
+`docs/DEBUG-HOOKS.md` is a stub redirect, so the “world API” entry agents
 open first has no profiler surface.
 
 **Evidence:** `js/perf/bench-capture.js:57–65`;
-`js/perf/metrics-overlay.js:22–23`; `docs/AGENT-WORLD-API.md:1–6`.
+`js/perf/metrics-overlay.js:22–23`; `docs/DEBUG-HOOKS.md:1–6`.
 
 **Proposed change:** Map render-call UIDs → named passes (same keys as
 pass-census / future GpuProfile); METRICS bar action COPY SNAPSHOT =

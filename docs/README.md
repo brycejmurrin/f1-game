@@ -30,17 +30,17 @@ your change touches → the skill that drives it.
 |---|---|
 | [PHYSICS.md](PHYSICS.md) | Driving model, tuning variables, aero/X-mode, overtake gate, the curvature columns. |
 | [CAREER.md](CAREER.md) | Career flow, save slots, ratings, economy and R&D. |
-| [FLOW.md](FLOW.md) / [USAGE-PATHS.md](USAGE-PATHS.md) | Session state machine; end-to-end player journeys. |
+| [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) §Session flow / §Usage paths | Session state machine; end-to-end player journeys (the former FLOW and USAGE-PATHS pages, merged 2026-11-03). |
 | [SCENERY-API.md](SCENERY-API.md) / [SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md) | The `scenery(api)` contract; the track/scenery build pipeline. |
 | [LIGHTING.md](LIGHTING.md) / [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | Light records, time of day, lamps; every tuner slider (generated). |
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire, rendezvous, snapshots, phone as controller. |
-| [UI-MAP.md](UI-MAP.md) / [UI-EXPLORER.md](UI-EXPLORER.md) / [ui-experience-studio.md](ui-experience-studio.md) | Navigation web and screens; browser exploration toolkit; appearance and Photo Studio contracts. |
-| [COMPONENTS.md](COMPONENTS.md) / [CODE-STANDARDS.md](CODE-STANDARDS.md) | CSS class families and owners; JavaScript house style. |
+| [UI-MAP.md](UI-MAP.md) | Navigation web and screens, DOM IDs; the UI explorer toolkit and the capture/publish review flow (merged 2026-11-03). |
+| [COMPONENTS.md](COMPONENTS.md) / [CODE-STANDARDS.md](CODE-STANDARDS.md) | CSS class families and owners, layout axes, layout tokens, the UI experience and studio acceptance contract; JavaScript house style. |
 | [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | Player guide to the in-game track designer. |
 | [STREAMING.md](STREAMING.md) | Streamer guide to `overlay.html`: the OBS setup, page options, accessibility. |
 | [PLATFORM.md](PLATFORM.md) / [PACKAGING.md](PACKAGING.md) | iOS/Safari and static-host limits; Electron and Capacitor packaging. |
-| [BUGS.md](BUGS.md) | The current verified bug shortlist. |
-| [CAPTURE-REVIEW.md](CAPTURE-REVIEW.md) | Car capture matrices and portable site exports. |
+| [BUGS.md](BUGS.md) | A pointer: open defects are the `bug`-labelled issues; fixed classes are in the defect ledger. |
+| [DECISIONS.md](DECISIONS.md) | The `D-NNN` ledger of Bryce's decisions; rules and tests cite a row instead of quoting. |
 
 ## Agent surface and evidence
 
@@ -52,11 +52,8 @@ your change touches → the skill that drives it.
 | [agent-output/](agent-output/README.md) | Selectable tool output levels and saved evidence. |
 | [DESIGN-TOOLS.md](DESIGN-TOOLS.md) | Free design tooling: private MCP recovery, token/accessibility evidence, screenshot reviews, procedural room/glTF checks. |
 
-Redirect stubs (cited from source comments; follow the link): [RENDERERS.md](RENDERERS.md),
-[SCENERY-GROUNDING.md](SCENERY-GROUNDING.md), [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md),
-[LAYOUT-TOKENS.md](LAYOUT-TOKENS.md),
-[AGENT-WORLD-API.md](AGENT-WORLD-API.md), [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md),
-[PERF-FINDINGS.md](PERF-FINDINGS.md), [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md).
+One redirect stub remains: [PERF-FINDINGS.md](PERF-FINDINGS.md) → `notes/PERF-FINDINGS.md`
+(`tools/manifest.cjs` cites the old path; delete both together). The other six went on 2026-11-03.
 
 ## Directories
 
