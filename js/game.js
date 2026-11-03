@@ -653,7 +653,7 @@ function onIncidentLineCross(c, cross, newS) {
     // finish stamp is still authoritative and must reach the other peer; null
     // time/best keep the invalid lap out of timing comparisons.
     if (c.local && netPlay.active()) {
-      netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, fin: raceT, invalid: true });
+      netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, fin: c.finishT, invalid: true });
     }
     if (c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");
   }
