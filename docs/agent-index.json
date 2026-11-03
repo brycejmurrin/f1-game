@@ -3163,6 +3163,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/garage-camera-options.js",
+      "global": "GarageCameraOptions",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
       "roster": "tag"
@@ -3175,6 +3180,11 @@
     {
       "path": "js/data/garage-entrance-motion.js",
       "global": "GarageEntranceMotionData",
+      "roster": "LAZY_RACE"
+    },
+    {
+      "path": "js/data/garage-entry-camera.js",
+      "global": "GarageEntryCameraData",
       "roster": "LAZY_RACE"
     },
     {
