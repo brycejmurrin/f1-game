@@ -269,6 +269,8 @@ const HudReadouts = (function () {
   /** yellow | vsc | sc | red | blue | "" for data-flag-cue on #hud-flag. */
   function flagCueKind(caution, blue) {
     if (blue) return "blue";
+    // Level 0 with time still owed paints flag-yellow in hud.js: keep its cue letter.
+    if (caution && !(caution.level > 0) && caution.owed > 0) return "yellow";
     if (!caution || !(caution.level > 0)) return "";
     if (caution.level === 4) return "red";
     if (caution.level === 3) return "sc";
