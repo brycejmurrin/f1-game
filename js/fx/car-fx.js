@@ -71,7 +71,11 @@ const CarFx = (function () {
         }
       }
       if (want !== anchor && (!anchor || str < HAZE_MIN)) anchor = want;
-      const target = anchor && anchor === want ? heat(anchor) : 0;
+      // Sustain the held anchor while it is still on power. Forcing target=0 just
+      // because a nearer car became `want` made the plume fade mid-throttle until
+      // str dropped below HAZE_MIN (then the nearer car could take the anchor).
+      // Fade only when the held car lifts (heat→0); the switch still waits for it.
+      const target = anchor ? heat(anchor) : 0;
       if (dt > 0) str += (target - str) * (1 - Math.exp(-dt / HAZE_TAU));
       if (target === 0 && str < HAZE_MIN) str = 0;   // faded: at() draws nothing below it anyway
       return anchor;
