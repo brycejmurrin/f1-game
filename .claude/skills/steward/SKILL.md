@@ -50,7 +50,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 ## Push
 
 - The floor is AGENTS.md rule 3: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit);
-  the PR's tiers prove the rest. Then ONE push per verified batch: a push over a live run cancels it and a killed job
+  the PR's tiers prove the rest. It runs 2-4 min: never foreground. The literal call is Bash with
+  `run_in_background: true`, `timeout: 7200000`, command `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet >
+  artifacts/logs/floor.log 2>&1`, then Monitor on that log (skill `check-changes` has the recipe). Then ONE push per verified batch: a push over a live run cancels it and a killed job
   runs no `if: always()` step, so its failures are lost.
 - Refresh the Plan with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line),
   add discovered work, strike a dropped item with why, never delete one. Refresh the Hand-off block at every push
@@ -71,10 +73,10 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    open PR's diff belongs to that PR until it merges or closes.
 4. Fix on the branch, verify at the floor (§Push), ONE push. A flake: AGENTS.md rule 9 (quarantine by name in
    `tests/data/flaky-quarantine.json`; re-run a job at most once for timeout/infra, `tools/ci/ci-rerun.mjs`).
-5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
+5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (Bash `run_in_background: true`, `timeout: 7200000`, `> artifacts/logs/sync.log 2>&1`, then Monitor the log), never a hand merge,
    and only when `needs-sync` says so (`conflict | stale-red`); never to
    "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
-   is fixed first, then sync once and ONE push. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
+   is fixed first, then sync once and ONE push. STOPPED leaves HEAD on `sync-pr-<branch>` mid-merge: resolve there, then `git push origin HEAD:<branch>`; do not re-merge by hand. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
 
 ## Land
 
