@@ -1326,6 +1326,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-entrance.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/assets.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
