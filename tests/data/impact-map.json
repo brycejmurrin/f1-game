@@ -7511,6 +7511,7 @@
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/ui-scale.spec.js",
         "tests/unit/audio-recovery.test.mjs",
+        "tests/unit/car-warm-token.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/field-lod.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
