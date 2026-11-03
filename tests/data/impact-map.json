@@ -3028,6 +3028,7 @@
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -3038,6 +3039,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
@@ -3049,6 +3051,7 @@
       "draw": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
@@ -5408,6 +5411,7 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -5823,6 +5827,7 @@
     "js/data/garage-departure-motion.js": {
       "sample": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ]
@@ -7758,7 +7763,8 @@
         "tests/unit/garage-crew.test.mjs"
       ],
       "applyStyle": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs"
       ],
       "bindSettings": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7774,13 +7780,15 @@
       "create": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs"
       ],
       "finish": [
         "tests/unit/garage-entrance-motion.test.mjs"
@@ -7791,6 +7799,7 @@
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "rate": [
@@ -7816,6 +7825,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "shotsFor": [
@@ -7838,6 +7848,7 @@
       "timeline": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "wallLeft": [
@@ -7873,6 +7884,7 @@
       ],
       "*": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ]
     },
@@ -7916,10 +7928,15 @@
       ],
       "create": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "samplePose": [
+        "tests/unit/garage-departure-wheels.test.mjs"
+      ],
       "spinRadians": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs"
       ]
     },
     "js/garage/entrance-motion.js": {
@@ -8029,7 +8046,8 @@
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-camera-rigs.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs"
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-departure-wheels.test.mjs"
       ]
     },
     "js/garage/livery-design-editor.js": {

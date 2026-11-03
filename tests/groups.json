@@ -458,6 +458,8 @@
     "tests/unit/garage-crew-choreo.test.mjs",
     "// The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.",
     "tests/unit/garage-crew.test.mjs",
+    "// GarageDepartureWheels.samplePose: authored path for every angle (Night Shift high), not only CUT.",
+    "tests/unit/garage-departure-wheels.test.mjs",
     "tests/unit/garage-entrance-motion.test.mjs",
     "tests/unit/garage-finish-remap.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
