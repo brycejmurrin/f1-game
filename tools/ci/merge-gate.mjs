@@ -14,9 +14,10 @@
 // Rows (all must pass; each prints `= gate <row>: ok|FAIL <reason>`, then one final `= merge-gate passed|refused …`
 // line, which land.yml reads as the check title):
 //   open      the PR is open and not a draft, and its head is the `--sha` the workflow gated (when given)
-//   hold      no `hold` label, and the newest `hold` unlabel event was Bryce's own click: a hold an agent removed
-//             (the event's performed_via_github_app is set) still holds — "hold removed by an agent; Bryce removes
-//             holds" (provenance, docs/plans/2026-11-03-agent-surface-reset.md §4.3; tools/ci/lib/provenance.mjs)
+//   hold      no `hold` label; a hold Bryce set in person (newest `labeled hold` with performed_via_github_app
+//             null) is lifted only by his own click — an agent's unlabel of it still holds ("hold set by Bryce was
+//             removed by an agent"). An agent may lift a hold an agent set. (provenance, docs/plans/
+//             2026-11-03-agent-surface-reset.md §4.3; tools/ci/lib/provenance.mjs)
 //   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
 //   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
 //             `success` on the PR's current head, newest attempt
@@ -43,7 +44,7 @@ import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
 import { planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
-import { OWNER, byOwner, describeActor, newestLabelEvent } from "./lib/provenance.mjs";
+import { OWNER, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -80,17 +81,20 @@ export function openVerdict(pull) {
   return row(true, "open and ready for review");
 }
 
-/** hold: no `hold` label, and the newest `hold` unlabel (when the PR's label events are given) was the owner's own
- *  click. Labels may be strings or `{ name }` objects (the API's shape); `events` null skips the provenance half
- *  (pure callers without events). Pure. */
+/** hold: no `hold` label, and (when the PR's label events are given) a hold the OWNER set in person was lifted by his
+ *  own click: the newest `labeled hold` passing byOwner with the newest `unlabeled hold` not passing it is still held.
+ *  An agent may lift a hold an agent set. Labels may be strings or `{ name }` objects (the API's shape); `events`
+ *  null skips the provenance half (pure callers without events). Pure. */
 export function holdVerdict(labels, events = null, owner = OWNER) {
   const names = (labels || []).map((l) => String(typeof l === "string" ? l : l?.name || "").toLowerCase());
-  if (names.includes(HOLD_LABEL)) return row(false, `the \`${HOLD_LABEL}\` label is set: only ${owner}'s own click removes it`);
-  const last = newestLabelEvent(events, HOLD_LABEL);
-  if (last && last.event === "unlabeled" && !byOwner(last, owner)) {
-    return row(false, `hold removed by an agent; Bryce removes holds (unlabeled by ${describeActor(last)} at ${last.created_at || "?"}): still held until ${owner} removes it himself`);
+  if (names.includes(HOLD_LABEL)) return row(false, `the \`${HOLD_LABEL}\` label is set: whoever set it removes it; one ${owner} set, only his own click`);
+  const at = (e) => Date.parse(e?.created_at || "") || 0;
+  const newest = (kind) => labelEvents(events, HOLD_LABEL).filter((e) => e.event === kind).reduce((best, e) => (!best || at(e) >= at(best) ? e : best), null);
+  const set = newest("labeled"), lifted = newest("unlabeled");
+  if (set && byOwner(set, owner) && lifted && !byOwner(lifted, owner)) {
+    return row(false, `hold set by Bryce was removed by an agent (set by ${owner} at ${set.created_at || "?"}, unlabeled by ${describeActor(lifted)} at ${lifted.created_at || "?"}): still held until ${owner} removes it himself`);
   }
-  return row(true, last ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(last)})` : `no \`${HOLD_LABEL}\` label`);
+  return row(true, lifted ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(lifted)})` : `no \`${HOLD_LABEL}\` label`);
 }
 
 /** config: a diff touching a CONFIG_PATH needs the `config-ok` label whose newest `labeled` event is the owner's own
@@ -360,9 +364,9 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
   The landing gate: the CI check named \`gate\` (land.yml), also runnable locally with a GitHub token
   (GH_TOKEN / GITHUB_TOKEN or \`gh auth token\`). Rows, each printed as \`= gate <row>: ok|FAIL <reason>\`, then one
   final \`= merge-gate passed|refused …\` line (the check title):
-    open (open, not a draft, head = --sha when given), hold (no \`hold\` label, and its last removal was ${OWNER}'s own
-    click — a hold an agent removed still holds), plan (Plan closed; \`land:\` items exempt), ci (\`CI\` success on the
-    head), config (a diff touching .claude/hooks/**, .claude/settings.json, .github/workflows/** or .githooks/** needs
+    open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
+    only by his own click, an agent's hold by anyone), plan (Plan closed; \`land:\` items exempt), ci (\`CI\` success on
+    the head), config (a diff touching .claude/hooks/**, .claude/settings.json, .github/workflows/** or .githooks/** needs
     \`${CONFIG_LABEL}\` added by ${OWNER} in person), gen (clean merge onto the current base tip + gen:check), ratchets (on
     that merge result).
   --trusted: only the rows that run no PR code (open, hold, plan, ci, config); land.yml's trusted-rows job.
