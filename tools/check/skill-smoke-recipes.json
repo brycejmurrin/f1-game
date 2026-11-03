@@ -192,9 +192,9 @@
     },
     {
       "skill": "data-hub",
-      "task": "Exercise a failed data predecessor never evaluates hub; retry reuses evaluated siblings",
+      "task": "Exercise a failed data predecessor (schedule, api-transport, telemetry-player) never evaluates hub; retry reuses evaluated siblings",
       "fixture": "tests/unit/data-lazy-loader.test.mjs",
-      "pattern": "a\\ failed\\ data\\ predecessor\\ never\\ evaluates\\ hub;\\ retry\\ reuses\\ evaluated\\ siblings",
+      "pattern": "a\\ failed\\ js/data/[a-z-]+\\.js\\ never\\ evaluates\\ hub;\\ retry\\ reuses\\ evaluated\\ siblings",
       "expected": {
         "minPass": 1,
         "maxFail": 0
@@ -489,9 +489,9 @@
     },
     {
       "skill": "pwa-cache-service-worker",
-      "task": "Exercise activation preserves prior caches while only INSTALL_COMPLETE is set",
+      "task": "Exercise activate after a version drift (current generation empty) claims but deletes nothing",
       "fixture": "tests/unit/service-worker.test.mjs",
-      "pattern": "activation\\ preserves\\ prior\\ caches\\ while\\ only\\ INSTALL_COMPLETE\\ is\\ set",
+      "pattern": "activate\\ after\\ a\\ version\\ drift\\ \\(current\\ generation\\ empty\\)\\ claims\\ but\\ deletes\\ nothing",
       "expected": {
         "minPass": 1,
         "maxFail": 0
@@ -867,9 +867,9 @@
     },
     {
       "skill": "ship",
-      "task": "Exercise guardsVerdict: aggregator success",
+      "task": "Exercise guardsVerdict: the aggregator decides; its shards are the fallback when it was cancelled/skipped; a red or running shard blocks",
       "fixture": "tests/unit/ready-gate.test.mjs",
-      "pattern": "guardsVerdict:\\ aggregator\\ success",
+      "pattern": "guardsVerdict:\\ the\\ aggregator\\ decides;",
       "expected": {
         "minPass": 1,
         "maxFail": 0
