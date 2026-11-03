@@ -111,6 +111,7 @@ const REAL_ARGS = {
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD", id: "monza" },
   apex_frame_report: { track: "monza" },
+  apex_circuit_info: { track: "monza" },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
 };
 /** Opt-in (--browser): one cheap call per browser path, run ONE AT A TIME (each takes the browser lock itself). */
