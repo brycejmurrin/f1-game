@@ -68,16 +68,16 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 323,
+      "ceiling": 322,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 179,
+      "ceiling": 178,
       "slack": 0
     },
     "rawGameReads": 299,
     "rawSpacing": {
-      "ceiling": 306,
+      "ceiling": 305,
       "slack": 0
     },
     "shellNodes": {

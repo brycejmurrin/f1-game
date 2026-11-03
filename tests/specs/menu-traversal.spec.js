@@ -203,9 +203,15 @@ async function leaves(page, layerId, reopen, seed) {
 const toTitle = async (page) => {
   for (let i = 0; i < 8; i++) {
     if ((await page.evaluate(() => window.__aud.top())) === "overlay") return;
-    const before = await page.evaluate(() => window.__aud.top());
+    const before = await page.evaluate(() => window.__aud.top() + "/" + ((document.getElementById("dlg-settings") || {}).textContent || ""));
     await page.keyboard.press("Escape");
-    await page.waitForFunction((b) => window.__aud.top() !== b, before, { polling: 100, timeout: 2_000 }).catch(() => {});
+    // Each Escape must move: leave the layer, or pop a Settings page (ADVANCED
+    // sits two pages deep inside the one "pmsettings" layer, so its first
+    // Escape keeps the layer and changes the title — the `where` that leaves()
+    // reads). A stuck press fails here, named, not 8 presses later as a bare
+    // final timeout (#4362).
+    const moved = await waitWhereChanged(page, before, 2_000).then(() => true, () => false);
+    expect(moved, `toTitle: Escape did not move off "${before}"`).toBe(true);
   }
   await page.waitForFunction(() => window.__aud.top() === "overlay", null, { polling: 100, timeout: 5_000 });
 };
@@ -355,14 +361,15 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await page.waitForFunction(() => {
       const hud = document.getElementById("hud");
       return !!(hud && !hud.hidden);
-    }, null, { polling: 100, timeout: 8_000 }).catch(() => {});
+    }, null, { polling: 100, timeout: 8_000 });
     const closeAll = async () => {
       for (let i = 0; i < 6; i++) {
         if (!(await page.evaluate(() => window.__aud.top()))) return;
-        const before = await page.evaluate(() => window.__aud.top());
+        const before = await page.evaluate(() => window.__aud.top() + "/" + ((document.getElementById("dlg-settings") || {}).textContent || ""));
         await page.keyboard.press("Escape");
-        await page.waitForFunction((b) => !window.__aud.top() || window.__aud.top() !== b, before,
-          { polling: 100, timeout: 2_000 }).catch(() => {});
+        // Same rule as toTitle: a layer close or a Settings page pop (#4362).
+        const moved = await waitWhereChanged(page, before, 2_000).then(() => true, () => false);
+        expect(moved, `closeAll: Escape did not move off "${before}"`).toBe(true);
       }
     };
     const openPause = async () => {
