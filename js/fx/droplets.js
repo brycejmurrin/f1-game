@@ -243,8 +243,17 @@ const Droplets = (function () {
     const resized = _resize();
     const reflection = helmet ? CockpitOpts.visorReflections() : "light";
     const strength = reflection === "off" ? 0 : reflection === "medium" ? 1.4 : reflection === "strong" ? 1.8 : 1;
-    const changed = strength !== _spriteReflection || helmet !== _spriteHelmet;
+    const helmetFlip = helmet !== _spriteHelmet;
+    const changed = strength !== _spriteReflection || helmetFlip;
     if (changed) { _spriteReflection = strength; _spriteHelmet = helmet; _sprite = _paintSprite(strength, helmet); }
+    // Classic beads are ~4× smaller than helmet beads. Keep the old radii after a
+    // cam flip and the helmet glass looks empty until they age out — remap the
+    // live pool onto the destination spawn band (preserves hit clocks / pause).
+    if (helmetFlip && _n) {
+      const k = helmet ? (0.011 / 0.0025) : (0.0025 / 0.011);
+      const hi = helmet ? 0.037 : 0.012;
+      for (let i = 0; i < _n; i++) _r[i] = Math.min(hi, Math.max(0.001, _r[i] * k));
+    }
     const scale = helmet && typeof CockpitOpts.visorDropSize === "function" ? CockpitOpts.visorDropSize() : 1;
     const sizeChanged = scale !== _dropScale;
     _dropScale = scale;
@@ -252,6 +261,9 @@ const Droplets = (function () {
     if (dt > 0.1) dt = 0.1;
     _step(dt, vs || 0, !!reduced, runoff, helmet, rain);
     const c = cap(_mob(), !!reduced);
+    // Reduced motion can halve the ceiling mid-session; trim the live pool so
+    // _step/_draw do not keep walking (and blitting) the old oversized set.
+    while (_n > c) _kill(_n - 1);
     _acc += rate(rain, storm, !!reduced) * dt * (amount === "light" ? 0.4 : amount === "heavy" ? 1.8 : 1);
     while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced, helmet); }
     _draw(!!reduced, helmet);
