@@ -33,7 +33,7 @@ plugin does not appear after reload, use the copy.
 Marketplace publish is optional later. Until then, teammates install from this
 tree.
 
-Plugin skills must stay aligned with repo `AGENTS.md` and `docs/WORKERS.md`
+Plugin skills must stay aligned with repo `AGENTS.md` and skill `steward` (`.claude/skills/steward/`)
 (the one home for claim, draft PR, hand-off and landing). Do not fork process
 rules here: point to those files.
 

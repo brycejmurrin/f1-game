@@ -1,6 +1,6 @@
 # Codex-native coordination
 
-Use this route for the current Codex task and its native children. Use [transport adapters](transports.md) for independent provider sessions or GitHub coordination (`docs/WORKERS.md`). A GitHub comment records coordination; it does not create an agent, prove delivery or grant authority.
+Use this route for the current Codex task and its native children. Use [transport adapters](transports.md) for independent provider sessions or GitHub coordination (AGENTS.md §Coordination, skill `steward`). A GitHub comment records coordination; it does not create an agent, prove delivery or grant authority.
 
 ## Host and ownership preflight
 

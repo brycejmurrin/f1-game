@@ -72,7 +72,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 4. Fix on the branch, verify at the floor (§Push), ONE push. A flake: AGENTS.md rule 9 (quarantine by name in
    `tests/data/flaky-quarantine.json`; re-run a job at most once for timeout/infra, `tools/ci/ci-rerun.mjs`).
 5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
-   and only when `needs-sync` says so (`conflict | stale-red`) or the `gate` status fails on `distance`; never to
+   and only when `needs-sync` says so (`conflict | stale-red`); never to
    "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
    is fixed first, then sync once and ONE push. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
 
@@ -107,7 +107,7 @@ check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry
 ## References
 
 - [`references/labels.md`](references/labels.md) — every label, where it goes and what it means (source `.github/labels.json`).
-- [`references/land.md`](references/land.md) — what `land.yml` does after the label: `gate`, arming, AUTO-SYNC, retries.
+- [`references/land.md`](references/land.md) — what `land.yml` does after the label: `gate`, arming, retries.
 - [`references/issues.md`](references/issues.md) — native `blocked_by` dependencies and the `blocked` label.
 - [`references/vendors.md`](references/vendors.md) — Cursor and Codex lanes, `LAND_TOKEN`, the ruleset.
 - [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md) — `cancelled` twice, `needs-sync`, `sync-pr` modes.

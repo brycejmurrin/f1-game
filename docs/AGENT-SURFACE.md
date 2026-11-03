@@ -50,7 +50,7 @@ agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
 the task with an explicit persona label, OWNED paths, forbidden actions,
 allowed tools, and the required hand-back format. Claude frontmatter such as
 `readonly`, `tools`, `background` and `model` is reference metadata in Codex;
-repeat the safety limits in the launch prompt. Landing is GitHub's (`land.yml`, docs/WORKERS.md).
+repeat the safety limits in the launch prompt. Landing is GitHub's (`land.yml`, skill `steward` §Land).
 work (for example `deploy-research`), never ready/arm/merge authority.
 
 The doctor catalog warning is host metadata, not a repository failure. If the

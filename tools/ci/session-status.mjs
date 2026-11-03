@@ -18,7 +18,7 @@
 //   node tools/ci/session-status.mjs --summary  # bounded routine Markdown; --json still returns full data
 //
 // Reads only: local git (no fetch — run `git fetch origin <deploy>` first for a
-// fresh ahead/behind), artifacts/logs/*.log, and .claude/hooks/live-run.py.
+// fresh ahead/behind), artifacts/logs/*.log, and test-bg's state file (liveSpecRun).
 // Exit 0 always.
 //
 //   --pr [<number>]  appends the PR's LIVE state (head sha, draft/ready,
@@ -32,6 +32,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gitTry } from "../lib/git-run.mjs";
 import { verificationIdentity, readVerification } from "./verification-receipt.mjs";
+import { liveSpecRun } from "./test-bg.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEPLOY = "claude/f1-game-project-26h3ng";
@@ -119,8 +120,8 @@ export function collect() {
                  ageMin: Math.round((Date.now() - st.mtimeMs) / 60000) };
       }).sort((a, b) => a.ageMin - b.ageMin)
     : [];
-  const lr = spawnSync("python3", [path.join(ROOT, ".claude/hooks/live-run.py"), ROOT], { encoding: "utf8" });
-  const live = (lr.stdout || "").trim() || null;
+  let live = null;
+  try { live = liveSpecRun(); } catch (_) { live = null; }
   return { at: new Date().toISOString(), branch, base: base || null, ahead, behind, unpushed,
            upstream: upstream || null, sessions, commits, dirty, logs, live };
 }

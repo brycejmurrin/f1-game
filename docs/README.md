@@ -6,14 +6,14 @@ notes, research, archive and plans tables live in [NOTES-INDEX.md](NOTES-INDEX.m
 
 ## Read in this order
 
-**If you are an agent:** `AGENTS.md` → `WORKERS.md` → `VERIFICATION.md` → `ARCHITECTURE-MAP.md` →
+**If you are an agent:** `AGENTS.md` → skill `steward` → `VERIFICATION.md` → `ARCHITECTURE-MAP.md` →
 `ARCHITECTURE.md` (the section you edit) → `TESTING.md` §1-2 → the one area doc
 your change touches → the skill that drives it.
 
 | # | Read | Why |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules; every flat prohibition lives there. Read all of it. |
-| 2 | [WORKERS.md](WORKERS.md) | The worker contract: find and claim work, draft PR, local floor, `land`, cost cap, takeover, labels, the dispatcher. |
+| 2 | [steward](../.claude/skills/steward/SKILL.md) | The PR lifecycle: claim, draft PR, push, red, `land`, after land; labels in its `references/labels.md`, the dispatcher in skill `dispatcher`. |
 | 3 | [VERIFICATION.md](VERIFICATION.md) | Edit-loop, pre-push, docs-only, CI and Pages commands and what each proves. |
 | 4 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Boot path, layer map, data flow, where to edit what. Ten minutes. |
 | 5 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module contract, the `G` façade, the loop, the three renderers. Read your directory's section. |
@@ -52,8 +52,9 @@ your change touches → the skill that drives it.
 | [agent-output/](agent-output/README.md) | Selectable tool output levels and saved evidence. |
 | [DESIGN-TOOLS.md](DESIGN-TOOLS.md) | Free design tooling: private MCP recovery, token/accessibility evidence, screenshot reviews, procedural room/glTF checks. |
 
+[WORKERS.md](WORKERS.md) is a retired stub (2026-11-03): the lane contract is skill `steward`.
 One redirect stub remains: [PERF-FINDINGS.md](PERF-FINDINGS.md) → `notes/PERF-FINDINGS.md`
-(`tools/manifest.cjs` cites the old path; delete both together). The other six went on 2026-11-03.
+(dozens of `js/` comments cite the old path; repoint them and delete the stub together). The other six went on 2026-11-03.
 
 ## Directories
 

@@ -126,9 +126,6 @@ const SKILL_DOCS = [];
 const PLACEHOLDERS = new Set([
   "tests/foo.spec.js", "tests/a.spec.js", "tests/b.spec.js",
   "js/circuits/<id>.js", "docs/tracks/<id>.md",
-  // 2026-11-03: the decision ledger AGENTS.md points at is created by the docs lane of the same PR
-  // (docs/plans/2026-11-03-agent-surface-reset.md §4.9); delete this entry once the file exists.
-  "docs/DECISIONS.md",
 ]);
 
 // The lookbehind (rather than a bare \b) stops a path segment INSIDE a URL from
@@ -452,7 +449,7 @@ test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
   assert.deepEqual([f.fast, f.gate, f.disk], [fast.length, gate.size, disk], "the report tool measures the same ladder");
   const SIZES = [/\d+ of \d+ unit\s+files/, /The other \d+ have taken deploys red/, /<!-- GENERATED: ladder -->/,
     /\| `npm run test:tooling-fast` \| \d+ of \d+/];
-  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
+  for (const doc of ["AGENTS.md", "docs/VERIFICATION.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
     const text = read(doc);
     for (const re of SIZES) assert.doesNotMatch(text, re, `${doc} commits a ladder size (${re}) — every PR adding a test file would conflict on it; point at gen-ladder-figures.mjs instead`);
   }

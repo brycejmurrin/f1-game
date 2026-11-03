@@ -771,15 +771,6 @@
       ]
     },
     {
-      "path": "tools/ci/archive-sessions.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
       "path": "tools/ci/assert-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -1832,7 +1823,10 @@
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
       "classification": "asset",
-      "outputPolicy": "no-direct-output"
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md",
@@ -1842,7 +1836,10 @@
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md",
       "classification": "asset",
-      "outputPolicy": "no-direct-output"
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/profiling.md",

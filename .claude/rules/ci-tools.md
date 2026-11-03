@@ -6,8 +6,8 @@ paths:
 
 # CI tools / workflows
 
-- Run cancels and merge methods: AGENTS.md §Coordination and `docs/WORKERS.md`
-  (the hooks and `merge_policy.py` enforce both). A queued run holds no slot.
+- Run cancels and merge methods: AGENTS.md §Coordination (the hooks enforce both). A queued run holds no slot;
+  `node tools/ci/queue-depth.mjs` is an informational gauge and nothing holds a push on it.
 - Every PR push runs CI: a DRAFT push gets the fast tier plus ONE `selected`
   browser shard (a 5-min budget); ready gets the full tier. No label or body
   line opts in. `= ci none` after a push means no open PR carries the sha (not
@@ -15,5 +15,5 @@ paths:
   <group>` on the pushed branch; agents never run a browser test locally
   (AGENTS.md rule 5). A manual `ci.yml` dispatch is a hook "ask" (a deny on Codex).
 - Sync via `node tools/ci/sync-pr.mjs <branch>` (merge origin, no force); never
-  `update_pull_request_branch` from an agent (`land.yml`'s throttled AUTO-SYNC is
-  the one sanctioned update-branch caller).
+  `update_pull_request_branch` from an agent (nothing calls update-branch since
+  AUTO-SYNC left on 2026-11-03).

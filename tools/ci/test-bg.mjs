@@ -57,6 +57,12 @@ export const shQuote = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 const readState = () => {
   try { return JSON.parse(fs.readFileSync(STATEFILE, "utf8")); } catch (_) { return { runs: [] }; }
 };
+/** `<pid> <log>` of the spec run that is still alive in THIS checkout, else null. The one answer session-status,
+ *  debug-chrome and probe-mcp read (the `.claude/hooks/live-run.py` reader left with local browser groups, 2026-11-03). */
+export function liveSpecRun(state = readState()) {
+  const run = (state.runs || []).find((r) => aliveRun(r));
+  return run ? `${run.pid} ${run.log || run.group || ""}`.trim() : null;
+}
 // THE REGISTRY IS SHARED between every test-bg process alive at once: a
 // `--wait` stamping `ended` while a second shell starts a run is the ordinary
 // case, not a corner. So a write is (1) a RE-READ immediately before it, so the

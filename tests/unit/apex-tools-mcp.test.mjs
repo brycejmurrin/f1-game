@@ -3023,7 +3023,7 @@ test("MCP concurrency: failed running publication withholds the workload gate an
 test("MCP concurrency: job wrapper aborts on owner EOF and executes normally after publication", async () => {
   const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
   const { EventEmitter } = await import("node:events");
-  const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "mcp-launch-gate-"));
+  const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "mcp-job-wrapper-"));
   const marker = path.join(root, "executed"), argv = process.argv[2];
   let command, args, options, child;
   try {

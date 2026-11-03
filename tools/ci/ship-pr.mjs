@@ -5,7 +5,7 @@
 //
 // It never calls the ready or merge endpoints itself: the draft→ready flip stays the GitHub MCP `update_pull_request`
 // call the hooks gate on a fresh ready-gate receipt (10 min, tools/lib/gate-receipt.mjs), and `land` stays a label
-// (docs/WORKERS.md §5). A receipt older than that: re-run this command.
+// (skill `steward` §Land). A receipt older than that: re-run this command.
 //
 //   node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]
 //

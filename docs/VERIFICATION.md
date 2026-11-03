@@ -68,10 +68,11 @@ node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
 ```
 
 Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
-The full tiers run on the PR: every draft push runs the fast tier (its
-`Structural guards` A–D run the full `tooling-fast`, the check `ready-gate`
-reads) plus one 5-min `selected` browser shard, the full tier runs once the PR is ready, and `land.yml`'s `gate` check
-judges the merge result. A worker ends its turn at `land` ([WORKERS.md](WORKERS.md) §5).
+The full tiers run on the PR: every draft push gets the fast tier plus one
+`selected` shard (its `Structural guards` A–D run the full `tooling-fast`, the
+check `ready-gate` reads), the full tier runs once the PR is ready, and
+`land.yml`'s `gate` check judges the merge result. A worker ends its turn at
+`land` (skill `steward` §Land).
 
 ## 4. The gate is a ladder, and the rungs are not the same size
 
@@ -171,8 +172,9 @@ successful rerun.
 ## 6. CI and Pages
 
 PR CI validates the PR head; the deploy branch requires one check, `gate`, whose
-ci row requires `CI` green on the head (D-002). Every draft push runs the fast tier plus one
-`selected` shard (no label opts in). A deploy-branch push starts the Pages release
+ci row requires `CI` green on the head (D-002). Every PR push starts CI (a
+draft's run is the fast tier plus one `selected` shard); `= ci none` after a
+push means no open PR carries the sha. A deploy-branch push starts the Pages release
 train; there is no separate ship-push CI run. A green PR is not proof that Pages
 is live; verify live `version.json` and the apex SHA with `deploy-research`
 after Pages succeeds. For failure triage: `node tools/ci/ci-watch.mjs --sha <head>`
@@ -190,7 +192,7 @@ commit; unknown states stay unknown and the ready gate is not evaluated by it.
 ## Related readers
 
 - [AGENTS.md](../AGENTS.md) — the binding rules, one line each.
-- [WORKERS.md](WORKERS.md) — the worker contract, `land`, where a session ends.
+- [steward](../.claude/skills/steward/SKILL.md) — the PR lifecycle: open, push, red, `land`, where a session ends.
 - [TESTING.md](TESTING.md) — test groups, costs, harnesses and the release train.
 - [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) — where verification tools fit.
 - [AGENT-SURFACE.md](AGENT-SURFACE.md) — CLI and MCP ownership.
