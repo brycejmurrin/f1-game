@@ -12463,6 +12463,9 @@
         "tests/unit/hud-gap-decimals.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "inPit": [
+        "tests/unit/hud-gap-decimals.test.mjs"
+      ],
       "manual": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
@@ -17836,6 +17839,9 @@
         "tests/unit/input-hud-properties.test.mjs"
       ],
       "gapDecimals": [
+        "tests/unit/hud-gap-decimals.test.mjs"
+      ],
+      "inPit": [
         "tests/unit/hud-gap-decimals.test.mjs"
       ],
       "lapGapText": [
