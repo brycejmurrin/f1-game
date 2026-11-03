@@ -1,7 +1,6 @@
 /* hud-announce-lane-cache — PERF #1723: announceLane must not call
  * getBoundingClientRect on steady 10 Hz ticks (gap digit rolloff included).
  * Rects are cached; invalidate only on real layout change.
- * Ranked follow-ups: docs/notes/PERF-HUNT-P5-2026-11-03.md (row 4 layout-key cost).
  *
  * Run: node --test tests/unit/hud-announce-lane-cache.test.mjs
  */

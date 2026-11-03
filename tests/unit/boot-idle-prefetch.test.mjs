@@ -1,5 +1,6 @@
 // Boot / race-entry idle prefetch: LazyBundles.raceAssets, TrackBuildClient spawn gating,
 // renderer-boot adapter probe cap, Assets strip-decode yields.
+// Ranked boot/load findings: docs/notes/PERF-HUNT-P3-2026-11-03.md (#4531).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
