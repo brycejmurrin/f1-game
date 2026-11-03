@@ -17832,11 +17832,15 @@
       "rowLabel": [
         "tests/unit/hud-relative.test.mjs"
       ],
+      "sampleGeo": [
+        "tests/unit/hud-relative-geo-sample.test.mjs"
+      ],
       "select": [
         "tests/unit/hud-relative.test.mjs"
       ],
       "tick": [
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/hud-relative-geo-sample.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ]
     },
@@ -18002,6 +18006,7 @@
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
+        "tests/unit/hud-relative-geo-sample.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
