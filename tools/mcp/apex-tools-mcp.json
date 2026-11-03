@@ -44,6 +44,7 @@
     "apex_select_specs",
     "apex_graph_parity",
     "apex_frame_report",
+    "apex_circuit_info",
     "apex_cursor_agents",
     "apex_hud_shot",
     "apex_hud_survey",
