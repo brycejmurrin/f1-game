@@ -1,5 +1,5 @@
-// apex-extras.mjs — the session, job, UI, car and track-audit handlers behind apex-tools-mcp.mjs.
-// @doc Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit.
+// apex-extras.mjs — the session, job and UI handlers behind apex-tools-mcp.mjs.
+// @doc Handlers for apex_track (track session), apex_job_* (background CLIs), apex_profile and apex_ui_fit / apex_ui_shot.
 // @skill check-changes
 //
 // The catalog entries stay in apex-tools-mcp.mjs (agent-surface.test.mjs reads
@@ -11,7 +11,7 @@
 //                 (102 s), livery-contrast (95 s a team) outlive any client's
 //                 tool timeout; a job returns an id at once and runs on.
 //   apex_ui_*   — one menu screen × viewport: geometry numbers or PNG + DOM, ~15 s.
-//   apex_car_audit / apex_track_audit — the offline checks agents ran by hand.
+//   (apex_car_audit / apex_track_audit left on 2026-11-03: their CLIs print JSON already.)
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
@@ -988,52 +988,6 @@ export function createExtras(ctx) {
     } finally { releaseLock(); }
   }
 
-  // ── apex_car_audit / apex_track_audit: offline checks, no browser ─────────
-  async function carAudit(args, { signal }) {
-    const check = String(args.check || "");
-    let argv;
-    if (check === "ladder") {
-      try { argv = nodeArgv("car/parts-ladder.mjs", "--json", ...carFilterArgv(args)); }
-      catch (e) { return refuse("bad_args", e.message, "Use canonical category and team ids from apex_catalog."); }
-    }
-    else if (check === "crest") {
-      const teams = (args.teams || []).map(String);
-      if (teams.some((t) => !/^[a-z]{2,20}$/.test(t))) return refuse("bad_args", "teams are team ids", "e.g. [\"haas\",\"audi\"]");
-      argv = nodeArgv("car/crest-sweep.mjs", ...teams, "--json");
-    } else return refuse("bad_args", "check must be ladder or crest", "parts-sweep and livery-contrast take minutes: apex_job_start {kind:\"parts_sweep\"|\"livery_contrast\"}.");
-    if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
-    if (mockMode()) return toolResult({ ok: true, mock: true, argv });
-    // Exit 1 = the check found rows to look at — a verdict, not a crash.
-    return runSpawn(argv, { timeoutMs: 120000, allowExit: new Set([0, 1]), signal });
-  }
-  const AUDIT_CHECKS = ["verify", "float", "clip", "coplanar", "props", "ground"];
-  async function trackAudit(args, { signal }) {
-    let track; try { track = needTrack(args.track); } catch (e) { return e.refuse; }
-    // `checks` → tools/track/audit-circuit.cjs: every per-circuit audit against
-    // its baseline in one call (~16 s for all six on monza, 2026-10-05). The
-    // bare call keeps the original verify + float pair.
-    if (args.checks !== undefined) {
-      const checks = Array.isArray(args.checks) ? args.checks.map(String) : [];
-      if (!checks.length || checks.some((c) => !AUDIT_CHECKS.includes(c))) return refuse("bad_args", `checks must be a non-empty list of ${AUDIT_CHECKS.join(" | ")}`, 'e.g. {"track":"monza","checks":["clip","coplanar"]}');
-      const argv = nodeArgv("track/audit-circuit.cjs", track, "--json", "--checks", [...new Set(checks)].join(","));
-      if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
-      if (mockMode()) return toolResult({ ok: true, mock: true, argv });
-      // Exit 1 = a check over its baseline — a verdict, not a crash.
-      const r = bodyOf(await runSpawn(argv, { timeoutMs: 180000, allowExit: new Set([0, 1]), signal }));
-      return toolResult({ ok: r.ok, track, audit: r.out, stderr: r.ok ? undefined : String(r.stderr || "").slice(-800),
-        hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !r.ok });
-    }
-    const va = nodeArgv("track/verify-track.cjs", track, "--quiet"), fa = nodeArgv("track/float-audit.cjs", track, "--json");
-    if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: [va, fa] });
-    if (mockMode()) return toolResult({ ok: true, mock: true, argv: [va, fa] });
-    const [v, f] = (await Promise.all([runSpawn(va, { timeoutMs: 120000, signal }), runSpawn(fa, { timeoutMs: 120000, allowExit: new Set([0, 1]), signal })])).map(bodyOf);
-    const ok = v.ok && f.ok;
-    return toolResult({ ok, track,
-      verify: { ok: v.ok, exit: v.exit, line: (v.stdout || "").split("\n")[0], stderr: v.ok ? undefined : v.stderr.slice(-800) },
-      float: { ok: f.ok, exit: f.exit, out: f.out, stderr: f.ok ? undefined : f.stderr.slice(-800) },
-      hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !ok });
-  }
-
   return {
     thumbBlock,
     sessionInfo,
@@ -1059,14 +1013,12 @@ export function createExtras(ctx) {
         const r = jobStart({ ...a, kind: "profile" });
         let b; try { b = JSON.parse(r.content[0].text); } catch { return r; }
         if (b.ok === false || b.dryRun || b.mock) return r;
-        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then apex_profile_query on the artifact named in the log." });
+        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then `node tools/perf/query.mjs` on the artifact named in the log." });
       },
       apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
       apex_ui_shot: (a, o) => uiShot(a, o),
-      apex_car_audit: (a, o) => carAudit(a, o),
-      apex_track_audit: (a, o) => trackAudit(a, o),
     },
   };
 }

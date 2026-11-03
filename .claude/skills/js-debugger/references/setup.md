@@ -4,7 +4,7 @@ Moved out of SKILL.md so the recipe stays on top. Read when the daemon is down, 
 
 Requires Node 22+ and Bash for the wrapper. The debugger itself needs no npm
 package; source navigation and the game launcher need the checkout dependencies
-(`npm ci` on a fresh checkout). See [bootstrap and host attachment](../../../docs/AGENT-SURFACE.md#bootstrap-auto-setup).
+(`npm ci` on a fresh checkout). See [bootstrap and host attachment](../../../../docs/AGENT-SURFACE.md#bootstrap-auto-setup).
 Prefer attached `debugger_*` tools when the session lists them. Otherwise inspect
 the local schemas without a daemon or browser:
 

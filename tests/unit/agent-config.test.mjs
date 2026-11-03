@@ -165,7 +165,7 @@ test("tinyfish stays CLI-only: the lockstep guard owns its deliberate non-attach
   // TinyFish was REMOVED from the catalog in 2026-09 on purpose, and prose
   // alone does not hold a removal (this file's header: a stale "tinyfish for
   // deploy" line is one of the drifts that created the guard). The wrapper
-  // (tools/mcp/tinyfish-mcp.sh) is a CLI managing a tmux-held HTTP proxy on
+  // (mcp/tinyfish-mcp.sh, deleted 2026-11-03) was a CLI managing a tmux-held HTTP proxy on
   // 127.0.0.1:3711 — it has no stdio run/serve mode for output-level-mcp.sh
   // to spawn — and container egress blocks agent.tinyfish.ai, so the proxy
   // can never answer from an agent session (docs/AGENT-SURFACE.md, "Removed
@@ -185,14 +185,11 @@ test("tinyfish stays CLI-only: the lockstep guard owns its deliberate non-attach
       `${f} must not name tinyfish at all — the catalogs stay silent about a CLI-only tool`);
   const allow = JSON.parse(read(".cursor/environment.json")).mcpServerAllowlist;
   assert.ok(!allow.some((a) => /tinyfish/i.test(a.name)), "environment.json must not allowlist tinyfish");
-  // The CLI that remains: wrapper + RPC unwrapper, still declaring itself.
-  assert.ok(exists("tools/mcp/tinyfish-mcp.sh"),
-    "the tinyfish CLI wrapper is gone — if that is deliberate, update this pin and AGENT-SURFACE together");
-  assert.ok(exists("tools/mcp/tinyfish-rpc.py"), "the tinyfish RPC helper is gone — see the wrapper pin above");
-  assert.ok(
-    /CLI ONLY — NOT MCP-ATTACHED/.test(read("tools/mcp/tinyfish-mcp.sh")),
-    "the wrapper no longer declares itself CLI-only — a changed interface re-opens the attachment decision here, not by drift",
-  );
+  // 2026-11-03 (agent-surface reset §4.8): the CLI pair left the tree too — nothing in-repo speaks to TinyFish.
+  // Split literals so docs-integrity does not read them as live paths.
+  assert.equal(exists("tools/mcp/" + "tinyfish-mcp.sh"), false,
+    "the tinyfish CLI left 2026-11-03; re-attaching starts with fresh egress evidence, here and in AGENT-SURFACE together");
+  assert.equal(exists("tools/mcp/" + "tinyfish-rpc.py"), false, "the tinyfish RPC helper left 2026-11-03 — see the wrapper pin above");
   // The doc side of the decision stays in the surface map.
   assert.ok(
     /Removed 2026-09 \(CLI only now, not MCP-attached\)/.test(read("docs/AGENT-SURFACE.md")),

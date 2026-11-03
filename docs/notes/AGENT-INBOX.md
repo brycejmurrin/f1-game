@@ -1,5 +1,10 @@
 # GitHub inbox CLI and MCP adapter
 
+> **Retired MCP half (2026-11-03, agent-surface reset §4.8):** the four `apex_inbox_*`
+> tools and the stdio adapter `mcp/inbox-mcp.mjs` were deleted — the GitHub MCP reads
+> the same comments, and the SQLite mirror was a second copy of the bus. The CLI
+> `tools/agent/inbox.mjs` described below still exists; the MCP paragraphs are history.
+
 `node tools/agent/inbox.mjs` implements the read-only first slice of #4387/#4394.
 GitHub remains authoritative under [WORKERS.md](../WORKERS.md). Grok continues
 managing the Cursor bots; this tool does not launch, message or adopt any bot.
@@ -126,7 +131,7 @@ cache access. `apex_help` returns the full schema, and server discovery points t
 the inbox tools. The existing server can list them without loading SQLite;
 actual inbox operations still require Node 22.13+.
 
-`tools/mcp/inbox-mcp.mjs` is also a standalone stdio adapter and transport test
+`mcp/inbox-mcp.mjs` (deleted 2026-11-03) was also a standalone stdio adapter and transport test
 entrypoint. Both routes share the same handler and core. It supports repository
 protocol revisions through 2025-06-18, negotiates a supported older version when
 requested, and does not claim implementation of 2026-07-28. Standard object
@@ -160,7 +165,7 @@ its own checkout, not automatically this PR worktree; never pull into another
 session's checkout to activate these tools.
 
 For a runtime that has no existing apex-tools connection, a concrete standalone
-registration would execute `node /APPROVED/CHECKOUT/tools/mcp/inbox-mcp.mjs` with
+registration would have executed `node /APPROVED/CHECKOUT/<mcp/inbox-mcp.mjs>` with
 only the four named tools enabled. The absolute checkout/mount, Node version,
 server authentication and host support must be validated for each runtime.
 A stdio server is not a remote HTTPS service merely because its URL is published.

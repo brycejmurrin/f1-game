@@ -576,20 +576,10 @@
       "presentation": "native",
       "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact"
     },
-    "tools/ci/codex-cloud.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "JSON stdin and typed exit/ok/error; in-memory host login and fixed endpoint/no redirects; lossless UTF-8 pagination; explicit control mode, account-scoped replay receipts, created thread IDs and ambiguous delivery."
-    },
     "tools/ci/claude-agents.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, queued versus unknown delivery, replyRetrieved and retrySafe. Never expose message stdin or credentials."
-    },
-    "tools/ci/claude-transcript.py": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "JSON retrieval verdict; no terminal transcript or credentials in diagnostics. Dedicated reader checkout, confirmed export, deadline and no model prompts. Helper for cloud transcript snapshots, never a general shell runner."
+      "preserve": "JSON verdict, source identity, known-reference versus live-list distinction, untrusted-data label on local logs; reads only (no send verbs). Never expose credentials."
     },
     "tools/ci/cursor-agents.mjs": {
       "action": "keep-native",
@@ -1721,11 +1711,6 @@
       "presentation": "native",
       "preserve": "40 native tool names, stdio/HTTP route"
     },
-    "tools/mcp/apex-codex-agents.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Separate closed read-only/control schemas and annotations; no auth on discovery/dryRun; bounded UTF-8 continuation; owned child timeout/cancellation; request IDs and ambiguous delivery; no credential diagnostics."
-    },
     "tools/mcp/apex-tools-mcp.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -1881,11 +1866,6 @@
       "presentation": "native",
       "preserve": "Correctness and timing separate"
     },
-    "tools/mcp/inbox-mcp.mjs": {
-      "action": "protocol-only",
-      "presentation": "native",
-      "preserve": "JSON-RPC stdout framing, closed tool arguments, bounded cache payloads/cursors, isError, and no provider sends; no CLI output wrapping."
-    },
     "tools/mcp/lsp-mcp.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
@@ -1940,16 +1920,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Tokenized URLs, bytes, safe report paths"
-    },
-    "tools/mcp/tinyfish-mcp.sh": {
-      "action": "page-results",
-      "presentation": "shared-levels",
-      "preserve": "RPC failures remain nonzero, source URL/title and credentials redaction"
-    },
-    "tools/mcp/tinyfish-rpc.py": {
-      "action": "page-results",
-      "presentation": "shared-levels",
-      "preserve": "Live/local build mismatch exit and upstream RPC errors"
     },
     "tools/mcp/ui-tools.mjs": {
       "action": "targeted-summary",
