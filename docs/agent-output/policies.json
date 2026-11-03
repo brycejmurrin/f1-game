@@ -1306,6 +1306,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/garage/author-crew-motion.py": {
       "action": "keep-native",
       "presentation": "native",
