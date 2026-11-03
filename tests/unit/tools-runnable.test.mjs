@@ -75,7 +75,7 @@ function tool(name) {
 
 test("the sweep sees the whole tools tree (a silent empty list proves nothing)", () => {
   assert.ok(FILES.length >= 70, `expected the full tool set, walked ${FILES.length}`);
-  for (const name of ["mcp-cli.mjs", "tinyfish-mcp.sh", "manifest.cjs"]) {
+  for (const name of ["mcp-cli.mjs", "probe-mcp.py", "manifest.cjs"]) {
     assert.ok(FILES.some((f) => f.rel.endsWith(name)), `${name} missing from the walk`);
   }
 });
@@ -272,7 +272,6 @@ test("the MCP-facing entry points answer without touching a browser or a network
   const cases = [
     { cmd: process.execPath, args: [tool("mcp-cli.mjs"), "--help"], want: /probe/ },
     { cmd: process.execPath, args: [tool("mcp-cli.mjs"), "probe", "--dry-run"], want: /new_page/ },
-    { cmd: "bash", args: [tool("tinyfish-mcp.sh"), "help"], want: /deploy-check/ },
     { cmd: "python3", args: [tool("probe-mcp.py"), "help"], want: /chrome_/ },
     { cmd: "bash", args: [tool("apex-tools-mcp.sh"), "help"], want: /apex_/ },
     { cmd: "bash", args: [tool("apex-tools-mcp.sh"), "help"], want: /smoke/ },

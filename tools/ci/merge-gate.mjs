@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // merge-gate.mjs — the landing gate: the CI check named `gate` (.github/workflows/land.yml), runnable locally.
-// @doc Landing gate (`gate` check): open, no `hold`, Plan closed, CI green, gen:check + ratchets on the merge, base distance.
+// @doc Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok for harness edits, gen + ratchets.
 // @section runner
 // @skill steward
 //
@@ -9,26 +9,30 @@
 // nothing (no receipt, no bus line), reads no bus, and pins no session identity: the branch ruleset requires the
 // `gate` check and `land.yml` arms auto-merge when it is green.
 //
-//   node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--max-behind N] [--json <path>]
+//   node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--trusted] [--json <path>]
 //
 // Rows (all must pass; each prints `= gate <row>: ok|FAIL <reason>`, then one final `= merge-gate passed|refused …`
 // line, which land.yml reads as the check title):
 //   open      the PR is open and not a draft, and its head is the `--sha` the workflow gated (when given)
-//   hold      no `hold` label (replaces the body line `MERGE-HOLD:`, which is no longer read)
+//   hold      no `hold` label; a hold Bryce set in person (newest `labeled hold` with performed_via_github_app
+//             null) is lifted only by his own click — an agent's unlabel of it still holds ("hold set by Bryce was
+//             removed by an agent"). An agent may lift a hold an agent set. (provenance, docs/plans/
+//             2026-11-03-agent-surface-reset.md §4.3; tools/ci/lib/provenance.mjs)
 //   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
 //   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
 //             `success` on the PR's current head, newest attempt
+//   config    a diff touching .claude/hooks/**, .claude/settings.json, .github/workflows/** or .githooks/** needs the
+//             `config-ok` label, last added by Bryce in person (`= gate config: FAIL needs config-ok from brycejmurrin`);
+//             any other diff passes. Replaces the hook "ask" and the unenforced "Bryce's explicit yes" rule.
 //   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
-//   distance  the PR's merge-base is at most N (default MAX_BEHIND) GAME merges behind the base tip: a game merge is a
-//             first-parent merge commit on the base whose diff touches js/ css/ assets/ index.html or sw.js
-//             (replaces GAME-SLOT pacing: red trains were 13.3 % when a merge landed after the PR's green vs 4.3 %)
-//             — applied only when the PR's own diff (merge-base..head) touches a game path; otherwise it passes
+// The `distance` row (merge-base at most N game merges behind the tip) was retired 2026-11-03 (plan §6): gen and
+// ratchets already run on the real merge result, which is what catches composition reds; the row only bought syncs.
 //
-// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, distance): it fetches the
-// head's objects for the merge-base but never checks them out or runs them. land.yml's `trusted-rows` job runs it,
-// so `post` never takes those rows from the artifact of the leg that ran the PR's scripts (WP-L2).
+// `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, config): GitHub reads only,
+// nothing checked out or run. land.yml's `trusted-rows` job runs it, so `post` never takes those rows from the
+// artifact of the leg that ran the PR's scripts (WP-L2).
 //
 // Exit: 0 every row ok, 2 a row failed, 3 waiting on CI, 1 usage or API/git error. `--check` is accepted (the
 // workflow's spelling). `--json <path>` writes the row summary there; nothing else is written outside the
@@ -40,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
 import { planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { OWNER, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -50,26 +55,16 @@ export const CI_APP = "github-actions";
 /** The workflow file whose run must own the `CI` check-run: a job named `CI` in any OTHER workflow (a PR can add one)
  * is an Actions-app check-run too, so the app alone does not pin it (r2 landing-design, WP-L3e). */
 export const CI_WORKFLOW = "ci.yml";
-/** The label that vetoes a landing (plan §4.1: whoever sets it removes it; Bryce can always remove it). */
+/** The label that vetoes a landing (plan §4.1); since 2026-11-03 only Bryce's own click lifts it (the hold row). */
 export const HOLD_LABEL = "hold";
-/** Game merges are the ones a Pages train ships; the distance row counts them. */
-export const GAME_PATH = /^(js\/|css\/|assets\/|index\.html$|sw\.js$)/;
-export const isGamePath = (p) => GAME_PATH.test(String(p || "").replace(/^\.\//, ""));
-export const gameFiles = (files) => (files || []).filter(isGamePath);
-/** Whether a PR's own changed files touch a game path. Only such a PR is held to the distance row: a docs, tools,
- *  tests or workflow PR gains nothing from it, and gen:check and the ratchets already run on the real merge
- *  result (2026-10-27: #3920, #3957, #3980, #4001, #4021 were refused on distance alone). Pure. */
-export const touchesGame = (files) => gameFiles(files).length > 0;
-/** Default for --max-behind. Plan §4.3 started at an unmeasured N = 2; on 2026-10-27 the deploy branch took ~15 game
- *  merges per ~40 min full CI tier, so game PRs went green and were refused on distance again and again (#3964, #3932,
- *  #3886: 3 syncs each). 6 was still too tight: on 2026-10-28 #4004 was synced onto tip 1c3263c2, passed distance,
- *  and one CI tier later the tip was 9 merges ahead (8 touching game paths) so the green PR was refused again; the tip
- *  took 11 merges in 2 h. 12 covers one CI tier plus a margin. It stays safe because land-gate still runs gen:check and
- *  the ratchets on the real merge result against the current tip, and the Pages train gates every deploy tip before it
- *  publishes. */
-export const MAX_BEHIND = 12;
+/** The label Bryce adds in person to let a PR that edits the agent harness land (the config row). */
+export const CONFIG_LABEL = "config-ok";
+/** The paths whose edit needs CONFIG_LABEL: the hooks, the settings and the workflows that enforce every other rule. */
+export const CONFIG_PATH = /^(\.claude\/hooks\/|\.claude\/settings\.json$|\.github\/workflows\/|\.githooks\/)/;
+export const isConfigPath = (p) => CONFIG_PATH.test(String(p || "").replace(/^\.\//, ""));
+export const configFiles = (files) => (files || []).filter(isConfigPath);
 /** Row order, which is also print order. */
-export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "gen", "ratchets", "distance"]);
+export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "gen", "ratchets"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */
 export const TRUSTED_ROWS = Object.freeze(ROWS.filter((k) => k !== "gen" && k !== "ratchets"));
 
@@ -86,10 +81,35 @@ export function openVerdict(pull) {
   return row(true, "open and ready for review");
 }
 
-/** hold: no `hold` label. Labels may be strings or `{ name }` objects (the API's shape). Pure. */
-export function holdVerdict(labels) {
+/** hold: no `hold` label, and (when the PR's label events are given) a hold the OWNER set in person was lifted by his
+ *  own click: the newest `labeled hold` passing byOwner with the newest `unlabeled hold` not passing it is still held.
+ *  An agent may lift a hold an agent set. Labels may be strings or `{ name }` objects (the API's shape); `events`
+ *  null skips the provenance half (pure callers without events). Pure. */
+export function holdVerdict(labels, events = null, owner = OWNER) {
   const names = (labels || []).map((l) => String(typeof l === "string" ? l : l?.name || "").toLowerCase());
-  return names.includes(HOLD_LABEL) ? row(false, `the \`${HOLD_LABEL}\` label is set: whoever set it removes it (Bryce can always remove it)`) : row(true, `no \`${HOLD_LABEL}\` label`);
+  if (names.includes(HOLD_LABEL)) return row(false, `the \`${HOLD_LABEL}\` label is set: whoever set it removes it; one ${owner} set, only his own click`);
+  const at = (e) => Date.parse(e?.created_at || "") || 0;
+  const newest = (kind) => labelEvents(events, HOLD_LABEL).filter((e) => e.event === kind).reduce((best, e) => (!best || at(e) >= at(best) ? e : best), null);
+  const set = newest("labeled"), lifted = newest("unlabeled");
+  if (set && byOwner(set, owner) && lifted && !byOwner(lifted, owner)) {
+    return row(false, `hold set by Bryce was removed by an agent (set by ${owner} at ${set.created_at || "?"}, unlabeled by ${describeActor(lifted)} at ${lifted.created_at || "?"}): still held until ${owner} removes it himself`);
+  }
+  return row(true, lifted ? `no \`${HOLD_LABEL}\` label (last removed by ${describeActor(lifted)})` : `no \`${HOLD_LABEL}\` label`);
+}
+
+/** config: a diff touching a CONFIG_PATH needs the `config-ok` label whose newest `labeled` event is the owner's own
+ *  click; a diff touching none passes. `files` are the PR's changed paths (the pulls/<n>/files endpoint). Pure. */
+export function configVerdict(files, labels, events = null, owner = OWNER) {
+  const touched = configFiles(files);
+  if (!touched.length) return row(true, `no hook, settings, workflow or githook path in the diff (${(files || []).length} file(s))`);
+  const shown = touched.slice(0, 4).join(", ") + (touched.length > 4 ? ", …" : "");
+  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+  const last = newestLabelEvent(events, CONFIG_LABEL);
+  if (!names.includes(CONFIG_LABEL)) return row(false, `needs ${CONFIG_LABEL} from ${owner}: the diff edits ${shown}`);
+  if (!last || last.event !== "labeled" || !byOwner(last, owner)) {
+    return row(false, `needs ${CONFIG_LABEL} from ${owner}: the label was ${last ? `last added by ${describeActor(last)}` : "found but its label event was not"} — only his own click counts (the diff edits ${shown})`);
+  }
+  return row(true, `${CONFIG_LABEL} added by ${owner} at ${last.created_at || "?"} covers ${shown}`);
 }
 
 /** plan: the Plan checklist is closed (ready-gate.mjs planVerdict, `land:` items exempt). No Plan at all passes. Pure. */
@@ -120,73 +140,7 @@ export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP, suites
   return best.conclusion === "success" ? row(true, `${name} success (check-run ${best.id})`) : row(false, `${name} ${best.conclusion}`);
 }
 
-/**
- * Game merges on the base between the PR's merge-base (exclusive) and the tip (inclusive). `commits` is the base's
- * first-parent history, NEWEST first, each `{ sha, parents, files }`; the walk stops at `mergeBase`. A commit counts
- * when it is a merge (two or more parents) and its first-parent diff touches a game path. Pure.
- * @returns {{ count: number, shas: string[], reached: boolean }} reached: the merge-base was found in the list
- */
-export function gameMergesBehind(commits, mergeBase) {
-  const shas = [];
-  let reached = false;
-  for (const c of commits || []) {
-    if (!c) continue;
-    if (c.sha === mergeBase) { reached = true; break; }
-    if ((c.parents || []).length > 1 && gameFiles(c.files).length) shas.push(c.sha);
-  }
-  return { count: shas.length, shas, reached };
-}
-
-/** distance: the merge-base is at most `max` game merges behind the tip. Pure. */
-export function distanceVerdict(commits, mergeBase, max = MAX_BEHIND) {
-  const d = gameMergesBehind(commits, mergeBase);
-  // A merge-base off the first-parent line (a PR stacked on another branch): every walked merge landed after it.
-  const where = d.reached ? "" : " (merge-base off the base's first-parent line: every merge since it counts)";
-  const list = d.shas.slice(0, 4).map((s) => s.slice(0, 8)).join(", ");
-  if (d.count > max) return row(false, `base is ${d.count} game merge(s) ahead of the merge-base (max ${max}): ${list}${d.count > 4 ? ", …" : ""}${where} — sync-pr.mjs (merge the base tip), push, and let CI re-run`);
-  return row(true, `${d.count} game merge(s) between the merge-base and the base tip (max ${max})${where}`);
-}
-
 // ---- git-backed rows --------------------------------------------------------------------------------------
-
-/**
- * The base's first-parent history from `tip` down to and including `mergeBase`, in gameMergesBehind's shape. Only
- * merge commits carry a file list (the only ones the distance row counts). `cwd` has both refs fetched.
- */
-export function baseHistory({ tip, mergeBase, cwd = ROOT, run = git } = {}) {
-  const list = run(["rev-list", "--first-parent", "--parents", tip, `^${mergeBase}^@`], cwd);
-  if (list.status !== 0) return { error: `rev-list failed: ${(list.stderr || "").trim().split("\n")[0]}` };
-  const commits = [];
-  for (const line of list.stdout.split("\n").filter(Boolean)) {
-    const [sha, ...parents] = line.trim().split(/\s+/);
-    let files = [];
-    if (parents.length > 1) {
-      const d = run(["diff-tree", "--no-commit-id", "--name-only", "-r", parents[0], sha], cwd);
-      if (d.status !== 0) return { error: `diff-tree ${sha.slice(0, 8)} failed: ${(d.stderr || "").trim().split("\n")[0]}` };
-      files = d.stdout.split("\n").filter(Boolean);
-    }
-    commits.push({ sha, parents, files });
-  }
-  return { commits };
-}
-
-/**
- * The distance row for a real clone: merge-base of `head` and `tip`, then the PR's own changed files (merge-base..head,
- * renames split so a file moved out of js/ still counts); a PR touching no game path passes without the walk, any
- * other gets baseHistory. `{ row, mergeBase, error? }`.
- */
-export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git } = {}) {
-  const mb = run(["merge-base", head, tip], cwd);
-  if (mb.status !== 0) return { error: `merge-base of ${String(head).slice(0, 8)} and ${String(tip).slice(0, 8)} failed (shallow clone? fetch-depth: 0)` };
-  const mergeBase = mb.stdout.trim();
-  const own = run(["diff", "--no-renames", "--name-only", mergeBase, head], cwd);
-  if (own.status !== 0) return { error: `diff ${mergeBase.slice(0, 8)}..${String(head).slice(0, 8)} failed: ${(own.stderr || "").trim().split("\n")[0]}` };
-  const files = own.stdout.split("\n").filter(Boolean);
-  if (!touchesGame(files)) return { row: row(true, `no game files in this PR's diff (${files.length} file(s)): distance not applied`), mergeBase };
-  const h = baseHistory({ tip, mergeBase, cwd, run });
-  if (h.error) return { error: h.error };
-  return { row: distanceVerdict(h.commits, mergeBase, max), mergeBase };
-}
 
 /**
  * The shrink-only ratchets, run on the MERGE RESULT (cwd = the merged worktree): tools/check/ratchets.mjs (file and
@@ -245,7 +199,7 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
  */
 /**
  * Fetch the base tip and the PR head's objects (nothing is checked out or run). Returns { tip } or { error }: the
- * shared first step of the throw-away merge and of `--trusted` (whose distance row needs the merge-base).
+ * first step of the throw-away merge; `--trusted` reads GitHub only and never calls it.
  */
 export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = {}) {
   const f1 = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${base}:refs/remotes/origin/${base}`], cwd);
@@ -265,8 +219,7 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
   const fetched = fetchForGate({ pr, head, headRef, cwd, base });
   if (fetched.error) return { ok: false, evidence: fetched.error, tip: "", error: true };
   const tip = fetched.tip;
-  // A refusal carries the fetched tip: with `tip: ""` evaluate's distance row failed its merge-base and the gate
-  // reported an error ("will retry") in place of the real conflict or gen:check refusal (2026-10-27 23:20Z, #3964).
+  // A refusal carries the fetched tip: land.yml compares it with the deploy tip at post time (2026-10-27 23:20Z, #3964).
   const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip }; };
   cleanup();
   const add = git(["worktree", "add", "--detach", wt, tip], cwd);
@@ -337,11 +290,26 @@ export function ciSuitesFor(sha, request) {
   return { suites };
 }
 
+/** Every page of a list endpoint through `request` → { rows } | { error }. */
+function listAll(pathQs, request, pick = (j) => j, maxPages = 30) {
+  const out = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const r = request(`${pathQs}${pathQs.includes("?") ? "&" : "?"}per_page=100&page=${page}`);
+    if (r.error) return { error: r.error };
+    const batch = pick(r.json);
+    const rows = Array.isArray(batch) ? batch : [];
+    out.push(...rows);
+    if (rows.length < 100) break;
+  }
+  return { rows: out };
+}
+
 /**
- * Every row for PR `pr`. Side effects only through the injected `request` (GitHub), `localMerge` (the throw-away
- * merge) and `distance` (git). Returns { ok, rows, pr, head, base, tip } or { error } for an API/git failure.
+ * Every row for PR `pr`. Side effects only through the injected `request` (GitHub) and `localMerge` (the throw-away
+ * merge). The hold and config rows read the PR's label events (provenance) and the config row its changed files.
+ * Returns { ok, rows, pr, head, base, tip } or { error } for an API/git failure.
  */
-export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind = MAX_BEHIND, localMerge = localMergeGenCheck, distance = distanceFor, trusted = false, fetchTip = fetchForGate } = {}) {
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -352,7 +320,10 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind =
   rows.open = openVerdict(pull);
   const want = String(sha || "").toLowerCase();
   if (rows.open.ok && want && !(head.startsWith(want) || want.startsWith(head))) rows.open = row(false, `PR head is ${head.slice(0, 8)}, not the --sha ${want.slice(0, 8)} this run gated: a newer push gets its own run`);
-  rows.hold = holdVerdict(pull.labels);
+  // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).
+  const ev = listAll(`issues/${pr}/events`, request, (j) => j, 10);
+  if (ev.error) return { error: `events of PR #${pr}: ${ev.error}` };
+  rows.hold = holdVerdict(pull.labels, ev.rows, owner);
   rows.plan = planRow(pull.body);
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
@@ -360,31 +331,18 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind =
   const ci = ciSuitesFor(head, request);
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
+  const files = listAll(`pulls/${pr}/files`, request);
+  if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
+  rows.config = configVerdict(files.rows.map((f) => f?.filename), pull.labels, ev.rows, owner);
   let tip = "";
-  // No tip is a FAIL row, not an error: an error posts "will retry" and hides the row that actually refused.
-  const distanceRow = () => {
-    if (!tip) return { row: row(false, "not evaluated: no tip") };
-    return distance({ head, tip, cwd: root, max: maxBehind });
-  };
   if (!rows.open.ok) {
-    for (const k of order.filter((r) => r === "gen" || r === "ratchets" || r === "distance")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
-  } else if (trusted) {
-    // No merge and no PR script: the base tip and the head's objects only, for the merge-base.
-    const f = fetchTip({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
-    if (f.error) return { error: f.error };
-    tip = f.tip || "";
-    const d = distanceRow();
-    if (d.error) return { error: d.error };
-    rows.distance = d.row;
-  } else {
+    for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
+  } else if (!trusted) {
     const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
     if (g.error) return { error: g.evidence };
     tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);
     rows.ratchets = g.ratchets ? row(g.ratchets.ok, g.ratchets.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
-    const d = distanceRow();
-    if (d.error) return { error: d.error };
-    rows.distance = d.row;
   }
   const ordered = {};
   for (const k of order) ordered[k] = rows[k];
@@ -402,30 +360,30 @@ export function rowLines(v) {
   return lines;
 }
 
-const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--trusted] [--max-behind N] [--json <path>]
+const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--check] [--trusted] [--json <path>]
   The landing gate: the CI check named \`gate\` (land.yml), also runnable locally with a GitHub token
   (GH_TOKEN / GITHUB_TOKEN or \`gh auth token\`). Rows, each printed as \`= gate <row>: ok|FAIL <reason>\`, then one
   final \`= merge-gate passed|refused …\` line (the check title):
-    open (open, not a draft, head = --sha when given), hold (no \`hold\` label), plan (Plan closed; \`land:\` items
-    exempt), ci (\`CI\` success on the head), gen (clean merge onto the current base tip + gen:check),
-    ratchets (on that merge result), distance (merge-base at most N game merges behind the base tip; default ${MAX_BEHIND};
-    a PR whose own diff touches no game path passes it).
-  --trusted: only the rows that run no PR code (open, hold, plan, ci, distance); land.yml's trusted-rows job.
+    open (open, not a draft, head = --sha when given), hold (no \`hold\` label; a hold ${OWNER} set in person is lifted
+    only by his own click, an agent's hold by anyone), plan (Plan closed; \`land:\` items exempt), ci (\`CI\` success on
+    the head), config (a diff touching .claude/hooks/**, .claude/settings.json, .github/workflows/** or .githooks/** needs
+    \`${CONFIG_LABEL}\` added by ${OWNER} in person), gen (clean merge onto the current base tip + gen:check), ratchets (on
+    that merge result).
+  --trusted: only the rows that run no PR code (open, hold, plan, ci, config); land.yml's trusted-rows job.
   A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
   finished), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
 
-export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, distance = distanceFor, write = fs.writeFileSync, fetchTip = fetchForGate } = {}) {
+export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, write = fs.writeFileSync, owner = OWNER } = {}) {
   exitIfHelp(argv, USAGE);
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const pr = Number(opt("--pr"));
   if (!Number.isInteger(pr) || pr < 1) { log("= merge-gate error — --pr <n> is required"); return 1; }
-  const maxBehind = opt("--max-behind") == null ? MAX_BEHIND : Number(opt("--max-behind"));
-  if (!Number.isInteger(maxBehind) || maxBehind < 0) { log("= merge-gate error — --max-behind expects a non-negative integer"); return 1; }
-  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, maxBehind, localMerge, distance, trusted: argv.includes("--trusted"), fetchTip });
+  if (argv.includes("--max-behind")) { log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03 (header of this file)"); return 1; }
+  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner });
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");
-  if (jsonPath) write(path.resolve(root, jsonPath), JSON.stringify({ ...v, maxBehind, at: new Date().toISOString() }, null, 2) + "\n");
+  if (jsonPath) write(path.resolve(root, jsonPath), JSON.stringify({ ...v, at: new Date().toISOString() }, null, 2) + "\n");
   return v.ok ? 0 : v.waiting ? 3 : 2;
 }
 

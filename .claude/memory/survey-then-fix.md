@@ -21,4 +21,4 @@ after delivering the survey, be ready to apply them on the same branch, verify
 with the gate, and refresh the PR body. Name what cannot be done in the cloud
 session (interactive slash commands) explicitly rather than skipping it silently.
 Related: AGENTS.md §Verification (verify once, let the PR's CI run the full tiers) and
-[docs/WORKERS.md](../../docs/WORKERS.md) (the `land` label lands the PR).
+[skill steward](../skills/steward/SKILL.md) (the `land` label lands the PR).

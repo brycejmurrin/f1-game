@@ -11,6 +11,7 @@
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
  *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
+ *     (DRAFT=true: a dropped spec warns instead of redding — the draft plan is the 5-min budget, 2026-11-03)
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -97,17 +98,8 @@ function judgeSpecs(input) {
   if (selected === "success") {
     reason = "selected specs passed";
   } else if (selected === "skipped") {
-    // Draft CI deliberately defers every browser leg, including budget spills.
-    // Report that deferral, rather than judging an unexecuted ready-tier plan.
-    if (draft === "true") {
-      return {
-        ok: true,
-        reason: "draft PR: selected legs skipped (ready_for_review runs them)",
-        ...(dropped !== "0" ? { warn: droppedKnown ? `draft plan dropped ${dropped} routed spec(s); resolve the budget before ready-tier validation` : `draft plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}); check the select job's outputs` } : {}),
-        infraRetry,
-        failedSpecs,
-      };
-    }
+    // A draft runs the selected legs too since 2026-11-03 (one 5-min shard), so
+    // a skipped matrix means the same thing on every PR: the plan had no jobs.
     reason = "the plan had no jobs";
   } else if (selected === "cancelled" || selected === "failure") {
     if (failedSpecs.length > 0) {
@@ -153,6 +145,18 @@ function judgeSpecs(input) {
   }
 
   if (dropped !== "0") {
+    // A DRAFT WARNS (2026-11-03): its plan is the 5-min budget, so a routed spec
+    // it cannot afford is expected there; the ready run (10 min) or
+    // remote-group.mjs runs it, and only those verdicts red on it.
+    if (draft === "true") {
+      return {
+        ok: true,
+        reason,
+        warn: !droppedKnown ? `the draft plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}); check the select job's outputs` : `the draft plan (5-min budget) dropped ${dropped} routed spec(s); the ready run's 10-min plan or tools/ci/remote-group.mjs runs them, and those verdicts red on it`,
+        infraRetry,
+        failedSpecs,
+      };
+    }
     if (called === "true") {
       return {
         ok: true,

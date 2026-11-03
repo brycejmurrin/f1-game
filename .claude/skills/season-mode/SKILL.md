@@ -50,9 +50,8 @@ node --test tests/unit/season-cal.test.mjs                        # VM, no brows
 node tools/ci/test-bg.mjs --spec tests/specs/season.spec.js        # BROWSER, one spec, background (format chips: season-format.spec.js)
 ```
 
-   Subagents never run a browser spec (AGENTS.md Session shape rule 10). `node tools/ci/test-bg.mjs modes`
-   is the WHOLE group (cost: AGENTS.md §Verification) — only when `node tools/ci/pick-tests.mjs` names
-   it, and then preferably `node tools/ci/remote-group.mjs modes` on the pushed branch.
+   Subagents never run a browser spec (AGENTS.md rule 10). The WHOLE `modes` group runs only on the pushed
+   branch, `node tools/ci/remote-group.mjs modes`, and only when `node tools/ci/pick-tests.mjs` names it.
 
 ## References
 

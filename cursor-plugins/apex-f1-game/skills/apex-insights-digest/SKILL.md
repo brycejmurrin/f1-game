@@ -23,5 +23,5 @@ Write `/workspace/apex-insights/digest-YYYY-MM-DD.md` with:
 5. Gaps (agents with PR but no transcript)
 
 End with five bullets for chat. Do not launch workers from this skill: a fix becomes a `ready` issue, and the
-hourly dispatcher launches it within its caps (`tools/ci/dispatch.json`, `docs/WORKERS.md` §The dispatcher). A
-close-out is the PR's ```handoff block (`docs/WORKERS.md` §The Hand-off block). Never merge or arm auto-merge.
+hourly dispatcher launches it within its caps (`tools/ci/dispatch.json`, skill `dispatcher`). A
+close-out is the PR's ```handoff block (`.github/pull_request_template.md`). Never merge or arm auto-merge.

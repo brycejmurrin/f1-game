@@ -1,6 +1,6 @@
 ---
 name: phone-bridge
-description: "Use when measuring live play on Bryce's iPhone (GitHub-issue bridge, apex-cmd)."
+description: "Use when measuring live play on Bryce's actual iPhone through the GitHub-issue bridge (apex-cmd / apex-result: fps, WebGPU vs WebGL2 path, BENCHMARK, snap). Not for: playing the working tree from a phone → phone-browser; headless profiles → playwright-probe."
 ---
 
 # Phone bridge — Claude drives the live game on Bryce's phone

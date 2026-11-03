@@ -13,13 +13,13 @@
  *   node tools/ci/pick-tests.mjs --staged        # only what is staged
  *   node tools/ci/pick-tests.mjs --since HEAD~3
  *   node tools/ci/pick-tests.mjs js/car/parts.js js/ui/hud.js   # explicit paths
- *   node tools/ci/pick-tests.mjs --bg            # print the background-run command
+ *   node tools/ci/pick-tests.mjs --bg            # print only the remote-group.mjs commands
  *   node tools/ci/pick-tests.mjs --json         # machine-readable, for CI
  *
  * `--json` exists because the human output is PROSE and a CI selector reading
  * it becomes a silent consumer of an unversioned format. Two of its lines are
  * live traps for an unanchored `test:<group>` grep: the zero-match message
- * names `test:tiny`, and the batching lines name `tools/ci/test-bg.mjs <groups>`.
+ * names `test:tiny`, and the run lines name `tools/ci/remote-group.mjs <group>`.
  * The JSON shape is asserted by tests/unit/pick-tests.test.mjs, so it cannot drift
  * out from under a consumer the way the prose can.
  *
@@ -38,7 +38,6 @@
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -50,14 +49,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // tests/unit/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
 // drift apart silently the way a comment naming a branch would.
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
-// Kept in step with tools/ci/test-bg.mjs: WORKERS is its formula, and a batch
-// is ONE group because test-bg's default cap is 1 (sequential; `--parallel`
-// is the opt-in). The old cores/2 batches printed two-group commands that
-// test-bg then started only the first of.
-const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
-const WORKERS = +process.env.WORKERS || (os.cpus().length <= 4 ? 1 : 2);
-const MAX_GROUPS = 1;
-
 /* [matcher, groups, why] — matcher is a RegExp over the repo-relative path.
    Every rule that matches contributes its groups; the union is what runs. */
 export const RULES = [
@@ -214,9 +205,9 @@ export const RULES = [
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/(phone-recorder|soak-run)\.js/, ["phone-recorder"], "PHONE TEST recorder + AUTO SOAK (#1633)"],
-  // Post-flag ceremony + FLOW/USAGE-PATHS finish tables (#1584 slice 5 / #4071).
-  [/^docs\/FLOW\.md$/, ["results-flow"], "post-flag ceremony + ResultsCam finish table"],
-  [/^docs\/USAGE-PATHS\.md$/, ["results-flow"], "R11–R13 finish journeys and ceremony matrix"],
+  // Post-flag ceremony + finish journeys (#1584 slice 5 / #4071); FLOW.md and USAGE-PATHS.md folded into
+  // ARCHITECTURE-MAP.md on 2026-11-03 (D-001 §4.9).
+  [/^docs\/ARCHITECTURE-MAP\.md$/, ["results-flow"], "post-flag ceremony, ResultsCam finish table and the R11–R13 finish journeys"],
   [/^tests\/specs\/results-flow\.spec\.js$/, ["results-flow"], "ceremony browser gate"],
   [/^js\/race\/(cooldown-lap|parc-ferme|ceremony)\.js$/, ["results-flow"], "ceremony phase modules (slices 1–4)"],
   [/^js\/perf\/(metrics-overlay|race-entry-profile)\.js/, ["perf-frametime", "ui"], "frametime bench seam + metrics overlay"],
@@ -643,7 +634,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   (no args)     groups for files not yet on ${DEPLOY_BRANCH}, plus the working tree
   --staged      only staged files
   --since <ref> files changed since <ref>
-  --bg          print tools/ci/test-bg.mjs batch commands only
+  --bg          print tools/ci/remote-group.mjs commands only (one per browser group)
   --json        machine-readable {reason,files,groups} (asserted by pick-tests.test.mjs)
   --help        this message
 
@@ -701,27 +692,16 @@ An unknown option prints this usage and exits 2.`;
   console.log(`\n${names.length} group(s) to run:`);
   for (const g of names) console.log(`    test:${g.padEnd(14)} ${[...groups.get(g)][0]}`);
 
-  // BATCHED, because this is deliberately biased toward running too much and a
-  // wide selection pasted as one command oversubscribes the box. Every worker
-  // drives a SwiftShader Chromium, and past the core count they fail on their
-  // own timeouts — which read as a broken change rather than a busy machine.
-  // test-bg.mjs enforces the same cap, so an unbatched paste is now refused
-  // rather than silently producing fake failures; this just prints the shape it
-  // will accept. (Doing this in the suggester alone would not have been enough:
-  // the rule was in AGENTS.md and docs/TESTING.md the whole time, and this tool
-  // still handed out a nine-group command.)
-  const batches = [];
-  for (let i = 0; i < names.length; i += MAX_GROUPS) batches.push(names.slice(i, i + MAX_GROUPS));
-  const cmds = batches.map((b) => `node tools/ci/test-bg.mjs ${b.join(" ")}`);
+  // Browser groups run on GitHub's runners, never on this box (AGENTS.md rule 5,
+  // 2026-11-03): the PR's tiers run what these rules name on every push, and
+  // `remote-group.mjs <group>` answers "is this whole group green on my pushed
+  // branch?" on four llvmpipe shards. The local floor stays `tooling-fast --changed`.
+  const cmds = names.filter((g) => groupsJson()[`test:${g}`]?.kind === "browser").map((g) => `node tools/ci/remote-group.mjs ${g}`);
   if (argv.includes("--bg")) {
     console.log("\n" + cmds.join("\n"));
-  } else {
-    console.log(`\nrun them in the background, with logs — ONE BATCH AT A TIME` +
-      ` (${CORES} cores, ${WORKERS} workers per group):`);
+  } else if (cmds.length) {
+    console.log(`\nthe PR run covers them; one whole group on the PUSHED branch (never locally):`);
     for (const c of cmds) console.log(`    ${c}`);
-  }
-  if (batches.length > 1) {
-    console.log(`\nwait for each batch before starting the next:  node tools/ci/test-bg.mjs --wait`);
   }
   printExtras(files, argv);
 }

@@ -42,8 +42,8 @@ function run(args, extraEnv = {}) {
 
 test("mcp-smoke --dry-run pokes the two attached shell wrappers and never launches Chromium", () => {
   // The checkout also registers js-debugger; its separate native smoke owns
-  // debugger validation. This legacy smoke pokes the apex and Chrome shells; probe / playwright / tinyfish
-  // wrappers may stay in the plan as CLI probes but are not MCP-attached.
+  // debugger validation. This legacy smoke pokes the apex and Chrome shells; the probe / playwright
+  // wrappers may stay in the plan as CLI probes but are not MCP-attached (tinyfish left the tree 2026-11-03).
   const r = run(["--dry-run"]);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const body = JSON.parse(r.stdout);
@@ -77,11 +77,7 @@ test("smokePlan chrome (and any CLI-only wrapper it still pokes) stays status/he
     assert.ok(pw.argv.includes("status"));
     assert.ok(!pw.argv.includes("run"));
   }
-  const fish = plan.find((s) => s.server === "tinyfish");
-  if (fish) {
-    assert.ok(fish.argv.includes("help"));
-    assert.ok(!fish.argv.includes("ensure"));
-  }
+  assert.equal(plan.find((s) => s.server === "tinyfish"), undefined, "the tinyfish proxy left the tree 2026-11-03");
 });
 
 test("apex-tools-mcp.sh smoke --dry-run delegates", () => {
@@ -104,37 +100,23 @@ test("help names the never-wrap and the write path", () => {
   assert.match(r.stdout, /playwright status only/);
 });
 
-test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
+test("cloud-agent-install clones chrome-devtools and embeds no key", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
-  assert.match(src, /TINYFISH_API_KEY/);
-  assert.match(src, /https:\/\/agent\.tinyfish\.ai\/home/);
   assert.match(src, /chrome-devtools-mcp\.sh" clone/);
-  assert.match(src, /tinyfish-mcp\.sh" setup/);
   assert.match(src, /ensure_mcp_clones/);
-  assert.match(src, /APEX_SKIP_TINYFISH_SETUP/);
   assert.ok(!src.includes("sk-" + "tinyfish-"));
   assert.ok(!src.includes("BAKED" + "_KEY"));
 });
 
-test("mcp-smoke names the TinyFish home URL when the key is missing and never reports a fallback", () => {
-  assert.match(fs.readFileSync(SMOKE, "utf8"), /https:\/\/agent\.tinyfish\.ai\/home/);
-  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
-  assert.equal(r.status, 0, r.stderr + r.stdout);
-  const body = JSON.parse(r.stdout);
-  // With no key in the shell the only legitimate source is the gitignored
-  // .env file — a "fallback" verdict would mean a tracked key came back.
-  assert.notEqual(body.tinyfishKey.via, "fallback");
-  assert.ok(["env-file", "missing"].includes(body.tinyfishKey.via), body.tinyfishKey.via);
-  if (!body.tinyfishKey.present) {
-    assert.equal(body.tinyfishKey.url, "https://agent.tinyfish.ai/home");
-    assert.match(body.warnings.join("\n"), /https:\/\/agent\.tinyfish\.ai\/home/);
-  }
-});
-
-test("tracked source never embeds a TinyFish key", () => {
+test("mcp-smoke reads no TinyFish key and reports none (the proxy left 2026-11-03)", () => {
   const src = fs.readFileSync(SMOKE, "utf8");
   assert.ok(!src.includes("sk-" + "tinyfish-"));
-  assert.match(src, /TINYFISH_API_KEY/);
+  assert.doesNotMatch(src, /TINYFISH_API_KEY|tinyfish-mcp/);
+  const r = run(["--dry-run"]);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.tinyfishKey, undefined);
+  assert.doesNotMatch(body.warnings.join("\n"), /tinyfish/i);
 });
 
 test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mode", async () => {
@@ -176,15 +158,15 @@ test("smoke --real --browser adds the browser checks, opt-in, and judges them th
   assert.match(on.stdout, /mcp-smoke --real ok: 3\/3 tools \(tree \+ browser\)/);
 });
 
-test("real smoke supplies fresh-checkout inputs for locations and profile query, then removes its synthetic fixture", () => {
+test("real smoke runs a built-in tree tool for real with its fresh-checkout args and leaves no fixture behind", () => {
   const fixtures = () => fs.existsSync(path.join(ROOT, "scratch")) ? fs.readdirSync(path.join(ROOT, "scratch")).filter(n => n.startsWith("mcp-smoke-")) : [];
   const before = fixtures();
-  const r = run(["--real", "--no-write", "--only=apex_locations,apex_profile_query"], { APEX_MCP_MOCK: "" });
+  const r = run(["--real", "--no-write", "--only=apex_help,apex_catalog"], { APEX_MCP_MOCK: "" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  assert.match(r.stdout, /PASS apex_locations/);
-  assert.match(r.stdout, /PASS apex_profile_query/);
+  assert.match(r.stdout, /PASS apex_help/);
+  assert.match(r.stdout, /PASS apex_catalog/);
   assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
-  assert.deepEqual(fixtures(), before, "synthetic profiles must not survive the check");
+  assert.deepEqual(fixtures(), before, "no synthetic fixture survives the check (2026-11-03: none is written any more)");
 });
 
 test("misspelled, empty, unsupported and mixed selections fail before running any tool", () => {

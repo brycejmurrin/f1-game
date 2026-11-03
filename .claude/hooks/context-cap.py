@@ -9,15 +9,14 @@ context = input + cache read + cache write of the newest main-thread entry (the 
 tools/ci/session-transcript.mjs --ctx and the audit's rows 1/2).
 
 Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's last `STOP AT: <N>k`; hard = soft + HARD_DELTA_K.
-A session with no brief (one Bryce opened) has no cap and gets nothing. (The per-role table in the agent-fleet
-launch policy was retired 2026-10-27; a dispatcher brief states its own STOP AT, docs/WORKERS.md.)
+A session with no brief (one Bryce opened) has no cap and gets nothing; a worker brief states its own STOP AT
+(.claude/agents/README.md §Parent and child).
 
   UserPromptSubmit, PostToolUse — advisory: one line, `context N k / cap C k`, once per level (soft, hard) per
                                    session (state in artifacts/ctx-cap/). Any error → no output.
-  PreToolUse (Agent, create_session) — over the HARD cap, deny a new spawn (permissionDecision "deny",
-                                   https://code.claude.com/docs/en/hooks §PreToolUse decision control). A
-                                   create_session whose prompt is a hand-off to a successor stays allowed: that
-                                   is the size stop's own way out. settings.json runs this mode as
+  PreToolUse (Agent)             — over the HARD cap, deny a new spawn (permissionDecision "deny",
+                                   https://code.claude.com/docs/en/hooks §PreToolUse decision control); the
+                                   way out is to push and hand off (skill handoff). settings.json runs this mode as
                                    `context-cap.py --guard`, which FAILS CLOSED (2026-10-28, the commit-hook
                                    split's hook pass): an unreadable payload or an internal error on a spawn is a
                                    block (exit 2, the reason and both overrides on stderr). Without --guard (the
@@ -31,8 +30,7 @@ import sys
 
 HARD_DELTA_K = 50
 TAIL = 4 << 20
-HANDOFF = re.compile(r"\bhand-?off\b|\bsuccessor\b", re.I)
-SPAWNS = ("Agent", "mcp__claude-code-remote__create_session")
+SPAWNS = ("Agent",)
 
 
 def _entries(lines):
@@ -123,20 +121,18 @@ def decide(data, root, env):
     k = round(n / 1000)
     line = "context %dk / cap %dk" % (k, soft)
     if event == "PreToolUse":
-        inp = data.get("tool_input") or {}
-        if k < hard or (data.get("tool_name") != "Agent" and HANDOFF.search(str(inp.get("prompt") or ""))):
+        if k < hard:
             return ""
         return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
             "permissionDecisionReason": ("context-cap: %s, over the hard cap %dk (%s). No new spawns: push, then "
-                "hand off to a successor (a create_session whose prompt says hand-off/successor is allowed; "
-                "docs/WORKERS.md §The contract)." % (line, hard, src))}})
+                "hand off (skill handoff; .claude/agents/README.md §Parent and child)." % (line, hard, src))}})
     if k < soft:
         return ""
     level = "hard" if k >= hard else "soft"
     if not once(root, data.get("session_id"), level):
         return ""
-    msg = ("context-cap: %s (%s; hard %dk). %s (docs/WORKERS.md §The contract)." % (line, src, hard,
-           "Over the hard cap: push and hand off now; new Agent/create_session spawns are refused" if level == "hard"
+    msg = ("context-cap: %s (%s; hard %dk). %s (skill handoff)." % (line, src, hard,
+           "Over the hard cap: push and hand off now; new Agent spawns are refused" if level == "hard"
            else "Over the soft cap: finish the current unit, push, hand off"))
     if event == "UserPromptSubmit":
         return msg

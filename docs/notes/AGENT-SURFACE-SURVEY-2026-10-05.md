@@ -27,7 +27,7 @@ What the tests already pin (so this pass did not re-argue them):
 descriptions keep folded trigger words), `agent-config.test.mjs` (three MCP
 catalogs in lockstep, every hook row has a script, the Bash guard's kill /
 commit / subagent shapes, AGENTS.md ≤ 200 lines, the always-on budget),
-`agent-surface.test.mjs` (wrap map = catalog), `skill-smoke.test.mjs`.
+`agent-surface.test.mjs` (wrap map = catalog), skill-smoke.test.mjs (deleted 2026-11-03).
 
 ## 1. Skills, graded
 
@@ -45,7 +45,7 @@ commit / subagent shapes, AGENTS.md ≤ 200 lines, the always-on budget),
 ("Builds and validates…") and `replay-camera` ("Validates…") open with a
 capability sentence and put the trigger second; `track-realism` is 168 chars
 with no near-miss redirect at all. The routing eval has NO queries for
-`f1-animation-cameras` and `replay-camera` (`tests/data/skill-routing/queries/`
+`f1-animation-cameras` and `replay-camera` (`skill-routing/queries/ (deleted 2026-11-03) `
 covers 28 of 30), so their triggering has never been measured — exactly the
 case the skill-creator's description optimiser is for.
 

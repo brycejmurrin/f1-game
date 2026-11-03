@@ -1065,7 +1065,7 @@ const LAZY_EDGES = [
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
 // a menu — so it must not sit in the boot script wall, which is the one perf
-// number this box can measure honestly (docs/PERF-FINDINGS.md §0).
+// number this box can measure honestly (docs/notes/PERF-FINDINGS.md §0).
 // light-presets.js is 338 KB of baked per-condition lighting whose ONLY reader
 // is js/lighting/profiles.js, and that reads window.LightPresets at CALL time
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
@@ -1582,8 +1582,6 @@ const MOVED = {
   "tools/mcp-cli.mjs": "tools/mcp/mcp-cli.mjs",
   "tools/mcp-smoke.mjs": "tools/mcp/mcp-smoke.mjs",
   "tools/probe-mcp.py": "tools/mcp/probe-mcp.py",
-  "tools/tinyfish-mcp.sh": "tools/mcp/tinyfish-mcp.sh",
-  "tools/tinyfish-rpc.py": "tools/mcp/tinyfish-rpc.py",
   "tools/chrome-devtools-mcp.sh": "tools/mcp/chrome-devtools-mcp.sh",
   "tools/playwright-mcp.sh": "tools/mcp/playwright-mcp.sh",
   "tools/apex-tools-mcp.mjs": "tools/mcp/apex-tools-mcp.mjs",

@@ -485,7 +485,7 @@ test("install icons have declared PNG dimensions and are seeded for offline use"
 
 test("sw.js comments do not keep the audit4 L4 obsolete payload counts", () => {
   // Live shell grew past "145 script tags / ~5.8 MB"; agents copying those
-  // figures plan the wrong install budget (docs/notes/system-audit-4/live-site.md L4).
+  // figures plan the wrong install budget (docs/archive/notes/system-audit-4/live-site.md L4).
   assert.doesNotMatch(SW_SOURCE, /145 script tags/);
   assert.doesNotMatch(SW_SOURCE, /~5\.8 MB/);
   assert.doesNotMatch(SW_SOURCE, /These three are LAZY_AGENT/);

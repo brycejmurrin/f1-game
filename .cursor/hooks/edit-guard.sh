@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File-edit guard for Cursor → the repo's edit guard (.claude/hooks/protect-files.sh):
-# generated files, the live-run source freeze, and the ratchet bans (a hand raise
-# of tests/data/ratchets.json or a ratchets.d fragment, another branch's fragment).
+# generated files (tests/data/ratchets.json and the ratchets.d fragments among
+# them) and the linked-worktree shared-contract files.
 # Cursor's preToolUse sends {"tool_name", "tool_input": {...}, "cwd", ...} and reads
 # {"permission": "allow"|"deny", "user_message", "agent_message"}; exit 2 denies
 # (https://cursor.com/docs/agent/hooks). Claude's Edit maps onto Cursor's Write
@@ -10,15 +10,14 @@
 # this with NO matcher (DAD's review of #3575) and the filter is here:
 #   - read-only tools (Read, Grep, Glob, LS, Task, Web*, MCP:*) and Shell
 #     (beforeShellExecution → shell-guard.sh) pass untouched;
-#   - Delete is a removal of its path;
+#   - Delete is judged by path alone (a generated file is refused);
 #   - any other tool whose input carries a path, a body or a write shape (code_edit,
 #     diff, patch, replacement...) is a write. Its path is read from file_path / path /
 #     target_file / filePath, else the first string under any key naming a path, file or
 #     target (targetFile, relative_workspace_path, notebook_path...); its body from content /
 #     contents / file_text; old_string/new_string, old_str/new_str or edits make it
 #     an Edit. A write with no readable path is DENIED (failClosed, not a warning);
-#     with no readable body only the path rules run, and a ratchet file is refused
-#     (bans 1-2 need the content). An unreadable payload is denied.
+#     with no readable body only the path rules run. An unreadable payload is denied.
 set -u
 DIR=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$DIR" || { echo '{"permission": "deny", "user_message": "edit-guard: cannot enter the project directory."}'; exit 2; }
@@ -71,17 +70,9 @@ if [ -z "$FILE" ]; then
   answer deny "edit-guard: this file write carries no path the guard can read (file_path / path / target_file), so the generated-file and ratchet rules cannot run. Retry the write with an explicit file path."; exit 2
 fi
 case "$TOOL" in
-  Delete)
-    # A delete is a removal: protect-files reads `rm <path>` exactly as it reads a Claude Bash removal.
-    NORM=$(FILE="$FILE" python3 -c 'import json,os,shlex; print(json.dumps({"tool_name": "Bash", "tool_input": {"command": "rm -- " + shlex.quote(os.environ["FILE"])}}))') ;;
-  Unknown)
-    # Only the content-free rules can be judged. A ratchet file needs the content (bans 1 and 2), so it is refused.
-    case "$FILE" in
-      *tests/data/ratchets.json|*tests/data/ratchets.d/*)
-        answer deny "edit-guard: this write carries no content the guard can read, and $FILE is a ratchet file (shared safety bans 1-2). Write it with a full-content Write instead."; exit 2 ;;
-    esac
-    # An empty Edit runs the path-only rules (an outright generated file, the live-run freeze)
-    # and matches no content rule, so a gen-block or test:* check cannot misfire on a missing body.
+  Delete|Unknown)
+    # An empty Edit runs the path-only rules (an outright generated file, a worktree's shared-contract
+    # file) and matches no content rule, so a gen-block or test:* check cannot misfire on a missing body.
     NORM=$(printf '%s' "$NORM" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["tool_name"]="Edit"; d["tool_input"].update(old_string="", new_string=""); print(json.dumps(d))') ;;
 esac
 ERR=$(printf '%s' "$NORM" | CLAUDE_PROJECT_DIR="$DIR" bash "$DIR/.claude/hooks/protect-files.sh" 2>&1 >/dev/null); RC=$?

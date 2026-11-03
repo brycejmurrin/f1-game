@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Picks tests and runs pre-push checks. Use when asked did I break anything, validate/pre-push, verify track edits, js/css shell/cache version bump, deploy checks on a dirty tree, Playwright timeouts. Not red Actions → ci-red-triage; landing → ship."
+description: "Use when asked did I break anything, which tests this change needs, validate or pre-push, verify track edits, js/css shell/cache version bump, deploy checks on a dirty tree, a Playwright timeout or a background run to wait on. Not for: red Actions → ci-red-triage; opening or landing the PR → steward."
 ---
 
 # Validate changes before committing/pushing
@@ -26,39 +26,43 @@ For prose-only edits, take the [canonical docs/skill fast path](../../../docs/VE
 before choosing the code gate below. Generated documentation is not prose-only;
 agent-surface edits also run the focused `agent-config` checks.
 
-`--fast` needs only Node modules; browser batches need the headless shell.
+`--fast` needs only Node modules; interactive browser pokes need the headless shell.
 The SessionStart hook installs both (AGENTS.md §Verification 1); the manual
 fallback is `bash tools/env/cloud-agent-install.sh`.
 
 ## The minimum before a push (one floor)
 
-The pre-push floor is AGENTS.md rule 3 → docs/WORKERS.md §3 (its one home). In practice, two commands:
+The floor is AGENTS.md rule 3 (its one home): `tooling-fast --changed --jobs=3 --quiet`, or `verify-track.cjs <id>`
+for a circuit. In practice:
 
 ```sh
-node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fast (the pre-push floor is `--changed --jobs=3 --quiet` plus the ONE spec, AGENTS.md rule 3), verify-track, graph-parity, bump-cache; no browsers
-node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # the ONE spec, background; pick it: select-specs.mjs --since <base> (or --files <paths>): its FLOOR SPEC line (null = none evidenced; pick by name)
+node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fast --changed, verify-track, graph-parity, bump-cache; no browsers
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the same floor, plain; a red run ends with `failing files:` and `log:` lines
 ```
 
-(a circuit edit swaps the spec for `node tools/track/verify-track.cjs <id>`). The PR's tiers run the rest of the
-ladder; name the groups `pick-tests` lists as not-run in the PR, or run one on the pushed branch with
-`node tools/ci/remote-group.mjs <group>`. A started run's verdict is its log's `= run …` line (`references/triage.md`).
+The PR's tiers run the rest of the ladder (every draft push gets the fast tier plus a selected browser shard); name
+the groups `pick-tests` lists as not-run in the PR, or run one on the pushed branch with
+`node tools/ci/remote-group.mjs <group>`. No local browser test runs (AGENTS.md rule 5): a Bryce-attended session
+may run ONE named spec on his explicit grant, recorded in the PR body, as a background task.
 
 ```sh
 node tools/ci/verify-change.mjs --plan       # what this change needs (JSON); explicit paths override the diff: --plan js/circuits/monza.js .claude/skills/x/SKILL.md
-node tools/ci/verify-change.mjs              # NOT a floor: starts batch 1, a WHOLE browser group (AGENTS.md §Verification's cost) — only when asked
-node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked; prefer remote-group.mjs
 ```
+
+Anything over 2 minutes is ONE background Bash task logging to `artifacts/logs/` (AGENTS.md rule 4). Waiting:
+`node tools/ci/wait-for.mjs --log-matches <log> '^= '` as the task; a `Monitor` (5 min default, 30 max) is early
+warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`). The verdict is the log's closing `= …` line
+(`= tooling-fast passed|failed (<n> files, <m> failed)`; a `test-bg` log's `= bg exit N`); never the process table.
 
 The commit hook guards Cursor and Codex commits too (AGENTS.md §Agent extensions; two calls: rule 12).
 
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
   pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
-  new-on-session | already-red-on-ref`; a red you did not cause → claim first (AGENTS.md §Git branch & deploy).
+  new-on-session | already-red-on-ref`; a red you did not cause → skill `steward` §Red.
   A baseline comparison with no selected checks or unread results is unknown;
   both scoped runs green means no red, not a pre-existing failure.
-- **Which groups, in what order?** `--plan`'s `batches` are the groups; locally run ONE spec
-  (`test-bg.mjs --spec`), the groups on the pushed PR (`remote-group.mjs`), the rest named not-run:
-  `references/engine-physics.md`.
+- **Which groups, in what order?** `--plan`'s `batches` are the groups; they run on the pushed PR
+  (`remote-group.mjs`), the rest named not-run: `references/engine-physics.md`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
@@ -81,7 +85,7 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 ## Load on demand
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
-- A test timed out / hangs / `--wait --timeout` exited 124 / passes solo but not loaded (or vice versa) —
+- A test timed out / hangs / a CI shard passes solo but not loaded (or vice versa) —
   step 0 (read-only load + log anchors), the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
 - No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
   edit before commit) → [`references/bump.md`](references/bump.md)

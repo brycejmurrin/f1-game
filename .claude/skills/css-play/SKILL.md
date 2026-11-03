@@ -1,5 +1,7 @@
 ---
 name: css-play
+paths:
+  - "css/**"
 description: "Use when tweaking one menu or HUD element (padding, font size, safe area, tap target) with screenshots, or restructuring screens, DOM or design tokens (BEM/CUBE/ITCSS). Not for: a cramped screen → ui-menu-a11y; the whole-UI review → survey-ui-matrix; dead CSS → slim-bloat."
 ---
 

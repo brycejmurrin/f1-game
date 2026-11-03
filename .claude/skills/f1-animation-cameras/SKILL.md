@@ -9,8 +9,7 @@ Start with [the local game guide](references/game.md), then trace the named
 motion or camera owner. Separate car/world state from camera interpolation;
 measure the transition that prompted the change with a deterministic fixture.
 
-`node tools/check/skill-smoke.mjs --skill f1-animation-cameras --check` exercises
-the local chase-rig contract. Replay snaps and stale follow anchors (entry → seek →
+Replay snaps and stale follow anchors (entry → seek →
 follow → exit → reentry): [references/replay.md](references/replay.md). A HIGHLIGHTS seek snap is designed
 (`references/replay-diagnosis.md`; evidence contract `references/replay-workflow.md`). MEASURING camera lag, modes and
 still framing: [playwright-probe camera measurements](../playwright-probe/references/cameras.md); FIXING lag

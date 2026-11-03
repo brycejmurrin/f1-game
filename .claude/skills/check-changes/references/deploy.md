@@ -2,7 +2,7 @@
 
 Deploy branch: `claude/f1-game-project-26h3ng` (`pages.yml` →
 https://brycejmurrin.github.io/f1-game/). Work reaches it only through a PR that
-GitHub merges (`/ship`, docs/WORKERS.md §5); a direct push is refused (GH006).
+GitHub merges (skill `steward` §Land); a direct push is refused (GH006).
 Never force-push. Never rebase published history.
 
 ```sh
@@ -10,10 +10,10 @@ node tools/ci/deploy.mjs --plan       # fetch, show their commits / ours / confl
 node tools/ci/deploy.mjs --gate-only  # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track; pushes nothing
 ```
 
-A worker's local floor is docs/WORKERS.md §3, not `--gate-only`: the PR's tiers
+The local floor is AGENTS.md rule 3, not `--gate-only`: the PR's tiers
 and the `gate` check run the union. Plain `deploy.mjs` ends in a refused
 deploy-branch push, and `deploy.mjs --pr` opens a READY PR without the template
-body (no draft, no Hand-off block, no `ready-gate`): workers use `/ship`'s draft route.
+body (no draft, no Hand-off block, no `ready-gate`): use skill `steward` §Open.
 
 What changed underneath it, and why the old steps are gone:
 
@@ -31,14 +31,14 @@ What changed underneath it, and why the old steps are gone:
    `--plan` prints which of the two it chose, and one float-equality failure
    that only the sweeps catch is why). `verify-track` runs for touched
    circuits either way (2 s each).
-3. **No tinyfish live check.** `pages.yml`'s `verify-live` job polls the Pages
+3. **No in-repo live check.** `pages.yml`'s `verify-live` job polls the Pages
    CDN for the stamped build and fails the run if it never appears; read the
    run in the Actions tab. From a session, the host's fetch tool can read
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
 4. **A PR is the path that lands work** — the deploy branch is protected: its
    ruleset requires the checks `CI` and `gate` and forbids direct pushes
-   (docs/WORKERS.md §`LAND_TOKEN`). GitHub creates the merge commit, so the PR
+   (skill `steward` `references/vendors.md` §`LAND_TOKEN`). GitHub creates the merge commit, so the PR
    is a real record — a local fast-forward auto-closes the PR instead (#67).
    No session arms auto-merge: `land.yml` arms it once the `land` label is on a
    ready PR and the `gate` check passes. Merge commits only, never squash or

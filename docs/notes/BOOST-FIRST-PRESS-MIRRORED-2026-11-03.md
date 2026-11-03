@@ -1,5 +1,7 @@
 # First BOOST press: the cockpit ERS bar's mirrored back pass was never warmed (#4514, 2026-11-03)
 
+Kind: incident · Re-measure-by: 2027-02-01
+
 Bryce (2026-11-03, iPhone 15, Home Screen web app, THREE PATH: WEBGPU, BUTTONS controls): "when I hit the boost
 button for the first time regardless of when in the race … there's a lag or frame freeze for a few seconds".
 It still freezes with sound off, so the audio unlock path in `TLX-WEBGPU-PERF-3-2026-10-30.md` §6 is not the cause.

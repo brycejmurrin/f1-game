@@ -33,7 +33,7 @@ fi
 # when node_modules was fresh and npm's "prepare" did not run. RELATIVE, so each
 # linked worktree runs its own tree's copy (an absolute path into the main
 # checkout ran ITS hook for every worktree; red-team R15). bash-guard.sh refuses
-# an agent's own core.hooksPath write; this hook is the sanctioned setter.
+# an agent's own hooksPath write; this hook is the sanctioned setter.
 if [ -f .githooks/pre-commit ]; then
   hp=$(git config --get core.hooksPath 2>/dev/null || true)
   if [ "$hp" != ".githooks" ]; then
@@ -79,9 +79,8 @@ else
 fi
 
 # ORIENTATION IN THE SAME LINE (2026-09-16): the branch, its distance from
-# the deploy tip, the dirty count, the load and whether a Playwright run is
-# already live — the four or five calls every session used to spend before
-# its first real one. Best effort; a missing remote ref prints "?".
+# the deploy tip, the dirty count and the load — the calls every session used
+# to spend before its first real one. Best effort; a missing remote ref prints "?".
 DEPLOY_BRANCH="claude/f1-game-project-26h3ng"
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
 if git rev-parse --verify -q "origin/$DEPLOY_BRANCH" >/dev/null 2>&1; then
@@ -91,13 +90,8 @@ else
 fi
 dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo "?")
-live=$(python3 "$ROOT/.claude/hooks/live-run.py" "$ROOT" 2>/dev/null)
-if [ -n "$live" ]; then pw="LIVE ($live) — no js/css edits"; else pw="none"; fi
-status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load" "playwright $pw")
-# Auto memory (cloud only; see memory-sync.sh): put .claude/memory/ back where
-# the CLI reads it, before the first prompt is built.
-mem=$("$ROOT/.claude/hooks/memory-sync.sh" restore </dev/null 2>/dev/null)
-[ -n "$mem" ] && status+=("$mem")
+status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load")
+# Auto memory restore is its own SessionStart entry (settings.json: memory-sync.sh restore).
 # The gate ladder's sizes (AGENTS.md rule 3). Measured, never committed:
 # committed digits made every two test-adding PRs conflict (2026-09-30).
 lad=$(timeout 10 node "$ROOT/tools/gen/gen-ladder-figures.mjs" 2>/dev/null)

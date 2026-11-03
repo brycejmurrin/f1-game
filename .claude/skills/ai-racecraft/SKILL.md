@@ -1,5 +1,7 @@
 ---
 name: ai-racecraft
+paths:
+  - "js/physics/ai-*.js"
 description: "Use when AI cars or rivals race wrong: overtakes/dive-bombs too aggressive or passive, brake targets, preferred lane, ERS deploy, AI stuck in traffic, wall or pit lane, driver ratings craft/awareness, ai-drive.js. Not the player's car → tune-physics; flags/crashes → race-incidents-control."
 ---
 

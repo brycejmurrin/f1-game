@@ -15,7 +15,7 @@ the exact head, then undraft.
 | Doc | Role vs this plan |
 |---|---|
 | [`2026-09-24-refactor-readability.md`](2026-09-24-refactor-readability.md) | Ranked readability backlog. This plan **narrows** to ratchet headroom and the blocks peers are about to touch. |
-| [`CLEANUP-ROADMAP.md`](CLEANUP-ROADMAP.md) | Earlier carve log; unfinished items stay there unless absorbed below. |
+| `CLEANUP-ROADMAP.md` (archived) | Earlier carve log; unfinished items stay there unless absorbed below. |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) §Reorg | Extraction lessons: boundary crossings, no leftover symbols, no fat `G`. |
 | [slim-bloat / carves.md](../../.claude/skills/slim-bloat/references/carves.md) | Mechanical recipe (`extract-module.mjs`, `--update`, lockstep). |
 | [ARCHITECTURE-MAP.md](../ARCHITECTURE-MAP.md) §Where new code goes | Home for new modules (added with this plan). |

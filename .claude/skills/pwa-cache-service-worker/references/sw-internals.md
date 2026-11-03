@@ -35,7 +35,7 @@ stay `?v=dev` (`.claude/rules/game-code.md`). Check with `npm run gen:check`.
 **Hashed assets on a browser with no SW.** GitHub Pages serves every response with a short
 `max-age` (not configurable), so `?v=<sha256>` assets are "immutable" only inside the SW: a browser
 with no SW (or Safari before install) revalidates them. Measured headers and payload sizes:
-`docs/notes/system-audit-4/live-site.md` (L3, L5); re-measure before quoting them.
+`docs/archive/notes/system-audit-4/live-site.md` (L3, L5); re-measure before quoting them.
 
 ## Install, guard and update
 

@@ -17,4 +17,4 @@ Already under `~/.cursor/plugins/local/apex-f1-game/` for local discovery. To sh
 ## Ship defaults
 Repo `https://github.com/brycejmurrin/f1-game`. Deploy branch `claude/f1-game-project-26h3ng`. Topic work: `cursor/<topic>-<hash>` draft PRs into it with `Closes #<n>`, `lane:cursor` and a ```handoff block. Model: `composer-2.5` routine; Grok 7 hard only (slug at launch); never `default`/Auto; dispatcher uses `hosts.cursor.model` in `tools/ci/dispatch.json`. Renderer default: three.js (TLX, WebGPU path); pass backend `"three"` to apex MCP (tools may default webgl2); headless: `apex26.tlxForceGL=1`.
 
-The work contract (claim, draft PR, hand-off, landing, the dispatcher and its caps in `tools/ci/dispatch.json`) is `docs/WORKERS.md`; repo rules are `AGENTS.md`. GitHub lands PRs; workers do not merge.
+The work contract (claim, draft PR, hand-off, landing, the dispatcher and its caps in `tools/ci/dispatch.json`) is skill `steward` (`.claude/skills/steward/SKILL.md`; the dispatcher: skill `dispatcher`); repo rules are `AGENTS.md`. GitHub lands PRs; workers do not merge.

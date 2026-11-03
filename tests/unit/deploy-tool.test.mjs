@@ -285,7 +285,7 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
   // cured when every hunk differed in digits alone (the "N of M unit files"
   // figures). Those figures left the tree (gen-ladder-figures.mjs only reports),
   // so a conflict in any of these docs is prose someone wrote, and stops.
-  for (const doc of ["AGENTS.md", "docs/TESTING.md", "docs/notes/PREPUSH-GATE-LADDER.md", ".claude/agents/verify-agent.md", "README.md"])
+  for (const doc of ["AGENTS.md", "docs/TESTING.md", "docs/VERIFICATION.md", ".claude/agents/verify-agent.md", "README.md"])
     assert.equal(cureableConflicts([doc]).cureable, false, `${doc} is a real conflict`);
   assert.equal(cureableConflicts(["AGENTS.md", "package.json"]).cureable, false, "one prose doc stops the merge");
 });

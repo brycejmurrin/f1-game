@@ -449,7 +449,7 @@ test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
   assert.deepEqual([f.fast, f.gate, f.disk], [fast.length, gate.size, disk], "the report tool measures the same ladder");
   const SIZES = [/\d+ of \d+ unit\s+files/, /The other \d+ have taken deploys red/, /<!-- GENERATED: ladder -->/,
     /\| `npm run test:tooling-fast` \| \d+ of \d+/];
-  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
+  for (const doc of ["AGENTS.md", "docs/VERIFICATION.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
     const text = read(doc);
     for (const re of SIZES) assert.doesNotMatch(text, re, `${doc} commits a ladder size (${re}) — every PR adding a test file would conflict on it; point at gen-ladder-figures.mjs instead`);
   }
@@ -649,7 +649,9 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;
   const agents = read("AGENTS.md");
-  const section = agents.slice(agents.indexOf("Baked asset pack"), agents.indexOf("`window.__apex` dev API"));
+  // The slice ends at the next H2 (the `window.__apex` section it used to end at left AGENTS.md on 2026-11-03).
+  const start = agents.indexOf("Baked asset pack");
+  const section = agents.slice(start, agents.indexOf("\n## ", start));
   assert.ok(section, "the baked-asset-pack section moved");
   assert.equal(/\*\*Ships ON\.\*\*/.test(section), on,
     `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
@@ -658,7 +660,7 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // WGX implements createTextureArray / setMaterialMaps — the old "WGX does not"
   // trap sent agents hunting a missing port that already shipped.
   assert.doesNotMatch(section, /WGX does not/);
-  assert.match(section, /GLX,\s*\n?TLX, and WGX implement it|GLX,\s*TLX, and WGX implement it/);
+  assert.match(section, /GLX,\s*TLX,\s*and\s*WGX\s*implement it/);
 
   // …and the same claim, outside the slice. The check above reads only the text
   // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook

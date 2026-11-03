@@ -92,7 +92,7 @@ auditor 24, PR resumer 12 — the most tool-hours) have no definition.
 - [ ] `check-changes/references/sync-pr.md`: the real-conflict recipe (resolve on `sync-pr-<branch>`, then `--resume`)
 - [ ] Agent names always written "agent `x`" (`check-changes/SKILL.md:3`, `steward/SKILL.md:34,42,100`)
 - [ ] playwright-probe and mcp-probe open with "name the shot/apex-eval flag that cannot do it before writing a scratch script"
-- [ ] `tests/data/skill-routing/queries/`: Bryce's real phrasings ("Chdck", "Merge", "merge it when green", "Retry", "Fix all")
+- [ ] `skill-routing/queries/ (deleted 2026-11-03) `: Bryce's real phrasings ("Chdck", "Merge", "merge it when green", "Retry", "Fix all")
 - [ ] steward: `--release` claims before the final answer
 - Verify: skill-routing eval, agent-config, docs-integrity
 
