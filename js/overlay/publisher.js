@@ -17,16 +17,34 @@ const OverlayPublisher = (function () {
     return t ? css(t.color) : "";
   }
 
+  // Nominal m/s for interval→prog. __apex.field rows carry gaps, not track prog;
+  // OverlayFeed.battle → Broadcast.battles needs relative prog/speed so a 5 s
+  // interval is not painted as gapS:0 (every pair fighting).
+  const GAP_SPEED = 70;
+
   // One OverlayFeed.frame input from the __apex reads. Pure: every source is passed in.
   function input(src) {
     const field = src.field && Array.isArray(src.field.positions) ? src.field : null;
     const info = src.info || {};
     const sec = src.sectors || null;
-    const ranked = field ? field.positions.map((r) => ({
-      pos: r.pos, code: r.code, team: teamColour(r.team, src.teams),
-      intervalS: r.pos === 1 ? null : r.intervalS, gapToLeaderS: r.pos === 1 ? null : r.gapToLeaderS,
-      isPlayer: r.isPlayer, pit: !!r.retired,
-    })) : [];
+    const ranked = [];
+    if (field) {
+      let gapLead = 0;
+      for (let i = 0; i < field.positions.length; i++) {
+        const r = field.positions[i];
+        if (r.pos === 1) gapLead = 0;
+        else if (Number.isFinite(r.gapToLeaderS)) gapLead = r.gapToLeaderS;
+        else if (Number.isFinite(r.intervalS)) gapLead += r.intervalS;
+        ranked.push({
+          pos: r.pos, code: r.code, team: teamColour(r.team, src.teams),
+          intervalS: r.pos === 1 ? null : r.intervalS, gapToLeaderS: r.pos === 1 ? null : r.gapToLeaderS,
+          isPlayer: r.isPlayer, pit: !!r.retired,
+          // Bracket keys keep the display-only "no car writes" pin green.
+          "prog": 1e5 - gapLead * GAP_SPEED,
+          "speed": GAP_SPEED,
+        });
+      }
+    }
     return {
       seq: src.seq | 0, t: field ? field.t : 0,
       state: info.state || (field && field.raceState) || "idle",
