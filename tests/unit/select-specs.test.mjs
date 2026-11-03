@@ -1910,8 +1910,9 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   const pinned = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/career/career-ui.js"] });
   assert.equal(pinned.changed, 1);
   assert.ok(SOURCE_AFFECTED.some(([re, spec]) => re.test("js/career/career-ui.js") && spec === pinned.floor), pinned.floor);
-  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/captions.js"] });
   assert.equal(routed.floor, null);
+  assert.equal(routed.floorShards, undefined);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
 });
 
@@ -2017,4 +2018,19 @@ test("fat-shard: the n rewritten legs select every test exactly once, even one t
     assert.match(src, /--test-list <file>/);
     assert.match(src, /--test-list-invert <file>/);
   }
+});
+
+test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names its CI shard pieces", () => {
+  // hud-layout asserts the DOM hud.js keeps but names it only in comments, so no import reaches it: before the pin
+  // the floor was null and a cold agent picked hud-audit "by name".
+  assert.deepEqual(specsAffectedBySource(["js/ui/hud.js"]), ["tests/specs/hud-layout.spec.js"]);
+  const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  assert.equal(r.floor, "tests/specs/hud-layout.spec.js");
+  assert.equal(r.floorReason, undefined);
+  // ~34 min whole: the floor carries the native --shard pieces CI runs, so it is never run whole by mistake.
+  assert.ok(r.floorShards && r.floorShards.pieces.length >= 2, JSON.stringify(r.floorShards));
+  assert.deepEqual(r.floorShards.pieces, r.shards.filter((x) => x.specs === r.floor && x.shard).map((x) => x.shard));
+  assert.match(r.floorShards.hint, /--shard pieces/);
+  // The pin is narrow: a sibling HUD module stays routed-only.
+  assert.deepEqual(specsAffectedBySource(["js/ui/hud-tyres.js"]), []);
 });

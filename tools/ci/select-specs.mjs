@@ -1261,6 +1261,10 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
+  // THE RACE HUD (#4289): hud-layout asserts the DOM hud.js keeps (`.hud-gaps[data-empty]`, the gaps strip) but names
+  // the module only in comments, so no import elevates it and rule 3's floor read null; a cold agent then picked
+  // hud-audit "by name". hud-mirror reads hud.js too (radioTopSlot) but is a test:gfx spec; hud-layout is the floor.
+  [/^js\/ui\/hud\.js$/, "tests/specs/hud-layout.spec.js"],
 ];
 
 /** Specs that prove nothing about a particular module: they boot the page or
@@ -1517,6 +1521,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.
   const best = [...r.selected, ...r.oversize].filter((x) => x.rank <= 2).sort((a, b) => a.rank - b.rank)[0];
   r.floor = best ? best.file : null;
+  // A floor CI splits into native --shard pieces (hud-layout: 4 x ~10 min) is too big to run whole: name the pieces.
+  const pieces = best ? r.shards.filter((x) => x.specs === best.file && x.shard).map((x) => x.shard) : [];
+  if (pieces.length) r.floorShards = { sec: best.sec, pieces, hint: `~${Math.round(best.sec / 60)} min whole; CI runs it as ${pieces.length} --shard pieces (${pieces.join(", ")}); run the piece that holds your test, or --grep it` };
   if (!best) r.floorReason = r.selected.length ? `no spec imports or is pinned to these files; ${r.selected.length} are routed by group (${browserGroups.join(", ")}) — pick by name, or run the group on the PR` : "no browser spec is routed";
   return r;
 }
@@ -1545,7 +1552,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
   const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
-  console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
+  console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}${r.floorShards ? ` — ${r.floorShards.hint}` : ""}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(
     `SELECTION NARROWER THAN THE CHANGE: this diff touches ${r.tracked.length} tracked/infra path(s) ` +
