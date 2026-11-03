@@ -4098,6 +4098,7 @@
       ],
       "deleteSlot": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "driverOverride": [
@@ -4137,7 +4138,8 @@
         "tests/unit/career-round2.test.mjs"
       ],
       "firstFree": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs"
       ],
       "freeAgents": [
         "tests/unit/career-hire-rating.test.mjs",
@@ -4311,6 +4313,7 @@
       ],
       "saveStatus": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
@@ -4360,6 +4363,7 @@
       "slots": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
@@ -4375,6 +4379,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4727,6 +4732,7 @@
       ],
       "saveStatus": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
