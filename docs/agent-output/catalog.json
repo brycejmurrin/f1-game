@@ -1042,13 +1042,9 @@
       "outputPolicy": "protocol-only"
     },
     {
-      "path": "tools/ci/launch-gate.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
+      "path": "tools/ci/lib/provenance.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/ci/live-run-check.mjs",
@@ -1489,6 +1485,11 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/worker-prompt.md",
+      "classification": "asset",
+      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/desktop/minify-worker.mjs",
