@@ -6,13 +6,70 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createHash } = require("node:crypto");
 const { buildContext } = require("../lib/track-build-vm.cjs");
+// Catalog writes still use the legacy TRACK_VM-wide hasher so merge-gate keeps working
+// until tools/shot/scenery-source-hash.cjs is narrowed (#4525). sceneryCatalogDigest
+// below is the garage-immune fingerprint used by track-shot-survey tooling-fast.
 const { scenerySourceDigest } = require("./scenery-source-hash.cjs");
 
 const root = path.resolve(__dirname, "../..");
 const dir = path.join(root, "tests/data/landmarks");
 const outFile = path.join(__dirname, "scenery-locations.json");
 const round = (v, digits) => Number(v.toFixed(digits));
+
+/** Manifest slice: TRACK_VM entries that feed emitted track scenery, not the garage bay. */
+const SCENERY_MANIFEST_SLICE = "tools/manifest.cjs#TRACK_VM_SCENERY";
+
+function isGarageModule(file) {
+  return file === "js/garage" || file.startsWith("js/garage/");
+}
+
+function filesUnder(absRoot, relDir, include = () => true) {
+  return fs.readdirSync(path.join(absRoot, relDir), { withFileTypes: true }).flatMap((entry) => {
+    const rel = `${relDir}/${entry.name}`;
+    return entry.isDirectory() ? filesUnder(absRoot, rel, include) : include(rel) ? [rel] : [];
+  });
+}
+
+/** TRACK_VM paths that can change emitted scenery locations (excludes @circuits and js/garage/). */
+function sceneryTrackVm(manifest) {
+  return manifest.TRACK_VM.filter((file) => file !== "@circuits" && !isGarageModule(file));
+}
+
+/**
+ * Fingerprint of inputs that change the named scenery screenshot catalog.
+ * Garage bay modules live on TRACK_VM for the track-build VM but do not move
+ * circuit scenery; hashing them made unrelated garage PRs fail track-shot-survey (#4525).
+ */
+function sceneryCatalogDigest(absRoot) {
+  absRoot = path.resolve(absRoot);
+  const manifest = require(path.join(absRoot, "tools/manifest.cjs"));
+  const trackVm = sceneryTrackVm(manifest);
+  const paths = [
+    "tools/shot/gen-scenery-locations.cjs",
+    "tools/lib/track-build-vm.cjs",
+    "tools/lib/pack-assets.cjs",
+    ...trackVm,
+    ...filesUnder(absRoot, "assets/pack", (file) => file.endsWith(".bin") || file.endsWith("manifest.json")),
+  ];
+  for (const relDir of ["js/circuits", "js/circuits/scenery", "tests/data/landmarks"]) {
+    paths.push(...filesUnder(absRoot, relDir, (file) => file.endsWith(relDir.includes("landmarks") ? ".json" : ".js")));
+  }
+  const hash = createHash("sha256");
+  for (const file of [...new Set(paths)].sort()) {
+    hash.update(file).update("\0").update(fs.readFileSync(path.join(absRoot, file))).update("\0");
+  }
+  hash.update(SCENERY_MANIFEST_SLICE).update("\0").update(JSON.stringify(trackVm)).update("\0");
+  return hash.digest("hex");
+}
+
+module.exports = {
+  sceneryCatalogDigest,
+  sceneryTrackVm,
+  isGarageModule,
+  SCENERY_MANIFEST_SLICE,
+};
 // A model can sit nearer a different road segment from the one it was authored
 // to be seen from. These viewpoints are explicit in the current scenery source
 // or circuit brief; "authored" values pass through the BUILT TrackSpace shift.
@@ -134,13 +191,15 @@ function generate() {
   return { schema: 2, method: "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise", sourceDigest: scenerySourceDigest(root), locations: rows, omitted };
 }
 
-const actual = JSON.stringify(generate(), null, 2) + "\n";
-if (process.argv.includes("--check")) {
-  if (!fs.existsSync(outFile) || fs.readFileSync(outFile, "utf8") !== actual) {
-    console.error("scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs");
-    process.exitCode = 1;
-  } else console.log(`OK scenery catalog: ${JSON.parse(actual).locations.length} emitted locations`);
-} else {
-  fs.writeFileSync(outFile, actual);
-  console.log(`Wrote ${outFile}: ${JSON.parse(actual).locations.length} emitted locations`);
+if (require.main === module) {
+  const actual = JSON.stringify(generate(), null, 2) + "\n";
+  if (process.argv.includes("--check")) {
+    if (!fs.existsSync(outFile) || fs.readFileSync(outFile, "utf8") !== actual) {
+      console.error("scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs");
+      process.exitCode = 1;
+    } else console.log(`OK scenery catalog: ${JSON.parse(actual).locations.length} emitted locations`);
+  } else {
+    fs.writeFileSync(outFile, actual);
+    console.log(`Wrote ${outFile}: ${JSON.parse(actual).locations.length} emitted locations`);
+  }
 }

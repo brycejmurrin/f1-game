@@ -405,15 +405,23 @@ test('every circuit exposes authored turn locations usable by named shot plans',
  assert.throws(()=>listSurveyLocations('unknown'),/Unknown track/);
  assert.throws(()=>buildTrackShotSurveyPlan({track:'monaco',location:'spa/turn-1'}),/Unknown or ambiguous/);
 });
+// Geometry digest for emitted track scenery. Excludes js/garage/ TRACK_VM bodies so
+// garage-only PRs do not false-fail this suite (#4525). Update together with a catalog
+// regen when non-garage scenery inputs change. Merge-gate still fingerprints via
+// tools/shot/scenery-source-hash.cjs until that hasher is narrowed under the same contract.
+const SCENERY_CATALOG_DIGEST = "ae13077bb44e2cf2011df9d5519f5f3659d820fece1dd7c867035dea214cced3";
 test('named scenery catalog accounts for every registered hero and targets emitted geometry', async () => {
  const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
- const { default: { scenerySourceDigest } } = await import('../../tools/shot/scenery-source-hash.cjs');
- const catalog = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8'));
- assert.equal(catalog.sourceDigest,scenerySourceDigest(path.resolve('.')),'catalog must be regenerated after scenery or projection source changes');
- const registryDir = 'tests/data/landmarks';
- const registryFiles = fs.readdirSync(registryDir).filter(f=>f.endsWith('.json'));
  const { createRequire } = await import('node:module');
  const require = createRequire(import.meta.url);
+ const { sceneryCatalogDigest } = require('../../tools/shot/gen-scenery-locations.cjs');
+ const catalog = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8'));
+ assert.equal(sceneryCatalogDigest(path.resolve('.')), SCENERY_CATALOG_DIGEST,
+  'scenery geometry digest drifted — regenerate tools/shot/scenery-locations.json and update SCENERY_CATALOG_DIGEST');
+ assert.equal(typeof catalog.sourceDigest, 'string');
+ assert.match(catalog.sourceDigest, /^[a-f0-9]{64}$/, 'catalog sourceDigest must remain a sha256 hex for merge-gate');
+ const registryDir = 'tests/data/landmarks';
+ const registryFiles = fs.readdirSync(registryDir).filter(f=>f.endsWith('.json'));
  const trackIds = Array.from(require('../../tools/track/verify-track.cjs').buildContext(null,{quiet:true}).LIST,d=>d.id).sort();
  assert.deepEqual(registryFiles.map(f=>f.slice(0,-5)).sort(),trackIds,'every circuit must have a scenery registry');
  const registered = registryFiles.flatMap(f=>JSON.parse(fs.readFileSync(path.join(registryDir,f),'utf8')).ids);
@@ -507,6 +515,58 @@ test("sourceDigest ignores an unrelated manifest module and follows TRACK_VM", a
  fs.writeFileSync(manifestPath, withMember);
  dropCache();
  assert.notEqual(scenerySourceDigest(tmp), baseline, "a TRACK_VM membership change must change the digest");
+});
+test("sceneryCatalogDigest ignores garage TRACK_VM bodies and follows circuit scenery", async (t) => {
+ const { createRequire } = await import("node:module");
+ const require = createRequire(import.meta.url);
+ const { sceneryCatalogDigest, sceneryTrackVm } = require("../../tools/shot/gen-scenery-locations.cjs");
+ const { scenerySourceDigest } = require("../../tools/shot/scenery-source-hash.cjs");
+ const { TRACK_VM } = require("../../tools/manifest.cjs");
+ const root = path.resolve(".");
+ const garageFiles = TRACK_VM.filter((file) => file.startsWith("js/garage/"));
+ assert.ok(garageFiles.length > 0, "TRACK_VM must still list garage modules for this contract to matter");
+ assert.equal(sceneryTrackVm({ TRACK_VM }).some((file) => file.startsWith("js/garage/")), false);
+ const baselineNarrow = sceneryCatalogDigest(root);
+ const baselineBroad = scenerySourceDigest(root);
+ assert.notEqual(baselineNarrow, baselineBroad, "garage bodies must be what separates the two digests on this tip");
+ const tmp = fs.mkdtempSync(path.join(TMP_BASE, "apex-scenery-digest-"));
+ t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+ const files = [
+   "tools/shot/gen-scenery-locations.cjs",
+   "tools/lib/track-build-vm.cjs",
+   "tools/lib/pack-assets.cjs",
+   ...sceneryTrackVm({ TRACK_VM }),
+ ];
+ const walk = (dir, include) => {
+   for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+     const rel = `${dir}/${entry.name}`;
+     if (entry.isDirectory()) walk(rel, include);
+     else if (include(rel)) files.push(rel);
+   }
+ };
+ walk("assets/pack", (file) => file.endsWith(".bin") || file.endsWith("manifest.json"));
+ for (const dir of ["js/circuits", "js/circuits/scenery", "tests/data/landmarks"]) {
+   walk(dir, (file) => file.endsWith(dir.includes("landmarks") ? ".json" : ".js"));
+ }
+ // Copy garage modules too so a broad digest can still see them when we mutate one.
+ for (const rel of [...files, ...garageFiles, "tools/manifest.cjs", "tools/shot/scenery-source-hash.cjs"]) {
+   const dest = path.join(tmp, rel);
+   fs.mkdirSync(path.dirname(dest), { recursive: true });
+   if (!fs.existsSync(dest)) fs.copyFileSync(path.join(root, rel), dest);
+ }
+ const dropCache = () => {
+   for (const key of Object.keys(require.cache)) {
+     if (key.startsWith(tmp + path.sep)) delete require.cache[key];
+   }
+ };
+ const garageTarget = garageFiles.find((file) => file.endsWith("/scene.js")) || garageFiles[0];
+ fs.writeFileSync(path.join(tmp, garageTarget), fs.readFileSync(path.join(tmp, garageTarget)) + "\n// garage-only digest probe\n");
+ dropCache();
+ assert.equal(sceneryCatalogDigest(tmp), baselineNarrow, "a garage TRACK_VM body edit must leave the scenery catalog digest unchanged");
+ assert.notEqual(scenerySourceDigest(tmp), baselineBroad, "legacy broad digest still sees garage bodies (merge-gate until narrowed)");
+ fs.writeFileSync(path.join(tmp, "js/circuits/scenery/spa.js"), fs.readFileSync(path.join(tmp, "js/circuits/scenery/spa.js")) + "\n// scenery digest probe\n");
+ dropCache();
+ assert.notEqual(sceneryCatalogDigest(tmp), baselineNarrow, "a circuit scenery edit must change the scenery catalog digest");
 });
 test('resume requires matching receipt identity when a capture context is supplied',()=>{
  const dir=fs.mkdtempSync(path.join(TMP_BASE,'survey-identity-'));
