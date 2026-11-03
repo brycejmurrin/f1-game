@@ -569,6 +569,8 @@
     "// The night lamp-shadow map holds one flood while the car sits between two:",
     "// the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.",
     "tests/unit/lamp-shadow-pick.test.mjs",
+    "// land.yml trusted-rows and land-gate: shallow checkout + one-branch unshallow, 20 min cap (#4683). ~0.1 s.",
+    "tests/unit/land-checkout-fetch.test.mjs",
     "// Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.",
     "tests/unit/lap-format-rollover.test.mjs",
     "tests/unit/layers-anyopen-memo.test.mjs",
