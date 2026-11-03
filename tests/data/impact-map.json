@@ -189,8 +189,10 @@
       ]
     },
     "js/agent/apex-net.js": {
+      "hooks": [
+        "tests/unit/apex-arg-guards.test.mjs"
+      ],
       "*": [
-        "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
         "tests/unit/apex-diag-canvas.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -220,6 +222,9 @@
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/three-inspector.test.mjs"
+      ],
+      "resetStartLights": [
+        "tests/unit/apex-arg-guards.test.mjs"
       ],
       "settled": [
         "tests/specs/camera-hooks.spec.js",
