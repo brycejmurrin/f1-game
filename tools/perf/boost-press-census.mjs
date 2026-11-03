@@ -30,6 +30,40 @@ export function hookPipelines() {
     } catch (_) { /* naming is best-effort */ }
     return o.apply(this, arguments);
   };
+  // #4514 step 2: what else a window CREATES on the device — a bind group, buffer or texture first made at the first
+  // deploy is first-use work too. Own-property wrappers on three's GPUDevice (WebGPU only; the WebGL2 leg has none).
+  P.res = { bindGroup: 0, buffer: 0, texture: 0 }; P.resLog = [];
+  const dev = be.device;
+  if (dev && typeof dev.createBindGroup === "function") {
+    for (const [fn, k] of [["createBindGroup", "bindGroup"], ["createBuffer", "buffer"], ["createTexture", "texture"]]) {
+      const f = dev[fn];
+      dev[fn] = function (desc) {
+        P.res[k]++;
+        // Armed windows only (a census beat): the three call sites that made it, so a window's objects can be told apart.
+        if (P.armed && P.resLog.length < 20000) {
+          const st = String(new Error().stack || "").split("\n").slice(2, 9).map((l) => (l.match(/at (?:new )?([\w$.<>]+)/) || [])[1]).filter(Boolean);
+          P.resLog.push({ at: P.frames, k, label: (desc && desc.label) || "", size: (desc && desc.size) || 0, via: st.join("<") });
+        }
+        return f.apply(this, arguments);
+      };
+    }
+  } else P.res = null;
+  // Every three RenderObject made (a new object, its bind groups and uniform buffers): which material and layout.
+  P.ros = [];
+  const objs = T.renderer._objects;
+  if (objs && typeof objs.createRenderObject === "function") {
+    const cro = objs.createRenderObject;
+    objs.createRenderObject = function (nodes, geometries, renderer, object, material, scene, camera, lights, ctx, clip, passId) {
+      try {
+        if (P.armed && P.ros.length < 5000) {
+          const geometry = object && object.geometry, pos = geometry && geometry.attributes && geometry.attributes.position;
+          P.ros.push({ at: P.frames, transparent: !!(material && material.transparent), side: material ? material.side : -1, passId: passId || "",
+            verts: pos ? pos.count : 0, attrs: Object.keys((geometry && geometry.attributes) || {}).sort().join(","), pool: !!(object && object.parent && object.parent.type === "Object3D" && !object.parent.parent) });
+        }
+      } catch (_) { /* best-effort */ }
+      return cro.apply(this, arguments);
+    };
+  }
   let api = null; try { api = T.backendState().api; } catch (_) { /* older TLX */ }
   return "ok " + (api || (be.isWebGPUBackend ? "webgpu" : "webgl2"));
 }
@@ -43,25 +77,37 @@ export async function frames(page, n) {
  *  times, each after a control window of the same length with BOOST off. Writes artifacts/perf/.
  *  `gas(true|false)` presses / releases the throttle with a REAL input device (the spec passes
  *  page.keyboard): BOOST deploys only while GAS is held, the iPhone sequence. */
-export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
-  await page.addInitScript((gl) => {
+export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} }) {
+  await page.addInitScript(([gl, extra]) => {
     try {
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.tlxForceGL", gl);
       localStorage.setItem("apex26.gfxPreset", '"medium"');
       localStorage.setItem("apex26.gfxBootStepMs", "45000");   // TLX init can exceed 8 s on a busy software-GL runner
+      for (const [k, v] of Object.entries(extra)) localStorage.setItem(k, v);   // e.g. apex26.tlxDrawWarm (#4514)
     } catch (_) { /* private mode */ }
-  }, forceGL ? "1" : "0");
+  }, [forceGL ? "1" : "0", ls]);
+  // Page errors and console errors (a renderer throw reloads the page onto GLX: the annotation should name it).
+  const errors = [];
+  page.on("pageerror", (e) => { if (errors.length < 24) errors.push("pageerror: " + String((e && e.stack) || e).slice(0, 1500)); });
+  page.on("console", (m) => { const t = m.text(); if ((m.type() === "error" || /gfx|device|lost|reload|warm failed|TLX/i.test(t)) && !/Vertex attribute/.test(t) && errors.length < 24) errors.push("console[" + m.type() + "]: " + t.slice(0, 1500)); });
+  page.on("framenavigated", (f) => { if (f === page.mainFrame() && errors.length < 24) errors.push("navigated: " + f.url()); });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof GLX !== "undefined" && !!GLX.__tlx, null, { polling: 100, timeout: bootMs });
   const hook = await page.evaluate(hookPipelines);
-  if (!/^ok /.test(hook)) return { hook, presses: [] };
+  if (!/^ok /.test(hook)) return { hook, presses: [], errors };
 
   await page.evaluate(() => { window.__apex.race("monza"); });
   await page.waitForFunction(() => { try { const i = window.__apex.info(); return i.track === "monza" && (i.state === "race" || i.state === "count"); } catch (_) { return false; } },
     null, { polling: 200, timeout: 300000 });
   await page.evaluate(() => window.__apex.go());
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
+  // raceGate passes once the PROGRAM warm is done; the race-entry rig job (car-draw.js warmCockpitRig, which compiles
+  // and draws the boost pairs, #4514) runs after it — ~5 s more on SwiftShader (probe 2026-11-03). Measure after it.
+  // warm.pending is false while the job is still QUEUED, so wait for its own record (warm.rig, set when it finishes).
+  await page.waitForFunction(() => { try { return !!window.GLX.__tlx.memState().warm.rig; } catch (_) { return true; } }, null, { polling: 500, timeout: 120000 })
+    .catch(() => { /* reported: the annotation shows rig null */ });
+  if (!(await page.evaluate(() => !!(window.__apex && window.__bpp)))) throw new Error("the page reloaded during race entry: " + errors.join(" | "));
   await page.evaluate(() => window.__apex.setEnergy && window.__apex.setEnergy(1));
   await gas(true);                       // GAS held, the iPhone sequence
   await frames(page, SPACING);           // driving on the throttle: everything but BOOST is warm
@@ -70,22 +116,35 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
   // ordinary driving (a prop or car coming into view), not BOOST, and is reported, not asserted.
   const count = () => page.evaluate(() => window.__bpp.count);
   const slice = (a, b) => page.evaluate(([x, y]) => window.__bpp.log.slice(x, y), [a, b]);
+  // poolNew: TLX pool wrappers minted (memState().churn) — each a new three RenderObject with its own bind groups.
+  const res = () => page.evaluate(() => {
+    const P = window.__bpp; P.armed = true;
+    let poolNew = null; try { poolNew = window.GLX.__tlx.memState().churn.poolNew; } catch (_) { /* not TLX */ }
+    return P.res ? { ...P.res, poolNew, log: P.resLog.length, ros: P.ros.length } : null;
+  });
+  const delta = (a, b) => (a && b ? { bindGroup: b.bindGroup - a.bindGroup, buffer: b.buffer - a.buffer, texture: b.texture - a.texture,
+    poolNew: a.poolNew == null ? null : b.poolNew - a.poolNew } : null);
+  const resSlice = (a, b) => (a && b ? page.evaluate(([x, y]) => window.__bpp.resLog.slice(x, y), [a.log, b.log]) : null);
+  const roSlice = (a, b) => (a && b ? page.evaluate(([x, y]) => window.__bpp.ros.slice(x, y), [a.ros, b.ros]) : null);
+  const warmRig = await page.evaluate(() => { try { const w = window.GLX.__tlx.memState().warm; return { rig: w.rig, drawn: w.drawn, where: w.where, failed: w.failed, marks: (typeof RaceEntryProfile !== "undefined" ? RaceEntryProfile.snapshot().marks : []).filter((m) => /rigWarm/.test(JSON.stringify(m))) }; } catch (e) { return { error: String(e) }; } });
   const presses = [];
   for (let i = 1; i <= PRESSES; i++) {
-    const c0 = await count();
+    const c0 = await count(), r0 = await res();
     await frames(page, DEPLOY_FRAMES + SPACING);
-    const c1 = await count();
+    const c1 = await count(), r1 = await res();
     await page.evaluate(() => { const A = window.__apex; if (A.setEnergy) A.setEnergy(1); A.setBoost(true); });
     await frames(page, 3);
     const deployed = await page.evaluate(() => { const e = window.__apex.carEffects(); return !!(e && e.ersDeploy); });
     await frames(page, DEPLOY_FRAMES - 3);
     await page.evaluate(() => window.__apex.setBoost(false));
     await frames(page, SPACING);
-    const c2 = await count();
-    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2) });
+    const c2 = await count(), r2 = await res();
+    presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2),
+      controlRes: delta(r0, r1), res: delta(r1, r2), resMade: await resSlice(r1, r2),
+      controlRos: await roSlice(r0, r1), ros: await roSlice(r1, r2) });
   }
   await gas(false);
-  const out = { hook, forceGL, presses };
+  const out = { hook, forceGL, ls, warmRig, presses, errors };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/boost-press-pipelines-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
@@ -112,6 +171,12 @@ export function boostVerdict(presses) {
     const lit = p.built.filter((b) => !isFxStream(b));
     if (lit.length) fail.push(`press ${p.press} built ${lit.length} BOOST/lit pipelines (#3677): ${JSON.stringify(lit.slice(0, 6))}`);
   }
+  // (d) FIRST-USE OBJECTS (#4514 step 2): press 1 creates no RenderObject for a double-sided transparent lit draw
+  //     (a backSide pass on the lit layout: the cockpit ERS bar / OT lamp _rigFxA pair). The race-entry rig job draws
+  //     it under the cover (tlx.js drawRigPairs); compile-only (APEX_BOOST_DRAW_WARM=0) minted it here, with its bind
+  //     groups and uniform buffers. Raw bind-group/buffer counts are scenery churn in every window and only reported.
+  const firstRos = presses[0] && presses[0].ros ? presses[0].ros.filter((r) => r.passId === "backSide" && isLitMesh(r)) : [];
+  if (firstRos.length) fail.push(`press 1 created ${firstRos.length} double-sided transparent lit RenderObjects: a BOOST draw the rig warm never drew (#4514): ${JSON.stringify(firstRos.slice(0, 4))}`);
   const fxPress = later.reduce((n, p) => n + p.built.filter(isFxStream).length, 0);
   const fxCtrl = later.reduce((n, p) => n + (p.controlBuilt || []).filter(isFxStream).length, 0);
   if (fxPress > fxCtrl) fail.push(`presses 2..${presses.length} built ${fxPress} fx-stream pipelines vs ${fxCtrl} in the matched no-BOOST windows`);

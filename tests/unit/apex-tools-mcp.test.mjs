@@ -220,6 +220,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_catalog",
+    "apex_circuit_info",
     "apex_claude_agents",
     "apex_cursor_agents",
     "apex_debug_chrome",
@@ -629,6 +630,19 @@ test("tree pins: graph-parity needs base; a retired wrap is unknown", () => {
   }
 });
 
+// #4287: circuit facts (length, turns, sectors, corner count) from one tree call instead of a grep or a browser boot.
+test("apex_circuit_info: tree tool, one known track, spawns circuit-info.cjs <track> --json only; routed in the map", () => {
+  const ok = callCli("apex_circuit_info", { dryRun: true, track: "Monza" });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(JSON.parse(ok.stdout).argv.join(" "), /tools\/track\/circuit-info\.cjs monza --json$/);
+  const bad = callCli("apex_circuit_info", { dryRun: true, track: "nope" });
+  assert.equal(JSON.parse(bad.stdout).error, "bad_args");
+  assert.equal(JSON.parse(callCli("apex_circuit_info", { dryRun: true }).stdout).error, "bad_args", "track is required");
+  assert.match(fs.readFileSync(MCP, "utf8"), /name: "apex_circuit_info",\s*kind: "tree"/);
+  const routes = rpc([{ jsonrpc: "2.0", id: 1, method: "resources/read", params: { uri: "apex://start-here" } }]).find((m) => m.id === 1).result.contents[0].text;
+  assert.match(routes, /circuit length[^;]*corner count: apex_circuit_info/);
+});
+
 test("apex_frame_report: tree tool, validated track / u / frames / shots, never --out or --fleet", () => {
   const body = (r) => JSON.parse(r.stdout);
   const ok = callCli("apex_frame_report", { dryRun: true, track: "monaco", u: [0.25, 0.5], json: true });
@@ -1001,13 +1015,13 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
     if (a.readOnlyHint) assert.equal(a.idempotentHint, true, `${t.name}: read-only implies idempotent`);
     if (/^apex_(eval|shot|agent|garage|track|ui_fit|ui_shot|hud_shot|hud_survey)$/.test(t.name)) assert.equal(a.readOnlyHint, false, `${t.name} takes the browser lock and writes artifacts`);
   }
-  assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
+  assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_catalog", "apex_circuit_info", "apex_doctor", "apex_help", "apex_hud_mock",
     "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_pick_tests", "apex_select_specs",
     "apex_status", "apex_viewer"], "exactly the tools with a measured result shape");
   // 2026-11-03: no tool on this server writes to a vendor; the only destructive one stops a local job.
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_cursor_agents"], "only the Cursor READS reach a network");
-  for (const n of ["apex_claude_agents", "apex_cursor_agents", "apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_claude_agents", "apex_cursor_agents", "apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_circuit_info", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
@@ -1670,6 +1684,7 @@ const MIN_ARGS = {
   apex_select_specs: { since: "HEAD~1" },
   apex_graph_parity: { base: "HEAD~1", id: "monza" },
   apex_frame_report: { track: "monza" },
+  apex_circuit_info: { track: "monza" },
   apex_shot_survey: { track: "monza" },
   apex_ui_fit: { screen: "title" },
   apex_profile: { track: "monza" },
@@ -2299,7 +2314,7 @@ test("tools/list stays compact and apex_help returns the full text it shortens",
   for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
   // Bryce 2026-10-20 ("All five"): the required circuit-id enum points at apex_catalog instead of listing 52 ids;
   // a shorter required enum (apex_job_start kind) stays inline, and the server still rejects an unknown id.
-  for (const name of ["apex_frame_report"]) {
+  for (const name of ["apex_frame_report", "apex_circuit_info"]) {
     const track = listed.tools.find((t) => t.name === name).inputSchema.properties.track;
     assert.equal(track.enum, undefined, `${name}.track lists no ids`);
     assert.ok(track.description.includes("apex_catalog"), `${name}.track points at apex_catalog`);

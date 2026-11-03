@@ -39,6 +39,9 @@ options and your pick, then keep doing everything that does not depend on the an
 answer arrives as a comment starting `decision:` or as a label change, which wakes you. The `hold` label is his veto;
 only he removes it.
 
+Report a status (to the dispatcher or in a comment) only after the write it reports has returned success; a denied or
+failed write is reported as denied, never as done.
+
 Caps: stop at 300k context or when stuck — push, refresh the Plan and handoff block (`next:` names the blocker), add
 `needs-owner`, end. A CONTINUE worker will pick the PR up. Never merge, arm auto-merge, force-push, cancel an Actions
 run, or push to the deploy branch; every hook refusal is final for that action.

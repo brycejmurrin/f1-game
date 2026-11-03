@@ -686,10 +686,11 @@ const VisorOptics = (function () {
     _acc += dt > 0 ? dt : 0;
     if (!resized && _acc < 1 / hz) return;
     if (!(dt > 0) && !resized && !changed) return;              // a paused profile change still refreshes once
+    const accHeld = _acc;                                        // restored when the scene read fails: the interval is spent only by a paint
     _acc = resized || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
-    if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
+    if (!scene) { _acc = accHeld; _show(false); return; }                       // nothing to light the shield: keep the layer hidden
     _show(true);
     const fringe = _budget < 2 ? FRINGE[_opt("visorRefraction", "off")] || 0 : 0;
     const beams = budget.beams ? _beams() : 0;
