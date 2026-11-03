@@ -1,5 +1,7 @@
 ---
 name: tune-physics
+paths:
+  - "js/physics/**"
 description: "Use when the car handles wrong: understeer, oversteer, running wide, lazy or snappy turn-in, grip, braking, pace, GRIP STEER maths, or a physics A/B. Not for: shake → game-feel; steering sliders → input-controls; camera lag → playwright-probe; AI → ai-racecraft."
 ---
 

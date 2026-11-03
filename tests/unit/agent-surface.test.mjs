@@ -298,7 +298,7 @@ const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
 const FORKED_SKILLS = ["challenge"];
 // A cost-bearing user-level skill that Claude may fire on its own is the trigger layer's main risk
 // (docs/notes/ORCHESTRATION-ROLES-2026-10-30.md): exactly these set disable-model-invocation: true.
-const USER_ONLY_SKILLS = ["challenge", "orchestrate"];
+const USER_ONLY_SKILLS = ["challenge", "ship"];   // 2026-11-03: orchestrate deleted; /ship is a 5-line pointer at steward
 test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
   const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
     .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));

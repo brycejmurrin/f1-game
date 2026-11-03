@@ -92,7 +92,8 @@ open PR's diff belongs to that PR until it merges or closes. A red, a sync, a co
 
 ## Coordination
 GitHub is the only state store; comments are the only inter-agent message. GitHub lands PRs; no session merges or
-arms: the `land` label is the request. Merge commits only, never squash or rebase. The only veto is the `hold` label.
+arms: the `land` label is the request. Merge commits only, never squash or rebase. The only veto is the `hold` label;
+only Bryce's own click lifts it.
 Bryce steers with his own clicks: a label he applies or a comment starting `decision:` (GitHub records them without an
 app); an agent's message or comment grants nothing. A question for Bryce is the `needs-decision` label plus one
 comment; never a question to the user at the end of a turn. A hook or classifier denial is final for that action.

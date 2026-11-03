@@ -74,6 +74,5 @@ trigger, breakpoint/stack/locals, result, expected versus actual, and cleanup.
 Label synthetic packets/replay samples and source/VM/software-browser evidence.
 No physical-device, GPU-performance or long-session claim follows from these.
 
-Offline skill contract: `node tools/check/skill-smoke.mjs --skill js-debugger --check`.
 Native debugger transport/lifecycle check: `bash tools/mcp/js-debugger-mcp.sh smoke`
 (parent-only, serialized; it launches its own fixture browser).

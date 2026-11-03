@@ -5,6 +5,8 @@ paths:
 
 # js/ navigation — loads with any js/ file
 
+The one home of "a symbol → apex-lsp" (AGENTS.md §Agent extensions and skill `code-nav` point here).
+
 - A named symbol (`Name`, `Head.member`, `G.member`): ask MCP `apex-lsp`, not grep.
   `lsp_definition` (`body: true` returns the source), `lsp_references` (rows name
   the enclosing function), `lsp_callers` before changing a shared function,

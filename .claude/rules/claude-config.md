@@ -5,43 +5,32 @@ paths:
 
 # .claude/ config — loads with .claude/
 
-- Hooks (`.claude/hooks/**`) and `.claude/settings*.json` need Bryce's explicit
-  yes before ready — do not edit them without that grant.
-- Memory (`.claude/memory/`) edits belong in a memory-focused PR unless Bryce
-  grants a combined one; `ready-gate` flags them on other PRs.
-- Skills and agents live under `.claude/skills` / `.claude/agents`; keep the
-  Codex mirror with `bash tools/env/mirror-skills.sh`. Never fork under
-  `.cursor/skills/` or `.cursor/agents/`.
+- Hooks (`.claude/hooks/**`) and `.claude/settings*.json`: a PR that edits them needs the `config-ok` label, which
+  Bryce applies himself (merge-gate's `config` row reads the label event's actor, not a message).
+- The deny and ask lists live in `.claude/settings.json` (`permissions.deny`, `permissions.ask`); a denied tool is
+  refused outright, an asked one waits for Bryce in an attended session and is unavailable in a worker.
+- Memory: `.claude/memory/` is restored one way at SessionStart (`memory-sync.sh restore`; the repo copy wins); edits
+  to it belong in a memory-focused PR unless Bryce grants a combined one (`ready-gate` flags them on other PRs).
+- Skills and agents live under `.claude/skills` / `.claude/agents`; keep the Codex mirror with
+  `bash tools/env/mirror-skills.sh`. Never fork under `.cursor/skills/` or `.cursor/agents/`.
 - One home per rule: a rule sentence lives in one file and others link to it
-  (`tests/unit/rulebook-guards.test.mjs`; map in
-  `docs/notes/RULEBOOK-REWRITE-2026-10-26.md`).
+  (`tests/unit/rulebook-guards.test.mjs`; map in `docs/notes/RULEBOOK-REWRITE-2026-10-26.md`).
 
-## Hooks (wired by `.claude/settings.json`; moved from AGENTS.md 2026-10-26)
+## Hooks (wired by `.claude/settings.json`)
 
-- `session-start.sh` installs deps and prints the orientation line; `memory-sync.sh`
-  restores auto memory there and saves it on PostToolUse Write/Edit and Stop
-  (`docs/notes/AGENT-MEMORY.md`).
-- `protect-files.sh` blocks generated-file edits and source edits during a live
-  browser run (Write/Edit and Bash writes), and keeps the eight reporter agents
-  (`.claude/agents/README.md`) inside scratch/ and artifacts/. Escape hatches are
-  untracked files a MAIN session creates and removes when the assigned edit is done
-  (a subagent cannot create one; every guarded call announces an active hatch):
-  `.claude/allow-protected` lifts the generated-file rules only (never the live-run,
-  surveyor or reporter rules), `.claude/allow-context-cap` lifts `context-cap.py`'s
-  spawn refusal, `.claude/allow-stop` silences `stop-guard.sh`.
-- `.githooks/pre-commit` owns `test:guards`, its verdict cache and the docs-only
-  path for every host (AGENTS.md rule 12). `bash-guard.sh` keeps fast, fail-closed
-  refusals, including a missing executable git hook and attempts to bypass it. It blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a
-  subagent (`mcp-browser-guard.sh` for the MCP browser tools) and any Actions run
-  cancel. `github-mcp-guard.sh` and bash-guard's `gh pr merge`/`gh pr ready`/`gh api`
-  check (one text, `merge_policy.py`) deny squash/rebase and run cancels, refuse
-  every session merge or arm (land.yml lands; merge-gate writes no receipt) and
-  require the ready-gate receipt for a draft→ready flip.
-- `context-cap.py` names live context against the brief's `STOP AT` and refuses spawns over the hard
-  cap; `launch-gate.py` refuses `create_session` without a fresh quota receipt
-  (`tools/ci/launch-gate.mjs`, from the page `launch-page.py` records on `get_session`).
-- Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated
-  file), `lsp-hint.py` (the apex-lsp call after a bare-symbol grep),
-  `stop-guard.sh` (a turn ending over a live run), `subagent-contract.py` (a
-  reporter agent's malformed report), `skill-hint.py` (skills a prompt matches),
-  `ui-fixer-uncommitted.sh` (an hour-old commit with a dirty tree).
+A refusal's message says what to do instead; that message is the rule.
+
+- `session-start.sh` installs deps, builds `BUILT_PATHS`, restores memory and prints the orientation line.
+- `protect-files.sh` (Write/Edit/MultiEdit/NotebookEdit) refuses a hand edit of a generated file (AGENTS.md rule
+  11). The one hatch: an untracked `.claude/allow-protected` a MAIN session creates for the assigned edit and
+  removes after (a subagent cannot create one; every guarded call announces an active hatch).
+- `bash-guard.sh` (Bash) refuses `pkill -f` / `killall` and PID kills of unlisted processes, a browser run inside a
+  subagent, `git commit --no-verify` / `-n`, a `core.hooksPath` change, and `gh run cancel` / `gh pr merge` /
+  `gh pr ready`; `mcp-browser-guard.sh` refuses the MCP browser tools inside a subagent and a second browser beside
+  a live one; `github-mcp-guard.sh` refuses a session merge or arm and a draft→ready flip without a fresh
+  ready-gate receipt. `.githooks/pre-commit` owns `test:guards` for every host (AGENTS.md rule 12);
+  `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch pushes.
+- `context-cap.py` (Agent) advises on live context against the brief's `STOP AT` and refuses spawns over the hard
+  cap; `subagent-contract.py` flags a reporter agent's malformed report.
+- Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated file), `lsp-hint.py` (the
+  apex-lsp call after a bare-symbol grep), `memory-sync.sh` (SessionStart restore only).

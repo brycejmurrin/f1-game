@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @doc Advisory delegation overlap against open-PR diffs and supplied sibling briefs; GET-only, never a reservation.
-// @skill worker
+// @skill steward
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

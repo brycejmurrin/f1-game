@@ -226,7 +226,7 @@ test("a folded skill's trigger words live in the hub description", () => {
     "css-play": [/restructur/i, /BEM|CUBE|ITCSS/],
     "agent-view": [/geometry/i, /curvature/i, /groundY/i],
     "f1-animation-cameras": [/replay/i, /anchor/i, /seek/i],
-    "steward": [/own, pick up or are handed a PR/i, /push once per green cycle/i],
+    "steward": [/own a PR at any stage/i, /CONTINUE PR/, /land/i],   // 2026-11-03: worker + ship folded in
     "survey-track": [/multi-circuit/i, /campaign/i],
   };
   for (const [hub, res] of Object.entries(need)) {

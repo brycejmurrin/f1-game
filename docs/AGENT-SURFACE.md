@@ -327,10 +327,10 @@ and report comparison do not launch Chromium.
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
 | `apex_help` | built-in | tree | check-changes |
-| `apex_inbox_sync` | `agent/inbox.mjs` | tree | worker |
-| `apex_inbox_list` | `agent/inbox.mjs` | tree | worker |
-| `apex_inbox_get` | `agent/inbox.mjs` | tree | worker |
-| `apex_inbox_status` | `agent/inbox.mjs` | tree | worker |
+| `apex_inbox_sync` | `agent/inbox.mjs` | tree | steward |
+| `apex_inbox_list` | `agent/inbox.mjs` | tree | steward |
+| `apex_inbox_get` | `agent/inbox.mjs` | tree | steward |
+| `apex_inbox_status` | `agent/inbox.mjs` | tree | steward |
 | `apex_diagnostics` | `perf/diagnostics.mjs` | tree | renderer-debug |
 | `apex_garage_plan` | `shot/garage-angles.mjs` | tree | garage-parts-livery |
 | `apex_ui_mission_plan` | `ui/explorer.mjs` | tree | survey-ui-matrix |

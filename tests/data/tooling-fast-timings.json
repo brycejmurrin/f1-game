@@ -678,7 +678,6 @@
     "tests/unit/skill-hint-hook.test.mjs": 6500,
     "tests/unit/skill-progressive.test.mjs": 430,
     "tests/unit/skill-routing-eval.test.mjs": 1400,
-    "tests/unit/skill-smoke.test.mjs": 720,
     "tests/unit/soak-run.test.mjs": 160,
     "tests/unit/soundtrack-cache.test.mjs": 690,
     "tests/unit/source-integrity.test.mjs": 1500,

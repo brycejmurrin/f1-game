@@ -216,7 +216,7 @@ Sources: [CC] https://code.claude.com/docs/en/skills (Claude Code skills page) Â
   - trigger-rate routing eval `tools/check/skill-routing-eval.py` (8 queries per skill, 5 positive + 3
     near-miss, `--runs`, base/head `--compare`, detection "follows the skill-creator's run_eval.py");
   - a â‰¥85% top-2 hint floor (`tests/unit/skill-hint-hook.test.mjs`);
-  - offline smoke recipes (`tools/check/skill-smoke.mjs`).
+  - offline smoke recipes (`check/skill-smoke.mjs` (deleted 2026-11-03)).
   - Gaps: no held-out split, about 8 queries per skill against the recommended ~20, and **no with-skill vs
     without-skill OUTPUT-quality eval** for any skill.
 
@@ -230,7 +230,7 @@ Sources: [CC] https://code.claude.com/docs/en/skills (Claude Code skills page) Â
    - Why: [BP] "At least three evaluations created" and [AS-EVAL]. Today the repo measures routing, not whether the
      skill improves the outcome.
 2. **Hold out a fixed validation split in routing evals.**
-   - Tag 3 of each `tests/data/skill-routing/queries/<s>.json` rows `"split":"validation"` (keep 1 near-miss in
+   - Tag 3 of each `skill-routing/queries/ (deleted 2026-11-03) <s>.json` rows `"split":"validation"` (keep 1 near-miss in
      each split).
    - Have `skill-routing-eval.py --compare` report train and validation separately.
    - Grow to ~12 rows for the 6 most-confused pairs.

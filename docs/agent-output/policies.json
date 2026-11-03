@@ -441,16 +441,6 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
-    "tools/check/skill-smoke-recipes.json": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c8"
-    },
-    "tools/check/skill-smoke.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "@c1"
-    },
     "tools/check/tolerance-diff.mjs": {
       "action": "keep-native",
       "presentation": "native",

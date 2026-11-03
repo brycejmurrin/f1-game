@@ -1,6 +1,6 @@
 # Land mechanics — what happens after `land`
 
-Read when you need the detail behind contract item 5 (the steps themselves are skill `ship`).
+Read when you need the detail behind SKILL.md §Land (the steps themselves are there).
 
 - `land.yml` runs `merge-gate.mjs --check` as the commit status named `gate` and arms auto-merge pinned to your head;
   the ruleset merges when `gate` is green. Its ci row requires the newest check named exactly `CI` green on your head.
@@ -15,4 +15,6 @@ Read when you need the detail behind contract item 5 (the steps themselves are s
   re-gate (at most 3 per head). An API or git error leaves `gate` in progress ("error, will retry"), never red. `gate`
   turns green only while the deploy tip is the one it measured. `land.yml` may merge the deploy tip into a `land` PR
   whose `gate` refused only on distance (AUTO-SYNC, at most `SYNC_MAX` waiting on CI); pull before pushing to it.
-- `LAND_TOKEN` and the ruleset: `docs/WORKERS.md` §`LAND_TOKEN`.
+- Gate rows that read Bryce's own click (provenance, not a relay): `hold` (only the actor who set it, or Bryce,
+  lifts it), `ratchet-raise`, `config` (`config-ok` on a hooks/settings PR).
+- `LAND_TOKEN` and the ruleset: [`vendors.md`](vendors.md).

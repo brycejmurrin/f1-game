@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-# skill-routing-eval.py — which project skill fires for a realistic request? (2026-09-30)
-# @doc Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none).
+# skill-routing-eval.py — which project skill fires for a realistic request? (2026-09-30; phone.json 2026-11-03)
+# @doc Routes the phone.json prompts through the REAL skill set via `claude -p`; scores which skill fired (correct/wrong/none).
 # @skill agent-config
 #
-#   python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --out artifacts/skill-routing.json --model <session model>
-#   ... --root ../wt-base --alias old=new --runs 3 --grace 2 --only agent-view,slim-bloat
+#   python3 tools/check/skill-routing-eval.py --out artifacts/skill-routing.json --model <session model>
+#   ... --root ../wt-base --alias old=new --runs 3 --grace 2 --prompts tests/data/skill-routing/phone.json
 #   python3 tools/check/skill-routing-eval.py --compare base.json head.json   # no run: per-skill table + flips
 #
-# 8 queries per skill (5 should-fire, 3 near-misses a named neighbour owns) in
-# tests/data/skill-routing/queries/<skill>.json. One `claude -p` per query in the
-# repo root (--root DIR: any checkout/worktree), so every real skill is in the
-# available list; the FIRST Skill tool call (or a Read of a SKILL.md) before any
-# other tool is the strict verdict. --grace K also records `late:<skill>` when
-# that call comes within the K tool calls after a first non-skill tool (grace
-# score). --runs N: majority verdict, agreement k/N per query. --alias old=new
-# scores a fired `old` as `new` (merged skills on the base side). Detection
-# follows the skill-creator's run_eval.py. Cost: one short call per query per run
-# (~50k cached input tokens each); 216 queries take ~30 min at --workers 6.
+# The prompts are tests/data/skill-routing/phone.json: per skill three `fire` prompts
+# (should load it) and `near` rows (a neighbour owns them). One `claude -p` per
+# prompt in the repo root (--root DIR: any checkout/worktree), so every real skill
+# is in the available list; the FIRST Skill tool call (or a Read of a SKILL.md)
+# before any other tool is the strict verdict. --grace K also records
+# `late:<skill>` when that call comes within the K tool calls after a first
+# non-skill tool (grace score). --runs N: majority verdict, agreement k/N per
+# prompt. --alias old=new scores a fired `old` as `new` (merged skills on the base
+# side). Detection follows the skill-creator's run_eval.py. Cost: one short call
+# per prompt per run (~50k cached input tokens each). The deterministic guard that
+# runs on every commit is tests/unit/skill-descriptions.test.mjs; this is the
+# optional A/B after a fold or a description rewrite (skill agent-config).
 # Output: {"header": {claude_version, model, ...}, "results": [...]}; --compare
 # also reads the pre-2026-10-14 bare-list shape. Tests: tests/unit/skill-routing-eval.test.mjs (fake claude).
 # Baseline 2026-09-30 on claude-fable-5-1: 182/216 before the `paths:` removal, 214/216 after.
@@ -27,6 +29,7 @@ from concurrent.futures import as_completed
 from pathlib import Path
 
 ROOT = str(Path(__file__).resolve().parents[2])
+PROMPTS = str(Path(ROOT, "tests/data/skill-routing/phone.json"))
 SKILL_RE = re.compile(r"\.claude/skills/([a-z0-9-]+)/")
 
 
@@ -150,6 +153,20 @@ def parse_alias(specs):
     return out
 
 
+def load_prompts(path):
+    """phone.json -> [{source, query, expect}]: a `fire` prompt expects its own skill, a `near` row its neighbour."""
+    data = json.loads(Path(path).read_text())
+    skills = data.get("skills", data)
+    items = []
+    for name, row in skills.items():
+        if not isinstance(row, dict): continue
+        for q in row.get("fire", []):
+            items.append({"source": name, "query": q, "expect": name})
+        for n in row.get("near", []):
+            items.append({"source": name, "query": n["q"], "expect": n["expect"]})
+    return items
+
+
 def load_results(path):
     data = json.loads(Path(path).read_text())
     return data["results"] if isinstance(data, dict) else data
@@ -185,7 +202,7 @@ def compare(a_path, b_path, out=sys.stdout):
         print(f"  {k[0]}  expect={a['expect']}  {a['verdict']}({a.get('fired')}) → {b['verdict']}({b.get('fired')})  {k[1]}", file=out)
     only = len(amap) + len(bmap) - 2 * len(common)
     if only:
-        print(f"\n{only} queries in only one file (not compared)", file=out)
+        print(f"\n{only} prompts in only one file (not compared)", file=out)
     return 0
 
 
@@ -199,44 +216,38 @@ def claude_version(root):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Score which project skill `claude -p` fires per query.")
-    ap.add_argument("--queries", help="dir of <skill>.json query files (required unless --compare)")
+    ap = argparse.ArgumentParser(description="Score which project skill `claude -p` fires per phone.json prompt.")
+    ap.add_argument("--prompts", default=PROMPTS, help="phone.json (default: tests/data/skill-routing/phone.json)")
     ap.add_argument("--out", help="result JSON path (required unless --compare)")
     ap.add_argument("--model", default=None)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--timeout", type=int, default=90)
     ap.add_argument("--root", default=ROOT, help="checkout to run `claude -p` in (default: this script's repo)")
-    ap.add_argument("--only", default=None, help="comma list of query files/sources to run")
     ap.add_argument("--alias", action="append", help="old=new[,old2=new2]: a fired old counts as new (repeatable)")
-    ap.add_argument("--runs", type=int, default=1, help="runs per query; verdict = majority, agreement k/N")
+    ap.add_argument("--runs", type=int, default=1, help="runs per prompt; verdict = majority, agreement k/N")
     ap.add_argument("--grace", type=int, default=0, help="also record late:<skill> within K tool calls after a non-skill tool")
-    ap.add_argument("--compare", nargs=2, metavar=("A.json", "B.json"), help="no run: per-skill base→head table + flipped queries")
+    ap.add_argument("--compare", nargs=2, metavar=("A.json", "B.json"), help="no run: per-skill base→head table + flipped prompts")
     a = ap.parse_args(argv)
     if a.compare:
         return compare(*a.compare)
-    if not a.queries or not a.out:
-        ap.error("--queries and --out are required (unless --compare)")
+    if not a.out:
+        ap.error("--out is required (unless --compare)")
     if a.runs < 1: ap.error("--runs must be >= 1")
     if a.grace < 0: ap.error("--grace must be >= 0")
     alias = parse_alias(a.alias)
     root = str(Path(a.root).resolve())
-    only = {s.strip().removesuffix(".json") for s in a.only.split(",") if s.strip()} if a.only else None
-    items = []
-    for f in sorted(Path(a.queries).glob("*.json")):
-        if only is not None and f.stem not in only: continue
-        for q in json.loads(f.read_text()):
-            items.append({"source": f.stem, "query": q["query"], "expect": q["expect"]})
-    if only is not None and not items:
-        ap.error(f"--only matched no query file in {a.queries}")
+    items = load_prompts(a.prompts)
+    if not items:
+        ap.error(f"no prompts in {a.prompts}")
     # an expect is a skill if either checkout (or an alias target) has it, so a
-    # base checkout missing a new skill still scores that skill's queries
+    # base checkout missing a new skill still scores that skill's prompts
     skills = set(alias.values())
     for r in {root, ROOT}:
         d = Path(r, ".claude/skills")
         if d.is_dir(): skills |= {x.name for x in d.iterdir() if x.is_dir()}
     info = {}
-    header = {"claude_version": claude_version(root), "model": a.model, "root": root,
-              "runs": a.runs, "grace": a.grace, "alias": alias, "only": sorted(only) if only else None,
+    header = {"claude_version": claude_version(root), "model": a.model, "root": root, "prompts": a.prompts,
+              "runs": a.runs, "grace": a.grace, "alias": alias,
               "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
     def one(it):

@@ -104,7 +104,7 @@ Values are partial `{knobId: number}` maps (only non-default knobs).
    ```
    Every key and knob must pass the script validator.
 
-4. **Smoke (optional):** `node tools/ci/test-bg.mjs smoke`
+4. **Smoke (optional):** `node tools/ci/remote-group.mjs smoke` on the pushed branch
 
 5. **Commit** `js/lighting/presets.js` on the active feature branch (two calls, AGENTS.md rule 12),
    message `Bake lighting presets: <which tracks/conditions>`.

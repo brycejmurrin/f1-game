@@ -19,8 +19,8 @@ grep -aE '= (run (passed|failed|timedout|interrupted)|bg exit)' artifacts/logs/<
 grep -aE 'x FAIL|! retry|= FAILURES|= slowest' artifacts/logs/<group>.log | head   # per-test 78.0s-style durations; `while setting up "context"` = load
 ```
 
-No `= run` line and `--status` says `running` = wait more (`--wait --timeout`
-again), do not re-run. A `= run failed` with only ~120 s timeouts on a loaded
+No `= bg exit` line and `--status` says `running` = wait more (`--wait --timeout`
+again), do not re-run. A `= bg exit 1` with only ~120 s timeouts on a loaded
 box goes to step 1; the load NOW is not the load THEN (compare log timestamps
 with other `artifacts/logs/*.log` mtimes).
 
@@ -90,9 +90,8 @@ base result is UNKNOWN, not green. A pass that needed the retry is still a red
   Browser+browser pairing is the measured source of the entire 120 s class.
 - Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
   `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
-- Verdicts come from the log's terminal line `= run <status>  (N/M done,
-  K failed)` — match with `grep -E '= (run (passed|failed|timedout|interrupted)|bg exit)'`
-  (ERE alternation; fixed-string/BRE grep never matches) — never the process
-  table.
+- Verdicts come from the log's closing line: a `test-bg` log's verdict is `= bg exit N` (its `= run <status>
+  (N/M done, K failed)` line is the runner's summary, written before the exit); a `tooling-fast` log ends
+  `= tooling-fast passed|failed (<n> files, <m> failed)`. Match with `grep -E '^= '` — never the process table.
 - `tools/ci/verify-change.mjs` runs the whole selection serialized correctly and
   labels timeout outcomes with the triage command.

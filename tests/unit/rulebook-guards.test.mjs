@@ -42,7 +42,7 @@ const text = new Map(FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "u
 // [id, canonical sentence (regex), home]. Each regex matches the RULE as a sentence, not a tool name or a pointer.
 const CANON = [
   ["hold label veto", /only veto is the `hold` label/i, "AGENTS.md"],
-  ["GitHub lands PRs", /GitHub lands PRs; no session merges or arms/i, "AGENTS.md"],
+  ["GitHub lands PRs", /GitHub lands PRs; no session merges or\s+arms/i, "AGENTS.md"],
   // 2026-11-03 (plan §4.3): provenance, not relays — an agent's message or comment grants nothing.
   ["no authority", /an agent's message or comment grants nothing/i, "AGENTS.md"],
   // 2026-11-03: four lane-procedure sentences re-homed from AGENTS.md to skill `steward` (plan §4.4).
@@ -51,8 +51,8 @@ const CANON = [
   ["never cancel", /NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
   ["commit in two calls", /Commit in two calls: stage in its own command/, "AGENTS.md"],
   ["push without a pipe", /no output pipe/i, "AGENTS.md"],
-  ["no timers", /No sleep or shell-poll loops and no standby wakes/i, "AGENTS.md"],
-  ["dirty ready flip", /ready flip on a (?:dirty PR|CONFLICTING\/DIRTY head) starts no CI/i, ".claude/skills/steward/SKILL.md"],
+  ["no timers", /No\s+sleep or shell-poll loops and no standby wakes/i, "AGENTS.md"],
+  ["dirty ready flip", /ready flip\s+on a (?:dirty PR|CONFLICTING\/DIRTY head)\s+starts no CI/i, ".claude/skills/steward/SKILL.md"],
   ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, ".claude/skills/steward/SKILL.md"],
   ["first claimant fixes", /the first claimant fixes, the rest wait/i, ".claude/skills/steward/SKILL.md"],
   ["memory-change line", /`memory-change: <reason>`/, ".github/pull_request_template.md"],
