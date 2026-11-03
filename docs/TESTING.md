@@ -42,7 +42,7 @@ detached, under a one-run lock and a loadavg-3 gate:
 ```sh
 node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # one spec, log artifacts/logs/spec-<name>.log
 node tools/ci/test-bg.mjs --status                            # running / how it ended
-node tools/ci/test-bg.mjs --wait --timeout 45                 # the waiter (a background task): exit 1 red, 124 still running
+node tools/ci/test-bg.mjs --wait --timeout 45                 # the waiter: ONE background Bash task, pass timeout 2700000 (the 30-min default kills it); exit 1 red, 124 still running
 node tools/ci/test-bg.mjs --stop                              # end it (never a PID kill: that orphans the browsers)
 ```
 
