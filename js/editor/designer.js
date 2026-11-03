@@ -840,7 +840,8 @@ const TrackDesigner = (function () {
         tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
       const home = tuck ? body : root;
-      if (foot.parentNode !== home) home.appendChild(foot);   // a no-op re-append can drop focus from SAVE/RACE
+      // A no-op re-append can drop focus from SAVE/RACE; a real move blurs the focused chip (#4600), so hand it back.
+      if (foot.parentNode !== home) { const a = document.activeElement, kept = a && foot.contains(a) ? a : null; home.appendChild(foot); if (kept && document.activeElement !== kept) kept.focus({ preventScroll: true }); }
       root.dataset.foot = tuck ? "in" : "out";
     };
     if (typeof addEventListener === "function") addEventListener("resize", seatFoot);
