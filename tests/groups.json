@@ -481,6 +481,8 @@
     "// trace were each found by a screenshot; this puts them in the edit loop.",
     "// Round-2 garage: era bans never delete fitted parts, the wall board reads FREE BUILD, stats include career development, badges and legend chips.",
     "tests/unit/garage-sheet-round2.test.mjs",
+    "// Garage video harness flags: ends-early / car-still / camera-oob / never-finishes (tools/shot/garage-video-checks.mjs).",
+    "tests/unit/garage-video-checks.test.mjs",
     "// gate-receipt: no tool writes a merge receipt (review M2); readers still judge one; < 0.5 s.",
     "tests/unit/gate-receipt-merge-kind.test.mjs",
     "// D·W22a: gen-agent-index stable sort by id (localeCompare-free); shuffled input → byte-identical.",

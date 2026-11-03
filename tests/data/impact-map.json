@@ -3194,15 +3194,19 @@
     "js/car/crest-draw.js": {
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/crest-marks.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "tracePath": [
+        "tests/unit/crest-marks.test.mjs"
+      ],
       "*": [
         "tests/unit/cover-legibility.test.mjs",
-        "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ]
     },
@@ -3214,6 +3218,7 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
@@ -3465,6 +3470,7 @@
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -3488,12 +3494,14 @@
       ],
       "*": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/garage-followups.test.mjs"
+        "tests/unit/garage-followups.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs"
       ]
     },
     "js/car/livery-graphics.js": {
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/crest-marks.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -3503,10 +3511,10 @@
       ],
       "*": [
         "tests/unit/cover-legibility.test.mjs",
-        "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ]
     },
@@ -3565,7 +3573,8 @@
         "tests/unit/crest-marks.test.mjs"
       ],
       "drawLogoImage": [
-        "tests/unit/crest-marks.test.mjs"
+        "tests/unit/crest-marks.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs"
       ],
       "drawNumber": [
         "tests/unit/livery-cover-graphics.test.mjs"
@@ -3586,6 +3595,9 @@
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/livery-contrast.test.mjs"
       ],
+      "markChanged": [
+        "tests/unit/livery-swatch-cache.test.mjs"
+      ],
       "markOnField": [
         "tests/unit/crest-marks.test.mjs"
       ],
@@ -3604,6 +3616,9 @@
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
+      "paintSwatch": [
+        "tests/unit/livery-swatch-cache.test.mjs"
+      ],
       "playerHiResDeferred": [
         "tests/unit/livery-tier.test.mjs"
       ],
@@ -3613,11 +3628,18 @@
       ],
       "setTeamLogo": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "sunColour": [
         "tests/unit/fin-design.test.mjs",
         "tests/unit/livery-contrast.test.mjs"
+      ],
+      "swatchCanvas": [
+        "tests/unit/livery-swatch-cache.test.mjs"
+      ],
+      "swatchStats": [
+        "tests/unit/livery-swatch-cache.test.mjs"
       ],
       "to255": [
         "tests/unit/fin-design.test.mjs"
@@ -5278,6 +5300,7 @@
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/log-namespaces.test.mjs",
@@ -6186,6 +6209,7 @@
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -12471,6 +12495,9 @@
         "tests/unit/hud-gap-decimals.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "inPit": [
+        "tests/unit/hud-gap-decimals.test.mjs"
+      ],
       "manual": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
@@ -17841,6 +17868,9 @@
         "tests/unit/input-hud-properties.test.mjs"
       ],
       "gapDecimals": [
+        "tests/unit/hud-gap-decimals.test.mjs"
+      ],
+      "inPit": [
         "tests/unit/hud-gap-decimals.test.mjs"
       ],
       "lapGapText": [
