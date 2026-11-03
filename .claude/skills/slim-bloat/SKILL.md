@@ -24,9 +24,9 @@ node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ON
 `ratchets.mjs` is the verdict; `bloat-scan` only ranks (it reads `ratchets.json` `lines`, not the branch's
 `ratchets.d` delta or the other metrics).
 
-**Over the ceiling** (an `OVER` row; the commit is blocked): the commit hook's absorb is
-`tools/hooks/ratchet-reason.mjs` (a small silent allowance, a larger one with a `Ratchet-Reason:` trailer — read
-the constants there); past it every commit on the branch blocks until the carve lands. Run
+**Over the ceiling** (an `OVER` row; the commit is blocked): the commit hook's absorb is a flat 20 lines of
+real growth per file (`ratchets.mjs --auto-raise`; the `Ratchet-Reason:` trailer was dropped 2026-11-03); past
+it every commit on the branch blocks until the carve lands. Run
 `node tools/check/ratchets.mjs --base origin/claude/f1-game-project-26h3ng` (your own raise vs an inherited one),
 then carve until value ≤ ceiling and `--update --lower-only`: a carve that is too small prints `SKIP RAISE` and the
 row stays OVER. The raise `ratchets.mjs` suggests is Bryce's alone (`.claude/rules/game-code.md`); never type it.

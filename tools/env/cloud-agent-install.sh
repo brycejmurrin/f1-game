@@ -107,7 +107,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 usage: bash tools/env/cloud-agent-install.sh [--help|--check-npm-prefix]
 
 Cursor Cloud dashboard install: best-effort mesa/vulkan/xvfb, then
-install-browsers.sh, then the chrome-devtools / tinyfish MCP clones.
+install-browsers.sh, then the chrome-devtools MCP clone.
 Idempotent. Exit 0 when the snapshot already has usable deps.
 
   --check-npm-prefix  only run the npm prefix=/ cure (nvm PATH + cargo
@@ -179,22 +179,6 @@ ensure_mcp_clones() {
     fi
   fi
 
-  if [[ "${APEX_SKIP_TINYFISH_SETUP:-}" != "1" ]]; then
-    if [[ -f "$ROOT/scratch/tinyfish-mcp-server/dist/index.js" ]]; then
-      echo "tinyfish MCP clone already built"
-    else
-      echo "Cloning tinyfish MCP (best-effort; deploy-check needs setup)…"
-      if ! bash "$ROOT/tools/mcp/tinyfish-mcp.sh" setup; then
-        echo "WARN: tinyfish setup failed — run tools/mcp/tinyfish-mcp.sh setup" >&2
-      fi
-    fi
-  fi
-
-  # Dashboard secret / .env override the tracked fallback in tinyfish-mcp.sh.
-  # This script never embeds a key. Custom key: https://agent.tinyfish.ai/home
-  if [[ -z "${TINYFISH_API_KEY:-}" && ! -f "$ROOT/scratch/tinyfish-mcp-server/.env" ]]; then
-    echo "NOTE: TINYFISH_API_KEY unset — tinyfish-mcp.sh uses its tracked fallback. Custom key: https://agent.tinyfish.ai/home"
-  fi
 }
 
 # The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): build

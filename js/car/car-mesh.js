@@ -531,26 +531,30 @@ function getSpinDisc() {
 // cached by its rgb, laid on each wheel's outer face like the brake ring —
 // outside the brake ring's band, so the two never overlap.
 const _compoundRings = new Map();
-function getCompoundRing(col) {
-  const key = colKey3(col);   // per wheel per car per frame: the memoised key
-  let m = _compoundRings.get(key);
-  if (m) return m;
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  const SEG = 20, R0 = 0.24, R1 = 0.315;
-  for (let i = 0; i < SEG; i++) {
-    const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
-    const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
-    const base = out.pos.length / 3;
-    out.pos.push(0, R0 * c0, R0 * s0,  0, R1 * c0, R1 * s0,
-                 0, R1 * c1, R1 * s1,  0, R0 * c1, R0 * s1);
-    for (let v = 0; v < 4; v++) { out.nrm.push(1, 0, 0); out.col.push(col[0], col[1], col[2]); }
-    out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
-                 base, base + 2, base + 1, base, base + 3, base + 2);
+  function getCompoundRing(col) {
+    const key = colKey3(col);   // per wheel per car per frame: the memoised key
+    let m = _compoundRings.get(key);
+    if (m) return m;
+    const out = { pos: [], nrm: [], col: [], idx: [] };
+    // Leave a two-segment gap so the stripe is not a full annulus: a continuous
+    // ring is rotation-invariant, so the overlay that rides the spinning wheel
+    // matrix could never show motion. The gap is the spin cue at chase distance.
+    const SEG = 20, R0 = 0.24, R1 = 0.315, GAP0 = 0, GAP1 = 1;
+    for (let i = 0; i < SEG; i++) {
+      if (i === GAP0 || i === GAP1) continue;
+      const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+      const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+      const base = out.pos.length / 3;
+      out.pos.push(0, R0 * c0, R0 * s0,  0, R1 * c0, R1 * s0,
+                   0, R1 * c1, R1 * s1,  0, R0 * c1, R0 * s1);
+      for (let v = 0; v < 4; v++) { out.nrm.push(1, 0, 0); out.col.push(col[0], col[1], col[2]); }
+      out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
+                   base, base + 2, base + 1, base, base + 3, base + 2);
+    }
+    m = _gfx.createMesh(out);
+    _compoundRings.set(key, m);
+    return m;
   }
-  m = _gfx.createMesh(out);
-  _compoundRings.set(key, m);
-  return m;
-}
 
 // THE STOP'S CREW: a jack at each end of the car — cradle, team-colour beam,
 // castors, upright handle — a wheel gun with its hose at each wheel, and the

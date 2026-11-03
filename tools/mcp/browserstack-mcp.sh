@@ -18,7 +18,7 @@
 # it is a different attachment from this repo-configured local server.
 #
 # CREDENTIALS: read from the process environment ONLY. Nothing is tracked,
-# defaulted or persisted by this script (the tinyfish-mcp.sh rule). No
+# defaulted or persisted by this script. No
 # credentials in the shell env = a clear "not set" message and exit 1.
 # Where to get them: BrowserStack account settings (username + access key).
 # Put them in the host's secret store (Cursor Secrets / the shell env the

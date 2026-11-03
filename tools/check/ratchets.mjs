@@ -50,7 +50,6 @@ import fs from "node:fs";
 import cp from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { absorbLimit, readCommitMessage } from "../hooks/ratchet-reason.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DATA = path.join(ROOT, "tests/data/ratchets.json");
@@ -964,10 +963,9 @@ async function main() {
   }
   const auto = argv.find((a) => a.startsWith("--auto-raise"));
   if (auto) {
-    // No `=N`: the hook's absorb. A Ratchet-Reason trailer lifts 20 to 40;
-    // a bare shell-guard call (no commit message) stays at the silent cap.
+    // No `=N`: the hook's absorb, a flat 20 (the Ratchet-Reason trailer was dropped 2026-11-03).
     // An explicit `--auto-raise=N` keeps N, including the historical 40.
-    const maxRaise = auto.includes("=") ? (Number(auto.split("=")[1]) || 40) : absorbLimit(readCommitMessage());
+    const maxRaise = auto.includes("=") ? (Number(auto.split("=")[1]) || 40) : 20;
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);

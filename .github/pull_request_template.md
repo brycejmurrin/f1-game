@@ -22,24 +22,20 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
 - [ ]
 - [ ] land: add the `land` label once ready-gate exits 0
 
-The last Plan item keeps that shape: ready-gate ignores an item that starts `land:`, so it stays open until the label is on and GitHub lands the PR (docs/WORKERS.md).
+The last Plan item keeps that shape: ready-gate ignores an item that starts `land:`, so it stays open until the label is on and GitHub lands the PR (skill `steward` §Land).
 
 ## Verified / Not run
-<!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = run passed`.
+<!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = tooling-fast passed`.
      Every group the change needs that did NOT run, named, with why (AGENTS.md rule 9).
-     The full tiers run on the PR (`run-ci` on a draft; the full tier once ready). -->
+     The tiers run on the PR (every draft push: the fast tier plus a selected browser shard; ready: the full tier). -->
 
 ## Hand-off
-<!-- The dispatcher parses this block (docs/WORKERS.md): refresh it at every push and
+<!-- The dispatch Action and a takeover read this block (skill `steward`): refresh it at every push and
      when you add `land`, `needs-owner` or `needs-decision`. One value per line, no prose
      outside the fence. A hold is the `hold` label on the PR, not a line here. -->
 ```handoff
-branch: <branch>
 head: <sha>
 owner: <host>:<session or agent id>
-lane: claude | cursor | codex
-verified: <what ran, verdict lines>
-not-run: <groups the change needs that did not run, and why>
 next: <the one next step>
 ```
 

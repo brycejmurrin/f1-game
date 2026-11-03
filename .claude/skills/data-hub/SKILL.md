@@ -56,8 +56,9 @@ Export tab (`loadExport`) → `references/export.md`.
 Season/year, stale-standings triage → `references/season-year.md`.
 
 Start with `tests/specs/data-lifecycle.spec.js` or `tests/specs/telemetry-compare.spec.js`
-through `node tools/ci/test-bg.mjs --spec <path>` (AGENTS.md §The loop). Reserve the
-`test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
+through `node tools/ci/test-bg.mjs --spec <path>` (Bryce-attended, on his grant; else the PR's shard). Reserve
+the whole `hooks` group (`node tools/ci/remote-group.mjs hooks` on the pushed branch) for changes that need its
+wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
 `lifecycle-unit` is not the hub spec: its file list is `tests/groups.json`

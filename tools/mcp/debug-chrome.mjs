@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromiumPath } from "../lib/chromium-path.mjs";
+import { liveSpecRun } from "../ci/test-bg.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = path.join(ROOT, "artifacts/debug-chrome");
@@ -40,8 +41,7 @@ export function refusal({ load = os.loadavg()[0], live = liveRun() } = {}) {
   return null;
 }
 function liveRun() {
-  const r = spawnSync("python3", [path.join(ROOT, ".claude/hooks/live-run.py"), ROOT], { encoding: "utf8" });
-  return (r.stdout || "").trim() || null;
+  try { return liveSpecRun(); } catch (_) { return null; }
 }
 // browser-use (plugin MCP) finds a local browser only through DevToolsActivePort in a standard profile
 // dir; headless Chromium never writes one, so start writes it (Chrome's format: port, then the browser

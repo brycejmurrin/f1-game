@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
-# @doc Passthrough for every Chrome DevTools + TinyFish MCP tool (`chrome_*` / `tinyfish_*`): list-tools / call / serve.
+# @doc Passthrough for every Chrome DevTools MCP tool (`chrome_*`): list-tools / call / serve, plus the chrome daemon.
 # @skill mcp-probe
-"""probe-mcp — unified CLI passthrough for EVERY Chrome DevTools + TinyFish MCP tool.
+"""probe-mcp — CLI passthrough for EVERY Chrome DevTools MCP tool.
 
 NOT MCP-ATTACHED (removed from .mcp.json / .cursor/mcp.json 2026-09). The
 attached servers are apex-tools, playwright-official and chrome-devtools; this
 file stays a CLI because its `chrome-start` daemon + `call` auto-routing has no
-equivalent elsewhere. The tinyfish_* half cannot work in this container (egress
-blocks agent.tinyfish.ai) — live Pages checks go through the deploy-research
+equivalent elsewhere. The tinyfish_* half left on 2026-11-03 with
+tools/mcp/tinyfish-mcp.sh (container egress blocked agent.tinyfish.ai, so it
+never answered here) — live Pages checks go through the deploy-research
 subagent (host fetch / WebFetch). `serve` still speaks stdio MCP for a host
-with egress that wants to attach it by hand. Prefixes:
+that wants to attach it by hand. Prefix:
 
   chrome_<tool>     → tools/mcp/chrome-devtools-mcp.sh  (stdio, SwiftShader)
-  tinyfish_<tool>   → tools/mcp/tinyfish-mcp.sh ensure + http://127.0.0.1:3711/mcp
 
 CLI (no MCP host required):
   python3 tools/mcp/probe-mcp.py help
   python3 tools/mcp/probe-mcp.py status
   python3 tools/mcp/probe-mcp.py list-tools
   python3 tools/mcp/probe-mcp.py call chrome_navigate_page '{"url":"http://127.0.0.1:3456/"}'
-  python3 tools/mcp/probe-mcp.py call tinyfish_fetch_content \\
-      '{"urls":["https://brycejmurrin.github.io/f1-game/version.json"]}'
   python3 tools/mcp/probe-mcp.py serve          # stdio MCP (NOT wired in .mcp.json; opt-in)
 
 A bare `call` spawns a FRESH Chromium per invocation — state does not survive
@@ -37,7 +35,7 @@ whenever it is up:
 Mock catalog (unit tests / offline): PROBE_MCP_MOCK=1 python3 tools/mcp/probe-mcp.py serve
 
 See .claude/skills/mcp-probe — park chrome to about:blank before Playwright;
-never render while test-bg.mjs is running.
+never render while a Playwright spec (test-bg.mjs --spec) is running.
 """
 from __future__ import annotations
 
@@ -62,16 +60,10 @@ CHROME_DAEMON_PORT = os.environ.get("PROBE_CHROME_PORT", "3712")
 CHROME_DAEMON_STATE = ROOT / "scratch" / "probe-chrome-daemon.port"
 CHROME_DAEMON_ID = hashlib.sha256(str(ROOT).encode()).hexdigest()[:16]
 CHROME_DAEMON_SESSION = f"probe-chrome-{CHROME_DAEMON_ID}"
-TINYFISH_SH = ROOT / "tools" / "mcp" / "tinyfish-mcp.sh"
-TINYFISH_BASE = os.environ.get("TINYFISH_MCP_BASE", "http://127.0.0.1:3711")
-TINYFISH_MCP = f"{TINYFISH_BASE.rstrip('/')}/mcp"
-TINYFISH_PROTO = "2025-06-18"
-TINYFISH_STATE = ROOT / "scratch" / "tinyfish-mcp-server" / ".mcp-session"
 CHROME_PREFIX = "chrome_"
-TINYFISH_PREFIX = "tinyfish_"
 PROTOCOL = "2025-06-18"
 
-# Frozen catalogs for PROBE_MCP_MOCK=1 (measured 2026-08-17 on this box).
+# Frozen catalog for PROBE_MCP_MOCK=1 (measured 2026-08-17 on this box).
 MOCK_CHROME = [
     "click", "close_heapsnapshot", "close_page", "compare_heapsnapshots", "drag",
     "emulate", "evaluate_script", "fill", "fill_form", "get_console_message",
@@ -85,13 +77,6 @@ MOCK_CHROME = [
     "performance_start_trace", "performance_stop_trace", "press_key",
     "resize_page", "select_page", "take_heapsnapshot", "take_screenshot",
     "take_snapshot", "type_text", "upload_file", "wait_for",
-]
-MOCK_TINYFISH = [
-    "search", "fetch_content", "guide_next_step", "run_web_automation",
-    "run_web_automation_async", "create_browser_session", "get_run", "list_runs",
-    "cancel_run", "batch_status", "batch_cancel", "get_search_usage",
-    "list_browser_sessions", "close_browser_session", "list_fetch_usage",
-    "get_wallet",
 ]
 
 # Page creation/enumeration never needs an injected target. Other tools may
@@ -213,11 +198,9 @@ def route(name: str) -> tuple[str, str]:
     """Return (backend, upstream_tool_name) for a prefixed tool name."""
     if name.startswith(CHROME_PREFIX):
         return "chrome", name[len(CHROME_PREFIX) :]
-    if name.startswith(TINYFISH_PREFIX):
-        return "tinyfish", name[len(TINYFISH_PREFIX) :]
     raise ValueError(
-        f"tool name must start with {CHROME_PREFIX!r} or {TINYFISH_PREFIX!r} "
-        f"(got {name!r})"
+        f"tool name must start with {CHROME_PREFIX!r} (got {name!r}); "
+        "tinyfish_* left on 2026-11-03 — live web goes through deploy-research"
     )
 
 
@@ -245,7 +228,7 @@ class ChromeBackend:
         self._selected_page_id: int | None = None
 
     def _find_daemon(self) -> int | None:
-        # Lazy: a tinyfish-only invocation must not pay the health probe.
+        # Lazy: list-tools and route must not pay the health probe.
         if not self._probed:
             self._probed = True
             if self._use_daemon and not _mock():
@@ -316,141 +299,18 @@ class ChromeBackend:
             self._client = None
 
 
-class TinyfishBackend:
-    def __init__(self) -> None:
-        self._session = ""
-        self._tools: list[dict[str, Any]] = []
-
-    def _ensure_proxy(self) -> None:
-        if _mock():
-            return
-        r = subprocess.run(
-            [str(TINYFISH_SH), "ensure"],
-            cwd=str(ROOT),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if r.returncode != 0:
-            raise RuntimeError(
-                f"tinyfish ensure failed ({r.returncode}): {r.stderr or r.stdout}"
-            )
-        if TINYFISH_STATE.is_file():
-            self._session = TINYFISH_STATE.read_text().strip()
-
-    def _post(self, body: dict[str, Any], *, allow_empty: bool = False) -> dict[str, Any] | None:
-        data = json.dumps(body).encode()
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "MCP-Protocol-Version": TINYFISH_PROTO,
-        }
-        if self._session:
-            headers["Mcp-Session-Id"] = self._session
-        req = urllib.request.Request(TINYFISH_MCP, data=data, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=90) as resp:
-                sid = resp.headers.get("Mcp-Session-Id") or resp.headers.get("mcp-session-id")
-                if sid:
-                    self._session = sid.strip()
-                    TINYFISH_STATE.parent.mkdir(parents=True, exist_ok=True)
-                    TINYFISH_STATE.write_text(self._session)
-                raw = resp.read().decode()
-        except urllib.error.HTTPError as e:
-            raw = e.read().decode() if e.fp else ""
-            if not raw and allow_empty and 200 <= e.code < 300:
-                return None
-            # Upstream wraps refusals as JSON-RPC errors inside HTTP 400 —
-            # surface the human message, not the transport wrapper.
-            msg = ""
-            try:
-                msg = (json.loads(raw).get("error") or {}).get("message") or ""
-            except (json.JSONDecodeError, AttributeError):
-                pass
-            if msg:
-                raise RuntimeError(f"tinyfish: {msg}") from e
-            raise RuntimeError(f"tinyfish HTTP {e.code}: {raw[:500]}") from e
-        if not raw:
-            if allow_empty:
-                return None
-            raise RuntimeError("tinyfish empty response")
-        if raw.startswith("data:"):
-            raw = raw.split("\n", 1)[0][5:].strip()
-        return json.loads(raw)
-
-    def ensure(self) -> None:
-        if _mock():
-            self._tools = [
-                {
-                    "name": n,
-                    "description": f"mock tinyfish {n}",
-                    "inputSchema": {"type": "object"},
-                }
-                for n in MOCK_TINYFISH
-            ]
-            return
-        if self._tools:
-            return
-        self._ensure_proxy()
-        # Fresh initialize for this Python client (shell may own another session).
-        self._session = ""
-        if TINYFISH_STATE.is_file():
-            TINYFISH_STATE.unlink()
-        init = self._post(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": TINYFISH_PROTO,
-                    "capabilities": {},
-                    "clientInfo": {"name": "probe-mcp", "version": "1"},
-                },
-            }
-        )
-        assert init is not None
-        self._post({"jsonrpc": "2.0", "method": "notifications/initialized"}, allow_empty=True)
-        listed = self._post(
-            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
-        )
-        assert listed is not None
-        self._tools = list((listed.get("result") or {}).get("tools") or [])
-
-    def tools(self) -> list[dict[str, Any]]:
-        self.ensure()
-        return self._tools
-
-    def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        self.ensure()
-        if _mock():
-            return _mock_tool_result(name, arguments)
-        resp = self._post(
-            {
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            }
-        )
-        assert resp is not None
-        if "error" in resp:
-            raise RuntimeError(json.dumps(resp["error"]))
-        return resp.get("result") or resp
-
-
 def _static_catalog(backend: str) -> list[dict[str, Any]]:
     """Frozen names so tools/list never returns empty.
 
     Cloud hosts call tools/list ONCE at session start (capabilities.tools.listChanged
-    is False). If either backend's ensure() throws — tinyfish not built, chrome
-    wrapper missing — the host caches an empty catalog for the whole session.
-    Measured 2026-08-17: apex-wrap advertised 0 tools while the CLI list-tools
-    traceback was `tinyfish ensure failed: Missing build at scratch/tinyfish-mcp-server`.
-    The MOCK_* lists are the measured upstream names; advertising them statically
-    lets the host route chrome_* / tinyfish_* even when the backend is down.
-    `call` still ensure()s and fails with a useful error.
+    is False). If the backend's ensure() throws — chrome wrapper missing — the host
+    caches an empty catalog for the whole session. Measured 2026-08-17: apex-wrap
+    advertised 0 tools while the CLI list-tools traceback was a backend ensure failure.
+    MOCK_CHROME holds the measured upstream names; advertising them statically lets
+    the host route chrome_* even when the backend is down. `call` still ensure()s
+    and fails with a useful error.
     """
-    names = MOCK_CHROME if backend == "chrome" else MOCK_TINYFISH
+    names = MOCK_CHROME
     return [
         {
             "name": n,
@@ -462,7 +322,7 @@ def _static_catalog(backend: str) -> list[dict[str, Any]]:
 
 
 def prefix_tools(backend: str, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    pref = CHROME_PREFIX if backend == "chrome" else TINYFISH_PREFIX
+    pref = CHROME_PREFIX
     out: list[dict[str, Any]] = []
     for t in tools:
         cloned = dict(t)
@@ -477,33 +337,23 @@ def prefix_tools(backend: str, tools: list[dict[str, Any]]) -> list[dict[str, An
 class Bridge:
     def __init__(self) -> None:
         self.chrome = ChromeBackend()
-        self.tinyfish = TinyfishBackend()
 
     def all_tools(self) -> list[dict[str, Any]]:
         # Hosts call tools/list ONCE at session start. Never spawn Chromium
-        # or `tinyfish ensure` here — Cursor times out live discovery and
-        # caches an empty catalog (measured 2026-08-18: project-0-f1-game-probe
-        # serverStatus error). Mock still lists via ensure(); call() still
-        # ensure()s the live backend. FAIL_BACKENDS keeps the throw-fallback
-        # path covered by tests.
-        out: list[dict[str, Any]] = []
+        # here — Cursor times out live discovery and caches an empty catalog
+        # (measured 2026-08-18: project-0-f1-game-probe serverStatus error).
+        # Mock still lists via ensure(); call() still ensure()s the live
+        # backend. FAIL_BACKENDS keeps the throw-fallback path covered by tests.
         fail_all = os.environ.get("PROBE_MCP_FAIL_BACKENDS", "").strip() not in ("", "0", "false", "no")
         if _mock() and not fail_all:
-            for backend, getter in (("chrome", self.chrome.tools), ("tinyfish", self.tinyfish.tools)):
-                out.extend(prefix_tools(backend, getter()))
-            return out
-        for backend in ("chrome", "tinyfish"):
-            if fail_all:
-                print(f"# {backend} tools() skipped (PROBE_MCP_FAIL_BACKENDS)", file=sys.stderr)
-            out.extend(prefix_tools(backend, _static_catalog(backend)))
-        return out
+            return prefix_tools("chrome", self.chrome.tools())
+        if fail_all:
+            print("# chrome tools() skipped (PROBE_MCP_FAIL_BACKENDS)", file=sys.stderr)
+        return prefix_tools("chrome", _static_catalog("chrome"))
 
     def call(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
-        backend, tool = route(name)
-        args = arguments or {}
-        if backend == "chrome":
-            return self.chrome.call(tool, args)
-        return self.tinyfish.call(tool, args)
+        _backend, tool = route(name)
+        return self.chrome.call(tool, arguments or {})
 
     def close(self) -> None:
         self.chrome.close()
@@ -517,13 +367,13 @@ def cmd_help(_: argparse.Namespace) -> int:
     print(
         """Commands:
   help                 this text
-  status               chrome wrapper + tinyfish healthz + chrome daemon
+  status               chrome wrapper + chrome daemon
   route <prefixed>     show backend + upstream tool name
-  list-tools           every chrome_* and tinyfish_* tool
+  list-tools           every chrome_* tool
   call <name> '<json>' invoke one prefixed tool (auto-routes to the daemon)
   chrome-start         persistent Chromium daemon in tmux (state survives calls);
                        refused while a Playwright run is live here (--force overrides)
-  chrome-stop          stop it — test-bg.mjs refuses a browser group while it is up
+  chrome-stop          stop it — test-bg.mjs --spec refuses to start while it is up
   chrome-daemon        the daemon itself, foreground (chrome-start runs this)
   serve                stdio MCP server (not in .mcp.json since 2026-09; opt-in only)
 """
@@ -555,18 +405,7 @@ def cmd_status(_: argparse.Namespace) -> int:
     port = daemon_port()
     print(f"UP  127.0.0.1:{port} (calls share one browser)" if port
           else "DOWN (per-call spawn; chrome-start for a persistent browser)")
-    print("=== tinyfish ===")
-    t = subprocess.run(
-        [str(TINYFISH_SH), "status"],
-        cwd=str(ROOT),
-        capture_output=True,
-        text=True,
-    )
-    print((t.stdout or t.stderr).rstrip() or f"exit {t.returncode}")
-    if t.returncode != 0:
-        print("WARN: tinyfish DOWN — run tools/mcp/tinyfish-mcp.sh ensure", file=sys.stderr)
-    # Chrome wrapper status is enough for Cloud `probe status` to be usable
-    # before tinyfish setup. TinyFish DOWN is a warning, not a hard fail.
+    # The chrome wrapper's status is the verdict; the daemon line is informational.
     return 0 if r.returncode == 0 else 1
 
 
@@ -574,9 +413,7 @@ def cmd_list_tools(_: argparse.Namespace) -> int:
     bridge = Bridge()
     try:
         tools = bridge.all_tools()
-        chrome_n = sum(1 for t in tools if t["name"].startswith(CHROME_PREFIX))
-        tiny_n = sum(1 for t in tools if t["name"].startswith(TINYFISH_PREFIX))
-        print(f"tools: {len(tools)} (chrome {chrome_n}, tinyfish {tiny_n})")
+        print(f"tools: {len(tools)} (chrome)")
         for t in tools:
             print(f"  - {t['name']}")
     finally:
@@ -712,13 +549,16 @@ def cmd_chrome_daemon(args: argparse.Namespace) -> int:
 
 
 def live_test_run() -> str:
-    """`<pid>:<start> <log>` of a live Playwright run in THIS checkout, else ""
-    (.claude/hooks/live-run.py, the same answer stop-guard and protect-files use)."""
+    """`<pid> <log>` of a live Playwright spec run in THIS checkout, else "" (test-bg's own state file,
+    artifacts/logs/test-bg.json — the same answer `node tools/ci/test-bg.mjs --status` reads)."""
     try:
-        r = subprocess.run([sys.executable, str(ROOT / ".claude" / "hooks" / "live-run.py"), str(ROOT)],
-                           capture_output=True, text=True, timeout=10)
-        return r.stdout.strip()
-    except (OSError, subprocess.SubprocessError):
+        state = json.loads((ROOT / "artifacts" / "logs" / "test-bg.json").read_text())
+        for run in state.get("runs", []):
+            pid = int(run.get("pid") or 0)
+            if pid > 0 and (Path("/proc") / str(pid)).exists():
+                return f"{pid} {run.get('log') or run.get('group') or ''}".strip()
+        return ""
+    except (OSError, ValueError, TypeError):
         return ""
 
 
@@ -752,8 +592,8 @@ def cmd_chrome_start(args: argparse.Namespace) -> int:
         port = daemon_port()
         if port is not None:
             print(f"probe-chrome daemon up on 127.0.0.1:{port}")
-            print("REMEMBER: `chrome-stop` before any test-bg.mjs run — test-bg refuses "
-                  "a browser group while this daemon is live.")
+            print("REMEMBER: `chrome-stop` before any test-bg.mjs --spec run — test-bg refuses "
+                  "to start a spec while this daemon is live.")
             return 0
     print("daemon did not come up — tmux pane:", file=sys.stderr)
     print(_tmux("capture-pane", "-t", f"{CHROME_DAEMON_SESSION}:0.0", "-p").stdout,
@@ -822,10 +662,8 @@ def cmd_serve(_: argparse.Namespace) -> int:
                             "instructions": (
                                 "Apex probe bridge (CLI-first; not in .mcp.json since 2026-09). "
                                 "chrome_* drives the local working tree (WebGL/SwiftShader). "
-                                "tinyfish_* needs egress to agent.tinyfish.ai, which the "
-                                "container blocks — live version.json / public web is the "
-                                "deploy-research subagent (host fetch). Park chrome to "
-                                "about:blank before Playwright."
+                                "Live version.json / public web is the deploy-research "
+                                "subagent (host fetch). Park chrome to about:blank before Playwright."
                             ),
                         },
                     }
@@ -865,7 +703,7 @@ def cmd_serve(_: argparse.Namespace) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Unified Chrome DevTools + TinyFish MCP bridge",
+        description="Chrome DevTools MCP bridge (chrome_* passthrough + persistent daemon)",
         add_help=False,
     )
     sub = ap.add_subparsers(dest="cmd")

@@ -552,6 +552,12 @@ function lookFloor(out, liv, L) {
       tile(out, x, x + 0.30, Z_DOOR - 0.75, Z_DOOR - 0.30, i % 2 ? yel : blk, Y, M);
     }
   }
+  // Rain-ready: wet-look puddle bands along the car box (cool specular lanes).
+  if (L.floor && L.floor.wetBands) {
+    const wet = [0.55, 0.60, 0.66];
+    for (const z of [-2.2, 0.2, 2.4])
+      tile(out, -0.95, 0.95, z - 0.08, z + 0.08, wet, Y + 0.001, M);
+  }
 }
 // The roof structure under a look. Returns false for "stock" (the caller
 // builds the shipped truss).
@@ -609,7 +615,8 @@ function lookLed(g, liv, L) {
   } else if (L.ceilLed === "strips") {
     for (const x of [-1.4, 1.4]) {
       block(g.mid, x, CEIL_Y - 0.02, 0, 0.07, 0.02, (Z_DOOR - Z_BACK) / 2, GREY(0.03));    // channel, wall to wall
-      block(g.mid, x, CEIL_Y - 0.045, 0, 0.035, 0.005, (Z_DOOR - Z_BACK) / 2 - 0.05, [0.95, 1.05, 1.20]);
+      const lens = L.hotStrips ? [1.15, 1.20, 1.35] : [0.95, 1.05, 1.20];
+      block(g.mid, x, CEIL_Y - 0.045, 0, 0.035, 0.005, (Z_DOOR - Z_BACK) / 2 - 0.05, lens);
     }
   } else if (L.ceilLed === "pendants") {
     for (const x of [-2.2, 2.2]) for (const z of [-4.0, 0, 4.0]) {

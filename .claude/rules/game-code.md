@@ -20,16 +20,13 @@ paths:
   `docs/agent-output/policies.json` entry. Skipping one costs a CI cycle each (#4108, #4188).
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit
-  hook absorbs ≤ 20 lines of growth silently, ≤ 40 with a `Ratchet-Reason:` commit trailer
-  (`tools/hooks/ratchet-reason.mjs`; the raise lands as `tests/data/ratchets.d/<branch>.json`); more blocks until
-  you extract or shrink. A tree-wide ceiling rises only when Bryce types the raise in the acting session
-  (`APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason="<why>"`; safety ban 1,
-  2026-10-22); `--update --lower-only` lowers.
+  hook's absorb is a flat 20 lines of growth; an explicit `--auto-raise=N` keeps N (the raise lands as
+  `tests/data/ratchets.d/<branch>.json`); more blocks until you extract or shrink. A tree-wide ceiling rises only on Bryce's own `ratchet-raise` label
+  (merge-gate row) with `node tools/check/ratchets.mjs --update --fragment --reason="<why>"` and the reason in the
+  commit; `--update --lower-only` lowers.
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
-- Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT turn (measured). Never flip a
-  curvature sign without a rendered lap.
-- Frac-keyed def tables must respect `def._sceneryShift` (consume via `bankingProfile` / `buildCenterline`); a
-  raw `frac` lands 2/3 of a lap away.
+- Coordinates, `+k = LEFT`, and `def._sceneryShift`: the nested `js/track/CLAUDE.md` and `js/circuits/CLAUDE.md`
+  own them and load with those directories.
 - Physics (AGENTS.md §Physics): `PACE` is a scale — compare speeds through `vTop()`/`vStd()`/`aStd()`
   (`tools/check/vstd-lint.mjs`). A new `Tracks.curvature()` call goes in a legitimate column (AI-only,
   assist-gated, broadcast-only, surface — docs/PHYSICS.md). Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`.

@@ -288,6 +288,28 @@ const LOOKS = {
              band: (c1) => c1, key: GREY(0.90), outline: [0.94, 0.55, 0.14] },
     backWall: "frame",
   },
+  // Wet-race / rain-ready bay: cool overcast panelling, dark gloss resin with
+  // pale safety lanes — pairs with the rain lighting mood for a Spa weekend.
+  rainready: {
+    label: "Rain ready",
+    wall: { dado: () => [0.28, 0.32, 0.34], stripe: (c1, c2) => mix([0.55, 0.62, 0.70], c2, 0.35),
+            panel: () => [0.42, 0.46, 0.50], skirt: GREY(0.06), seam: "joint", jointPitch: 1.80, back: null },
+    ceil: [0.30, 0.34, 0.38], truss: "rails", ceilLed: "grid",
+    floor: { slab: [0.08, 0.10, 0.12], inner: [0.12, 0.15, 0.18], paint: GREY(0.88), walk: [0.70, 0.74, 0.78],
+             band: (c1) => mix(GREY(0.55), c1, 0.35), key: GREY(0.90), outline: [0.72, 0.78, 0.84], wetBands: true },
+    backWall: "header",
+  },
+  // Qualifying night: deep charcoal walls, bright linear strips, white floor
+  // box under a framed back wall — the Saturday-night parc-fermé read.
+  qualify: {
+    label: "Qualifying night",
+    wall: { dado: () => [0.08, 0.09, 0.12], stripe: (c1, c2) => mix([0.85, 0.88, 0.95], c2, 0.25),
+            panel: () => [0.04, 0.05, 0.08], skirt: GREY(0.02), seam: "slat", back: (c1) => scale(c1, 0.40) },
+    ceil: GREY(0.012), truss: "stock", ceilLed: "strips", hotStrips: true,
+    floor: { slab: GREY(0.035), inner: GREY(0.050), paint: GREY(0.94), walk: (c1, c2) => scale(c2, 0.75),
+             band: (c1, c2) => c2, key: GREY(0.92), outline: GREY(0.90) },
+    backWall: "frame",
+  },
 };
 const LOOK_IDS = Object.keys(LOOKS);
 let _look = "stock";

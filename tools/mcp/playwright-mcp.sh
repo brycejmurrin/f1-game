@@ -48,7 +48,7 @@ tools/ui/css-play.mjs — localhost host, catalog --screen, stylesheet hot-swap
 (--css css/menus.css), structured DOM dump (boxes + computed + tokens).
 See: node tools/ui/css-play.mjs --help
 
-Loopback only for the game (http://127.0.0.1). github.io stays TinyFish.
+Loopback only for the game (http://127.0.0.1). github.io is the deploy-research subagent's.
 Park about:blank before any Playwright test group.
 EOF
 }

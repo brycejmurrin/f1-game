@@ -1,12 +1,13 @@
 /* test-bg-outcome.test.mjs — a background run's verdict never reads green when
- * its process exited non-zero.
+ * its process exited non-zero, and the one-spec runner refuses what it must.
  *
- * test-bg.mjs reads a run's outcome out of its own log. A group can be two
- * commands (`test:tooling` is tooling-fast && sweeps; a twinned group runs its
- * VM twins, then Playwright), and until 2026-09-24 the FIRST half's
- * `= run passed` or `# fail 0` beat the `= bg exit N` trailer, so a red second
- * half — or a Playwright half killed before its summary — read as passed and
- * `--wait` exited 0.
+ * test-bg.mjs reads a run's outcome out of its own log. A run can be two
+ * commands (a twinned spec runs its VM twins, then Playwright), and until
+ * 2026-09-24 the FIRST half's `= run passed` or `# fail 0` beat the
+ * `= bg exit N` trailer, so a red second half — or a Playwright half killed
+ * before its summary — read as passed and `--wait` exited 0.
+ * Group mode (and its chain, parallel cap and sweep) went on 2026-11-03: agents
+ * never run a browser test locally; the tool runs ONE spec for an attended session.
  *
  * Run: node --test tests/unit/test-bg-outcome.test.mjs
  */
@@ -14,13 +15,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start, workerBudget, waitChain, waitForRunning } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start, workerBudget, waitForRunning } from "../../tools/ci/test-bg.mjs";
 
 test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
   assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
   assert.equal(parseTestBgArgv(["--wait", "--timeout=45"]).waitTimeoutMin, 45);
   assert.throws(() => parseTestBgArgv(["--wait", "--timeout"]), /--timeout requires/);
-  assert.deepEqual(parseTestBgArgv(["--wait", "--timeout", "45", "smoke"]).groups, ["smoke"]);
+  assert.throws(() => parseTestBgArgv(["--wait", "--timeout", "45", "smoke"]), /group mode is gone/, "a bare group name is no longer an argument");
 });
 
 test("a non-zero exit wins over an earlier passing summary", () => {
@@ -121,13 +122,13 @@ test("a zombie supervisor is not a live run (#1921)", async () => {
 // Skill mcp-probe hard rule 1 ("never render Chrome MCP while Playwright runs"),
 // enforced both ways: test-bg refuses a browser group beside a live
 // `probe-mcp.py chrome-start` daemon, and chrome-start refuses beside a live run.
-test("test-bg refuses a browser group while the MCP Chrome daemon is live (box-wide, --force overrides)", () => {
+test("test-bg refuses a spec run while the MCP Chrome daemon is live (box-wide, --force overrides)", () => {
   const sessions = probeChromeSessions(() => "work\nprobe-chrome-0123456789abcdef\nprobe-chrome-short\n");
   assert.deepEqual(sessions, ["probe-chrome-0123456789abcdef"], "only the daemon's exact session-name shape counts");
   assert.deepEqual(probeChromeSessions(() => { throw new Error("no tmux"); }), [], "no tmux = no daemon");
   assert.match(chromeRefusal({ browser: true, force: false, sessions }), /REFUSED[\s\S]*probe-mcp\.py chrome-stop/);
   assert.equal(chromeRefusal({ browser: true, force: true, sessions }), null, "--force overrides");
-  assert.equal(chromeRefusal({ browser: false, force: false, sessions }), null, "a node-only group is not a Chromium run");
+  assert.equal(chromeRefusal({ browser: false, force: false, sessions }), null, "a node-only run is not a Chromium run");
   assert.equal(chromeRefusal({ browser: true, force: false, sessions: [] }), null);
 });
 
@@ -158,14 +159,17 @@ print("forced", m.cmd_chrome_start(argparse.Namespace(port=0, force=True)))
   assert.match(r.stdout, /^forced 1$/m, "--force skips the live-run check");
 });
 
-test("parseTestBgArgv: --spec runs one spec as a pseudo-group, --workers is read, an unknown flag throws (audit3 T8)", () => {
+test("parseTestBgArgv: --spec names the one spec, --workers and --tail are read, an unknown flag or a group name throws (audit3 T8)", () => {
   const p = parseTestBgArgv(["--spec", "tests/specs/hud-layout.spec.js", "--workers=1"]);
   assert.deepEqual(p.specs, ["tests/specs/hud-layout.spec.js"]);
-  assert.deepEqual(p.groups, ["spec-hud-layout"]);
   assert.equal(p.workers, "1");
+  assert.equal(parseTestBgArgv(["--tail", "spec-hud-layout"]).tail, "spec-hud-layout");
   assert.throws(() => parseTestBgArgv(["--spec"]), /--spec requires a value/);
   assert.throws(() => parseTestBgArgv(["--wait", "--timout", "45"]), /unknown flag --timout/);
-  assert.throws(() => parseTestBgArgv(["--workers", "0", "smoke"]), /--workers requires a positive integer/);
+  assert.throws(() => parseTestBgArgv(["--workers", "0", "--spec", "x"]), /--workers requires a positive integer/);
+  for (const retired of [["--parallel", "--spec", "x"], ["--sweep"], ["--last-failed", "--spec", "x"], ["--keep-going"]])
+    assert.throws(() => parseTestBgArgv(retired), /unknown flag/, `${retired[0]} went with group mode`);
+  assert.throws(() => parseTestBgArgv(["smoke", "tiny"]), /group mode is gone[\s\S]*remote-group\.mjs/);
 });
 
 // The real start controller with inert process/registry edges: no browser,
@@ -173,22 +177,15 @@ test("parseTestBgArgv: --spec runs one spec as a pseudo-group, --workers is read
 function startFixture({ runs = [], load = 0, sessions = [], spawnResult, beforeWrite } = {}) {
   const events = [], messages = [];
   let state = { runs: runs.map((r) => ({ ...r })) };
-  let nextPid = 200;
   const io = {
-    loadPkg: () => ({ scripts: { "test:smoke": "node tools/ci/run-playwright.mjs", "test:tiny": "node tools/ci/run-playwright.mjs" } }),
     probeChromeSessions: () => sessions,
-    changedForWaste: () => [],
     load1: () => load,
     readState: () => state,
     alive: (r) => !r.ended,
-    supersede: (groups) => {
-      events.push(["supersede", [...groups]]);
-      state.runs = state.runs.map((r) => groups.includes(r.group) ? { ...r, ended: "superseded" } : r);
-    },
     mkdirLogs: () => events.push(["mkdir"]),
-    spawnGroup: (group, _pkg, options) => {
-      events.push(["spawn", group, options]);
-      return spawnResult ? spawnResult(group) : { group, pid: nextPid++, log: `/fixture/${group}.log` };
+    spawnSpec: (spec) => {
+      events.push(["spawn", spec]);
+      return spawnResult ? spawnResult(spec) : { group: "spec-smoke", spec, pid: 200, log: "/fixture/spec-smoke.log", browser: true };
     },
     updateState: (mutate) => {
       events.push(["write"]);
@@ -202,66 +199,44 @@ function startFixture({ runs = [], load = 0, sessions = [], spawnResult, beforeW
   };
   return { io, events, messages, state: () => state };
 }
+const SPEC = "tests/specs/smoke.spec.js";
 
-test("start: unknown groups and load at the refusal threshold leave runs untouched", () => {
-  for (const [groups, options, code] of [[["unknown"], {}, 2], [["smoke"], { load: 3 }, 3]]) {
-    const f = startFixture({ runs: [{ group: "smoke", pid: 100 }], ...options });
-    assert.throws(() => start(groups, {}, f.io), { code });
-    assert.deepEqual(f.events, [], "a refusal cannot supersede, spawn, or rewrite the registry");
-    assert.deepEqual(f.state().runs, [{ group: "smoke", pid: 100 }]);
-  }
+test("start: load at the refusal threshold leaves the registry untouched; --force lifts only that", () => {
+  const f = startFixture({ runs: [{ group: "spec-old", pid: 100, ended: "2026-10-28T00:00:00Z" }], load: 3 });
+  assert.throws(() => start(SPEC, {}, f.io), { code: 3 });
+  assert.deepEqual(f.events, [], "a refusal cannot spawn or rewrite the registry");
+  assert.match(f.messages[0], /loadavg 3\.00 >= 3/);
+  start(SPEC, { force: true }, f.io);
+  assert.deepEqual(f.events, [["mkdir"], ["spawn", SPEC], ["write"]]);
 });
 
-test("start: a live MCP browser refuses before supersede or spawn", () => {
+test("start: a live MCP browser refuses before spawn", () => {
   const f = startFixture({ sessions: ["probe-chrome-0123456789abcdef"] });
-  assert.throws(() => start(["smoke"], {}, f.io), { code: 3 });
+  assert.throws(() => start(SPEC, {}, f.io), { code: 3 });
   assert.deepEqual(f.events, []);
 });
 
-test("start: a deferred sequential group still occupies the one-run cap", () => {
-  const f = startFixture({ runs: [{ group: "tiny", pid: 100 }] });
-  assert.throws(() => start(["smoke", "tiny"], {}, f.io), { code: 3 });
-  assert.deepEqual(f.events, [], "the already-running deferred tiny group must not be forgotten");
-  assert.deepEqual(f.state().runs, [{ group: "tiny", pid: 100 }]);
+test("start: ONE run at a time — a live run refuses the next, --force included", () => {
+  for (const force of [false, true]) {
+    const f = startFixture({ runs: [{ group: "spec-tiny", pid: 100, log: "/fixture/spec-tiny.log" }] });
+    assert.throws(() => start(SPEC, { force }, f.io), { code: 3 }, `force=${force}`);
+    assert.deepEqual(f.events, [], "the live run must not be superseded, forgotten or raced");
+    assert.match(f.messages[0], /REFUSED: a run is live \(spec-tiny pid=100\)/);
+    assert.deepEqual(f.state().runs, [{ group: "spec-tiny", pid: 100, log: "/fixture/spec-tiny.log" }]);
+  }
 });
 
-test("start: sequential selection supersedes only the group actually being restarted", () => {
-  const f = startFixture({ runs: [{ group: "smoke", pid: 100 }] });
-  start(["smoke", "tiny"], {}, f.io);
-  assert.deepEqual(f.events, [
-    ["supersede", ["smoke"]], ["mkdir"], ["spawn", "smoke", { lastFailed: false }], ["write"],
-  ]);
-  assert.deepEqual(f.state().runs, [{ group: "smoke", pid: 200, log: "/fixture/smoke.log" }]);
-  assert.equal(f.state().mode, "sequential");
-});
-
-test("start: a concurrent writer's live run survives the final registry mutation", () => {
-  const f = startFixture({ beforeWrite: (state) => state.runs.push({ group: "tiny", pid: 101 }) });
-  start(["smoke"], {}, f.io);
-  assert.deepEqual(f.state().runs.map((r) => [r.group, r.pid]), [["tiny", 101], ["smoke", 200]]);
-});
-
-test("start: forced parallel starts forward replay options and preserve an unrelated run", () => {
-  const f = startFixture({ runs: [{ group: "old", pid: 100 }] });
-  start(["smoke", "tiny"], { parallel: true, force: true, lastFailed: true }, f.io);
-  assert.deepEqual(f.events, [
-    ["supersede", ["smoke", "tiny"]], ["mkdir"],
-    ["spawn", "smoke", { lastFailed: true }], ["spawn", "tiny", { lastFailed: true }], ["write"],
-  ]);
-  assert.deepEqual(f.state().runs.map((r) => r.pid), [100, 200, 201]);
-  assert.equal(f.state().mode, "parallel");
-});
-
-test("start: an empty last-failed replay keeps other runs without a false start", () => {
-  const f = startFixture({ runs: [{ group: "old", pid: 100 }], spawnResult: () => null });
-  start(["smoke"], { force: true, lastFailed: true }, f.io);
-  assert.deepEqual(f.state().runs, [{ group: "old", pid: 100 }]);
-  assert.equal(f.messages.some((m) => m.startsWith("tail one:")), false);
+test("start: a finished run's record survives beside the new one, and a concurrent writer's live run survives the merge", () => {
+  const f = startFixture({ runs: [{ group: "spec-old", pid: 100, ended: "x" }], beforeWrite: (state) => state.runs.push({ group: "spec-other", pid: 101 }) });
+  start(SPEC, {}, f.io);
+  assert.deepEqual(f.state().runs.map((r) => [r.group, r.pid]), [["spec-old", 100], ["spec-other", 101], ["spec-smoke", 200]]);
+  assert.equal(f.state().mode, "spec");
+  assert.ok(f.messages.some((m) => m.startsWith("tail:")) && f.messages.some((m) => /--wait --timeout 45/.test(m)), "prints the tail and waiter commands");
 });
 
 test("start: a supervisor launch error cannot publish a fictitious run", () => {
   const f = startFixture({ spawnResult: () => { throw new Error("launch denied"); } });
-  assert.throws(() => start(["smoke"], {}, f.io), /launch denied/);
+  assert.throws(() => start(SPEC, {}, f.io), /launch denied/);
   assert.equal(f.events.some(([event]) => event === "write"), false);
   assert.deepEqual(f.state().runs, []);
 });
@@ -285,63 +260,8 @@ test("workerBudget: older Node falls back to CPU count and an empty count falls 
 test("workerBudget: environment and parsed CLI overrides beat the available-CPU default", () => {
   const system = { cpus: () => Array(5), availableParallelism: () => 4 };
   assert.equal(workerBudget({ env: { WORKERS: "3" }, system }).workers, "3");
-  const { workers } = parseTestBgArgv(["--workers=2", "smoke"]);
+  const { workers } = parseTestBgArgv(["--workers=2", "--spec", "tests/specs/smoke.spec.js"]);
   assert.equal(workerBudget({ workers, env: { WORKERS: "3" }, system }).workers, "2");
-});
-
-// A wait deadline is an observation result: the owned runner remains alive.
-// Exercise the controller without a browser or real registry mutation.
-test("waitChain preserves a waiter deadline and starts no later group, even with keep-going", async () => {
-  const oldExit = process.exitCode;
-  const oldArgv = process.argv;
-  try {
-    for (const keepGoing of [false, true]) {
-      process.exitCode = 0;
-      process.argv = keepGoing ? [...oldArgv, "--keep-going"] : oldArgv;
-      const started = [];
-      await waitChain(["smoke", "tiny"], { force: true }, {
-        loadPkg: () => ({ scripts: { "test:smoke": "x", "test:tiny": "x" } }),
-        start: (groups) => started.push(...groups),
-        waitForRunning: async () => { process.exitCode = 124; return 124; },
-        readState: () => ({ runs: [{ group: "smoke" }] }),
-        outcome: () => "running",
-      });
-      assert.equal(process.exitCode, 124, "deadline must not become a test failure");
-      assert.deepEqual(started, ["smoke"], "later groups cannot start while the timed-out runner remains alive");
-    }
-  } finally { process.exitCode = oldExit; process.argv = oldArgv; }
-});
-
-test("waitChain preserves completed pass and failure sequencing", async () => {
-  const oldExit = process.exitCode;
-  const oldArgv = process.argv;
-  try {
-    for (const [verdicts, keepGoing, expectedGroups, expectedExit] of [
-      [["passed (1 passed)", "passed (1 passed)"], false, ["smoke", "tiny"], 0],
-      [["failed (1 failed)", "passed (1 passed)"], false, ["smoke"], 1],
-      [["failed (1 failed)", "passed (1 passed)"], true, ["smoke", "tiny"], 1],
-    ]) {
-      process.exitCode = 0;
-      process.argv = keepGoing ? [...oldArgv, "--keep-going"] : oldArgv;
-      const started = [];
-      const completed = [];
-      await waitChain(["smoke", "tiny"], { force: true }, {
-        loadPkg: () => ({ scripts: { "test:smoke": "x", "test:tiny": "x" } }),
-        start: (groups) => started.push(...groups),
-        waitForRunning: async () => {
-          const code = verdicts[started.length - 1].startsWith("passed") ? 0 : 1;
-          process.exitCode = code;
-          completed.push(started.at(-1));
-          return code;
-        },
-        readState: () => ({ runs: started.map((group) => ({ group })) }),
-        outcome: ({ group }) => verdicts[["smoke", "tiny"].indexOf(group)],
-      });
-      assert.deepEqual(started, expectedGroups);
-      assert.deepEqual(completed, expectedGroups, "every launched group was awaited");
-      assert.equal(process.exitCode, expectedExit, "a later pass cannot erase an earlier failure");
-    }
-  } finally { process.exitCode = oldExit; process.argv = oldArgv; }
 });
 
 test("production waiter returns 124 when its deadline expires with an owned runner still live", async () => {
@@ -353,7 +273,7 @@ test("production waiter returns 124 when its deadline expires with an owned runn
     const result = await waitForRunning({ deadline: Date.now() - 1 }, {
       running: () => { reads++; return live; },
     });
-    assert.equal(result, 124, "waitChain consumes the production waiter's deadline result");
+    assert.equal(result, 124, "the waiter returns its deadline result");
     assert.equal(process.exitCode, 124, "standalone --wait retains its terminal deadline status");
     assert.ok(reads > 0);
     assert.deepEqual(live, [{ group: "fixture-live-run" }], "the runner remains live and untouched");

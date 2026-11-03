@@ -9,7 +9,7 @@ description: >-
 
 Repo: `brycejmurrin/f1-game`. Current local gate meanings: [`docs/VERIFICATION.md`](../../../../docs/VERIFICATION.md). Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
 
-**Authority and readiness:** follow `AGENTS.md` §Coordination and `docs/WORKERS.md`. GitHub lands PRs: a worker flips its PR ready and adds the `land` label, and `land.yml` runs the `gate` check and arms auto-merge; no session merges or arms. Draft→ready requires a green tip and successful `ready-gate.mjs --pr <n>`. There is no fixed ready-PR cap. This watch skill observes and reports; it does not grant merge, arm, readiness, or cancellation authority.
+**Authority and readiness:** follow `AGENTS.md` §Coordination and skill `steward`. GitHub lands PRs: a worker flips its PR ready and adds the `land` label, and `land.yml` runs the `gate` check and arms auto-merge; no session merges or arms. Draft→ready requires a green tip and successful `ready-gate.mjs --pr <n>`. There is no fixed ready-PR cap. This watch skill observes and reports; it does not grant merge, arm, readiness, or cancellation authority.
 
 ## What to watch (do not conflate)
 
@@ -21,7 +21,7 @@ A green PR CI does **not** prove Pages will pass. Pages diffs against `before_sh
 
 ## Watcher (no sleep / `gh run view` loops)
 
-Use `node tools/ci/ci-watch.mjs --sha <head> [--pages] [--once]` (AGENTS.md rule 13). Match **head_sha**. Watch only while CI runs on your own head (`docs/WORKERS.md` §4): a Cursor run ends at ready, and a red after it is a dispatcher follow-up turn. Ignore cancelled twins superseded by a newer run on the same SHA (draft/ready dedupe).
+Use `node tools/ci/ci-watch.mjs --sha <head> [--pages] [--once]` (AGENTS.md rule 13). Match **head_sha**. Watch only while CI runs on your own head (AGENTS.md rule 13): a Cursor run ends at ready, and a red after it is a dispatcher follow-up turn. Ignore cancelled twins superseded by a newer run on the same SHA (draft/ready dedupe).
 
 Sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), never rebase or force-push, and only when AGENTS.md §Git branch & deploy says so: GitHub reports CONFLICTING/DIRTY or the `gate` check refuses the base distance; never for clean-behind. After a merge, Pages and its nested release gate are the verdict, not the closed PR.
 
@@ -50,7 +50,7 @@ Sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), neve
 
 Product defaults live in `js/data/settings-defaults.js`. Align tests to intentional defaults; do not “fix” CI by changing player defaults unless product says so.
 
-Pre-push for a fix: the local floor in `docs/WORKERS.md` §3; the PR's CI tiers run the rest. Push once per green local cycle.
+Pre-push for a fix: the local floor in `docs/VERIFICATION.md`; the PR's CI tiers run the rest. Push once per green local cycle.
 
 ## Deploy / redeploy
 
@@ -61,6 +61,6 @@ Pre-push for a fix: the local floor in `docs/WORKERS.md` §3; the PR's CI tiers 
 
 ## Report shape to the user
 
-Lead with: merged or not, head SHA, which run URL, green or red. If red: failing test name + Expected/Received (or timeout). Say whether PR CI or Pages’ release gate/publication failed. Next action in one sentence. On your own PR, the hand-off is its ```handoff block (`docs/WORKERS.md` §The Hand-off block).
+Lead with: merged or not, head SHA, which run URL, green or red. If red: failing test name + Expected/Received (or timeout). Say whether PR CI or Pages’ release gate/publication failed. Next action in one sentence. On your own PR, the hand-off is its ```handoff block (`.github/pull_request_template.md`).
 
 Never narrate cancelled superseded runs as the verdict. Never declare deploy live until Pages succeeded (or verify-live / version confirms the merge commit).

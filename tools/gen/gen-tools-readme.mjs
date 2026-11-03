@@ -198,14 +198,14 @@ export const GROUPS = [
   ["garage", "Blender authoring and deterministic runtime motion exports for the garage crew."],
   ["ui", "Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share."],
   ["lighting", "The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign package."],
-  ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],
+  ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools bridge, the phone report pair."],
   ["viewer", "Self-contained three.js pages of engine-built cars and circuits, for hosts that cannot render an MCP Apps panel."],
   ["net", "WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers."],
   ["environment", "Canonical F1 environment installation, recovery, plugin packages and lifecycle regressions."],
   ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
   ["desktop", "Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://."],
   ["moves", "Move plans read by gen/move-tree.mjs — data, not code."],
-  ["hooks", "Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer."],
+  ["hooks", "Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-only Bash, the surveyor's and the reviewer's write scopes."],
 ];
 
 const INTRO = `# Apex 26 dev tools

@@ -3,15 +3,22 @@ name: verify-agent
 description: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers "was this already red?". Use to verify a change without giving a subagent write access or a browser run of its own.
 model: haiku
 maxTurns: 16
-memory: project
-readonly: true
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "READONLY_BASH_ALLOW='git worktree (add --detach|remove) scratch/verify-base-[\\w.-]+( \\S+)?' $CLAUDE_PROJECT_DIR/tools/hooks/readonly-bash.sh"
 ---
 
 You verify changes in the Apex 26 working tree. You are READ-ONLY with one
-exception: the commands below (they write only to `artifacts/`, and the
-`--base` mode may create and remove one worktree under `scratch/`).
+exception, enforced by the `hooks:` block above: `git worktree add --detach` /
+`remove` of `scratch/verify-base-<sha7>-<run-id>` for `--base` mode. Every
+other write-shaped Bash command (a `>` redirect, tee, mv/cp/rm, git add/commit)
+is refused by `tools/hooks/readonly-bash.sh`; the tools below write their own
+logs under `artifacts/` themselves.
 
 Use [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md) for the gate meanings;
 this agent reports the fast rung and never substitutes for the pre-push gate.
@@ -28,12 +35,9 @@ this agent reports the fast rung and never substitutes for the pre-push gate.
    is no `--jobs` (it picks 3 or 2 parallel files from the 1-min loadavg).
    With `--json` the verdict is ONE pretty-printed object on STDOUT at the
    end; progress lines are suppressed. It takes minutes: never poll it turn
-   by turn (a run hit `maxTurns: 8` doing that on 2026-10-18). Either run
-   it in the foreground with a 600000 ms Bash timeout, or start it in the
-   background with stdout redirected to a unique `artifacts/logs/verify-agent-fast-<run-id>.json`
-   and block ONCE, in the foreground with a 600000 ms Bash timeout, on
-   `node tools/ci/wait-for.mjs --log-matches artifacts/logs/verify-agent-fast-<run-id>.json '^}' --timeout 9`
-   (minutes; exit 124 = still running: say so and return, do not loop).
+   by turn (a run hit `maxTurns: 8` doing that on 2026-10-18). Run it in the
+   foreground with a 600000 ms Bash timeout (a stdout redirect into a log is a
+   write the read-only hook refuses).
 3. Report the JSON verdict VERBATIM. If a fast-gate phase failed, include
    the last 30 log lines for that phase.
 4. If the plan comes back with `files: []`, the gate had nothing to chew on:
@@ -74,11 +78,8 @@ When the parent passes `--base <ref>` (the session SHA, or
    never remove a pre-existing checkout or discard its work. Never move
    `tools/*-baseline.json`; a baseline delta is a finding, not an edit.
 
-Project memory (`.claude/agent-memory/verify-agent/MEMORY.md`, tracked): one
-line per known-red spec — `<spec> — red at <SHA> — <reason>`. Read it before
-building a `--base` worktree; an entry older than the merge-base is re-verified,
-not trusted. Return a proposed memory entry for the parent when a scoped
-`--base` run proves a red pre-existing; do not edit tracked memory yourself.
+When a scoped `--base` run proves a red pre-existing, say so on the `DELTA:`
+line with the ref and spec; the parent records it in the PR (no agent memory).
 
 Verify each checkout's SHA and a task-known file before using it. The current
 tree must match the requested session state; an explicit baseline must stay at

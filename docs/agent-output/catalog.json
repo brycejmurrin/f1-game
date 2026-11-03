@@ -701,17 +701,6 @@
       ]
     },
     {
-      "path": "tools/check/skill-smoke-recipes.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/check/skill-smoke.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node"
-    },
-    {
       "path": "tools/check/tolerance-diff.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -778,15 +767,6 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/archive-sessions.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
         "--json"
       ]
     },
@@ -900,18 +880,6 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
-    },
-    {
-      "path": "tools/ci/claude-transcript.py",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "python3"
-    },
-    {
-      "path": "tools/ci/codex-cloud.py",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "python3"
     },
     {
       "path": "tools/ci/coverage-merge.mjs",
@@ -1042,13 +1010,9 @@
       "outputPolicy": "protocol-only"
     },
     {
-      "path": "tools/ci/launch-gate.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
+      "path": "tools/ci/lib/provenance.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/ci/live-run-check.mjs",
@@ -1491,6 +1455,11 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/worker-prompt.md",
+      "classification": "asset",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/desktop/minify-worker.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -1542,6 +1511,16 @@
       "npmScripts": [
         "gen:check",
         "gen:docs"
+      ]
+    },
+    {
+      "path": "tools/docs/knowledge-gc.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
       ]
     },
     {
@@ -1844,7 +1823,10 @@
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
       "classification": "asset",
-      "outputPolicy": "no-direct-output"
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md",
@@ -1854,7 +1836,10 @@
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md",
       "classification": "asset",
-      "outputPolicy": "no-direct-output"
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/profiling.md",
@@ -2524,9 +2509,22 @@
       "interpreter": "node"
     },
     {
-      "path": "tools/hooks/ratchet-reason.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "no-direct-output"
+      "path": "tools/hooks/readonly-bash.sh",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/hooks/scratch-md-only.sh",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/hooks/surveyor-scope.sh",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "bash"
     },
     {
       "path": "tools/lib/ai-ratings-math.mjs",
@@ -2897,11 +2895,6 @@
       "outputPolicy": "no-direct-output"
     },
     {
-      "path": "tools/mcp/apex-codex-agents.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
       "path": "tools/mcp/apex-extras.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "job-status",
@@ -3045,11 +3038,6 @@
       "path": "tools/mcp/garage-plan.mjs",
       "classification": "ambiguous",
       "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/mcp/inbox-mcp.mjs",
-      "classification": "protocol-entrypoint",
-      "outputPolicy": "protocol-only"
     },
     {
       "path": "tools/mcp/ios-console.mjs",
@@ -3214,25 +3202,6 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
-    },
-    {
-      "path": "tools/mcp/tinyfish-mcp.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "bash",
-      "nativeOutputFlagMentions": [
-        "--format",
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/mcp/tinyfish-rpc.py",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "python3",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
     },
     {
       "path": "tools/mcp/ui-tools.mjs",
@@ -3990,6 +3959,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/track/merge-surveyor.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "no-direct-output",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/track/osm-circuits.json",
       "classification": "data",
       "outputPolicy": "no-direct-output"
@@ -4462,7 +4437,7 @@
     },
     {
       "name": "test:agent-output",
-      "command": "node --test --test-timeout=900000 tests/unit/agent-experiment.test.mjs tests/unit/agent-inbox.test.mjs tests/unit/agent-message-contract.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/inbox-main-mcp.test.mjs tests/unit/inbox-mcp.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/agent-experiment.test.mjs tests/unit/agent-inbox.test.mjs tests/unit/agent-message-contract.test.mjs tests/unit/agent-output-config.test.mjs tests/unit/agent-output.test.mjs tests/unit/output-level-mcp.test.mjs tests/unit/output-surface.test.mjs"
     },
     {
       "name": "test:audio-unit",
@@ -4498,7 +4473,7 @@
     },
     {
       "name": "test:docs-guards",
-      "command": "node tools/ci/run-node-group.mjs test:docs-guards tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/assets-verify-material-md5.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs tests/unit/vendor-licences.test.mjs --"
+      "command": "node tools/ci/run-node-group.mjs test:docs-guards tests/unit/agent-config.test.mjs tests/unit/agent-scope-hooks.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/assets-verify-material-md5.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/ci-gate-selection.test.mjs tests/unit/ci-gpu-census.test.mjs tests/unit/ci-pages-train.test.mjs tests/unit/ci-ship-filter-geometry.test.mjs tests/unit/ci-ship-smoke-renderer.test.mjs tests/unit/ci-workflow-triggers.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/merge-surveyor.test.mjs tests/unit/parent-protocol.test.mjs tests/unit/pre-commit-guards.test.mjs tests/unit/skill-descriptions.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs tests/unit/vendor-licences.test.mjs --"
     },
     {
       "name": "test:float",

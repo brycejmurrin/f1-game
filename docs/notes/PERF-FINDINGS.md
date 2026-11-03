@@ -3316,7 +3316,7 @@ move. Do not attempt it as a quick win.
 
 Re-walked the 08-17 survey against cache **1388**, then merged deploy tip
 `11d972d2` (cache **1421**). Full board:
-[PERF-HUNT-2026-08-18.md](PERF-HUNT-2026-08-18.md).
+[PERF-HUNT-2026-08-18.md](../archive/notes/PERF-HUNT-2026-08-18.md).
 
 Boot wall **at 1655 (2026-08-29):** **156** tags, **3,633,081 B** (3.55 MB) —
 down from **157 / 5,082,769 B** the same day. **1,415 KB, 28.5%**, in one round:

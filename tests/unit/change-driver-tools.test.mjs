@@ -116,15 +116,6 @@ test("tooling-fast npm script uses the sequential runner", () => {
   assert.ok(fs.existsSync(path.join(ROOT, "tools/ci/tooling-fast.mjs")));
 });
 
-test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/test-bg.mjs"), "utf8");
-  assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
-  // Comments stripped: the @doc header says "sequential by default" and used to satisfy this match.
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  assert.match(code, /maxConcurrent\s*=\s*force\s*\?\s*Infinity\s*:\s*\(parallel\s*\?\s*PARALLEL_MAX\s*:\s*1\)/,
-    "test-bg must default concurrent cap to 1");
-});
-
 test("verify-change --plan on a docs-only change selects no browser batches", () => {
   const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");

@@ -14,14 +14,14 @@ Totals: LIVE 273 | DOC-ONLY 14 | TEST-ONLY 39 | ORPHAN 2.
 | class | path | callers | action |
 |---|---|---|---|
 | ORPHAN | check-doctor-catalog.mjs (deleted, #3935) | none; hard-codes `cwd:'/workspace/f1-game'` + `source tools/environment/activate.sh`; no test | DELETE |
-| ORPHAN | tools/gen/track-stills.mjs | none in code/skills; only docs/plans/skilltest-content-pipeline.md. Its output `assets/stills/*.webp` IS shipped (js/ui/select-screen.js) | KEEP (asset generator); add a line to new-track or asset-pack skill |
+| ORPHAN | tools/gen/track-stills.mjs | none in code/skills; only docs/archive/plans/skilltest-content-pipeline.md. Its output `assets/stills/*.webp` IS shipped (js/ui/select-screen.js) | KEEP (asset generator); add a line to new-track or asset-pack skill |
 
 ## Fleet / orchestrator / relay / train era vs docs/WORKERS.md (GitHub-only bus, dispatcher, land.yml)
 No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orch / desk / ledger (WORKERS.md
 "What no longer exists" — already deleted). Remaining era names:
 | class | path | callers | action |
 |---|---|---|---|
-| DOC-ONLY | tools/ci/archive-sessions.mjs | no code caller (dispatch.mjs imports only github-api + cli-args and implements archive rule 4 itself, emitting `ARCHIVE_SESSION`); .claude/settings.json allow line; AGENTS.md:187 says the dispatcher uses it (drift); role-tag rule (seed/orchestrator era) differs from WORKERS.md rule 4 (claim comment + PR closed > 60 min) | DELETE + its test + groups.json row; fix AGENTS.md:187 to `dispatch.mjs`; drop settings allow |
+| DOC-ONLY | archive-sessions.mjs (tools/ci; deleted 2026-11-03) | no code caller (dispatch.mjs imports only github-api + cli-args and implements archive rule 4 itself, emitting `ARCHIVE_SESSION`); .claude/settings.json allow line; AGENTS.md:187 says the dispatcher uses it (drift); role-tag rule (seed/orchestrator era) differs from WORKERS.md rule 4 (claim comment + PR closed > 60 min) | DELETE + its test + groups.json row; fix AGENTS.md:187 to `dispatch.mjs`; drop settings allow |
 | TEST-ONLY | pr-body.mjs (deleted, #3935) | only pr-body.test.mjs (deleted, #3935); header "edit a PR body's Plan / Status / fleet block … an orchestrator's concurrent edit"; fleet block retired 2026-10-27; AGENTS rule 12 now says `update_pull_request` | DELETE; MOVE the 3 `planVerdict` cases in pr-body.test.mjs into ready-gate's test before deleting the file |
 | TEST-ONLY | fleet-block.mjs (deleted, #3935) | sole importer is pr-body.mjs; no test of its own | DELETE with pr-body |
 | TEST-ONLY | lane-preamble.mjs (deleted, #3935) | only its test; Cursor UI-survey launch prompts (AGENT-TOKEN-USE-2026-10-20); dispatcher builds its own prompts | DELETE + test + groups.json row |
@@ -30,7 +30,7 @@ No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orc
 | LIVE | tools/ci/needs-sync.mjs | pr-board.mjs, sync-pr.mjs; steward skill | KEEP (WORKERS sync rule) |
 | LIVE | tools/ci/sync-pr.mjs | behind-ship, ci-watch, dispatch; 10 skill refs | KEEP |
 | LIVE | tools/ci/dispatch.mjs (+dispatch.json) | spec-timings.yml/labels.json mention; settings allow; WORKERS.md | KEEP (the dispatcher) |
-| LIVE | tools/ci/launch-gate.mjs | hooks/launch-gate.py, launch-page.py, dispatch.mjs | KEEP (quota receipt before create_session); header cites orchestrator.md — reword |
+| LIVE | launch-gate.mjs (tools/ci; deleted 2026-11-03 with the Actions dispatcher) | hooks/launch-gate.py, launch-page.py, dispatch.mjs | KEEP (quota receipt before create_session); header cites orchestrator.md — reword |
 | LIVE | tools/ci/cursor-agents.mjs + lib/cursor-transcript.mjs | apex-tools-mcp.mjs (`apex_cursor_agents`) | KEEP (lane:cursor) |
 | LIVE | tools/ci/session-status.mjs | pr-body.mjs, apex-tools-mcp.mjs; skills check, check-changes | KEEP (drops one caller when pr-body goes) |
 | LIVE | tools/ci/session-transcript.mjs | archive-sessions.mjs; hooks/context-cap.py | KEEP (hook caller survives) |
@@ -66,7 +66,7 @@ No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orc
 
 ## Deletion list (each needs: tests/groups.json row removed, `npm run gen` for tools/README.md + agent-output catalogs)
 1. check-doctor-catalog.mjs (deleted, #3935) — no test.
-2. tools/ci/archive-sessions.mjs — tests/unit/archive-sessions.test.mjs; also AGENTS.md:187, .claude/settings.json:74.
+2. archive-sessions.mjs — its unit test (both deleted 2026-11-03); also AGENTS.md:187, .claude/settings.json:74.
 3. pr-body.mjs (deleted, #3935) + fleet-block.mjs (deleted, #3935) — pr-body.test.mjs (deleted, #3935) (move its `planVerdict` cases first).
 4. lane-preamble.mjs (deleted, #3935) — lane-preamble.test.mjs (deleted, #3935).
 5. measure-pr-ci-after-close.mjs (deleted, #3935) — measure-pr-ci-after-close.test.mjs (deleted, #3935).

@@ -250,7 +250,6 @@
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchets.test.mjs",
-        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
@@ -3027,26 +3026,34 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs"
+        "tests/unit/livery-paint-zones.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "createGarage": [
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "draw": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
+      ],
+      "phaseStep": [
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "prepare": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "release": [
         "tests/unit/garage-arrival.test.mjs",
@@ -3057,6 +3064,9 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
+      ],
+      "wrapPhase": [
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -4807,11 +4817,12 @@
     "js/circuits/monza.js": {
       "*": [
         "tests/specs/track-designer.spec.js",
-        "tests/unit/bash-guard-hardening.test.mjs",
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/merge-surveyor.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/prop-clipping.test.mjs",
@@ -4933,8 +4944,8 @@
         "tests/unit/monza-coplanar-clip.test.mjs"
       ],
       "*": [
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -4988,7 +4999,6 @@
     },
     "js/circuits/scenery/spa.js": {
       "*": [
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
     },
@@ -5237,9 +5247,8 @@
         "tests/specs/data-lifecycle.spec.js",
         "tests/specs/logging.spec.js",
         "tests/specs/telemetry-compare.spec.js",
-        "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/career-determinism.test.mjs",
@@ -5259,12 +5268,10 @@
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/log-namespaces.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
-        "tests/unit/merge-gate.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ready-gate.test.mjs",
         "tests/unit/reliability.test.mjs",
-        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/stage-minify.test.mjs",
@@ -7614,7 +7621,6 @@
         "tests/specs/ui-scale.spec.js",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/audio-tune.test.mjs",
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/body-attitude.test.mjs",
         "tests/unit/car-fx.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
@@ -7663,7 +7669,6 @@
         "tests/specs/multiplayer-seats.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
-        "tests/unit/agent-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
@@ -7716,7 +7721,6 @@
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
-        "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/report-server.test.mjs",
@@ -7733,7 +7737,6 @@
         "tests/unit/survey-hud.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/terrain-normals.test.mjs",
-        "tests/unit/test-bg-waste.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tolerance-diff.test.mjs",
@@ -16445,14 +16448,12 @@
     },
     "js/roster.js": {
       "*": [
-        "tests/unit/bash-guard-hardening.test.mjs",
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
-        "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/three-inspector.test.mjs",
-        "tests/unit/tool-hook-fixes.test.mjs"
+        "tests/unit/three-inspector.test.mjs"
       ]
     },
     "js/share/share-card-chips.js": {
@@ -16601,7 +16602,6 @@
         "tests/unit/track-def-factory.test.mjs"
       ],
       "*": [
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hw-zones.test.mjs"
       ]
@@ -17106,6 +17106,7 @@
         "tests/specs/monaco-foundation.spec.js",
         "tests/specs/new-hooks.spec.js",
         "tests/specs/season-format.spec.js",
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
@@ -18002,7 +18003,6 @@
         "tests/specs/hud-mirror.spec.js",
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
-        "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",

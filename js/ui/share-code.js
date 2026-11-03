@@ -3,7 +3,7 @@
    never startRace / gridUp. A setup/livery code DOES write the team's stored
    sheet / livery pick, so apply() first saves what it replaces (UNDO_KEY) and
    the toast names the door back: paste UNDO in SETTINGS › FILES (6-F2).
-   Plan slice 4: docs/plans/2026-09-30-player-a11y.md. */
+   Plan slice 4: docs/archive/plans/2026-09-30-player-a11y.md. */
 "use strict";
 
 const ShareCode = (function () {

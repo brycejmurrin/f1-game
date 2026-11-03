@@ -18,7 +18,6 @@ inlining every page.
 | Live vs deploy tip | deploy-research: WebFetch `version.json` + `git show origin/<deploy>:version.json` |
 | Confirm a marker shipped | deploy-research: fetch `js/<path>.js?v=<live hash>` then grep the unique string |
 | External grounding | WebSearch / hosted TinyFish `search`, then fetch the best URLs |
-| Box WITH egress only | `./tools/mcp/tinyfish-mcp.sh deploy-check --tip` / `deploy-js --marker RE js/<path>.js` (CLI, not attached; key from shell / gitignored `.env`, no tracked fallback) |
 
 Do **not** use a public-web fetcher for the working tree (localhost). Do **not**
 use Chrome DevTools MCP for `github.io` from this container (egress proxy).

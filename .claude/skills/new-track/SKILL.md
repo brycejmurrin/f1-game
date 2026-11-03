@@ -1,5 +1,8 @@
 ---
 name: new-track
+paths:
+  - "js/circuits/**"
+  - "js/track/**"
 description: "Use when adding a circuit or changing its layout, geometry, metadata, bridges or elevation (hill, crest, dip) in js/circuits/, or the in-game TRACK DESIGNER. Not corner/grade diagnosis → agent-view; matching the real place → survey-track; props → scenery-dress."
 ---
 

@@ -322,13 +322,27 @@
     return (team.drivers && team.drivers[0] && team.drivers[0].num) || 0;
   }
 
+  // Planted wheels (CarWheels.createGarage): body is noWheels so the rim can
+  // roll. Wheel distance integrates a studio roll speed (m/s) — same v/R path
+  // the race frame uses via CarWheels.phaseStep / WHEEL_R.
+  let wheelDrawer = null, wheelDist = 0, _frameT = 0, wheelRoll = true;
+  const WHEEL_ROLL_MPS = 12;   // demo road speed so spokes/cues read while orbiting
   function rebuild() {
     const team = teamObj();
     const liv = resolveLivOver(team);
     const tiers = Parts.getVisualTiers(S.parts, team);
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);
-    carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
+    // noWheels: race/garage path — spinning layers drawn separately below.
+    carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers, noWheels: true }));
+    if (!wheelDrawer && typeof CarWheels !== "undefined" && CarWheels.createGarage)
+      wheelDrawer = CarWheels.createGarage(GLX);
+    if (wheelDrawer) {
+      const wt = CarWheels.tints(liv);
+      const ids = (tiers && tiers._ids) || {};
+      const wkey = [team.id, ids.tyres || "medium", ids.brakes || "standard", ids.wheels || "standard", wt.key || ""].join(":");
+      wheelDrawer.prepare(wkey, liv, tiers);
+    }
     // ACTIVE AERO: the wing's top elements are NOT in that mesh — Car3D leaves
     // them out so they can rotate (see Car3D.aeroFlaps). A viewer that only drew
     // Car3D.build() would therefore show a wing missing its top flaps. Keep what
@@ -414,9 +428,16 @@
     }
   }
 
-  function frame() {
+  function frame(now) {
     GLX.resize();
     if (S.spin) S.az = (S.az + 0.4) % 360;
+    const tNow = (typeof now === "number" && now > 0) ? now : performance.now();
+    const dt = _frameT ? Math.min(0.05, Math.max(0, (tNow - _frameT) / 1000)) : 1 / 60;
+    _frameT = tNow;
+    // Always roll in the studio so spokes / valve / sidewall dash read as spin
+    // (baked-in Car3D wheels never moved). distance += v·dt; draw uses /WHEEL_R.
+    // CARVIEW.set({ wheelRoll:false, wheelDist }) freezes a known phase for shots.
+    if (!S.hideCar && wheelRoll) wheelDist += WHEEL_ROLL_MPS * dt;
     const eye = camera();
     const t = TOD[S.tod] || TOD.day;
     const bg = S.bg ? [parseInt(S.bg.slice(0,2),16)/255, parseInt(S.bg.slice(2,4),16)/255, parseInt(S.bg.slice(4,6),16)/255] : t.bg;
@@ -440,6 +461,7 @@
     if (paint) Object.assign(paint, paintFromRefl(S.refl));   // live reflection strength (sparkle/doubleSided untouched by draw, harmless to reassign)
     if (!S.hideCar) {
       if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
+      if (wheelDrawer) wheelDrawer.draw(REFLECT_X, wheelDist, 0, paint || { doubleSided: true });
       drawFlaps();
       if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
     }
@@ -567,6 +589,8 @@
       }
       if (o.lights !== undefined) S.lights = o.lights || [];
       for (const k of ["az", "el", "dist", "look", "lookX", "lookY", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep", "hideCar"]) if (o[k] !== undefined) S[k] = o[k];
+      if (o.wheelRoll !== undefined) wheelRoll = !!o.wheelRoll;
+      if (o.wheelDist !== undefined && Number.isFinite(o.wheelDist)) wheelDist = o.wheelDist;
       if (reb) { buildUI(); rebuild(); }
       return true;
     },

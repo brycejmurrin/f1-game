@@ -1,5 +1,8 @@
 ---
 name: scenery-dress
+paths:
+  - "js/circuits/**"
+  - "js/track/**"
 description: "Use when adding or fixing track scenery: buildings, trees, grandstands, barriers, billboards, floodlight masts, props that float, sink or vanish, a circuit scenery(api) callback, TrackGraph.instance migration, graph parity, batches()/bakeOnly. Not lamps → lighting-tuner; real-place accuracy → survey-track."
 ---
 

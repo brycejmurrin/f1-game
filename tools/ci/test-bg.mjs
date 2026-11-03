@@ -1,65 +1,43 @@
 #!/usr/bin/env node
-// @doc Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`).
+// @doc Runs ONE browser spec in the BACKGROUND under a one-run lock and a loadavg gate; `--status`, `--wait`, `--stop`.
 // @section runner
 /**
- * test-bg.mjs — start test groups in the BACKGROUND and hand back a log to tail.
+ * test-bg.mjs — run ONE Playwright spec in the background and hand back a log to tail.
  *
- * A foreground Playwright run on this software-rendered suite blocks for
- * minutes and prints nothing an editor can act on. This detaches: it returns
- * as soon as the children are up, prints the tail commands, and leaves a
- * status file per group. (The older `test-shards.sh` fan-out in this directory
- * WAITED; it duplicated `--parallel` + `--wait` and was removed 2026-09-10.)
+ * Agents do not run browser tests locally (AGENTS.md rule 5); this tool exists for a Bryce-attended single spec.
+ * CI runs the tiers: every PR push gets the change-aware `selected` legs (one 5-min shard on a draft, the
+ * 10-min budget once ready) and `node tools/ci/remote-group.mjs <group>` runs a whole group on the pushed
+ * branch. Group mode (`test-bg.mjs <group>`, `--parallel`, `--wait <groups>`, `--sweep`, `--last-failed`) went
+ * on 2026-11-03 with the 4-core local-run practice it served
+ * (docs/plans/2026-11-03-agent-surface-reset.md §4.2).
  *
- *   node tools/ci/test-bg.mjs smoke                 # start one group (default)
- *   node tools/ci/test-bg.mjs smoke physics-core    # starts smoke ONLY; prints the `next:` command
- *   node tools/ci/test-bg.mjs --parallel smoke aero # concurrent up to core cap
+ *   node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # ONE spec: `npm test -- <file>` detached, logging
+ *                                                   #   to artifacts/logs/spec-<name>.log; verdict line `= bg exit N`
  *   node tools/ci/test-bg.mjs --status              # what is running / how it ended
- *   node tools/ci/test-bg.mjs --tail smoke          # print the tail command
- *   node tools/ci/test-bg.mjs --wait                # block until all groups finish (the waiter:
- *                                                   #   run it as a background task; exit 1 = a red)
- *   node tools/ci/test-bg.mjs --wait --timeout 45   # ...giving up after 45 min (exit 124, runs left alive)
- *   node tools/ci/test-bg.mjs --wait smoke aero     # start each, wait, then next (waits ≤ 10 min for
- *                                                   #   loadavg < 3 between groups; exit 3 if it never settles)
- *   node tools/ci/test-bg.mjs --stop                # kill everything still running
- *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
- *   node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # ONE spec: `npm test -- <file>` under the same
- *                                                   #   one-run lock, loadavg gate and log (artifacts/logs/spec-x.log)
- *   --grep <re>     Playwright --grep: run only matching test titles (browser groups and --spec)
- *   --workers <n>   Playwright workers per group (default: env WORKERS, else 1 on <= 4 cores, 2 above)
- *   --force | --last-failed | --keep-going | --parallel   (see the sections below)
+ *   node tools/ci/test-bg.mjs --tail <name>         # print the tail command (name: spec-<basename>)
+ *   node tools/ci/test-bg.mjs --wait --timeout 45   # block until the run finishes (run it as a background task):
+ *                                                   #   exit 0 passed, 1 red, 124 still running after N minutes
+ *   node tools/ci/test-bg.mjs --stop                # SIGTERM, then SIGKILL, the run's process group
+ *   --grep <re>     Playwright --grep: run only matching test titles
+ *   --workers <n>   Playwright workers (default: env WORKERS, else 1 on <= 4 cores, 2 above)
+ *   --force         start despite loadavg >= 3 or a live MCP Chrome daemon (never beside another run)
  *   An unknown flag prints this usage and exits 2 (tools/lib/cli-args.mjs strictFlags).
  *
- * Default is SEQUENTIAL (one group at a time). `--parallel` restores the old
- * core-capped concurrent start. AGENTS.md: ONE Playwright process, ONE browser
- * group per batch — bunching groups is how SwiftShader timeouts masquerade as
- * test failures.
- *
- * Each group gets its own free port (via tools/ci/run-playwright.mjs), its own
- * artifacts/report-<port>/ and its own artifacts/logs/<group>.log — so groups
- * cannot tear down each other's web server, and a stall is attributable to one
- * log rather than to "the run".
- *
- * Sizing: every worker is a Chromium + SwiftShader process, so total browsers
- * is groups × workers. WORKERS defaults to 1 on ≤4 cores (2 above); keep concurrent
- * groups at 1 unless you know the box is quiet.
+ * ONE run at a time, refused otherwise: every Playwright worker is a Chromium +
+ * SwiftShader process, and past the core count they starve each other and fail
+ * on their own timeouts — which reads as a broken change rather than a busy box.
+ * The run gets its own free port (tools/ci/run-playwright.mjs), its own
+ * artifacts/report-<port>/ and its own log, and `--status` reads its verdict
+ * out of that log, so there is no second source of truth to keep in sync.
  */
-import { spawn, execSync, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { changedPaths } from "../lib/changed-files.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-// Same deploy tip pick-tests uses — docs-only waste is vs that base, not main.
-const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
-// Espree-free twin of select-specs.DOCS_ONLY / isDocsOnly. test-bg is imported
-// by apex-tools-mcp at module load; a static import of select-specs.mjs pulls
-// espree into that graph and fails "servers boot with no node_modules" (#1714).
-const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
-const isDocsOnly = (changed) =>
-  changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
 /** Use the CPU budget available to this process, not the host's logical CPUs.
@@ -71,35 +49,29 @@ export function workerBudget({ workers, env = process.env, system = os } = {}) {
 }
 // One worker reduces SwiftShader contention on a 4-core budget. Budgets above
 // four keep two workers; explicit CLI and environment overrides are retained.
-const initialBudget = workerBudget();
-const CORES = initialBudget.cores;
-let WORKERS = initialBudget.workers;
+let WORKERS = workerBudget().workers;
 /** `--grep <pattern>`: forwarded to Playwright (single-quoted for the `sh -c` that starts the run). */
 let GREP = null;
 export const shQuote = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 
-// THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
-// Every Playwright worker drives a SwiftShader Chromium, so the real browser
-// count is (groups × WORKERS) and they are all CPU-bound. Past the core count
-// they starve each other and fail on their own timeouts — a screenshot that
-// takes 60 s, a spec that takes 120 s — which reads as a broken change rather
-// than as a busy machine. Measured here: five groups took the load average to
-// 46 on 4 cores with 94 Chromium processes, and every "failure" was a timeout.
-//
-// Default concurrent cap is 1 (sequential). --parallel raises it to cores/WORKERS.
-// --force overrides the cap entirely for a box that really is bigger.
-let PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
-
 const readState = () => {
   try { return JSON.parse(fs.readFileSync(STATEFILE, "utf8")); } catch (_) { return { runs: [] }; }
 };
+/** `<pid> <log>` of the spec run that is still alive in THIS checkout, else null. The one answer session-status,
+ *  debug-chrome and probe-mcp read (the `.claude/hooks/live-run.py` reader left with local browser groups, 2026-11-03). */
+export function liveSpecRun(state = readState()) {
+  const run = (state.runs || []).find((r) => aliveRun(r));
+  return run ? `${run.pid} ${run.log || run.group || ""}`.trim() : null;
+}
 // THE REGISTRY IS SHARED between every test-bg process alive at once: a
-// `--wait` stamping `ended` while a second shell starts another group is the
-// ordinary case, not a corner. So a write is (1) a RE-READ immediately before
-// it, so the mutation applies to what is on disk now rather than to a copy
-// taken seconds ago, (2) a merge BY PID — the pid is the one key two writers
-// cannot both own — and (3) a tmp file + renameSync, so a reader never sees a
-// half-written JSON. `mutate(fresh)` returns the next state (or edits in place).
+// `--wait` stamping `ended` while a second shell starts a run is the ordinary
+// case, not a corner. So a write is (1) a RE-READ immediately before it, so the
+// mutation applies to what is on disk now rather than to a copy taken seconds
+// ago, (2) a merge BY PID — the pid is the one key two writers cannot both own
+// — and (3) a tmp file + renameSync, so a reader never sees a half-written
+// JSON. `mutate(fresh)` returns the next state (or edits in place).
+// tools/mcp/apex-tools-mcp.mjs reads the same file (`runs[].browser`, `mode`)
+// to keep its browser tools off a live run.
 const updateState = (mutate) => {
   fs.mkdirSync(LOGDIR, { recursive: true });
   const fresh = readState();
@@ -117,12 +89,11 @@ const mergeByPid = (disk, mine) => {
 /* LIVENESS IS PID + START TIME (2026-10-04). `kill(pid, 0)` alone read any
  * process that later took a recorded pid as this run: after a container
  * restart (artifacts/ survives, pids restart low) or a pid wrap, a stale entry
- * stayed "running" forever, the one-group cap refused every start, and
- * --stop / a supersede sent SIGTERM then SIGKILL to the process GROUP of an
- * unrelated process. A run now records its /proc/<pid>/stat starttime (field
- * 22 — the identity .claude/hooks/live-run.py prints) and the kernel boot id,
- * and is alive only while both still match. An old record without them falls
- * back to the pid test. */
+ * stayed "running" forever, the one-run cap refused every start, and --stop
+ * sent SIGTERM then SIGKILL to the process GROUP of an unrelated process. A
+ * run now records its /proc/<pid>/stat starttime (field 22) and the kernel
+ * boot id, and is alive only while both still match. An old record without
+ * them falls back to the pid test. */
 export function procStart(pid) {
   try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim().split(/\s+/)[19] || null; }
   catch (_) { return null; }
@@ -163,20 +134,17 @@ const fmtDur = (ms) => {
 // A negative pid signals the whole process GROUP (spawn uses detached:true, so
 // pgid === pid). The single-pid fallback is for a child that never became a
 // group leader — it reaches the npm shim only, which is why the group form is
-// tried first. See the long note above stop().
+// tried first. See the note above stop().
 const signal = (pid, sig) => {
   try { process.kill(-pid, sig); return true; } catch (_) {
     try { process.kill(pid, sig); return true; } catch (_) { return false; }
   }
 };
-// Synchronous sleep: supersede() below must finish killing BEFORE the
-// replacement is spawned, so it cannot hand control back to the event loop.
-const sleepSync = (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
 
 /* A run's outcome is read out of its own log, so there is no second source of
-   truth to keep in sync. Two formats, because two kinds of group exist:
-   Playwright groups end with live-reporter's "= run <status>" line, and
-   node --test groups end with a TAP summary. A group whose log matches neither
+   truth to keep in sync. Two formats, because two kinds of log exist:
+   Playwright runs end with live-reporter's "= run <status>" line, and a
+   node --test half ends with a TAP summary. A log that matches neither
    really did die early. */
 export function outcome(run) {
   if (alive(run)) return "running";
@@ -186,11 +154,11 @@ export function outcome(run) {
 }
 
 /** The verdict in a finished log. THE EXIT CODE IS CHECKED FIRST (2026-09-24):
- *  a group can be two commands (`test:tooling` is tooling-fast && sweeps, a
- *  twinned group is its VM twins then Playwright), and the first half's
- *  `= run passed` or `# fail 0` used to win over a non-zero `= bg exit`, so a
- *  red second half — or a Playwright half SIGKILLed before its summary — read
- *  as passed and `--wait` exited 0. The detail line still names the counts. */
+ *  a run can be two commands (a twinned spec is its VM twins then Playwright),
+ *  and the first half's `= run passed` or `# fail 0` used to win over a
+ *  non-zero `= bg exit`, so a red second half — or a Playwright half SIGKILLed
+ *  before its summary — read as passed and `--wait` exited 0. The detail line
+ *  still names the counts. */
 export function outcomeOf(text) {
   const bgExit = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
   const detail = [...text.matchAll(/= run (\w+)\s+\(([^)]*)\)/g)].pop();
@@ -219,11 +187,8 @@ export function outcomeOf(text) {
     return `${tap[2] === "0" ? "passed" : "failed"} (${tap[1]} passed, ${tap[2]} failed${suffix})`;
   }
 
-  // Plain-script groups (test:audit is `node tools/ci/test-coverage-audit.mjs`)
-  // print neither format, so a PASSING audit read as "died before finishing"
-  // and --wait exited 1 on a green batch. start() appends this trailer to
-  // every log for exactly this case; pw/tap stay first because they carry
-  // richer detail.
+  // A log with neither format but a trailer: the `= bg exit N` line start()
+  // appends is the verdict. pw/tap stay first because they carry richer detail.
   const bg = [...text.matchAll(/^= bg exit (\d+)$/gm)].pop();
   if (bg) return bg[1] === "0" ? "passed (exit 0)" : `failed (exit ${bg[1]})`;
 
@@ -234,7 +199,7 @@ export function outcomeOf(text) {
 function status() {
   const s = readState();
   if (!s.runs.length) return say("no background runs recorded");
-  say(`status ${loadavgLine()} mode=${s.mode || "?"}`);
+  say(`status ${loadavgLine()}`);
   for (const r of s.runs) {
     const started = r.started ? Date.parse(r.started) : NaN;
     const dur = alive(r) ? `elapsed=${fmtDur(Date.now() - started)}`
@@ -247,26 +212,26 @@ function waitDeadlineFromMin(waitTimeoutMin) {
   return waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
 }
 
-export const KNOWN_FLAGS = ["--timeout", "--workers", "--spec", "--force", "--last-failed", "--parallel", "--keep-going",
-  "--grep", "--sweep", "--status", "--stop", "--tail", "--wait", "--help"];
-/** One spec runs as a pseudo-group `spec-<basename>` so it shares the lock, the registry and the log layout. */
+export const KNOWN_FLAGS = ["--timeout", "--workers", "--spec", "--force", "--grep", "--status", "--stop", "--tail", "--wait", "--help"];
+/** The spec's run name, `spec-<basename>`: the registry key, the log name and the `--tail` argument. */
 export const specGroupName = (file) => "spec-" + path.basename(String(file)).replace(/\.spec\.[cm]?js$/, "").replace(/[^a-z0-9._-]/gi, "_");
-/** Parse CLI flags shared by --wait and group starts. `--timeout` is minutes (AGENTS.md).
- *  Strict: an unknown `--flag` throws (main prints the usage and exits 2). */
+/** Parse the CLI. `--timeout` is minutes (AGENTS.md). Strict: an unknown `--flag`
+ *  throws, and so does a bare word — group mode is gone (main prints the usage and exits 2). */
 export function parseTestBgArgv(argv) {
   let waitTimeoutMin = 0;
   let workers = null;
-  const groups = [];
   const specs = [];
   let grep = null;
+  let tail = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    const kv = /^(--workers|--spec|--grep)(?:=(.*))?$/.exec(a);
+    const kv = /^(--workers|--spec|--grep|--tail)(?:=(.*))?$/.exec(a);
     if (kv) {
       const v = kv[2] !== undefined ? kv[2] : argv[++i];
       if (v == null || v === "" || v.startsWith("-")) throw new Error(`${kv[1]} requires a value`);
       if (kv[1] === "--grep") grep = v;
       else if (kv[1] === "--spec") specs.push(v);
+      else if (kv[1] === "--tail") tail = v;
       else if (!(Number(v) >= 1 && Number.isInteger(Number(v)))) throw new Error("--workers requires a positive integer");
       else workers = String(Number(v));
       continue;
@@ -288,28 +253,18 @@ export function parseTestBgArgv(argv) {
       if (!KNOWN_FLAGS.includes(a)) throw new Error(`unknown flag ${a}\n  accepts: ${KNOWN_FLAGS.join(" ")}`);
       continue;
     }
-    groups.push(a);
+    throw new Error(`group mode is gone (2026-11-03): "${a}" is not a flag. Run ONE spec with --spec tests/specs/<file>.spec.js;`
+      + ` a whole group runs on the PR (node tools/ci/remote-group.mjs <group>)`);
   }
-  return {
-    waitTimeoutMin,
-    workers,
-    grep,
-    specs,
-    groups: [...groups, ...specs.map(specGroupName)],
-    force: argv.includes("--force"),
-    lastFailed: argv.includes("--last-failed"),
-    parallel: argv.includes("--parallel"),
-    keepGoing: argv.includes("--keep-going"),
-    sweep: argv.includes("--sweep"),
-  };
+  return { waitTimeoutMin, workers, grep, specs, tail, force: argv.includes("--force") };
 }
 
 export async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {},
   { running = () => readState().runs.filter((r) => alive(r)) } = {}) {
   const dl = deadline ?? waitDeadlineFromMin(waitTimeoutMin);
   const t0 = Date.now();
-  // Re-read the registry every poll: a group another shell starts while this
-  // waits is part of "everything still running" (it used to be read once).
+  // Re-read the registry every poll: a run another shell starts while this
+  // waits is part of "everything still running".
   while (running().length) {
     if (Date.now() > dl) {
       process.stderr.write("\r" + " ".repeat(80) + "\r");
@@ -326,7 +281,7 @@ export async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {},
   process.stderr.write("\r" + " ".repeat(80) + "\r");
   // Stamp ended times for finished runs so --status can show duration. The
   // stamps are keyed by pid and applied to a FRESH read inside updateState, so
-  // a group another shell started while this one waited is not clobbered.
+  // a run another shell started while this one waited is not clobbered.
   const stamped = new Map();
   for (const r of readState().runs) {
     if (!alive(r) && !r.ended) {
@@ -351,59 +306,22 @@ export async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {},
 }
 
 // KILL THE PROCESS GROUP, NOT THE npm WRAPPER. `process.kill(pid)` reached only
-// the `npm run test:<group>` shim; npm does not forward the signal, so
-// run-playwright, the Playwright runner and every Chromium it had opened were
-// orphaned and kept running — invisible to --status, still holding the CPU, and
-// still writing to the log file the NEXT run truncated under them.
-//
-// That is how this tool produced fake results. Measured after three `--stop`ed
-// groups: 117 Chromium processes on a 4-core box, load average 50.7, three
-// orphaned runners (one of them re-running the same physics specs as the live
-// run, into the same log). Every "failure" in that state was `Test timeout of
-// 120000ms exceeded` and not one was an assertion.
-//
-// spawn() uses `detached: true`, which makes each child a process-group leader
+// the `npm test` shim; npm does not forward the signal, so run-playwright, the
+// Playwright runner and every Chromium it had opened were orphaned and kept
+// running — invisible to --status, still holding the CPU, and still writing to
+// the log file the NEXT run truncated under them. Measured after three
+// `--stop`ed runs: 117 Chromium processes on a 4-core box, load average 50.7,
+// and every "failure" in that state a `Test timeout of 120000ms exceeded`.
+// spawn() uses `detached: true`, which makes the child a process-group leader
 // with pgid === pid, so a negative pid signals the whole tree. SIGTERM first so
 // Playwright can close its browsers, then SIGKILL anything still up.
-// THE REGISTRY IS NOT THE WHOLE TRUTH once someone has killed a supervisor by
-// hand. `--stop` can only signal pids it has recorded, and a `kill <pid>` on
-// the run leaves the registry entry pointing at a corpse while the children —
-// run-playwright, the Playwright runner, its workers, every Chromium — go on
-// burning CPU. Measured 2026-09-09: 8 Chromiums at ~290 % held the box above
-// the deploy's load gate and `--stop` would have reported "0 run group(s)".
-// --sweep is the recovery: hunt the SHAPES this tool launches, skipping the
-// harness's own MCP browsers (they idle at 0 % and are not ours to kill) and
-// this process itself.
-// The browser alternation covers every layout Playwright unpacks — chrome-linux
-// (the sandbox's chromium-1194), chrome-linux64 (newer Linux builds), chrome-mac
-// and chrome-mac-arm64 (`Chromium.app/.../Chromium`) — under either browsers
-// root, /opt/pw-browsers or ~/.cache|Library/Caches/ms-playwright.
-const SWEEP_RE = /(run-playwright\.mjs|playwright\/lib\/worker\/workerProcessEntry|node_modules\/\.bin\/playwright test|(pw-browsers|ms-playwright)\/.*(chrome-linux(64)?|chrome-mac[^/]*)\/(chrome|headless_shell|Chromium))/;
-function sweep() {
-  let out = "";
-  try { out = execSync("ps -eo pid,args", { encoding: "utf8", maxBuffer: 1 << 24 }); } catch (_) { return 0; }
-  const mine = [];
-  for (const line of out.split("\n").slice(1)) {
-    const m = /^\s*(\d+)\s+(.*)$/.exec(line);
-    if (!m) continue;
-    const pid = +m[1], args = m[2];
-    if (pid === process.pid || pid === process.ppid) continue;
-    if (/playwright-mcp|chrome-devtools-mcp/.test(args)) continue;   // the harness's, not ours
-    if (SWEEP_RE.test(args)) mine.push(pid);
-  }
-  for (const pid of mine) { try { process.kill(pid, "SIGKILL"); } catch (_) {} }
-  say(mine.length ? `swept ${mine.length} orphaned process(es): ${mine.join(" ")}` : "sweep found no orphans");
-  return mine.length;
-}
-
-function stop({ graceMs = 4000, doSweep = false } = {}) {
+function stop({ graceMs = 4000 } = {}) {
   const s = readState();
   const live = s.runs.filter((r) => alive(r));
   let n = 0;
   for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
-  say(`sent SIGTERM to ${n} run group(s)`);
-  if (!n) { if (doSweep) sweep(); else say("nothing registered is alive — if the box is still busy, run --stop --sweep"); return; }
-  if (doSweep) setTimeout(sweep, graceMs + 500);
+  say(`sent SIGTERM to ${n} run(s)`);
+  if (!n) { say("nothing registered is alive — if the box is still busy, `ps -eo pid,pcpu,args --sort=-pcpu | head` and kill a listed pid of yours"); return; }
   const deadline = Date.now() + graceMs;
   const spin = () => {
     const still = live.filter((r) => alive(r));
@@ -414,84 +332,21 @@ function stop({ graceMs = 4000, doSweep = false } = {}) {
   setTimeout(spin, 250);
 }
 
-// RESTARTING A LIVE GROUP MUST KILL IT, not just forget it. The state entry for
-// a superseded group is replaced (see the note in start()), and for a while that
-// was ALL that happened: the old process kept running with nobody holding its
-// pid, so it was invisible to --status/--wait/--stop, it kept its SwiftShader
-// Chromiums on a box that was now also running the replacement, and it went on
-// writing into the very log file the new run had just truncated — the exact
-// fake-results failure the stop() note above describes, reached by a different
-// door. Same SIGTERM-then-SIGKILL ladder as --stop, but synchronous, because it
-// has to be finished before the replacement is spawned.
-function supersede(groups, { graceMs = 4000 } = {}) {
-  const doomed = readState().runs.filter((r) => alive(r) && groups.includes(r.group));
-  if (!doomed.length) return;
-  for (const r of doomed) {
-    const ok = signal(r.pid, "SIGTERM");
-    say(ok
-      ? `superseding test:${r.group} — SIGTERM to pgid ${r.pid}`
-      : `WARNING: could not signal the running test:${r.group} (pid ${r.pid}); it may still be writing to ${path.relative(ROOT, r.log)}`);
-  }
-  const deadline = Date.now() + graceMs;
-  let still = doomed.filter((r) => alive(r));
-  while (still.length && Date.now() < deadline) {
-    sleepSync(250);
-    still = still.filter((r) => alive(r));
-  }
-  for (const r of still) {
-    signal(r.pid, "SIGKILL");
-    say(`superseding test:${r.group} — SIGKILL pgid ${r.pid}`);
-  }
-  if (still.length) sleepSync(500);   // let the kernel reap before the log is truncated
-}
-
-/** --last-failed <group>: the port the group's previous run used, read from
- *  its own log (run-playwright prints `[playwright] port=N`). Playwright keeps
- *  `.last-run.json` in the run's outputDir, which this repo suffixes by port
- *  (artifacts/test-results-<port>/), so the re-run has to be told where the
- *  previous failures were recorded: APEX_LAST_RUN_FILE, which run-playwright
- *  copies into the new run's outputDir before `playwright test --last-failed`. */
-function lastRunFile(group) {
-  const log = path.join(LOGDIR, `${group}.log`);
-  let text = "";
-  try { text = fs.readFileSync(log, "utf8"); } catch (_) { return null; }
-  const port = [...text.matchAll(/\[playwright\] port=(\d+)/g)].pop()?.[1];
-  if (!port) return null;
-  const file = path.join(ROOT, "artifacts", `test-results-${port}`, ".last-run.json");
-  return fs.existsSync(file) ? file : null;
-}
-
-function spawnGroup(group, pkg, { lastFailed = false } = {}) {
+function spawnSpec(spec) {
+  const group = specGroupName(spec);
   const log = path.join(LOGDIR, `${group}.log`);
   const started = new Date().toISOString();
-  let lastRun = null;
-  if (lastFailed) {
-    lastRun = lastRunFile(group);
-    if (!lastRun) {
-      console.error(`[test-bg] --last-failed: no previous run of test:${group} recorded (need artifacts/logs/${group}.log with its port and that run's .last-run.json) — running the whole group`);
-    } else {
-      const failed = (() => { try { return JSON.parse(fs.readFileSync(lastRun, "utf8")).failedTests?.length ?? 0; } catch (_) { return 0; } })();
-      say(`--last-failed ${group}: ${failed} failed test id(s) from ${path.relative(ROOT, lastRun)}`);
-      if (!failed) { say(`nothing failed last time — nothing to re-run`); return null; }
-    }
-  }
-  const header =
-    `[test-bg] START group=${group} at=${started} ${loadavgLine()} workers=${WORKERS}\n`;
+  const header = `[test-bg] START group=${group} spec=${spec} at=${started} ${loadavgLine()} workers=${WORKERS}\n`;
   fs.writeFileSync(log, header);
   const fd = fs.openSync(log, "a");
-  // --workers is a Playwright flag. A `node --test` group would take it as a
-  // FILE PATH, so only the browser groups get it.
-  const isBrowser = /run-playwright/.test(pkg.scripts[`test:${group}`]);
-  const spec = SPEC_RUNS[group];
-  const forward = isBrowser ? ["--", ...(spec ? [JSON.stringify(spec)] : []), `--workers=${WORKERS}`, ...(GREP ? [`--grep=${shQuote(GREP)}`] : []), ...(lastRun ? ["--last-failed"] : [])] : [];
+  const forward = [JSON.stringify(spec), `--workers=${WORKERS}`, ...(GREP ? [`--grep=${shQuote(GREP)}`] : [])];
   // detached + ignored stdin: the run must outlive this process and must
   // never block waiting for a terminal that is no longer attached.
-  // The `= bg exit N` trailer is the terminal line for groups that print
-  // neither the Playwright reporter's `= run …` nor a TAP summary — see
-  // outcome() above for why a log without one reads as a dead run.
+  // The `= bg exit N` trailer is the terminal line: see outcome() above for
+  // why a log without one reads as a dead run.
   const cmd =
     `start_s=$(date +%s); ` +
-    `npm ${spec ? "test --silent" : `run --silent test:${group}`}${forward.length ? " " + forward.join(" ") : ""}; ` +
+    `npm test --silent -- ${forward.join(" ")}; ` +
     `ec=$?; end_s=$(date +%s); ` +
     `echo "[test-bg] END group=${group} duration=$((end_s-start_s))s exit=$ec loadavg=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo '?')"; ` +
     `echo "= bg exit $ec"`;
@@ -499,15 +354,13 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
     cwd: ROOT,
     detached: true,
     stdio: ["ignore", fd, fd],
-    env: { ...process.env, APEX_HEARTBEAT: process.env.APEX_HEARTBEAT || "30", ...(lastRun ? { APEX_LAST_RUN_FILE: lastRun } : {}) },
+    env: { ...process.env, APEX_HEARTBEAT: process.env.APEX_HEARTBEAT || "30" },
   });
   child.unref();
   fs.closeSync(fd);
   say(`START ${group.padEnd(14)} pid=${child.pid} at=${started} ${loadavgLine()} log=${path.relative(ROOT, log)}`);
-  // Persist whether this group actually owns Chromium. Consumers that guard
-  // browser automation must not mistake Node-only groups (tooling-fast,
-  // sweeps) for Playwright merely because test-bg launched them.
-  return { group, pid: child.pid, starttime: procStart(child.pid), bootId: BOOT_ID, log, started, browser: forward.length > 0 };
+  // `browser: true` is what apex-tools-mcp reads to keep its browser tools off this run.
+  return { group, spec, pid: child.pid, starttime: procStart(child.pid), bootId: BOOT_ID, log, started, browser: true };
 }
 
 /** The live `probe-mcp.py chrome-start` daemons on this BOX (any checkout):
@@ -520,63 +373,20 @@ export function probeChromeSessions(list = () => spawnSync("tmux", ["ls", "-F", 
   return String(out).split("\n").map((l) => l.trim()).filter((l) => /^probe-chrome-[0-9a-f]{16}$/.test(l));
 }
 
-/** The refusal text when a browser group would start beside a live MCP Chrome, else null. */
-export function chromeRefusal({ browser, force, sessions }) {
+/** The refusal text when a browser run would start beside a live MCP Chrome, else null. */
+export function chromeRefusal({ browser = true, force, sessions }) {
   if (force || !browser || !sessions.length) return null;
   return `[test-bg] REFUSED: the MCP Chrome daemon is live (tmux ${sessions.join(", ")}) — a Chrome beside Playwright starves it.\n` +
     `[test-bg] park it to about:blank, then: python3 tools/mcp/probe-mcp.py chrome-stop   (or --force, and do not trust a timeout).`;
 }
 
-/**
- * Advisory WASTE line when a browser group starts on a docs-only diff (#1714).
- * Pure: callers pass the changed path list (pick-tests' set). `--force` silences
- * it; non-browser groups never warn. Exit stays 0 — advisory until the ledger
- * shows it firing on real waste (measurement.md item 3).
- */
-export function docsOnlyWasteWarning({ groups, scripts = {}, changed = [], force = false } = {}) {
-  if (force) return null;
-  const browserGroups = (groups || []).filter((g) => /run-playwright/.test(scripts[`test:${g}`] || ""));
-  if (!browserGroups.length) return null;
-  if (!isDocsOnly(changed || [])) return null;
-  const g = browserGroups.join(", ");
-  return `WASTE: docs-only diff — group ${g} buys nothing (AGENTS.md verification table). --force to run.`;
-}
+const LOAD_LIMIT = 3;   // start()'s refusal threshold (1-min loadavg)
 
-/** Changed paths vs the deploy tip (+ dirty tree), same question pick-tests asks. */
-export function changedForWaste({ root = ROOT } = {}) {
-  let base = "";
-  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
-    try {
-      base = String(execSync(`git -C ${JSON.stringify(root)} merge-base HEAD ${JSON.stringify(ref)}`, {
-        encoding: "utf8",
-      })).trim();
-      if (base) break;
-    } catch (_) { /* try next */ }
-  }
-  try {
-    if (!base) return changedPaths(["HEAD"], { cwd: root });
-    const out = new Set(changedPaths([base], { cwd: root }));
-    for (const f of changedPaths(["HEAD"], { cwd: root })) out.add(f);
-    return [...out];
-  } catch (_) {
-    return [];
-  }
-}
-
-/** `--spec` pseudo-groups: name → spec file. Filled by main from parseTestBgArgv. */
-const SPEC_RUNS = {};
-/** package.json, plus a synthetic `test:spec-<name>` (= `npm test`) per --spec so start/waitChain treat it as a group. */
-function loadPkg() {
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-  for (const name of Object.keys(SPEC_RUNS)) pkg.scripts[`test:${name}`] = pkg.scripts.test;
-  return pkg;
-}
-
-// Inject only process/filesystem edges so start's actual ordering and registry
-// mutations can be exercised without launching or signaling any browser run.
-export function start(groups, { force = false, parallel = false, lastFailed = false } = {}, deps = {}) {
+// Inject only process/filesystem edges so start's ordering and registry
+// mutations can be exercised without launching or signalling any browser run.
+export function start(spec, { force = false } = {}, deps = {}) {
   const io = {
-    loadPkg, probeChromeSessions, changedForWaste, readState, alive, supersede, spawnGroup, updateState, say,
+    probeChromeSessions, readState, alive, spawnSpec, updateState, say,
     load1: () => os.loadavg()[0],
     mkdirLogs: () => fs.mkdirSync(LOGDIR, { recursive: true }),
     error: (...args) => console.error(...args),
@@ -584,197 +394,48 @@ export function start(groups, { force = false, parallel = false, lastFailed = fa
     now: () => new Date().toISOString(),
     ...deps,
   };
-  const pkg = io.loadPkg();
-  const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
-  if (unknown.length) {
-    io.error(`[test-bg] no such group: ${unknown.join(", ")}`);
-    io.error(`[test-bg] available: ${Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)).join(" ")}`);
-    io.exit(2);
-  }
-  const refusal = chromeRefusal({
-    browser: groups.some((g) => /run-playwright/.test(pkg.scripts[`test:${g}`])),
-    force, sessions: force ? [] : io.probeChromeSessions(),
-  });
+  const refusal = chromeRefusal({ browser: true, force, sessions: force ? [] : io.probeChromeSessions() });
   if (refusal) { io.error(refusal); io.exit(3); }
 
-  // Advisory: a browser group on a docs-only diff buys nothing (AGENTS.md table).
-  try {
-    const waste = docsOnlyWasteWarning({
-      groups, scripts: pkg.scripts, changed: io.changedForWaste(), force,
-    });
-    if (waste) io.error(waste);
-  } catch (_) { /* advisory — never block a start */ }
-
-  // Default: one group at a time. --parallel raises the cap to cores/WORKERS.
-  // --force removes the cap (legacy escape hatch).
-  const maxConcurrent = force ? Infinity : (parallel ? PARALLEL_MAX : 1);
-
-  // A busy box measures the machine, not the code (AGENTS.md §Verification 5):
-  // refuse to start a browser group above loadavg 3 unless --force. Every false
-  // red in tiny.log on 2026-09-01 was a start at loadavg > 3.
+  // A busy box measures the machine, not the code: refuse to start above
+  // loadavg 3 unless --force. Every false red in tiny.log on 2026-09-01 was a
+  // start at loadavg > 3.
   const load1 = io.load1();
   if (!force && load1 >= LOAD_LIMIT) {
-    io.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= 3 — a timeout now would measure the box, not the code.`);
+    io.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= ${LOAD_LIMIT} — a timeout now would measure the box, not the code.`);
     io.error(`[test-bg] wait for it to settle (cat /proc/loadavg), or pass --force and do not trust a timeout from this run.`);
     io.exit(3);
   }
 
-  // Count what is ALREADY on the CPU. An earlier batch still running is exactly
-  // as expensive as one started now, and is the case most likely to be forgotten
-  // — it does not appear on this command line.
-  //
-  // A group being RESTARTED is excluded because supersede() below kills it
-  // before anything is spawned, so it is not on the CPU by the time the new run
-  // is: counting it would refuse the ordinary "re-run the group I am already
-  // running" on a box that has room. The cap check runs FIRST so that a refusal
-  // never kills a live run and then declines to replace it.
-
-  if (!parallel && !force && groups.length > 1) {
-    // Sequential multi-group start without --wait: launch ONLY the first, and
-    // print the rest as the next commands. Agents should not silently fan out.
-    io.say(`sequential mode (default): starting 1 of ${groups.length} — use --wait <groups> to chain, or --parallel to fan out`);
-    const rest = groups.slice(1);
-    groups = groups.slice(0, 1);
-    io.say(`next: node tools/ci/test-bg.mjs ${rest.join(" ")}`);
-  }
-
-  // Deferred sequential groups are still live work, not replacements. Count
-  // them until this invocation actually supersedes them.
-  const running = io.readState().runs.filter((r) => io.alive(r) && !groups.includes(r.group));
-  const total = groups.length + running.length;
-  if (total > maxConcurrent) {
-    io.error(`[test-bg] REFUSING: ${total} group(s) would run at once (${groups.length} asked for` +
-      `${running.length ? `, ${running.length} already running: ${running.map((r) => r.group).join(", ")}` : ""}),` +
-      ` but concurrent cap is ${maxConcurrent === Infinity ? "unlimited (--force)" : maxConcurrent}` +
-      ` (${parallel ? `parallel, ${CORES} cores / ${WORKERS} workers` : "sequential default"}).`);
-    io.error(`[test-bg] Run them one at a time (default), or:\n`);
-    for (const g of groups) io.error(`    node tools/ci/test-bg.mjs ${g}`);
-    if (groups.length > 1) {
-      io.error(`\n    node tools/ci/test-bg.mjs --wait ${groups.join(" ")}   # sequential chain`);
-      io.error(`    node tools/ci/test-bg.mjs --parallel ${groups.join(" ")}  # concurrent (cap ${PARALLEL_MAX})`);
-    }
-    io.error(`\n(--force overrides; WORKERS=1 raises the parallel cap.)`);
+  // ONE RUN AT A TIME, --force included: a second Playwright beside the first
+  // starves both (and on the local path can attach to the first's server, so
+  // stopping one kills the other mid-flight). The check runs before anything
+  // is spawned, so a refusal never leaves a half-registered run.
+  const running = io.readState().runs.filter((r) => io.alive(r));
+  if (running.length) {
+    io.error(`[test-bg] REFUSED: a run is live (${running.map((r) => `${r.group} pid=${r.pid}`).join(", ")}) — one at a time.`);
+    io.error(`[test-bg] read it (--status, tail -f ${running.map((r) => path.relative(ROOT, r.log)).join(" ")}) or end it (--stop) first.`);
     io.exit(3);
   }
 
-  // Kill any live run of a group being restarted BEFORE its log is truncated
-  // and its replacement spawned.
-  io.supersede(groups);
   io.mkdirLogs();
-  const mode = parallel ? "parallel" : "sequential";
-  io.say(`spawning ${groups.length} group(s) mode=${mode} maxConcurrent=${maxConcurrent === Infinity ? "∞" : maxConcurrent} ${loadavgLine()}`);
-  const runs = [];
-  for (const group of groups) {
-    const r = io.spawnGroup(group, pkg, { lastFailed });
-    if (r) runs.push(r);
-  }
-  // MERGE WITH WHAT IS STILL RUNNING, don't clobber it. Starting a second batch
-  // used to replace the whole list, which ORPHANED everything already in
-  // flight: --status stopped listing it, --wait returned as soon as the new
-  // batch finished, and --stop left it running. That is not a cosmetic bug —
-  // an orphaned run keeps its workers on the CPU, so the next batch is
-  // measured against a machine that is quietly oversubscribed, and its
-  // timeouts read as test failures. Observed exactly that: `test-bg physics`
-  // then `test-bg tiny` left physics alive and invisible.
-  //
-  // A group started again SUPERSEDES its old entry — same log file. Dropping
-  // the entry is only SAFE because supersede() has already killed that process:
-  // dropping it while it still ran was how a superseded run became invisible
-  // and went on interleaving output into the log the new run truncated.
-  //
-  // The read happens INSIDE updateState, immediately before the rename, and the
-  // new runs merge by pid — a `--wait` in another shell that stamped an `ended`
-  // between our earlier read and this write keeps its stamp.
-  let prior = [];
-  io.updateState((s) => {
-    prior = s.runs.filter((r) => io.alive(r) && !groups.includes(r.group));
-    return { runs: mergeByPid(prior, runs), started: io.now(), workers: WORKERS, mode };
-  });
-  if (prior.length) io.say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);
-  // NOTHING SPAWNED IS A REAL OUTCOME, NOT A CRASH. spawnGroup() returns null
-  // when `--last-failed <group>` finds a previous run with zero failures, so
-  // after a green run this list is empty and runs[0].log threw a TypeError.
-  // verify-change.mjs reads a non-zero exit from this tool as `refused`, so a
-  // group that had simply nothing to re-run reported as a broken runner.
-  if (!runs.length) {
-    io.say(`nothing to run — every requested group had no previous failures to replay`);
-    return;
-  }
-  io.say(`tail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
-  io.say(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
+  io.say(`spawning ONE spec ${loadavgLine()}`);
+  const run = io.spawnSpec(spec);
+  // MERGE WITH WHAT IS ON DISK, don't clobber it: finished runs keep their
+  // records (and their `ended` stamps) for --status. The read happens INSIDE
+  // updateState, immediately before the rename, and the new run merges by pid.
+  io.updateState((s) => ({ runs: mergeByPid(s.runs || [], [run]), started: io.now(), workers: WORKERS, mode: "spec" }));
+  io.say(`tail:       tail -f ${path.relative(ROOT, run.log)}`);
   io.say(`check:      node tools/ci/test-bg.mjs --status`);
-  io.say(`block:      node tools/ci/test-bg.mjs --wait`);
-}
-
-const LOAD_LIMIT = 3;                  // start()'s refusal threshold (1-min loadavg)
-const CHAIN_SETTLE_MS = 10 * 60_000;   // how long a chain waits for it between groups
-
-/** Resolve true once the 1-min loadavg is under LOAD_LIMIT, false after maxMs. */
-async function settleLoad(maxMs, pollMs = 15_000) {
-  const until = Date.now() + maxMs;
-  let told = false;
-  for (;;) {
-    const load1 = os.loadavg()[0];
-    if (load1 < LOAD_LIMIT) return true;
-    if (Date.now() >= until) return false;
-    if (!told) { say(`loadavg ${load1.toFixed(2)} >= ${LOAD_LIMIT}: waiting up to ${maxMs / 60000} min for it to settle before the next group`); told = true; }
-    await new Promise((r) => setTimeout(r, pollMs));
-  }
-}
-
-/** Start each group, wait for it to finish, then start the next. */
-export async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}, deps = {}) {
-  const io = { loadPkg, start, waitForRunning, outcome, readState, settleLoad, ...deps };
-  const deadline = waitDeadlineFromMin(waitTimeoutMin);
-  const remainingMs = () => (deadline === Infinity ? CHAIN_SETTLE_MS : Math.max(0, deadline - Date.now()));
-  const pkg = io.loadPkg();
-  const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
-  if (unknown.length) {
-    console.error(`[test-bg] no such group: ${unknown.join(", ")}`);
-    process.exit(2);
-  }
-  say(`sequential --wait chain: ${groups.length} group(s) ${loadavgLine()}`);
-  let allOk = true;
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i];
-    say(`── chain ${i + 1}/${groups.length}: ${g}`);
-    // start() REFUSES at loadavg >= 3 with process.exit(3) — right for a lone
-    // start, but in a chain the previous group's own teardown keeps the 1-min
-    // average up, so group 2 was refused and every later group died with it.
-    // Wait (bounded) for the load to settle; give up cleanly, naming the rest.
-    if (!force) {
-      const settleCap = Math.min(CHAIN_SETTLE_MS, remainingMs());
-      if (settleCap <= 0 || !(await io.settleLoad(settleCap))) {
-      say(`chain stopped: loadavg ${os.loadavg()[0].toFixed(2)} still >= ${LOAD_LIMIT} — not started: ${groups.slice(i).join(" ")}`);
-      process.exitCode = 3;
-      return;
-      }
-    }
-    // Cap is 1 in sequential; force still allows starting when something else is live.
-    io.start([g], { force, parallel: false });
-    const waitCode = await io.waitForRunning({ deadline, waitTimeoutMin });
-    // A deadline leaves the owned runner alive. Keep its 124 verdict and do
-    // not classify it as a failed test or launch another group beside it.
-    if (waitCode === 124) return;
-    const o = io.outcome(io.readState().runs.find((r) => r.group === g) || { pid: -1, log: "" });
-    say(`── chain ${i + 1}/${groups.length} ${g}: ${o}`);
-    if (!/^passed/.test(o)) {
-      allOk = false;
-      if (!process.argv.includes("--keep-going")) {
-        say(`stopping chain after failure (pass --keep-going to continue)`);
-        break;
-      }
-    }
-  }
-  process.exitCode = allOk ? 0 : 1;
+  io.say(`block:      node tools/ci/test-bg.mjs --wait --timeout 45`);
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const argv = isMain ? process.argv.slice(2) : [];
-export const USAGE = `usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force] [--last-failed] [--workers <n>]
-       node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js [--force] [--workers <n>]   # one spec, same lock + log
-       node tools/ci/test-bg.mjs --wait [--timeout <min>] [group...] [--keep-going] [--force]   # exit 1 red, 124 timeout
-       node tools/ci/test-bg.mjs --status | --stop [--sweep] | --tail <group>`;
+export const USAGE = `usage: node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js [--grep <re>] [--workers <n>] [--force]   # one spec, detached
+       node tools/ci/test-bg.mjs --wait [--timeout <min>]   # exit 1 red, 124 still running
+       node tools/ci/test-bg.mjs --status | --stop | --tail <name>
+(agents do not run browser tests locally, AGENTS.md rule 5: a whole group runs on the PR via tools/ci/remote-group.mjs)`;
 let parsed;
 if (isMain) {
   strictFlags(argv, KNOWN_FLAGS, USAGE);
@@ -782,26 +443,23 @@ if (isMain) {
     console.error(`[test-bg] ${e.message}`);
     process.exit(2);
   }
+  if (parsed.specs.length > 1) { console.error(`[test-bg] ONE spec per run (got ${parsed.specs.length}); a whole group runs on the PR via tools/ci/remote-group.mjs`); process.exit(2); }
   for (const f of parsed.specs) {
     if (!fs.existsSync(path.resolve(ROOT, f))) { console.error(`[test-bg] --spec: no such file ${f}`); process.exit(2); }
-    SPEC_RUNS[specGroupName(f)] = f;
   }
   GREP = parsed.grep;
-  if (parsed.workers) { WORKERS = workerBudget({ workers: parsed.workers }).workers; PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2))); }
+  if (parsed.workers) WORKERS = workerBudget({ workers: parsed.workers }).workers;
 }
-const { waitTimeoutMin, groups, force, lastFailed, parallel } = parsed || {};
 
-if (!isMain) { /* imported for outcomeOf (tests/unit/test-bg-outcome.test.mjs) */ }
+if (!isMain) { /* imported for outcomeOf, aliveRun, parseTestBgArgv (tests, tools/mcp/apex-tools-mcp.mjs) */ }
 else if (argv.includes("--status")) status();
-else if (argv.includes("--stop")) stop({ doSweep: argv.includes("--sweep") });
-else if (argv.includes("--tail")) {
-  const g = argv[argv.indexOf("--tail") + 1];
-  const r = readState().runs.find((x) => x.group === g);
-  console.log(r ? `tail -f ${path.relative(ROOT, r.log)}` : `no run recorded for group "${g}"`);
+else if (argv.includes("--stop")) stop();
+else if (parsed.tail) {
+  const r = readState().runs.find((x) => x.group === parsed.tail || x.group === specGroupName(parsed.tail));
+  console.log(r ? `tail -f ${path.relative(ROOT, r.log)}` : `no run recorded for "${parsed.tail}"`);
 } else if (argv.includes("--wait")) {
-  if (groups.length) await waitChain(groups, { force, waitTimeoutMin });
-  else await waitForRunning({ waitTimeoutMin });
-} else if (!groups.length) {
+  await waitForRunning({ waitTimeoutMin: parsed.waitTimeoutMin });
+} else if (!parsed.specs.length) {
   console.error(USAGE);
   process.exit(2);
-} else start(groups, { force, parallel, lastFailed });
+} else start(parsed.specs[0], { force: parsed.force });

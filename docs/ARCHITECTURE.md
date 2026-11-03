@@ -913,7 +913,7 @@ its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 GLX, WGX, and TLX all ship behind the `Gfx` seam. TLX is the unset default,
 GLX is the explicit WebGL2 choice and fallback, and WGX is opt-in.
 
-Boot / pipeline / parity map: **[RENDERERS.md](RENDERERS.md)**. This section
+Boot / pipeline / parity map: **this section** (the old `RENDERERS.md` page redirected here; deleted 2026-11-03). This section
 is the module contract and GLX API sketch.
 
 ### Three backends behind one seam
@@ -1551,7 +1551,7 @@ not a per-file list).
 
 ## js/game.js — main
 
-Session flow (the four-state machine, how a start is entered, what the flag shows per mode): [FLOW.md](FLOW.md).
+Session flow (the four-state machine, how a start is entered, what the flag shows per mode): [ARCHITECTURE-MAP.md §Session flow](ARCHITECTURE-MAP.md#session-flow-menu--race--results).
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
 `tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems

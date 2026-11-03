@@ -1,0 +1,104 @@
+name: Knowledge GC
+
+# Weekly docs/notes retention (docs/plans/2026-11-03-agent-surface-reset.md §4.9,
+# D-001): `node tools/docs/knowledge-gc.mjs --apply` archives every note nothing
+# live has cited for 21 days (git mv + link repointing + NOTES-INDEX regen), and
+# the diff lands as ONE reviewed PR, never as a hook surprise. A run is a no-op
+# while an earlier gc PR is still open or when nothing is stale.
+#
+# Same shape as ratchets-fold.yml: a per-run `bot/knowledge-gc-<run_id>` branch,
+# `gh pr create` into the deploy branch, then `gh workflow run ci.yml` on that
+# branch — a PR opened with GITHUB_TOKEN starts no `pull_request` run, but
+# workflow_dispatch always does ("events triggered by the GITHUB_TOKEN will not
+# create a new workflow run ... workflow_dispatch and repository_dispatch events
+# always create workflow runs":
+# https://docs.github.com/en/actions/concepts/security/github_token).
+# gh pr create: https://cli.github.com/manual/gh_pr_create; the schedule can be
+# delayed under load (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule),
+# so the minute is off the hour and nothing depends on the exact time.
+#
+# Syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+# (on.schedule cron is UTC, runs from the default branch; permissions per job).
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"   # Mondays 07:23 UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Cite-or-archive window in days"
+        required: false
+        default: "21"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write    # the "gc PR needs a hand" issue when gh pr create is refused
+  actions: write   # workflow_dispatch of ci.yml on the gc branch (the PR's CI)
+
+concurrency:
+  group: knowledge-gc
+  cancel-in-progress: false
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job commits and pushes a per-run bot/knowledge-gc-* branch
+        with:
+          ref: claude/f1-game-project-26h3ng
+
+      - uses: ./.github/actions/setup-apex
+
+      - name: Skip while a gc PR is open
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/knowledge-gc"))] | length')"
+          echo "open gc PRs: $n"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Archive stale notes and open the PR
+        if: steps.open.outputs.n == '0'
+        env:
+          DAYS: ${{ inputs.days || '21' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$DAYS" in ''|*[!0-9]*) echo "::error::days must be a number"; exit 2 ;; esac
+          node tools/docs/knowledge-gc.mjs --apply "--days=$DAYS" | tee gc.log
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "nothing stale"; exit 0
+          fi
+          # The retention guard and the link checks must agree with the move before a PR exists.
+          node --test tests/unit/knowledge-retention.test.mjs tests/unit/docs-integrity.test.mjs
+          git config user.name "apex-knowledge-gc-bot"
+          git config user.email "noreply@anthropic.com"
+          GC_BRANCH="bot/knowledge-gc-${GITHUB_RUN_ID}"
+          git checkout -b "$GC_BRANCH"
+          git add -A docs
+          git commit -m "docs(notes): archive notes nothing live cites (knowledge-gc)
+
+          $(cat gc.log)"
+          git push origin "$GC_BRANCH"
+          PR_TITLE="docs(notes): weekly knowledge-gc archive"
+          PR_BODY="Scheduled retention pass (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001): $(grep -c '^archive ' gc.log || true) note(s) nothing live cited for $DAYS days moved to docs/archive/notes/ with their links repointed; NOTES-INDEX regenerated. Opened by .github/workflows/knowledge-gc.yml on branch \`$GC_BRANCH\`, which dispatched ci.yml on that head. Cite a note from the doc, skill, tool or test that uses it to keep it live."
+          if gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head "$GC_BRANCH" \
+            --title "$PR_TITLE" --body "$PR_BODY" 2> pr.err; then
+            PR_OK=1
+          else
+            PR_OK=0; cat pr.err
+          fi
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$GC_BRANCH" \
+            || echo "::warning::ci.yml dispatch failed; dispatch it on $GC_BRANCH by hand"
+          if [ "$PR_OK" = 0 ]; then
+            export ISSUE_TITLE="knowledge-gc PR needs a hand ($GC_BRANCH)"
+            NOTE="The weekly knowledge-gc pushed \`$GC_BRANCH\` ($(git rev-parse --short HEAD)) but \`gh pr create\` was refused: $(head -1 pr.err). Open the PR from \`$GC_BRANCH\` by hand (its ci.yml run was dispatched), or enable Settings > Actions > General > \"Allow GitHub Actions to create and approve pull requests\". Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            NUM="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq '[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty')"
+            if [ -n "$NUM" ]; then gh issue comment "$NUM" --repo "$GITHUB_REPOSITORY" --body "$NOTE"
+            else gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "$NOTE"; fi
+            echo "::error::gc PR not opened: $(head -1 pr.err) — see the issue \"$ISSUE_TITLE\""
+            exit 1
+          fi

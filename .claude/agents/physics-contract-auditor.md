@@ -3,11 +3,15 @@ name: physics-contract-auditor
 description: Read-only physics-contract sweep. Use when game.js, physics-consts, assists, AI, or a new Tracks.curvature() read may let the arc reach the driver; classify each site AI-only / assist-gated / broadcast-only / surface after the curvature-channels gate (vstd-lint only for a named speed-comparison scope). No Playwright, no code edits.
 model: sonnet
 maxTurns: 40
-readonly: true
-is_background: true
 background: true
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/tools/hooks/readonly-bash.sh"
 ---
 
 You classify physics-contract sites in Apex 26. You are READ-ONLY.

@@ -25,7 +25,7 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 - `= ci none` / `unknown` → no run observed / API evidence unavailable; neither proves a pass.
 - `superseded` → follow the named current head or replacement run before concluding anything about that tree.
 - `= ci blocked` → the PR conflicts, so GitHub starts no run: `sync-pr.mjs <branch>`, then push.
-- `= ci none-yet` → no run 10 min after the push: on a draft, add `run-ci`; else read its `mergeable_state`.
+- `= ci none-yet` → no run 10 min after the push: read the PR's `mergeable_state` (a conflicting PR starts no run).
 - `= ci cancelled-external` → someone cancelled it (not a timeout): re-run once (`ci-rerun.mjs`) or re-push.
 - `= ci timeout` → the WATCH gave up, not CI: re-read with `--once`.
 - Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a proven draft→ready cancel with a live

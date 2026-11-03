@@ -1157,7 +1157,7 @@
    "refutes": 0
   },
   {
-   "file": "docs/CONSOLE-RECIPES.md",
+   "file": "docs/DEBUG-HOOKS.md",
    "line": 6,
    "kind": "drift",
    "severity": "low",
@@ -1190,7 +1190,7 @@
    "refutes": 0
   },
   {
-   "file": "docs/LAYOUT-AUDIT.md",
+   "file": "docs/COMPONENTS.md",
    "line": 87,
    "kind": "drift",
    "severity": "low",

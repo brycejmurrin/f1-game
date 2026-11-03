@@ -11,8 +11,6 @@
       "mcp__claude-code-remote",
       "mcp__Context7",
       "mcp__Claude_Docs",
-      "mcp__MDN",
-      "mcp__mcp_browserstack_com",
       "mcp__plugin_browser-use_browser-use",
       "Bash",
       "Read",
@@ -43,96 +41,6 @@
       "ArtifactComments",
       "ArtifactData",
       "LSP",
-      "Bash(npm run test*)",
-      "Bash(npm run test:guards)",
-      "Bash(npm test *)",
-      "Bash(npm run gen)",
-      "Bash(npm run gen*)",
-      "Bash(npm install)",
-      "Bash(npm ci)",
-      "Bash(npx playwright install *)",
-      "Bash(npx serve *)",
-      "Bash(node --test *)",
-      "Bash(node --check *)",
-      "Bash(node -e *)",
-      "Bash(node tools/ci/ready-gate.mjs *)",
-      "Bash(node tools/ci/merge-gate.mjs *)",
-      "Bash(node tools/ci/ci-watch.mjs *)",
-      "Bash(node tools/ci/archive-sessions.mjs *)",
-      "Bash(node tools/ci/dispatch.mjs --plan*)",
-      "Bash(node tools/ci/pr-board.mjs *)",
-      "Bash(node tools/ci/session-status.mjs *)",
-      "Bash(node tools/ci/session-transcript.mjs *)",
-      "Bash(node tools/ci/wait-for.mjs *)",
-      "Bash(node tools/ci/needs-sync.mjs *)",
-      "Bash(node tools/ci/sync-pr.mjs *)",
-      "Bash(git push -u origin cursor/*)",
-      "Bash(git push origin cursor/*)",
-      "Bash(node tools/ci/verify-change.mjs *)",
-      "Bash(node tools/ci/pick-tests.mjs *)",
-      "Bash(node tools/ci/select-specs.mjs *)",
-      "Bash(node tools/ci/test-bg.mjs *)",
-      "Bash(node tools/ci/test-solo.mjs *)",
-      "Bash(node tools/ci/tooling-fast.mjs *)",
-      "Bash(node tools/ci/twinned-specs.mjs *)",
-      "Bash(node tools/ci/bump-cache.mjs *)",
-      "Bash(node tools/ci/deploy.mjs --plan*)",
-      "Bash(node tools/ci/deploy.mjs --gate-only*)",
-      "Bash(node tools/ci/sync-pr.mjs * --plan*)",
-      "Bash(node tools/track/verify-track.cjs *)",
-      "Bash(node tools/track/graph-parity.cjs *)",
-      "Bash(node tools/gen/gen-shell.mjs *)",
-      "Bash(node tools/gen/gen-test-groups.mjs *)",
-      "Bash(node tools/gen/gen-*.mjs *)",
-      "Bash(node tools/gen/assets.mjs verify)",
-      "Bash(node tools/check/*)",
-      "Bash(node tools/shot/*)",
-      "Bash(node tools/ui/*)",
-      "Bash(node tools/gfx/wgx-validate.mjs *)",
-      "Bash(node tools/gfx/gfx-probe.mjs *)",
-      "Bash(bash tools/env/cloud-agent-install.sh)",
-      "Bash(bash tools/env/mirror-skills.sh *)",
-      "Bash(tools/mcp/apex-tools-mcp.sh call *)",
-      "Bash(git status *)",
-      "Bash(git diff *)",
-      "Bash(git log *)",
-      "Bash(git branch *)",
-      "Bash(git show *)",
-      "Bash(git add *)",
-      "Bash(git commit *)",
-      "Bash(git fetch *)",
-      "Bash(git checkout *)",
-      "Bash(git switch *)",
-      "Bash(git stash list*)",
-      "Bash(git stash show *)",
-      "Bash(git stash push *)",
-      "Bash(git stash pop*)",
-      "Bash(git ls-remote *)",
-      "Bash(git rev-list *)",
-      "Bash(git merge-tree *)",
-      "Bash(git cat-file *)",
-      "Bash(git worktree *)",
-      "Bash(git merge *)",
-      "Bash(git rev-parse *)",
-      "Bash(git ls-files *)",
-      "Bash(git remote *)",
-      "Bash(git for-each-ref *)",
-      "Bash(grep *)",
-      "Bash(rg *)",
-      "Bash(cat *)",
-      "Bash(ls *)",
-      "Bash(wc *)",
-      "Bash(find *)",
-      "Bash(head *)",
-      "Bash(tail *)",
-      "Bash(sed -n *)",
-      "Bash(sort *)",
-      "Bash(jq *)",
-      "Bash(diff *)",
-      "Bash(cat /proc/loadavg)",
-      "Bash(ps *)",
-      "Bash(curl http://127.0.0.1:3*)",
-      "Bash(curl http://localhost:3*)",
       "mcp__Google_Drive__search_files",
       "mcp__Google_Drive__read_file_content",
       "mcp__Google_Drive__get_file_metadata",
@@ -147,6 +55,12 @@
       "mcp__TinyFish__get_run",
       "mcp__TinyFish__list_runs"
     ],
+    "ask": [
+      "Bash(gh api * -X DELETE *)",
+      "Bash(gh api * --method DELETE *)",
+      "Bash(gh workflow run *)",
+      "mcp__github__actions_run_trigger"
+    ],
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f *)",
@@ -157,16 +71,32 @@
       "Bash(git push * claude/f1-game-project-26h3ng*)",
       "Bash(git push *:claude/f1-game-project-26h3ng*)",
       "Bash(git push *refs/heads/claude/f1-game-project-26h3ng*)",
+      "Bash(git push *--no-verify*)",
+      "Bash(git push --no-verify *)",
+      "Bash(git commit *--no-verify*)",
+      "Bash(git commit -n *)",
+      "Bash(git config * core.hooksPath*)",
+      "Bash(git config core.hooksPath*)",
+      "Bash(git config --global *)",
+      "Bash(gh run cancel *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr ready *)",
+      "Bash(pkill -f *)",
+      "Bash(killall *)",
       "Bash(node tools/ci/bump-cache.mjs --apply*)",
       "Bash(node tools/gen/assets.mjs bake*)",
       "Bash(node tools/track/rotate-markings.cjs --write*)",
-      "mcp__github__delete_file",
+      "mcp__github__merge_pull_request",
+      "mcp__github__enable_pr_auto_merge",
+      "mcp__github__disable_pr_auto_merge",
       "mcp__github__update_pull_request_branch",
+      "mcp__github__delete_file",
       "mcp__github__create_repository",
       "mcp__github__fork_repository",
       "mcp__github__push_files",
       "mcp__github__create_or_update_file",
       "mcp__github__create_branch",
+      "mcp__apex-tools__apex_codex_control",
       "Skill(agent-protocols:ship)",
       "Skill(agent-protocols:build)",
       "Skill(agent-protocols:plan)",
@@ -184,22 +114,8 @@
       "mcp__Google_Drive__trash_file",
       "mcp__Google_Drive__update_file",
       "mcp__Google_Drive__create_file",
-      "mcp__Google_Drive__copy_file",
-      "Bash(git config core.hooksPath*)",
-      "Bash(git config --global *)"
+      "mcp__Google_Drive__copy_file"
     ]
-  },
-  "enabledPlugins": {
-    "agent-army@synced": false,
-    "agent-context-kit@synced": false,
-    "cc-bootstrapper@synced": false,
-    "claude-code-toolkit@synced": false,
-    "claude-context-optimizer@synced": false,
-    "claude-cursor-orchestration@synced": false,
-    "claude-review-loop@synced": false,
-    "cowork-plugin-management@synced": false,
-    "desktop-commander@synced": false,
-    "handoff@synced": false
   },
   "worktree": {
     "baseRef": "head"
@@ -223,6 +139,11 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"",
             "timeout": 300
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" restore",
+            "timeout": 10
           }
         ]
       }
@@ -247,12 +168,6 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
             "timeout": 30,
             "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
-            "timeout": 30,
-            "onFailure": "block"
           }
         ]
       },
@@ -268,7 +183,7 @@
         ]
       },
       {
-        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
+        "matcher": "^mcp__github__(merge_pull_request|enable_pr_auto_merge|disable_pr_auto_merge|update_pull_request|update_pull_request_branch|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
         "hooks": [
           {
             "type": "command",
@@ -284,13 +199,12 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-contract.py\"",
-            "timeout": 10,
-            "onFailure": "block"
+            "timeout": 10
           }
         ]
       },
       {
-        "matcher": "^(Agent|mcp__claude-code-remote__create_session)$",
+        "matcher": "Agent",
         "hooks": [
           {
             "type": "command",
@@ -299,30 +213,9 @@
             "onFailure": "block"
           }
         ]
-      },
-      {
-        "matcher": "^mcp__claude-code-remote__create_session$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
-            "timeout": 5,
-            "onFailure": "block"
-          }
-        ]
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": "mcp__claude-code-remote__get_session",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-page.py\"",
-            "timeout": 10
-          }
-        ]
-      },
       {
         "matcher": "Grep|Bash",
         "hooks": [
@@ -340,11 +233,6 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit.sh\"",
             "timeout": 90
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
-            "timeout": 10
           }
         ]
       },
@@ -358,35 +246,9 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-guard.sh\"",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/skill-hint.py\"",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ui-fixer-uncommitted.sh\"",
-            "timeout": 5
-          },
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
@@ -397,7 +259,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|agent-surface-reviewer|bloat-auditor|physics-contract-auditor|ci-red-triage)$",
+        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|surface-reviewer|physics-contract-auditor|ci-red-triage|worker)$",
         "hooks": [
           {
             "type": "command",
