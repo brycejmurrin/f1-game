@@ -319,6 +319,10 @@ var GameAudioRadioFx = (function () {
       return new Promise((res, rej) => host.context().decodeAudioData(ab, res, rej));
     }
     let voicesLive = 0;
+    // Each on-air clip's silent retire (count + nodes, no host calls). A closed
+    // context never fires onended, so resetContext() retires them here; the
+    // engine's dropHolds() already drops the focus and spotter holds (#4536).
+    const _liveVoices = new Set();
     const CLIP_OVERLAP_S = 0.05;
     /** Play decoded clips back to back from `at` (numbers in `parts` are pauses,
      *  in seconds). Returns { end, stop } or null when nothing can play. */
@@ -369,16 +373,22 @@ var GameAudioRadioFx = (function () {
         spotterDuck = false;
         if (host.setSpotterDuck) host.setSpotterDuck(false);
       };
+      const retire = () => {
+        if (dead) return;
+        dead = true; voicesLive--; _liveVoices.delete(retire);
+        for (const s of srcs) { try { s.disconnect(); } catch (e) { /* gone */ } }
+        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
+      };
       const teardown = () => {
         if (dead) return;
-        dead = true; voicesLive--;
+        dead = true; voicesLive--; _liveVoices.delete(retire);
         if (host.setVoiceFocusHold) host.setVoiceFocusHold(false, focusOwner);
         releaseSpotterDuck();
         for (const s of srcs) { try { s.disconnect(); } catch (e) { /* gone */ } }
         for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
       };
       if (!srcs.length) { dead = true; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } } return null; }
-      voicesLive++;
+      voicesLive++; _liveVoices.add(retire);
       // Audio-clock automation shares the BufferSource schedule, including
       // suspended contexts. No wall timer can promote a future voice early.
       if ((!o || o.channel !== "coach") && host.setVoiceFocusSpan) host.setVoiceFocusSpan(focusOwner, t0, t, focusContext);
@@ -618,6 +628,7 @@ var GameAudioRadioFx = (function () {
       radioFxMax: () => RADIO_FX_MAX,
       resetContext() {
         radioStingStop();
+        for (const r of [..._liveVoices]) r();
         for (const w of _watchClips) w.teardown();
         _watchClips.clear();
         for (const ent of _voiceChains.values()) dropVoiceChain(ent);
