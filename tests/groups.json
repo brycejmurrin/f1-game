@@ -57,6 +57,8 @@
     "// ApexBridge (phone <-> Claude over one GitHub issue): ?bridge=<n> + device token only, OWNER apex-cmd comments after its hello, ETag 304 polls, __apex allowlist (no save/career/net), reply cap. VM + fake fetch, ~0.1 s.",
     "tests/unit/apex-bridge.test.mjs",
     "tests/unit/apex-cam-fallback.test.mjs",
+    "// VM-executed js/agent/apex-lifecycle.js with a stub DOM: context loss counted when created before #game (#4367), ~0.1 s.",
+    "tests/unit/apex-lifecycle.test.mjs",
     "// Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.",
     "tests/unit/apex-memory.test.mjs",
     "// __apex.physState() with G.track null (stepped rebuild / flyby drop): {error:\"no track\"}, no throw (audit4 B3). ~0.1 s.",

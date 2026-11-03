@@ -2507,3 +2507,14 @@ test("pack models/ has no orphan bins outside the manifest index",
   const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
   assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
 });
+
+test("diffRoleIndex treats a null manifest or role index as empty, never throws (#4356)", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  const noLive = diffRoleIndex(idx, null);
+  assert.deepEqual(noLive.indexOnly, ["a", "b"]);
+  assert.deepEqual(noLive.liveOnly, []);
+  assert.deepEqual(noLive.badRole, ["b:bogus"]);
+  const noIndex = diffRoleIndex(null, { models: { c: {} } });
+  assert.deepEqual(noIndex, { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex(undefined, undefined), { indexOnly: [], liveOnly: [], badRole: [] });
+});

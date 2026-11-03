@@ -344,3 +344,26 @@ test("stall: lighter renderer already latched skips a second reload", () => {
   assert.equal(h.calls.reload, 0);
   assert.equal(h.LoopHealth.state().stall.act, "budget");
 });
+
+test("stallWatch(false) writes the explicit OFF switch, not a key removal (#4369)", () => {
+  const store = new Map([["apex26.stallWatch", "0"]]);
+  const ctx = {
+    performance: { now: () => 0 }, Date: { now: () => 0 }, Math, console,
+    location: { search: "" },
+    navigator: { webdriver: false, userAgent: "player" },   // auto default = ON
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => { store.set(k, String(v)); },
+      removeItem: (k) => { store.delete(k); },
+    },
+  };
+  vm.createContext(ctx);
+  seedLog(ctx);
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
+  const LH = ctx.LoopHealth;
+  assert.equal(LH.stallWatch(), false, "the stored 0 turns it off");
+  assert.equal(LH.stallWatch(true), true);
+  assert.equal(store.get("apex26.stallWatch"), "1");
+  assert.equal(LH.stallWatch(false), false, "false must turn the watchdog off outside automation");
+  assert.equal(store.get("apex26.stallWatch"), "0");
+});
