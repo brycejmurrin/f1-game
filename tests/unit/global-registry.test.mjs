@@ -141,7 +141,8 @@ const KNOWN_EXTERNAL_READS = {
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
-  "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)
+  "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler", "GarageCameraOptions", "GarageEntryCameraData"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0); camera-options pack is lazy (CAMERA_OPTION_FILES), not on the manifest eager/LAZY_RACE lists
+  "js/garage/setup-camera.js": ["GarageCameraOptions"], // typeof-guarded override layer; lands with ensureGarageData / ScriptLoader, never an eager <script>
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
   "js/race/session-records.js": ["__APEX_BUILD"], // TT input-ghost meta stamps the same shell build
   "js/track/build-client.js": ["__APEX_BUILD"],     // stamps the build Worker's URL like loadBackendScripts

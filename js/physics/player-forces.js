@@ -264,10 +264,11 @@ const PlayerForces = (function () {
       const bF = TyreModel.brakeFront(beta, loadF, loadR) * (bb ? bb.f : 1);
       const bR = beta * (bb ? bb.r : 1);
       const capG = longBudget * surfMu * kerbGrip * tyreMu * marbleMu * aeroGrip;
+      // aReqR throttle demand is a fraction of the weather-scaled budget, like axFracR above (#4336).
       const ow = Vehicle.wheel;
       ow.dt = dt; ow.braking = braking; ow.thrOn = thrOn;
       ow.aReqF = -pedal * bF * longBudget;
-      ow.aReqR = thrOn ? axThrDemand * LONG_GRIP : -(pedal * bR + engine) * longBudget;
+      ow.aReqR = thrOn ? axThrDemand * longBudget : -(pedal * bR + engine) * longBudget;
       ow.muLongF = capG * tyreAx.f; ow.muLongR = capG * tyreAx.r;
       ow.slipF = slipF; ow.slipR = slipR; ow.csFront = CS_FRONT; ow.csRear = csR;
       ow.muLatF = muF; ow.muLatR = muR;
