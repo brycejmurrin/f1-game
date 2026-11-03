@@ -3037,7 +3037,6 @@
         "tests/unit/livery-paint-zones.test.mjs"
       ],
       "createGarage": [
-        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
       ],
       "draw": [
@@ -7904,8 +7903,15 @@
       ]
     },
     "js/garage/departure-wheels.js": {
+      "accumulateTravel": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "create": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
+      ],
+      "spinRadians": [
+        "tests/unit/garage-arrival.test.mjs"
       ]
     },
     "js/garage/entrance-motion.js": {
