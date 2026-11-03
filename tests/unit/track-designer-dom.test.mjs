@@ -3118,3 +3118,24 @@ test("terrain library search filters without editing; landscapes place, undo and
   for (const theme of ["fjord", "badlands", "redwood"]) { by("theme", theme).click(); assert.equal(b.D.state().design.theme, theme); }
   b.D.close();
 });
+
+test("a resize that tucks the foot under the rail keeps keyboard focus on SHARE & FILES (#4600)", () => {
+  // The browser blurs a focused node that is moved; the mini DOM does not, so the move is modelled here.
+  const b = bootScreen(), { ctx } = b, doc = b.dom.document;
+  let onResize = null;
+  ctx.addEventListener = (type, fn) => { if (type === "resize") onResize = fn; };
+  ctx.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  ctx.innerWidth = 390; ctx.innerHeight = 844;                   // portrait: the foot stays under the body
+  openGreen(b);
+  assert.equal(b.root.dataset.foot, "out");
+  const body = b.root.querySelector(".td-body"), add = body.appendChild;
+  body.appendChild = (c) => { if (c.contains && c.contains(doc.activeElement)) doc.activeElement = doc.body; return add(c); };
+  const trigger = walk(b.root).find((e) => e.dataset.role === "file-menu").children[0];
+  trigger.focus();
+  ctx.innerWidth = 844; ctx.innerHeight = 390;                   // the late resize lands after the IMPORT press focused it
+  assert.equal(typeof onResize, "function", "seatFoot listens for resize");
+  onResize();
+  assert.equal(b.root.dataset.foot, "in", "844x390 tucks the foot into the body");
+  assert.equal(doc.activeElement, trigger, "the move hands focus back to the chip that had it");
+  b.D.close();
+});
