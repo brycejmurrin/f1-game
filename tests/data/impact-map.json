@@ -17844,6 +17844,7 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-lane-collapse-backstop.test.mjs",
         "tests/unit/hud-survey.test.mjs"
       ]
     },
@@ -17872,13 +17873,15 @@
         "tests/unit/hud-radio-slot.test.mjs"
       ],
       "announceLaneTick": [
-        "tests/unit/hud-feel.test.mjs"
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-lane-collapse-backstop.test.mjs"
       ],
       "create": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-lane-collapse-backstop.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
