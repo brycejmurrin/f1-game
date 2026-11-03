@@ -154,14 +154,16 @@ test.describe("WebGL renderer probes", () => {
     expect(typeof ls.exposure).toBe("number");
 
     await page.evaluate(() => window.__apex.setTimeOfDay("day"));
-    // Wait for day lighting to settle (numLights typically drops to 0)
+    // Monza day has zero floodlights (the strict sibling test below pins it):
+    // wait for 0, and let a timeout fail. The old .catch swallowed it, so a day
+    // mode that never dropped its lights still passed as long as night had
+    // more (#4361).
     await page.waitForFunction(
       () => window.__apex.lightState().numLights === 0,
       null, { polling: 100, timeout: LIGHT_MS }
-    ).catch(() => {
-      // Some tracks may keep minimal lights even in day — proceed and capture dayLights
-    });
+    );
     const dayLights = await page.evaluate(() => window.__apex.lightState().numLights);
+    expect(dayLights, "monza day: no floodlights").toBe(0);
 
     await page.evaluate(() => window.__apex.setTimeOfDay("night"));
     // Night should activate floodlights
@@ -175,8 +177,9 @@ test.describe("WebGL renderer probes", () => {
   });
 
   test("day mode has zero floodlights (monza)", async ({ page }) => {
-    // Merged from the former lightstate.spec.js: a strict day==0 check (the
-    // night-transition test above only asserts night > day, hedged with a catch).
+    // Merged from the former lightstate.spec.js: a strict day==0 check from a
+    // fresh load (the night-transition test above reaches day after its shape
+    // checks).
     await loadRace(page);
     await page.evaluate(() => window.__apex.setTimeOfDay("day"));
     await page.waitForFunction(() => window.__apex.lightState().numLights === 0, null, { polling: 100, timeout: LIGHT_MS });
