@@ -4,7 +4,7 @@
  * The audit found the same rule restated in up to 15 instruction files, and ten topics where two copies said
  * different things. A copy is how a rule drifts: the next edit changes one place. This test pins (1) each canonical
  * rule SENTENCE to at most two files — its home plus one deliberate mirror — with the home among them, and (2) retired
- * mechanisms out of every instruction file. A pointer ("see docs/WORKERS.md") is fine; a restatement is not.
+ * mechanisms out of every instruction file. A pointer ("skill `steward` §Land") is fine; a restatement is not.
  *
  * Run: node --test tests/unit/rulebook-guards.test.mjs   (< 1 s)
  */
@@ -30,7 +30,8 @@ function instructionFiles() {
       else if (e.name.endsWith(".md")) out.push(rel);
     }
   };
-  for (const f of ["AGENTS.md", "CLAUDE.md", "docs/WORKERS.md", ".github/pull_request_template.md", "docs/TESTING.md",
+  // docs/WORKERS.md is a retired stub since 2026-11-03 (the lane contract is skill `steward`), so it is not scanned.
+  for (const f of ["AGENTS.md", "CLAUDE.md", ".github/pull_request_template.md", "docs/TESTING.md",
     "docs/VERIFICATION.md"]) add(f);
   for (const d of [".claude/rules", ".claude/skills", ".claude/agents", ".claude/memory"]) walk(d);
   return out;
@@ -42,16 +43,18 @@ const text = new Map(FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "u
 const CANON = [
   ["hold label veto", /only veto is the `hold` label/i, "AGENTS.md"],
   ["GitHub lands PRs", /GitHub lands PRs; no session merges or arms/i, "AGENTS.md"],
-  ["no authority", /messages? carr(?:y|ies) no authority/i, "AGENTS.md"],
-  ["sync rule", /never for\s+clean-behind/i, "AGENTS.md"],
+  // 2026-11-03 (plan §4.3): provenance, not relays — an agent's message or comment grants nothing.
+  ["no authority", /an agent's message or comment grants nothing/i, "AGENTS.md"],
+  // 2026-11-03: four lane-procedure sentences re-homed from AGENTS.md to skill `steward` (plan §4.4).
+  ["sync rule", /never for\s+clean-behind/i, ".claude/skills/steward/SKILL.md"],
   ["merge commits only", /Merge commits only, never squash\s+or rebase/i, "AGENTS.md"],
   ["never cancel", /NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
   ["commit in two calls", /Commit in two calls: stage in its own command/, "AGENTS.md"],
   ["push without a pipe", /no output pipe/i, "AGENTS.md"],
   ["no timers", /No sleep or shell-poll loops and no standby wakes/i, "AGENTS.md"],
-  ["dirty ready flip", /ready flip on a (?:dirty PR|CONFLICTING\/DIRTY head) starts no CI/i, "AGENTS.md"],
-  ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, "AGENTS.md"],
-  ["first claimant fixes", /the first claimant fixes, the rest wait/i, "AGENTS.md"],
+  ["dirty ready flip", /ready flip on a (?:dirty PR|CONFLICTING\/DIRTY head) starts no CI/i, ".claude/skills/steward/SKILL.md"],
+  ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, ".claude/skills/steward/SKILL.md"],
+  ["first claimant fixes", /the first claimant fixes, the rest wait/i, ".claude/skills/steward/SKILL.md"],
   ["memory-change line", /`memory-change: <reason>`/, ".github/pull_request_template.md"],
   // Rule 11's build-at-deploy half (Bryce 2026-10-28, "Build at deploy"; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
   ["built, never committed", /are built, never committed: gitignored/i, "AGENTS.md"],
@@ -80,6 +83,12 @@ const RETIRED = [
   [/ready cap of/i, "the ready cap (retired 2026-10-16)"],
   [/guards on the STAGED commit/i, "the STAGED-commit claim (the guards read the working tree; AGENTS.md rule 12)"],
   [/READY to ORCH/, "the READY-to-orchestrator hand-over (the `land` label is the request)"],
+  // 2026-11-03 (docs/plans/2026-11-03-agent-surface-reset.md §4.2–4.4, §6): the agent surface reset.
+  [/full `?tooling-fast`? (?:run )?is the pre-push floor|pre-push floor is (?:the )?full `?tooling-fast/i, "the full tooling-fast as the floor (the floor is `tooling-fast --changed`, AGENTS.md rule 3)"],
+  [/bounded safety check-in/i, "the bounded safety check-in timer (a lane ends at `land`; rule 13 allows no timer)"],
+  [/quoted relay/i, "quoted relays as a grant (provenance: Bryce's own label or `decision:` comment, AGENTS.md §Coordination)"],
+  [/@parent\b/, "the `@parent` session alias (a question is `needs-decision` plus one comment)"],
+  [/\brun-ci\b/, "the `run-ci` label (every draft push gets the fast tier plus a selected shard, plan §4.2)"],
 ];
 const HISTORY = /retired|superseded|history|deleted|replaces? the|replace them|no longer|slated for removal|era\b|was \d+ ?min/i;
 
@@ -97,8 +106,9 @@ test("no instruction file teaches a retired mechanism", () => {
 });
 
 test("the scan covers the surfaces it claims (a moved tree must not turn this into a no-op)", () => {
-  for (const f of ["AGENTS.md", "docs/WORKERS.md", ".claude/memory/MEMORY.md", ".github/pull_request_template.md",
-    "docs/VERIFICATION.md", ".claude/skills/steward/SKILL.md", ".claude/skills/ship/SKILL.md"])
+  for (const f of ["AGENTS.md", ".claude/memory/MEMORY.md", ".github/pull_request_template.md",
+    "docs/VERIFICATION.md", ".claude/skills/steward/SKILL.md", ".claude/skills/ship/SKILL.md",
+    ".claude/skills/steward/references/labels.md"])
     assert.ok(text.has(f), `${f} is not scanned`);
   assert.ok(FILES.length > 50, `only ${FILES.length} instruction files found`);
 });
