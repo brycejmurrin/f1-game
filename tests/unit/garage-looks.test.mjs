@@ -113,7 +113,7 @@ test("new room looks rebuild a live bay and restore its stock shell", () => {
     return shell;
   };
   const stock = shellAfterDraw();
-  for (const id of ["porcelain", "heritage", "endurance"]) {
+  for (const id of ["porcelain", "heritage", "endurance", "rainready", "qualify"]) {
     assert.equal(GaragePrims.setLook(id), true, `${id} is selectable`);
     const shell = shellAfterDraw();
     assert.notDeepEqual(shell.col, stock.col, `${id} changes the current room`);
@@ -123,6 +123,21 @@ test("new room looks rebuild a live bay and restore its stock shell", () => {
     GaragePrims.setLook("stock");
     assert.deepEqual(shellAfterDraw().col, stock.col, `${id} leaves no colour override behind`);
   }
+});
+
+test("rainready and qualify are distinct player-selectable room looks", () => {
+  const { GaragePrims } = harness();
+  assert.ok(GaragePrims.LOOK_IDS.includes("rainready"));
+  assert.ok(GaragePrims.LOOK_IDS.includes("qualify"));
+  assert.ok(GaragePrims.LOOK_IDS.includes("heritage"), "heritage stays the classic works look");
+  assert.equal(GaragePrims.LOOKS.rainready.label, "Rain ready");
+  assert.equal(GaragePrims.LOOKS.qualify.label, "Qualifying night");
+  const rain = shellMean(build("rainready").plain[0]);
+  const quali = shellMean(build("qualify").plain[0]);
+  const herit = shellMean(build("heritage").plain[0]);
+  assert.ok(Math.hypot(...rain.map((v, i) => v - quali[i])) > 0.02, "rainready vs qualify");
+  assert.ok(Math.hypot(...rain.map((v, i) => v - herit[i])) > 0.02, "rainready vs heritage");
+  assert.ok(Math.hypot(...quali.map((v, i) => v - herit[i])) > 0.02, "qualify vs heritage");
 });
 
 test("a look's upper wall takes its panel colour, not the accent stripe", () => {

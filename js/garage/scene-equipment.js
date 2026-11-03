@@ -111,13 +111,20 @@ function tyreTrolley(out, x, z, comps, c1) {
     tube(out, [x + sx * 0.42, 0.58, z + 1.3], [x + sx * 0.42, 0.94, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
   }
   tube(out, [x - 0.42, 0.94, z + 1.3], [x + 0.42, 0.94, z + 1.3], 0.03, RUBBER, 8);
+  // End uprights (Blender tyre-rack): keep blankets clear of the walk aisle.
+  for (const ez of [-1.3, 1.3]) {
+    tube(out, [x - 0.42, 0.58, z + ez], [x - 0.42, 1.05, z + ez], 0.022, STEEL, 6, MAT.METAL);
+    tube(out, [x + 0.42, 0.58, z + ez], [x + 0.42, 1.05, z + ez], 0.022, STEEL, 6, MAT.METAL);
+  }
   for (let i = 0; i < 4; i++) {
     const wz = z - 1.0 + i * 0.68;
     tube(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);
     tube(out, [x - 0.15, 0.44, wz], [x + 0.15, 0.44, wz], 0.36, scale(c1, 0.6), 14);   // blanket
     tube(out, [x - 0.10, 0.44, wz], [x - 0.20, 0.44, wz], 0.20, scale(STEEL, 0.9), 10, MAT.METAL);   // rim face
     block(out, x + 0.17, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
+    // Blanket heater lead + small thermostat puck on the tyre face.
     hose(out, [[x + 0.19, 0.30, wz], [x + 0.30, 0.20, wz + 0.1], [x + 0.30, 0.20, z + 1.45]], 0.012, HOSE, 5);
+    block(out, x - 0.19, 0.58, wz, 0.03, 0.03, 0.04, dark);
   }
   block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, dark);                     // blanket controller
   for (let l = 0; l < 4; l++) block(out, x + 0.30 + (l % 2 ? 0.04 : -0.04), 0.50 + (l < 2 ? 0.04 : -0.02), z + 1.565, 0.012, 0.012, 0.005, l % 3 ? [0.2, 0.9, 0.3] : [0.9, 0.5, 0.1]);   // status LEDs
@@ -227,22 +234,53 @@ function floorFan(out, x, z, c1) {
   tube(out, [x - 0.08, cy, z], [x + 0.08, cy, z], 0.055, DARK, 10);
 }
 function serviceRig(out, x, z, c1) {
+  // Fuel / air service cart (Blender fuel-air-rig-px): twin bottles, dual gauges, retract hose.
   block(out, x, 0.66, z, 0.42, 0.50, 0.36, scale(c1, 0.5));
   block(out, x, 0.18, z, 0.41, 0.025, 0.35, STEEL);
   block(out, x, 1.18, z, 0.44, 0.03, 0.38, STEEL);
-  cyl(out, x, 1.21, z, 0.14, 0.40, scale(STEEL, 0.75), 12, MAT.METAL);
-  cyl(out, x, 1.61, z, 0.04, 0.09, STEEL, 8, MAT.METAL);
-  tube(out, [x, 1.71, z - 0.05], [x, 1.71, z + 0.05], 0.014, [0.75, 0.15, 0.10], 6);
-  block(out, x - 0.43, 0.97, z, 0.012, 0.14, 0.18, DARK);
-  tube(out, [x - 0.44, 1.0, z - 0.06], [x - 0.465, 1.0, z - 0.06], 0.065, STEEL, 12, MAT.METAL);
-  tube(out, [x - 0.465, 1.0, z - 0.06], [x - 0.47, 1.0, z - 0.06], 0.05, [0.85, 0.85, 0.82], 12);
-  block(out, x - 0.476, 1.01, z - 0.06, 0.005, 0.025, 0.006, [0.75, 0.15, 0.10]);
+  for (const sx of [-0.14, 0.14]) {
+    cyl(out, x + sx, 1.21, z, 0.11, 0.38, scale(STEEL, sx < 0 ? 0.75 : 0.55), 10, MAT.METAL);
+    cyl(out, x + sx, 1.59, z, 0.035, 0.07, STEEL, 8, MAT.METAL);
+    tube(out, [x + sx, 1.68, z - 0.04], [x + sx, 1.68, z + 0.04], 0.012, sx < 0 ? [0.75, 0.15, 0.10] : [0.15, 0.35, 0.85], 6);
+  }
+  block(out, x - 0.43, 0.97, z, 0.012, 0.14, 0.22, DARK);
+  for (const gz of [-0.07, 0.07]) {
+    tube(out, [x - 0.44, 1.0, z + gz], [x - 0.465, 1.0, z + gz], 0.055, STEEL, 10, MAT.METAL);
+    tube(out, [x - 0.465, 1.0, z + gz], [x - 0.47, 1.0, z + gz], 0.042, [0.85, 0.85, 0.82], 10);
+    block(out, x - 0.476, 1.01, z + gz, 0.005, 0.02, 0.005, [0.75, 0.15, 0.10]);
+  }
   for (const sz of [-1, 1]) {
     tube(out, [x - 0.36, 0.80, z + sz * 0.26], [x - 0.40, 1.30, z + sz * 0.26], 0.022, STEEL, 6, MAT.METAL);
     for (const sx of [-1, 1]) caster(out, x + sx * 0.30, z + sz * 0.26, 0.06);
   }
   tube(out, [x - 0.40, 1.30, z - 0.26], [x - 0.40, 1.30, z + 0.26], 0.025, RUBBER, 8);
   hose(out, [[x - 0.08, 1.50, z], [x - 0.30, 1.25, z + 0.10], [x - 0.30, 0.90, z + 0.10], [x - 0.25, 0.65, z + 0.10]], 0.02, HOSE, 6);
+}
+// Engineers' monitor gantry (Blender monitor-gantry-nx): rail + three hung screens.
+function monitorGantry(out, x, z, c1) {
+  const s = x < 0 ? 1 : -1;
+  block(out, x, 2.55, z, 0.04, 0.055, 1.70, STEEL, MAT.METAL);
+  for (const dz of [-1.15, 0, 1.15]) {
+    tube(out, [x, 2.55, z + dz], [x, 2.18, z + dz], 0.014, STEEL, 6, MAT.METAL);
+    block(out, x + s * 0.09, 1.92, z + dz, 0.03, 0.26, 0.40, DARK);
+    block(out, x + s * 0.11, 1.92, z + dz, 0.01, 0.22, 0.34, scale(STEEL, 0.42));
+    block(out, x + s * 0.02, 2.18, z + dz, 0.06, 0.02, 0.06, scale(c1, 0.55));
+  }
+}
+// Floor work lamp (Blender work-lamp-rig): stand + head aimed at the car.
+function workLamp(out, x, z, c1) {
+  cyl(out, x, 0, z, 0.15, 0.05, DARK, 8);
+  tube(out, [x, 0.05, z], [x, 1.52, z], 0.022, STEEL, 6, MAT.METAL);
+  block(out, x, 1.66, z, 0.16, 0.07, 0.16, scale(c1, 0.45));
+  block(out, x, 1.64, z + 0.11, 0.12, 0.045, 0.018, [1.16, 1.12, 1.02]);
+  tube(out, [x, 1.58, z], [x + 0.18, 1.40, z + 0.22], 0.012, STEEL, 5, MAT.METAL);
+}
+// LED light boom under a side-wall service shelf (Blender lighting-rig-*).
+function lightBoom(out, x, z, halfLen, c1) {
+  block(out, x, 3.72, z, 0.035, 0.018, halfLen, scale(STEEL, 0.55));
+  block(out, x, 3.695, z, 0.025, 0.006, halfLen - 0.12, [1.06, 1.09, 1.16]);
+  for (const dz of [-halfLen + 0.35, 0, halfLen - 0.35])
+    block(out, x, 3.78, z + dz, 0.04, 0.04, 0.04, scale(c1, 0.5));
 }
 function wheelDolly(out, x, z, c1) {
   block(out, x, 0.18, z, 0.55, 0.035, 0.30, scale(c1, 0.55));
@@ -371,6 +409,6 @@ function buildEquipment(g, liv, ctx) {
 
   // HOSE stays module-local (hoseReel / serviceRig paint). COMPOUND + starterCart /
   // tyreTrolley / rearJack stay exported — garage-mesh unit seams.
-  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
+  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, lightBoom, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;

@@ -204,6 +204,7 @@ function buildProps(g, liv) {
   const stack = tyreStack;
   const toolbox = (out, x, z) => GarageEquipment.toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
+  // Blender look-dev (monitor-desk-nx / monitor-gantry-nx): desk under a hung gantry.
   toolbox(g.nx, -4.92, 3.6);
   // The charging rack sits on the actual chest top (1.16 + 0.03 m).
   GarageEquipment.radioRack(g.nx, -4.92, 3.6, c1, 1.19);
@@ -217,6 +218,7 @@ function buildProps(g, liv) {
     block(g.nx, -5.22, 1.45 + (m < 3 ? 0 : 0.90), 0.6 + ((m % 3) - 1) * 0.98, 0.03, 0.36, 0.46, scale(STEEL, 0.55));
   block(g.nx, -5.02, 0.86, 0.6, 0.30, 0.03, 1.30, scale(STEEL, 0.9));
   for (let s = -1; s <= 1; s += 2) cyl(g.nx, -5.02, 0, 0.6 + s * 1.15, 0.04, 0.86, STEEL, 6);
+  GarageEquipment.monitorGantry(g.nx, -4.70, 0.60, c1);
   // +X wall: the tool trolleys.
   // Trade repeated storage for distinct service stations within the same budget.
   GarageEquipment.wheelGunDock(g.px, 4.85, -1.5, c1);
@@ -275,6 +277,8 @@ function buildProps(g, liv) {
       if (i % 2 === 0)
         block(w, x - sd * 0.06, 4.06, i * 2.30, 0.14, 0.18, 0.34, scale(STEEL, 0.55));
     }
+    // Blender lighting-rig-*: LED boom under the shelf (trade one spare crate shelf below).
+    GarageEquipment.lightBoom(w, sd * 5.05, 0, 2.40, c1);
   }
 
   // Spare front wings on a rack — the most recognisable thing in a real bay
@@ -299,8 +303,9 @@ function buildProps(g, liv) {
   // Shelving of parts crates and a workbench. These live on the DOOR wall, not
   // the back wall: the back wall is where the information boards go, and a
   // prop stood 0.3 m proud of a board is a prop that hides it.
-  for (let sh = 0; sh < 3; sh++) {
-    const y = 0.95 + sh * 0.62;
+  // Two shelves (was three): the third shelf's tris pay for monitor gantry + light booms.
+  for (let sh = 0; sh < 2; sh++) {
+    const y = 0.95 + sh * 0.72;
     block(g.door, -4.02, y, 6.15, 1.25, 0.025, 0.22, STEEL);
     for (let bx = 0; bx < 3; bx++)
       block(g.door, -5.07 + bx * 0.86, y + 0.17, 6.15, 0.32, 0.15, 0.17,
@@ -312,6 +317,8 @@ function buildProps(g, liv) {
   for (let f = 0; f < 2; f++) GarageEquipment.extinguisher(g.nx, -5.22, -4.4 + f * 0.42, 1);
   cyl(g.nx, -4.75, 0, 4.7, 0.20, 0.52, scale(STEEL, 0.5), 8); // desk bin
   GarageEquipment.rollingStool(g.nx, -4.10, 3.0, c1);
+  // Blender work-lamp-rig: floor lamp in the −X mid bay for wet / night reads.
+  GarageEquipment.workLamp(g.nx, -3.35, -2.85, c1);
   // Barrier stanchions across the pit-lane opening, chain height only.
   for (let i = -1; i <= 1; i += 2) {
     cyl(g.barrier, i * 2.2, 0, Z_DOOR - 0.55, 0.05, 0.95, scale(STEEL, 0.8), 8);
