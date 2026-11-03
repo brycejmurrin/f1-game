@@ -605,6 +605,8 @@ function runFile(ctx, relPath, record) {
   // Absolute filename: Node's V8 coverage (NODE_V8_COVERAGE / --experimental-test-coverage)
   // silently drops scripts whose name is not an absolute path, so a relative
   // name made every twin report 0 % for the game sources it ran.
+  // node:vm reads of var/function globals are ~100x slower than lexical ones, so V8 profiles taken here mis-rank sim work:
+  // docs/notes/PERF-HUNT-P2-2026-11-03.md §2 (JSC is the real target).
   const body = src.replace(/^const\b/gm, "var");
   const filename = path.join(ROOT, relPath);
   const r = runScriptCached(body, ctx, { filename, root: ROOT });
