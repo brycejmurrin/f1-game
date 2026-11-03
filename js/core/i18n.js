@@ -20,6 +20,14 @@ const I18n = (function () {
     return i < 0 ? tag : tag.slice(0, i);
   }
 
+  // A tag Intl rejects (`?lang=en_US`) would make every I18n.n() and plural string throw a RangeError for
+  // the session (hunt B6, #4550). Accept `_` as `-`, canonicalise, else fall back to English.
+  function cleanTag(lang) {
+    const tag = String(lang || "").trim().replace(/_/g, "-");
+    if (!tag) return "en";
+    try { return Intl.getCanonicalLocales(tag)[0] || "en"; } catch (_) { return "en"; }
+  }
+
   function readQueryLang() {
     const loc = (typeof globalThis !== "undefined" && globalThis.location)
       || (typeof location !== "undefined" ? location : null);
@@ -217,7 +225,7 @@ const I18n = (function () {
   }
 
   async function boot(lang) {
-    const next = lang || resolveDetectOrder();
+    const next = cleanTag(lang || resolveDetectOrder());
     activeLang = next;
     setHtmlLang(next);
     readyDone = false;
@@ -246,7 +254,7 @@ const I18n = (function () {
   }
 
   async function set(lang, opts) {
-    const next = String(lang || "en").trim() || "en";
+    const next = cleanTag(lang);
     const persist = !(opts && opts.persist === false);
     if (persist && typeof GameStore !== "undefined") GameStore.store.set(LANG_KEY, next);
     await boot(next);
