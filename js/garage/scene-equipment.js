@@ -227,22 +227,54 @@ function floorFan(out, x, z, c1) {
   tube(out, [x - 0.08, cy, z], [x + 0.08, cy, z], 0.055, DARK, 10);
 }
 function serviceRig(out, x, z, c1) {
+  // Fuel / air service cart (Blender fuel-air-rig-px): main bottle, slim air bottle, dual gauge faces.
   block(out, x, 0.66, z, 0.42, 0.50, 0.36, scale(c1, 0.5));
   block(out, x, 0.18, z, 0.41, 0.025, 0.35, STEEL);
   block(out, x, 1.18, z, 0.44, 0.03, 0.38, STEEL);
-  cyl(out, x, 1.21, z, 0.14, 0.40, scale(STEEL, 0.75), 12, MAT.METAL);
-  cyl(out, x, 1.61, z, 0.04, 0.09, STEEL, 8, MAT.METAL);
-  tube(out, [x, 1.71, z - 0.05], [x, 1.71, z + 0.05], 0.014, [0.75, 0.15, 0.10], 6);
-  block(out, x - 0.43, 0.97, z, 0.012, 0.14, 0.18, DARK);
-  tube(out, [x - 0.44, 1.0, z - 0.06], [x - 0.465, 1.0, z - 0.06], 0.065, STEEL, 12, MAT.METAL);
-  tube(out, [x - 0.465, 1.0, z - 0.06], [x - 0.47, 1.0, z - 0.06], 0.05, [0.85, 0.85, 0.82], 12);
-  block(out, x - 0.476, 1.01, z - 0.06, 0.005, 0.025, 0.006, [0.75, 0.15, 0.10]);
+  cyl(out, x - 0.08, 1.21, z, 0.13, 0.38, scale(STEEL, 0.75), 10, MAT.METAL);
+  cyl(out, x - 0.08, 1.59, z, 0.04, 0.08, STEEL, 6, MAT.METAL);
+  tube(out, [x - 0.08, 1.69, z - 0.04], [x - 0.08, 1.69, z + 0.04], 0.012, [0.75, 0.15, 0.10], 6);
+  cyl(out, x + 0.18, 1.21, z, 0.055, 0.32, scale(STEEL, 0.55), 8, MAT.METAL);
+  block(out, x + 0.18, 1.55, z, 0.04, 0.03, 0.04, [0.15, 0.35, 0.85]);
+  block(out, x - 0.43, 0.97, z, 0.012, 0.14, 0.22, DARK);
+  // Dual gauges as flat faces (tube gauges blew the 700-tri model budget).
+  for (const gz of [-0.07, 0.07]) {
+    block(out, x - 0.45, 1.0, z + gz, 0.02, 0.055, 0.055, STEEL, MAT.METAL);
+    block(out, x - 0.462, 1.0, z + gz, 0.008, 0.042, 0.042, [0.85, 0.85, 0.82]);
+    block(out, x - 0.468, 1.01, z + gz, 0.004, 0.012, 0.004, [0.75, 0.15, 0.10]);
+  }
   for (const sz of [-1, 1]) {
     tube(out, [x - 0.36, 0.80, z + sz * 0.26], [x - 0.40, 1.30, z + sz * 0.26], 0.022, STEEL, 6, MAT.METAL);
     for (const sx of [-1, 1]) caster(out, x + sx * 0.30, z + sz * 0.26, 0.06);
   }
   tube(out, [x - 0.40, 1.30, z - 0.26], [x - 0.40, 1.30, z + 0.26], 0.025, RUBBER, 8);
   hose(out, [[x - 0.08, 1.50, z], [x - 0.30, 1.25, z + 0.10], [x - 0.30, 0.90, z + 0.10], [x - 0.25, 0.65, z + 0.10]], 0.02, HOSE, 6);
+}
+// Engineers' monitor gantry (Blender monitor-gantry-nx): rail + three hung screens.
+function monitorGantry(out, x, z, c1) {
+  const s = x < 0 ? 1 : -1;
+  block(out, x, 2.55, z, 0.04, 0.055, 1.70, STEEL, MAT.METAL);
+  for (const dz of [-1.15, 0, 1.15]) {
+    // Drop as a thin block (tube hangers blew the bay trophy budget by a few tris).
+    block(out, x, 2.36, z + dz, 0.015, 0.19, 0.015, STEEL, MAT.METAL);
+    block(out, x + s * 0.09, 1.92, z + dz, 0.03, 0.26, 0.40, DARK);
+    block(out, x + s * 0.11, 1.92, z + dz, 0.01, 0.22, 0.34, scale(STEEL, 0.42));
+  }
+}
+// Floor work lamp (Blender work-lamp-rig): stand + head aimed at the car.
+function workLamp(out, x, z, c1) {
+  cyl(out, x, 0, z, 0.15, 0.05, DARK, 8);
+  tube(out, [x, 0.05, z], [x, 1.52, z], 0.022, STEEL, 6, MAT.METAL);
+  block(out, x, 1.66, z, 0.16, 0.07, 0.16, scale(c1, 0.45));
+  block(out, x, 1.64, z + 0.11, 0.12, 0.045, 0.018, [1.16, 1.12, 1.02]);
+  tube(out, [x, 1.58, z], [x + 0.18, 1.40, z + 0.22], 0.012, STEEL, 5, MAT.METAL);
+}
+// LED light boom under a side-wall service shelf (Blender lighting-rig-*).
+function lightBoom(out, x, z, halfLen, c1) {
+  block(out, x, 3.72, z, 0.035, 0.018, halfLen, scale(STEEL, 0.55));
+  block(out, x, 3.695, z, 0.025, 0.006, halfLen - 0.12, [1.06, 1.09, 1.16]);
+  for (const dz of [-halfLen + 0.35, 0, halfLen - 0.35])
+    block(out, x, 3.78, z + dz, 0.04, 0.04, 0.04, scale(c1, 0.5));
 }
 function wheelDolly(out, x, z, c1) {
   block(out, x, 0.18, z, 0.55, 0.035, 0.30, scale(c1, 0.55));
@@ -371,6 +403,6 @@ function buildEquipment(g, liv, ctx) {
 
   // HOSE stays module-local (hoseReel / serviceRig paint). COMPOUND + starterCart /
   // tyreTrolley / rearJack stay exported — garage-mesh unit seams.
-  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
+  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, lightBoom, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;
