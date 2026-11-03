@@ -170,8 +170,19 @@ function announceLane(root, paintedBand, replay) {
 }
 // Layout-free key for the lane memo. Gaps are empty/non-empty only — digit
 // rolloff used to re-key every tick and force a full rect pass (#1723).
+// Element refs the key reads, resolved once and re-resolved only when missing or detached:
+// steady 10 Hz ticks do 0 getElementById (perf hunt #4586 row 4).
+const _laneKeyEls = Object.create(null);
+function laneKeyEl(id) {
+  const c = _laneKeyEls[id];
+  if (c && c.isConnected !== false) return c;
+  const el = typeof document !== "undefined" ? document.getElementById(id) : null;
+  _laneKeyEls[id] = el;
+  return el;
+}
+const LANE_KEY_IDS = ["hud-rel", "hud-strat", "hud-inputs", "hud-damage", "hud-mirror", "hud-mirror-chip"];
 function announceLaneLayoutKey() {
-  const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  const ann = laneKeyEl("announce");
   const gapBit = (el) => (el && (el.textContent || "").length ? "1" : "0");
   const hid = (el) => (el && !el.hidden ? "1" : "0");
   // Announce: show/hide only. Content length does not move the clippers the
@@ -185,10 +196,7 @@ function announceLaneLayoutKey() {
     + hid(els.flag) + hid(els.hudLimits) + hid(els.tyre);
   // Delayed primary packing moves TYRES without a setting or visibility change.
   if (els.tyre && els.tyre.style) k += "|" + els.tyre.style.getPropertyValue("margin-left") + "," + els.tyre.style.getPropertyValue("margin-top");
-  for (const id of ["hud-rel", "hud-strat", "hud-inputs", "hud-damage", "hud-mirror", "hud-mirror-chip"]) {
-    const el = typeof document !== "undefined" ? document.getElementById(id) : null;
-    k += hid(el);
-  }
+  for (const id of LANE_KEY_IDS) k += hid(laneKeyEl(id));
   for (const d of docks()) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
   return k;
 }

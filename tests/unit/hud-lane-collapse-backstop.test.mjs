@@ -10,6 +10,9 @@
  * apart). Nothing the lane reads had changed, so the backstop must not undo a
  * later owner's reopen; a key change or a forced refresh still decides afresh.
  *
+ * #4586 row 4: announceLaneLayoutKey runs every tick before the key compare; it
+ * caches its element refs, so steady ticks do 0 getElementById (was 7 per tick).
+ *
  * Run: node --test tests/unit/hud-lane-collapse-backstop.test.mjs
  */
 import { test } from "node:test";
@@ -65,7 +68,11 @@ function boot() {
     if (on) announce.setAttribute(name, ""); else announce.removeAttribute(name);
     return on;
   };
-  return { lane, root, announce, collapses: () => collapses };
+  // Count document.getElementById calls (#4586 row 4: the 10 Hz key must not look elements up).
+  const ids = [];
+  const rawById = doc.getElementById;
+  doc.getElementById = (id) => { ids.push(id); return rawById(id); };
+  return { lane, root, announce, doc, ids, collapses: () => collapses };
 }
 
 const collapsed = (h) => h.announce.hasAttribute("data-lane-collapsed");
@@ -105,4 +112,25 @@ test("a lane-key change still re-collapses", () => {
   h.announce.hidden = true; h.lane.announceLaneTick(h.root, false);    // card hides (key: A → a)
   h.announce.hidden = false; h.lane.announceLaneTick(h.root, false);   // next call shows: key changes again
   assert.equal(collapsed(h), true, "a new key re-measures and re-decides");
+});
+
+test("steady ticks do 0 getElementById: the lane key caches its element refs (#4586 row 4)", () => {
+  const h = boot();
+  h.lane.announceLaneTick(h.root, true);   // warm: refs resolve once
+  h.ids.length = 0;
+  for (let i = 0; i < 20; i++) h.lane.announceLaneTick(h.root, false);   // 2 s of 10 Hz, under the 3 s backstop
+  assert.equal(h.ids.length, 0, `getElementById called ${h.ids.length}x in 20 steady ticks (${[...new Set(h.ids)].join(",")})`);
+});
+
+test("a detached cached ref is re-resolved, and the new element keys the lane", () => {
+  const h = boot();
+  h.lane.announceLaneTick(h.root, true);
+  h.announce.isConnected = false;                       // the cached #announce left the document
+  const fresh = h.doc.createElement("div"); fresh.id = "announce"; fresh.hidden = true; h.doc.body.appendChild(fresh);
+  h.ids.length = 0;
+  h.lane.announceLaneTick(h.root, false);
+  assert.ok(h.ids.includes("announce"), "a detached ref is looked up again");
+  h.ids.length = 0;
+  for (let i = 0; i < 5; i++) h.lane.announceLaneTick(h.root, false);
+  assert.equal(h.ids.filter((id) => id === "announce").length, 0, "the fresh connected ref is cached again");
 });
