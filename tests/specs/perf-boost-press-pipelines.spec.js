@@ -39,7 +39,7 @@ test("TLX WebGPU: BOOST presses 2..N re-mint no BOOST pipelines and add no backg
   if (!/webgpu/i.test(hook)) testInfo.annotations.push({ type: "fallback", description: "no WebGPU adapter on this runner: the WebGPU leg ran on three's WebGL2 backend" });
   testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (lit ones fail the run, #4514)` });
   testInfo.annotations.push({ type: "control windows", description: presses.map((p) => p.control).join(",") + " pipelines in the equal no-BOOST windows" });
-  testInfo.annotations.push({ type: "rig warm", description: `tlxDrawWarm=${drawWarm} ${JSON.stringify(warmRig && { pairs: warmRig.pairs, drawn: warmRig.drawn, ok: warmRig.ok })}` });
+  testInfo.annotations.push({ type: "rig warm", description: `tlxDrawWarm=${drawWarm} ${JSON.stringify(warmRig && warmRig.rig && { pairs: warmRig.rig.pairs, drawn: warmRig.rig.drawn, ok: warmRig.rig.ok })}` });
   testInfo.annotations.push({ type: "device objects", description: presses.map((p) => `press ${p.press} ${JSON.stringify(p.res)} vs control ${JSON.stringify(p.controlRes)}`).join("; ") });
   for (const p of presses) expect(p.deployed, `press ${p.press} never deployed ERS: the count would pass vacuously`).toBe(true);
   const v = boostVerdict(presses);

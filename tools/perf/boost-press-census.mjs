@@ -39,7 +39,11 @@ export function hookPipelines() {
       const f = dev[fn];
       dev[fn] = function (desc) {
         P.res[k]++;
-        if (P.resLog.length < 400) P.resLog.push({ at: P.frames, k, label: (desc && desc.label) || "", size: (desc && desc.size) || 0 });
+        // Armed windows only (a census beat): the three call sites that made it, so a window's objects can be told apart.
+        if (P.armed && P.resLog.length < 20000) {
+          const st = String(new Error().stack || "").split("\n").slice(2, 9).map((l) => (l.match(/at (?:new )?([\w$.<>]+)/) || [])[1]).filter(Boolean);
+          P.resLog.push({ at: P.frames, k, label: (desc && desc.label) || "", size: (desc && desc.size) || 0, via: st.join("<") });
+        }
         return f.apply(this, arguments);
       };
     }
@@ -85,10 +89,16 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
   // ordinary driving (a prop or car coming into view), not BOOST, and is reported, not asserted.
   const count = () => page.evaluate(() => window.__bpp.count);
   const slice = (a, b) => page.evaluate(([x, y]) => window.__bpp.log.slice(x, y), [a, b]);
-  const res = () => page.evaluate(() => (window.__bpp.res ? { ...window.__bpp.res, log: window.__bpp.resLog.length } : null));
-  const delta = (a, b) => (a && b ? { bindGroup: b.bindGroup - a.bindGroup, buffer: b.buffer - a.buffer, texture: b.texture - a.texture } : null);
+  // poolNew: TLX pool wrappers minted (memState().churn) — each a new three RenderObject with its own bind groups.
+  const res = () => page.evaluate(() => {
+    const P = window.__bpp; P.armed = true;
+    let poolNew = null; try { poolNew = window.GLX.__tlx.memState().churn.poolNew; } catch (_) { /* not TLX */ }
+    return P.res ? { ...P.res, poolNew, log: P.resLog.length } : null;
+  });
+  const delta = (a, b) => (a && b ? { bindGroup: b.bindGroup - a.bindGroup, buffer: b.buffer - a.buffer, texture: b.texture - a.texture,
+    poolNew: a.poolNew == null ? null : b.poolNew - a.poolNew } : null);
   const resSlice = (a, b) => (a && b ? page.evaluate(([x, y]) => window.__bpp.resLog.slice(x, y), [a.log, b.log]) : null);
-  const warmRig = await page.evaluate(() => { try { return window.GLX.__tlx.memState().warm.rig || null; } catch (_) { return null; } });
+  const warmRig = await page.evaluate(() => { try { const w = window.GLX.__tlx.memState().warm; return { rig: w.rig, drawn: w.drawn, where: w.where, failed: w.failed }; } catch (e) { return { error: String(e) }; } });
   const presses = [];
   for (let i = 1; i <= PRESSES; i++) {
     const c0 = await count(), r0 = await res();
