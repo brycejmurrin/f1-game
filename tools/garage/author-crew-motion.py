@@ -3,6 +3,9 @@
 """Author garage crew controls in Blender; export sampled curves to the runtime.
 blender -b --python tools/garage/author-crew-motion.py -- --output-dir artifacts/garage-blender --write-runtime
 Original project-authored motion, metres, 24 fps. Blender XYZ = game X,-Z,Y.
+
+Walk polish: contralateral arm swing, slight torso lean, shorter/varied steps,
+and a hip weight-shift (sway) channel. Cycle distance stays 1.35 m.
 """
 import bpy, math, json, argparse, sys, hashlib
 from pathlib import Path
@@ -30,29 +33,68 @@ for side,x in [('L',.1),('R',-.1)]:
   c=control(limb+'.'+side,p);controls[limb+'.'+side]=c
   if limb=='hand':c.parent=rig
   ik=rig.pose.bones[('shin.' if limb=='foot' else 'forearm.')+side].constraints.new('IK');ik.target=c;ik.chain_count=2
+# Hip sway + torso lean empties (exported channels; draw consumes them).
+sway_c=control('Hip sway',[0,.91,0]);lean_c=control('Torso lean',[0,1.2,0])
 # Foot placement is authored in world space during root retreat, then exported
-# relative to the root. Plant intervals are linear; swings ease and lift.
+# relative to the root. Five shorter, uneven steps; plant intervals stay linear
+# in world space while swings ease, lift, and carry a small weight shift.
 D=1.35
+# Five shorter steps (old was four × D/4 = 0.3375). Lengths uneven; swing
+# windows staggered so the gait fills most of the retreat instead of ending early.
+STEP_LEN=(.22,.28,.24,.31,.30)  # sum = 1.35
+assert abs(sum(STEP_LEN)-D)<1e-9
+# Per-side: start phase, then each swing uses ~0.09 of back with a 0.08 gap
+# (double-support). Five swings → ~0.85 of back from the first toe-off.
+def foot_travel(back, phase):
+ travelled=0.0;lift=0.0;support=0.0
+ t_cursor=phase
+ for step,length in enumerate(STEP_LEN):
+  dur=0.088 + 0.012 * (step % 3) / 2  # 0.088 … 0.100, slight variety
+  t=max(0,min(1,(back-t_cursor)/dur));e=t*t*(3-2*t)
+  travelled+=length*e
+  if 0<t<1:
+   lift=.072*math.sin(math.pi*t)**2
+   support=math.sin(math.pi*t)
+  t_cursor+=dur+0.078
+ return travelled,lift,support
 for f in range(1,50):
  u=(f-1)/48;back=u*u*(3-2*u);root_z=-D*back
+ # Slight forward lean builds with retreat, plus a gait bob from step phase.
+ gait=math.sin(back*math.pi*5)  # ~2.5 cycles over the retreat
+ lean=.028+.018*back+.012*gait
+ sway=0.0
  rig.location=xyz([0,0,root_z]);rig.keyframe_insert('location',frame=f)
- for side,phase in [('L',.02),('R',.13)]:
-  # Four staggered steps. Stance targets are fixed in world space even at
-  # the start and finish; only airborne feet move to the next target.
-  travelled=0;lift=0
-  for step in range(4):
-   t=max(0,min(1,(back-(phase+step*.25))/.10));e=t*t*(3-2*t)
-   travelled+=(D/4)*e
-   if 0<t<1:lift=.085*math.sin(math.pi*t)**2
+ for side,phase in [('L',.02),('R',.11)]:
+  travelled,lift,support=foot_travel(back,phase)
   local_z=.03+D*back-travelled;y=.08+lift
-  c=controls['foot.'+side];c.location=xyz([.1 if side=='L' else -.1,y,root_z+local_z]);c.keyframe_insert('location',frame=f)
-# A second action: relaxed, asymmetric "come forward / hold clear" hand cues.
-# Curves are Blender Beziers; sampled data is the runtime's only motion source.
+  # Slight lateral push onto the stance side during the opposite swing.
+  lat=(.10 if side=='L' else -.10)+(.018*support if side=='L' else -.018*support)
+  sway+=(-.022 if side=='L' else .022)*support
+  c=controls['foot.'+side];c.location=xyz([lat,y,root_z+local_z]);c.keyframe_insert('location',frame=f)
+  # Contralateral arm: same-side hand goes back while that foot swings forward.
+  foot_lead=local_z-.03
+  hand_z=.10-.55*foot_lead+.04*gait*(1 if side=='L' else -1)
+  hand_y=.88+.04*lift+.02*abs(gait)
+  h=controls['hand.'+side];h.location=xyz([.22 if side=='L' else -.22,hand_y,hand_z]);h.keyframe_insert('location',frame=f)
+ lean_c.location=xyz([0,1.2,lean]);lean_c.keyframe_insert('location',frame=f)
+ sway_c.location=xyz([sway,.91,0]);sway_c.keyframe_insert('location',frame=f)
+# A second action: relaxed, asymmetric "come forward / hold clear" hand cues
+# overlaid on the same timeline (sampled by the runtime's decorative loop).
+# Mid-clip both hands reach together; gait frames keep contralateral offsets.
 signal=control('Signal channels',[0,0,0]);signal['reach']=.42;signal['handY']=1.35;signal['bob']=0.0
-for f,reach,height,bob in [(1,.42,1.35,0),(13,.49,1.47,.008),(25,.42,1.35,0),(37,.46,1.28,-.006),(49,.42,1.35,0)]:
+for f,reach,height,bob in [(1,.12,.88,0),(13,.42,1.35,.008),(25,.12,.88,0),(37,.36,1.22,-.006),(49,.12,.88,0)]:
  for key,value in [('reach',reach),('handY',height),('bob',bob)]:signal[key]=float(value);signal.keyframe_insert(data_path='["'+key+'"]',frame=f)
+ # Softly pull both hands toward the cue without erasing contralateral lead.
  for side in ['L','R']:
-  h=controls['hand.'+side];h.location=xyz([.22 if side=='L' else -.22,height,reach]);h.keyframe_insert('location',frame=f)
+  h=controls['hand.'+side];base=h.location
+  # Game-space target mixed into the already-keyed contralateral pose.
+  gx=.22 if side=='L' else -.22
+  # Read current game Y/Z from blender location.
+  cur_y=base.z;cur_z=-base.y
+  mix=max(0,min(1,(reach-.12)/.30))
+  hy=cur_y+(height-cur_y)*mix;hz=cur_z+(reach-cur_z)*mix
+  h.location=xyz([gx,hy,hz]);h.keyframe_insert('location',frame=f)
+  signal['bob']=float(bob)
 # Visible proxy: capsules track the IK bones, providing an editable Blender rig
 # without exporting a second, unrelated game character mesh.
 scene.frame_set(1);bpy.context.view_layer.update()
@@ -80,14 +122,19 @@ for f in range(1,50,2):
  vals=[]
  for side in ['L','R']:
   p=controls['foot.'+side].location;vals += [float(p.z),float(-p.y-root_z)]
- vals += [float(signal['reach']),float(signal['handY']),float(signal['bob'])]
- rows.append([round(v,6) for v in vals])
+ # Per-side hand Z (game forward) for contralateral swing; lean + sway.
+ for side in ['L','R']:
+  vals.append(float(-controls['hand.'+side].location.y))
+ # lean empty at game (0,1.2,lean) → blender (0,-lean,1.2)
+ vals.append(float(-lean_c.location.y))
+ vals.append(float(sway_c.location.x))
+ rows.append([round(v,4) for v in vals])
 scene.frame_set(1);blend=out/'garage-guide-actions.blend';bpy.ops.wm.save_as_mainfile(filepath=str(blend))
 source_hash=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
-metadata={'validation':{'maxProxyCenterError':round(max_proxy_error,6),'maxHandTargetDistance':round(max_hand_distance,6),'armSpanLimit':.61},'sourceSHA256':source_hash,'authoring':'Blender '+bpy.app.version_string,'fps':24,'frames':49,'sampleStep':2,'channels':['footLY','footLZ','footRY','footRZ','reach','handY','bob'],'units':'metres; game X right,Y up,Z forward','license':'Original project-authored motion; follows repository license','samples':rows}
+metadata={'validation':{'maxProxyCenterError':round(max_proxy_error,6),'maxHandTargetDistance':round(max_hand_distance,6),'armSpanLimit':.61},'sourceSHA256':source_hash,'authoring':'Blender '+bpy.app.version_string,'fps':24,'frames':49,'sampleStep':2,'channels':['footLY','footLZ','footRY','footRZ','handLZ','handRZ','lean','sway'],'units':'metres; game X right,Y up,Z forward','license':'Original project-authored motion; follows repository license','samples':rows}
 (out/'crew-motion.json').write_text(json.dumps(metadata,indent=2)+'\n')
 if opts.write_runtime:
  p=root/'js/garage/crew-motion.js';text=p.read_text();start=text.index('  // @blender-motion:start');end=text.index('  // @blender-motion:end',start)
- block='  // @blender-motion:start\n  // Blender 4.3; tools/garage/author-crew-motion.py; 24 fps, sampled every 2 frames.\n  // Source SHA256: '+source_hash+'\n  const KEYS = '+json.dumps(rows,separators=(',',':'))+';\n'
+ block='  // @blender-motion:start\n  // Blender 4.2; tools/garage/author-crew-motion.py; 24 fps / 2; footLY,footLZ,footRY,footRZ,handLZ,handRZ,lean,sway\n  // Source SHA256: '+source_hash+'\n  const KEYS = '+json.dumps(rows,separators=(',',':'))+';\n'
  p.write_text(text[:start]+block+text[end:])
-print(json.dumps({'blend':str(blend),'frames':49,'samples':len(rows),'export':str(out/'crew-motion.json')}))
+print(json.dumps({'blend':str(blend),'frames':49,'samples':len(rows),'channels':8,'export':str(out/'crew-motion.json')}))

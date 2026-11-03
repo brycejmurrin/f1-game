@@ -241,14 +241,17 @@ test("service crews hand over to already-built guides while the car moves", () =
 });
 
 test('Blender motion keeps contact feet planted and returns both feet to rest', () => {
-  const { Motion } = load(), a = new Float32Array(7), b = new Float32Array(7);
+  const { Motion } = load(), a = new Float32Array(8), b = new Float32Array(8);
   assert.equal(Motion.sampleCount, 25);
   Motion.sample(0, a); Motion.sample(1, b);
   for (let i = 0; i < 4; i++) assert.ok(Math.abs(a[i] - b[i]) < 1e-6);
-  let plants = 0, lift = 0;
+  let plants = 0, lift = 0, contra = 0, leanAmp = 0, swayAmp = 0;
   const back = u => u * u * (3 - 2 * u);
   for (let k = 0; k < 24; k++) {
     const u = k / 24, v = (k + 1) / 24; Motion.sample(u, a); Motion.sample(v, b);
+    leanAmp = Math.max(leanAmp, Math.abs(a[6])); swayAmp = Math.max(swayAmp, Math.abs(a[7]));
+    // Contralateral: when R foot is ahead of L, L hand should be ahead of R (and vice versa).
+    if (Math.abs(a[1] - a[3]) > .04 && Math.sign(a[1] - a[3]) !== Math.sign(a[4] - a[5])) contra++;
     for (let f = 0; f < 4; f += 2) {
       lift = Math.max(lift, a[f] - .08);
       if (Math.abs(a[f] - .08) < 1e-5 && Math.abs(b[f] - .08) < 1e-5) {
@@ -257,6 +260,9 @@ test('Blender motion keeps contact feet planted and returns both feet to rest', 
     }
   }
   assert.ok(plants >= 5); assert.ok(lift > .06);
+  assert.ok(contra >= 3, 'arms swing opposite the leading foot');
+  assert.ok(leanAmp > .02 && leanAmp < .12, 'slight torso lean is authored');
+  assert.ok(swayAmp > .01 && swayAmp < .08, 'hip weight-shift is authored');
 });
 
 test('articulated guide playback reuses meshes, clears the car and keeps boots on the floor', () => {
@@ -299,7 +305,7 @@ test('runtime motion export matches the current Blender authoring source', () =>
 
 test('actual articulated boot transforms plant in both world axes during retreat', () => {
   const { Crew, Arrival, Motion, draws } = load();
-  const cfg = Arrival.settings({ leaveCrew: 'guides' }), a = new Float32Array(7); let prev = null, contacts = 0;
+  const cfg = Arrival.settings({ leaveCrew: 'guides' }), a = new Float32Array(8); let prev = null, contacts = 0;
   for (let k = 0; k <= 24; k++) {
     const u = k / 24; draws.length = 0;
     Crew.draw(LIV, [-3,2,-4], { ...Arrival.poseOut(u*1.8,cfg,true), door:u });
