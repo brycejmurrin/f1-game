@@ -53,3 +53,21 @@ exceeded: evaluate" after soft-present succeeded (software adapter speed).
   can show the freeze is gone. Ask him to tap BOOST in a race, or link the bridge on #4459.
 - **The hypothesis that did not hold.** Drawing the late probes once in the warm draw stage (not only compiling them)
   was tried first. It is unproven, and it is not what the census shows, so it was dropped.
+
+## Step 2 (#4514, #4523): DRAW the rig pairs under the race-entry cover
+
+Compile-warming never draws (WebKit bug 324043 leaves work after `compileAsync` resolves), and the first boost minted a
+new pool wrapper, RenderObject, bind groups and uniform buffers in-frame. `warmCockpitRig` now captures the rig with
+BOOST and OVERTAKE forced on; `drawRigPairs` (`tlx.js`) draws every pair once through the real pool under a 1×1 scissor.
+`apex26.tlxDrawWarm="rig"` forces only this draw; `0` is compile-only. `boostVerdict` rule (d): press 1 creates no
+double-sided transparent lit RenderObject.
+
+| run (`perf-boost-press-pipelines.spec.js`, software WebGPU) | press 1 | verdict |
+|---|---|---|
+| `APEX_BOOST_DRAW_WARM=0` | creates the 24-vertex ERS bar backSide+front RenderObject pair | **failed** rule (d) |
+| `tlxDrawWarm="rig"` (head `0f9a4b55`) | 0 pipelines, no double-sided pair; rig job `drawn: 18` | `= run passed` |
+
+Forcing the WHOLE draw warm (`tlxDrawWarm=1`) on the software adapter reloads the page ("present failed: null
+BYTES_PER_ELEMENT in getVertexBufferLayout", 3/3). Not investigated on the base tree. `gpu-census.yml` on
+macos-latest (real Metal, default path, run 41597756876): `gpuErrors=0`, `entryWarm=warm:request`, no reload. That run
+does not drive the boost press, so it is not proof the first press is smooth. Only the iPhone shows that.
