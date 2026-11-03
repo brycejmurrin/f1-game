@@ -62,6 +62,9 @@ async function rig(t, { soft = false } = {}) {
     const _gpuSettled = async () => {}, _ssrMrtNode = () => null, softOutRT = () => null;
     const drawList = []; drawList.n = 0;
     const rigDraws = [];
+    const flushes = [];
+    function flushDropLater(all) { flushes.push("later:" + all); }
+    function flushDropped(force) { flushes.push("dropped:" + force); }   // tlx.js drops the freed track's wrappers before a DRAWING job
     function drawRigPairs(recs, usePost, useTag) { rigDraws.push(recs.map((r) => ({ geo: r.geo, mat: r.mat, sx: r.sx, m: r.m }))); return recs.length; }   // tlx.js's DRAWS them (live-only)
     ${tslice("      const _warmProbes = new WeakMap();", "      async function warmFxPrograms() {")}
     ${tslice("      // THE DRAWS NO WARM FRAME HELD", "      const ENV_PROBE_TRIES")}
@@ -78,7 +81,7 @@ async function rig(t, { soft = false } = {}) {
     }
     const warmQueued = () => !_deviceLost && !!_rigWarm && !_rigWarm.started;   // as tlx.js, pinned in the wiring test
     return { warmDraws, draw, present, warmQueued, pending: () => _warmPending, drawn: () => drawList.n, mats, requestWarm: () => { _warmRequested = true; },
-      mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages, rigDraws };`);
+      mirror: () => ({ stages: mirrorStages, unswaps }), stages: _warmStages, rigDraws, flushes };`);
   const R = mk(THREE, renderer, scene, camera, lit, globalThis.Log, soft);
   renderer.render(scene, camera);   // three's own first-render programs (the output pass), so a count isolates ours
   const compiles = [];
@@ -340,6 +343,7 @@ test("#4514 step 2: { draw: true } hands every captured pair, once per (geo, mat
   // Compiled earlier, without draw: the draw job must still draw it.
   const p0 = h.R.warmDraws(() => h.R.draw(bar, MIRRORED, FX)); h.R.present(); await p0;
   assert.equal(h.R.rigDraws.length, 0, "a compile-only job draws nothing");
+  assert.deepEqual(h.R.flushes, [], "a compile-only job leaves the freed track's wrappers to the first present");
   const scratch = new Float32Array(MIRRORED);
   const p = h.R.warmDraws(() => {
     h.R.draw(bar, scratch, FX); h.R.draw(bar, scratch, FX);   // a repeat pair: one draw
@@ -349,6 +353,7 @@ test("#4514 step 2: { draw: true } hands every captured pair, once per (geo, mat
   assert.equal(h.R.present(), false, "the job holds the present that starts it");
   assert.equal(await p, true);
   assert.equal(h.R.rigDraws.length, 1, "one draw pass per job");
+  assert.deepEqual(h.R.flushes, ["later:true", "dropped:true"], "a DRAWING job drops the freed track's wrappers first: it holds present past race start (session-quit-memory on Metal)");
   const d = h.R.rigDraws[0];
   assert.equal(d.length, 3, "(bar, FX) once — compiled already, still drawn — plus (bar, BOOST) and (lamp, BOOST)");
   assert.deepEqual(d.map((r) => [r.geo === bar.geo ? "bar" : "lamp", r.sx]), [["bar", -1], ["bar", -1], ["lamp", 1]]);

@@ -3942,6 +3942,10 @@ const TLX = (function () {
         let ok = false;
         const t0 = performance.now();
         const sp = { pairs: 0, mirror: 0, settle: 0, probes: 0, drawn: 0, worst: [] };   // A·W56 (#3673): where the cold 5.7 s goes
+        // The previous circuit's wrappers (_dropLater / _dropQueue) otherwise wait for the first present, and a job that
+        // DRAWS holds present long enough for a race to start first: drop them before the compile and the draw. None is in
+        // this job's pairs (captured at race entry) and a track free has no pipeline to hold (session-quit-memory).
+        if (job.draws) { flushDropLater(true); flushDropped(true); }
         _warmPending = (async () => {
           try {
             // The materials were minted at capture, so the tag stamps them now, as the scene warm stamps its own.

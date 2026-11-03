@@ -15648,11 +15648,13 @@
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "flushDropLater": [
-        "tests/unit/render-final-contracts.test.mjs"
+        "tests/unit/render-final-contracts.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "flushDropped": [
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
       "freeInstancedBatch": [
