@@ -8,7 +8,8 @@
 # `ready_for_review` AND GitHub holds a completed successful ci.yml
 # pull_request run for the exact PR head SHA (the draft that just went green).
 # Callers skip the expensive fast-tier STEPS (names still report) and still
-# run ready-only jobs (smoke, sweeps, renderer, selected).
+# run ready-only jobs (smoke, sweeps, renderer) and the selected legs (a draft
+# ran them on a smaller budget; see the note at the bottom).
 #
 # THE BASE MUST NOT HAVE MOVED (15-F5, 2026-10-10). A pull_request run tests
 # refs/pull/N/merge: the head merged into the base tip AT THAT TIME. Marking
@@ -45,7 +46,7 @@ hit="$(printf '%s' "$json" | node -e '
     const self = process.env.GITHUB_RUN_ID || "";
     const r = runs.find((x) => x.status === "completed" && x.conclusion === "success"
       && String(x.id) !== self && x.path === ".github/workflows/ci.yml"
-      && x.event === "pull_request" && !/^CI ignored: /.test(x.display_title || ""));
+      && x.event === "pull_request");
     if (r) process.stdout.write(`${r.id} ${r.run_started_at || r.created_at || ""}`);
   });')"
 if [ -n "$hit" ]; then
@@ -63,10 +64,14 @@ if [ -n "$hit" ]; then
     exit 0
   fi
 fi
-# A GREEN RUN IS NOT A RUN THAT TESTED ANYTHING (#2184, 2026-10-15). A draft
-# without run-ci concludes success with only the skip notice run, and so does
-# a label-noise run (every job skipped; ci.yml's `on:` note) — a skipped job
-# reports success. Reuse only a run whose tooling A shard really ran and passed.
+# A GREEN RUN IS NOT A RUN THAT TESTED ANYTHING (#2184, 2026-10-15). A skipped
+# job reports success, so a run whose fast-tier jobs skipped (until 2026-11-03 a
+# draft that had not opted in, or a label-noise run; still any run cancelled-then-green
+# by a cancelled shard) concludes success while testing nothing. Reuse only a
+# run whose tooling A shard really ran and passed.
+# THE DRAFT `selected` SHARD IS NOT REUSED (2026-11-03): a draft runs selected
+# on a 5-min budget, ready on 10, so the two plans differ and the ready run's
+# selected legs run again. Only the tree-only fast-tier STEPS reuse here.
 if [ -n "$hit" ]; then
   ran="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null | node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
@@ -75,7 +80,7 @@ if [ -n "$hit" ]; then
       process.stdout.write(a.length && a.every((j) => j.conclusion === "success") ? "yes" : "no");
     });')" || ran=no
   if [ "$ran" != yes ]; then
-    say "reuse-draft-fast: ci.yml run $hit concluded success but its tooling A shard did not run and pass (a skip-only draft or label run) — run the fast tier"
+    say "reuse-draft-fast: ci.yml run $hit concluded success but its tooling A shard did not run and pass (a skip-only run) — run the fast tier"
     echo "reuse=false"
     exit 0
   fi

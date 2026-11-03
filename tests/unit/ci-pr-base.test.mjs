@@ -137,10 +137,10 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     // No base ref, or an unreadable tip date, is not "same": fail safe.
     assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
     assert.match(reuse("").stdout, /reuse=false/);
-    // #2184: a run that concluded success with tooling A SKIPPED (a draft
-    // without run-ci, or a label-noise run) tested nothing and is never reused.
+    // #2184: a run that concluded success with tooling A SKIPPED (a cancelled-then-green
+    // shape; until 2026-11-03 also an opted-out draft) tested nothing and is never reused.
     const skipOnly = reuse("2026-10-10T09:00:00Z", { STUB_JOBS: JSON.stringify({ jobs: [
-      { name: "Draft push (CI skipped — add run-ci label)", conclusion: "success" },
+      { name: "Structural guards (tooling B)", conclusion: "skipped" },
       { name: "Structural guards (tooling A)", conclusion: "skipped" }] }) });
     assert.match(skipOnly.stdout, /reuse=false/, "a skip-only green run must not stand in for the fast tier");
     assert.match(skipOnly.stderr, /did not run and pass/);
