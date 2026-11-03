@@ -119,6 +119,10 @@ const GarageArrival = (function () {
     documentary: Object.freeze({ label: "DOCUMENTARY", look: { angle: "custom", shots: ["door", "low", "left"], move: "drift", sway: 2, zoom: 6, fov: 58, light: "asset", cue: "none", captions: true, bars: false, slowmo: 0 } }),
     showcase: Object.freeze({ label: "SHOWCASE", look: { angle: "orbit", move: "still", sway: 0, zoom: 8, fov: 50, light: "asset", cue: "spotsweep", captions: false, bars: true, slowmo: 0 } }),
     nightshift: Object.freeze({ label: "NIGHT SHIFT", look: { angle: "high", move: "drift", sway: 0.5, zoom: 0, fov: 56, light: "endurance", cue: "none", captions: true, bars: false, slowmo: 0 } }),
+    // MORE OPTIONS (Bryce 2026-11-02): wet-race, heritage pit, qualifying night — same registry pattern as SHOWCASE / NIGHT SHIFT.
+    rainready: Object.freeze({ label: "RAIN READY", look: { angle: "door", move: "drift", sway: 0.5, zoom: 4, fov: 56, light: "rain", cue: "none", captions: true, bars: false, slowmo: 0 } }),
+    heritage: Object.freeze({ label: "HERITAGE", look: { angle: "low", move: "still", sway: 0, zoom: 6, fov: 50, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.25 } }),
+    qualify: Object.freeze({ label: "QUALIFYING", look: { angle: "high", move: "still", sway: 0, zoom: 4, fov: 52, light: "night", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
   });
   /** The saved settings with style `id`'s look laid over them. */
   function applyStyle(value, id) {

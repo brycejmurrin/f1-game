@@ -1831,9 +1831,13 @@ test('departure wheels cache fitted layers and rotate rims while calipers remain
   const c = vm.createContext({
     Car3D: { TYRE_BAND: [null, [1,0,0]], BRAKE_CALIPER: [null, [1,1,0]],
       buildWheelLayers() { builds++; return { rotating: {}, fixed: {} }; } } });
-  for (const f of ['js/core/mat4.js', 'js/car/car-wheels.js'])
+  for (const f of ['js/core/mat4.js', 'js/car/car-wheels.js', 'js/garage/departure-wheels.js'])
     vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), c, { filename: absSrc(f) });
-  const wheels = vm.runInContext('CarWheels', c).createGarage({ createMesh: data => data, freeMesh() { freed++; },
+  const DepartureWheels = vm.runInContext('GarageDepartureWheels', c);
+  assert.equal(DepartureWheels.WHEEL_RADIUS, 0.34);
+  assert.ok(Math.abs(DepartureWheels.spinRadians(0.34 * Math.PI) - Math.PI) < 1e-12);
+  assert.equal(DepartureMotion.wheelRadius, DepartureWheels.WHEEL_RADIUS);
+  const wheels = DepartureWheels.create({ createMesh: data => data, freeMesh() { freed++; },
     draw(_mesh, matrix, opts) { draws.push({ matrix: Array.from(matrix), opts }); } });
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 });
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 2);
@@ -1844,6 +1848,60 @@ test('departure wheels cache fitted layers and rotate rims while calipers remain
   wheels.draw(vm.runInContext('M4.ident()', c), 1, 0, {}); assert.equal(builds, 2, 'rendering never rebuilds geometry');
   wheels.release(); assert.equal(freed, 4);
   wheels.prepare('one', {}, { tyres: 1, brakes: 1 }); assert.equal(builds, 4, 'repeat launch restores released wheels');
+});
+
+test('departure launch eases from rest and wheel distance tracks the path without heave', () => {
+  const p = departureOutput(), early = [], mid = [];
+  for (let i = 0; i <= 20; i++) {
+    DepartureMotion.sample(i / 240, 1, p);
+    early.push(p.distance);
+  }
+  for (let i = 80; i <= 100; i++) {
+    DepartureMotion.sample(i / 240, 1, p);
+    mid.push(p.distance);
+  }
+  // Quintic ease-in: the first samples creep, then the mid-launch stride grows.
+  assert.ok(early[1] < 1e-3, 'first step is nearly still');
+  assert.ok(early[10] < early[20], 'distance advances through the ease');
+  const earlyStep = early[20] - early[19], midStep = mid[mid.length - 1] - mid[mid.length - 2];
+  assert.ok(earlyStep < midStep * 0.5, 'launch stride is softer than mid-cruise');
+  DepartureMotion.sample(1, 1, p);
+  assert.ok(Math.abs(p.distance / DepartureMotion.wheelRadius - p.distance / 0.34) < 1e-12);
+  assert.equal(p.eye[1], 2.2, 'follow height stays flat (no heave pop)');
+});
+
+test('PREVIEW OUT CUT applies departure distance so spokes advance across 100 ms frames', () => {
+  // DAD 2026-11-02: Race start preview at ~3.1 s held identical spoke angles across 6 frames
+  // because previewPose never published pose.distance (body used poseOut, rims stayed at 0).
+  const wheelsCtx = vm.createContext({
+    Car3D: { TYRE_BAND: [null, [1, 0, 0]], BRAKE_CALIPER: [null, [1, 1, 0]],
+      buildWheelLayers() { return { rotating: {}, fixed: {} }; } },
+    GarageArrival: Arrival, GarageDepartureMotion: DepartureMotion
+  });
+  for (const f of ['js/core/mat4.js', 'js/car/car-wheels.js', 'js/garage/departure-wheels.js'])
+    vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), wheelsCtx, { filename: absSrc(f) });
+  const Wheels = vm.runInContext('GarageDepartureWheels', wheelsCtx);
+  const h = previewHarness({ saved: { enabled: true, speed: 1, angle: 'cut', fov: 54 } });
+  h.c.GarageDepartureMotion = DepartureMotion;
+  h.c.GarageDepartureWheels = Wheels;
+  assert.equal(h.start('out'), true);
+  const at = (t) => { const p = h.playing(); p.t = t; return h.fn('previewPose')(p); };
+  // Roll-out begins at door+hold (=2.9 s). Sample the cruise window and the first moving beat.
+  const a = at(5.0), b = at(5.1), early = at(3.1), early2 = at(3.2);
+  assert.ok(Number.isFinite(early.distance) && early2.distance > early.distance, 'distance is live from the first centimetres of roll');
+  assert.ok(b.distance > a.distance + 0.2, `cruise spokes advance over 100 ms (Δ=${(b.distance - a.distance).toFixed(3)} m)`);
+  const spinA = Wheels.spinRadians(a.distance), spinB = Wheels.spinRadians(b.distance);
+  assert.ok(Math.abs(spinB - spinA) > 0.5, `rim phase moves (Δθ=${(spinB - spinA).toFixed(3)} rad)`);
+  // Travel fallback when the Blender table is absent still rolls the rims (poseOut body motion).
+  const plain = previewHarness({ saved: { enabled: true, speed: 1, angle: 'right', fov: 54 } });
+  plain.c.GarageDepartureWheels = Wheels;
+  assert.equal(plain.start('out'), true);
+  const owner = plain.playing();
+  const p0 = Arrival.poseOut(3.1, Arrival.settings({ angle: 'right' }));
+  const p1 = Arrival.poseOut(3.2, Arrival.settings({ angle: 'right' }));
+  const d0 = Wheels.accumulateTravel(owner, p0);
+  const d1 = Wheels.accumulateTravel(owner, p1);
+  assert.ok(d1 > d0 + 0.05, 'non-CUT preview accumulates horizontal travel for wheel spin');
 });
 
 // Downstream lane fitting may mutate the sampled object, including during a final hold.
@@ -1863,20 +1921,25 @@ test('garage engine speed retains scalar samples across mirrored or narrowed lan
 });
 // ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
 test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
-  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary', 'showcase', 'nightshift']);
+  // Moods the STYLES reference (rain / goldenhour / night / …) must exist so light round-trips.
+  context.GarageScene = {
+    MOODS: { shipped: {}, showroom: {}, broadcast: {}, goldenhour: {}, endurance: {}, rain: {}, night: {}, inspection: {} },
+    CUES: ['lightsup', 'spotsweep', 'flashes', 'pulse', 'beacon'],
+  };
+  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary', 'showcase', 'nightshift', 'rainready', 'heritage', 'qualify']);
   for (const id of Object.keys(Arrival.STYLES)) {
     const v = Arrival.applyStyle({ enterCrew: 'current', speed: 2, door: 3.5 }, id);
     assert.deepEqual([v.enterCrew, v.speed, v.door], ['current', 2, 3.5], `${id}: crews and timing stay the player's`);
     for (const [k, want] of Object.entries(Arrival.STYLES[id].look)) if (k !== 'cue' && k !== 'light') assert.deepEqual(v[k], want, `${id}.${k}`);
   }
-  for (const id of ['cinema', 'documentary', 'showcase', 'nightshift']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
+  for (const id of ['cinema', 'documentary', 'showcase', 'nightshift', 'rainready', 'heritage', 'qualify']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
   assert.equal(Arrival.styleOf(null), null, 'the shipped look is no style');
   assert.deepEqual(Arrival.applyStyle(null, 'nope'), Arrival.settings(null), 'an unknown style is the saved settings');
   assert.equal(Arrival.settings(null).race, 'dry', 'PREVIEW RACE defaults to the shipped dry look');
 });
 test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
   const dom = makeDom(), doc = dom.document;
-  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {} }, CUES: ['lightsup'] } });
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {}, rain: {}, goldenhour: {}, night: {}, endurance: {} }, CUES: ['lightsup', 'spotsweep'] } });
   for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
@@ -1892,13 +1955,18 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
   assert.ok(bar, 'built in JS (index.html is at its shellNodes ceiling)');
   const kids = rows.children;
   assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
-  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT']);
+  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT', 'RAIN READY', 'HERITAGE', 'QUALIFYING']);
   $('ga-style-cinema').onclick();
   assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
   assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
   $('ga-style-broadcast').onclick();
   assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
   assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
+  const more = ['rainready', 'heritage', 'qualify'].map((id) => {
+    $('ga-style-' + id).onclick();
+    return [id, saved.angle, saved.light];
+  });
+  assert.deepEqual(more, [['rainready', 'door', 'rain'], ['heritage', 'low', 'goldenhour'], ['qualify', 'high', 'night']]);
 });
 test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
   const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });
