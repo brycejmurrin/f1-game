@@ -612,7 +612,8 @@ const GarageArrival = (function () {
     const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
     return shot(Object.assign({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
       engine: !(r && r.pushed), side, calm, camera: rig || cam, shot: n + 1, mood: lightFor(config, dir), cue: cueFor(config, dir), swell: lookNum(config, "swell", 1),
-      bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", sound: config.sound !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: rs ? rs.fov : config.fov,
+      // Lollipop finishes lowering exactly when the car stops (T.park): crew hand-off at rest.
+      bars: !!config.bars, captions: config.captions !== false, rearLight: config.rearLight || "auto", sound: config.sound !== false, crewClear: 1 - ease((t - (T.park - .25)) / .25), crew: crewFor(config, dir), fov: rs ? rs.fov : config.fov,
       door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label }, authored ? {
         // Channels describe authored motion, not renderer readiness. The ground root
         // remains y=0; body pitch/heave belong on a separate body-only transform.

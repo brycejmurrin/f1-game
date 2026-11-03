@@ -493,6 +493,7 @@ Blender authoring and deterministic runtime motion exports for the garage crew.
 | **garage/arrival-poses.mjs** | Samples the real GarageArrival poses (pit stop, race start, after-race home) to JSON frames for the Blender previz. | — |
 | **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
 | **garage/author-departure.py** | Authors the garage departure blocking scene and exports allocation-light transform samples. | — |
+| **garage/author-entrance.py** | Authors the garage entrance lane/back scenes and exports allocation-light transform samples. | — |
 
 ### `tools/ui/`
 
