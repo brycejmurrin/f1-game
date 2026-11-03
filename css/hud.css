@@ -709,7 +709,7 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
   letter-spacing: 0.08em; color: var(--bg); background: var(--you);
   border: 0; border-radius: var(--r-xs);
   box-shadow: var(--lift-2);
-  animation: pulse var(--hud-pulse) infinite;
+  animation: pulse var(--hud-pulse) infinite; will-change: opacity;   /* own layer: the shadow is not repainted per frame (#4586) */
   pointer-events: auto; cursor: pointer;
 }
 @media (prefers-reduced-motion: reduce) { #hud-work { animation: none; } }

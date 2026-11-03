@@ -323,6 +323,8 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/garage-tap.mjs** | GARAGE tap from the title, prebuild ON vs OFF on one tree: tap-to-first-frame ms (__apex.garagePrebuild). | playwright-probe |
+| **shot/garage-video-checks.mjs** | Pure garage-video clip flags: ends-early, car-still, camera-oob, never-finishes. | playwright-probe |
+| **shot/garage-video.mjs** | Records garage entry/exit clips (style×angle×tune), contact sheets, timing JSON + auto-flags. | playwright-probe |
 | **shot/gen-scenery-locations.cjs** | Regenerate/check the all-circuit emitted-scenery screenshot location catalog. | — |
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
@@ -427,6 +429,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/barrier-jumps.cjs** | Pure helpers: max adjacent \|Δbar\| / wallAt step on a barrier table (run-off terminus teleports). | check-changes |
 | **track/build-gallery.cjs** | Build a filterable HTML/WebP gallery from local captures or survey branches; preserves existing output. | survey-track |
 | **track/centreline-kinks.cjs** | Lists single-node centreline kinks (node radius < half-width) per circuit; `--gate` pins counts, `--update` lowers. | — |
+| **track/circuit-info.cjs** | One circuit's facts from the real build, no browser: lengthKm, built lap m, turns, sectors, corner count; `--json`. | agent-view |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
 | **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
@@ -490,6 +493,7 @@ Blender authoring and deterministic runtime motion exports for the garage crew.
 | Tool | Does | Paired skill |
 |---|---|---|
 | **garage/arrival-poses.mjs** | Samples the real GarageArrival poses (pit stop, race start, after-race home) to JSON frames for the Blender previz. | — |
+| **garage/author-camera.py** | Export garage entry/exit camera samples into js/data/garage-entry-camera.js (lazy). | — |
 | **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
 | **garage/author-departure.py** | Authors the garage departure blocking scene and exports allocation-light transform samples. | — |
 
@@ -725,6 +729,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
 | **check/vm-filename-lint.mjs** | Flags a vm source load in tests/unit or tests/helpers with a relative filename, which breakpoints and coverage miss. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
+| **ci/archive-sweep.mjs** | Which cloud sessions can be archived: a session whose PR (named by its session-link footer) merged or closed. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |
 | **ci/base-verdict.sh** | Whose red is it? One line naming the last deploy-branch CI verdict below this head, with its failed job names. |
