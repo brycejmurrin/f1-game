@@ -5406,6 +5406,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
@@ -7780,6 +7781,7 @@
       "duration": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "finish": [
@@ -7790,6 +7792,7 @@
       ],
       "poseOut": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ],
@@ -7815,6 +7818,7 @@
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ],
@@ -7873,6 +7877,7 @@
       ],
       "*": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
       ]
     },
@@ -7882,6 +7887,7 @@
       ],
       "draw": [
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "free": [
@@ -7901,12 +7907,14 @@
       ],
       "draw": [
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "free": [
         "tests/unit/garage-crew.test.mjs"
       ],
       "layout": [
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ]
     },
@@ -8156,6 +8164,7 @@
       ],
       "draw": [
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
@@ -8165,11 +8174,13 @@
       ],
       "init": [
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "layout": [
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
       "noseTip": [
@@ -8284,6 +8295,7 @@
       ],
       "*": [
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -16661,6 +16673,7 @@
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-worker.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-looks.test.mjs",
@@ -16736,6 +16749,7 @@
       "resolve": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-looks.test.mjs",
