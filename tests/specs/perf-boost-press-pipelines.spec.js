@@ -9,7 +9,9 @@
 // even where milliseconds are not).
 //
 // What this pins, per leg:
-//   - press 1 may build pipelines (that is the open first-press warm-up work, A·W45 #3677) — reported, not asserted;
+//   - press 1 builds NO pipeline on a lit mesh layout (#4514): the cockpit ERS bar's transparent double-sided variant
+//     is drawn through the wheel's mirrored matrix, and its back pass was the one lit pipeline a WebGPU race built
+//     live — at the first BOOST. Other press-1 builds (post quads landing in the window) are reported, not asserted;
 //   - presses 2..PRESSES, each spaced by BOOST off for SPACING frames, build NO pipeline on a lit mesh layout (the
 //     BOOST/deploy draws): one that compiles again is a per-press re-mint — a hitch on EVERY press. The fx particle
 //     streams' own background re-mint (#3713) must not run faster in the press windows than in the matched control
@@ -32,7 +34,7 @@ test("TLX WebGPU: BOOST presses 2..N re-mint no BOOST pipelines and add no backg
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
   if (!/webgpu/i.test(hook)) testInfo.annotations.push({ type: "fallback", description: "no WebGPU adapter on this runner: the WebGPU leg ran on three's WebGL2 backend" });
-  testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (first-use warm-up, #3677)` });
+  testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (lit ones fail the run, #4514)` });
   testInfo.annotations.push({ type: "control windows", description: presses.map((p) => p.control).join(",") + " pipelines in the equal no-BOOST windows" });
   for (const p of presses) expect(p.deployed, `press ${p.press} never deployed ERS: the count would pass vacuously`).toBe(true);
   const v = boostVerdict(presses);
