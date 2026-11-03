@@ -1301,6 +1301,8 @@
     "tests/unit/wgx-labels.test.mjs",
     "// #3984: WGX sun-map PCF texel (d[74]) reads SHD.SHADOW_SIZE; no second size const in wgx.js; GLX shader gate comments drop drifted line numbers. Source pins, < 0.1 s.",
     "tests/unit/wgx-shadow-size-source.test.mjs",
+    "// Wheel spin math: CarWheels.phaseStep is angle += v/R·dt (front × 1−lock); createGarage uses the same R.",
+    "tests/unit/wheel-phase-math.test.mjs",
     "// Opt-in torque-balanced wheel state (#1628): lockup / wheelspin VM pins; default OFF.",
     "tests/unit/wheel-state.test.mjs",
     "// WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,",
