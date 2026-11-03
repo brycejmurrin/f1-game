@@ -323,6 +323,8 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/garage-tap.mjs** | GARAGE tap from the title, prebuild ON vs OFF on one tree: tap-to-first-frame ms (__apex.garagePrebuild). | playwright-probe |
+| **shot/garage-video-checks.mjs** | Pure garage-video clip flags: ends-early, car-still, camera-oob, never-finishes. | playwright-probe |
+| **shot/garage-video.mjs** | Records garage entry/exit clips (style×angle×tune), contact sheets, timing JSON + auto-flags. | playwright-probe |
 | **shot/gen-scenery-locations.cjs** | Regenerate/check the all-circuit emitted-scenery screenshot location catalog. | — |
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |

@@ -2561,6 +2561,16 @@
       "presentation": "native",
       "preserve": "@c5"
     },
+    "tools/shot/garage-video-checks.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/shot/garage-video.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
     "tools/shot/gen-scenery-locations.cjs": {
       "action": "keep-native",
       "presentation": "native",
