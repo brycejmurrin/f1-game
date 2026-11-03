@@ -496,6 +496,7 @@ Blender authoring and deterministic runtime motion exports for the garage crew.
 | **garage/author-camera.py** | Export garage entry/exit camera samples into js/data/garage-entry-camera.js (lazy). | — |
 | **garage/author-crew-motion.py** | Authors editable Blender garage guide actions and exports deterministic runtime motion curves. | — |
 | **garage/author-departure.py** | Authors the garage departure blocking scene and exports allocation-light transform samples. | — |
+| **garage/author-entrance.py** | Authors the garage entrance lane/back scenes and exports allocation-light transform samples. | — |
 
 ### `tools/ui/`
 
