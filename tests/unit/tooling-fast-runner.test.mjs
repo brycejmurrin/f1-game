@@ -955,7 +955,7 @@ test("changedVsDeploy lists untracked files beside the tracked diff", () => {
     git("init", "-q", "-b", "base");
     fs.writeFileSync(path.join(dir, ".gitignore"), "ignored/\n");
     fs.writeFileSync(path.join(dir, "a.js"), "1\n");
-    git("add", "."); git("commit", "-q", "-m", "base");
+    git("add", "."); git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base");   // CI runners have no git identity
     git("checkout", "-q", "-b", "topic");
     fs.writeFileSync(path.join(dir, "a.js"), "2\n");
     fs.mkdirSync(path.join(dir, "fresh"), { recursive: true });
