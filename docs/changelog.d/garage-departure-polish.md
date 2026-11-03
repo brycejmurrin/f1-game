@@ -1,0 +1,1 @@
+Improved: Garage departure eases out of the box, rolls its wheels with path distance (no skating), and holds a flat pitch/heave on the authored follow shot. PREVIEW OUT / Race start now publishes that distance so spokes spin with the body.

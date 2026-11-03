@@ -3,9 +3,12 @@ name: Land
 # GITHUB LANDS PRS; AGENTS NEVER MERGE (docs/plans/2026-10-27-orchestration-redesign.md §3 and §4.3; the worker
 # page is docs/WORKERS.md). A worker asks for landing by flipping its PR ready and adding the `land` label. This
 # workflow runs `tools/ci/merge-gate.mjs --pr <n> --check`, posts the verdict as the commit status `gate`, and on a pass
-# calls `gh pr merge --auto --merge --match-head-commit <gated head>` for ONE PR. That call MERGES AT ONCE when the
-# PR is already mergeable (CLEAN / UNSTABLE / HAS_HOOKS: cli/cli pkg/cmd/pr/merge/merge.go, `autoMerge =
-# AutoMergeEnable && !isImmediatelyMergeable(...)`); only a PR GitHub still reports BLOCKED gets a real auto-merge.
+# calls `gh pr merge --auto --merge --match-head-commit <gated head>` for ONE PR when gh still reads BLOCKED.
+# gh chooses auto-merge vs merge-now from mergeStateStatus immediately before the call; that read can be stale
+# seconds after `gate` is posted while GitHub already computes CLEAN, so enablePullRequestAutoMerge may refuse with
+# "Pull request is in clean status" — the arm step then re-reads vetoes and the tip and runs one direct
+# `--merge --match-head-commit` (no squash, rebase, or admin). UNSTABLE / HAS_HOOKS still merge at once when gh
+# reads them as immediately mergeable (cli/cli pkg/cmd/pr/merge/merge.go).
 # Since `arm` runs after `CI` and `gate` are green, assume it merges: every veto is re-read right before the call.
 #
 # JOBS AND TRUST. Every trigger runs THIS file as it is on the deploy branch (the default branch), never a PR's copy:
@@ -737,6 +740,35 @@ jobs:
             merge_rc=$?
             printf '%s\n' "$merge_out" >&2
           fi
+          # gh picks auto-merge vs merge-now from mergeStateStatus read just before the call; seconds after `gate` is
+          # posted (or the tip moves) that read can be stale (UNKNOWN/BLOCKED) while GitHub already computes CLEAN, and
+          # enablePullRequestAutoMerge then refuses "Pull request is in clean status" (#4498, runs 41420214975 and
+          # 41421861494, 2026-11-02). Same call minus --auto: a merge commit pinned to the gated head, after the same
+          # veto and tip re-read. Any failure (incl. "Base branch was modified") falls through to the handling below.
+          case "$merge_out" in
+            *"is in clean status (enablePullRequestAutoMerge)"*)
+              now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || exit "$merge_rc"
+              pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || exit "$merge_rc"
+              paused=$(GH_TOKEN="$GITHUB_TOKEN" gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+                --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || exit "$merge_rc"
+              [ "$paused" = false ] || { echo "::notice::not merging #$n: dispatch:merge-pause is set" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
+              jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
+                and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null \
+                || { echo "::notice::not merging #$n: state, head, \`land\` or \`hold\` changed since the gate" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
+              if [ "$now" != "$tip" ]; then
+                echo "::notice::not merging #$n: deploy tip moved ${tip:0:12} -> ${now:0:12}; re-gating at once" | tee -a "$GITHUB_STEP_SUMMARY"
+                echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if merge_out=$(gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --merge --match-head-commit "$head" 2>&1); then
+                printf '%s\n' "$merge_out"
+                echo "merged #$n @ ${head:0:12} onto ${tip:0:12} with $who (PR was already CLEAN; auto-merge refused)" | tee -a "$GITHUB_STEP_SUMMARY"
+                exit 0
+              else
+                merge_rc=$?
+                printf '%s\n' "$merge_out" >&2
+              fi ;;
+          esac
           # The tip can move after the read above but before GitHub accepts the arm. Only this known race may
           # use the existing bounded re-gate: never repeat the merge command or reuse the stale gate result.
           case "$merge_out" in
