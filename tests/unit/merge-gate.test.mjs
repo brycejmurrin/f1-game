@@ -186,6 +186,7 @@ function fakes() {
     if (p === "pulls/7") return { json: pull };
     if (p.startsWith("issues/7/events")) return { json: events };
     if (p.startsWith("pulls/7/files")) return { json: files };
+    if (p === "branches/deploy-x") return { json: { commit: { sha: TIP } } };
     if (p.startsWith("commits/")) return { json: { check_runs: checks, total_count: checks.length } };
     if (p.startsWith(`actions/workflows/ci.yml/runs?head_sha=${HEAD}`)) return { json: { workflow_runs: runs, total_count: runs.length } };
     return { error: `unexpected ${p}` };
@@ -495,7 +496,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   const v = evaluate({ pr: 7, ...f.deps, trusted: true });
   assert.equal(v.ok, true, JSON.stringify(v.rows));
   assert.deepEqual(Object.keys(v.rows), TRUSTED_ROWS);
-  assert.equal(v.tip, "", "no git at all: the tip is land.yml's business at post time");
+  assert.equal(v.tip, TIP, "the base tip from GitHub (no git): land.yml post requires it to equal the land-gate leg's tip (#4592)");
   assert.deepEqual(f.calls, [], "localMerge (the PR's scripts) never runs");
   f.pull.body = "## Plan\n- [ ] still open\n";
   assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["plan"]);
@@ -505,7 +506,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   f.files.pop();
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 0);
-  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=`);
+  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=${TIP}`);
   f.checks[1].status = "in_progress";
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: () => {} }), 3, "CI running is waiting");
 });
