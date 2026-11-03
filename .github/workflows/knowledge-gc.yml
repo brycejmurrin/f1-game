@@ -2,7 +2,7 @@ name: Knowledge GC
 
 # Weekly docs/notes retention (docs/plans/2026-11-03-agent-surface-reset.md §4.9,
 # D-001): `node tools/docs/knowledge-gc.mjs --apply` archives every note nothing
-# live has cited for 21 days (git mv + link repointing + NOTES-INDEX regen), and
+# live has cited for 21 days (git mv + link repointing), and
 # the diff lands as ONE reviewed PR, never as a hook surprise. A run is a no-op
 # while an earlier gc PR is still open or when nothing is stale.
 #
@@ -84,7 +84,7 @@ jobs:
           $(cat gc.log)"
           git push origin "$GC_BRANCH"
           PR_TITLE="docs(notes): weekly knowledge-gc archive"
-          PR_BODY="Scheduled retention pass (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001): $(grep -c '^archive ' gc.log || true) note(s) nothing live cited for $DAYS days moved to docs/archive/notes/ with their links repointed; NOTES-INDEX regenerated. Opened by .github/workflows/knowledge-gc.yml on branch \`$GC_BRANCH\`, which dispatched ci.yml on that head. Cite a note from the doc, skill, tool or test that uses it to keep it live."
+          PR_BODY="Scheduled retention pass (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001): $(grep -c '^archive ' gc.log || true) note(s) nothing live cited for $DAYS days moved to docs/archive/notes/ with their links repointed. Opened by .github/workflows/knowledge-gc.yml on branch \`$GC_BRANCH\`, which dispatched ci.yml on that head. Cite a note from the doc, skill, tool or test that uses it to keep it live."
           if gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head "$GC_BRANCH" \
             --title "$PR_TITLE" --body "$PR_BODY" 2> pr.err; then
             PR_OK=1
