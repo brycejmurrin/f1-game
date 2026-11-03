@@ -348,7 +348,7 @@ test("a stored array of custom liveries still comes back untouched", () => {
 
 // Share-code keeps null slots (`!l || l.id !== replaceId`); normalizeImported used to throw on liv.id.
 // Finding #1 in docs/notes/HUNT-LIVERY-2026-11-03.md (Lane 14 livery pipeline hunt).
-// Tip unblock citation: docs/notes/PERF-HUNT-P5-2026-11-03.md landed uncited without Kind.
+// Tip #4647 archived the uncited P5 hunt note; no live citation of that path.
 test("normalizeImported drops null/non-object rows instead of throwing on liv.id", () => {
   const sb = {
     console,
