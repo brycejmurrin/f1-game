@@ -96,7 +96,7 @@ function laneSafeInsets(root) {
 // A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
 // css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
 const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
-function announceLane(root, paintedBand) {
+function announceLane(root, paintedBand, replay) {
   if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = top() ? laneRect(top()) : null;
   const W = vpW(), H = vpH() || 0;
@@ -162,7 +162,11 @@ function announceLane(root, paintedBand) {
     hStyle(root, "--announce-lane-w", "0px");
   } else for (const k of ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]) hUnstyle(root, k);
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
+  // A replay (announceLaneTick's same-key backstop, cached rects) never re-collapses a card that
+  // HudLayout.clearReadouts reopened in a free slot: nothing it decided from moved, and the
+  // re-collapse cost a collapsed frame plus two clearReadouts passes every ~3 s (perf hunt P5 #4545).
+  if (annEl && annEl.toggleAttribute && !(replay && collapsed && !annEl.hasAttribute("data-lane-collapsed")))
+    annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
 }
 // Layout-free key for the lane memo. Gaps are empty/non-empty only — digit
 // rolloff used to re-key every tick and force a full rect pass (#1723).
@@ -196,9 +200,10 @@ function announceLaneTick(root, force) {
   if (!force && k === _laneKey && --_laneWait > 0) return;
   // Key change or force → drop the rect cache. Same-key 3 s backstop keeps it
   // (re-apply CSS vars from cached rects; 0 getBoundingClientRect).
+  const replay = !force && k === _laneKey && !!_laneRects;
   if (force || k !== _laneKey) { _laneRects = null; _laneSafe = null; }
   _laneKey = k; _laneWait = 30;
-  announceLane(root);
+  announceLane(root, undefined, replay);
 }
 function radioTopSlot(root, bcast) {
   // Clearance belongs to the previous lane. Measure this lane before applying
