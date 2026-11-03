@@ -1511,6 +1511,16 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 #ga-styles > button { flex: 1 1 auto; min-height: 44px; min-width: max-content; margin: 0; }   /* wraps a row rather than clip DOCUMENTARY */
 #ga-styles > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
+/* ENTRY / EXIT CAMERA OPTIONS (injected by the garage camera-options binder) */
+#ga-cam-options { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); margin: 0 0 var(--gap); padding: calc(var(--gap) / 2) 0; border-top: 1px solid var(--card-line); border-bottom: 1px solid var(--card-line); }
+#ga-cam-options > .adv-help { margin: 0 0 calc(var(--gap) / 2); font-size: var(--fs-micro); line-height: 1.35; color: var(--muted); }
+#ga-cam-options .tune-label { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-2); color: var(--text); }
+/* 16px: iOS focused-input auto-zoom floor (see #3558 / ios-input-zoom-w25e) */
+#ga-cam-options select { min-height: var(--tap); font-size: 16px; }
+@media (orientation: landscape) and (max-height: 420px) {
+  #ga-cam-options > .adv-help { display: none; }   /* phone landscape: controls first, help is in the aria-label */
+  #ga-cam-options .tune-label { font-size: var(--fs-micro); }
+}
 }
 
 @layer components {

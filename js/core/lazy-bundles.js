@@ -17,6 +17,13 @@ const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 const isGarageData = (f) => /^js\/garage\/|^js\/data\/garage-/.test(f);   // incl. the optional authored entrance motion
 const RACE_FILES = ApexRoster.LAZY_RACE.filter((f) => !isGarageData(f));
 const GARAGE_FILES = ApexRoster.LAZY_RACE.filter(isGarageData);
+// Entry/exit camera options (override layer + sampled paths). Not on LAZY_RACE /
+// the eager shell — appended here so MAX_EAGER_SCRIPTS never rises. Loaded with
+// the garage's Blender tables; soft: a miss leaves GarageArrival's shipped look.
+const CAMERA_OPTION_FILES = Object.freeze([
+  "js/data/garage-entry-camera.js",
+  "js/data/garage-camera-options.js",
+]);
 // LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
 // does not pay the whole fetch on the critical path.
@@ -806,10 +813,27 @@ function ensureLightPresets() {
 // rigs play the "cut" cameras and the crews the shipped crew.
 let garageLoad = null;
 const garageReady = () => typeof GarageData !== "undefined" && !!GarageData;
+const cameraOptionsReady = () => typeof GarageCameraOptions !== "undefined" && !!GarageCameraOptions;
+function ensureCameraOptions() {
+  if (cameraOptionsReady()) return Promise.resolve(true);
+  if (!CAMERA_OPTION_FILES.length) return Promise.resolve(false);
+  return loadBackendScripts(CAMERA_OPTION_FILES, [], {
+    strict: true, transientRetry: false,
+    ready: (src) => src.indexOf("camera-options") >= 0 ? cameraOptionsReady()
+      : typeof GarageEntryCameraData !== "undefined",
+  }).catch(() => false).then(() => cameraOptionsReady());
+}
 function ensureGarageData() {
-  if (garageReady() || !GARAGE_FILES.length) return Promise.resolve(garageReady());
+  // Camera options hitch a ride on the first inject; once GarageData is up a
+  // second ask only fetches the options pack (never re-evals GarageData).
+  if (garageReady()) {
+    if (cameraOptionsReady()) return Promise.resolve(true);
+    return ensureCameraOptions().then(() => true);
+  }
+  if (!GARAGE_FILES.length) return ensureCameraOptions().then(() => garageReady());
   if (garageLoad) return garageLoad;
-  garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
+  const files = GARAGE_FILES.concat(CAMERA_OPTION_FILES.filter((f) => GARAGE_FILES.indexOf(f) < 0));
+  garageLoad = loadBackendScripts(files, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
     garageLoad = null;
     if (!garageReady()) Log.warn("game", "the garage's Blender tables did not load — the next garage visit asks again");
     return garageReady();
@@ -921,7 +945,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureCameraOptions, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();

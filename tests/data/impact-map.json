@@ -5393,6 +5393,7 @@
         "tests/unit/forecast.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/garage-camera-options.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
@@ -5796,6 +5797,41 @@
         "tests/unit/flyby-shots.test.mjs"
       ]
     },
+    "js/data/garage-camera-options.js": {
+      "applyArrival": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "clampEye": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "clearJamb": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "enforceNearPlane": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "inJamb": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "maxDistInside": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "outsideBay": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "read": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "samplePath": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "settings": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
+      "write": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ]
+    },
     "js/data/garage-defaults.js": {
       "file": [
         "tests/unit/garage-defaults.test.mjs"
@@ -5818,6 +5854,11 @@
     "js/data/garage-entrance-motion.js": {
       "*": [
         "tests/unit/garage-entrance-motion.test.mjs"
+      ]
+    },
+    "js/data/garage-entry-camera.js": {
+      "*": [
+        "tests/unit/garage-camera-options.test.mjs"
       ]
     },
     "js/data/hub.js": {
@@ -8000,7 +8041,11 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "lighting": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "lookingOut": [
+        "tests/unit/garage-mesh.test.mjs"
       ],
       "poseMatrix": [
         "tests/unit/garage-prebuild.test.mjs"
@@ -8521,6 +8566,8 @@
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/garage-camera-options.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs"
       ]
     },

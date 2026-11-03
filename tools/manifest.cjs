@@ -1078,6 +1078,8 @@ const LAZY_EDGES = [
 const LAZY_RACE = [
   "js/data/garage-entrance-motion.js", // optional authored bay motion, warmed with presets
   "js/garage/entrance-motion.js",
+  "js/data/garage-entry-camera.js", // entry/exit camera samples for GarageCameraOptions (lazy)
+  "js/data/garage-camera-options.js", // stay-inside override + garrival / BAY UI (lazy; under js/data/ so sw.js stamps it)
   "js/lighting/presets.js",
   "js/garage/garage-data.js",
 ];

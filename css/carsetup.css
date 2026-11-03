@@ -1352,13 +1352,25 @@ body:not(.desktop) #cs-photo {
    them without a class the shell had to repeat five times */
 #cs-cam-panel > div { display: flex; align-items: center; gap: 8px; }
 .cs-pan-lbl {
-  flex: 0 0 40px;
+  flex: 0 0 48px;
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
-  color: rgba(255,255,255,0.45); text-align: right;
+  color: var(--muted); text-align: right;
 }
-.cs-pan-grp, #cs-view, #cs-wing-views {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+.cs-pan-grp, #cs-view, #cs-wing-views, #cs-bay-views {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap);
   min-width: 0;
+}
+/* BAY chips (GarageCameraOptions): readable on desktop and landscape phone */
+#cs-bay-views .cs-view-btn {
+  min-height: var(--tap);
+  padding: 0 var(--pad);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+}
+@media (orientation: landscape) and (max-height: 420px) {
+  #cs-bay-views .cs-view-btn { min-height: var(--tap); padding: 0 var(--gap); }
+  .cs-pan-lbl { flex-basis: 36px; }
 }
 /* A narrow LANDSCAPE screen: the sheet's 410px floor takes most of the width
    and the sliver beside it cannot hold a row of chips, so the controls would be
