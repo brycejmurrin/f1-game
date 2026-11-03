@@ -1826,6 +1826,7 @@ function updateHud(force, dtMs) {
     invalidateFit(); _minimap.invalidate();
     force = true;   // repaint/refit immediately, even inside the 10 Hz throttle
   }
+  if ((force || !(hudT - dtMs > 0)) && typeof HudRelative !== "undefined" && HudRelative.sampleGeo) HudRelative.sampleGeo();   // tick frame, before any write: REL's 1 Hz net reads clean layout (#4586)
   syncHudCamClasses();
   const skinRev = G.store ? G.store.rev : 0;
   if (player.team && (player.team.id !== _teamSkin || skinRev !== _teamSkinRev)) {
