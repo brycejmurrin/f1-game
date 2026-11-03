@@ -1580,8 +1580,6 @@ const MOVED = {
   "tools/mcp-cli.mjs": "tools/mcp/mcp-cli.mjs",
   "tools/mcp-smoke.mjs": "tools/mcp/mcp-smoke.mjs",
   "tools/probe-mcp.py": "tools/mcp/probe-mcp.py",
-  "tools/tinyfish-mcp.sh": "tools/mcp/tinyfish-mcp.sh",
-  "tools/tinyfish-rpc.py": "tools/mcp/tinyfish-rpc.py",
   "tools/chrome-devtools-mcp.sh": "tools/mcp/chrome-devtools-mcp.sh",
   "tools/playwright-mcp.sh": "tools/mcp/playwright-mcp.sh",
   "tools/apex-tools-mcp.mjs": "tools/mcp/apex-tools-mcp.mjs",
