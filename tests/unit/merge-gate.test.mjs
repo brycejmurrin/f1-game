@@ -42,19 +42,22 @@ test("holdVerdict: the `hold` label vetoes, in either API shape, case-insensitiv
   assert.equal(holdVerdict([{ name: "run-ci" }, "land"]).ok, true);
   assert.equal(holdVerdict([{ name: "Hold" }]).ok, false);
   assert.equal(holdVerdict(["hold"]).ok, false);
-  assert.equal(holdVerdict(["hold"]).evidence, "the `hold` label is set: only brycejmurrin's own click removes it");
+  assert.equal(holdVerdict(["hold"]).evidence, "the `hold` label is set: whoever set it removes it; one brycejmurrin set, only his own click");
 });
 
-test("holdVerdict provenance: a hold an agent removed (performed_via_github_app set) still holds; Bryce's own removal lifts it; a re-added hold holds", () => {
+test("holdVerdict provenance: a hold Bryce set in person stays held when an agent removes it; an agent's hold may be lifted by anyone; Bryce's own removal always lifts", () => {
   const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z", T3 = "2026-11-03T12:00:00Z";
   const byAgent = holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP })]);
   assert.equal(byAgent.ok, false);
-  assert.equal(byAgent.evidence, `hold removed by an agent; Bryce removes holds (unlabeled by brycejmurrin via app claude at ${T2}): still held until brycejmurrin removes it himself`);
+  assert.equal(byAgent.evidence, `hold set by Bryce was removed by an agent (set by brycejmurrin at ${T1}, unlabeled by brycejmurrin via app claude at ${T2}): still held until brycejmurrin removes it himself`);
   const byBryce = holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled" })]);
   assert.deepEqual(byBryce, { ok: true, evidence: "no `hold` label (last removed by brycejmurrin)" });
-  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T3, { event: "unlabeled" })]).ok, true, "Bryce's later removal is the newest event");
+  const agentsOwn = holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled", app: APP })]);
+  assert.deepEqual(agentsOwn, { ok: true, evidence: "no `hold` label (last removed by brycejmurrin via app claude)" }, "an agent lifts a hold an agent set");
+  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T3, { event: "unlabeled" })]).ok, true, "Bryce's later removal is the newest unlabel");
   assert.equal(holdVerdict([], [ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T1)]).ok, false, "created_at orders the events, not the list");
-  assert.equal(holdVerdict([], [ev("hold", T2, { event: "unlabeled", actor: "someone-else" })]).ok, false, "another login's removal is not Bryce's");
+  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", actor: "someone-else" })]).ok, false, "another login's removal of Bryce's hold is not his");
+  assert.equal(holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled" }), ev("hold", T3)]).ok, true, "newest `labeled` is Bryce's but it was never lifted: the label would be present; with it absent the events alone do not hold");
   assert.equal(holdVerdict([], [ev("other", T2, { event: "unlabeled", app: APP })]).ok, true, "another label's events do not count");
   assert.equal(holdVerdict(["hold"], [ev("hold", T2, { event: "unlabeled" })]).ok, false, "the label present always holds");
   assert.equal(holdVerdict([], null).ok, true, "no events (pure callers): the label alone decides");
