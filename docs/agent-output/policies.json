@@ -676,10 +676,10 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
-    "tools/ci/launch-gate.mjs": {
+    "tools/ci/lib/provenance.mjs": {
       "action": "keep-native",
       "presentation": "native",
-      "preserve": "The `= launch-gate ok|refused` line with its reason and receipt path; --json verdict; exit 0 ok, 1 refused, 2 usage"
+      "preserve": "Library: byOwner / isDecisionComment / ownerSet verdicts and the paginated event and comment readers; no CLI output"
     },
     "tools/ci/live-run-check.mjs": {
       "action": "keep-native",
@@ -910,6 +910,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "checked entries and errors; base URL/runtime root; non-ok exits 1, missing URL exits 2"
+    },
+    "tools/ci/worker-prompt.md": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Prose: the Apex worker scheduled task's saved prompt; nothing runs it"
     },
     "tools/ci/wait-for.mjs": {
       "action": "keep-native",

@@ -30,7 +30,7 @@ No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orc
 | LIVE | tools/ci/needs-sync.mjs | pr-board.mjs, sync-pr.mjs; steward skill | KEEP (WORKERS sync rule) |
 | LIVE | tools/ci/sync-pr.mjs | behind-ship, ci-watch, dispatch; 10 skill refs | KEEP |
 | LIVE | tools/ci/dispatch.mjs (+dispatch.json) | spec-timings.yml/labels.json mention; settings allow; WORKERS.md | KEEP (the dispatcher) |
-| LIVE | tools/ci/launch-gate.mjs | hooks/launch-gate.py, launch-page.py, dispatch.mjs | KEEP (quota receipt before create_session); header cites orchestrator.md — reword |
+| LIVE | launch-gate.mjs (tools/ci; deleted 2026-11-03 with the Actions dispatcher) | hooks/launch-gate.py, launch-page.py, dispatch.mjs | KEEP (quota receipt before create_session); header cites orchestrator.md — reword |
 | LIVE | tools/ci/cursor-agents.mjs + lib/cursor-transcript.mjs | apex-tools-mcp.mjs (`apex_cursor_agents`) | KEEP (lane:cursor) |
 | LIVE | tools/ci/session-status.mjs | pr-body.mjs, apex-tools-mcp.mjs; skills check, check-changes | KEEP (drops one caller when pr-body goes) |
 | LIVE | tools/ci/session-transcript.mjs | archive-sessions.mjs; hooks/context-cap.py | KEEP (hook caller survives) |

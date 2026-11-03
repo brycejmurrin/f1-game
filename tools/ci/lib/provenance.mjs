@@ -1,0 +1,96 @@
+// provenance.mjs — "did Bryce decide this": a GitHub label event or comment is the owner's only when its actor is the
+// owner AND it was not performed through a GitHub App.
+// @doc Provenance of GitHub label events and comments: byOwner (actor = owner, no app), decision: comments, label events.
+// @section runner
+// @skill steward
+//
+// Why (docs/plans/2026-11-03-agent-surface-reset.md §4.3): every agent in this repo writes to GitHub as `brycejmurrin`
+// through the Claude GitHub App, so the login alone proves nothing. The one field that separates Bryce's own click on
+// GitHub Mobile from an agent's write is `performed_via_github_app`: null on his clicks, the app object (`claude`) on
+// agent writes. Verified on this repo's events 2026-11-03 (plan §4.1 "Platform facts"). A grant is therefore a label
+// event or a `decision:` comment that passes `byOwner`; a quoted relay of his words in a PR body or comment is not.
+//
+// Readers: tools/ci/dispatch.mjs (`priority`, `dispatch:pause`, `dispatch:merge-pause`, clearing `needs-decision`)
+// and tools/ci/merge-gate.mjs (the `hold` and `config` rows). Issue events and issue comments share the fields read
+// here: the actor (`actor` on an event, `user` on a comment) and `performed_via_github_app`.
+//   https://docs.github.com/en/rest/issues/events#list-issue-events
+//   https://docs.github.com/en/rest/issues/comments#list-issue-comments
+// Every function is pure except readIssueEvents / readIssueComments, which take the GitHub client as an argument.
+import { api as githubApi, REPO } from "../github-api.mjs";
+
+/** The repository owner whose clicks and `decision:` comments are grants. tools/ci/dispatch.json `owner` overrides. */
+export const OWNER = "brycejmurrin";
+/** Rows per list page; a page shorter than this is the last one. */
+export const PAGE_SIZE = 100;
+/** `decision:` at the start of a comment (case-insensitive, leading whitespace allowed): Bryce's one-channel answer. */
+export const DECISION_RE = /^\s*decision:/i;
+
+/** The login that performed an event or wrote a comment (`actor` on an event, `user` on a comment). Pure. */
+export const actorOf = (evt) => evt?.actor?.login ?? evt?.user?.login ?? null;
+
+/** Did `owner` perform this event or write this comment, in person (no GitHub App)? Pure. */
+export function byOwner(evt, owner = OWNER) {
+  if (!evt || !owner) return false;
+  return actorOf(evt) === owner && !evt.performed_via_github_app;
+}
+
+/** Why an event is not the owner's, for a gate's evidence line: "<login> via app <slug>" / "not the owner". Pure. */
+export function describeActor(evt) {
+  const who = actorOf(evt) || "unknown";
+  const app = evt?.performed_via_github_app;
+  return app ? `${who} via app ${app.slug || app.name || "?"}` : who;
+}
+
+/** A comment by the owner in person whose body starts with `decision:`. Pure. */
+export const isDecisionComment = (c, owner = OWNER) => byOwner(c, owner) && DECISION_RE.test(String(c?.body || ""));
+
+/** The `labeled` / `unlabeled` events for one label, in the order given (the API lists oldest first). Pure. */
+export const labelEvents = (events, label) => (events || [])
+  .filter((e) => (e?.event === "labeled" || e?.event === "unlabeled") && e.label?.name === label);
+
+/** The label events for `label` the owner performed in person. Pure. */
+export const ownerLabelEvents = (events, owner = OWNER, label) => labelEvents(events, label).filter((e) => byOwner(e, owner));
+
+/** The newest `labeled` / `unlabeled` event for `label` (by created_at, then list order), or null. Pure. */
+export function newestLabelEvent(events, label) {
+  const t = (e) => Date.parse(e?.created_at || "") || 0;
+  let best = null;
+  for (const e of labelEvents(events, label)) if (!best || t(e) >= t(best)) best = e;
+  return best;
+}
+
+/** Is `label` currently on `labels` AND was it last ADDED by the owner in person? A label with no fetched events
+ *  (`events` null/undefined) is not honoured: provenance unknown is not a grant. Pure. */
+export function ownerSet(labels, events, label, owner = OWNER) {
+  const names = (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+  if (!names.includes(label)) return false;
+  const e = newestLabelEvent(events, label);
+  return !!e && e.event === "labeled" && byOwner(e, owner);
+}
+
+const pathFor = (repo, tail) => (!repo || repo === REPO ? tail : `https://api.github.com/repos/${repo}/${tail}`);
+
+/** Every page of a list endpoint through the repo's GitHub client → { rows } | { error }. */
+function readAll(pathQs, { request = githubApi, maxPages = 10 } = {}) {
+  const rows = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const r = request(`${pathQs}${pathQs.includes("?") ? "&" : "?"}per_page=${PAGE_SIZE}&page=${page}`);
+    if (r?.error) return { error: r.error };
+    const batch = Array.isArray(r?.json) ? r.json : [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+  return { rows };
+}
+
+/** The issue/PR's events (labeled, unlabeled, closed, … oldest first), every page. { events } | { error }. */
+export function readIssueEvents(repo, n, opts = {}) {
+  const r = readAll(pathFor(repo, `issues/${n}/events`), opts);
+  return r.error ? r : { events: r.rows };
+}
+
+/** The issue/PR's comments (oldest first), every page. { comments } | { error }. */
+export function readIssueComments(repo, n, opts = {}) {
+  const r = readAll(pathFor(repo, `issues/${n}/comments`), opts);
+  return r.error ? r : { comments: r.rows };
+}

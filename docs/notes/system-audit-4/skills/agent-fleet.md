@@ -30,4 +30,4 @@ GAPS (ranked):
 4. comms.md:161-175,194-209 vs communication.md:19-25,67-99 — dedupe the two messaging homes; one SKILL.md bullet.
 5. SKILL.md:3 and :12 — remove "Merge Desk approvals"; add orchestrator/bus/quota/hand-off triggers; soften "cannot message out at all".
 6. orchestrator.md Hard lines 13/14/15 and anecdotes — trim ~3 KB; role-pr-owner.md:67 drop "was 15 min".
-OUT OF SCOPE: .claude/hooks/launch-gate.py:4 and tools/ci/launch-gate.mjs:8 — cite "orchestrator.md §Pre-launch quota check says ..." which is now a pointer to launch-policy.md §Quota gate; AGENTS.md "standing authority ... launches sessions (the quota gate wins)" should name the override.
+OUT OF SCOPE: .claude/hooks/launch-gate.py:4 and launch-gate.mjs:8 (tools/ci; deleted 2026-11-03) — cite "orchestrator.md §Pre-launch quota check says ..." which is now a pointer to launch-policy.md §Quota gate; AGENTS.md "standing authority ... launches sessions (the quota gate wins)" should name the override.

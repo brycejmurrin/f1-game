@@ -1,7 +1,7 @@
-/* merge-gate.test.mjs — the landing gate's rows as behaviour: pure verdicts, the distance count from a fixture
- * history (pure and over a real git repo), the ratchets on a merge result, and the evaluator with a fake API,
- * fake merge and fake git (docs/plans/2026-10-27-orchestration-redesign.md §4.3), plus the ready receipt the hooks
- * still read (tools/lib/gate-receipt.mjs and its Python twin .claude/hooks/merge_policy.py).
+/* merge-gate.test.mjs — the landing gate's rows as behaviour: pure verdicts (hold and config with provenance from
+ * the PR's label events), the ratchets on a merge result, and the evaluator with a fake API and fake merge
+ * (docs/plans/2026-10-27-orchestration-redesign.md §4.3; provenance: 2026-11-03-agent-surface-reset.md §4.3), plus
+ * the ready receipt the hooks still read (tools/lib/gate-receipt.mjs and its Python twin .claude/hooks/merge_policy.py).
  *
  * Run: node --test tests/unit/merge-gate.test.mjs
  */
@@ -13,9 +13,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  REQUIRED_CHECK, CI_APP, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
-  gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
-  untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, touchesGame,
+  REQUIRED_CHECK, CI_APP, HOLD_LABEL, CONFIG_LABEL, ROWS, openVerdict, holdVerdict, configVerdict, planRow, ciVerdict, isConfigPath,
+  configFiles, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main, untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { planHash } from "../../tools/ci/ready-gate.mjs";
@@ -26,6 +25,9 @@ const scratch = (prefix) => { const d = path.join(ROOT, "artifacts", "tmp"); fs.
 const HEAD = "a".repeat(40), TIP = "t".repeat(40);
 const sha = (n) => String(n).repeat(40).slice(0, 40);
 const GHA = { slug: "github-actions" };
+const APP = { id: 1236329, slug: "claude", name: "Claude" };
+/** A label event: Bryce's own click unless `app` names the GitHub App that performed it. */
+const ev = (name, at, { event = "labeled", app = null, actor = "brycejmurrin" } = {}) => ({ event, label: { name }, actor: { login: actor }, created_at: at, performed_via_github_app: app });
 
 test("openVerdict: only an open, non-draft PR passes", () => {
   assert.equal(openVerdict({ state: "open", draft: false }).ok, true);
@@ -40,6 +42,41 @@ test("holdVerdict: the `hold` label vetoes, in either API shape, case-insensitiv
   assert.equal(holdVerdict([{ name: "run-ci" }, "land"]).ok, true);
   assert.equal(holdVerdict([{ name: "Hold" }]).ok, false);
   assert.equal(holdVerdict(["hold"]).ok, false);
+  assert.equal(holdVerdict(["hold"]).evidence, "the `hold` label is set: only brycejmurrin's own click removes it");
+});
+
+test("holdVerdict provenance: a hold an agent removed (performed_via_github_app set) still holds; Bryce's own removal lifts it; a re-added hold holds", () => {
+  const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z", T3 = "2026-11-03T12:00:00Z";
+  const byAgent = holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP })]);
+  assert.equal(byAgent.ok, false);
+  assert.equal(byAgent.evidence, `hold removed by an agent; Bryce removes holds (unlabeled by brycejmurrin via app claude at ${T2}): still held until brycejmurrin removes it himself`);
+  const byBryce = holdVerdict([], [ev("hold", T1, { app: APP }), ev("hold", T2, { event: "unlabeled" })]);
+  assert.deepEqual(byBryce, { ok: true, evidence: "no `hold` label (last removed by brycejmurrin)" });
+  assert.equal(holdVerdict([], [ev("hold", T1), ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T3, { event: "unlabeled" })]).ok, true, "Bryce's later removal is the newest event");
+  assert.equal(holdVerdict([], [ev("hold", T2, { event: "unlabeled", app: APP }), ev("hold", T1)]).ok, false, "created_at orders the events, not the list");
+  assert.equal(holdVerdict([], [ev("hold", T2, { event: "unlabeled", actor: "someone-else" })]).ok, false, "another login's removal is not Bryce's");
+  assert.equal(holdVerdict([], [ev("other", T2, { event: "unlabeled", app: APP })]).ok, true, "another label's events do not count");
+  assert.equal(holdVerdict(["hold"], [ev("hold", T2, { event: "unlabeled" })]).ok, false, "the label present always holds");
+  assert.equal(holdVerdict([], null).ok, true, "no events (pure callers): the label alone decides");
+});
+
+test("configVerdict: a diff touching hooks, settings.json, workflows or githooks needs `config-ok` last added by Bryce in person; any other diff passes", () => {
+  assert.equal(CONFIG_LABEL, "config-ok");
+  for (const p of [".claude/hooks/bash-guard.sh", ".claude/settings.json", ".github/workflows/dispatch.yml", ".githooks/pre-commit", "./.claude/hooks/x.py"]) assert.equal(isConfigPath(p), true, p);
+  for (const p of [".claude/settings.local.json", ".claude/skills/steward/SKILL.md", ".github/labels.json", "tools/ci/merge-gate.mjs", "js/game.js", ".claude/rules/claude-config.md"]) assert.equal(isConfigPath(p), false, p);
+  assert.deepEqual(configFiles(["docs/a.md", ".githooks/pre-push", "js/a.js"]), [".githooks/pre-push"]);
+  const T1 = "2026-11-03T10:00:00Z", T2 = "2026-11-03T11:00:00Z";
+  assert.deepEqual(configVerdict(["docs/TESTING.md", "tools/ci/merge-gate.mjs"], [], null), { ok: true, evidence: "no hook, settings, workflow or githook path in the diff (2 file(s))" });
+  const files = [".github/workflows/dispatch.yml", "tools/ci/dispatch.mjs"];
+  assert.deepEqual(configVerdict(files, [], []), { ok: false, evidence: "needs config-ok from brycejmurrin: the diff edits .github/workflows/dispatch.yml" });
+  assert.deepEqual(configVerdict(files, ["config-ok"], [ev("config-ok", T1, { app: APP })]),
+    { ok: false, evidence: "needs config-ok from brycejmurrin: the label was last added by brycejmurrin via app claude — only his own click counts (the diff edits .github/workflows/dispatch.yml)" });
+  assert.deepEqual(configVerdict(files, ["config-ok"], []),
+    { ok: false, evidence: "needs config-ok from brycejmurrin: the label was found but its label event was not — only his own click counts (the diff edits .github/workflows/dispatch.yml)" });
+  assert.deepEqual(configVerdict(files, [{ name: "config-ok" }], [ev("config-ok", T1)]), { ok: true, evidence: `config-ok added by brycejmurrin at ${T1} covers .github/workflows/dispatch.yml` });
+  assert.equal(configVerdict(files, ["config-ok"], [ev("config-ok", T1), ev("config-ok", T2, { event: "unlabeled" }), ev("config-ok", "2026-11-03T12:00:00Z", { app: APP })]).ok, false, "Bryce's old click does not cover an agent's re-add");
+  const many = configVerdict([".claude/hooks/a.sh", ".claude/hooks/b.sh", ".claude/hooks/c.sh", ".claude/hooks/d.sh", ".claude/hooks/e.sh"], [], []);
+  assert.equal(many.evidence, "needs config-ok from brycejmurrin: the diff edits .claude/hooks/a.sh, .claude/hooks/b.sh, .claude/hooks/c.sh, .claude/hooks/d.sh, …");
 });
 
 test("planRow: open items refuse, a `land:` item is exempt, no Plan passes", () => {
@@ -57,104 +94,6 @@ test("ciVerdict: the required check-run on the head, newest attempt, success onl
   assert.equal(ciVerdict([{ id: 1, name: "CI", app: GHA, status: "in_progress" }]).ok, false);
   assert.equal(ciVerdict([{ id: 1, name: "CI", app: GHA, status: "completed", conclusion: "failure" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success" }]).ok, true, "newest attempt wins");
   assert.equal(ciVerdict([{ id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success" }, { id: 3, name: "CI", app: GHA, status: "completed", conclusion: "failure" }]).ok, false);
-});
-
-test("game paths: js/ css/ assets/ index.html sw.js", () => {
-  for (const p of ["js/game.js", "css/career.css", "assets/pack/manifest.json", "index.html", "sw.js", "./js/x.js"]) assert.equal(isGamePath(p), true, p);
-  for (const p of ["tests/unit/ready-gate.test.mjs", "tools/ci/merge-gate.mjs", "docs/TESTING.md", "index.html.bak", "jsx/x"]) assert.equal(isGamePath(p), false, p);
-  assert.deepEqual(gameFiles(["tools/ci/ready-gate.mjs", "js/core/log.js"]), ["js/core/log.js"]);
-  assert.equal(touchesGame(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", ".github/workflows/land.yml", "index.html.bak"]), false);
-  assert.equal(touchesGame(["docs/a.md", "sw.js"]), true);
-  assert.equal(touchesGame([]), false, "an empty diff touches nothing");
-});
-
-// A base's first-parent history, newest first: merges are counted only when their diff touches a game path.
-const commit = (n, files, merge = true) => ({ sha: sha(n), parents: merge ? [sha(n + 1), sha(9)] : [sha(n + 1)], files });
-const HISTORY = [commit(1, ["js/game.js"]), commit(2, ["docs/TESTING.md"]), commit(3, ["css/hud.css"]), commit(4, ["js/a.js"], false), commit(5, ["index.html"]), commit(6, ["js/b.js"])];
-
-test("gameMergesBehind counts game merges between the tip and the merge-base; non-game merges and plain commits do not count", () => {
-  assert.deepEqual(gameMergesBehind(HISTORY, sha(6)), { count: 3, shas: [sha(1), sha(3), sha(5)], reached: true });
-  assert.deepEqual(gameMergesBehind(HISTORY, sha(1)), { count: 0, shas: [], reached: true }, "a PR based on the tip");
-  assert.deepEqual(gameMergesBehind(HISTORY, sha(3)), { count: 1, shas: [sha(1)], reached: true });
-  assert.equal(gameMergesBehind(HISTORY, "none").reached, false, "a merge-base off the first-parent line");
-  assert.equal(gameMergesBehind(HISTORY, "none").count, 4);
-});
-
-test("distanceVerdict: at most N game merges behind (default 12); an off-line merge-base counts everything walked", () => {
-  assert.equal(MAX_BEHIND, 12);
-  assert.equal(distanceVerdict(HISTORY, sha(6)).ok, true, "3 behind passes the default");
-  assert.ok(distanceVerdict(HISTORY, sha(6)).evidence.includes("(max 12)"));
-  assert.equal(distanceVerdict(HISTORY, sha(3), 2).ok, true);
-  assert.equal(distanceVerdict(HISTORY, sha(5), 2).ok, true, "exactly N passes");
-  const over = distanceVerdict(HISTORY, sha(6), 2);
-  assert.equal(over.ok, false);
-  assert.ok(over.evidence.includes("3 game merge(s)") && over.evidence.includes("sync-pr"), over.evidence);
-  assert.equal(distanceVerdict(HISTORY, sha(6), 3).ok, true, "--max-behind 3");
-  assert.equal(distanceVerdict(HISTORY, sha(6), 0).ok, false);
-  assert.equal(distanceVerdict(HISTORY, "none", 4).ok, true);
-  assert.ok(distanceVerdict(HISTORY, "none", 4).evidence.includes("off the base's first-parent line"));
-});
-
-test("baseHistory / distanceFor over a real repo: first-parent merges with their first-parent diff, down to the merge-base", () => {
-  const T = scratch("merge-gate-distance-");
-  const g = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
-  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(T, rel)), { recursive: true }); fs.writeFileSync(path.join(T, rel), text); };
-  const land = (name, rel) => { g(T, "checkout", "-q", "-b", name, "base"); write(rel, name + "\n"); g(T, "add", "-A"); g(T, "commit", "-qm", name); g(T, "checkout", "-q", "base"); g(T, "merge", "-q", "--no-ff", "-m", `merge ${name}`, name); };
-  try {
-    // Fixture paths reuse the names docs-integrity's SOURCE_EXEMPT already allows for this file.
-    g(T, "init", "-q", "-b", "base"); write("README", "0\n"); write("js/b.js", "old\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "root");
-    const fork = g(T, "rev-parse", "HEAD");
-    g(T, "checkout", "-q", "-b", "pr", "base"); write("tools/x.mjs", "pr\n"); write("js/b.js", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "the PR");
-    const head = g(T, "rev-parse", "HEAD");
-    g(T, "checkout", "-q", "-b", "docs-pr", "base"); write("docs/a.md", "pr\n"); write("tools/x.mjs", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "a docs and tools PR");
-    const docsHead = g(T, "rev-parse", "HEAD");
-    g(T, "checkout", "-q", "-b", "mover", "base"); write("tools/y.mjs", "old\n"); g(T, "rm", "-q", "js/b.js"); g(T, "add", "-A"); g(T, "commit", "-qm", "move a game file out of js/");
-    const moverHead = g(T, "rev-parse", "HEAD");
-    land("game-1", "js/a.js"); land("docs-1", "docs/a.md"); land("game-2", "css/a.css");
-    write("tools/y.mjs", "direct\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "direct commit");   // not a merge: never counts
-    const tip = g(T, "rev-parse", "base");
-    const h = baseHistory({ tip, mergeBase: fork, cwd: T });
-    assert.equal(h.commits.length, 5, "direct, game-2, docs-1, game-1, root");
-    assert.equal(h.commits.at(-1).sha, fork, "the merge-base closes the walk");
-    assert.deepEqual(h.commits.filter((c) => c.parents.length > 1).map((c) => c.files), [["css/a.css"], ["docs/a.md"], ["js/a.js"]], "a merge's files are its first-parent diff");
-    assert.deepEqual(h.commits[0].files, [], "plain commits carry no file list");
-    const d = distanceFor({ head, tip, cwd: T });
-    assert.equal(d.mergeBase, fork);
-    assert.equal(d.row.ok, true, d.row.evidence);
-    assert.ok(d.row.evidence.startsWith("2 game merge(s)"), d.row.evidence);
-    assert.equal(distanceFor({ head, tip, cwd: T, max: 1 }).row.ok, false);
-    const docs = distanceFor({ head: docsHead, tip, cwd: T, max: 0 });
-    assert.equal(docs.mergeBase, fork);
-    assert.deepEqual(docs.row, { ok: true, evidence: "no game files in this PR's diff (2 file(s)): distance not applied" }, "a PR touching no game path is not held to the distance");
-    assert.equal(g(T, "-c", "diff.renames=true", "diff", "--name-only", fork, moverHead), "tools/y.mjs", "with rename detection git names only the destination");
-    assert.equal(distanceFor({ head: moverHead, tip, cwd: T, max: 1 }).row.ok, false, "a rename out of js/ still touches js/ (--no-renames)");
-    assert.ok(/failed/.test(distanceFor({ head: "0".repeat(40), tip, cwd: T }).error), "an unknown head is an error, not a row");
-  } finally { fs.rmSync(T, { recursive: true, force: true }); }
-});
-
-test("distanceFor: 20 game merges behind refuses a game PR and passes a PR whose own diff touches no game path (fake git)", () => {
-  const id = (i) => "f" + i.toString(16).padStart(39, "0");   // distinct fake shas
-  const MB = id(999), TIP20 = id(0);
-  const fakeGit = (prFiles, calls) => (args) => {
-    calls.push(args[0]);
-    const ok = (lines) => ({ status: 0, stdout: lines.join("\n") + "\n", stderr: "" });
-    if (args[0] === "merge-base") return ok([MB]);
-    if (args[0] === "diff") { assert.deepEqual(args, ["diff", "--no-renames", "--name-only", MB, HEAD], "the PR's own diff: merge-base..head, renames split"); return ok(prFiles); }
-    if (args[0] === "rev-list") return ok([...Array.from({ length: 20 }, (_, i) => `${id(i)} ${i === 19 ? MB : id(i + 1)} ${id(500 + i)}`), `${MB} ${id(1000)}`]);
-    if (args[0] === "diff-tree") return ok(["css/a.css"]);
-    return { status: 1, stdout: "", stderr: `unexpected git ${args[0]}` };
-  };
-  const calls = [];
-  const game = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/a.md", "js/a.js"], calls) });
-  assert.equal(game.row.ok, false);
-  assert.ok(game.row.evidence.startsWith("base is 20 game merge(s) ahead of the merge-base (max 12)"), game.row.evidence);
-  assert.ok(calls.includes("rev-list"));
-  calls.length = 0;
-  const docs = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", "tests/unit/merge-gate.test.mjs", ".github/workflows/land.yml"], calls) });
-  assert.deepEqual(docs, { row: { ok: true, evidence: "no game files in this PR's diff (4 file(s)): distance not applied" }, mergeBase: MB });
-  assert.deepEqual(calls, ["merge-base", "diff"], "no base walk for a PR that touches no game path");
-  const broken = distanceFor({ head: HEAD, tip: TIP20, run: (a) => (a[0] === "merge-base" ? { status: 0, stdout: MB + "\n" } : { status: 128, stdout: "", stderr: "fatal: bad object" }) });
-  assert.equal(broken.error, `diff ${MB.slice(0, 8)}..${HEAD.slice(0, 8)} failed: fatal: bad object`, "a failed diff is an error, never a pass");
 });
 
 // The assert-match ratchet counts the literal text of the pin, so the fixtures spell it from parts.
@@ -222,7 +161,7 @@ test("localMergeGenCheck: a gen:check failure and a conflict each return the fet
     const gen = gate((cmd) => (cmd === "npm" ? { status: 1, stdout: "docs/agent-index.json is stale: run npm run gen", stderr: "" } : assert.fail(`unexpected ${cmd}`)));
     assert.equal(gen.ok, false);
     assert.equal(gen.error, undefined, "a refusal, not a git error");
-    assert.equal(gen.tip, tip, "the tip is known once fetched: distance still evaluates on it");
+    assert.equal(gen.tip, tip, "the tip is known once fetched: land.yml compares it with the deploy tip at post time");
     assert.ok(gen.evidence.startsWith(`gen:check fails on the merge onto ${tip.slice(0, 8)}: docs/agent-index.json is stale`), gen.evidence);
     git(W, "checkout", "-q", "deploy-x"); write(W, "docs/a.md", "tip\n"); git(W, "add", "docs/a.md"); git(W, "commit", "-q", "-m", "tip edits the same line"); git(W, "push", "-q", "origin", "deploy-x");
     const moved = git(W, "rev-parse", "deploy-x");
@@ -233,22 +172,23 @@ test("localMergeGenCheck: a gen:check failure and a conflict each return the fet
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
-/** A fake GitHub plus fake merge and distance for the evaluator; `pull` and `checks` are mutable per case. */
+/** A fake GitHub plus fake merge for the evaluator; `pull`, `checks`, `events` and `files` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
   const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success", check_suite: { id: 50 } }];
   const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml" }];
+  const events = [], files = [{ filename: "js/game.js" }, { filename: "docs/TESTING.md" }];
   const calls = [];
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
+    if (p.startsWith("issues/7/events")) return { json: events };
+    if (p.startsWith("pulls/7/files")) return { json: files };
     if (p.startsWith("commits/")) return { json: { check_runs: checks, total_count: checks.length } };
     if (p.startsWith(`actions/workflows/ci.yml/runs?head_sha=${HEAD}`)) return { json: { workflow_runs: runs, total_count: runs.length } };
     return { error: `unexpected ${p}` };
   };
   const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }; };
-  const distance = ({ max }) => ({ row: { ok: max >= 1, evidence: `1 game merge(s) (max ${max})` }, mergeBase: sha(5) });
-  const fetchTip = (a) => { calls.push({ fetch: a }); return { tip: TIP }; };
-  return { pull, checks, runs, calls, deps: { request, root: "/nowhere", localMerge, distance, fetchTip } };
+  return { pull, checks, runs, events, files, calls, deps: { request, root: "/nowhere", localMerge } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -265,42 +205,46 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   f.pull.body = ""; f.checks[1].conclusion = "failure";
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"]);
   f.checks[1].conclusion = "success";
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, maxBehind: 0 }).rows[k].ok), ["distance"]);
+  f.files.push({ filename: ".github/workflows/land.yml" });
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["config"], "a workflow edit without Bryce's config-ok");
+  f.pull.labels = [{ name: "config-ok" }]; f.events.push(ev("config-ok", "2026-11-03T10:00:00Z"));
+  assert.equal(evaluate({ pr: 7, ...f.deps }).ok, true, "config-ok by Bryce's own click");
+  f.events.push(ev("hold", "2026-11-03T10:30:00Z"), ev("hold", "2026-11-03T11:00:00Z", { event: "unlabeled", app: APP }));
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["hold"], "a hold an agent removed still holds");
+  f.events.length = 1; f.pull.labels = []; f.files.pop();
   const refused = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: TIP }) });
   assert.deepEqual(ROWS.filter((k) => !refused.rows[k].ok), ["gen", "ratchets"], "a refused merge leaves the ratchets unproven");
   f.pull.draft = true; f.calls.length = 0;
   const draft = evaluate({ pr: 7, ...f.deps });
-  assert.deepEqual(ROWS.filter((k) => !draft.rows[k].ok), ["open", "gen", "ratchets", "distance"]);
+  assert.deepEqual(ROWS.filter((k) => !draft.rows[k].ok), ["open", "gen", "ratchets"]);
   assert.equal(f.calls.length, 0, "no throw-away merge for a PR that is not open and ready");
   f.pull.draft = false;
-  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, sha: "b".repeat(40), ...f.deps }).rows[k].ok), ["open", "gen", "ratchets", "distance"], "--sha must be the current head");
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, sha: "b".repeat(40), ...f.deps }).rows[k].ok), ["open", "gen", "ratchets"], "--sha must be the current head");
   assert.equal(evaluate({ pr: 7, sha: HEAD.slice(0, 12), ...f.deps }).ok, true, "a prefix of the head is the head");
   assert.ok(/HTTP 500/.test(evaluate({ pr: 7, ...f.deps, request: () => ({ error: "HTTP 500" }) }).error));
   assert.ok(/fetch failed/.test(evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "fetch failed", error: true }) }).error));
+  const noEvents = (p) => (p.startsWith("issues/7/events") ? { error: "HTTP 502" } : f.deps.request(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: noEvents }).error, "events of PR #7: HTTP 502", "unreadable provenance is an error (will retry), never a pass");
+  const noFiles = (p) => (p.startsWith("pulls/7/files") ? { error: "HTTP 502" } : f.deps.request(p));
+  assert.equal(evaluate({ pr: 7, ...f.deps, request: noFiles }).error, "files of PR #7: HTTP 502");
 });
 
-test("evaluate: a gen:check or conflict refusal refuses on its own row, never masked as an error; no tip is a distance FAIL row (#3964, 2026-10-27)", () => {
+test("evaluate: a gen:check or conflict refusal refuses on its own row, never masked as an error, and carries the fetched tip (#3964, 2026-10-27)", () => {
   const f = fakes();
-  // distanceFor's real shape: an empty tip fails its merge-base, which evaluate used to return as { error }.
-  const strict = ({ tip, max }) => (tip ? { row: { ok: true, evidence: `0 game merge(s) (max ${max})` }, mergeBase: sha(5) } : { error: `merge-base of ${HEAD.slice(0, 8)} and  failed (shallow clone? fetch-depth: 0)` });
   const GEN_TIP = "abc" + "0".repeat(37);
   const genFail = () => ({ ok: false, evidence: `gen:check fails on the merge onto ${GEN_TIP.slice(0, 8)}: docs/agent-index.json drift`, tip: GEN_TIP });
-  const v = evaluate({ pr: 7, ...f.deps, distance: strict, localMerge: genFail });
+  const v = evaluate({ pr: 7, ...f.deps, localMerge: genFail });
   assert.equal(v.error, undefined, v.error);
   assert.deepEqual([v.ok, v.waiting, v.tip], [false, false, GEN_TIP]);
-  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["gen", "ratchets"], "distance still evaluates on the refusal's tip");
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["gen", "ratchets"]);
   assert.ok(v.rows.gen.evidence.startsWith("gen:check fails"), v.rows.gen.evidence);
   const logs = [];
-  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, distance: strict, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
   assert.ok(logs.some((l) => l.startsWith("= gate gen: FAIL gen:check fails")), logs.join("\n"));
-  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=FAIL distance=ok pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
-  const noTip = evaluate({ pr: 7, ...f.deps, distance: strict, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
+  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=ok gen=FAIL ratchets=FAIL pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
+  const noTip = evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
   assert.equal(noTip.error, undefined, noTip.error);
-  assert.deepEqual(ROWS.filter((k) => !noTip.rows[k].ok), ["gen", "ratchets", "distance"]);
-  assert.equal(noTip.rows.distance.evidence, "not evaluated: no tip");
-  const trustedNoTip = evaluate({ pr: 7, ...f.deps, distance: strict, trusted: true, fetchTip: () => ({ tip: "" }) });
-  assert.equal(trustedNoTip.error, undefined, trustedNoTip.error);
-  assert.deepEqual(TRUSTED_ROWS.filter((k) => !trustedNoTip.rows[k].ok), ["distance"]);
+  assert.deepEqual([ROWS.filter((k) => !noTip.rows[k].ok), noTip.tip], [["gen", "ratchets"], ""]);
 });
 
 test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a row failed, 1 usage/API error; --json writes the summary", () => {
@@ -310,16 +254,18 @@ test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a r
   const deps = { ...f.deps, log: (l) => logs.push(l), write: (p, text) => { written[p] = JSON.parse(text); } };
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 0);
   assert.deepEqual(logs.slice(0, 7).map((l) => l.split(" ").slice(0, 4).join(" ")), ROWS.map((k) => `= gate ${k}: ok`));
-  assert.ok(logs[7].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok gen=ok ratchets=ok distance=ok pr=#7 sha=" + HEAD), logs[7]);
+  assert.ok(logs[7].startsWith("= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok gen=ok ratchets=ok pr=#7 sha=" + HEAD), logs[7]);
   logs.length = 0;
-  assert.equal(main(["--pr", "7", "--max-behind", "0", "--json", "artifacts/g.json"], deps), 2);
-  assert.ok(logs.some((l) => l.startsWith("= gate distance: FAIL")), logs.join("\n"));
-  assert.ok(logs.at(-1).startsWith("= merge-gate refused —"));
+  f.files.push({ filename: ".claude/hooks/bash-guard.sh" });
+  assert.equal(main(["--pr", "7", "--json", "artifacts/g.json"], deps), 2);
+  assert.ok(logs.some((l) => l === "= gate config: FAIL needs config-ok from brycejmurrin: the diff edits .claude/hooks/bash-guard.sh"), logs.join("\n"));
+  assert.ok(logs.at(-1).startsWith("= merge-gate refused — open=ok hold=ok plan=ok ci=ok config=FAIL"));
   const j = written["/nowhere/artifacts/g.json"];
-  assert.equal(j.ok, false); assert.equal(j.maxBehind, 0); assert.equal(j.rows.distance.ok, false);
+  assert.equal(j.ok, false); assert.equal(j.rows.config.ok, false); assert.equal("maxBehind" in j, false);
+  f.files.pop();
   assert.equal(main(["--pr", "7", "--sha", "b".repeat(40)], deps), 2, "a stale --sha refuses");
   assert.equal(main([], deps), 1, "no --pr");
-  assert.equal(main(["--pr", "7", "--max-behind", "x"], deps), 1, "bad --max-behind");
+  assert.equal(main(["--pr", "7", "--max-behind", "0"], deps), 1, "--max-behind is gone with the distance row");
   assert.equal(main(["--pr", "7"], { ...deps, request: () => ({ error: "HTTP 502" }) }), 1, "API error");
   assert.ok(logs.at(-1).startsWith("= merge-gate error — PR #7: HTTP 502"));
   assert.deepEqual(rowLines({ ok: false, pr: 1, rows: { open: { ok: false, evidence: "PR is closed" } } }), ["= gate open: FAIL PR is closed", "= merge-gate refused — open=FAIL pr=#1 sha= tip="]);
@@ -556,24 +502,25 @@ test("ciSuitesFor: the ci.yml runs on the head (path re-checked, a ref suffix to
   assert.equal(ciSuitesFor(HEAD, () => ({ error: "HTTP 403" })).error, "HTTP 403");
 });
 
-// ---- WP-L2: --trusted runs no PR code; post takes open/hold/plan/ci/distance from it, never from the artifact -----
+// ---- WP-L2: --trusted runs no PR code; post takes open/hold/plan/ci/config from it, never from the artifact -----
 
-test("--trusted: only the rows no PR code decides, no throw-away merge, distance on the fetched tip", () => {
-  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "distance"]);
+test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-away merge, no fetch", () => {
+  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "config"]);
   const f = fakes();
   const v = evaluate({ pr: 7, ...f.deps, trusted: true });
   assert.equal(v.ok, true, JSON.stringify(v.rows));
   assert.deepEqual(Object.keys(v.rows), TRUSTED_ROWS);
-  assert.equal(v.tip, TIP);
-  assert.deepEqual(f.calls, [{ fetch: { pr: 7, head: HEAD, headRef: "cursor/x", cwd: "/nowhere", base: "deploy-x" } }], "a fetch only: localMerge (the PR's scripts) never runs");
+  assert.equal(v.tip, "", "no git at all: the tip is land.yml's business at post time");
+  assert.deepEqual(f.calls, [], "localMerge (the PR's scripts) never runs");
   f.pull.body = "## Plan\n- [ ] still open\n";
   assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["plan"]);
   f.pull.body = "";
-  assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true, maxBehind: 0 }).rows[k].ok), ["distance"]);
-  assert.equal(evaluate({ pr: 7, ...f.deps, trusted: true, fetchTip: () => ({ error: "fetch deploy-x failed: x" }) }).error, "fetch deploy-x failed: x");
+  f.files.push({ filename: ".githooks/pre-commit" });
+  assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["config"]);
+  f.files.pop();
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 0);
-  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok distance=ok pr=#7 sha=${HEAD} tip=${TIP}`);
+  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=`);
   f.checks[1].status = "in_progress";
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: () => {} }), 3, "CI running is waiting");
 });
