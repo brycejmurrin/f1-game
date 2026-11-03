@@ -86,6 +86,8 @@ test("colourblind HUD cues: flag and sector data attributes when on", () => {
   const A11y = { cuesOn: () => true };
   const { R } = load({ A11yOpts: A11y });
   assert.equal(R.flagCueKind({ level: 1 }, false), "yellow");
+  assert.equal(R.flagCueKind({ level: 0, owed: 3 }, false), "yellow");
+  assert.equal(R.flagCueKind({ level: 0, owed: 0 }, false), "");
   assert.equal(R.flagCueKind({ level: 2 }, false), "vsc");
   assert.equal(R.flagCueKind({ level: 3 }, false), "sc");
   assert.equal(R.flagCueKind({ level: 4 }, false), "red");

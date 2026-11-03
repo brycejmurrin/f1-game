@@ -3,9 +3,12 @@ const GarageExteriorGeometry = (function () {
   "use strict";
   const MAX_VERTICES = 240000, MAX_INDICES = 720000;
   const empty = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
-  const bounds = (scale = 1) => [-650 * scale, 650 * scale, -120, 300, GaragePrims.Z_DOOR, 1000 * scale];
+  // Pit-lane look-outs (doorway / facade / departure) need more of the real
+  // straight and grandstands than the indoor inspection shell. Caps stay fixed;
+  // buildSteps still falls back through contextScale when a circuit is dense.
+  const bounds = (scale = 1) => [-900 * scale, 900 * scale, -160, 420, GaragePrims.Z_DOOR, 1600 * scale];
 
-  const groundBounds = () => [-900, 900, -10000, 10000, GaragePrims.Z_DOOR, 1300];
+  const groundBounds = () => [-1200, 1200, -10000, 10000, GaragePrims.Z_DOOR, 2200];
 
   // Match SceneryPits' exact-arc, yaw-only placement, including its banked origin.
   function anchorOf(track, teamId) {
@@ -238,7 +241,8 @@ const GarageExteriorGeometry = (function () {
   }
   function* buildSteps(def, options = {}) {
     // Keep the caps fixed: dense circuits get a smaller complete scenery window.
-    for (const contextScale of [1, .6, .35]) {
+    // Gentler ladder so more tracks keep the wide pit-lane look-out before .35.
+    for (const contextScale of [1, .75, .5, .35]) {
       try { return yield* buildRegion(def, Object.assign({}, options, { contextScale })); }
       catch (error) {
         if (contextScale === .35 || !/^(Scenery region geometry|Circuit exterior geometry) budget exceeded$/.test(error.message)) throw error;
