@@ -26,7 +26,8 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
    NEWEST adoption comment wins (stand down if a newer one appears), the opposite of issue claims.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
-   No PR, no question.
+   No PR, no question. Close ONLY with MCP `add_issue_comment`, then `issue_write` `state: closed` + `state_reason`;
+   never a `gh api` PATCH (the classifier denies it). A denied close is final: `needs-decision` plus one comment.
 5. **Cap.** The brief's `STOP AT` (300k context by default) and $10 soft (cost): finish the unit, push, refresh Plan
    and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options and your pick, then keep working on what does not
