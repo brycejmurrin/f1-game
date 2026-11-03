@@ -693,8 +693,17 @@ function runStep(script, env, files = {}) {
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
     `    *"/issues/"*"/comments"*) data=\${FAKE_COMMENTS:-[]} ;;`,
 `    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
-    `    *"/branches/"*) if [ "$(grep -c '/branches/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}"; else echo "\${NOW_TIP:-}"; fi; return 0 ;;`,
-    `    *" pr merge "*) echo "merge-token=\${GH_TOKEN:-}" >> "$GH_LOG"; [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
+    `    *"/branches/"*) bc=$(grep -c '/branches/' "$GH_LOG" || true);`,
+    `      if [ "$bc" -gt 2 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}";`,
+    `      elif [ "$bc" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31;`,
+    `        if [ "$bc" -eq 2 ] && [ "\${GH_CLEAN_PATH:-}" = true ]; then echo "\${NOW_TIP_CLEAN-\${NOW_TIP:-}}";`,
+    `        else echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}"; fi;`,
+    `      else echo "\${NOW_TIP:-}"; fi; return 0 ;;`,
+    `    *" pr merge "*) echo "merge-token=\${GH_TOKEN:-}" >> "$GH_LOG";`,
+    `      if [ "$(grep -c ' pr merge ' "$GH_LOG")" -gt 1 ] && [ -n "\${GH_MERGE_RC2+x}" ]; then`,
+    `        [ -z "\${GH_MERGE_STDERR2:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR2" >&2; return "\${GH_MERGE_RC2:-0}";`,
+    `      fi;`,
+    `      [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
         `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
@@ -972,6 +981,40 @@ test("land.yml arm: only a proven base-modified race re-gates after a failed sin
   assert.equal(r.summary, `armed (or merged) #7 @ ${HEAD7.slice(0, 12)} onto ${TIP_A.slice(0, 12)} with ${auth.LAND_TOKEN ? "LAND_TOKEN" : "GITHUB_TOKEN"}\n`);
   assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 1, "success has no recovery reads");
   singleArm(r);
+});
+
+test("land.yml arm: clean-status auto-merge refusal re-checks vetoes and tip, then one direct --merge", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "arm").run;
+  const cleanErr = "GraphQL: Pull request Pull request is in clean status (enablePullRequestAutoMerge)";
+  const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
+  const go = (extra = {}) => runStep(run, {
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    GH_MERGE_RC: "1", GH_MERGE_STDERR: cleanErr, GH_MERGE_RC2: "0", GH_MERGE_STDERR2: "", GH_CLEAN_PATH: "true",
+    ...auth, ...extra,
+  });
+  let r = go();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.retry, undefined);
+  assert.equal(r.stderr.split("\n")[0], cleanErr);
+  const merges = r.calls.filter((c) => c.includes("pr merge "));
+  assert.equal(merges.length, 2, "auto attempt then one direct merge");
+  assert.equal(merges[0], `gh pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`);
+  assert.equal(merges[1], `gh pr merge 7 --repo o/r --merge --match-head-commit ${HEAD7}`);
+  assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 2, "re-reads deploy tip");
+  assert.equal(r.calls.filter((c) => c.includes("/pulls/7")).length, 2, "re-reads PR vetoes");
+  assert.equal(r.summary, `merged #7 @ ${HEAD7.slice(0, 12)} onto ${TIP_A.slice(0, 12)} with LAND_TOKEN (PR was already CLEAN; auto-merge refused)\n`);
+  r = go({ NOW_TIP_CLEAN: TIP_B });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
+  assert.equal(r.calls.filter((c) => c.includes("pr merge ")).length, 1, "tip moved: no direct merge");
+  r = go({ FAKE_PR_AFTER: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.retry, undefined);
+  assert.equal(r.calls.filter((c) => c.includes("pr merge ")).length, 1, "hold set: no direct merge");
+  r = go({ GH_MERGE_RC2: "17", GH_MERGE_STDERR2: "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)", NOW_TIP_AFTER: TIP_B });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 }, "direct merge base-modified falls through to re-gate");
+  assert.equal(r.calls.filter((c) => c.includes("pr merge ")).length, 2);
 });
 
 test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry; other errors are not", () => {
