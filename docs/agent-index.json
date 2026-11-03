@@ -1499,6 +1499,7 @@
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-pack-followup.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",

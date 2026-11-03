@@ -2178,7 +2178,7 @@ let _menuFly = null;
 // (SwiftShader) and linked NOTHING — a held card for nothing
 // (23 links, all in the menu and the flyby).
 let _warmKey = "";
-const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
+const _carWarm = { busy: false, tok: 0 };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
 // ONE WARM PER WORLD PER SESSION (`_warmed`; "|lit" is a dark world's second one).
 // Its programs stay built, and a repeat links nothing yet holds TLX's presents for
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
@@ -2627,10 +2627,10 @@ async function startRaceBody() {
   // Meshes HERE, not on the first countdown frame — stepped (≤ 1 heavy piece per task, apex26.carWarmSlice; 0 = one sync task).
   // game-vm pumps no timers: an endless slice there never yields (like yieldMain above).
   // A frame drawn between steps built the not-yet-warmed cars itself (census 502/503: GLX ~1 s tasks, steps <= 199 ms).
-  _carWarm.busy = true;
+  const warmTok = ++_carWarm.tok; _carWarm.busy = true;   // a superseded start's finally must not clear a newer warm's flag (#4585)
   // deferRear: the cars behind the player hand their atlas upload and caster to the lights (car-draw.js
   // drainDeferredCarWarm, one piece a countdown frame below); headless has no frames to drain them in.
-  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
+  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { if (_carWarm.tok === warmTok) _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
