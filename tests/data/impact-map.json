@@ -10785,10 +10785,18 @@
     },
     "js/perf/menu-teardown.js": {
       "beginQuit": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/menu-quit-tail.test.mjs"
       ],
       "cover": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "endQuit": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "quitReadbackDefer": [
+        "tests/unit/menu-quit-tail.test.mjs"
       ],
       "quitRenderHold": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -17291,7 +17299,8 @@
       ],
       "push": [
         "tests/unit/announcer.test.mjs",
-        "tests/unit/captions.test.mjs"
+        "tests/unit/captions.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "radioWho": [
         "tests/unit/captions.test.mjs"
@@ -17914,6 +17923,9 @@
       ],
       "state": [
         "tests/unit/hud-tyres.test.mjs"
+      ],
+      "*": [
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/hud.js": {
