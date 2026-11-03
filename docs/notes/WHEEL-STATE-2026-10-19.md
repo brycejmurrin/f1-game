@@ -6,7 +6,7 @@
 prior angular / slip-ratio state. Only the heuristic `c.wheelLock` from
 `axFracF` vs `WHEEL_LOCK_ONSET` in `player-forces.js` (render/feel, not a
 torque balance). Plan row still open:
-`docs/plans/2026-09-14-mechanics-coherence.md` / Tier2 §5.
+`docs/archive/plans/2026-09-14-mechanics-coherence.md` / Tier2 §5.
 
 ## What shipped (this PR)
 

@@ -951,6 +951,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/docs/knowledge-gc.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/env/apex-memory.mjs": {
       "action": "keep-native",
       "presentation": "native",

@@ -20,7 +20,7 @@ creating it). Backticked paths without `<new>` already exist on disk.
 | Doc / code | What it already covers | What is still open (this plan) |
 |---|---|---|
 | `docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md` L138 (item 13) | "Colourblind palette and a settings search box", M, scored 1.2, never built as a system | The system; the search box is NOT in this plan |
-| `docs/plans/2026-09-30-player-a11y.md` | Grip steer, dock reposition, audio driving cues, share codes, comfort block. Its slice 5 lists "accessibility colourblind palette (#13)" as **Not in this slice** | This plan is that deferred item; it does not touch slices 1-5 |
+| `2026-09-30-player-a11y.md (archived)` | Grip steer, dock reposition, audio driving cues, share codes, comfort block. Its slice 5 lists "accessibility colourblind palette (#13)" as **Not in this slice** | This plan is that deferred item; it does not touch slices 1-5 |
 | `docs/research/CONTROLS-RESEARCH-2026-09-14.md` | XAG 103/104/107/108/117/118 for CONTROLS: handedness, resize/opacity, latch, comfort, DOM names | No colour or caption guidance there; this plan cites XAG only where it adds colour/caption evidence |
 | `docs/notes/DRIVING-LINE-RESEARCH.md` L45, L108 | Driving-line colour-blind variants (IBM triple) | Line palette is a SEPARATE toggle today (`pm-linecolor`); unify under the global mode |
 | `js/ui/appearance-opts.js` L21, L34, L84, L268, L422-457 | SHIPPED: `cvdMode` (`off`/`deutan`/`protan`/`tritan`), row `pm-cvd` "COLOUR VISION", `data-cvd` on `<html>`, SPEC row | Do not re-add the toggle or the key. Extend what it drives |

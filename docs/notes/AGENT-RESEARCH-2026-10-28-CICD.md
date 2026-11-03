@@ -24,7 +24,7 @@ Measured inputs (repo docs + today's REST reads):
 | oldest distance-only refusals | #4007, #4012, #4018 (gated 10-27 ~20:00Z, 11 h ago) | same |
 | MAX_BEHIND | 6 game merges (default; plan started at 2) → ~2.7 h of tip motion at 2.25 game merges/h | merge-gate.mjs:67 |
 | SYNC_MAX / RETRY_MAX | 3 / 3 | land.yml env |
-| ready `CI` verdict | p50 13.6 min, p90 29.7 (911 runs, 7.7 d) | docs/notes/system-audit-4/ci-7d.md |
+| ready `CI` verdict | p50 13.6 min, p90 29.7 (911 runs, 7.7 d) | docs/archive/notes/system-audit-4/ci-7d.md |
 | train push→publish | p50 17.0, p90 28.5 min; 13 % red on attempt 1 | ci-7d.md |
 | Linux job queue wait | p50 0.05, p90 4.8, p99 20.9 min (47,957 jobs) | ci-7d.md |
 | red train odds vs staleness | **4.3 % when 0 merges intervened, 13.3 % when ≥1, 14.6 % (6/41) when ≥20** | ci-7d.md "Stale green" |

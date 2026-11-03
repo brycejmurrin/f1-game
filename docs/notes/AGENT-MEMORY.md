@@ -1,31 +1,54 @@
-# Agent memory — what persists between sessions (2026-09-24)
+# Agent memory — what persists between sessions (2026-09-24, rewritten 2026-11-03)
+
+Kind: how-to · Re-measure-by: 2027-01-15
 
 Supersedes the "auto memory structurally cannot persist here" finding in
 `SELF-IMPROVING-SURFACE-2026-09-22.md`: it can, with two settings and a hook.
-Updated 2026-10-18 (#2901): one reviewed store for every host, explicit CLI,
-`memory-change:` ready-gate marker, edit-vs-delete sync.
+Rewritten 2026-11-03 (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001):
+one reviewed store, restored one way; the three-way sync, its baseline dir and
+the `assume-unchanged` mark are retired.
 
-## The three stores
+## The stores
 
 | store | where | loaded | written by |
 |---|---|---|---|
 | Instructions | `AGENTS.md` (via `CLAUDE.md`), `docs/WORKERS.md`, `.claude/rules/` (by `paths:`) | every session | people, reviewed |
+| Decisions | `docs/DECISIONS.md` (`D-NNN` rows) | when a rule or test cites one | a PR, one row per decision |
+| Measured facts | the doc that uses them; a note with `Kind:` + `Re-measure-by:` | when cited | a PR; `tools/docs/knowledge-gc.mjs` flags an overdue re-measure |
 | Subagent memory | `.claude/agent-memory/<agent>/` (`memory: project`) | that subagent | the subagent; schema + expiry pinned by `agent-config.test.mjs` |
-| Auto memory (shared) | tracked: `.claude/memory/`; Claude live: `~/.claude/projects/<repo>/memory/` | every host reads the tracked copy; Claude also loads the first 200 lines / 25 KB of `MEMORY.md` into the live dir | people + Claude auto (types `user`, `feedback`, `project`, `reference`) |
+| Preferences (auto memory) | tracked: `.claude/memory/`; Claude live: `~/.claude/projects/<repo>/memory/` | every host reads the tracked copy; Claude also loads the first 200 lines / 25 KB of `MEMORY.md` | people and Claude, through a PR |
 
 Coordination behaviour (merge commits, the `hold` label, `land`, subscribe, PT,
-phone-first) lives in AGENTS.md §Coordination and `docs/WORKERS.md` — not in the
-memory index. (Until 2026-10-27 it lived in an always-on `fleet-core` rule file,
-retired with the orchestration redesign, #3895.) Cursor gets the generated twins
-of `.claude/rules/` via `npm run gen` (`gen-cursor-rules`).
+phone-first) lives in AGENTS.md §Coordination and `docs/WORKERS.md` — never in
+the memory index (`agent-config.test.mjs` refuses the keywords there).
+
+## One-way restore (the design since 2026-11-03)
+
+- **The tracked `.claude/memory/` is the only store.** `session-start.sh` runs
+  `memory-sync.sh restore`: copy `.claude/memory/*.md` into the live auto-memory
+  dir before the first prompt, overwriting what is there (the repo wins). That
+  is the whole hook: no `save` on PostToolUse or Stop, no baseline directory
+  under `artifacts/`, no three-way merge, no `git update-index --assume-unchanged`
+  mark and therefore no `bash-guard` unmark before git verbs.
+- **A preference Bryce states in chat is committed like any doc edit.** The
+  session writes the topic file and its `MEMORY.md` line in the repo (`npm run
+  memory:*` or a plain edit), on a PR carrying the `memory-change: <reason>`
+  body line or label that `ready-gate` reads. A decision gets a `docs/DECISIONS.md`
+  row instead; a dated platform fact becomes a note with `Re-measure-by:`.
+- **Why.** The two-writer design (live dir and branch) needed a baseline, a
+  line-merge and two incident fixes (#2128, #2873) to stop a resumed session
+  reverting another branch's memories. With one writer none of that exists;
+  Cursor and Codex already read the tracked copy only.
+- **Cap.** `MEMORY.md` stays ≤ 25 lines (Claude loads ≤ 200 lines / 25 KB; a
+  short index is read in full). Topics: preferences and corrections about how
+  Bryce works, typed `user` / `feedback` / `project` / `reference`, each with
+  `source:` when it rests on a file (`agent-config.test.mjs` fails when the
+  cited path is gone).
 
 ## Cross-host commands (Claude / Cursor / Codex)
 
 One store: `.claude/memory/`. Do not fork a second copy under `.agents/` or
-`.cursor/`. Do not hide the tracked files with `git update-index
---assume-unchanged` on Cursor or Codex — that mark is Claude-hook-only (Stop
-nag); `bash-guard` unmarks before git verbs in Claude sessions. Everywhere else
-the files show in `git status` like any other tracked path.
+`.cursor/`. Everywhere the files show in `git status` like any other tracked path.
 
 ```sh
 npm run memory:list                 # index lines + orphan topic files
@@ -34,62 +57,30 @@ npm run memory:retire -- <file.md>  # drop topic + its MEMORY.md index line
 # same as: node tools/env/apex-memory.mjs <list|show|retire> …
 ```
 
-Commit memory edits on a PR that carries an intent marker (below).
-
 ## `memory-change:` — ready-gate intent marker
 
 `node tools/ci/ready-gate.mjs --pr <n>` refuses `.claude/memory/` edits unless
-the PR has either:
-
-1. a body line `memory-change: <reason>` (non-empty reason), or
-2. the GitHub label `memory-change`.
-
-A bare word "memory" or a path mention of `.claude/memory/MEMORY.md` in the
-title/body does **not** unlock the gate. A failed PR-files API fetch fails
-closed (never "no memory edits").
+the PR has either a body line `memory-change: <reason>` (non-empty reason) or
+the GitHub label `memory-change`. A bare word "memory" or a path mention of
+`.claude/memory/MEMORY.md` does **not** unlock the gate. A failed PR-files API
+fetch fails closed.
 
 ## Why auto memory needed wiring (measured on this box, CLI 2.1.281)
 
 1. **Off in cloud sessions by default.** The CLI returns "off" when
    `CLAUDE_CODE_REMOTE` is set unless `CLAUDE_CODE_DISABLE_AUTO_MEMORY` is
-   falsy. A nested `claude -p` here reported no memory section by default and a
-   memory dir once `.claude/settings.json` carried
-   `"env": {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"}`.
+   falsy; `.claude/settings.json` carries `"env": {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"}`.
 2. **The location cannot be moved from the repo.** `autoMemoryDirectory` must be
    absolute and is ignored in checked-in project settings; written into
    `settings.local.json` by a SessionStart hook it is read too late for the
    first prompt (measured). A symlinked memory dir made the model refuse to
    write through it.
-3. **So a hook copies (Claude only).** `memory-sync.sh restore` (from
-   `session-start.sh`) copies `.claude/memory/*.md` into the live dir before
-   the first prompt — measured: the restored entry was recalled on turn one.
-   `memory-sync.sh save` (PostToolUse on Write/Edit, and Stop) copies the live
-   dir back, so memories ride the session's next commit. Cloud only
-   (`CLAUDE_CODE_REMOTE=true`) unless `APEX_MEMORY_SYNC=1`: a laptop's memory
-   dir already persists and is personal.
-4. **Both directions are a three-way sync (2026-10-02).** The first `save`
-   copied every differing live file over the repo and deleted repo files the
-   session lacked, so a resumed session whose live dir predated a branch
-   checkout reverted other sessions' memories (twice in one day). Now each sync
-   compares against a baseline in `artifacts/.memory-base/`: only the side that
-   changed a file moves it, `MEMORY.md` is line-merged when both added lines,
-   a topic file changed on both sides keeps the repo copy and prints
-   `CONFLICT`, and **edit vs delete honours the delete** on both sides
-   (never resurrects; #2901). `tests/unit/memory-sync.test.mjs` drives the
-   real hook. After a branch change, missing ancestry or a failed history query
-   defers the entire sync with `WARNING sync deferred`: live memory, tracked
-   memory and baseline (including `.head`) remain unchanged. An empty shallow
-   deletion log is not proof that a branch never had a topic. Restore the old
-   HEAD object/common ancestry (deepen or unshallow the clone), then rerun
-   `bash .claude/hooks/memory-sync.sh restore`; do not delete the baseline.
-   Full-history checkouts still preserve memories a branch never had and
-   honour committed topic/index retirements.
+3. **So a hook copies (Claude only).** The restore above; measured: the restored
+   entry was recalled on turn one. Cloud only (`CLAUDE_CODE_REMOTE=true`) unless
+   `APEX_MEMORY_SYNC=1`: a laptop's memory dir already persists and is personal.
 
-   Claude worktrees share the main checkout's live store and baseline: the
-   hook uses the main checkout's HEAD and `.claude/memory/`, not the linked
-   worktree's branch. The cross-host CLI edits its own checkout directly;
-   linked-worktree changes reach Claude's shared store when they reach the
-   main checkout.
+Claude worktrees share the main checkout's live store; the restore reads the
+checkout the session booted in.
 
 ## Rules
 

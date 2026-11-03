@@ -1545,6 +1545,16 @@
       ]
     },
     {
+      "path": "tools/docs/knowledge-gc.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ]
+    },
+    {
       "path": "tools/env/apex-memory.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

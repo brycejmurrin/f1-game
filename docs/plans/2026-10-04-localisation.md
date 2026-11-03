@@ -17,7 +17,7 @@ is a new top-level data directory. Every other backticked path exists on disk (v
 
 | Doc | Role vs this plan |
 |---|---|
-| [`2026-09-30-player-a11y.md`](2026-09-30-player-a11y.md) | Accessibility slices (grip steer, comfort). Same house rules; a language picker lives next to its comfort/settings rows, not inside it. |
+| `2026-09-30-player-a11y.md` (archived) | Accessibility slices (grip steer, comfort). Same house rules; a language picker lives next to its comfort/settings rows, not inside it. |
 | [RACE-RADIO-REDESIGN-2026-09.md](../research/RACE-RADIO-REDESIGN-2026-09.md) | Why radio lines are `{slot}` templates and how the voice pack splices clips. The translation unit for radio is already there. |
 | [VOICE-LAG-IPHONE-2026-10-01.md](../notes/VOICE-LAG-IPHONE-2026-10-01.md) | Speech-synthesis latency evidence; constrains the SpeechSynthesis fallback below. |
 | [UI-MAP.md](../UI-MAP.md) | Screen inventory used to order the migration. |

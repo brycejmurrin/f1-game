@@ -1116,6 +1116,7 @@
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/html-sink-lint.test.mjs",
+        "tests/unit/knowledge-retention.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/lexical-window-guard.test.mjs",
         "tests/unit/load-order.test.mjs",

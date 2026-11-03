@@ -19,7 +19,7 @@ already exist on disk (verified 2026-10-28 tip via apex-lsp).
 | `docs/USAGE-PATHS.md` R11–R12, finish-camera table | Journey IDs to extend; do not invent a parallel path language. |
 | `docs/plans/2026-10-04-feature-roadmap.md` tier 2 | Named this idea; row should point here once this plan lands. |
 | `docs/plans/2026-10-04-highlight-reel-clip-export.md` | Owns HIGHLIGHTS *export*; this plan only reuses the live ResultsCam highlights phase as an optional exit from ceremony. |
-| `docs/plans/2026-10-04-share-cards.md` | Share cards stay on the results / standings surfaces; ceremony does not mint a new share surface. |
+| `2026-10-04-share-cards.md (archived)` | Share cards stay on the results / standings surfaces; ceremony does not mint a new share surface. |
 | skill `f1-animation-cameras` | Camera ownership when a build slice edits ResultsCam or chase blends. |
 | Manual pit-stop mini-game (roadmap same cell) | **Out of scope** for every slice below — later tier; do not couple cooldown to a mini-game. |
 

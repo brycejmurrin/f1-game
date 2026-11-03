@@ -153,7 +153,7 @@ node tools/track/rotate-markings.cjs --check           # read-only proposed tran
 ```
 Green = each count equals its `"<id>"` row in `tools/track/{clip,coplanar,float}-baseline.json` (an absent float row = 0); `props-tris-baseline.json` is a ratchet ceiling, so a lower measure is fine. Read the rows, never a number quoted in prose. Re-run after the edit;
 a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit.
-`import-circuit-path.mjs --self-check` can exit 1 on a known committed-path drift row (see `docs/plans/skilltest-content-pipeline.md`); a FAIL row for the circuit you touched is yours.
+`import-circuit-path.mjs --self-check` can exit 1 on a known committed-path drift row (see `docs/archive/plans/skilltest-content-pipeline.md`); a FAIL row for the circuit you touched is yours.
 
 ## Adding a bridge or an elevation bump to an existing def
 

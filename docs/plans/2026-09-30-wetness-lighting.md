@@ -61,7 +61,7 @@ hook when a consumer must move onto the shared wetness read.
 | `AiDrive` | No direct weather read; lateral / yaw scales take `gripMult(c)` from game.js. |
 | Characterization | `physics-characterization` / its VM twin do **not** pin weather (default dry). `mechanics-integration-vm.test.mjs` (~35–49) asserts continuous grip through an arc but **does not assert `frame.wetness === roadWetness()`**. |
 
-The September 14 survey (§6 / weather row) and `docs/plans/2026-09-15-racing-depth.md`
+The September 14 survey (§6 / weather row) and `2026-09-15-racing-depth.md (archived)`
 still list "Spatial wetness / drainage / drying / puddles" as pending a
 **shared** surface field. The mechanics-coherence plan claimed "one continuous
 global wetness drives grip and rendered road wetness", but the `LT.wetness`
@@ -133,7 +133,7 @@ look-and-grip equality at sampled times.
 
 **Spatial later (NOT this workstream's ship).** Sector wetness, drainage,
 drying racing line, local puddles / aquaplaning stay deferred
-(`docs/plans/2026-09-15-racing-depth.md` remaining register). The global
+(`2026-09-15-racing-depth.md (archived)` remaining register). The global
 contract is the prerequisite.
 
 ### (b) Preset grids for the twelve

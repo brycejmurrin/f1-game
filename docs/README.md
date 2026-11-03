@@ -60,13 +60,15 @@ Redirect stubs (cited from source comments; follow the link): [RENDERERS.md](REN
 
 ## Directories
 
-[notes/](NOTES-INDEX.md) dated ledgers · [research/](NOTES-INDEX.md) source-cited research ·
-[plans/](NOTES-INDEX.md) plans · [archive/](NOTES-INDEX.md) provenance only (archive/research/,
-archive/notes/, archive/superpowers/, archive/slider-effect/, archive/manual-probes/, archive/webgpu/,
+[notes/](NOTES-INDEX.md) dated ledgers (retention: `node tools/docs/knowledge-gc.mjs`, a note nothing
+live cites for 21 days is archived) · [research/](NOTES-INDEX.md) source-cited research ·
+[plans/](NOTES-INDEX.md) live plans (shipped and superseded ones are under archive/plans/) ·
+[DECISIONS.md](DECISIONS.md) the `D-NNN` ledger of what Bryce decided · [archive/](NOTES-INDEX.md)
+provenance only (archive/research/, archive/notes/, archive/plans/, archive/survey/, archive/surveys/,
+archive/superpowers/, archive/slider-effect/, archive/manual-probes/, archive/webgpu/,
 archive/tracks/, archive/workflows/, archive/moves/, archive/tools/) · [changelog.d/](changelog.d/README.md)
 per-PR changelog fragments · [tracks/](tracks) per-circuit reference · [look-survey/](look-survey/README.md)
-contact sheets · [surveys/](surveys) and survey/ profiling surveys · perf/ device measurements ·
-[evidence/](evidence/historical-catalog.json) capture catalog.
+contact sheets · perf/ device measurements · [evidence/](evidence/historical-catalog.json) capture catalog.
 
 For day-to-day workflows, see the skills (`.claude/skills/README.md`) and the
 tools (`tools/README.md`).
