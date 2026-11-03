@@ -3400,11 +3400,15 @@ const TLX = (function () {
           // matrixWorld.determinantAffine() < 0, and the car draws one side's
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
-          // The double-sided variant is the cockpit dash ERS bar / OT lamp
-          // (_rigFxA), never drawn mirrored: its cw twin was a whole lit
-          // pipeline (~1.2 s cold on an iPhone 14) no race used —
-          // ers-deploy-census tlx-gpu helmet, first deploy: lazy=0 without it.
-          for (const g of geos.values()) for (const sx of (o.doubleSided ? [1] : [1, -1])) {
+          // The double-sided variant (the cockpit dash ERS bar / OT lamp,
+          // _rigFxA) needs both too: the rig draws it through the wheel's
+          // MIRRORED matrix, and three draws a transparent double-sided
+          // material as a BackSide pass then a FrontSide one, so the first
+          // deploy's back pass keyed a cw pipeline the warm never built — the
+          // one live lit pipeline of a WebGPU race, at the first BOOST
+          // (perf-boost-press-pipelines.spec.js, #4514). A census that skipped
+          // it read lazy=0 on three's WebGL2 path, where winding is no key.
+          for (const g of geos.values()) for (const sx of [1, -1]) {
             await compileWarmProbe(g, mat, sx);
           }
         }

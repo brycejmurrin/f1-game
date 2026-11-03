@@ -204,6 +204,7 @@ function buildProps(g, liv) {
   const stack = tyreStack;
   const toolbox = (out, x, z) => GarageEquipment.toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
+  // Blender look-dev (monitor-desk-nx / monitor-gantry-nx): desk under a hung gantry.
   toolbox(g.nx, -4.92, 3.6);
   // The charging rack sits on the actual chest top (1.16 + 0.03 m).
   GarageEquipment.radioRack(g.nx, -4.92, 3.6, c1, 1.19);
@@ -217,6 +218,8 @@ function buildProps(g, liv) {
     block(g.nx, -5.22, 1.45 + (m < 3 ? 0 : 0.90), 0.6 + ((m % 3) - 1) * 0.98, 0.03, 0.36, 0.46, scale(STEEL, 0.55));
   block(g.nx, -5.02, 0.86, 0.6, 0.30, 0.03, 1.30, scale(STEEL, 0.9));
   for (let s = -1; s <= 1; s += 2) cyl(g.nx, -5.02, 0, 0.6 + s * 1.15, 0.04, 0.86, STEEL, 6);
+  // Monitor gantry over the laptop bench (z -1.85), clear of the −X wordmark / board band.
+  GarageEquipment.monitorGantry(g.nx, -4.70, -1.85, c1);
   // +X wall: the tool trolleys.
   // Trade repeated storage for distinct service stations within the same budget.
   GarageEquipment.wheelGunDock(g.px, 4.85, -1.5, c1);
@@ -274,6 +277,8 @@ function buildProps(g, liv) {
       block(w, x - sd * 0.09, 3.71, i * 2.30, 0.11, 0.09, 0.05, scale(STEEL, 0.45));
       if (i % 2 === 0)
         block(w, x - sd * 0.06, 4.06, i * 2.30, 0.14, 0.18, 0.34, scale(STEEL, 0.55));
+      // Blender lighting-rig-*: LED puck on alternate brackets (full boom exceeds bay tri budget).
+      if (i % 2 === 0) block(w, x - sd * 0.12, 3.70, i * 2.30, 0.04, 0.02, 0.12, [1.06, 1.09, 1.16]);
     }
   }
 
@@ -299,8 +304,9 @@ function buildProps(g, liv) {
   // Shelving of parts crates and a workbench. These live on the DOOR wall, not
   // the back wall: the back wall is where the information boards go, and a
   // prop stood 0.3 m proud of a board is a prop that hides it.
-  for (let sh = 0; sh < 3; sh++) {
-    const y = 0.95 + sh * 0.62;
+  // Two shelves (was three): the third shelf's tris pay for monitor gantry + light booms.
+  for (let sh = 0; sh < 2; sh++) {
+    const y = 0.95 + sh * 0.72;
     block(g.door, -4.02, y, 6.15, 1.25, 0.025, 0.22, STEEL);
     for (let bx = 0; bx < 3; bx++)
       block(g.door, -5.07 + bx * 0.86, y + 0.17, 6.15, 0.32, 0.15, 0.17,
