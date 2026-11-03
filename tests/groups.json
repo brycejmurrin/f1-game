@@ -1108,6 +1108,8 @@
     "// against three r186's real Texture). The pit-crew mesh cache is capped.",
     "// Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.",
     "tests/unit/tlx-round2.test.mjs",
+    "// #4556 shader trims: vertex sway branch keeps the normalLocal anchor first (built WGSL), carFinish-gated hammered derivatives, CPU dither/vignette uniforms.",
+    "tests/unit/tlx-shader-trims.test.mjs",
     "tests/unit/tlx-smith-root.test.mjs",
     "tests/unit/tlx-texture-release.test.mjs",
     "// Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.",
