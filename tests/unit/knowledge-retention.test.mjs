@@ -72,6 +72,14 @@ test(`${INDEX} is what knowledge-gc.mjs --index generates (the notes block is no
   assert.equal(renderIndex(cur, r.notes), cur, `run: node tools/docs/knowledge-gc.mjs --index`);
 });
 
+test(`${INDEX}'s notes block is merge-stable: rows sorted by name, no volatile count line (#4608)`, () => {
+  const block = read(INDEX).split("<!-- gen:notes -->")[1].split("<!-- /gen:notes -->")[0];
+  const names = [...block.matchAll(/^\| \[([^\]]+)\]\(notes\//gm)].map((m) => m[1]);
+  assert.ok(names.length > 10);
+  assert.deepEqual(names, [...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), "rows are name-sorted so two PRs adding notes rarely touch adjacent lines");
+  assert.doesNotMatch(block, /\d+ live notes/, "a note count changes in every PR and conflicts them all");
+});
+
 // ---------------------------------------------------------------------------
 // docs/DECISIONS.md — the D-NNN ledger
 
