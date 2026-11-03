@@ -205,7 +205,11 @@ const toTitle = async (page) => {
     if ((await page.evaluate(() => window.__aud.top())) === "overlay") return;
     const before = await page.evaluate(() => window.__aud.top());
     await page.keyboard.press("Escape");
-    await page.waitForFunction((b) => window.__aud.top() !== b, before, { polling: 100, timeout: 2_000 }).catch(() => {});
+    // Each Escape must leave the layer it was pressed on: a stuck layer fails
+    // here, named, not 8 presses later as a bare final timeout (#4362).
+    const left = await page.waitForFunction((b) => window.__aud.top() !== b, before, { polling: 100, timeout: 2_000 })
+      .then(() => true, () => false);
+    expect(left, `toTitle: Escape did not leave layer "${before}"`).toBe(true);
   }
   await page.waitForFunction(() => window.__aud.top() === "overlay", null, { polling: 100, timeout: 5_000 });
 };
@@ -355,14 +359,15 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await page.waitForFunction(() => {
       const hud = document.getElementById("hud");
       return !!(hud && !hud.hidden);
-    }, null, { polling: 100, timeout: 8_000 }).catch(() => {});
+    }, null, { polling: 100, timeout: 8_000 });
     const closeAll = async () => {
       for (let i = 0; i < 6; i++) {
         if (!(await page.evaluate(() => window.__aud.top()))) return;
         const before = await page.evaluate(() => window.__aud.top());
         await page.keyboard.press("Escape");
-        await page.waitForFunction((b) => !window.__aud.top() || window.__aud.top() !== b, before,
-          { polling: 100, timeout: 2_000 }).catch(() => {});
+        const left = await page.waitForFunction((b) => !window.__aud.top() || window.__aud.top() !== b, before,
+          { polling: 100, timeout: 2_000 }).then(() => true, () => false);
+        expect(left, `closeAll: Escape did not leave layer "${before}"`).toBe(true);
       }
     };
     const openPause = async () => {
