@@ -173,6 +173,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
+| `garage-entry-camera.js` | `GarageEntryCameraData` | LAZY_RACE | Blender-ready entry/exit camera samples for GarageCameraOptions. |
+| `garage-camera-options.js` | `GarageCameraOptions` | LAZY_RACE | garage entry/exit CAMERA OPTIONS and the UI for choosing them. |
 | `garage-departure-motion.js` | `GarageDepartureMotion` | LAZY_RACE_SESSION | Blender-authored departure transforms. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
