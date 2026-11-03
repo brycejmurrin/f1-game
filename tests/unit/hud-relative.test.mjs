@@ -608,3 +608,56 @@ test("REL off (the default): refit touches no DOM, and the key still sees the cl
   R.refit();
   assert.ok(lookups > before, "and the first tick after turning it on fits");
 });
+
+test("tick: 1 Hz geoKey reads rects before the tick's DOM writes (#4586 row 3)", () => {
+  // A write dirties the fake layout tree; a gBCR after that is a forced layout.
+  // The 1 Hz net must probe while the tree is still clean from this tick.
+  let layoutDirty = false, forced = 0, writes = 0;
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], _tc: "",
+      style: { setProperty() { layoutDirty = true; writes++; }, removeProperty() { layoutDirty = true; } },
+      setAttribute(k, v) { layoutDirty = true; writes++; el.attrs[k] = String(v); },
+      removeAttribute(k) { layoutDirty = true; delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; },
+      getBoundingClientRect() {
+        if (layoutDirty) forced++;
+        return { left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 };
+      } };
+    Object.defineProperty(el, "textContent", {
+      get() { return el._tc; },
+      set(v) { layoutDirty = true; writes++; el._tc = v; }
+    });
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 160; root.scrollHeight = 160; root.currentCSSZoom = 1;
+  const brake = mk(); brake.hidden = false;
+  brake.getBoundingClientRect = () => {
+    if (layoutDirty) forced++;
+    return { left: 400, right: 480, top: 180, bottom: 260, width: 80, height: 80 };
+  };
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { body: { className: "", classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const a1 = car("A1", 1100, 3, { rank: 1 });
+  const G = { cars: [p, a1, car("A2", 1400, 3)], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  R.tick(G, p);   // first fit (post-write geoKey inside fitRows is expected)
+  // Nine more ticks with gap churn so the 10th hits FIT_REFRESH with real writes.
+  for (let i = 0; i < 9; i++) {
+    a1.s = 1100 + (i + 1) * 40;
+    a1.prog = a1.lap * L - (L - a1.s);
+    layoutDirty = false; forced = 0; writes = 0;
+    R.tick(G, p);
+  }
+  a1.s = 1500; a1.prog = a1.lap * L - (L - a1.s);
+  layoutDirty = false; forced = 0; writes = 0;
+  R.tick(G, p);
+  assert.ok(writes > 0, "precondition: the 1 Hz tick still wrote a gap/rank");
+  assert.equal(forced, 0, "geoKey must not read after this tick's writes (forced=" + forced + ")");
+});
+
+test("#btn-ot.armed declares will-change: opacity (#4586 row 5)", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css/touch-controls.css"), "utf8");
+  assert.match(css, /#btn-ot\.armed\s*\{[^}]*will-change:\s*opacity/s);
+});

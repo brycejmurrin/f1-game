@@ -176,7 +176,7 @@
              background: rgba(251, 241, 186, 0.82); border-color: rgba(255, 251, 220, 0.75); color: #3a3208; }
 #btn-ot.armed { background: rgba(255, 210, 26, 1); color: #2b2400; border-color: #ffe98a;
                 box-shadow: 0 0 20px rgba(250, 195, 20, 0.85); animation: pulse 0.8s infinite;
-                opacity: 1; }
+                opacity: 1; will-change: opacity; }
 #btn-ot.on { background: rgba(122, 88, 0, 0.96); color: #ffeeae; border-color: #f0c419;
              box-shadow: 0 0 18px rgba(225, 175, 20, 0.8); opacity: 1; }
 /* ACTIVE AERO is BLUE. Green belongs to BOOST now, and the two must not share a

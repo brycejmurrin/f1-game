@@ -138,6 +138,10 @@ const HudRelative = (function () {
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
     if (root.hidden) root.hidden = false;
     select(cars, player, track.total, rows);
+    // 1 Hz geo net: read boxes BEFORE the row writes so gBCR does not force
+    // layout on a tree this tick just dirtied (#4586 row 3 / HUD-F07).
+    let geoProbe = null;
+    if (fitSeen !== null && fitAge + 1 >= FIT_REFRESH) geoProbe = geoKey();
     const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
     for (let i = 0; i < ROWS; i++) {
       const r = rows[i], dom = built[i], c = last[i], car = r.car;
@@ -177,8 +181,9 @@ const HudRelative = (function () {
     if (key !== fitSeen) fitRows();
     // The age is a 1 Hz net for layout the key cannot see. It is READ-ONLY (audit4
     // UB6): compare the boxes fitRows decides from with the ones the last fit left;
-    // only a moved box pays fitRows' reset-then-measure passes.
-    else if (++fitAge >= FIT_REFRESH) { fitAge = 0; if (geoKey() !== geoSeen) fitRows(); }
+    // only a moved box pays fitRows' reset-then-measure passes. geoProbe was
+    // taken before the writes above so this compare never forces layout.
+    else if (++fitAge >= FIT_REFRESH) { fitAge = 0; if ((geoProbe !== null ? geoProbe : geoKey()) !== geoSeen) fitRows(); }
   }
   let fitSeen = null, fitAge = 0, geoSeen = null;
   const FIT_REFRESH = 10;
