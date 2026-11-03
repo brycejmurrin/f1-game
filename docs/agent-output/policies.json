@@ -2721,6 +2721,11 @@
       "presentation": "native",
       "preserve": "Gate versus update behavior, baseline identity and changed-file receipt."
     },
+    "tools/track/circuit-info.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One JSON row per circuit (built lap metres, turns, detector corner count) and exit 2 on an unknown id."
+    },
     "tools/track/clip-audit.cjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",

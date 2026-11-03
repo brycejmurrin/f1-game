@@ -376,6 +376,7 @@ table is the current roster; use `tools/list` for current counts.
 | `apex_bump_cache_check` | `ci/bump-cache.mjs` | tree | check-changes |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
+| `apex_circuit_info` | `track/circuit-info.cjs` | tree | agent-view |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
 | `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
 | `apex_claude_agents` | `ci/claude-agents.mjs` | tree | steward |
