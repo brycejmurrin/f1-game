@@ -2270,8 +2270,12 @@ jobs:
           # browser verdict; the 10-min default (select-specs DEFAULT_BUDGET_MIN)
           # stays for ready PRs and the train; the nightly keeps 60.
           BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '5' || '' }}
-          # A DRAFT gets the budgeted shards only (plan §4.2: one small browser verdict per push): no overflow spill.
-          # The first draft push of #4515 (2026-11-03) fanned out to 24 browser legs with the default 11 here.
+          # A DRAFT gets no OVERFLOW legs (plan §4.2: one small browser verdict per push). This caps only the
+          # overflow pool: select-specs never drops a routed spec, so what overflow would have taken goes to the
+          # bounded `spill` legs (MAX_SPILL_SHARDS) and a spec bigger than the 5-min budget still runs as an
+          # `oversize` leg. A typical worker diff routes a handful of specs and gets one leg; #4515's 660-file
+          # diff (2026-11-03) routed ~70 and ran 26 legs (1 selected, 6 spill, 19 oversize) with this at 0,
+          # 24 with the default 11. A draft mode that names the rest as not-run instead is a follow-up.
           OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '0' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). The plan drops

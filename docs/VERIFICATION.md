@@ -68,9 +68,11 @@ node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
 ```
 
 Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
-The full tiers run on the PR: every draft push gets the fast tier plus one
-`selected` shard (its `Structural guards` A–D run the full `tooling-fast`, the
-check `ready-gate` reads), the full tier runs once the PR is ready, and
+The full tiers run on the PR: every draft push gets the fast tier plus the
+`selected` legs under a 5-min budget with no overflow — one leg for a typical
+diff; a wide diff still fans out, because `select-specs` never drops a routed
+spec (its `Structural guards` A–D run the full `tooling-fast`, the check
+`ready-gate` reads), the full tier runs once the PR is ready, and
 `land.yml`'s `gate` check judges the merge result. A worker ends its turn at
 `land` (skill `steward` §Land).
 
@@ -173,7 +175,7 @@ successful rerun.
 
 PR CI validates the PR head; the deploy branch requires one check, `gate`, whose
 ci row requires `CI` green on the head (D-002). Every PR push starts CI (a
-draft's run is the fast tier plus one `selected` shard); `= ci none` after a
+draft's run is the fast tier plus the 5-min-budget `selected` legs, §3); `= ci none` after a
 push means no open PR carries the sha. A deploy-branch push starts the Pages release
 train; there is no separate ship-push CI run. A green PR is not proof that Pages
 is live; verify live `version.json` and the apex SHA with `deploy-research`
