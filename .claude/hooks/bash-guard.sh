@@ -42,6 +42,14 @@ except Exception:
 sys.stdout.write(c or "")' 2>/dev/null) || {
   echo "BLOCKED: bash-guard could not read the command out of the hook payload (not JSON, or an unexpected shape), so none of its rules ran and the command is refused (fail closed)." >&2; exit 2; }
 [ -n "$CMD" ] || exit 0
+# Fast path (perf P8 row 11): every rule below needs one of these literals in the command text (kill: pkill/killall/
+# pgrep…kill/kill; 2: the BROWSER tokens; 3: commit, hookspath (the (?i) rule, hence the lowercase); 4: cancel,
+# merge, ready), so a command with none of them passes without a grep. A new rule adds its literal here.
+case "${CMD,,}" in
+  *kill*|*commit*|*hookspath*|*cancel*|*merge*|*ready*|*test-bg*|*playwright*|*verify-change*|*debug-chrome*|\
+  *gfx-probe*|*probe-mcp*|*shot/*|*ui/*|*npm*|*chrome-start*) ;;
+  *) exit 0 ;;
+esac
 
 has() { printf '%s' "$CMD" | grep -Pq -- "$1"; }
 # The kill scan reads the command with quoted strings blanked: `echo "pkill -f x"` or a commit message that
@@ -72,7 +80,8 @@ fi
 # --- 2. a subagent never starts a browser ---------------------------------------
 if printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"\s*:\s*"[^"]|/subagents/'; then
   P='((node|python3?)\s+)?([^\s;&|()]*/)?'
-  BG=$(python3 -c '
+  BG=""   # groups.json only feeds the `npm run … test:<group>` alternative: no "test:" in the command, no python3
+  [[ "$CMD" == *test:* ]] && BG=$(python3 -c '
 import json, re, sys
 try:
     g = json.load(open(sys.argv[1]))["groups"]
@@ -87,8 +96,8 @@ fi
 
 # --- 3. the commit gate stays reachable -----------------------------------------
 COMMIT="git(\s+-[^\s]+(\s+[^-\s][^\s]*)?)*\s+commit(\s|$)"
-UNQUOTED=$(printf '%s' "$CMD" | sed -E "s/'[^']*'//g; s/\"[^\"]*\"//g")   # a -n inside a commit message is prose
-if has "${PRE}${COMMIT}" && printf '%s' "$UNQUOTED" | grep -Pq -- "\s(--no-ver[a-z]*|-[A-Za-z]*n[A-Za-z]*)(\s|=|;|&|\||\)|$)"; then
+# UNQUOTED_CMD (the kill scan's blanked text): a -n inside a commit message is prose
+if has "${PRE}${COMMIT}" && printf '%s' "$UNQUOTED_CMD" | grep -Pq -- "\s(--no-ver[a-z]*|-[A-Za-z]*n[A-Za-z]*)(\s|=|;|&|\||\)|$)"; then
   refuse "git commit --no-verify / -n skips .githooks/pre-commit, the one commit gate (test:guards, docs-integrity, the ratchet auto-raise; AGENTS.md rule 12). Commit without it; a red guard is work, not a flag."
 fi
 has '(?i)core\.hookspath' && [ -z "${APEX_HOOKSPATH_SETTER:-}" ] \
