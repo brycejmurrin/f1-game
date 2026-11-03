@@ -120,8 +120,11 @@ const D_STRAT = { x: 512, y: 896, w: 512, h: 128 };
 // glow: a modern garage's crest wall IS a lightbox, the pit board IS an LED
 // panel and the monitors ARE emissive. Relative brightness between surfaces is
 // baked into the canvas, because glow is per-draw and there is only one draw.
-function paintDress(team, liv, info) {
-  const cv = document.createElement("canvas");
+// `into`: a previous dress canvas to repaint. Re-setting its size resets the
+// bitmap and every context state, so the paint below starts exactly as on a
+// fresh canvas, without a new 4 MB backing store per paint-drag step.
+function paintDress(team, liv, info, into) {
+  const cv = into || document.createElement("canvas");
   cv.width = cv.height = DRESS;
   const ctx = cv.getContext("2d");
   ctx.clearRect(0, 0, DRESS, DRESS);

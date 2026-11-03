@@ -1260,3 +1260,60 @@ test('circuit exterior retains distant rendered road while tyre lookup remains a
     assert.ok(x >= -28 && x <= 27 && z >= 3 && z <= 55, 'all cell references remain in contact bounds');
   }
 });
+
+// #4546 P6: a paint-drag step (a new c1) is a geometry rebuild and a new dressId.
+// It used to build the bay floor twice (rebuild + ensureMirrorFade) and allocate a
+// fresh 1024² dress canvas; now the fade copies the rebuilt floor and the dress
+// canvas is repainted in place.
+function paintStepHarness() {
+  const c2d = new Proxy(function () {}, {
+    get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
+    set: () => true, apply: () => c2d,
+  });
+  const meshes = [], canvases = [], floorCols = { n: 0 };
+  const gfx = {
+    createMesh(data) { meshes.push(data); return { id: meshes.length }; }, createTexMesh: () => ({ tex: true }), freeMesh() {},
+    createTexture: (src) => ({ w: src.width }), refillTexture: () => true, freeTexture() {},
+    draw() {}, drawDecal() {}, drawGlow() {},
+  };
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
+    Uint32Array, isFinite, parseFloat, parseInt, Date,
+    performance: { now: () => 0 },
+    document: { createElement: () => { const c = { width: 0, height: 0, getContext: () => c2d }; canvases.push(c); return c; } },
+    LiveryTex: {},
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
+  });
+  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"]) {
+    let src = read(f);
+    if (f === "js/garage/scene-dress.js") src = src.replace("Object.freeze(GarageDress);", "");   // let the test count floor builds
+    vm.runInContext(src, ctx, { filename: absSrc(f) });
+  }
+  const GD = vm.runInContext("GarageDress", ctx), base = GD.lookFloorCols;
+  GD.lookFloorCols = (...a) => { floorCols.n++; return base(...a); };
+  vm.runInContext("GaragePrims", ctx).setLook("flood");   // a look routes buildBayFloor through lookFloorCols
+  const GarageScene = vm.runInContext("GarageScene", ctx);
+  GarageScene.init(gfx);
+  return { GarageScene, meshes, canvases, floorCols };
+}
+
+test("a paint-drag step builds the bay floor once and reuses the dress canvas (#4546 P6)", () => {
+  const { GarageScene, meshes, canvases, floorCols } = paintStepHarness();
+  const car = { car: true };
+  const step = (r) => GarageScene.draw(TEAM, { ...LIV, c1: [r, 0.45, 0.05] }, [0, 1.4, 3.2], null, 0, null, car);
+  step(0.95);
+  const canvasesAfterFirst = canvases.length;
+  for (const r of [0.80, 0.65, 0.50, 0.35, 0.20]) {
+    const builds = floorCols.n, made = meshes.length;
+    step(r);
+    assert.equal(floorCols.n - builds, 1, "one buildBayFloor per rebuild (the mirror fade copies it)");
+    const fresh = meshes.slice(made);
+    const floor = fresh.find((m) => fresh.some((o) => o !== m && o.pos.length === m.pos.length && o.pos[1] === m.pos[1] + 0.002));
+    assert.ok(floor, "the mirror fade is the rebuilt floor lifted 2 mm");
+    const fade = fresh.find((o) => o !== floor && o.pos.length === floor.pos.length && o.pos[1] === floor.pos[1] + 0.002);
+    for (let i = 0; i < floor.pos.length; i++) assert.equal(fade.pos[i], floor.pos[i] + (i % 3 === 1 ? 0.002 : 0));
+    assert.deepEqual(fade.col, floor.col); assert.deepEqual(fade.idx, floor.idx); assert.deepEqual(fade.mat, floor.mat);
+  }
+  assert.equal(canvases.length, canvasesAfterFirst, "five paint steps allocate no new canvas (was one 1024² dress canvas each)");
+});
