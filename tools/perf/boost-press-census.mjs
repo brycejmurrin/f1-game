@@ -48,6 +48,22 @@ export function hookPipelines() {
       };
     }
   } else P.res = null;
+  // Every three RenderObject made (a new object, its bind groups and uniform buffers): which material and layout.
+  P.ros = [];
+  const objs = T.renderer._objects;
+  if (objs && typeof objs.createRenderObject === "function") {
+    const cro = objs.createRenderObject;
+    objs.createRenderObject = function (nodes, geometries, renderer, object, material, scene, camera, lights, ctx, clip, passId) {
+      try {
+        if (P.armed && P.ros.length < 5000) {
+          const geometry = object && object.geometry, pos = geometry && geometry.attributes && geometry.attributes.position;
+          P.ros.push({ at: P.frames, transparent: !!(material && material.transparent), side: material ? material.side : -1, passId: passId || "",
+            verts: pos ? pos.count : 0, attrs: Object.keys((geometry && geometry.attributes) || {}).sort().join(","), pool: !!(object && object.parent && object.parent.type === "Object3D" && !object.parent.parent) });
+        }
+      } catch (_) { /* best-effort */ }
+      return cro.apply(this, arguments);
+    };
+  }
   let api = null; try { api = T.backendState().api; } catch (_) { /* older TLX */ }
   return "ok " + (api || (be.isWebGPUBackend ? "webgpu" : "webgl2"));
 }
@@ -81,6 +97,11 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
     null, { polling: 200, timeout: 300000 });
   await page.evaluate(() => window.__apex.go());
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
+  // raceGate passes once the PROGRAM warm is done; the race-entry rig job (car-draw.js warmCockpitRig, which compiles
+  // and draws the boost pairs, #4514) runs after it — ~5 s more on SwiftShader (probe 2026-11-03). Measure after it.
+  // warm.pending is false while the job is still QUEUED, so wait for its own record (warm.rig, set when it finishes).
+  await page.waitForFunction(() => { try { return !!window.GLX.__tlx.memState().warm.rig; } catch (_) { return true; } }, null, { polling: 500, timeout: 120000 })
+    .catch(() => { /* reported: the annotation shows rig null */ });
   await page.evaluate(() => window.__apex.setEnergy && window.__apex.setEnergy(1));
   await gas(true);                       // GAS held, the iPhone sequence
   await frames(page, SPACING);           // driving on the throttle: everything but BOOST is warm
@@ -93,12 +114,13 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
   const res = () => page.evaluate(() => {
     const P = window.__bpp; P.armed = true;
     let poolNew = null; try { poolNew = window.GLX.__tlx.memState().churn.poolNew; } catch (_) { /* not TLX */ }
-    return P.res ? { ...P.res, poolNew, log: P.resLog.length } : null;
+    return P.res ? { ...P.res, poolNew, log: P.resLog.length, ros: P.ros.length } : null;
   });
   const delta = (a, b) => (a && b ? { bindGroup: b.bindGroup - a.bindGroup, buffer: b.buffer - a.buffer, texture: b.texture - a.texture,
     poolNew: a.poolNew == null ? null : b.poolNew - a.poolNew } : null);
   const resSlice = (a, b) => (a && b ? page.evaluate(([x, y]) => window.__bpp.resLog.slice(x, y), [a.log, b.log]) : null);
-  const warmRig = await page.evaluate(() => { try { const w = window.GLX.__tlx.memState().warm; return { rig: w.rig, drawn: w.drawn, where: w.where, failed: w.failed }; } catch (e) { return { error: String(e) }; } });
+  const roSlice = (a, b) => (a && b ? page.evaluate(([x, y]) => window.__bpp.ros.slice(x, y), [a.ros, b.ros]) : null);
+  const warmRig = await page.evaluate(() => { try { const w = window.GLX.__tlx.memState().warm; return { rig: w.rig, drawn: w.drawn, where: w.where, failed: w.failed, marks: (typeof RaceEntryProfile !== "undefined" ? RaceEntryProfile.snapshot().marks : []).filter((m) => /rigWarm/.test(JSON.stringify(m))) }; } catch (e) { return { error: String(e) }; } });
   const presses = [];
   for (let i = 1; i <= PRESSES; i++) {
     const c0 = await count(), r0 = await res();
@@ -112,7 +134,8 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
     await frames(page, SPACING);
     const c2 = await count(), r2 = await res();
     presses.push({ press: i, deployed, control: c1 - c0, controlBuilt: await slice(c0, c1), pipelines: c2 - c1, built: await slice(c1, c2),
-      controlRes: delta(r0, r1), res: delta(r1, r2), resMade: await resSlice(r1, r2) });
+      controlRes: delta(r0, r1), res: delta(r1, r2), resMade: await resSlice(r1, r2),
+      controlRos: await roSlice(r0, r1), ros: await roSlice(r1, r2) });
   }
   await gas(false);
   const out = { hook, forceGL, ls, warmRig, presses };
