@@ -19,7 +19,7 @@ import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, schedule
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
-  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope, closingLine, workflowFailureAnnotations }
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope, closingLine, workflowFailureAnnotations, changedVsDeploy }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -944,5 +944,24 @@ test("closingLine: the verdict is the LAST output line of a CLI run, red or gree
       { cwd: ROOT, encoding: "utf8" });
     assert.equal(r.status, 1);
     assert.equal(r.stdout.trimEnd().split("\n").pop(), "= tooling-fast failed (1 files, 1 failed)");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// B3 (2026-11-03): `--changed` read `git diff` only, so a new, un-added unit file was never selected.
+test("changedVsDeploy lists untracked files beside the tracked diff", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tf-untracked-"));
+  try {
+    const git = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout; };
+    git("init", "-q", "-b", "base");
+    fs.writeFileSync(path.join(dir, ".gitignore"), "ignored/\n");
+    fs.writeFileSync(path.join(dir, "a.js"), "1\n");
+    git("add", "."); git("commit", "-q", "-m", "base");
+    git("checkout", "-q", "-b", "topic");
+    fs.writeFileSync(path.join(dir, "a.js"), "2\n");
+    fs.mkdirSync(path.join(dir, "fresh"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "fresh/new.test.mjs"), "\n");
+    fs.mkdirSync(path.join(dir, "ignored"));
+    fs.writeFileSync(path.join(dir, "ignored/x.js"), "\n");
+    assert.deepEqual(changedVsDeploy("base", dir).sort(), ["a.js", "fresh/new.test.mjs"]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

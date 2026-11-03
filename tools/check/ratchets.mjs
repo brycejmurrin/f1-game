@@ -897,6 +897,14 @@ export async function seedTreeMetric(metric, { slack, dryRun = false } = {}) {
   return value;
 }
 
+/** `--flag=N` → N; a missing or non-numeric N is `dflt`. An explicit 0 stays 0 (B3: `|| dflt` turned
+ *  `--auto-raise=0` / `--max-raise=0` into a 40-line allowance). */
+export function numArg(flag, dflt) {
+  const v = String(flag).split("=")[1];
+  const n = v === undefined || v.trim() === "" ? NaN : Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : dflt;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   // --help answers from the header without measuring the tree (audit4 cli-help: it took 10 s).
@@ -928,7 +936,7 @@ async function main() {
     const ref = argv[baseAt + 1];
     if (!ref || ref.startsWith("-")) { console.error("ratchets: --base needs a ref"); process.exitCode = 2; return; }
     const mr = argv.find((a) => a.startsWith("--max-raise="));
-    process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40, advisory: argv.includes("--advisory") });
+    process.exitCode = compareToBase(ref, { maxRaise: mr ? numArg(mr, 40) : 40, advisory: argv.includes("--advisory") });
     return;
   }
   if (argv.includes("--update") || argv.includes("--preview") || argv.includes("--lower-only")) {
@@ -956,7 +964,7 @@ async function main() {
   }
   if (argv.includes("--fold")) {
     const minArg = argv.find((a) => a.startsWith("--min-fragments="));
-    const n = minArg ? await foldIfDue(Number(minArg.split("=")[1]) || 1) : await fold();
+    const n = minArg ? await foldIfDue(numArg(minArg, 1)) : await fold();
     if (minArg && !n) { console.log(`ratchets --fold: fewer than ${minArg.split("=")[1]} fragment(s), nothing folded`); return; }
     console.log(`ratchets --fold: ${n} fragment(s) summed into tests/data/ratchets.json and deleted; every effective ceiling unchanged`);
     return;
@@ -965,7 +973,7 @@ async function main() {
   if (auto) {
     // No `=N`: the hook's absorb, a flat 20 (the Ratchet-Reason trailer was dropped 2026-11-03).
     // An explicit `--auto-raise=N` keeps N, including the historical 40.
-    const maxRaise = auto.includes("=") ? (Number(auto.split("=")[1]) || 40) : 20;
+    const maxRaise = auto.includes("=") ? numArg(auto, 40) : 20;
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
