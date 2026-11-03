@@ -133,3 +133,26 @@ test("settings.json wires the guard on Bash with onFailure block, and the deny/a
   assert.equal(s.enabledPlugins, undefined, "the ten false enabledPlugins entries did nothing");
   for (const t of [...s.permissions.deny, ...s.permissions.ask]) assert.ok(!s.permissions.allow.includes(t), `${t} is both allowed and gated`);
 });
+test("B8 #4561: H1 npm run test, H2 gh global flags, H3 wrapper options, H5 hatches, H6 --stop, H4 prose passes", () => {
+  const sub = { agent_id: "a1" };
+  for (const cmd of ["npm run test", "npm run test --silent", "npm run-script test", "npm run -s test -- x"]) refused(cmd, /subagent never starts a browser run/, sub);
+  allowed("node tools/ci/test-bg.mjs --stop", sub);                                         // H6
+  for (const cmd of ["touch .claude/allow-protected", ": > .claude/allow-context-cap", "touch '.claude/allow-protected'"])
+    refused(cmd, /cannot lift a guard/, sub);                                                 // H5
+  allowed("touch .claude/allow-protected");                                                 // the main session keeps its hatch
+  for (const cmd of ["gh -R a/b pr merge 5", "gh --repo a/b pr merge 5 --merge", "gh --repo=a/b pr merge 5", "gh api -X PUT repos/a/b/pulls/5/merge",
+    "gh api graphql -f query='mutation { mergePullRequest(input:{}) { clientMutationId } }'"]) refused(cmd, /merges or arms/);   // H2
+  for (const cmd of ["gh -R a/b pr ready 5", "gh --repo a/b pr ready"]) refused(cmd, /ready/);
+  refused("gh -R a/b run cancel 1", /cancel/);
+  for (const cmd of ["env -i pkill -f x", "env FOO=1 pkill -f x", "sudo -E pkill -f x", "sudo -u root pkill -f x", "timeout -s KILL 5 pkill -f x",
+    "nice pkill -f x", "nice -n 5 pkill -f x", "command pkill -f x", "time pkill -f x", "if true; then pkill -f x; fi", "{ pkill -f x; }",
+    "! pkill -f x", 'echo "$(pkill -f x)"', "pkill '-f' x", "while true; do pkill -f x; done"]) refused(cmd, /pkill -f/);          // H3
+  for (const cmd of ["command npm test", "time npm test", "if true; then npm test; fi"]) refused(cmd, /subagent never starts/, sub);
+  for (const cmd of ["command git commit -n -m x", "time git commit --no-verify -m x"]) refused(cmd, /pre-commit/);
+  const HP = "core." + "hooksPath";
+  for (const cmd of [`git commit -m "docs: explain ${HP} setup"`, `git config --get ${HP}`, "echo 'see actions/runs/12/cancel'",
+    "git commit -m \"$(cat <<'X'\nfix\n\ngh pr merge is banned\nX\n)\"", 'git commit -m "x\n\ngh run cancel mention"',
+    "cat > notes.md <<'EOF'\ngh pr merge 5\npkill -f chrome\nEOF", "gh api repos/a/b/pulls/5/merge", "gh pr view 5 -R a/b"]) allowed(cmd);   // H4
+  refused("bash <<'EOF'\npkill -f chrome\nEOF", /pkill -f/);                                 // a heredoc a shell reads still runs
+  refused(`git config ${HP} /x`, /hooksPath/);
+});
