@@ -379,7 +379,8 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   assert.match(step, /--overflow-shards "\$OVERFLOW_SHARDS" --stale-first/);
   assert.match(step, /--budget-min "\$BUDGET_MIN"/);
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| '' \}\}/);
+  // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
+  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '5' \|\| '' \}\}/);
   assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| '' \}\}/,
     "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan");
 });

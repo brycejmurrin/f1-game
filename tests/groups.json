@@ -1030,7 +1030,6 @@
     "tests/unit/terrain-normals.test.mjs",
     "tests/unit/terrain-y.test.mjs",
     "tests/unit/test-bg-outcome.test.mjs",
-    "tests/unit/test-bg-waste.test.mjs",
     "tests/unit/test-coverage-audit.test.mjs",
     "tests/unit/test-groups-generated.test.mjs",
     "tests/unit/test-groups.test.mjs",

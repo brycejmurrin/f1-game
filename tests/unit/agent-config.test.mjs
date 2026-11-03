@@ -205,7 +205,7 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
     cwd: ROOT, encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  for (const name of ["render-wgx", "render-tlx", "js-nav", "tests-specs", "claude-config", "ci-tools"]) {
+  for (const name of ["render-wgx", "render-tlx", "js-nav", "claude-config", "ci-tools"]) {
     const claude = stripFrontmatter(read(`.claude/rules/${name}.md`));
     const cursor = stripFrontmatter(read(`.cursor/rules/${name}.mdc`));
     assert.match(claude.fm, /paths:/, `${name}: .claude/rules needs paths:`);

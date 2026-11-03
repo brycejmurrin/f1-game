@@ -12,7 +12,7 @@ import vm from "node:vm";
 import { parse as parseYAML } from "yaml";
 import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectJob, shipFilter, PR_ACTIVE } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectJob, shipFilter } from "../helpers/ci-workflow.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
@@ -34,12 +34,12 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // The deploy branch's push must reach the train; the heavy browser jobs still
   // opt out of a draft PR's fast tier by the one shared expression.
   assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach pages.yml");
-  // Draft synchronize is CI-free unless label run-ci (2026-10-15 fast-track); heavy
+  // Every PR push runs the fast tier (2026-11-03: no run-ci opt-in); heavy
   // jobs still wait for `ready_for_review`, which must therefore be a trigger type.
   const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
-  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review, labeled, edited\]/,
-    "labeled run-ci, and an edit that adds the `CI: run` body line, must be able to opt draft PRs into CI");
-  assert.match(ciWorkflow, /draft-ci-skipped:/, "draft pushes without run-ci report a skip job");
+  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "a draft push runs on its own; `labeled` and `edited` (the run-ci opt-in) are gone");
+  assert.doesNotMatch(ciWorkflow, /draft-ci-skipped:/, "no opt-out notice job: a draft push runs the fast tier");
   // Only the deploy branch's push starts a train; a topic branch runs through its PR.
   assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "the train's push must be scoped to the deploy branch");
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
@@ -48,12 +48,12 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.ok(shipFilter.includes(fastTier), "the ship filter step sits out the fast tier with the same expression");
   assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
-  // node-suites left the draft fast tier on 2026-10-16 (decision D1): it keeps
-  // the shared draft/label predicate and adds its own draft skip (pinned above).
+  // node-suites left the draft fast tier on 2026-10-16 (decision D1): its own
+  // draft skip is pinned in ci-gate-selection; the fast-tier jobs carry no draft gate at all.
   for (const name of ["guards-a", "guards-b", "guards", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
-    assert.ok(head.includes(PR_ACTIVE), `${name} must skip draft synchronize unless run-ci`);
+    assert.ok(!/run-ci|github\.event\.pull_request\.draft/.test(head), `${name} runs on every PR push, a draft included`);
     assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out of ship/draft heavy skip`);
   }
 });
