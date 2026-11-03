@@ -431,3 +431,25 @@ test("Mesa retries share a total deadline instead of exhausting the caller job",
   assert.notEqual(r.status, 0);
   assert.equal((r.stdout.match(/APT-CALL/g) || []).length, 1, "no retry after setup budget is spent");
 });
+
+test("perf P8 (#4548): renderer-macos runs as two one-worker legs, train-twins runs its two suites at once", () => {
+  const wf = parseYaml(fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8"));
+  // renderer-macos: 17 min 19 s as one leg (pages run 41599337245), ~7 min after
+  // every other dependency of the aggregate. Two runners = two GPUs, so the
+  // one-worker rule still holds per GPU; every spec still runs (Playwright --shard).
+  const r = wf.jobs["renderer-macos"];
+  assert.deepEqual(r.strategy?.matrix?.shard, [1, 2], "renderer-macos is a two-leg shard matrix");
+  assert.equal(r.strategy["fail-fast"], false, "one leg's red must not cancel the other's evidence");
+  const run = r.steps.find((s) => /npm run test:gfx/.test(s.run || ""));
+  assert.match(run.run, /--shard=\$\{\{ matrix\.shard \}\}\/2\b/);
+  assert.equal(String(run.env.APEX_WORKERS), "1", "still ONE worker per Metal GPU");
+  const up = r.steps.find((s) => /upload-artifact/.test(s.uses || ""));
+  assert.match(up.with.name, /\$\{\{ matrix\.shard \}\}/, "per-leg artifact names, or the uploads collide");
+  // train-twins: 10 min 45 s with the two node --test runs back to back.
+  const tw = wf.jobs["train-twins"].steps.find((s) => /node --test/.test(s.run || ""));
+  assert.equal(tw.shell, "bash");
+  assert.match(tw.run, /set -euo pipefail/, "a failing suite must fail its pipeline through the prefix sed");
+  assert.equal((tw.run.match(/\) &\n/g) || []).length, 2, "both suites start in the background");
+  assert.match(tw.run, /wait "\$pid" \|\| rc=1/, "every suite's exit status is collected");
+  assert.match(tw.run, /exit "\$rc"/);
+});
