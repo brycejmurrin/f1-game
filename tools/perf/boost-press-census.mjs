@@ -100,8 +100,14 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas }) {
 //       more of them than the matched control windows did: BOOST adds nothing to the background rate.
 // The background re-mint itself is pinned strictly in #3713 (zero in N idle windows), red until that lands.
 export const isFxStream = (b) => /(^|,)fxAlpha(,|$)/.test(b.attrs || "");
+//   (c) FIRST PRESS (#4514): press 1 builds ZERO pipelines on the lit mesh layout (`trk`): every BOOST-only lit
+//       variant is in the entry warm, in the winding it is drawn with. Post-chain quads (`position,uv`) can land in
+//       the window by timing and are not BOOST's, so only the lit layout is strict here.
+export const isLitMesh = (b) => /(^|,)trk(,|$)/.test(b.attrs || "");
 export function boostVerdict(presses) {
   const later = presses.slice(1), fail = [];
+  const first = presses[0] ? presses[0].built.filter(isLitMesh) : [];
+  if (first.length) fail.push(`press 1 built ${first.length} lit pipelines: a BOOST-only variant the warm missed (#4514): ${JSON.stringify(first.slice(0, 6))}`);
   for (const p of later) {
     const lit = p.built.filter((b) => !isFxStream(b));
     if (lit.length) fail.push(`press ${p.press} built ${lit.length} BOOST/lit pipelines (#3677): ${JSON.stringify(lit.slice(0, 6))}`);
