@@ -17286,7 +17286,8 @@
       ],
       "push": [
         "tests/unit/announcer.test.mjs",
-        "tests/unit/captions.test.mjs"
+        "tests/unit/captions.test.mjs",
+        "tests/unit/select-specs.test.mjs"
       ],
       "radioWho": [
         "tests/unit/captions.test.mjs"
@@ -17909,6 +17910,9 @@
       ],
       "state": [
         "tests/unit/hud-tyres.test.mjs"
+      ],
+      "*": [
+        "tests/unit/select-specs.test.mjs"
       ]
     },
     "js/ui/hud.js": {
