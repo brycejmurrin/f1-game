@@ -465,8 +465,10 @@ const HudLayout = (function () {
     // Pack primary instruments first, then place secondary readouts around them.
     // Both corrections reset before measurement and never enter saved settings.
     // Coalesce clearReadouts across packPhone, the fitHud tail (hud.js), the
-    // clearance RO, and the double-rAF + 120 ms follow-ups into one body run
-    // when the follow-up window ends — without editing hud.js.
+    // clearance RO, and the double-rAF packPhone into one body at the end of
+    // that same-tick/double-rAF window — without editing hud.js. Do not hold
+    // suppress across the later 120 ms idle: standalone clearReadouts (and
+    // browser specs that call it after controls settle) must stay sync.
     beginPackClearCoalesce();
     packPhone(W, H);
     schedulePackFollowUp();
@@ -491,29 +493,31 @@ const HudLayout = (function () {
   function schedulePackFollowUp() {
     if (_packFollow) return;
     _packFollow = 1;
-    beginPackClearCoalesce();
-    const finish = () => {
-      _packFollow = 0;
-      endPackClearCoalesce();
-    };
     const run = () => {
       if (!doc || typeof window === "undefined" || !window.innerWidth) {
-        finish();
+        _packFollow = 0;
+        endPackClearCoalesce();
         return;
       }
       packPhone(window.innerWidth, window.innerHeight);
+      // Flush fit + same-tick hud.js/RO clears + this pack now. Holding
+      // suppress through the 120 ms wait made HudLayout.clearReadouts() a
+      // no-op for callers (ui-scale map vs tall pedals).
+      endPackClearCoalesce();
       // Strat/rel paint on the 10 Hz HUD tick after fitHud; one more pack a
       // beat later catches the unhide the MutationObserver may miss when the
       // hidden flag never flipped (first race tick already showed them).
       if (typeof setTimeout === "function") {
         setTimeout(() => {
+          _packFollow = 0;
           if (doc && typeof window !== "undefined" && window.innerWidth) {
+            beginPackClearCoalesce();
             packPhone(window.innerWidth, window.innerHeight);
+            endPackClearCoalesce();
           }
-          finish();
         }, 120);
       } else {
-        finish();
+        _packFollow = 0;
       }
     };
     if (typeof requestAnimationFrame === "function") {
@@ -521,7 +525,8 @@ const HudLayout = (function () {
     } else if (typeof setTimeout === "function") {
       setTimeout(run, 32);
     } else {
-      finish();
+      _packFollow = 0;
+      endPackClearCoalesce();
     }
   }
 

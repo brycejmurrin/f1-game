@@ -1658,7 +1658,9 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
 });
 
 // #4586 row 2 — one fit used to run clearReadouts ~5× (packPhone, hud.js tail,
-// clearance RO, double-rAF pack, 120 ms pack). Coalesce to one body at follow-up end.
+// clearance RO, double-rAF pack, 120 ms pack). Coalesce the same-tick + double-rAF
+// wave to one body; the later 120 ms pack is its own brief coalesce so standalone
+// clearReadouts stays sync during the idle gap (ui-scale map clearance).
 test("fit pack follow-up coalesces clearReadouts to one body run", () => {
   const CLEAR_SEL = ".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror";
   let bodyRuns = 0;
@@ -1693,18 +1695,20 @@ test("fit pack follow-up coalesces clearReadouts to one body run", () => {
   // Same-tick callers that used to each run a body (fitHud tail + RO).
   ctx.HudLayout.clearReadouts();
   ctx.HudLayout.clearReadouts();
-  assert.equal(bodyRuns, 0, "clearReadouts bodies wait for the pack follow-up window");
-  // double-rAF → first follow-up packPhone (still coalesced)
+  assert.equal(bodyRuns, 0, "clearReadouts bodies wait for the double-rAF pack flush");
+  // double-rAF → follow-up packPhone then one coalesced body
   const wave1 = raf.splice(0);
   for (const cb of wave1) cb();
   const wave2 = raf.splice(0);
   for (const cb of wave2) cb();
-  assert.equal(bodyRuns, 0, "double-rAF packPhone still coalesced");
+  assert.equal(bodyRuns, 1, "exactly one clearReadouts body at the double-rAF flush");
   assert.equal(timers.length, 1, "120 ms follow-up armed");
   assert.equal(timers[0].ms, 120);
-  timers[0].cb();
-  assert.equal(bodyRuns, 1, "exactly one clearReadouts body when the follow-up window ends");
-  // Outside the window, a direct call stays synchronous for callers/tests.
+  // Between packs, standalone clearReadouts must not no-op.
   ctx.HudLayout.clearReadouts();
-  assert.equal(bodyRuns, 2, "standalone clearReadouts still runs immediately");
+  assert.equal(bodyRuns, 2, "standalone clearReadouts runs immediately after the flush");
+  timers[0].cb();
+  assert.equal(bodyRuns, 3, "120 ms packPhone ends with its own clearReadouts body");
+  ctx.HudLayout.clearReadouts();
+  assert.equal(bodyRuns, 4, "standalone clearReadouts still runs immediately");
 });
