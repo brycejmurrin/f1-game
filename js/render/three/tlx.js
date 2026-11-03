@@ -3819,10 +3819,11 @@ const TLX = (function () {
       // BOOST and OVERTAKE forced on, and the player's ERS strip) draws each captured pair ONCE through the real pool
       // (acquireMesh: the same wrapper, k = 0, the race's first boost frame takes) into the scene target under a 1x1
       // scissor, after its compile — as drawWarmStage draws the scene. Only the pool root is shown; present() clears
-      // and redraws the target before any pass reads it. Gated like the draw warm (drawWarmOn), or apex26.tlxRigDraw.
-      // apex26.tlxRigDraw: unset = follows the draw warm (drawWarmOn), "1" on, "0" off (compile-only, the A/B arm).
+      // and redraws the target before any pass reads it. Gated like the draw warm (drawWarmOn), or apex26.tlxDrawWarm="rig".
+      // apex26.tlxDrawWarm="rig" draws only these (the full draw warm stays AUTO): the census spec's handle on a software
+      // adapter, where forcing the whole draw warm reloaded the page. "0" is compile-only, the A/B arm.
       let _rigDrawKnob = null;
-      try { const v = localStorage.getItem("apex26.tlxRigDraw"); _rigDrawKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
+      try { _rigDrawKnob = localStorage.getItem("apex26.tlxDrawWarm") === "rig" ? true : null; } catch (_) { /* no storage: auto */ }
       function drawRigPairs(recs, usePost, useTag) {
         // _r6 off: the legacy hide loop would hide the live frame, so compile-only there.
         if (!_r6 || !recs || !recs.length || !usePost || !post || !post.sceneTarget || !(_rigDrawKnob !== null ? _rigDrawKnob : drawWarmOn())) return 0;
