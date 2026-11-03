@@ -7951,8 +7951,14 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
-      "*": [
+      "resolve": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "*": [
         "tests/unit/garage-entrance-motion.test.mjs"
       ]
     },
@@ -17944,11 +17950,15 @@
       "rowLabel": [
         "tests/unit/hud-relative.test.mjs"
       ],
+      "sampleGeo": [
+        "tests/unit/hud-relative-geo-sample.test.mjs"
+      ],
       "select": [
         "tests/unit/hud-relative.test.mjs"
       ],
       "tick": [
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/hud-relative-geo-sample.test.mjs",
         "tests/unit/hud-relative.test.mjs"
       ]
     },
@@ -18117,6 +18127,7 @@
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
+        "tests/unit/hud-relative-geo-sample.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
