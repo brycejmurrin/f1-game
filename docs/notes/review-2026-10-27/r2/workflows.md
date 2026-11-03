@@ -20,7 +20,7 @@ per-conclusion `total_count` for busy files, which the API caps at 2500); `trigg
 | lit-wgsl-advisory.yml | PR (js/render/**, vendor/three-*) | 256 · 10-27 · 2% cancel | job summary only; docs note | KEEP (advisory, cheap); review again if CHANGED rate stays ~4% |
 | flake-tally.yml | cron daily 06:19 + every 2 h, dispatch | 62 (60 sched) · 10-27 · 0% | `flaky` issues #3505/#3885 (updated today); base-red issues last 10-22 | KEEP; fix input text "3 h base-red" vs `*/2` cron; 62 runs ≈ half the 2-h slots fired |
 | garage-before.yml | cron 10:23, dispatch | 12 sched + 15 old wf_run (ended 10-14) · 10-26 · 44% (all old wf_run cancels) | garage-angles-fetch.mjs, garage-parts-livery skill | KEEP (plan job skips when paths unchanged) |
-| capture-gallery.yml | dispatch, **push of .github/capture-gallery-request.json on cursor/** ** | 9 push · 10-21 · 11% | run-capture-request.mjs, docs/CAPTURE-REVIEW.md | CHANGE-TRIGGER: dispatch only; then MERGE car-shot into it |
+| capture-gallery.yml | dispatch, **push of .github/capture-gallery-request.json on cursor/** ** | 9 push · 10-21 · 11% | run-capture-request.mjs, docs/UI-MAP.md | CHANGE-TRIGGER: dispatch only; then MERGE car-shot into it |
 | car-shot.yml | dispatch | 0 (27 ever) · 10-03 | render-car.mjs | MERGE-INTO capture-gallery (both: macOS, boot a page, upload frames) |
 | archive-evidence.yml | dispatch | 22 (one batch) · 10-19 · 0% | docs/EVIDENCE-STORAGE.md | KEEP (dormant, contents:write needed for releases) |
 | prune-branches.yml | dispatch | 6 · 10-26 · 0% | prune-branches.mjs, branch audit | KEEP (containers cannot delete refs) |

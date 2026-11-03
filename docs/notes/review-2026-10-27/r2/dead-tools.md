@@ -14,7 +14,7 @@ Totals: LIVE 273 | DOC-ONLY 14 | TEST-ONLY 39 | ORPHAN 2.
 | class | path | callers | action |
 |---|---|---|---|
 | ORPHAN | check-doctor-catalog.mjs (deleted, #3935) | none; hard-codes `cwd:'/workspace/f1-game'` + `source tools/environment/activate.sh`; no test | DELETE |
-| ORPHAN | tools/gen/track-stills.mjs | none in code/skills; only docs/plans/skilltest-content-pipeline.md. Its output `assets/stills/*.webp` IS shipped (js/ui/select-screen.js) | KEEP (asset generator); add a line to new-track or asset-pack skill |
+| ORPHAN | tools/gen/track-stills.mjs | none in code/skills; only docs/archive/plans/skilltest-content-pipeline.md. Its output `assets/stills/*.webp` IS shipped (js/ui/select-screen.js) | KEEP (asset generator); add a line to new-track or asset-pack skill |
 
 ## Fleet / orchestrator / relay / train era vs docs/WORKERS.md (GitHub-only bus, dispatcher, land.yml)
 No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orch / desk / ledger (WORKERS.md

@@ -36,7 +36,7 @@ Read from the notes and the tree on 2026-10-17 (deploy tip `37794758`).
 | adaptive quality | governor: resolution first, tier ladder second, crash sentinel, settle/hold/climb-survive/ceiling-expiry, two clocks (frame-counted vs ms), 5-substep physics cap | `js/perf/governor.js:14-130`; `js/game.js:8713-8734` |
 | CPU / GC | alloc hunt 1: `hud-layout` 52 → 11 KB/frame, `collide` buckets 6.5 → 0; minimap pit-mark glyph cache (heavy frames 30 % → 5 %); scratch objects in AI | `docs/notes/PERF-ALLOC-HUNT-2026-10-17.md`; `docs/notes/TLX-PERF-HUNT-5-2026-10-16.md` |
 | build | track build in a Worker (ON when >1 core), stepped fallback, typed accumulators, 24 m mass grid | `js/track/build-client.js`; `docs/notes/PERF-FINDINGS.md` §3 |
-| tooling | `PerfSpans`, `tools/perf/profile.mjs` (`--base` A/B, noise rule), `__apex.gpuTimer`, three Inspector `?inspector=1`, `gpu-census.yml` | `docs/notes/PROFILER-DESIGN-2026-10-16.md`; `docs/notes/MEASURING-GPU-PERF-2026-09-16.md` |
+| tooling | `PerfSpans`, `tools/perf/profile.mjs` (`--base` A/B, noise rule), `__apex.gpuTimer`, three Inspector `?inspector=1`, `gpu-census.yml` | `docs/notes/PROFILER-DESIGN-2026-10-16.md`; `docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md` |
 
 Refuted or closed by measurement (also in `docs/notes/PERF-FINDINGS.md` §4 and `docs/notes/PERF-OPTIONS-2026-09-16.md` §5–9):
 per-object occlusion queries (+2.1 %, superseded design), box bottom-face cull (0.27 %, not 13 %), meshopt vertex-cache
@@ -75,7 +75,7 @@ to measure and could re-rank everything below it. #8–#10 are structural and ca
 ## 2. Per opportunity
 
 Convention: **Evidence** cites the source with its date; ⚑ = fetched and read by me or the research agent, ◇ = search snippet or
-secondary. **Measure** names our instrument. A SwiftShader number never proves a GPU win (`docs/notes/MEASURING-GPU-PERF-2026-09-16.md`).
+secondary. **Measure** names our instrument. A SwiftShader number never proves a GPU win (`docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md`).
 
 ### 1. On-phone measurement kit and thermal soak
 
@@ -88,7 +88,7 @@ secondary. **Measure** names our instrument. A SwiftShader number never proves a
   thermal API to pages, so frame-time drift is the only signal. WebKit bug 173434 (⚑, last modified 2026-05-19): rAF is throttled to
   30 fps in Low Power Mode and in iframes; a 2024-09-23 comment reports 120 fps on iPhone 16 Pro (a comment, not a WebKit statement)
   ([bug 173434](https://bugs.webkit.org/show_bug.cgi?id=173434)).
-  Our own record: the CI phone leg is unreachable (`docs/notes/MEASURING-GPU-PERF-2026-09-16.md` §6 item 6).
+  Our own record: the CI phone leg is unreachable (`docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md` §6 item 6).
 - **Where.** `js/perf/metrics-overlay.js` (METRICS panel; downloads only on request, line ~807), `js/perf/spans.js`,
   `js/perf/governor.js` (`frameStats`, `renderScale`), `__apex.perf()`.
 - **Win.** None directly; it prices #2–#10 and settles SGSR default-ON.
@@ -306,7 +306,7 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   a kill line on an iPhone SE, `docs/notes/CI-RENDERING-PERFORMANCE.md` ~426).
 - **Evidence.** Unity Dynamic Resolution manual (◇, undated: scale-to-target pattern) ([manual](https://docs.unity3d.com/es/Manual/DynamicResolution.html)). Apple load/store guidance as #2. three's
   `RenderTarget` exposes `viewport`/`scissor` (Context7 three docs, WebGL/WebGPU renderers); sampling a sub-rect needs a UV scale
-  uniform in each of ~15 post quads (`docs/notes/TLX-PERF-HUNT-2026-10-11.md` §D: nothing to cut there without a look change, but
+  uniform in each of ~15 post quads (`docs/archive/notes/TLX-PERF-HUNT-2026-10-11.md` §D: nothing to cut there without a look change, but
   this is not cutting passes).
 - **Win.** No realloc hitch per governor step, finer steps (the `<0.02` contract today), lower peak memory, and a cleaner base
   for #5. Not a steady-state speedup.
@@ -319,13 +319,13 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
 
 - **What.** Each three RenderObject costs ~7.5–8 µs per frame and ~35 µs per post pass (hunt 4), and `updateForRender` was 1.1 s of
   a 30 s window (hunt 5). The census still shows ~90 main + ~37 mirror + ~49 sun draws per frame after the dust merge. Leftovers
-  priced earlier and not built: collapse the ~28 instanced prop variants (A2, `docs/notes/TLX-PERF-HUNT-2026-10-11.md`), wheels as one
+  priced earlier and not built: collapse the ~28 instanced prop variants (A2, `docs/archive/notes/TLX-PERF-HUNT-2026-10-11.md`), wheels as one
   `BatchedMesh` (D4: −37 RO, ≈1.1 ms/frame on Mac WebGL2 under braking), brake rings as one transparent instanced run
   (H2: −36 RO, blend-order look risk).
 - **Evidence.** three docs (Context7): `BatchedMesh` takes one material and many geometries, multi-draws through
   `WEBGL_multi_draw` **and falls back to a per-draw loop with `_gl_DrawID` uniforms when the extension is absent**, so on a
   device without it a "batch" can cost *more* CPU than separate meshes; `perObjectFrustumCulled` and `sortObjects` default on
-  ([BatchedMesh](https://github.com/mrdoob/three.js/blob/dev/docs/pages/BatchedMesh.html)). Our own earlier finding: multi-draw at 1.03 ranges per call was slower (`docs/notes/MEASURING-GPU-PERF-2026-09-16.md` §4). web3dsurvey
+  ([BatchedMesh](https://github.com/mrdoob/three.js/blob/dev/docs/pages/BatchedMesh.html)). Our own earlier finding: multi-draw at 1.03 ranges per call was slower (`docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md` §4). web3dsurvey
   reports `WEBGL_multi_draw` on iOS at 99.99 % (fetched 2026-10-17; no date or sample method on the page), so the fallback-loop
   worry is probably moot on a current iPhone; still confirm with `gl.getExtension` (§4 A) before any BatchedMesh work. One cheaper
   lever first: three's `NodeMaterialObserver` returns early when `object.static === true`
@@ -379,7 +379,7 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
 | Releasing three's CPU geometry mirrors | Blanks the chunked world; upstream says do not. | `docs/notes/PERF-FINDINGS.md` §2s |
 | A dev snapshot of three, or an uncited tolerance widening to get green | Hunt 4 verdict; AGENTS.md rule 9. | `docs/notes/PERF-HUNT-4-2026-10-14.md` |
 | Drop physics below 60 Hz or add AI update-rate LOD to save CPU | Breaks determinism and physics identity; no profile says CPU is the phone limit. Measure `PerfSpans` `physics` on the phone first. | AGENTS.md §Physics |
-| Chase mean fps from SwiftShader | CPU-only numbers do not prove a GPU win. | `docs/notes/MEASURING-GPU-PERF-2026-09-16.md` §6 |
+| Chase mean fps from SwiftShader | CPU-only numbers do not prove a GPU win. | `docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md` §6 |
 | Lower precision (`mediump`/`f16`) for lighting on the phone | Apple's retired OpenGL ES guide says medium and low precision are both computed as 16-bit floats on A7 and later (⚑), so `mediump` is *half* on native GL; but nothing found says ANGLE-Metal maps `mediump` to Metal `half` (WebKit bug 237434 is about fast-math differences, ◇), and three emits `precision highp` GLSL for node materials. Unity docs and an Apple forum thread (◇) say `half` can save power on Apple GPUs. Position and normal maths must stay `highp` (banding/shimmer). Unproven lever; Safari 26 `shader-f16` exposure unverified. Worth one experiment only after the phone shows ALU-bound frames. | Apple OpenGL ES guide for A7+ (⚑, retired); Unity metal-requirements doc (◇) |
 | GPU-driven rendering with indirect draws on Safari | Core WebGPU has no multi-draw-indirect, `indirect-first-instance` was unimplemented in WebKit (bug 251665; a fix has landed, shipping version not confirmed), and a WebKit bug filed 2026-08 reports a GPU hang from repeated indirect draws on shipping Safari 26.3 (resolved; build unconfirmed). Our phone path is WebGL2 anyway. | WebKit bugs 251665 and the 2026-08 hang report (◇ snippets) |
 | Blind Rapier upgrade or the SIMD build | We vendor `@dimforge/rapier3d-compat` 0.19.3 (`vendor/rapier-0.19.3/rapier.mjs`, 2.24 MB). npm `latest` is 0.21.0 (0.20.0 2026-08-08, 0.21.0 2026-09-25, from the registry); 0.21.0's compat `rapier.mjs` is **4.34 MB** and the SIMD build 4.62 MB (packed and measured here), nearly 2× the bytes for a lazily loaded debris world, and no changelog with a performance claim was found (the repo CHANGELOG fetched stops at 0.19.3). The README says the main build is only locally deterministic and a separate `-deterministic` build exists; the debris side-world feeds race logic (`js/physics/debris-world.js:77`), so a SIMD build that changes float results is a behaviour risk. WASM SIMD itself is supported in Safari since 16.4 (WebKit, ⚑). Measure the debris `step()` on the phone first (it was ~16 % of physics CPU in an old desktop profile, `docs/notes/PERF-FINDINGS.md` §2). | npm registry 2026-10-17; rapier.js README; WebKit "Features in Safari 16.4" (⚑) |
@@ -387,7 +387,7 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
 
 ## 4. Measurement plan for the iPhone itself
 
-Everything below is something Bryce can run; none is automatable from CI (`docs/notes/MEASURING-GPU-PERF-2026-09-16.md` §6: the phone leg is
+Everything below is something Bryce can run; none is automatable from CI (`docs/archive/notes/MEASURING-GPU-PERF-2026-09-16.md` §6: the phone leg is
 unreachable). Apple's sources are archived or search results: verify menu names on the device's iOS version.
 
 **Setup (once).** iPhone: Settings → Apps → Safari → Advanced → **Web Inspector** on. Mac with Safari: Settings → Advanced → **Show

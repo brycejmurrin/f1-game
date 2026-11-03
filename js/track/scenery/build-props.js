@@ -1950,7 +1950,7 @@ const TrackBuildProps = (function () {
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt,
         // World-XZ ground query, exposed to circuits because its ABSENCE is
-        // what makes Trap B (docs/SCENERY-GROUNDING.md §2) so easy to write:
+        // what makes Trap B (docs/SCENERY-API.md §2) so easy to write:
         // groundYAt is a NODE query, so a circuit walking a tangent away from
         // the centreline had nothing to ask and reused one anchor's height
         // across tens of metres of slope. Returns null off the rendered

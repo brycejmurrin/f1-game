@@ -6,7 +6,7 @@ Date: 2026-10-04 Status when written: PLAN (docs-only; nothing here is built) Sc
 and clip planner, an in-game reel player, then an optional video export (WebCodecs first, MediaRecorder fallback) with share-or-download. No backend,
 no build step, no change to physics or netplay authority.
 
-A path written `js/<new>/name.js` is a PROPOSED file (same convention as `docs/plans/2026-09-30-broadcast-feel.md`); every other path exists today.
+A path written `js/<new>/name.js` is a PROPOSED file (same convention as `2026-09-30-broadcast-feel.md (archived)`); every other path exists today.
 Ship branch `claude/f1-game-project-26h3ng`; one PR per slice, drafts until the gate (AGENTS.md section The loop); at most two PRs on auto-merge per
 session.
 
@@ -14,7 +14,7 @@ session.
 
 | Doc / module | What it owns | How this plan relates |
 |---|---|---|
-| `docs/plans/2026-09-30-broadcast-feel.md` | Shipped TV director, 20 s replay ring, results orbit + highlights (slices A-C) | This plan EXTENDS slice C: its `highlightsReel` is tag-only and ring-bound; we replace the input, not the player-facing buttons |
+| `2026-09-30-broadcast-feel.md (archived)` | Shipped TV director, 20 s replay ring, results orbit + highlights (slices A-C) | This plan EXTENDS slice C: its `highlightsReel` is tag-only and ring-bound; we replace the input, not the player-facing buttons |
 | `docs/notes/CAMERA-BROADCAST-KIT-2026-10-01.md` | Wall avoid, trackside cams, photo kit, comfort | We reuse `GameCams.vantage` shots and cam-avoid; no camera-kit changes |
 | `.claude/skills/replay-camera/SKILL.md` | Seek/follow/exit/reentry discontinuity probes | Reel clip boundaries are seeks: run its offline contract in slice 1 |
 | `docs/plans/2026-10-03-perf-memory.md` | Phone resident-memory budget | Export buffers must fit its low-tier ceiling (Risks) |

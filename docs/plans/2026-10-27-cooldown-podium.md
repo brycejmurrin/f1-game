@@ -15,11 +15,11 @@ already exist on disk (verified 2026-10-28 tip via apex-lsp).
 
 | Doc / module | Relationship |
 |---|---|
-| `docs/FLOW.md` §Leaving a session | Canonical post-flag table today: `endRace` → ResultsCam + results surface. This plan *inserts* phases before the full sheet owns the session. |
-| `docs/USAGE-PATHS.md` R11–R12, finish-camera table | Journey IDs to extend; do not invent a parallel path language. |
+| `docs/ARCHITECTURE-MAP.md` §Leaving a session | Canonical post-flag table today: `endRace` → ResultsCam + results surface. This plan *inserts* phases before the full sheet owns the session. |
+| `docs/ARCHITECTURE-MAP.md` R11–R12, finish-camera table | Journey IDs to extend; do not invent a parallel path language. |
 | `docs/plans/2026-10-04-feature-roadmap.md` tier 2 | Named this idea; row should point here once this plan lands. |
 | `docs/plans/2026-10-04-highlight-reel-clip-export.md` | Owns HIGHLIGHTS *export*; this plan only reuses the live ResultsCam highlights phase as an optional exit from ceremony. |
-| `docs/plans/2026-10-04-share-cards.md` | Share cards stay on the results / standings surfaces; ceremony does not mint a new share surface. |
+| `2026-10-04-share-cards.md (archived)` | Share cards stay on the results / standings surfaces; ceremony does not mint a new share surface. |
 | skill `f1-animation-cameras` | Camera ownership when a build slice edits ResultsCam or chase blends. |
 | Manual pit-stop mini-game (roadmap same cell) | **Out of scope** for every slice below — later tier; do not couple cooldown to a mini-game. |
 
@@ -51,7 +51,7 @@ and `#results` rather than inventing a second results stack. Phone landscape
   then `dbgCam = null; resultsCam.onFlag(); buildResults(…); els.results.hidden =
   false` (~L3027–3029). State flips to `"results"` *before* the sheet is shown
   (~L2931). There is **no** cooldown drive or parc fermé park.
-- Mode matrix: `docs/FLOW.md` — ResultsCam only for solo GP/sprint/practice/duel
+- Mode matrix: `docs/ARCHITECTURE-MAP.md` — ResultsCam only for solo GP/sprint/practice/duel
   and season/career when `ResultsCam.enabled(G)` (false on mobile /
   `PerfGov.tier() >= 2`); TT / quali / friend / WATCH skip `onFlag` paths as
   documented.
@@ -228,7 +228,7 @@ merge). One PR per slice unless a later steward joins 4+5.
   winner; CONTINUE → show `#results` (`buildResults`); career/season buttons
   unchanged.
 - [ ] **Slice 5 — `results-flow` spec + FLOW/USAGE-PATHS** — Playwright group;
-  update `docs/FLOW.md` / `USAGE-PATHS.md` finish tables; quarantine policy if
+  update `docs/ARCHITECTURE-MAP.md` / `USAGE-PATHS.md` finish tables; quarantine policy if
   flaky.
 
 **Deferred (not a slice of #1584):** manual pit-stop mini-game; per-circuit podium

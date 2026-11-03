@@ -119,7 +119,7 @@ Severity: **S1** agents will ship the wrong merge/push/ready behaviour;
    - **Owner:** plugin-sync.
 
 8. **`cursor-plugins/apex-f1-game/skills/apex-specialty-handoff/SKILL.md:22–26`**
-   vs **`docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md:30–41`**
+   vs **`docs/archive/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md:30–41`**
    - **Issue:** Plugin lists four fields (paths, PR/bc, ranked next ≤3,
      blockers). Stall gate requires five: **owned path globs** as well.
      Close-outs without OWNED fail the gate.
