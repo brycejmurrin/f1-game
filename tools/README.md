@@ -552,7 +552,7 @@ The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign 
 
 ### `tools/mcp/`
 
-MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair.
+MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools bridge, the phone report pair.
 
 | Tool | Does | Paired skill |
 |---|---|---|
@@ -703,7 +703,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 
 ### `tools/hooks/`
 
-Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer.
+Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-only Bash, the surveyor's and the reviewer's write scopes.
 
 | Tool | Does | Paired skill |
 |---|---|---|

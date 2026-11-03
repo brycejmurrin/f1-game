@@ -30,7 +30,7 @@ pushed branch. A Bryce-attended session may run ONE named spec locally on his ex
 node tools/ci/pick-tests.mjs                 # GROUPS, vs the branch point + working tree
 node tools/ci/pick-tests.mjs --staged
 node tools/ci/pick-tests.mjs js/car/parts.js # explicit paths
-node tools/ci/pick-tests.mjs --bg            # ready-to-paste background command
+node tools/ci/pick-tests.mjs --bg            # only the remote-group.mjs commands, one per browser group
 node tools/ci/select-specs.mjs --since <ref>              # SPECS, one per line, under a time budget
 node tools/ci/select-specs.mjs --since <ref> --budget-min 15
 ```

@@ -49,7 +49,7 @@ export function smokePlan() {
       server: "probe-catalog",
       argv: ["python3", path.join(ROOT, "tools/mcp/probe-mcp.py"), "list-tools"],
       env: { PROBE_MCP_MOCK: "1" },
-      note: "mock catalog — live list-tools starts Chromium / tinyfish ensure",
+      note: "mock catalog — live list-tools starts Chromium",
     },
     {
       server: "chrome-devtools",
