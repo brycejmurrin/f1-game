@@ -43,9 +43,15 @@ const ShareCardData = (function () {
     return { pos: Number.isInteger(pos) && pos > 0 ? pos : null, code: text(code, 4).toUpperCase(),
       name: text(name, 40), teamColor: colour(teamColor), value: text(value, 24).toUpperCase(), you: !!you };
   }
+  // Share links are QR payloads: keep the URL intact (no trademark rewrite),
+  // accept any http(s) capitalisation, strip only control chars, cap at 512.
+  function linkOf(value) {
+    const raw = String(value == null ? "" : value).replace(/[\x00-\x1f\x7f]/g, "").trim();
+    if (!/^https?:\/\//i.test(raw)) return null;
+    return raw.slice(0, 512);
+  }
   function common(opts) {
-    return { display: { name: text(opts.displayName, 32) || "DRIVER" },
-      link: /^https?:\/\//.test(opts.link || "") ? text(opts.link, 512) : null };
+    return { display: { name: text(opts.displayName, 32) || "DRIVER" }, link: linkOf(opts.link) };
   }
   function obj(value) { return value && typeof value === "object" ? value : {}; }
 
