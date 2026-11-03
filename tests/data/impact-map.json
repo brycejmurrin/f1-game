@@ -534,6 +534,7 @@
         "tests/unit/audio-tune.test.mjs"
       ],
       "rebuildCtx": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/reject-lint.test.mjs"
       ],
@@ -930,6 +931,7 @@
         "tests/unit/audio-tune.test.mjs"
       ],
       "radioVoice": [
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs"
       ],
