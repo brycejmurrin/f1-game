@@ -43,7 +43,9 @@ var CooldownLap = (function () {
     if (st.skipRequested) return "skip";
     const age = (sample && Number.isFinite(sample.age)) ? sample.age : st.age;
     if (sample) {
-      if (sample.atBox || sample.inPitLane) return "pit";
+      // pitArmed === false: the beat started inside the lane; ignore the pit
+      // exit until the car has been seen outside it (tick() re-arms).
+      if (st.pitArmed !== false && (sample.atBox || sample.inPitLane)) return "pit";
       if (Number.isFinite(sample.progDelta) && sample.progDelta >= (st.lapBudget || LAP_BUDGET)) return "lap";
     }
     if (Number.isFinite(age) && age >= (st.wallBudget || WALL_S)) return "time";
@@ -81,6 +83,7 @@ var CooldownLap = (function () {
     let age = 0;
     let startProg = 0;
     let skipRequested = false;
+    let pitArmed = true;
     let exit = null;
     let drive = true;
     let wallBudget = WALL_S;
@@ -167,6 +170,8 @@ var CooldownLap = (function () {
       if (Number.isFinite(o.wallS) && o.wallS > 0) wallBudget = o.wallS;
       if (Number.isFinite(o.lapBudget) && o.lapBudget > 0) lapBudget = o.lapBudget;
       startProg = progOf(G.player);
+      const s0 = samplePlayer();
+      pitArmed = !(s0.inPitLane || s0.atBox);
       live = true;
       age = 0;
       exit = null;
@@ -188,9 +193,11 @@ var CooldownLap = (function () {
       if (!live) return exit;
       const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
       age += step;
+      const smp = sample || samplePlayer();
+      if (!pitArmed && !smp.inPitLane && !smp.atBox) pitArmed = true;
       const reason = exitReason({
-        live, age, skipRequested, wallBudget, lapBudget,
-      }, sample || samplePlayer());
+        live, age, skipRequested, wallBudget, lapBudget, pitArmed,
+      }, smp);
       if (!reason) return null;
       exit = reason;
       live = false;

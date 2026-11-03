@@ -684,12 +684,14 @@
     }
 
     let _invColor0 = null;
+    // Membership without Object.values()'s per-pass array.
+    function _ownsFb(fbs, fb) { for (const k in fbs) if (fbs[k] === fb) return true; return false; }
     function discardColor(rt) {
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (rt.textures && rt.textures.length === 0) return false;   // depth-only (r187): no colour to drop
       if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
-      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      if (!fb || !d || !d.framebuffers || !_ownsFb(d.framebuffers, fb)) return false;
       gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, _invColor0 || (_invColor0 = [gl.COLOR_ATTACHMENT0]));
       return true;
     }

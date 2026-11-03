@@ -506,6 +506,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/archive-sweep.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per archivable session id with its PR and merged/closed reason; the final count line; exit 2 usage, 3 GitHub error."
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -2562,6 +2567,16 @@
       "preserve": "@c2"
     },
     "tools/shot/garage-tap.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
+    "tools/shot/garage-video-checks.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/shot/garage-video.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c5"

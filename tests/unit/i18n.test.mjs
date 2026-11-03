@@ -207,3 +207,17 @@ test("a superseded locale fetch cannot install its catalogue over a newer boot (
   await fr;
   assert.deepEqual([I18n.lang(), I18n.t("probe.key", null, "Default")], ["en", "Default"]);
 });
+
+test("a malformed ?lang= tag cannot make number and plural formatting throw (hunt B6, #4550)", async () => {
+  for (const bad of ["en_US", "%%%", "en--x"]) {
+    const { I18n } = loadI18n({ location: { search: "?lang=" + encodeURIComponent(bad), href: "http://localhost/" } });
+    I18n._resetForTest();
+    await I18n.boot();
+    assert.doesNotThrow(() => I18n.n(1234.5), bad);
+    assert.doesNotThrow(() => I18n.t("probe.plural", { n: 2 }, "{n, plural, one {# lap} other {# laps}}"), bad);
+  }
+  const { I18n } = loadI18n({ location: { search: "?lang=en_US", href: "http://localhost/" } });
+  I18n._resetForTest();
+  await I18n.boot();
+  assert.equal(I18n.lang(), "en-US", "an underscore tag is read as its BCP-47 spelling");
+});
