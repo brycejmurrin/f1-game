@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # MCP-call guard for Codex → the repo's GitHub MCP guard
-# (.claude/hooks/github-mcp-guard.sh): merge commits only, no session merge or
-# arm (land.yml lands), a ready-gate receipt before draft→ready, no Actions
-# run cancel. Bryce approved this hook in his session (2026-10-19 ~22:10Z,
+# (.claude/hooks/github-mcp-guard.sh, the one table behind all three doors): no
+# session merge or arm (land.yml lands), no API file writes, no Actions run
+# cancel; `hold` and a PR close ask. Bryce approved this hook in his session (2026-10-19 ~22:10Z,
 # AskUserQuestion "Yes, add the Codex MCP hook"): Codex ran only a Bash hook, so
 # a Codex merge through an MCP GitHub tool skipped the gate
 # (docs/plans/2026-10-19-fleet-redesign.md §8).
@@ -25,7 +25,7 @@ try:
     data = json.load(sys.stdin)
     if not isinstance(data, dict) or not isinstance(data.get("tool_name"), str):
         raise ValueError("invalid hook payload")
-    operation = re.fullmatch(r"mcp__(?:.*__|codex_apps__github_)(merge_pull_request|enable_pr_auto_merge|update_pull_request|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)", data["tool_name"])
+    operation = re.fullmatch(r"mcp__(?:.*__|codex_apps__github_)(merge_pull_request|enable_pr_auto_merge|disable_pr_auto_merge|update_pull_request|update_pull_request_branch|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)", data["tool_name"])
     if not operation:
         sys.exit(0)
     data["tool_name"] = "mcp__github__" + operation.group(1)
@@ -34,9 +34,11 @@ try:
         ti = json.loads(ti)
     if not isinstance(ti, dict):
         raise ValueError("invalid GitHub tool input")
-    # the hosted connector names the PR `pr_number`, a key the shared guard does not read
+    # the hosted connector names the PR `pr_number` / the issue `issueNumber` differently
     if ti.get("pullNumber") is None and ti.get("pr_number") is not None:
         ti["pullNumber"] = ti["pr_number"]
+    if ti.get("issue_number") is None and ti.get("issueNumber") is not None:
+        ti["issue_number"] = ti["issueNumber"]
     data["tool_input"] = ti
     result = subprocess.run(["bash", sys.argv[1]], input=json.dumps(data), stdout=subprocess.PIPE, text=True)
     if result.returncode != 0:

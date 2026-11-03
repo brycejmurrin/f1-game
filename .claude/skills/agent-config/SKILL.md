@@ -31,7 +31,7 @@ The figures live in `tests/data/agent-config-budgets.json` (the test reads them 
 - Every skill needs a routing query file (`agent-config.test.mjs`) and a smoke recipe
   (`skill-progressive.test.mjs`); §New skill steps 3–4.
 - Routing floor: the skill-hint hook's top-2 hint must hit ≥ 85% over every query file
-  (`tests/unit/skill-hint-hook.test.mjs`) — new query rows can sink it.
+  (`skill-hint-hook` (retired 2026-11-03)) — new query rows can sink it.
 - SKILL.md body under 500 lines; frontmatter keys only from the allowlist in
   `tests/unit/agent-surface.test.mjs`.
 
@@ -59,7 +59,7 @@ The figures live in `tests/data/agent-config-budgets.json` (the test reads them 
 3. Retest:
    ```sh
    node --test tests/unit/agent-config.test.mjs tests/unit/agent-surface.test.mjs tests/unit/skill-progressive.test.mjs \
-     tests/unit/skill-hint-hook.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/docs-integrity.test.mjs
+     tests/unit/skill-smoke.test.mjs tests/unit/docs-integrity.test.mjs
    bash tools/env/mirror-skills.sh --check
    npm run gen:check          # tools/README.md is generated from @doc / @skill headers
    ```

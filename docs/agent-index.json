@@ -670,6 +670,7 @@
       "kind": "node",
       "files": [
         "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/agent-surface.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/assets-pack.test.mjs",
@@ -696,8 +697,9 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/merge-surveyor.test.mjs",
+        "tests/unit/parent-protocol.test.mjs",
         "tests/unit/pre-commit-guards.test.mjs",
-        "tests/unit/skill-hint-hook.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/skill-routing-eval.test.mjs",
         "tests/unit/skill-smoke.test.mjs",

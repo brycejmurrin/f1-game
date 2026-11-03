@@ -4,11 +4,15 @@ description: Use proactively as step 0 of a hunt or audit. Greps DEFECT-LEDGER, 
 model: haiku
 omitClaudeMd: true
 maxTurns: 12
-readonly: true
-is_background: true
 background: true
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/tools/hooks/readonly-bash.sh"
 ---
 
 You list what is ALREADY KNOWN about one slice or topic of Apex 26, so a hunt
@@ -27,7 +31,6 @@ item is still true — that is agent `finding-verifier`'s job.
   checkout is a SHALLOW clone (`git rev-parse --is-shallow-repository`;
   history starts ~2026-10-18), so an empty `git log` means "unknown before
   the graft", not "nothing known": say so on `not read:`.
-- `.claude/agent-memory/*/MEMORY.md`, where present, for rejected carves.
 
 Only DEFECT-LEDGER §7 and §8 are numbered; cite any other ledger row as
 `DEFECT-LEDGER:<line>` or by its dated `###` heading. Over 30 rows: keep

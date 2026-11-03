@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-# SubagentStop (and PreToolUse SubagentHandback) hook: checks a read-only reporter subagent's final report
-# against the return contract its .claude/agents/<name>.md states, and sends a
-# malformed report BACK to the subagent to fix instead of letting it reach the
-# parent (2026-10-14).
+# SubagentStop (and PreToolUse SubagentHandback) hook: checks a reporter subagent's (or a worker's) final
+# report against the return contract its .claude/agents/<name>.md states, and
+# sends a malformed report BACK to the subagent to fix instead of letting it
+# reach the parent (2026-10-14). A run driven by a structured-output schema
+# (the workflows pass FINDINGS_SCHEMA etc.) returns JSON: a message that parses
+# as an object with a `findings` / `verdicts` / `known` array is let through unread.
 #
 # ADVISORY QUALITY CONTROL, NOT A SAFETY GUARD: it FAILS OPEN. Unknown agent
 # types (general-purpose, Explore, Plan, ...), an empty final message, garbage
@@ -34,8 +36,8 @@ import json, re, sys
 C = {
     "code-hunter": {
         "file": "code-hunter.md", "prefix": "FINDING", "cap": 12,
-        "row": r"^FINDING (none\b|\d+ \| (bug|perf|dead-code) \| sev (high|med|low) \|.*\| (CONFIRMED|CODE-TRACED|PLAUSIBLE)\b)",
-        "shape": "FINDING <n> | bug|perf|dead-code | sev high|med|low | file:line | ... | CONFIRMED|CODE-TRACED|PLAUSIBLE (or FINDING none)",
+        "row": r"^FINDING (none\b|\d+ \| (bug|perf|dead-code|drift|contradiction|duplication|mess) \| sev (high|med|low) \|.*\| (CONFIRMED|CODE-TRACED|PLAUSIBLE)\b)",
+        "shape": "FINDING <n> | bug|perf|dead-code|drift|contradiction|duplication|mess | sev high|med|low | file:line | ... | CONFIRMED|CODE-TRACED|PLAUSIBLE (or FINDING none)",
         "need": [r"^covered:", r"^not covered:", r"^measured:"],
     },
     "finding-verifier": {
@@ -50,18 +52,11 @@ C = {
         "shape": "KNOWN file:line — claim — where recorded — FIXED|OPEN|REJECTED|DEFERRED|? (plain lines, not a table)",
         "need": [r"^sources read:", r"^not read:"],
     },
-    "agent-surface-reviewer": {
-        "file": "agent-surface-reviewer.md", "prefix": "VERDICT", "cap": 1,
-        "row": r"^VERDICT:? (KEEP|TRIM|FIX|MERGE-INTO \S+|SPLIT|UNREAD)\b.*\| report: \S+",   # pass 4: the card header writes `VERDICT:`
-        "shape": "VERDICT KEEP|TRIM|FIX|MERGE-INTO <x>|SPLIT — <why> | report: <path>",
-        "need": [r"^VERDICT ", r"^GAP1 ", r"^GAP2 "],
-    },
-    "bloat-auditor": {
-        "file": "bloat-auditor.md", "prefix": "BLOAT", "cap": 8,
-        "row": r"^BLOAT\s+(none\b|kind:(extract|split|dead|dup|comment|skill|doc)\s+\S+\s+cost:[1-9]\d*\b)",
-        "shape": "BLOAT  kind:extract|split|dead|dup|comment|skill|doc  file:line  cost:<n>=1+  why: ...  carve: ...  do-not: ...",
-        "need": [r"^COVERED:"],
-        "forbid": (r"&(lt|gt|amp);", "no HTML entities: write <, >, & literally"),
+    "surface-reviewer": {
+        "file": "surface-reviewer.md", "prefix": "CLAIM", "cap": 60,
+        "row": r"^CLAIM (none\b|\d+ \| \S+:\d+ \| \S.* \| (holds|false|stale|unread) \| .+)",
+        "shape": "CLAIM <n> | <A file:line> | <B unit> | holds|false|stale|unread | <probe + rc> (or CLAIM none)",
+        "need": [r"^VERDICT (OK|FIX|UNREAD)\b.*\| report: \S+", r"^(collisions|cycles): "],
     },
     "physics-contract-auditor": {
         "file": "physics-contract-auditor.md", "prefix": "SITE", "cap": 30,
@@ -74,8 +69,29 @@ C = {
         # Step 0 of the card: with no current red the report says so instead of inventing a SHA line.
         "need": [r"^(SHA \S+ · run \S+|no (current|confirmed) red\b)", r"^(base: (already-red-on-base|new-on-this-push|unknown)\b|no (current|confirmed) red\b)", r"^next: \S"],
     },
-    # ci-watcher removed 2026-10-26: the agent was deleted (system-audit lane S4b; user grant, Bryce 2026-10-26).
+    "worker": {
+        "file": "worker.md", "prefix": "WORKER", "cap": 1,
+        "row": r"^WORKER \S+: (DONE|PARTIAL|BLOCKED)\b",
+        "shape": "WORKER <name>: DONE | PARTIAL | BLOCKED",
+        "need": [r"^WORKER \S+: (DONE|PARTIAL|BLOCKED)\b", r"^branch: \S+ @ [0-9a-f]{7,}", r"^verified: ", r"^next: "],
+    },
+    # bloat-auditor folded into code-hunter (focus: dead-code) and agent-surface-reviewer re-specced as
+    # surface-reviewer, 2026-11-03 (plan §4.6); ci-watcher deleted 2026-10-26.
 }
+
+
+def schema_json(msg):
+    """True when the final message is a structured-output object (a workflow run with a schema)."""
+    body = msg.strip()
+    if body.startswith("```"):
+        body = body.strip("`").strip()
+        if body.startswith("json"):
+            body = body[4:].strip()
+    try:
+        j = json.loads(body)
+    except Exception:
+        return False
+    return isinstance(j, dict) and any(isinstance(j.get(k), list) for k in ("findings", "verdicts", "known"))
 
 
 def lines(msg):
@@ -146,7 +162,7 @@ def main():
             msg = (d.get("tool_input") or {}).get("message")
         else:
             msg = d.get("last_assistant_message")
-        if name not in C or not isinstance(msg, str) or not msg.strip():
+        if name not in C or not isinstance(msg, str) or not msg.strip() or schema_json(msg):
             return
         why = check(name, msg)
         if why:

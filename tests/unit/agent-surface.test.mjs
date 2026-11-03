@@ -265,6 +265,20 @@ const frontmatterKeys = (text) => {
   return m[1].split("\n").filter((l) => /^[A-Za-z_-]+\s*:/.test(l)).map((l) => l.split(":")[0].trim());
 };
 
+// A `tools:` entry names a whole MCP server as `mcp__<server>__*` or one tool by its full name;
+// the bare `mcp__<server>` form matches nothing in `tools:` (code.claude.com/docs/en/sub-agents
+// §Available tools, read 2026-11-03), so an agent that listed servers that way had no MCP at all.
+test("every MCP entry in an agent's tools: is mcp__<server>__* or a full tool name", () => {
+  const bad = [];
+  for (const f of fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((n) => n.endsWith(".md") && n !== "README.md")) {
+    const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(path.join(ROOT, ".claude/agents", f), "utf8"))?.[1] || "";
+    const tools = (fm.match(/^tools:\s*(.*)$/m)?.[1] || "").split(/[,\s]+/).filter(Boolean);
+    for (const t of tools) if (t.startsWith("mcp__") && !/^mcp__[A-Za-z0-9_-]+__(\*|[A-Za-z0-9_]+)$/.test(t)) bad.push(`${f}: ${t}`);
+    for (const k of ["readonly", "is_background", "memory"]) if (new RegExp(`^${k}:`, "m").test(fm)) bad.push(`${f}: ${k}: (undocumented or retired key)`);
+  }
+  assert.deepEqual(bad, []);
+});
+
 test("every agent and skill frontmatter key is one a host documents", () => {
   // Negative control: the misspellings Claude Code would silently ignore
   // (fails open — a dropped disallowedTools or permissionMode is a lost guard).
@@ -358,7 +372,7 @@ test("every saved workflow parses and names only existing agentTypes", () => {
     for (const t of named[f]) assert.ok(agents.has(t), `${f}: agentType '${t}' is not .claude/agents/${t}.md`);
   }
   for (const [f, want] of [["code-survey.js", ["code-hunter", "finding-verifier", "prior-art-scout"]],
-    ["total-audit.js", ["code-hunter", "finding-verifier", "prior-art-scout", "agent-surface-reviewer"]]]) {
+    ["total-audit.js", ["code-hunter", "finding-verifier", "prior-art-scout", "surface-reviewer"]]]) {
     for (const t of want) assert.ok((named[f] || []).includes(t), `${f}: no longer routes through ${t}`);
   }
 });

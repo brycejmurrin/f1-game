@@ -12,7 +12,7 @@
         ]
       },
       {
-        "matcher": "^mcp__(?:.*__|codex_apps__github_)(merge_pull_request|enable_pr_auto_merge|update_pull_request|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
+        "matcher": "^mcp__(?:.*__|codex_apps__github_)(merge_pull_request|enable_pr_auto_merge|disable_pr_auto_merge|update_pull_request|update_pull_request_branch|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
         "hooks": [
           {
             "type": "command",

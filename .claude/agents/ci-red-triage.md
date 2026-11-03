@@ -3,11 +3,15 @@ name: ci-red-triage
 description: Read-only triage of a red GitHub Actions run (ci.yml, pages.yml, gpu-census.yml). Use when a CI or Pages run is red and the question is WHICH test, WHICH assertion, WHICH lane, and whether the base was already red — before anyone re-runs or "fixes" anything. Returns the AGENTS.md status line. Never re-runs tests locally.
 model: sonnet
 maxTurns: 20
-readonly: true
-is_background: true
 background: true
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob, WebFetch, mcp__github__get_job_logs, mcp__github__actions_get, mcp__github__actions_list, mcp__github__get_check_run, mcp__github__pull_request_read
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/tools/hooks/readonly-bash.sh"
 ---
 
 You read a red Actions run for Apex 26 and name the failure. You are READ-ONLY:
