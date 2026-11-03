@@ -111,20 +111,13 @@ function tyreTrolley(out, x, z, comps, c1) {
     tube(out, [x + sx * 0.42, 0.58, z + 1.3], [x + sx * 0.42, 0.94, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
   }
   tube(out, [x - 0.42, 0.94, z + 1.3], [x + 0.42, 0.94, z + 1.3], 0.03, RUBBER, 8);
-  // End uprights (Blender tyre-rack): keep blankets clear of the walk aisle.
-  for (const ez of [-1.3, 1.3]) {
-    tube(out, [x - 0.42, 0.58, z + ez], [x - 0.42, 1.05, z + ez], 0.022, STEEL, 6, MAT.METAL);
-    tube(out, [x + 0.42, 0.58, z + ez], [x + 0.42, 1.05, z + ez], 0.022, STEEL, 6, MAT.METAL);
-  }
   for (let i = 0; i < 4; i++) {
     const wz = z - 1.0 + i * 0.68;
     tube(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);
     tube(out, [x - 0.15, 0.44, wz], [x + 0.15, 0.44, wz], 0.36, scale(c1, 0.6), 14);   // blanket
     tube(out, [x - 0.10, 0.44, wz], [x - 0.20, 0.44, wz], 0.20, scale(STEEL, 0.9), 10, MAT.METAL);   // rim face
     block(out, x + 0.17, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
-    // Blanket heater lead + small thermostat puck on the tyre face.
     hose(out, [[x + 0.19, 0.30, wz], [x + 0.30, 0.20, wz + 0.1], [x + 0.30, 0.20, z + 1.45]], 0.012, HOSE, 5);
-    block(out, x - 0.19, 0.58, wz, 0.03, 0.03, 0.04, dark);
   }
   block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, dark);                     // blanket controller
   for (let l = 0; l < 4; l++) block(out, x + 0.30 + (l % 2 ? 0.04 : -0.04), 0.50 + (l < 2 ? 0.04 : -0.02), z + 1.565, 0.012, 0.012, 0.005, l % 3 ? [0.2, 0.9, 0.3] : [0.9, 0.5, 0.1]);   // status LEDs
@@ -234,20 +227,21 @@ function floorFan(out, x, z, c1) {
   tube(out, [x - 0.08, cy, z], [x + 0.08, cy, z], 0.055, DARK, 10);
 }
 function serviceRig(out, x, z, c1) {
-  // Fuel / air service cart (Blender fuel-air-rig-px): twin bottles, dual gauges, retract hose.
+  // Fuel / air service cart (Blender fuel-air-rig-px): main bottle, slim air bottle, dual gauge faces.
   block(out, x, 0.66, z, 0.42, 0.50, 0.36, scale(c1, 0.5));
   block(out, x, 0.18, z, 0.41, 0.025, 0.35, STEEL);
   block(out, x, 1.18, z, 0.44, 0.03, 0.38, STEEL);
-  for (const sx of [-0.14, 0.14]) {
-    cyl(out, x + sx, 1.21, z, 0.11, 0.38, scale(STEEL, sx < 0 ? 0.75 : 0.55), 10, MAT.METAL);
-    cyl(out, x + sx, 1.59, z, 0.035, 0.07, STEEL, 8, MAT.METAL);
-    tube(out, [x + sx, 1.68, z - 0.04], [x + sx, 1.68, z + 0.04], 0.012, sx < 0 ? [0.75, 0.15, 0.10] : [0.15, 0.35, 0.85], 6);
-  }
+  cyl(out, x - 0.08, 1.21, z, 0.13, 0.38, scale(STEEL, 0.75), 10, MAT.METAL);
+  cyl(out, x - 0.08, 1.59, z, 0.04, 0.08, STEEL, 6, MAT.METAL);
+  tube(out, [x - 0.08, 1.69, z - 0.04], [x - 0.08, 1.69, z + 0.04], 0.012, [0.75, 0.15, 0.10], 6);
+  cyl(out, x + 0.18, 1.21, z, 0.055, 0.32, scale(STEEL, 0.55), 8, MAT.METAL);
+  block(out, x + 0.18, 1.55, z, 0.04, 0.03, 0.04, [0.15, 0.35, 0.85]);
   block(out, x - 0.43, 0.97, z, 0.012, 0.14, 0.22, DARK);
+  // Dual gauges as flat faces (tube gauges blew the 700-tri model budget).
   for (const gz of [-0.07, 0.07]) {
-    tube(out, [x - 0.44, 1.0, z + gz], [x - 0.465, 1.0, z + gz], 0.055, STEEL, 10, MAT.METAL);
-    tube(out, [x - 0.465, 1.0, z + gz], [x - 0.47, 1.0, z + gz], 0.042, [0.85, 0.85, 0.82], 10);
-    block(out, x - 0.476, 1.01, z + gz, 0.005, 0.02, 0.005, [0.75, 0.15, 0.10]);
+    block(out, x - 0.45, 1.0, z + gz, 0.02, 0.055, 0.055, STEEL, MAT.METAL);
+    block(out, x - 0.462, 1.0, z + gz, 0.008, 0.042, 0.042, [0.85, 0.85, 0.82]);
+    block(out, x - 0.468, 1.01, z + gz, 0.004, 0.012, 0.004, [0.75, 0.15, 0.10]);
   }
   for (const sz of [-1, 1]) {
     tube(out, [x - 0.36, 0.80, z + sz * 0.26], [x - 0.40, 1.30, z + sz * 0.26], 0.022, STEEL, 6, MAT.METAL);
@@ -261,10 +255,10 @@ function monitorGantry(out, x, z, c1) {
   const s = x < 0 ? 1 : -1;
   block(out, x, 2.55, z, 0.04, 0.055, 1.70, STEEL, MAT.METAL);
   for (const dz of [-1.15, 0, 1.15]) {
-    tube(out, [x, 2.55, z + dz], [x, 2.18, z + dz], 0.014, STEEL, 6, MAT.METAL);
+    // Drop as a thin block (tube hangers blew the bay trophy budget by a few tris).
+    block(out, x, 2.36, z + dz, 0.015, 0.19, 0.015, STEEL, MAT.METAL);
     block(out, x + s * 0.09, 1.92, z + dz, 0.03, 0.26, 0.40, DARK);
     block(out, x + s * 0.11, 1.92, z + dz, 0.01, 0.22, 0.34, scale(STEEL, 0.42));
-    block(out, x + s * 0.02, 2.18, z + dz, 0.06, 0.02, 0.06, scale(c1, 0.55));
   }
 }
 // Floor work lamp (Blender work-lamp-rig): stand + head aimed at the car.

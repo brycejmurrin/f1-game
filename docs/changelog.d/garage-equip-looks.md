@@ -1,1 +1,1 @@
-Garage look-dev: Blender-planned tool / tyre / fuel-air / monitor-gantry / lighting props hand-ported into bay equipment; Rain ready and Qualifying night room looks; RAIN READY / HERITAGE / QUALIFYING arrival STYLE quick-picks.
+Improved: garage bay equipment (fuel/air rig, monitor gantry, light booms, work lamp) from Blender look-dev; Rain ready and Qualifying night room looks; RAIN READY / HERITAGE / QUALIFYING arrival STYLE quick-picks.
