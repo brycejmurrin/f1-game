@@ -714,15 +714,17 @@ const CarWheels = (function () {
       // near-symmetric, so at chase distance (and under the wagon-wheel effect)
       // the rim looks frozen even when the phase advances. These marks ride the
       // ROTATING mesh only; calipers stay on fixedOut. Cheap (a few boxes/quads).
+      // Metal cues stay on the rim lip (≤ rimR·1.05): parts-physics pins the
+      // outer tyre band (radius > 0.30 m) as rubber-only on an open rim.
       {
-        const stemA = 0.55, stemR = r * 0.92, weightA = stemA + Math.PI;
+        const stemA = 0.55, stemR = rimR * 1.04, weightA = stemA + Math.PI;
         const STEM = [0.72, 0.74, 0.78], WEIGHT = [0.90, 0.86, 0.18], DASH = [0.94, 0.90, 0.55];
         for (const ss of [[x0, -1], [x1, 1]]) {
           const dir = ss[1];
           addBox(out, ss[0] + dir * 0.018, cy + stemR * Math.cos(stemA), cz + stemR * Math.sin(stemA),
-                 0.014, 0.022, 0.022, STEM, SURFACES.metal);
+                 0.014, 0.018, 0.018, STEM, SURFACES.metal);
           addBox(out, ss[0] + dir * 0.008, cy + rimR * 1.01 * Math.cos(weightA), cz + rimR * 1.01 * Math.sin(weightA),
-                 0.010, 0.028, 0.018, WEIGHT, SURFACES.metal);
+                 0.010, 0.024, 0.016, WEIGHT, SURFACES.metal);
           const xb = ss[0] + dir * 0.007, a0 = 1.20, a1 = 1.55;
           const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
           addQuad(out, P(r * 0.78, a0), P(r * 0.78, a1), P(r * 0.70, a1), P(r * 0.70, a0), DASH, SURFACES.rubber);
