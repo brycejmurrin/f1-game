@@ -149,3 +149,74 @@ test("setup-camera previewSync uses wallSeconds for the transport clock", () => 
     /arrival: arrivalCfg/.test(src),
   ].every(Boolean), true);
 });
+
+test("softenCut refuses a left↔right 180° look flip in one frame", () => {
+  // High u skips path replacement so the authored eyes reach softenCut.
+  const a = { eye: [-3.8, 2.1, -4.8], aim: [0, 0.8, 1.2], fov: 54, yaw: 0, seconds: 9, end: 10, active: true };
+  GCO.applyArrival(a, { entryShot: "insideBay", stayInside: true }, { dir: "in", u: 0.93 });
+  const left = a.eye.slice();
+  const b = { eye: [4.1, 2.25, -4.9], aim: [0, 0.8, 1.2], fov: 54, yaw: 0, seconds: 9.5, end: 10, active: true };
+  GCO.applyArrival(b, { entryShot: "insideBay", stayInside: true }, { dir: "in", u: 0.95 });
+  // Must not land fully on the right eye in one soften step.
+  const jump = Math.hypot(b.eye[0] - left[0], b.eye[1] - left[1], b.eye[2] - left[2]);
+  const full = Math.hypot(4.1 - left[0], 2.25 - left[1], -4.9 - left[2]);
+  assert.ok(jump < full * 0.6, `jump=${jump} full=${full}`);
+  assert.ok(b.eye[0] < 2.5, `eye.x=${b.eye[0]} still crossing`);
+});
+
+test("softenCut holds the eye while the car is mid-turn", () => {
+  const a = { eye: [-3.0, 2.0, -3.0], aim: [0, 0.6, 1], fov: 54, yaw: 0, seconds: 9, end: 10, active: true };
+  GCO.applyArrival(a, { entryShot: "insideBay", stayInside: true }, { dir: "in", u: 0.93 });
+  const held = a.eye.slice();
+  const b = {
+    eye: [3.5, 2.2, -3.5], aim: [0, 0.6, 1], fov: 54,
+    yaw: 0.25,   // > MID_TURN_RAD from previous 0
+    seconds: 9.5, end: 10, active: true,
+  };
+  GCO.applyArrival(b, { entryShot: "insideBay", stayInside: true }, { dir: "in", u: 0.95 });
+  assert.deepEqual(b.eye, held);
+});
+
+test("bindUi shortens the DIRECTOR · THREE CAMERAS angle option", () => {
+  const store = { get: () => null, set() {} };
+  const opts = [];
+  const angle = {
+    options: opts,
+    appendChild() {},
+  };
+  // Mimic arrival.js ANGLE_TEXT option already in the select.
+  opts.push({ value: "cut", textContent: "TWO CAMERA CUT" });
+  opts.push({ value: "director", textContent: "DIRECTOR · THREE CAMERAS" });
+  const nodes = {
+    "ga-rows": { insertBefore() {}, firstChild: null },
+    "ga-angle": angle,
+    "ga-entry-shot": null,
+    "ga-exit-shot": null,
+    "ga-stay-inside": null,
+    "ga-cam-options": null,
+    "cs-cam-panel": null,
+    "ga-styles": null,
+    "ga-enabled": null,
+  };
+  const $ = (id) => nodes[id] || null;
+  // Force rebind: the module's _bound latches after the first call in this VM.
+  // Call through a fresh context so paint/bind run once.
+  const ctx = vm.createContext({ M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) }, document: { createElement(tag) {
+    const el = {
+      tagName: tag.toUpperCase(), children: [], style: {}, className: "",
+      setAttribute() {}, appendChild(c) { this.children.push(c); return c; },
+      insertBefore(c) { this.children.push(c); return c; },
+      closest() { return null; },
+    };
+    if (tag === "select") el.options = [];
+    if (tag === "option") { el.value = ""; el.textContent = ""; }
+    if (tag === "input") { el.type = ""; el.checked = false; el.onchange = null; }
+    return el;
+  } } });
+  vm.runInContext(read("js/data/garage-entry-camera.js"), ctx, { filename: absSrc("js/data/garage-entry-camera.js") });
+  vm.runInContext(read("js/data/garage-camera-options.js"), ctx, { filename: absSrc("js/data/garage-camera-options.js") });
+  const ok = vm.runInContext("GarageCameraOptions", ctx).bindUi($, store, {});
+  assert.equal(ok, true);
+  const director = opts.find((o) => o.value === "director");
+  assert.equal(director.textContent, "DIRECTOR · 3 CAMS");
+});

@@ -1316,8 +1316,9 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
    the settings page's own .set-row, and #ga-rows is the scroller between the
    fixed head and the RESET / DONE foot like #fb-rows in the flyby editor. */
 #ga-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
-/* Room for TWO CAMERA CUT: the settings page's fixed 8rem select clipped it. */
-#ga-rows .set-row > div > select { flex: 0 1 12rem; width: 12rem; }
+/* Room for DIRECTOR · 3 CAMS (was 8rem→12rem for TWO CAMERA CUT; 12rem still
+   clipped DIRECTOR · THREE CAMERAS to "DIRECTOR - THRE" on the docked rail). */
+#ga-rows .set-row > div > select { flex: 0 1 15rem; width: 15rem; min-width: 12rem; }
 /* Opened from the TITLE screen there is no race behind to preview, only the
    menu's own buttons showing through the docked panel: fade the menu out the
    way css/components.css does under any open dialog. */

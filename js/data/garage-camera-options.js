@@ -23,6 +23,10 @@ const GarageCameraOptions = (function () {
   const NEAR_PLANE = 1.85;
   // Soften a hard cut when the authored eye jumps more than this in one frame.
   const CUT_SOFT_M = 2.2;
+  // Look-yaw flip past this (radians) is a 180°-axis cut — refuse a hard jump.
+  const CUT_AXIS_RAD = 100 * Math.PI / 180;
+  // Car yaw change past this between frames = mid-turn: hold the current eye.
+  const MID_TURN_RAD = 0.08;
 
   // Turntable / inspection presets (az / el / dist) — also chips in #cs-cam-panel.
   const VIEW_PRESETS = Object.freeze({
@@ -240,21 +244,77 @@ const GarageCameraOptions = (function () {
   }
 
   let _prevEye = null;
+  let _prevAim = null;
+  let _prevYaw = null;
+  let _cutBlend = 0;   // >0 while a soft cut is still settling
 
-  /** Soften a hard cut (Broadcast exit ~11 s) by blending a large eye jump. */
+  function lookYaw(eye, aim) {
+    if (!eye || !aim) return 0;
+    return Math.atan2(aim[0] - eye[0], aim[2] - eye[2]);
+  }
+
+  function yawDelta(a, b) {
+    let d = b - a;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return d;
+  }
+
+  function blendVec(dst, from, to, a) {
+    dst[0] = from[0] + (to[0] - from[0]) * a;
+    dst[1] = from[1] + (to[1] - from[1]) * a;
+    dst[2] = from[2] + (to[2] - from[2]) * a;
+  }
+
+  /**
+   * Soften a hard cut (Broadcast exit ~11 s). Also refuses a cut while the car
+   * is mid-turn, and softens / holds a jump that flips look yaw across the
+   * ~180° axis (left↔right line-of-action).
+   */
   function softenCut(pose) {
     if (!pose || !pose.eye) return pose;
     const e = pose.eye;
+    const aim = pose.aim;
+    const yawNow = Number.isFinite(pose.yaw) ? pose.yaw : null;
     if (_prevEye) {
       const jump = Math.hypot(e[0] - _prevEye[0], e[1] - _prevEye[1], e[2] - _prevEye[2]);
-      if (jump > CUT_SOFT_M) {
-        const a = 0.45;
-        e[0] = _prevEye[0] + (e[0] - _prevEye[0]) * a;
-        e[1] = _prevEye[1] + (e[1] - _prevEye[1]) * a;
-        e[2] = _prevEye[2] + (e[2] - _prevEye[2]) * a;
+      const dyawLook = (aim && _prevAim)
+        ? Math.abs(yawDelta(lookYaw(_prevEye, _prevAim), lookYaw(e, aim)))
+        : 0;
+      const crossesAxis = dyawLook > CUT_AXIS_RAD;
+      const midTurn = _prevYaw != null && yawNow != null
+        && Math.abs(yawDelta(_prevYaw, yawNow)) > MID_TURN_RAD;
+      const midBlend = _cutBlend > 0.08;
+
+      // Mid-turn or still settling a prior soft cut: do not accept a new hard jump.
+      if ((midTurn || midBlend) && (jump > CUT_SOFT_M * 0.5 || crossesAxis)) {
+        e[0] = _prevEye[0]; e[1] = _prevEye[1]; e[2] = _prevEye[2];
+        if (aim && _prevAim) {
+          aim[0] = _prevAim[0]; aim[1] = _prevAim[1]; aim[2] = _prevAim[2];
+        }
+        _cutBlend = Math.max(0, _cutBlend - 0.12);
+        if (yawNow != null) _prevYaw = yawNow;
+        return pose;
+      }
+
+      if (jump > CUT_SOFT_M || crossesAxis) {
+        // Axis-crossing cuts ease in more slowly so the picture never flips sides
+        // in one frame; ordinary large jumps keep the prior 0.45 soften.
+        const a = crossesAxis ? 0.22 : 0.45;
+        const toEye = [e[0], e[1], e[2]];
+        blendVec(e, _prevEye, toEye, a);
+        if (aim && _prevAim) {
+          const toAim = [aim[0], aim[1], aim[2]];
+          blendVec(aim, _prevAim, toAim, a);
+        }
+        _cutBlend = 1 - a;
+      } else {
+        _cutBlend = Math.max(0, _cutBlend - 0.18);
       }
     }
     _prevEye = [e[0], e[1], e[2]];
+    if (aim) _prevAim = [aim[0], aim[1], aim[2]];
+    if (yawNow != null) _prevYaw = yawNow;
     return pose;
   }
 
@@ -277,11 +337,16 @@ const GarageCameraOptions = (function () {
     if (shot === "facade" && !cfg.stayInside) {
       // Outside facade is intentional — do not soften against an earlier inside eye.
       _prevEye = [pose.eye[0], pose.eye[1], pose.eye[2]];
+      _prevAim = pose.aim ? [pose.aim[0], pose.aim[1], pose.aim[2]] : null;
+      _prevYaw = Number.isFinite(pose.yaw) ? pose.yaw : null;
+      _cutBlend = 0;
       return pose;
     }
     const u = meta && Number.isFinite(meta.u) ? meta.u
       : (Number.isFinite(pose.seconds) && Number.isFinite(pose.end) && pose.end > 0 ? pose.seconds / pose.end : 0);
-    if (u < 0.1) _prevEye = null;   // new preview / early beat — do not soften across shows
+    if (u < 0.1) {   // new preview / early beat — do not soften across shows
+      _prevEye = null; _prevAim = null; _prevYaw = null; _cutBlend = 0;
+    }
 
     // Early sequence: if the authored / rig eye is in a jamb or outside, replace
     // with our path (or the angle's distinct frame) so Showcase/Cinema open clean.
@@ -443,6 +508,18 @@ const GarageCameraOptions = (function () {
       };
       exit.sel.onchange = () => save({ exitShot: exit.sel.value });
       stay.onchange = () => save({ stayInside: stay.checked });
+    }
+
+    // DIRECTOR · THREE CAMERAS truncates to "DIRECTOR - THRE" at the 12rem select
+    // width; shorten the option text (arrival.js still owns ANGLE_TEXT) and CSS
+    // widens the row so the full short label stays visible.
+    const angleSel = $("ga-angle");
+    if (angleSel) {
+      for (const o of angleSel.options || []) {
+        if (o.value === "director" && /THREE CAMERAS/i.test(o.textContent || "")) {
+          o.textContent = "DIRECTOR · 3 CAMS";
+        }
+      }
     }
 
     // CAMERA PANEL: BAY row of inspection presets.

@@ -1208,10 +1208,12 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // shots keep SP_DIST_MAX. spFitD's statement shape is pinned by
   // setup-preview-hull.test.mjs — keep it a pure Math.min(SP_FIT_DIST_MAX, …).
   const stayInside = typeof GarageCameraOptions === "undefined" || GarageCameraOptions.read(G.store).stayInside;
-  const bayCap = stayInside && !setupPreviewFree
-    ? (typeof GarageCameraOptions !== "undefined"
-      ? GarageCameraOptions.maxDistInside(setupPreviewAz, setupPreviewEl, setupPreviewOrbit, setupPreviewView === "doorway" || setupPreviewView === "pitWall")
-      : SP_DIST_BAY_CAP)
+  // typeof-guard: the Home-photo VM extract in garage-panel-side.test.mjs runs this
+  // framing slice without the module's let bindings (setupPreviewFree is free there).
+  const freeOrbit = typeof setupPreviewFree !== "undefined" && !!setupPreviewFree;
+  const bayCap = stayInside && !freeOrbit && typeof GarageCameraOptions !== "undefined"
+    ? GarageCameraOptions.maxDistInside(setupPreviewAz, setupPreviewEl, setupPreviewOrbit,
+        typeof setupPreviewView !== "undefined" && (setupPreviewView === "doorway" || setupPreviewView === "pitWall"))
     : SP_DIST_MAX;
   const spFitD = Math.min(SP_FIT_DIST_MAX,
     SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - Math.abs(panelFrac)), 0.05));
@@ -1256,7 +1258,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     // past the old 800 m cut (geometry window now reaches ~1.6 km at scale 1).
     const far = (context.realExterior && outLooking) ? 2500 : 800;
     M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, far);
-  } else if (stayInside && !setupPreviewFree && typeof GarageCameraOptions !== "undefined") {
+  } else if (stayInside && !freeOrbit && typeof GarageCameraOptions !== "undefined") {
     // Turntable eye: clamp residual outliers (narrow viewport + pan) inside the room.
     GarageCameraOptions.clampEye(eye, setupPreviewView === "doorway" || setupPreviewView === "pitWall");
   }

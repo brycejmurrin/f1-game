@@ -5801,6 +5801,9 @@
       "applyArrival": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
+      "bindUi": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
       "clampEye": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
