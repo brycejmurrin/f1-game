@@ -321,7 +321,11 @@ export function openF1Fixture(url) {
   if (u.includes("/drivers")) return OPENF1_DRIVERS;
   if (u.includes("/weather")) return OPENF1_WEATHER;
   if (u.includes("/position")) return OPENF1_POSITIONS;
-  if (u.includes("/laps")) return OPENF1_LAPS;
+  if (u.includes("/laps")) {
+    // A session-wide /laps (no driver_number) answers for every driver, as OpenF1 does.
+    if (/[?&]driver_number=/.test(u)) return OPENF1_LAPS;
+    return OPENF1_DRIVERS.flatMap((d) => OPENF1_LAPS.map((l) => ({ ...l, driver_number: d.driver_number })));
+  }
   if (u.includes("/car_data")) return OPENF1_CAR_DATA;
   if (u.includes("/location")) return OPENF1_LOCATION;
   if (u.includes("/stints")) return OPENF1_STINTS;

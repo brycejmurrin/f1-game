@@ -206,3 +206,16 @@ test("optional garage exterior coalesces loading and retries without holding a r
   assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "a failed optional fetch can retry");
   assert.equal(await bundles.ensureGarageExterior(), true); assert.equal(calls, 2, "resident globals need no extra fetch");
 });
+
+// #4544: a LAZY_RACE_SESSION file without a RACE_SESSION_READY probe counts as landed
+// the moment its script tag loads — the ceremony files slipped through that way.
+test("every LAZY_RACE_SESSION file has a RACE_SESSION_READY probe", () => {
+  const m = require("../../tools/manifest.cjs");
+  const body = src("js/core/lazy-bundles.js").match(/const RACE_SESSION_READY = \{([\s\S]*?)\n\};/);
+  assert.ok(body, "RACE_SESSION_READY table found");
+  const keys = new Set([...body[1].matchAll(/^\s*"([^"]+)":/gm)].map((x) => x[1]));
+  const missing = m.LAZY_RACE_SESSION.filter((f) => !keys.has(f));
+  assert.deepEqual(missing, [], "add a readiness probe for each");
+  const stale = [...keys].filter((k) => !m.LAZY_RACE_SESSION.includes(k));
+  assert.deepEqual(stale, [], "probe rows for files no longer in LAZY_RACE_SESSION");
+});
