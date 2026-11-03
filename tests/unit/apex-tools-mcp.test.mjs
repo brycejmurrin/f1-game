@@ -3154,3 +3154,36 @@ test("MCP concurrency: retrying admission release never replaces uncertain peer 
     assert.equal(takeJobAdmission(dir, owner, birth), null);
   } finally { fs.renameSync = rename; fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("cold start: the MCP server and its CLI never load Playwright (P8 #4548)", () => {
+  // tools/ui/menu-screens.mjs (imported for listScreenIds) used to require
+  // "playwright" at the top for its device table: ~0.4 s of core bundle on every
+  // `serve`, `help` and CLI `call`, and this file spawns ~150 of them.
+  // Perf hunt P8, #4548.
+  const probe = path.join(os.tmpdir(), `apex-pw-probe-${process.pid}.cjs`);
+  fs.writeFileSync(probe, `process.on("exit", () => {
+    const hit = Object.keys(require.cache).filter((k) => /[\\\\/]playwright(-core)?[\\\\/]/.test(k));
+    if (hit.length) process.stderr.write("PLAYWRIGHT-LOADED " + hit[0] + "\\n");
+  });\n`);
+  try {
+    const r = spawnSync(process.execPath, ["--require", probe, MCP, "help"], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /PLAYWRIGHT-LOADED/, "apex-tools-mcp help loaded Playwright");
+    // Positive control: the probe does see a Playwright load when one happens.
+    const c = spawnSync(process.execPath, ["--require", probe, "-e", "require('playwright')"], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+    assert.match(c.stderr, /PLAYWRIGHT-LOADED/, "the probe must detect a real load");
+  } finally { fs.rmSync(probe, { force: true }); }
+});
+
+test("menu-screens: VIEWPORTS rows read without Playwright until a device config is read", async () => {
+  const m = await import("../../tools/ui/menu-screens.mjs");
+  const names = m.VIEWPORTS.map(([n]) => n);
+  assert.ok(names.includes("ios-iphone-landscape-844"));
+  const row = m.VIEWPORTS.find(([n]) => n === "ios-iphone-landscape-844");
+  const [, cfg, why, inset] = row;
+  assert.deepEqual(cfg.viewport, { width: 844, height: 390 });
+  assert.equal(cfg.isMobile, true, "device descriptor fields are spread in");
+  assert.match(why, /844x390/);
+  assert.deepEqual(inset, { t: 0, r: 47, b: 21, l: 47 });
+  assert.equal(row[1], cfg, "the config is built once");
+});
