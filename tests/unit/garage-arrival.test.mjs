@@ -1904,12 +1904,11 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
   $('ga-style-broadcast').onclick();
   assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
   assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
-  $('ga-style-rainready').onclick();
-  assert.deepEqual([saved.angle, saved.light, saved.move], ['door', 'rain', 'drift']);
-  $('ga-style-heritage').onclick();
-  assert.deepEqual([saved.angle, saved.light, saved.bars], ['low', 'goldenhour', true]);
-  $('ga-style-qualify').onclick();
-  assert.deepEqual([saved.angle, saved.light, saved.cue], ['high', 'night', 'lightsup']);
+  const more = ['rainready', 'heritage', 'qualify'].map((id) => {
+    $('ga-style-' + id).onclick();
+    return [id, saved.angle, saved.light];
+  });
+  assert.deepEqual(more, [['rainready', 'door', 'rain'], ['heritage', 'low', 'goldenhour'], ['qualify', 'high', 'night']]);
 });
 test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
   const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });

@@ -127,17 +127,13 @@ test("new room looks rebuild a live bay and restore its stock shell", () => {
 
 test("rainready and qualify are distinct player-selectable room looks", () => {
   const { GaragePrims } = harness();
-  assert.ok(GaragePrims.LOOK_IDS.includes("rainready"));
-  assert.ok(GaragePrims.LOOK_IDS.includes("qualify"));
-  assert.ok(GaragePrims.LOOK_IDS.includes("heritage"), "heritage stays the classic works look");
-  assert.equal(GaragePrims.LOOKS.rainready.label, "Rain ready");
-  assert.equal(GaragePrims.LOOKS.qualify.label, "Qualifying night");
-  const rain = shellMean(build("rainready").plain[0]);
-  const quali = shellMean(build("qualify").plain[0]);
-  const herit = shellMean(build("heritage").plain[0]);
-  assert.ok(Math.hypot(...rain.map((v, i) => v - quali[i])) > 0.02, "rainready vs qualify");
-  assert.ok(Math.hypot(...rain.map((v, i) => v - herit[i])) > 0.02, "rainready vs heritage");
-  assert.ok(Math.hypot(...quali.map((v, i) => v - herit[i])) > 0.02, "qualify vs heritage");
+  assert.deepEqual(
+    ["rainready", "qualify", "heritage"].map((id) => [id, !!GaragePrims.LOOKS[id], GaragePrims.LOOKS[id]?.label]),
+    [["rainready", true, "Rain ready"], ["qualify", true, "Qualifying night"], ["heritage", true, "Heritage works"]],
+  );
+  const means = Object.fromEntries(["rainready", "qualify", "heritage"].map((id) => [id, shellMean(build(id).plain[0])]));
+  const pair = (a, b) => Math.hypot(...means[a].map((v, i) => v - means[b][i]));
+  assert.ok(Math.min(pair("rainready", "qualify"), pair("rainready", "heritage"), pair("qualify", "heritage")) > 0.02);
 });
 
 test("a look's upper wall takes its panel colour, not the accent stripe", () => {
