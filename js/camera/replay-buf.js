@@ -125,15 +125,11 @@ const ReplayBuf = (function () {
     }
     function writeCar(frame, i, c) {
       const o = (frame * nCars + i) * FLOATS;
-      data[o] = c.s || 0;
-      data[o + 1] = c.x || 0;
-      data[o + 2] = c.head || 0;
-      data[o + 3] = c.speed || 0;
-      data[o + 4] = c.px || 0;
-      data[o + 5] = c.py || 0;
-      data[o + 6] = c.pz || 0;
-      data[o + 7] = c.steer || 0;
-      data[o + 8] = c.yawVis || 0;
+      // A non-finite field keeps the previous sample's value (0 only with no history): storing 0 would park the car at the origin.
+      const po = count > 0 ? (((head + count - 1) % cap) * nCars + i) * FLOATS : -1;
+      const put = (k, v) => { data[o + k] = Number.isFinite(v) ? v : (v == null || v === false ? 0 : (po >= 0 ? data[po + k] : 0)); };
+      put(0, c.s); put(1, c.x); put(2, c.head); put(3, c.speed);
+      put(4, c.px); put(5, c.py); put(6, c.pz); put(7, c.steer); put(8, c.yawVis);
       status[frame * nCars + i] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
     }
     function readCar(out, frame, i) {
