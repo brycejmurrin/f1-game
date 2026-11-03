@@ -539,7 +539,7 @@ function realRatchetHookRepo(t, { fragment } = {}) {
   const repo = nativeHookRepo(t);
   fs.mkdirSync(path.join(repo.dir, "tools/hooks"), { recursive: true });
   fs.mkdirSync(path.join(repo.dir, "tests/data/ratchets.d"), { recursive: true });
-  for (const rel of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs", "tools/hooks/ratchet-reason.mjs"]) {
+  for (const rel of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs"]) {
     fs.copyFileSync(path.join(ROOT, rel), path.join(repo.dir, rel));
   }
   fs.writeFileSync(path.join(repo.dir, "tests/data/ratchets.json"), JSON.stringify({ files: { "code.js": { lines: 2 } }, tree: {} }));

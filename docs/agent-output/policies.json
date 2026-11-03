@@ -1691,11 +1691,6 @@
       "presentation": "native",
       "preserve": "Real Dawn versus static validation, frame count and failure count/exit."
     },
-    "tools/hooks/ratchet-reason.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
     "tools/hooks/readonly-bash.sh": {
       "action": "no-direct-output",
       "presentation": "native",

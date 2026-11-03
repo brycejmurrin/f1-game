@@ -713,7 +713,6 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **hooks/ratchet-reason.mjs** | Commit-hook ratchet absorb: 20 lines silent, 40 with a Ratchet-Reason trailer. | slim-bloat |
 | **hooks/readonly-bash.sh** | PreToolUse Bash hook for read-only subagents: refuses write-shaped commands; `READONLY_BASH_ALLOW` is the one exception. | agent-config |
 | **hooks/scratch-md-only.sh** | PreToolUse Write\|Edit hook for the surface reviewer: the only writable path is scratch/**.md (its report). | agent-config |
 | **hooks/surveyor-scope.sh** | PreToolUse Write\|Edit hook for track-surveyor: writes land only in the circuit pair, scratch/** or artifacts/**. | survey-track |

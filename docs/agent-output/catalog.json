@@ -2524,11 +2524,6 @@
       "interpreter": "node"
     },
     {
-      "path": "tools/hooks/ratchet-reason.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "no-direct-output"
-    },
-    {
       "path": "tools/hooks/readonly-bash.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "no-direct-output",

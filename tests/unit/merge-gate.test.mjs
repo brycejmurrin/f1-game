@@ -184,7 +184,7 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
     const remote = path.join(T, "remote.git"), W = path.join(T, "w");
     git(T, "init", "-q", "--bare", remote); git(T, "clone", "-q", remote, W); git(W, "checkout", "-q", "-b", "deploy-x");
     const UNIT = "tests/unit";   // built, not spelled: the path-reference lint reads no phantom file
-    for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs", "tools/hooks/ratchet-reason.mjs"]) write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
+    for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs"]) write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
     write(W, "tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: 3 } }) + "\n");
     write(W, `${UNIT}/base.test.mjs`, pins(2));
     // This fixture isolates ratchet composition; provide a valid scenery catalog for the preceding gen row.

@@ -1128,7 +1128,6 @@
         "tests/unit/output-surface.test.mjs",
         "tests/unit/prepush-gate-coverage.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
-        "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/selected-gate-verdict.test.mjs",
         "tests/unit/shell-ids.test.mjs",
