@@ -953,9 +953,8 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 ### Merge train (concurrent PRs)
 
 No agent merges, and there is no merge queue or one-PR-at-a-time rule: the
-flow is [WORKERS.md](WORKERS.md) §5. A worker flips its PR ready and adds the
-`land` label; `land.yml` posts the `gate` commit status (`merge-gate.mjs`,
-which also refuses a base too far behind) and arms auto-merge. `gate` is the
+flow is skill `steward` §Land ([land.md](../.claude/skills/steward/references/land.md)). A worker flips its PR ready and adds the
+`land` label; `land.yml` posts the `gate` commit status (`merge-gate.mjs`) and arms auto-merge. `gate` is the
 deploy branch's ONLY ruleset-required check; it requires `CI` green on the
 head. `pages.yml`'s concurrency group paces the trains. Before marking
 ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
@@ -971,10 +970,9 @@ cancelled; the train, the nightly and a dispatch get a group of their own
 per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
 2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
 smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only by
-AGENTS.md §Git branch & deploy (CONFLICTING/DIRTY or a refused base distance,
-via `node tools/ci/sync-pr.mjs <branch>`); never enable auto-update-branch bots
-or a require-up-to-date protection rule (the one exception is `land.yml`'s throttled
-AUTO-SYNC of `land` PRs refused on distance alone, explained in that file's header). `tools/ci/behind-ship.mjs` (at the end of
+AGENTS.md §Git branch & deploy (CONFLICTING/DIRTY, via `node tools/ci/sync-pr.mjs <branch>`);
+never enable auto-update-branch bots or a require-up-to-date protection rule
+(`land.yml`'s AUTO-SYNC went with merge-gate's `distance` row on 2026-11-03). `tools/ci/behind-ship.mjs` (at the end of
 Structural guards tooling B since 2026-10-15, PR only) prints how far the head is behind
 ship and emits a `::warning::` over 10 commits; it never fails the job.
 Deploy / Pages runs keep their own concurrency groups with

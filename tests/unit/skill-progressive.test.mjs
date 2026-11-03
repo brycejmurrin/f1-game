@@ -51,7 +51,7 @@ test("mcp-probe references keep the measured traps and recipes", () => {
     "references/traps.md": [/never render in the MCP browser while Playwright/, /snapCam/, /traps-chrome\.md/, /traps-camera\.md/, /traps-scene\.md/],
     "references/traps-chrome.md": [/never render in the MCP browser while Playwright/],
     "references/traps-camera.md": [/snapCam/],
-    "references/recipes.md": [/tinyfish|deploy-check/, /Probing a specific renderer|secure context|navigator\.gpu/i],
+    "references/recipes.md": [/deploy-research/, /Probing a specific renderer|secure context|navigator\.gpu/i],
   };
   for (const [file, res] of Object.entries(keeps)) {
     const text = fs.readFileSync(path.join(MCP, file), "utf8");

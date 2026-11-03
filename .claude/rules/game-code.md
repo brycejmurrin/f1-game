@@ -20,8 +20,8 @@ paths:
   `docs/agent-output/policies.json` entry. Skipping one costs a CI cycle each (#4108, #4188).
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit
-  hook's absorb is a flat 20 lines of growth (the raise lands as `tests/data/ratchets.d/<branch>.json`); more
-  blocks until you extract or shrink. A tree-wide ceiling rises only on Bryce's own `ratchet-raise` label
+  hook's absorb is a flat 20 lines of growth; an explicit `--auto-raise=N` keeps N (the raise lands as
+  `tests/data/ratchets.d/<branch>.json`); more blocks until you extract or shrink. A tree-wide ceiling rises only on Bryce's own `ratchet-raise` label
   (merge-gate row) with `node tools/check/ratchets.mjs --update --fragment --reason="<why>"` and the reason in the
   commit; `--update --lower-only` lowers.
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.

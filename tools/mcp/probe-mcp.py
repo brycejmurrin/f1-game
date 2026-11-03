@@ -35,7 +35,7 @@ whenever it is up:
 Mock catalog (unit tests / offline): PROBE_MCP_MOCK=1 python3 tools/mcp/probe-mcp.py serve
 
 See .claude/skills/mcp-probe — park chrome to about:blank before Playwright;
-never render while test-bg.mjs is running.
+never render while a Playwright spec (test-bg.mjs --spec) is running.
 """
 from __future__ import annotations
 
@@ -373,7 +373,7 @@ def cmd_help(_: argparse.Namespace) -> int:
   call <name> '<json>' invoke one prefixed tool (auto-routes to the daemon)
   chrome-start         persistent Chromium daemon in tmux (state survives calls);
                        refused while a Playwright run is live here (--force overrides)
-  chrome-stop          stop it — test-bg.mjs refuses a browser group while it is up
+  chrome-stop          stop it — test-bg.mjs --spec refuses to start while it is up
   chrome-daemon        the daemon itself, foreground (chrome-start runs this)
   serve                stdio MCP server (not in .mcp.json since 2026-09; opt-in only)
 """
@@ -549,13 +549,16 @@ def cmd_chrome_daemon(args: argparse.Namespace) -> int:
 
 
 def live_test_run() -> str:
-    """`<pid>:<start> <log>` of a live Playwright run in THIS checkout, else ""
-    (.claude/hooks/live-run.py, the same answer stop-guard and protect-files use)."""
+    """`<pid> <log>` of a live Playwright spec run in THIS checkout, else "" (test-bg's own state file,
+    artifacts/logs/test-bg.json — the same answer `node tools/ci/test-bg.mjs --status` reads)."""
     try:
-        r = subprocess.run([sys.executable, str(ROOT / ".claude" / "hooks" / "live-run.py"), str(ROOT)],
-                           capture_output=True, text=True, timeout=10)
-        return r.stdout.strip()
-    except (OSError, subprocess.SubprocessError):
+        state = json.loads((ROOT / "artifacts" / "logs" / "test-bg.json").read_text())
+        for run in state.get("runs", []):
+            pid = int(run.get("pid") or 0)
+            if pid > 0 and (Path("/proc") / str(pid)).exists():
+                return f"{pid} {run.get('log') or run.get('group') or ''}".strip()
+        return ""
+    except (OSError, ValueError, TypeError):
         return ""
 
 
@@ -589,8 +592,8 @@ def cmd_chrome_start(args: argparse.Namespace) -> int:
         port = daemon_port()
         if port is not None:
             print(f"probe-chrome daemon up on 127.0.0.1:{port}")
-            print("REMEMBER: `chrome-stop` before any test-bg.mjs run — test-bg refuses "
-                  "a browser group while this daemon is live.")
+            print("REMEMBER: `chrome-stop` before any test-bg.mjs --spec run — test-bg refuses "
+                  "to start a spec while this daemon is live.")
             return 0
     print("daemon did not come up — tmux pane:", file=sys.stderr)
     print(_tmux("capture-pane", "-t", f"{CHROME_DAEMON_SESSION}:0.0", "-p").stdout,

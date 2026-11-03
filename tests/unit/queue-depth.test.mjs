@@ -158,18 +158,14 @@ test("#2182: pushTargets reads the destination branch of every git push in a com
   assert.equal(pushTargets("git status", cur), null, "no push at all");
 });
 
-test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts CI; unknown answers never skip", () => {
+test("#2182: pushStartsCi — every open PR starts CI, a draft included (2026-11-03: no opt-in); unknown answers never skip", () => {
   const pulls = (list) => (q) => { assert.match(q, /^pulls\?head=brycejmurrin:[^&]+&state=open&per_page=10$/); return { json: list }; };
   assert.equal(pushStartsCi("cursor/x", pulls([])).ci, false);
   assert.match(pushStartsCi("cursor/x", pulls([])).why, /no open PR/);
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).ci, false);
-  assert.match(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, /#7 is a draft without run-ci/);
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [{ name: "run-ci" }] }])).ci, true);
-  // The self-serve body marker (2026-10-26): a line that starts `CI: run` opts a draft in like the label.
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "## Goal\r\nCI: run\r\n" }])).ci, true);
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "CI: run" }])).why, "cursor/x: PR #7 (draft, CI: run)");
-  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "put `CI: run` in the body" }])).ci, false,
-    "a mid-line quote of the marker is not the marker");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).ci, true, "a draft push runs the fast tier");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, "cursor/x: PR #7 (draft: fast tier)");
+  assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [], body: "CI: run" }])).why, "cursor/x: PR #7 (draft: fast tier)",
+    "the retired body marker changes nothing");
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 8, draft: false, labels: [] }])).ci, true);
   assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always starts a run (pages.yml, the train)");
   assert.equal(pushStartsCi("cursor/x", () => ({ error: "HTTP 502" })).ci, null, "a failed lookup is unknown");
@@ -184,9 +180,11 @@ test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts 
 
 test("the written status file is gitignored and the docs cite the tool and JOBS", () => {
   assert.match(fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8"), /^apex-status\/$/m);
-  const agents = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
-  assert.match(agents, /tools\/ci\/queue-depth\.mjs/);
-  assert.doesNotMatch(agents, />15 runs/);
+  // AGENTS.md dropped the gauge sentence on 2026-11-03 (plan §4.4); the path-scoped CI rule is its one live home.
+  const rule = fs.readFileSync(path.join(ROOT, ".claude/rules/ci-tools.md"), "utf8");
+  assert.match(rule, /tools\/ci\/queue-depth\.mjs/);
+  assert.doesNotMatch(rule, />15 runs/);
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8"), />15 runs/);
   for (const f of ["cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
     "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md"]) {
     const s = fs.readFileSync(path.join(ROOT, f), "utf8");

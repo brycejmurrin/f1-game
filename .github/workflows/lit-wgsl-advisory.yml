@@ -10,10 +10,9 @@ name: Lit WGSL advisory
 # be able to turn a PR red or hold the merge; a separate pull_request workflow that is not a required check cannot.
 # `continue-on-error` on the job keeps even a tool failure out of the PR's checks.
 #
-# Draft PRs skip it unless labelled run-ci or carrying ci.yml's `CI: run` body line (the same fast-tier rule ci.yml
-# uses, THE BODY MARKER in its `on:` notes); no `labeled` or `edited` trigger (audit
-# 2026-10-26: 157 runs in 7 days, 6 CHANGED, and label events re-ran it on unchanged heads), so a draft labelled
-# run-ci gets the advisory at its next push. The paths filter is the lit shader's own inputs: the renderer
+# Draft PRs skip it; the ready flip runs it on the same head (2026-11-03: the `run-ci` label and the `CI: run`
+# body line left with ci.yml's draft opt-in). No `labeled` or `edited` trigger (audit 2026-10-26: 157 runs in
+# 7 days, 6 CHANGED, and label events re-ran it on unchanged heads). The paths filter is the lit shader's own inputs: the renderer
 # (js/render/**) and the vendored three.js island; game logic, circuits and assets do not change the generated WGSL.
 # The summary and notice are written only when the census says CHANGED (an unchanged run stays silent).
 # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore
@@ -40,8 +39,8 @@ concurrency:
 
 jobs:
   census:
-    # A draft without run-ci or the body marker does nothing.
-    if: ${{ !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('"\n"'), github.event.pull_request.body), fromJSON('"\nCI\u003a run"')) }}
+    # A draft does nothing; the ready flip runs the census.
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: true

@@ -209,10 +209,9 @@ minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.
 
 ```sh
-node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need?
-node tools/ci/test-bg.mjs physics-core hooks    # start them in the background, one at a time
-tail -f artifacts/logs/smoke.log             # watch one live
-node tools/ci/test-bg.mjs --status              # running / how each ended
+node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need? (they run on the PR)
+node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # attended: ONE spec in the background
+node tools/ci/test-bg.mjs --status              # running / how it ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
 npm run test:physics-core                    # the driving model (browser; 42 tests, mostly fast)

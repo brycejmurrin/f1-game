@@ -6,7 +6,7 @@ Use host collaboration calls directly. This conversation's team is distinct from
 
 ## Cross-session coordination (GitHub)
 
-The checkout's `docs/WORKERS.md` is the one home: issues are tasks, labels are state, the PR body is the only hand-off and comments are the only inter-agent message. Use shell `gh` when authenticated, else the discovered GitHub connector's issue, label, pull-request and comment calls. There is no fleet-bus branch or bus helper; never append commits to a coordination ref. A posted comment confirms the write, not recipient acknowledgement.
+The checkout's AGENTS.md §Coordination and skill `steward` are the one home: issues are tasks, labels are state, the PR body is the only hand-off and comments are the only inter-agent message. Use shell `gh` when authenticated, else the discovered GitHub connector's issue, label, pull-request and comment calls. There is no fleet-bus branch or bus helper; never append commits to a coordination ref. A posted comment confirms the write, not recipient acknowledgement.
 
 ## External provider launch
 

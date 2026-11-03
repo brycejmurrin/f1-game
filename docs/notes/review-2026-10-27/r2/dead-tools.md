@@ -21,7 +21,7 @@ No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orc
 "What no longer exists" — already deleted). Remaining era names:
 | class | path | callers | action |
 |---|---|---|---|
-| DOC-ONLY | tools/ci/archive-sessions.mjs | no code caller (dispatch.mjs imports only github-api + cli-args and implements archive rule 4 itself, emitting `ARCHIVE_SESSION`); .claude/settings.json allow line; AGENTS.md:187 says the dispatcher uses it (drift); role-tag rule (seed/orchestrator era) differs from WORKERS.md rule 4 (claim comment + PR closed > 60 min) | DELETE + its test + groups.json row; fix AGENTS.md:187 to `dispatch.mjs`; drop settings allow |
+| DOC-ONLY | archive-sessions.mjs (tools/ci; deleted 2026-11-03) | no code caller (dispatch.mjs imports only github-api + cli-args and implements archive rule 4 itself, emitting `ARCHIVE_SESSION`); .claude/settings.json allow line; AGENTS.md:187 says the dispatcher uses it (drift); role-tag rule (seed/orchestrator era) differs from WORKERS.md rule 4 (claim comment + PR closed > 60 min) | DELETE + its test + groups.json row; fix AGENTS.md:187 to `dispatch.mjs`; drop settings allow |
 | TEST-ONLY | pr-body.mjs (deleted, #3935) | only pr-body.test.mjs (deleted, #3935); header "edit a PR body's Plan / Status / fleet block … an orchestrator's concurrent edit"; fleet block retired 2026-10-27; AGENTS rule 12 now says `update_pull_request` | DELETE; MOVE the 3 `planVerdict` cases in pr-body.test.mjs into ready-gate's test before deleting the file |
 | TEST-ONLY | fleet-block.mjs (deleted, #3935) | sole importer is pr-body.mjs; no test of its own | DELETE with pr-body |
 | TEST-ONLY | lane-preamble.mjs (deleted, #3935) | only its test; Cursor UI-survey launch prompts (AGENT-TOKEN-USE-2026-10-20); dispatcher builds its own prompts | DELETE + test + groups.json row |
@@ -66,7 +66,7 @@ No script in scope is named fleet-bus / who-is-on-it / relay / inbox / msg / orc
 
 ## Deletion list (each needs: tests/groups.json row removed, `npm run gen` for tools/README.md + agent-output catalogs)
 1. check-doctor-catalog.mjs (deleted, #3935) — no test.
-2. tools/ci/archive-sessions.mjs — tests/unit/archive-sessions.test.mjs; also AGENTS.md:187, .claude/settings.json:74.
+2. archive-sessions.mjs — its unit test (both deleted 2026-11-03); also AGENTS.md:187, .claude/settings.json:74.
 3. pr-body.mjs (deleted, #3935) + fleet-block.mjs (deleted, #3935) — pr-body.test.mjs (deleted, #3935) (move its `planVerdict` cases first).
 4. lane-preamble.mjs (deleted, #3935) — lane-preamble.test.mjs (deleted, #3935).
 5. measure-pr-ci-after-close.mjs (deleted, #3935) — measure-pr-ci-after-close.test.mjs (deleted, #3935).

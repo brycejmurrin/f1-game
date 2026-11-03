@@ -435,8 +435,8 @@ test("#2259: an older completed run plus a trigger at T and no run after T is ne
   const pages = (list) => (e) => { assert.match(e, /^issues\/738\/events\?per_page=100&page=\d$/); return { json: e.endsWith("page=1") ? list : [] }; };
   const draft = { number: 738, draft: true };
   assert.equal(triggerFloor(draft, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "area:tooling" } }),
-    ev("labeled", "2026-10-15T17:08:05Z", { label: { name: "run-ci" } }), ev("labeled", "2026-10-15T17:09:00Z", { label: { name: "claimed" } })])).floor, null,
-    "a label (run-ci included) is no trigger: no floor");
+    ev("labeled", "2026-10-15T17:08:05Z", { label: { name: "priority" } }), ev("labeled", "2026-10-15T17:09:00Z", { label: { name: "claimed" } })])).floor, null,
+    "a label is no trigger: no floor");
   assert.equal(triggerFloor({ number: 738, draft: false }, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "claimed" } }),
     ev("ready_for_review", "2026-10-15T17:08:05Z"), ev("labeled", "2026-10-15T17:20:00Z", { label: { name: "land" } })])).floor, T,
     "the ready flip is the floor; a later label is not");

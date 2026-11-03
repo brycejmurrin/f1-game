@@ -24,11 +24,12 @@ A refusal's message says what to do instead; that message is the rule.
 - `protect-files.sh` (Write/Edit/MultiEdit/NotebookEdit) refuses a hand edit of a generated file (AGENTS.md rule
   11). The one hatch: an untracked `.claude/allow-protected` a MAIN session creates for the assigned edit and
   removes after (a subagent cannot create one; every guarded call announces an active hatch).
-- `bash-guard.sh` (Bash) refuses `pkill -f` / `killall` and PID kills of unlisted processes, a browser run inside a
-  subagent, `git commit --no-verify` / `-n`, a `core.hooksPath` change, and `gh run cancel` / `gh pr merge` /
-  `gh pr ready`; `mcp-browser-guard.sh` refuses the MCP browser tools inside a subagent and a second browser beside
-  a live one; `github-mcp-guard.sh` refuses a session merge or arm and a draft→ready flip without a fresh
-  ready-gate receipt. `.githooks/pre-commit` owns `test:guards` for every host (AGENTS.md rule 12);
+- `bash-guard.sh` (Bash) refuses `pkill -f` / `killall` and a kill of a Chromium pid unless the command leads
+  with `APEX_KILL_OK=1`, a browser run inside a subagent, `git commit --no-verify` / `-n`, a `core.hooksPath`
+  change, and `gh run cancel` / `gh pr merge` / `gh pr ready` (it scans the command with quoted strings blanked);
+  `mcp-browser-guard.sh` refuses the MCP browser tools inside a subagent and a second browser beside a live one;
+  `github-mcp-guard.sh` refuses a session merge or arm (the draft→ready flip is allowed: the Plan gate and the CI
+  check judge it). `.githooks/pre-commit` owns `test:guards` for every host (AGENTS.md rule 12);
   `.githooks/pre-push` refuses force pushes, branch deletes and deploy-branch pushes.
 - `context-cap.py` (Agent) advises on live context against the brief's `STOP AT` and refuses spawns over the hard
   cap; `subagent-contract.py` flags a reporter agent's malformed report.

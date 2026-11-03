@@ -1,7 +1,6 @@
 # A `cancelled` run, and syncing with the base
 
-Read when `ci-watch` says `cancelled`, `needs-sync` says `conflict` or `stale-red`, or the `gate` status fails on
-`distance`.
+Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict` or `stale-red`.
 
 ## `cancelled`: read the jobs, not the conclusion
 
@@ -24,11 +23,8 @@ A PR that ends `cancelled` twice with zero failures:
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
 (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no` (exit 4).
 
-The third reason, which needs-sync cannot see, is the `gate` status's `distance` row (the merge-base is too many
-game merges behind the tip; `tools/ci/merge-gate.mjs` holds the limit; `needs-sync` still prints `no` there). On a
-`distance` failure run `node tools/ci/sync-pr.mjs <branch> --force-clean-behind --push`, unless the PR is a ready
-`land` PR: `land.yml`'s AUTO-SYNC update-branches those on the next train (at most `SYNC_MAX` waiting on CI), so
-fetch first and sync by hand only when it has not.
+Merely behind is never a reason: merge-gate's `distance` row and `land.yml`'s AUTO-SYNC left on 2026-11-03 (gen and
+ratchets run on the real merge result).
 
 ## Running `sync-pr.mjs`
 

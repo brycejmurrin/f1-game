@@ -206,11 +206,11 @@ test("needs-decision: a Bryce `decision:` comment newer than the label clears it
 
 test("board: the markdown carries the marker, one row per open PR (owner from the handoff block), launches by address, caps and the land queue", () => {
   const body = "```handoff\nowner: claude:session_01ABCDEFGHIJKLMNOP\n```";
-  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(70, { labels: ["run-ci", "lane:claude"], body, draft: false }), pr(71)] }), cfg(), NOW);
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(70, { labels: ["area:tooling", "lane:claude"], body, draft: false }), pr(71)] }), cfg(), NOW);
   assert.deepEqual(p.board.split("\n").slice(0, 13), [BOARD_MARKER, `## Board — ${ISO}`, "",
     "pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; launches/day 0/24; live claims 1/8; cost cap $10 · land queue 0/15", "",
     "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
-    "| #70 | PR 70 | ready | 30h | claude:session_01ABCDEFGHIJKLMNOP | 30m ago | run-ci, lane:claude |", "| #71 | PR 71 | draft | 30h | - | 30m ago | - |", "",
+    "| #70 | PR 70 | ready | 30h | claude:session_01ABCDEFGHIJKLMNOP | 30m ago | area:tooling, lane:claude |", "| #71 | PR 71 | draft | 30h | - | 30m ago | - |", "",
     "### Launches this run (1)", "- ISSUE 10: [Worker] #10 Task 10"]);
   assert.equal(p.boardIssue, 1);
   const landing = (n) => Array.from({ length: n }, (_, k) => pr(200 + k, { labels: ["land"], draft: false }));

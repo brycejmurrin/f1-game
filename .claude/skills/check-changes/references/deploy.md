@@ -31,7 +31,7 @@ What changed underneath it, and why the old steps are gone:
    `--plan` prints which of the two it chose, and one float-equality failure
    that only the sweeps catch is why). `verify-track` runs for touched
    circuits either way (2 s each).
-3. **No tinyfish live check.** `pages.yml`'s `verify-live` job polls the Pages
+3. **No in-repo live check.** `pages.yml`'s `verify-live` job polls the Pages
    CDN for the stamped build and fails the run if it never appears; read the
    run in the Actions tab. From a session, the host's fetch tool can read
    `version.json`, and `curl` reaches github.io too (see below) — never the
