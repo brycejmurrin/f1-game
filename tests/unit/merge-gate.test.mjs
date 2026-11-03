@@ -109,11 +109,14 @@ test("ratchetsOnMerge: every count check runs on the merge result against the ti
   const seen = [];
   const runWith = (byScript) => (cmd, argv, o) => { seen.push([argv, o.env]); return byScript[argv[0] === "--test" ? argv[1] : "ratchets"] || byScript.tests; };
   assert.deepEqual(ratchetsOnMerge({ run: runWith({ ratchets: out(0), tests: out(0) }) }), { ok: true, evidence: "ratchets.mjs and the whole-tree count tests hold on the merge result" });
-  assert.deepEqual(seen.map(([a]) => a.at(-1)), ["tools/check/ratchets.mjs", ...["assert-match-ratchet", "source-pin-hygiene", "vm-filename-lint", "test-groups", "docs-integrity", "output-surface"].map((f) => `tests/unit/${f}.test.mjs`)]);
+  assert.deepEqual(seen.map(([a]) => a.at(-1)), ["tools/check/ratchets.mjs", ...["assert-match-ratchet", "source-pin-hygiene", "vm-filename-lint", "test-groups", "docs-integrity", "output-surface", "knowledge-retention"].map((f) => `tests/unit/${f}.test.mjs`)]);
   assert.ok(seen.every(([, env]) => env.APEX_RATCHET_BASE_REF === "HEAD" && !("NODE_TEST_CONTEXT" in env) && !("APEX_RATCHET_ABSOLUTE" in env)));
   const pinFail = out(1, `error: '7317 ${PIN} sites (ceiling 7316) — convert a source pin'`);
   const both = ratchetsOnMerge({ run: runWith({ ratchets: out(1, "css/hud.css codeLines 2300 > 2279"), tests: out(0), "tests/unit/assert-match-ratchet.test.mjs": pinFail }) });
   assert.equal(both.evidence, `${OVER}ratchets.mjs: css/hud.css codeLines 2300 > 2279; assert-match ceiling: 7317 ${PIN} sites (ceiling 7316)${NEVER_RAISE}`, "both overages, not just the first");
+  const note = ratchetsOnMerge({ run: runWith({ ratchets: out(0), tests: out(0), "tests/unit/knowledge-retention.test.mjs": out(1, "", { stderr: "PERF-HUNT-P5 (2026-11-03, 0 d)" }) }) });
+  assert.equal(note.ok, false, "an uncited hunt note on the merge result refuses the land (#4657)");
+  assert.match(note.evidence, /knowledge-retention: /);
   assert.deepEqual(ratchetsOnMerge({ run: runWith({ ratchets: out(null, "", { error: new Error("spawn ENOENT") }), tests: out(0) }) }), { ok: false, evidence: `${OVER}ratchets.mjs: spawn ENOENT${NEVER_RAISE}` });
 });
 

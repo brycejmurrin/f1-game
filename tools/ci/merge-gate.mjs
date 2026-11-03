@@ -168,6 +168,9 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
     ["assert-match ceiling", "assert-match-ratchet"], ["source-pin ceiling", "source-pin-hygiene"],
     ["vm-filename ceiling", "vm-filename-lint"], ["test-groups", "test-groups"],
     ["docs-integrity", "docs-integrity"], ["output-surface", "output-surface"],
+    // A note's cite lives in another PR's files: two PRs green alone (a hunt note + the PR that cited it, or the
+    // NOTES-INDEX block two note PRs both edit) can be red together (#4657: PERF-HUNT-P5, P3, the index, 2026-11-03).
+    ["knowledge-retention", "knowledge-retention"],
   ];
   const steps = [
     { name: "ratchets.mjs", argv: ["tools/check/ratchets.mjs"] },
