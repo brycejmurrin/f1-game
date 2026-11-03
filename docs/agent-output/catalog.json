@@ -942,6 +942,12 @@
       ]
     },
     {
+      "path": "tools/ci/fat-shard.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/fixture-consumer-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

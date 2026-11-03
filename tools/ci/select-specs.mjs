@@ -34,6 +34,7 @@ import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs"
 import { changedPaths } from "../lib/changed-files.mjs";
 import { specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind } from "./change-kind.mjs";
+import { FAT_UI_SPEC } from "./fat-shard.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
 import * as espree from "espree";
@@ -880,8 +881,10 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     // — run-playwright's mega peel dropped --shard and ran the whole file on
     // the one shard megaShardPlan picked. partitionMegaSweepArgs no longer
     // peels a lone spec + --shard (PR #1113), and the config's
-    // `fullyParallel: true` shards by test.
-    const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
+    // `fullyParallel: true` shards by test. The leg still carries --shard=i/n;
+    // run-playwright.mjs turns it into a DURATION-balanced --test-list piece
+    // (tools/ci/fat-shard.mjs, P8 #4548), so `sec` below is an even share.
+    const fatUi = FAT_UI_SPEC.test(s.file);
     if (fatUi) {
       // ONE WORKER PER PIECE, AT LEAST TWO PIECES (2026-10-15). The two-worker
       // leg put two Chromiums on a 2-vCPU llvmpipe runner: Pages 38695272346
@@ -988,7 +991,7 @@ export const TRACKED = [
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|fat-shard\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
