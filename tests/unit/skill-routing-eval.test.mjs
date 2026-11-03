@@ -1,7 +1,8 @@
 // skill-routing-eval.py driven against a FAKE `claude` placed first on PATH:
 // canned stream-json for a Skill call, Bash-then-Skill, Bash-only, a SKILL.md
-// Read and a flaky query; covers --only, --alias, --runs majority, --grace late
-// detection, --root cwd, the output header and --compare. No network, ~2 s.
+// Read and a flaky prompt; covers the phone.json loader (fire + near rows),
+// --alias, --runs majority, --grace late detection, --root cwd, the output
+// header and --compare. No network, ~2 s.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -49,35 +50,39 @@ else if (q.includes("FLAKY")) {
 out({ type: "result", subtype: "success" });
 `, { mode: 0o755 });
 
-const Q = path.join(DIR, "queries");
-fs.mkdirSync(Q);
-const put = (name, rows) => fs.writeFileSync(path.join(Q, `${name}.json`), JSON.stringify(rows));
-put("agent-view", [
-  { query: "SKILLQ fire", expect: "agent-view" },
-  { query: "BASHONLY fire", expect: "agent-view" },
-  { query: "READSKILL merged", expect: "agent-view" },
-]);
-put("slim-bloat", [{ query: "BASHTHENSKILL late", expect: "slim-bloat" }]);
-put("flaky", [{ query: "FLAKY majority", expect: "agent-view" }]);
+// A phone.json-shaped prompt file: `fire` rows expect their own skill, `near` rows the neighbour.
+let files = 0;
+const prompts = (skills) => {
+  const p = path.join(DIR, `phone-${files++}.json`);
+  fs.writeFileSync(p, JSON.stringify({ skills }));
+  return p;
+};
+const MAIN = prompts({
+  "agent-view": { fire: ["SKILLQ fire", "BASHONLY fire", "READSKILL merged"], near: [{ q: "BASHTHENSKILL late", expect: "slim-bloat" }] },
+});
+const FLAKY = prompts({ "agent-view": { fire: ["FLAKY majority"], near: [] } });
+const NEAR_ONLY = prompts({ "slim-bloat": { fire: ["BASHTHENSKILL late"], near: [] } });
 
 const ENV = { ...process.env, PATH: `${BIN}${path.delimiter}${process.env.PATH}`, FAKE_CLAUDE_LOG: LOG };
 let n = 0;
-function run(...args) {
+function run(file, ...args) {
   const out = path.join(DIR, `out-${n++}.json`);
-  execFileSync("python3", [SCRIPT, "--queries", Q, "--out", out, "--workers", "1", "--timeout", "20", ...args],
+  execFileSync("python3", [SCRIPT, "--prompts", file, "--out", out, "--workers", "1", "--timeout", "20", ...args],
     { env: ENV, stdio: ["ignore", "ignore", "pipe"] });
   const data = JSON.parse(fs.readFileSync(out, "utf8"));
   return { ...data, by: Object.fromEntries(data.results.map((r) => [r.query.split(" ")[0], r])) };
 }
 const cwds = () => fs.readFileSync(LOG, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 
-test("--only filters sources; header records the claude version and model; cwd defaults to the script's repo", () => {
+test("phone.json rows load as fire/near prompts; header records the claude version and model; cwd defaults to the script's repo", () => {
   fs.rmSync(LOG, { force: true });
-  const r = run("--only", "agent-view,slim-bloat.json", "--model", "m-x");
-  assert.deepEqual(new Set(r.results.map((x) => x.source)), new Set(["agent-view", "slim-bloat"]));
+  const r = run(MAIN, "--model", "m-x");
+  assert.deepEqual(new Set(r.results.map((x) => x.source)), new Set(["agent-view"]));
+  assert.equal(r.by.BASHTHENSKILL.expect, "slim-bloat", "a near row expects its neighbour");
   assert.equal(r.header.claude_version, "9.9.9 (Claude Code)");
   assert.equal(r.header.model, "m-x");
   assert.equal(r.header.model_seen, "fake-model-1");
+  assert.equal(r.header.prompts, MAIN);
   assert.equal(r.by.SKILLQ.raw, "skill:agent-view");
   assert.equal(r.by.SKILLQ.verdict, "correct");
   assert.equal(r.by.BASHONLY.raw, "none:Bash");
@@ -92,7 +97,7 @@ test("--only filters sources; header records the claude version and model; cwd d
 test("--grace records late:<skill> within K calls; --alias rescores a merged skill; --root sets cwd", () => {
   fs.rmSync(LOG, { force: true });
   const other = fs.mkdtempSync(path.join(DIR, "root-"));
-  const r = run("--only", "agent-view,slim-bloat", "--grace", "2", "--alias", "old-skill=agent-view", "--root", other);
+  const r = run(MAIN, "--grace", "2", "--alias", "old-skill=agent-view", "--root", other);
   assert.equal(r.header.root, fs.realpathSync(other));
   assert.ok(cwds().every((c) => fs.realpathSync(c.cwd) === fs.realpathSync(other)));
   const late = r.by.BASHTHENSKILL;
@@ -106,12 +111,12 @@ test("--grace records late:<skill> within K calls; --alias rescores a merged ski
   assert.equal(r.by.READSKILL.verdict, "correct");
   assert.equal(r.by.SKILLQ.grace, "skill:agent-view");
   // K counts the calls AFTER the first non-skill tool: K=1 still sees the Skill at call #2
-  const k0 = run("--only", "slim-bloat", "--grace", "1");
+  const k0 = run(NEAR_ONLY, "--grace", "1");
   assert.equal(k0.by.BASHTHENSKILL.grace, "late:slim-bloat");
 });
 
 test("--runs N takes the majority and records agreement k/N", () => {
-  const r = run("--only", "flaky", "--runs", "3");
+  const r = run(FLAKY, "--runs", "3");
   const f = r.by.FLAKY;
   assert.equal(f.raw, "skill:agent-view");
   assert.equal(f.verdict, "correct");
@@ -120,7 +125,7 @@ test("--runs N takes the majority and records agreement k/N", () => {
   assert.equal(r.header.runs, 3);
 });
 
-test("--compare prints the per-skill base→head table and flipped queries (legacy list input too)", () => {
+test("--compare prints the per-skill base→head table and flipped prompts (legacy list input too)", () => {
   const row = (source, query, expect, verdict, fired) => ({ source, query, expect, verdict, fired, raw: "x" });
   const A = path.join(DIR, "a.json"), B = path.join(DIR, "b.json");
   fs.writeFileSync(A, JSON.stringify([          // pre-header bare list
@@ -141,7 +146,8 @@ test("--compare prints the per-skill base→head table and flipped queries (lega
   assert.match(out, /correct\(playwright-probe\) → wrong\(agent-view\)\s+q3/);
 });
 
-test("--help works and --queries/--out are required without --compare", () => {
+test("--help works, --out is required without --compare, and the default prompts file is the committed phone.json", () => {
   assert.match(execFileSync("python3", [SCRIPT, "--help"], { encoding: "utf8" }), /--compare/);
   assert.throws(() => execFileSync("python3", [SCRIPT], { stdio: "pipe" }));
+  assert.ok(fs.existsSync(path.join(ROOT, "tests/data/skill-routing/phone.json")));
 });

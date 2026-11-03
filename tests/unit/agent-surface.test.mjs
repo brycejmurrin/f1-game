@@ -146,8 +146,8 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
   assert.match(doc, /Layout principles/);
   assert.match(read("AGENTS.md"), /Available workflows/);
   const agents = read("AGENTS.md");
-  assert.match(agents, /^## Cursor Cloud specific instructions/m);
-  assert.match(agents, /mcpServerAllowlist/);
+  // 2026-11-03: the Cursor Cloud bootstrap facts (mcpServerAllowlist) live in AGENT-SURFACE.md §Bootstrap only.
+  assert.match(doc, /mcpServerAllowlist/);
   assert.match(agents, /\.agents\/skills/);
   assert.match(read("CLAUDE.md"), /@AGENTS\.md/);
   const settings = JSON.parse(read(".claude/settings.json"));
@@ -298,7 +298,7 @@ const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
 const FORKED_SKILLS = ["challenge"];
 // A cost-bearing user-level skill that Claude may fire on its own is the trigger layer's main risk
 // (docs/notes/ORCHESTRATION-ROLES-2026-10-30.md): exactly these set disable-model-invocation: true.
-const USER_ONLY_SKILLS = ["challenge", "orchestrate"];
+const USER_ONLY_SKILLS = ["challenge", "ship"];   // 2026-11-03: orchestrate deleted; /ship is a 5-line pointer at steward
 test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
   const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
     .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));
@@ -316,23 +316,8 @@ test("every skill with agent: names an existing subagent or a builtin, and forks
   assert.deepEqual([forked.sort(), userOnly.sort()], [[...FORKED_SKILLS].sort(), [...USER_ONLY_SKILLS].sort()], "the forked or user-only set changed — update the lists and their reasons here");
 });
 
-test("no skill declares paths: — it replaces description triggering instead of adding to it", () => {
-  // Measured 2026-09-30 (skill-routing eval, 216 realistic queries through the
-  // real skill set with claude -p): the four skills that carried `paths:`
-  // (webgl-debug, webgpu-debug, css-play, lighting-tuner) fired on 0 of 20
-  // should-fire queries and on 0 of their near-misses, while the 23 without it
-  // fired on 112 of 115. `/skill-doctor` listed 23 project skills, not 27. A
-  // chat-only symptom ("night looks washed out", "the GLX canvas is black")
-  // never has a matching file in play, so the field hides exactly the requests
-  // the description targets. PR #172 (2026-09-22) had re-added it as
-  // "additive"; docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md §Withdrawn.
-  for (const d of fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory())) {
-    const file = path.join(SKILLS, d.name, "SKILL.md");
-    if (!fs.existsSync(file)) continue;
-    const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(file, "utf8"))[1];
-    assert.doesNotMatch(fm, /^paths:/m, `${d.name}: paths: hides the skill from chat-only asks (measured 2026-09-30)`);
-  }
-});
+// 2026-11-03: skill `paths:` is allowed again (code.claude.com/docs/en/skills documents it as additive
+// file-scoped auto-load); the skill-descriptions unit test checks that every `paths:` glob resolves.
 
 /* Saved workflows (.claude/workflows/*.js) run in the Workflow tool's async
    harness, so `node --check` cannot parse them (top-level await/return,

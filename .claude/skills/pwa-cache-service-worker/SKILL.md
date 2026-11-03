@@ -1,5 +1,9 @@
 ---
 name: pwa-cache-service-worker
+paths:
+  - "sw.js"
+  - "version.json"
+  - "manifest.json"
 description: "Use when editing the service worker (sw.js), version.json or the PWA manifest: an installed app stuck on an old build, offline play, stale shell, or precache lists. Not for: audio → audio-debug; textures → asset-pack; picking tests → check-changes."
 ---
 

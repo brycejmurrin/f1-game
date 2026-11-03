@@ -7,6 +7,23 @@ TESTING.md and plans link here instead of restating a command. Merged
 ladder note `notes/PREPUSH-GATE-LADDER.md` and TESTING.md's §1 command blocks and
 §3 flake procedure.
 
+## By change
+
+What to run for each kind of change (AGENTS.md §Verification points here). Agents run no browser test locally: the
+PR's tiers run the groups `pick-tests` names, and `node tools/ci/remote-group.mjs <group>` runs a whole group on the
+pushed branch. A Bryce-attended session may run ONE named spec locally on his explicit grant, recorded in the PR body.
+
+| change touches | verify with |
+|---|---|
+| docs or skills only | the docs-only fast path (AGENTS.md §The loop) |
+| tools, tests | `tooling-fast --changed` plus the touched test file; the full suite runs on the PR as `Structural guards` |
+| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`; that circuit's foundation spec runs on the PR |
+| one subsystem with its own spec | the floor (`tooling-fast --changed`); the spec `select-specs` names runs on the PR, or `remote-group.mjs <group>` on the pushed branch |
+| `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
+| engine / physics / `js/game.js` | the local floor is `tooling-fast --changed`; the groups `pick-tests` names run on the PR; name any left unrun as not-run in the PR |
+| a whole browser group (not one spec) | `node tools/ci/remote-group.mjs <group>` on the PUSHED branch (`browser-group.yml`, four llvmpipe shards, 10–15 min wall) |
+| geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps` when the diff reaches the FLEET build (`tools/ci/geometry-paths.mjs`); a lighting, car, debris-world or driving-line edit needs only its TARGETED suite (`--targeted`). Else (Bryce-attended: the hooks ask first) dispatch `ci.yml` with `group: <name>` and read the four Smoke jobs |
+
 ## 1. Which tests does this change need?
 
 ```sh

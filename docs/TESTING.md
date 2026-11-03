@@ -1136,7 +1136,6 @@ comment saying why they are not one.
 
 ## 5. Coverage table
 
-`codex-cloud.test.mjs` was the tooling-fast suite for the Codex Cloud history and control contracts; it left with the adapter on 2026-11-03 (agent-surface reset), and `codex-cloud-history.test.mjs` still covers the offline history export.
 
 `knowledge-retention.test.mjs` (`test:guards`, ~1 s): `docs/notes/` retention and the
 `D-NNN` ledger, per `tools/docs/knowledge-gc.mjs`'s header.

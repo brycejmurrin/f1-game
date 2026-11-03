@@ -1,6 +1,6 @@
 # Skills a–l: third-pass audit (2026-10-26, tip b07a5ac6f)
 
-**Slice:** 19 skills (agent-config … lighting-tuner), `.claude/skills/README.md`, and `tests/data/skill-routing/queries/*.json`. Read-only review.
+**Slice:** 19 skills (agent-config … lighting-tuner), `.claude/skills/README.md`, and `skill-routing/queries/ (deleted 2026-11-03) *.json`. Read-only review.
 
 **Ran:**
 - `node --test` on agent-config, skill-smoke, skill-routing-eval, skill-progressive and skill-hint-hook: 93/93 pass.

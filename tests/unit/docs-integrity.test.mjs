@@ -126,6 +126,9 @@ const SKILL_DOCS = [];
 const PLACEHOLDERS = new Set([
   "tests/foo.spec.js", "tests/a.spec.js", "tests/b.spec.js",
   "js/circuits/<id>.js", "docs/tracks/<id>.md",
+  // 2026-11-03: the decision ledger AGENTS.md points at is created by the docs lane of the same PR
+  // (docs/plans/2026-11-03-agent-surface-reset.md §4.9); delete this entry once the file exists.
+  "docs/DECISIONS.md",
 ]);
 
 // The lookbehind (rather than a bare \b) stops a path segment INSIDE a URL from
@@ -649,7 +652,9 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;
   const agents = read("AGENTS.md");
-  const section = agents.slice(agents.indexOf("Baked asset pack"), agents.indexOf("`window.__apex` dev API"));
+  // The slice ends at the next H2 (the `window.__apex` section it used to end at left AGENTS.md on 2026-11-03).
+  const start = agents.indexOf("Baked asset pack");
+  const section = agents.slice(start, agents.indexOf("\n## ", start));
   assert.ok(section, "the baked-asset-pack section moved");
   assert.equal(/\*\*Ships ON\.\*\*/.test(section), on,
     `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
@@ -658,7 +663,7 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // WGX implements createTextureArray / setMaterialMaps — the old "WGX does not"
   // trap sent agents hunting a missing port that already shipped.
   assert.doesNotMatch(section, /WGX does not/);
-  assert.match(section, /GLX,\s*\n?TLX, and WGX implement it|GLX,\s*TLX, and WGX implement it/);
+  assert.match(section, /GLX,\s*TLX,\s*and\s*WGX\s*implement it/);
 
   // …and the same claim, outside the slice. The check above reads only the text
   // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook

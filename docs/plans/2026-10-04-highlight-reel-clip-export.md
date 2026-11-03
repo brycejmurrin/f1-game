@@ -222,7 +222,7 @@ proven on all three backends (TLX default, GLX fallback, WGX opt-in) before slic
 - Verification (AGENTS.md ladder): `node tools/ci/pick-tests.mjs`, make all edits, `node tools/ci/tooling-fast.mjs --jobs=3`, the new unit files plus
   `tests/unit/replay-buf.test.mjs` and `tests/unit/results-cam.test.mjs`, then ONE browser spec at most: a results-screen spec that runs a short race,
   presses REEL and asserts via `__apex` hooks (clip count, phase, no NaN poses). Replay-camera offline contract for the clip seams (`node
-  tools/check/skill-smoke.mjs --skill replay-camera --check`). `node tools/ci/deploy.mjs --gate-only` before the push; name unrun browser groups in
+  check/skill-smoke.mjs (deleted 2026-11-03) --skill replay-camera --check`). `node tools/ci/deploy.mjs --gate-only` before the push; name unrun browser groups in
   the PR.
 
 ### Slice 2 - export, offline WebCodecs + fallback (L)
