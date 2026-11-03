@@ -1801,14 +1801,17 @@ const CarDraw = (function () {
     function advanceWheelPhases(dt) {
       // game.js calls this exactly once before MirrorPass.render, including
       // frozen/zero-dt draws. No default state/DOM reads or context allocation.
+      // Math lives on CarWheels.phaseStep (angle += v/R·dt) so the unit pin and
+      // the garage distance path cannot drift from this frame step.
       if (_mirrorBodies) { _mirrorViewRead = false; _mirrorViewContext = null; }
+      const R = PhysicsConsts.WHEEL_R || CarWheels.WHEEL_R;
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         let phase = _wheelPhases.get(c);
         if (!phase) { phase = { rear: 0, front: 0 }; _wheelPhases.set(c, phase); }
-        const spin = (c.speed / PhysicsConsts.WHEEL_R) * dt;
-        phase.rear = ((phase.rear || 0) + spin) % (Math.PI * 2);
-        phase.front = ((phase.front || 0) + spin * (1 - (c.wheelLock || 0))) % (Math.PI * 2);
+        const d = CarWheels.phaseStep(c.speed, dt, R, c.wheelLock || 0);
+        phase.rear = CarWheels.wrapPhase((phase.rear || 0) + d.rear);
+        phase.front = CarWheels.wrapPhase((phase.front || 0) + d.front);
       }
     }
     // `bare` (drawMirrorCar): the 4 rotating wheels at the steer they show and

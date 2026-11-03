@@ -3027,27 +3027,35 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs"
+        "tests/unit/livery-paint-zones.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "createGarage": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "draw": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
+      ],
+      "phaseStep": [
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "prepare": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "release": [
         "tests/unit/garage-arrival.test.mjs",
@@ -3058,6 +3066,9 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
+      ],
+      "wrapPhase": [
+        "tests/unit/wheel-phase-math.test.mjs"
       ],
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",

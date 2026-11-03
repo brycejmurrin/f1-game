@@ -4927,7 +4927,8 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   // multi-view/traction-isolation checks live in mirror-pass-carbuild.test.mjs.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const phases = fnSource(cd, "function advanceWheelPhases(dt)");
-  assert.match(phases, /const spin = \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt;[\s\S]*phase\.front = \(\(phase\.front \|\| 0\) \+ spin \* \(1 - \(c\.wheelLock \|\| 0\)\)\) % \(Math\.PI \* 2\)/, "locked fronts stop turning in the private visual phase");
+  assert.match(phases, /CarWheels\.phaseStep\(c\.speed, dt, R, c\.wheelLock \|\| 0\)[\s\S]*phase\.front = CarWheels\.wrapPhase/,
+    "frame step uses CarWheels.phaseStep (v/R·dt); fronts freeze via (1−lock)");
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
   // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
   assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");

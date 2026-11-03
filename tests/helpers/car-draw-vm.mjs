@@ -90,7 +90,21 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       aeroLevelOf: () => 2, aeroStyleOf: () => null, appearanceParts: (p) => p,
       PART_STYLE_FIELDS: Object.fromEntries(["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"].map(c => [c + "Shape", c])),
     },
-    CarWheels: { tints: () => ({ rim: null, cal: null, ink: null, key: "" }) },   // livery wheel tints: none set
+    CarWheels: {
+      tints: () => ({ rim: null, cal: null, ink: null, key: "" }),   // livery wheel tints: none set
+      WHEEL_R: 0.34,
+      // Mirror js/car/car-wheels.js — advanceWheelPhases calls these by name.
+      phaseStep(speed, dt, wheelR, lock) {
+        const r = wheelR > 0 ? wheelR : 0.34;
+        const spin = (speed || 0) / r * (dt || 0);
+        const L = lock == null ? 0 : lock;
+        return { rear: spin, front: spin * (1 - L) };
+      },
+      wrapPhase(rad) {
+        const t = Math.PI * 2, x = (rad || 0) % t;
+        return x < 0 ? x + t : x;
+      },
+    },
     Parts: {
       CATALOG,
       legalityKey: () => "2026",
