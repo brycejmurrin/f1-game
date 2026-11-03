@@ -576,7 +576,9 @@ test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates neve
   assert.equal(group(wr(DEPLOY_BRANCH, [])), "land-tip");
   assert.equal(group(wr("fork-branch", [])), "land-sha-abc123", "a CI run naming no PR never shares land-tip");
   assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], prt("labeled", "land")), true);
-  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a CI or train re-gate never cancels");
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a PR's CI re-gate never cancels");
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr(DEPLOY_BRANCH, [])), true, "a tip sweep is replaced by the newer tip's (#4666)");
+  assert.match(LAND.jobs.resolve.steps.find((s) => s.id === "pick").run, /tip sweep for .* skipped/, "resolve drops a superseded tip run (#4666)");
 });
 
 test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older status no longer blocks the write", () => {
