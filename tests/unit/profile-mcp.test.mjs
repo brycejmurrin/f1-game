@@ -1,5 +1,6 @@
 /* profile-mcp.test.mjs — the profiler's MCP surface pins its argv (dryRun, no browser): the run is
- * apex_job_start kind "profile" (the guarded door); apex_profile_query reads saved artifacts only.
+ * apex_job_start kind "profile" (the guarded door) or apex_profile; saved artifacts are read by the
+ * plain CLI `node tools/perf/query.mjs` (the apex_profile_query wrap left 2026-11-03).
  * Run: node --test tests/unit/profile-mcp.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -22,9 +23,10 @@ const refused = (r, error, message) => {
   assert.match(j.message, message, r.out);
 };
 
-test("apex_profile is a direct browser tool next to apex_profile_query; the job kind is still listed", () => {
+test("apex_profile is a direct browser tool; apex_profile_query left; the job kind is still listed", () => {
   const names = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).map((t) => t.name);
-  assert.ok(names.includes("apex_profile")); assert.ok(names.includes("apex_profile_query"));
+  assert.ok(names.includes("apex_profile")); assert.ok(!names.includes("apex_profile_query"));
+  assert.equal(JSON.parse(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/x.json" }).out).error, "unknown_tool");
   const js = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).find((t) => t.name === "apex_job_start");
   assert.ok(js.inputSchema.properties.kind.enum.includes("profile"));
 });
@@ -38,12 +40,6 @@ test("apex_job_start kind profile dryRun: profile.mjs argv with mode, repeat and
 test("profile job refuses a base that looks like a flag and an unknown mode", () => {
   refused(call("apex_job_start", { kind: "profile", dryRun: true, base: "--upload-pack=x" }), "bad_args", /base may not start|base must be a git ref/);
   refused(call("apex_job_start", { kind: "profile", dryRun: true, mode: "bogus" }), "bad_args", /mode must be one of/);
-});
-
-test("apex_profile_query dryRun: query.mjs, artifacts-only path", () => {
-  const argv = argvOf(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/vegas-spans.json", top: 5 }));
-  assert.ok(argv.some((a) => a.endsWith("perf/query.mjs"))); assert.ok(argv.includes("--top"));
-  refused(call("apex_profile_query", { dryRun: true, file: "package.json" }), "path_escaped", /artifacts\/ or scratch\//);
 });
 
 test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base and mode refused", () => {

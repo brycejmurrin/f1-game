@@ -213,18 +213,16 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // Pinned wrappers: readiness, location catalog, session checks, track shots, jobs, UI and audits.
+  // Pinned wrappers (2026-11-03 reset): readiness, test selection, track shots, jobs, UI, HUD, the two vendor READS.
+  // The Codex pair, the four inbox tools and the pass-through audits (locations, car/track audit, diagnostics,
+  // profile_query, rotate_markings_check) are plain CLIs now.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
-    "apex_car_audit",
     "apex_catalog",
     "apex_claude_agents",
-    "apex_codex_agents",
-    "apex_codex_control",
     "apex_cursor_agents",
     "apex_debug_chrome",
-    "apex_diagnostics",
     "apex_doctor",
     "apex_eval",
     "apex_frame_report",
@@ -235,24 +233,16 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
-    "apex_inbox_get",
-    "apex_inbox_list",
-    "apex_inbox_status",
-    "apex_inbox_sync",
     "apex_job_cancel",
     "apex_job_start",
     "apex_job_status",
-    "apex_locations",
     "apex_pick_tests",
     "apex_profile",
-    "apex_profile_query",
-    "apex_rotate_markings_check",
     "apex_select_specs",
     "apex_shot",
     "apex_shot_survey",
     "apex_status",
     "apex_track",
-    "apex_track_audit",
     "apex_ui_diff",
     "apex_ui_fit",
     "apex_ui_inspect",
@@ -619,13 +609,7 @@ test("apex_shot out outside artifacts/scratch → path_escaped", () => {
   assert.equal(body.error, "path_escaped");
 });
 
-test("tree pins: rotate-markings --check only, graph-parity needs base", () => {
-  const rot = callCli("apex_rotate_markings_check", { dryRun: true });
-  assert.equal(rot.status, 0, rot.stderr);
-  const rotBody = JSON.parse(rot.stdout);
-  assert.ok(rotBody.argv.includes("--check"), rotBody.argv);
-  assert.ok(!rotBody.argv.includes("--write"), rotBody.argv);
-
+test("tree pins: graph-parity needs base; a retired wrap is unknown", () => {
   const gp = callCli("apex_graph_parity", { dryRun: true, base: "HEAD~1", id: "monza" });
   assert.equal(gp.status, 0, gp.stderr);
   const gpBody = JSON.parse(gp.stdout);
@@ -637,10 +621,12 @@ test("tree pins: rotate-markings --check only, graph-parity needs base", () => {
   assert.equal(gpMiss.status, 1, gpMiss.stderr);
   assert.equal(JSON.parse(gpMiss.stdout).error, "bad_args");
 
-  // A trimmed wrap must be refused as unknown, not silently routed to a CLI.
-  const gone = callCli("apex_verify_track", { dryRun: true, id: "monza" });
-  assert.equal(gone.status, 1);
-  assert.equal(JSON.parse(gone.stdout).error, "unknown_tool");
+  // A trimmed wrap must be refused as unknown, not silently routed to a CLI (2026-09 and 2026-11-03 trims alike).
+  for (const name of ["apex_verify_track", "apex_rotate_markings_check", "apex_track_audit", "apex_car_audit", "apex_locations", "apex_profile_query", "apex_diagnostics", "apex_codex_control", "apex_codex_agents", "apex_inbox_sync"]) {
+    const gone = callCli(name, { dryRun: true, id: "monza" });
+    assert.equal(gone.status, 1, name);
+    assert.equal(JSON.parse(gone.stdout).error, "unknown_tool", name);
+  }
 });
 
 test("apex_frame_report: tree tool, validated track / u / frames / shots, never --out or --fleet", () => {
@@ -795,7 +781,7 @@ test("tree tools do not take or refuse the browser lock", () => {
   fs.mkdirSync(path.dirname(LOCK), { recursive: true });
   fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
   try {
-    const r = callCli("apex_rotate_markings_check", { dryRun: true });
+    const r = callCli("apex_bump_cache_check", { dryRun: true });
     assert.equal(r.status, 0, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.ok, true);
@@ -1015,13 +1001,14 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
     if (a.readOnlyHint) assert.equal(a.idempotentHint, true, `${t.name}: read-only implies idempotent`);
     if (/^apex_(eval|shot|agent|garage|track|ui_fit|ui_shot|hud_shot|hud_survey)$/.test(t.name)) assert.equal(a.readOnlyHint, false, `${t.name} takes the browser lock and writes artifacts`);
   }
-  assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_car_audit", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
-    "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs",
-    "apex_status", "apex_track_audit", "apex_viewer"], "exactly the tools with a measured result shape");
-  assert.deepEqual(destructive, ["apex_codex_control", "apex_cursor_agents", "apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_claude_agents", "apex_codex_agents", "apex_codex_control", "apex_cursor_agents", "apex_inbox_sync"]);
-  for (const n of ["apex_codex_agents", "apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_codex_control", "apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
+    "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_pick_tests", "apex_select_specs",
+    "apex_status", "apex_viewer"], "exactly the tools with a measured result shape");
+  // 2026-11-03: no tool on this server writes to a vendor; the only destructive one stops a local job.
+  assert.deepEqual(destructive, ["apex_job_cancel"]);
+  assert.deepEqual(openWorld.sort(), ["apex_cursor_agents"], "only the Cursor READS reach a network");
+  for (const n of ["apex_claude_agents", "apex_cursor_agents", "apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
+  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
@@ -1048,7 +1035,6 @@ test("real results of the fast tree tools conform to their advertised outputSche
   const calls = [
     ["apex_status", {}], ["apex_doctor", {}], ["apex_pick_tests", {}], ["apex_select_specs", { since: "HEAD~1" }],
     ["apex_bump_cache_check", {}], ["apex_job_status", {}],
-    ["apex_track_audit", { track: "monza" }], ["apex_car_audit", { check: "ladder" }],
   ];
   const results = rpc(calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: 10 + i, method: "tools/call", params: { name, arguments: args } })));
   for (const [i, [name]] of calls.entries()) {
@@ -1375,21 +1361,7 @@ test("runSpawn never blocks, and a cancel or timeout kills the child's process g
   assert.equal(fine.stdout, "note");
 });
 
-test("rotateReport lifts rotate-markings --check rows into out", async () => {
-  const { rotateReport } = await import("../../tools/mcp/apex-tools-mcp.mjs");
-  const r = rotateReport([
-    "abudhabi      shift 10.15% of lap  16 turns  (sectors left alone)",
-    "brands_hatch  shift 83.64% of lap  11 turns",
-    "",
-    "2 circuit file(s) would change (--write to apply)",
-  ].join("\n"));
-  assert.equal(r.wouldChange, 2);
-  assert.deepEqual(r.circuits[0], { id: "abudhabi", shiftPct: 10.15, turns: 16, sectorsLeftAlone: true });
-  assert.equal(r.circuits[1].sectorsLeftAlone, false);
-  assert.deepEqual(rotateReport(""), { wouldChange: 0, circuits: [] });
-});
-
-test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and refuse bad input", () => {
+test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad input", () => {
   const body = (r) => JSON.parse(r.stdout);
   const ok = (name, args, re) => {
     const r = callCli(name, { dryRun: true, ...args });
@@ -1424,19 +1396,6 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
-  ok("apex_car_audit", { check: "ladder" }, /parts-ladder\.mjs","--json/);
-  ok("apex_car_audit", { check: "crest", teams: ["haas", "audi"] }, /crest-sweep\.mjs","haas","audi","--json/);
-  bad("apex_car_audit", { check: "sweep" });
-  bad("apex_car_audit", { check: "crest", teams: ["--x"] });
-  const audit = ok("apex_track_audit", { track: "monza" });
-  assert.match(JSON.stringify(audit.argv), /verify-track\.cjs","monza","--quiet".*float-audit\.cjs","monza","--json/);
-  bad("apex_track_audit", { track: "x" });
-  // `checks` routes through tools/track/audit-circuit.cjs (every per-circuit
-  // audit against its baseline, 2026-10-05); the bare call keeps the old pair.
-  const full = ok("apex_track_audit", { track: "monza", checks: ["clip", "coplanar"] });
-  assert.match(JSON.stringify(full.argv), /audit-circuit\.cjs","monza","--json","--checks","clip,coplanar"/);
-  bad("apex_track_audit", { track: "monza", checks: ["nope"] });
-  bad("apex_track_audit", { track: "monza", checks: [] });
   // apex_unit_test: one file under tests/unit/, optional --test-name-pattern.
   const unit = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" });
   assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/);
@@ -1448,7 +1407,7 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_unit_test", {});
   const src = fs.readFileSync(MCP, "utf8");
   for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
-  for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel", "apex_car_audit", "apex_track_audit"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);
+  for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);
 });
 
 test("resources/list and resources/read serve the agent references", () => {
@@ -1488,7 +1447,7 @@ test("server instructions name every tool they route to, and only real ones", ()
   const names = new Set(out.find((m) => m.id === 2).result.tools.map((t) => t.name));
   const routed = new Set(out.find((m) => m.id === 1).result.instructions.match(/apex_\w+/g));
   for (const n of routed) assert.ok(names.has(n), `instructions route to unknown tool ${n}`);
-  for (const n of names) if (!["apex_job_cancel", "apex_viewer", "apex_cursor_agents", "apex_debug_chrome", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan", "apex_rotate_markings_check", "apex_diagnostics"].includes(n)) assert.ok(routed.has(n), `instructions omit ${n}`);
+  for (const n of names) if (!["apex_job_cancel", "apex_debug_chrome", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan"].includes(n)) assert.ok(routed.has(n), `instructions omit ${n}`);
 });
 
 test("thumbBlock returns an MCP image block a client can render", async () => {
@@ -1705,12 +1664,6 @@ test("apex-eval: the shapeOf helper it injects into the page parses (named fn ex
 // ("arguments must match one of the advertised types", "tool needs file"); the survey dropped `cams` and still said ok.
 // These keep every tool answerable to a minimal valid call, and every refusal self-explaining.
 const MIN_ARGS = {
-  // Inbox has real GitHub/cache semantics even under global mock mode.
-  // Validate its advertised arguments without fetching or creating a cache.
-  apex_inbox_sync: { issue: 4387, dryRun: true },
-  apex_inbox_list: { issue: 4387, dryRun: true },
-  apex_inbox_get: { issue: 4387, id: 1, dryRun: true },
-  apex_inbox_status: { issue: 4387, dryRun: true },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
   apex_cursor_agents: { verb: "digest" },
   apex_claude_agents: { verb: "capabilities" },
@@ -1718,8 +1671,6 @@ const MIN_ARGS = {
   apex_graph_parity: { base: "HEAD~1", id: "monza" },
   apex_frame_report: { track: "monza" },
   apex_shot_survey: { track: "monza" },
-  apex_locations: { track: 'monza' },
-  apex_car_audit: { check: "ladder" },
   apex_ui_fit: { screen: "title" },
   apex_profile: { track: "monza" },
   apex_ui_shot: { screen: "title" },
@@ -1929,12 +1880,11 @@ test("apex_catalog lists the ids the other tools accept, from their own schemas 
   assert.ok(b.jobKinds.includes("ui_matrix") && b.jobKinds.includes("float_all"));
   assert.ok(!b.uiViewports.includes("phone-landscape-844x390"), "the two viewport families stay distinct");
 });
-test("apex_locations discovers authored turns and scenery names for shot surveys", () => {
-  const list = JSON.parse(callCli("apex_locations", { track: "monaco", search: "turn-1" }).stdout);
-  assert.equal(list.ok, true);
-  assert.deepEqual(list.locations.map(l => l.id), ["monaco/turn-1"]);
-  const named = JSON.parse(callCli("apex_locations", { track: "spa", search: "eau rouge" }).stdout);
-  assert.deepEqual(named.locations.map(l => l.id), ["spa/eau-rouge"]);
+test("shot surveys take the authored location ids shot-survey.mjs --list-locations prints (apex_locations left 2026-11-03)", async () => {
+  // The catalog is a plain CLI now: the same listSurveyLocations the CLI prints feeds apex_shot_survey.location.
+  const { listSurveyLocations } = await import("../../tools/lib/survey-scenarios.mjs");
+  assert.ok(listSurveyLocations("monaco").some((l) => l.id === "monaco/turn-1"));
+  assert.ok(listSurveyLocations("spa").some((l) => l.id === "spa/eau-rouge" && l.aliases.includes("eau rouge")));
   const plan = JSON.parse(callCli("apex_shot_survey", { track: "monaco", location: "monaco/turn-1",
     angles: ["apex"], dryRun: true }).stdout);
   assert.equal(plan.shots[0].location, "monaco/turn-1");
@@ -1949,20 +1899,21 @@ test("apex_locations discovers authored turns and scenery names for shot surveys
   assert.equal(comparison.options.profile, 'comparison');
 });
 
-test('custom survey collection flows through location catalog and async job argv', async () => {
+test('custom survey collection flows through the location catalog and async job argv', async () => {
   const { design } = await import('../helpers/editor-vm.mjs');
   const { loadSurveyDesigns } = await import('../../tools/lib/custom-survey-locations.mjs');
+  const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-custom-survey-')), file = path.join(dir, 'designs.json');
   try {
     fs.writeFileSync(file, JSON.stringify({ format: 'apex26.tracks', v: 1, items: [design({ props: [{ kind: 'pond', s: .25, side: 1, gap: 40 }] })] }));
-    const id = loadSurveyDesigns(file).designs[0].id;
-    const catalog = JSON.parse(callCli('apex_locations', { track: id, designs: file }).stdout);
-    assert.equal(catalog.ok, true);
-    assert.equal(catalog.locations[0].id, `${id}/pond-1`);
+    const custom = loadSurveyDesigns(file);
+    const id = custom.designs[0].id;
+    const locations = listSurveyLocations(id, custom);
+    assert.equal(locations[0].id, `${id}/pond-1`);
     const plan = JSON.parse(callCli('apex_shot_survey', { track: id, designs: file, location: `${id}/pond-1`, angles: ['overhead'], dryRun: true }).stdout);
     assert.equal(plan.ok, true);
     assert.equal(plan.options.profile, 'preview');
-    assert.deepEqual(plan.shots[0].target, catalog.locations[0].target);
+    assert.deepEqual(plan.shots[0].target, locations[0].target);
     const { buildTrackShotSurveyPlan } = await import('../../tools/lib/track-shot-survey.mjs');
     const selected = buildTrackShotSurveyPlan({ preset: 'quick' }).shots[0].name;
     const job = JSON.parse(callCli('apex_job_start', { kind: 'shot_survey', track: id, designs: file, preset: 'quick', select: [selected], profile: 'preview', dryRun: true }).stdout);
@@ -2051,7 +2002,6 @@ const ARG_BASES = {
   apex_ui_diff: [{ before: "scratch/before.json", after: "scratch/after.json" }],
   apex_ui_mission_plan: [{ mission: "first-race" }],
   apex_garage_plan: [{}],
-  apex_diagnostics: [{ op: "run", kind: "memory_census" }],
   apex_catalog: [{ section: "parts" }],
   apex_shot: [{ track: "monza" }],
   apex_agent: [{ track: "monza" }],
@@ -2066,9 +2016,7 @@ const ARG_BASES = {
   apex_select_specs: [{ since: "HEAD~1" }],
   apex_graph_parity: [{ base: "HEAD", id: "monza" }],
   apex_pick_tests: [{}],
-  apex_track_audit: [{ track: "monza" }],
   apex_viewer: [{}],
-  apex_car_audit: [{ check: "ladder" }, { check: "crest" }],               // teams: the crest sweep only
   apex_garage: [{ op: "open", team: "ferrari" }, { op: "team", team: "mercedes" }, { op: "design" }, { op: "design", design: { stripe: "#ffffff" } }, { op: "shot" }, { op: "sheet" }],   // each op reads its own keys; base only with a design
   apex_track: [{ op: "survey", track: "monza" }, { op: "shot" }, { op: "eval" }],
   apex_job_start: ["shot_survey", "flicker_gate", "livery_contrast", "survey_track", "graph_parity_all", "ui_matrix"].map((kind) => ({ kind, track: "monza" })),
@@ -2351,7 +2299,7 @@ test("tools/list stays compact and apex_help returns the full text it shortens",
   for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
   // Bryce 2026-10-20 ("All five"): the required circuit-id enum points at apex_catalog instead of listing 52 ids;
   // a shorter required enum (apex_job_start kind) stays inline, and the server still rejects an unknown id.
-  for (const name of ["apex_frame_report", "apex_track_audit"]) {
+  for (const name of ["apex_frame_report"]) {
     const track = listed.tools.find((t) => t.name === name).inputSchema.properties.track;
     assert.equal(track.enum, undefined, `${name}.track lists no ids`);
     assert.ok(track.description.includes("apex_catalog"), `${name}.track points at apex_catalog`);
@@ -2362,7 +2310,7 @@ test("tools/list stays compact and apex_help returns the full text it shortens",
 });
 
 test("tools/list preserves every accepted top-level input for compact discovery tools", () => {
-  const names = ["apex_diagnostics", "apex_ui_inspect", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan", "apex_viewer"];
+  const names = ["apex_ui_inspect", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan", "apex_viewer"];
   const out = rpc([
     { jsonrpc: "2.0", id: "list", method: "tools/list" },
     ...names.flatMap((tool) => [
@@ -2587,7 +2535,6 @@ test('canonical catalog and car filters integrate with the published MCP schemas
   assert.equal(b.section, 'parts'); assert.ok(b.rows.length <= 2);
   assert.ok(b.rows.every(row => row.category === 'fuel'));
   for (const [name, args] of [
-    ['apex_car_audit', { check: 'ladder', categories: ['fuel'], team: 'haas' }],
     ['apex_job_start', { kind: 'parts_sweep', categories: ['fuel'], team: 'haas' }],
   ]) {
     r = callCli(name, { ...args, dryRun: true });
@@ -2598,18 +2545,17 @@ test('canonical catalog and car filters integrate with the published MCP schemas
   }
 });
 
-test('diagnostics registry exposes bounded capabilities and all four named job kinds', () => {
-  const r = callCli('apex_diagnostics', { op: 'capabilities' });
-  assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(JSON.parse(r.stdout).jobs, ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']);
-  for (const kind of ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']) {
+test('the four diagnostics job kinds stay on apex_job_start (the apex_diagnostics wrap left 2026-11-03)', async () => {
+  const { DIAGNOSTIC_JOB_KINDS } = await import('../../tools/mcp/diagnostics-tools.mjs');
+  assert.deepEqual([...DIAGNOSTIC_JOB_KINDS], ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']);
+  for (const kind of DIAGNOSTIC_JOB_KINDS) {
     const run = callCli('apex_job_start', { kind, dryRun: true });
     assert.equal(run.status, 0, run.stderr + run.stdout);
     const plan = JSON.parse(run.stdout);
     assert.equal(plan.kind, kind);
     assert.ok(plan.argv.some(s => s.endsWith('/tools/perf/diagnostics.mjs')), 'persistent bounded supervisor owns execution');
   }
-  assert.equal(callCli('apex_diagnostics', { op: 'run', kind: 'shell', dryRun: true }).status, 1);
+  assert.equal(callCli('apex_job_start', { kind: 'shell', dryRun: true }).status, 1);
 });
 
 test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
@@ -2706,13 +2652,6 @@ test("a running browser job on disk is occupancy even after its one-shot `call` 
   assert.match(src, /function occupancyRefuse\(\) \{[^}]*?lockInfo\(\)[\s\S]{0,800}?runningBrowserJob\(\)/, "occupancyRefuse consults the job list");
 });
 
-test("apex_locations with an unreadable designs file is bad_args, not internal_error", () => {
-  const r = callCli("apex_locations", { track: "monza", designs: "nope.json" });
-  const b = JSON.parse(r.stdout);
-  assert.equal(b.ok, false);
-  assert.equal(b.error, "bad_args");
-});
-
 test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting under set -e", () => {
   // SessionStart may still be installing Chromium when the MCP server starts; detect_chrome's exit 1 killed it for the session.
   const sh = fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8");
@@ -2742,25 +2681,23 @@ const cursorBad = (args) => {
   return cursorBody(r);
 };
 
-test("apex_claude_agents discovery, mock followup and refusals use the existing MCP server", () => {
+test("apex_claude_agents is reads only: discovery, mock list and the retired send/read verbs refused", () => {
   const tool = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools.find((t) => t.name === "apex_claude_agents");
   assert.deepEqual(Object.keys(tool.inputSchema.properties), ["verb", "id", "options", "dryRun"]);
   assert.ok(Buffer.byteLength(JSON.stringify(tool)) < 800);
-  const id = "cse_contract123";
-  const result = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_claude_agents", arguments: { verb: "followup", id, options: { text: "never send during mock" } } } }])[0].result;
-  assert.equal(result.structuredContent.delivery, "not_attempted");
-  assert.equal(result.structuredContent.replyRetrieved, false);
+  assert.deepEqual(tool.annotations, { title: "Apex 26 · claude agents", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  const result = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_claude_agents", arguments: { verb: "list" } } }])[0].result;
+  assert.equal(result.structuredContent.dryRun, true, "mock mode answers without the CLI");
   assert.deepEqual(result.structuredContent, JSON.parse(result.content[0].text));
-  assert.ok(!JSON.stringify(result).includes("never send during mock"));
+  // 2026-11-03: followup / remember / transcript left; a caller gets the reason, never a send.
+  for (const verb of ["followup", "remember", "transcript"]) {
+    const gone = JSON.parse(callCli("apex_claude_agents", { verb, id: "cse_contract123", options: { text: "never send" } }).stdout);
+    assert.equal(gone.error, "unsupported_verb", verb);
+    assert.match(gone.message, /2026-11-03/, verb);
+    assert.ok(!JSON.stringify(gone).includes("never send"), verb);
+  }
   const refused = JSON.parse(callCli("apex_claude_agents", { verb: "launch" }).stdout);
   assert.equal(refused.error, "unsupported_verb");
-  const share = JSON.parse(callCli("apex_claude_agents", { verb: "followup", id: "cshk_share", options: { text: "status" } }).stdout);
-  assert.equal(share.error, "bad_args");
-  const snapshot = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { refresh: true, maxChars: 500 }, dryRun: true }).stdout);
-  assert.equal(snapshot.dryRun, true);
-  assert.equal(snapshot.verb, "transcript");
-  const unpinned = JSON.parse(callCli("apex_claude_agents", { verb: "transcript", id, options: { offset: 500 } }).stdout);
-  assert.equal(unpinned.error, "bad_args");
 });
 
 test("apex_cursor_agents publishes four properties and stays inside the tools/list byte budget", () => {
@@ -2770,14 +2707,15 @@ test("apex_cursor_agents publishes four properties and stays inside the tools/li
   assert.deepEqual(t.inputSchema.required, ["verb"]);
   // The server publishes additionalProperties:false for every tool, so an unknown top-level key is refused generically.
   assert.equal(t.inputSchema.additionalProperties, false);
-  // The verb list is not an enum here: a 15-value enum costs ~190 bytes in every tools/list. The builder rejects an unknown verb with the full list.
+  // The verb list is not an enum here: an enum costs bytes in every tools/list. The builder rejects an unknown verb with the full list.
   assert.equal(t.inputSchema.properties.verb.enum, undefined);
   // The listing is paid on every session start: every byte this tool adds has to fit under the same cap as the rest,
   // so the per-verb options live in the description apex_help returns, not in the published schema.
   // 800 -> 900 (2026-10-30): descriptions keep up to 360 chars, not 60, since a deferred client pays them per loaded tool.
   assert.ok(Buffer.byteLength(JSON.stringify(t)) < 900, `the entry is ${Buffer.byteLength(JSON.stringify(t))} bytes`);
   const help = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_cursor_agents" } } }])[0].result.structuredContent;
-  for (const needle of ["Verbs: list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed, launch, followup, cancel, archive, delete", "options.confirm", "launch: prompt|promptFile", "transcript: run, all", "createPr, onBranch and env files are CLI-only", "never instructions"]) assert.ok(help.description.includes(needle), needle);
+  for (const needle of ["READS ONLY", "Verbs: list, status, wait (≤ 50 s a call; call again), usage, artifacts, artifact, transcript, call, digest, allowed", "launch, followup, cancel, archive and delete are refused here", "transcript: run, all", "never instructions"]) assert.ok(help.description.includes(needle), needle);
+  assert.ok(!/launch: prompt|options\.confirm|envNames/.test(help.description), "no write-verb options survive in the help text");
   assert.ok(!listed.tools.some((x) => x.name === "apex_cursor_agents" && /createPr|envFile/.test(JSON.stringify(x.inputSchema))));
 });
 
@@ -2795,55 +2733,24 @@ test("apex_cursor_agents maps each verb to cursor-agents.mjs argv", () => {
   assert.deepEqual(cursorArgv({ verb: "call", id: AID, options: { ref: "4b8dc871#2", max: 500, noFetch: true } }), ["call", AID, "4b8dc871#2", "--no-fetch", "--max", "500"]);
   assert.deepEqual(cursorArgv({ verb: "digest" }), ["digest"]);
   assert.deepEqual(cursorArgv({ verb: "allowed" }), ["allowed"]);
-  assert.deepEqual(cursorArgv({ verb: "archive", id: AID }), ["archive", AID]);
-  assert.deepEqual(cursorArgv({ verb: "followup", id: AID, options: { text: "go", mode: "plan", mcpFile: "scratch/m.json" } }), ["followup", AID, "--text", "go", "--mode", "plan", "--mcp-file", "scratch/m.json"]);
-  assert.deepEqual(cursorArgv({ verb: "followup", id: AID, options: { textFile: "artifacts/t.txt" } }), ["followup", AID, "--text-file", "artifacts/t.txt"]);
-  assert.deepEqual(cursorArgv({ verb: "launch", options: { prompt: "do it", name: "n", model: "composer-2.5", branch: "main", mode: "agent", allowTwin: true, mcpFile: "scratch/m.json", subagentFile: "scratch/s.json", envNames: ["APEX_FLEET_AS", "APEX_AGENT_WEBHOOK_URL"] } }),
-    ["launch", "--prompt", "do it", "--name", "n", "--model", "composer-2.5", "--ref", "main", "--mode", "agent", "--allow-twin", "--mcp-file", "scratch/m.json", "--subagent-file", "scratch/s.json", "--env", "APEX_FLEET_AS", "--env", "APEX_AGENT_WEBHOOK_URL"]);
-  assert.deepEqual(cursorArgv({ verb: "launch", options: { promptFile: "scratch/p.txt", pr: "https://github.com/o/r/pull/3", repo: "https://github.com/o/r" } }), ["launch", "--prompt-file", "scratch/p.txt", "--repo", "https://github.com/o/r", "--pr", "https://github.com/o/r/pull/3"]);
-  assert.deepEqual(cursorArgv({ verb: "cancel", id: AID, options: { confirm: AID, run: "run-3d266b1c" } }), ["cancel", AID, "--run", "run-3d266b1c"]);
-  assert.deepEqual(cursorArgv({ verb: "delete", id: AID, options: { confirm: AID } }), ["delete", AID]);
 });
 
-test("apex_cursor_agents refuses what must never reach the CLI", () => {
+test("apex_cursor_agents refuses what must never reach the CLI, including every write verb (2026-11-03)", () => {
   const msg = (args) => cursorBad(args).message;
-  assert.ok(/verb must be one of list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed, launch, followup, cancel, archive, delete/.test(msg({ verb: "nope" })));
+  assert.ok(/verb must be one of list, status, wait, usage, artifacts, artifact, transcript, call, digest, allowed \(/.test(msg({ verb: "nope" })));
   assert.ok(/needs id = a bc-<uuid>/.test(msg({ verb: "status" })));
   assert.ok(/id may not start|needs id/.test(msg({ verb: "status", id: "--help" })));
   assert.ok(/needs id = a bc-<uuid>/.test(msg({ verb: "status", id: "bc-nothex" })));
-  // control verbs: a stray call cannot stop or erase an agent
-  assert.ok(/needs options\.confirm equal to the agent id/.test(msg({ verb: "delete", id: AID })));
-  assert.ok(/needs options\.confirm/.test(msg({ verb: "delete", id: AID, options: { confirm: "bc-99999999-8888-7777-6666-555555555555" } })));
-  assert.ok(/needs options\.confirm/.test(msg({ verb: "cancel", id: AID, options: {} })));
-  // a typo on a spending verb fails with a hint instead of running without its prompt
-  const typo = cursorBad({ verb: "launch", options: { promt: "x" } });
-  assert.ok(/unknown option promt for launch/.test(typo.message));
-  assert.ok(/Did you mean "prompt"\?/.test(typo.fix));
+  // the write verbs: no agent session starts, steers or erases a Cursor agent through Bryce's login — the CLI keeps them for him
+  for (const [verb, extra] of [["launch", { options: { prompt: "do it" } }], ["followup", { id: AID, options: { text: "go" } }], ["cancel", { id: AID, options: { confirm: AID } }], ["archive", { id: AID }], ["delete", { id: AID, options: { confirm: AID } }]]) {
+    const r = cursorBad({ verb, ...extra });
+    assert.match(r.message, new RegExp(`^${verb} is not an MCP verb`), verb);
+    assert.match(r.fix, /Reads only here/, verb);
+  }
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.ok(!/LAUNCH_ENV_ALLOW|--prompt-file|--text-file|--allow-twin/.test(src), "no launch/followup argv builder survives in the server");
+  assert.ok(/launch|followup|cancel|archive|delete/.test(fs.readFileSync(path.join(ROOT, "tools/ci/cursor-agents.mjs"), "utf8")), "the CLI keeps its write subcommands");
   assert.ok(/unknown option limit for status/.test(msg({ verb: "status", id: AID, options: { limit: 3 } })));
-  assert.ok(/unknown option createPr for launch/.test(msg({ verb: "launch", options: { prompt: "x", createPr: true } })));
-  assert.ok(/unknown option envFile/.test(msg({ verb: "launch", options: { prompt: "x", envFile: "scratch/e" } })));
-  assert.ok(/exactly one of options\.prompt or options\.promptFile/.test(msg({ verb: "launch", options: {} })));
-  assert.ok(/exactly one/.test(msg({ verb: "launch", options: { prompt: "x", promptFile: "scratch/p" } })));
-  assert.ok(/prompt must be 1\.\.100000/.test(msg({ verb: "launch", options: { prompt: "  " } })));
-  assert.ok(/exclusive/.test(msg({ verb: "launch", options: { prompt: "x", branch: "main", pr: "https://github.com/o/r/pull/1" } })));
-  // secrets and files: names only, and only from scratch/ or artifacts/
-  assert.ok(/not starting with CURSOR_/.test(msg({ verb: "launch", options: { prompt: "x", envNames: ["CURSOR_API_KEY"] } })));
-  assert.ok(/variable names/.test(msg({ verb: "launch", options: { prompt: "x", envNames: ["has space"] } })));
-  assert.ok(/array of variable NAMES/.test(msg({ verb: "launch", options: { prompt: "x", envNames: "A" } })));
-  // security audit 4 X1: only the launch allowlist leaves the box; every other secret-bearing family is refused by name
-  for (const n of ["AWS_SECRET_ACCESS_KEY", "FLEET_A_OAUTH_TOKEN", "GROK_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "HTTPS_PROXY", "A_B"]) {
-    const m = msg({ verb: "launch", options: { prompt: "x", envNames: [n] } });
-    assert.ok(new RegExp(`${n} is not in the launch env allowlist \\(APEX_FLEET_AS, APEX_SESSION_ID, APEX_AGENT_WEBHOOK_URL, APEX_AGENT_WEBHOOK_AUTH\\)`).test(m), m);
-  }
-  for (const f of ["/etc/passwd", "../x", "scratch/../../etc/passwd", "x.md", "scratch/", "artifacts/..\\x", "scratch"]) {
-    assert.ok(/under scratch\/ or artifacts\//.test(msg({ verb: "launch", options: { promptFile: f } })), f);
-  }
-  assert.ok(/mcpFile must be a file under/.test(msg({ verb: "launch", options: { prompt: "x", mcpFile: "/tmp/m.json" } })));
-  assert.ok(/subagentFile must be a file under/.test(msg({ verb: "launch", options: { prompt: "x", subagentFile: "src/s.json" } })));
-  assert.ok(/repo is not valid/.test(msg({ verb: "launch", options: { prompt: "x", repo: "https://evil.example/o/r" } })));
-  assert.ok(/pr is not valid/.test(msg({ verb: "launch", options: { prompt: "x", pr: "https://github.com/o/r/issues/1" } })));
-  assert.ok(/model is not valid/.test(msg({ verb: "launch", options: { prompt: "x", model: "-rf" } })));
-  assert.ok(/mode is not valid/.test(msg({ verb: "launch", options: { prompt: "x", mode: "yolo" } })));
   assert.ok(/artifacts\/\.\.\. path/.test(msg({ verb: "artifact", id: AID, options: { path: "../etc/passwd" } })));
   assert.ok(/artifacts\/\.\.\. path/.test(msg({ verb: "artifact", id: AID, options: { path: "artifacts/../x" } })));
   assert.ok(/timeoutS must be 1\.\.50/.test(msg({ verb: "wait", id: AID, options: { timeoutS: 51 } })));
@@ -2900,7 +2807,7 @@ test("withCursorVerdict turns the CLI's typed lines and exit codes into verdicts
   assert.equal(b.stdout, "partial");
 });
 
-test("apex_cursor_agents is not read-only, is destructive and open-world, and runs nothing in mock mode", () => {
+test("apex_cursor_agents is read-only and open-world (reads of a remote API), and runs nothing in mock mode", () => {
   const r = callCli("apex_cursor_agents", { verb: "list" });
   assert.equal(r.status, 0, r.stderr);
   const body = cursorBody(r);
@@ -2909,7 +2816,7 @@ test("apex_cursor_agents is not read-only, is destructive and open-world, and ru
   const src = fs.readFileSync(MCP, "utf8");
   assert.ok(/name: "apex_cursor_agents",\s*week: 6,\s*kind: "tree"/.test(src), "no browser lock");
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools.find((t) => t.name === "apex_cursor_agents");
-  assert.deepEqual(listed.annotations, { title: "Apex 26 · cursor agents", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true });
+  assert.deepEqual(listed.annotations, { title: "Apex 26 · cursor agents", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true });
 });
 
 test("the apex_cursor_agents pin refuses --wait, dump, a verb outside the catalog and any other script", async () => {

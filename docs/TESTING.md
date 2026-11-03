@@ -1391,7 +1391,7 @@ comment saying why they are not one.
 
 ## 5. Coverage table
 
-`codex-cloud.test.mjs` (tooling-fast, no network) covers the Codex Cloud history and control contracts.
+`codex-cloud.test.mjs` was the tooling-fast suite for the Codex Cloud history and control contracts; it left with the adapter on 2026-11-03 (agent-surface reset), and `codex-cloud-history.test.mjs` still covers the offline history export.
 
 `pit-think-cache.test.mjs` covers lazy per-step AI pit weather/caution reads,
 live reads outside the car-loop bracket, tick invalidation and real strategy

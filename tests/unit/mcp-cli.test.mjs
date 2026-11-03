@@ -1,8 +1,8 @@
 // mcp-cli.test.mjs — the MCP surface that stays on the fast gate: mcp-cli.mjs
 // probe mode (dry-run call plans), the Chrome wrapper's flags and release pin,
 // gfx-probe's backend flags, and the Playwright MCP pin. Nothing here launches
-// a browser or needs network. The tinyfish proxy and the probe bridge have
-// their own suites in tests/manual/ (tinyfish-mcp / probe-mcp), run by path.
+// a browser or needs network. The probe bridge has its own suite in
+// tests/manual/probe-mcp.test.mjs, run by path (the tinyfish proxy left 2026-11-03).
 import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
