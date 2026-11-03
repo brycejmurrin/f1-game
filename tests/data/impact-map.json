@@ -7864,8 +7864,14 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
-      "*": [
+      "resolve": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "*": [
         "tests/unit/garage-entrance-motion.test.mjs"
       ]
     },
