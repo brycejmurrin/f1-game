@@ -481,6 +481,25 @@ test("shadowCol returns the shadow lamp's steady baked colour, not its live one"
   assert.deepEqual(Array.from(LB.shadowCol({ lights: live, lampBakeScale: [1, 1, 1] }, 5, [9, 9, 9])), [0, 0, 0], "bad slot -> no carve");
 });
 
+// docs/notes/PERF-HUNT-P1-2026-11-03.md row 2.
+test("shadowCol caches a miss instead of re-scanning the source every frame (#4532)", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 } });
+  const set = [...LAMP_A, ...LAMP_B];
+  LB.forTrack({}, set, 4.0);
+  const stray = LAMP_A.slice(); stray[0] += 1234;     // a live-only lamp: matches no baked one
+  let reads = 0;
+  const orig = set.slice();
+  for (let i = 0; i < set.length; i++) Object.defineProperty(set, i, { get: () => { reads++; return orig[i]; } });
+  const f = { lights: stray, lampBakeScale: [1, 1, 1] };
+  assert.deepEqual(Array.from(LB.shadowCol(f, 0, [0, 0, 0])), [0, 0, 0]);
+  const first = reads;
+  assert.ok(first > 0, "the first call scans");
+  for (let n = 0; n < 50; n++) LB.shadowCol(f, 0, [0, 0, 0]);
+  assert.equal(reads, first, "later calls with the same miss do not scan");
+  const hit = { lights: LAMP_B.slice(), lampBakeScale: [1, 1, 1] };
+  assert.deepEqual(Array.from(LB.shadowCol(hit, 0, [0, 0, 0])), [LAMP_B[3], LAMP_B[4], LAMP_B[5]], "a new position still resolves");
+});
+
 test("the atlas stays under its texel budget on a circuit-sized extent", () => {
   const LB = load();
   const lights = [];

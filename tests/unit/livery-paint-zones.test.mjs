@@ -345,3 +345,39 @@ test("a stored array of custom liveries still comes back untouched", () => {
   const cl = loadCustomLiveries({ "livery.custom.custom": [row] });
   assert.deepEqual(Array.from(cl.getCustomLiveries("custom")), [row]);
 });
+
+// Share-code keeps null slots (`!l || l.id !== replaceId`); normalizeImported used to throw on liv.id.
+// Finding #1 in docs/notes/HUNT-LIVERY-2026-11-03.md (Lane 14 livery pipeline hunt).
+// Tip #4647 archived the uncited P5 hunt note; no live citation of that path.
+test("normalizeImported drops null/non-object rows instead of throwing on liv.id", () => {
+  const sb = {
+    console,
+    Teams: { LIST: [{ id: "mclaren", color: [1, 0.5, 0], color2: [0, 0, 0] }] },
+    Liveries: { forTeam: () => [{ id: "default", c1: [1, 0.5, 0], c2: [0, 0, 0] }] },
+  };
+  vm.createContext(sb);
+  vm.runInContext(read("js/car/custom-liveries.js") + "\n;globalThis.CustomLiveries = CustomLiveries;", sb, { filename: absSrc("js/car/custom-liveries.js") });
+  const row = { id: "mine", name: "Mine", c1: [1, 0, 0], c2: [0, 0, 1] };
+  let out;
+  assert.doesNotThrow(() => {
+    out = sb.CustomLiveries.normalizeImported("mclaren", [null, 3, row, undefined, "x"], "mine");
+  });
+  assert.deepEqual(out.liveries.map((l) => l.id), ["mine"]);
+  assert.equal(out.selectedId, "mine");
+  assert.equal(out.repaired, 0);
+});
+
+test("normalizeImported still remaps a catalog id collision after filtering holes", () => {
+  const sb = {
+    console,
+    Teams: { LIST: [{ id: "mclaren", color: [1, 0.5, 0], color2: [0, 0, 0] }] },
+    Liveries: { forTeam: () => [{ id: "default", c1: [1, 0.5, 0], c2: [0, 0, 0] }] },
+  };
+  vm.createContext(sb);
+  vm.runInContext(read("js/car/custom-liveries.js") + "\n;globalThis.CustomLiveries = CustomLiveries;", sb, { filename: absSrc("js/car/custom-liveries.js") });
+  const out = sb.CustomLiveries.normalizeImported("mclaren", [null, { id: "default", c1: [0, 1, 0], c2: [0, 0, 1] }], "default");
+  assert.equal(out.liveries.length, 1);
+  assert.notEqual(out.liveries[0].id, "default");
+  assert.equal(out.selectedId, out.liveries[0].id);
+  assert.equal(out.repaired, 1);
+});

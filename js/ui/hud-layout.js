@@ -470,12 +470,37 @@ const HudLayout = (function () {
     // Do not hold suppress across the later 120 ms idle.
     beginPackClearCoalesce();
     packPhone(W, H);
+    // HudRelative / HudStrategy / tyre paint AFTER fitHud in the same tick
+    // (js/ui/hud.js), so the first pack often misses them. One double-rAF
+    // follow-up re-packs once they have boxes, and one more 120 ms later.
     schedulePackFollowUp();
   }
-  let _packFollow = 0;
+  // FOLLOW-UP SKIP (#4586): each follow-up pack is ~35 style + rect reads with a
+  // forced layout. It is skipped only when (a) a clearReadouts ran after it was
+  // scheduled (fitHud's tail, the ResizeObserver) and (b) nothing packPhone
+  // measures changed since the pack: packSig is layout-free (viewport, body
+  // class + layout set, root inline style, each readout/dock piece's hidden
+  // flag, text length and class). A first-race unhide or a text change re-packs.
+  // Coalesce (this PR): packPhone during fit defers its clear; public
+  // clearReadouts flushes. Do not hold suppress across the 120 ms idle.
+  let _packFollow = 0, _clearSeq = 0, _followSeq = 0, _followSig = "";
   let _clearSuppress = 0;
   let _clearWH = null;
   let _clearing = 0;
+  function packSig() {
+    try {
+      const b = doc.body, rs = doc.documentElement && doc.documentElement.style;
+      let s = window.innerWidth + "x" + window.innerHeight + "|" + (b ? b.className + "|" + b.getAttribute("data-hl-set") : "")
+        + "|" + String((rs && rs.cssText) || "").replace(/--hud-fit-stamp:[^;]*;?/, "");
+      for (const [id, , sel] of ELEMENTS) {
+        if (CLEAR_READOUTS.indexOf(id) < 0 && !PACK_DOCK[id]) continue;
+        const el = doc.querySelector(sel);
+        s += el ? "|" + (el.hidden ? "h" : "v") + String(el.textContent || "").length + el.className : "|-";
+      }
+      return s;
+    } catch (_) { return "?" + _clearSeq; }   // unreadable: never matches, so the follow-up runs
+  }
+  function followUpRedundant() { return _clearSeq > _followSeq && packSig() === _followSig; }
   function beginPackClearCoalesce() {
     if (_clearSuppress) return;
     _clearSuppress = 1;
@@ -490,15 +515,20 @@ const HudLayout = (function () {
     if (W) clearReadoutsBody(W, H);
   }
   function schedulePackFollowUp() {
+    _followSeq = _clearSeq; _followSig = packSig();   // a re-fit while pending re-arms against its own pack
     if (_packFollow) return;
     _packFollow = 1;
     const run = () => {
+      _packFollow = 0;
       if (!doc || typeof window === "undefined" || !window.innerWidth) {
-        _packFollow = 0;
+        // Flush fit coalesce even when the follow-up cannot pack.
         endPackClearCoalesce();
         return;
       }
-      packPhone(window.innerWidth, window.innerHeight);
+      if (!followUpRedundant()) {
+        packPhone(window.innerWidth, window.innerHeight);
+        _followSeq = _clearSeq - 1; _followSig = packSig();   // this pack is the 120 ms check's baseline
+      }
       // Flush fit + same-tick hud.js/RO clears + this pack now. Holding
       // suppress through the 120 ms wait made HudLayout.clearReadouts() a
       // no-op for callers (ui-scale map vs tall pedals).
@@ -508,15 +538,11 @@ const HudLayout = (function () {
       // hidden flag never flipped (first race tick already showed them).
       if (typeof setTimeout === "function") {
         setTimeout(() => {
-          _packFollow = 0;
-          if (doc && typeof window !== "undefined" && window.innerWidth) {
-            beginPackClearCoalesce();
-            packPhone(window.innerWidth, window.innerHeight);
-            endPackClearCoalesce();
-          }
+          if (!doc || typeof window === "undefined" || !window.innerWidth || followUpRedundant()) return;
+          beginPackClearCoalesce();
+          packPhone(window.innerWidth, window.innerHeight);
+          endPackClearCoalesce();
         }, 120);
-      } else {
-        _packFollow = 0;
       }
     };
     if (typeof requestAnimationFrame === "function") {
@@ -819,6 +845,7 @@ const HudLayout = (function () {
   }
   function clearReadoutsBody(W = window.innerWidth, H = window.innerHeight) {
     if (!doc.querySelectorAll) return;
+    _clearSeq++;
     _clearing = 1;
     try {
       clearReadoutsWork(W, H);
