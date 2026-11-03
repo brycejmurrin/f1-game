@@ -196,10 +196,26 @@ export const PIN_METRICS = {
     count: (t) => (t.match(RAW_GAME) || []).length },
   vmSrcLoads: { dirs: ["tests/unit", "tests/helpers"], exempt: [], skipDir: "fixtures",
     count: async (t, rel) => {
+      if (!mayHoldVmLoad(t)) return 0;
+      pinParseStats.vmSrcLoads++;
       const { lintSource } = await import("./vm-filename-lint.mjs");
       return lintSource(t, rel).sites.filter((s) => s.kind === "missing" && s.src).length;
     } },
 };
+
+/* vmSrcLoads PREFILTER (perf P8, #4548). Parsing every tests/unit + tests/helpers
+ * file with espree cost 4.0 s of the 18 s measure(), and a file that does not parse
+ * counts 0 anyway. A site is a call or `new` whose callee is the identifier `vm`
+ * member-accessed by runInContext / runInNewContext / runInThisContext / Script
+ * (vm-filename-lint findVmCalls), so its text is `vm`, then only whitespace,
+ * comments, parens, `.`, `?.` or `[`, then the name. A source with no such run
+ * counts 0 without the parse; `\u` keeps any source that could spell either
+ * identifier with an escape. An over-approximation: it may parse a file that has
+ * no site, never skip one that has. */
+const VM_LOAD_HINT = /\bvm\b(?:[\s().?[]|\/\*[\s\S]*?\*\/|\/\/[^\n]*)*(?:runIn(?:New|This)?Context|Script)\b/;
+export const mayHoldVmLoad = (t) => t.includes("\\u") || VM_LOAD_HINT.test(t);
+/** Sources the vmSrcLoads counter handed to the parser (ratchets.test.mjs guards the prefilter). */
+export const pinParseStats = { vmSrcLoads: 0 };
 export const pinPatterns = { ASSERT_PIN, RAW_GAME };
 
 const pinFile = (m, rel) => /\.(mjs|cjs|js)$/.test(rel) && !m.exempt.includes(rel)
@@ -281,11 +297,13 @@ export function ratchetMode(env = process.env) {
 }
 
 /** One pin row judged by ratchetMode: {metric, value, ceiling, over, base?, inherited, ok, mode, why}. */
-export async function pinVerdict(name, { env = process.env, data = load() } = {}) {
+export async function pinVerdict(name, { env = process.env, data = load(), value: measured } = {}) {
   const raw = data.tree?.[name];
   if (raw === undefined) throw new Error(`tests/data/ratchets.json has no tree.${name}`);
   const { ceiling, slackMax } = entry(raw, `tree ${name}`);
-  const value = await pinCount(name);
+  // `value`: relativize() passes the count measure() just took on the same tree,
+  // so the whole pin walk (4.5 s with vmSrcLoads' parse) is not run twice (#4548).
+  const value = measured ?? await pinCount(name);
   const mode = ratchetMode(env);
   const row = { metric: name, value, ceiling, slackMax, over: Math.max(0, value - ceiling), slack: ceiling - value, mode: mode.mode, why: mode.why, inherited: false };
   if (mode.mode === "absolute") return { ...row, ok: row.over === 0, looseOk: row.slack <= slackMax };
@@ -588,7 +606,7 @@ export async function relativize(rows, { env = process.env, data = load() } = {}
   const out = [];
   for (const r of rows) {
     if (!r.tree || !Object.hasOwn(PIN_METRICS, r.metric)) { out.push(r); continue; }
-    const v = await pinVerdict(r.metric, { env, data });
+    const v = await pinVerdict(r.metric, { env, data, value: r.value });
     const row = { ...r, mode: v.mode, base: v.base };
     if (v.ok && r.over > 0) Object.assign(row, { over: 0, inherited: `over by ${r.over}, as the base ${v.base.ref.slice(0, 8)} already was (${v.base.over})` });
     else if (!v.ok && v.base) row.grew = `+${r.over - v.base.over} past the base ${v.base.ref.slice(0, 8)} (${v.base.value} at ceiling ${v.base.ceiling})`;

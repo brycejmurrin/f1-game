@@ -75,13 +75,23 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
 export const LANES = 24;
 
-/** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
- *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
- *  queued every ready PR while the high ones idled. Rotating the start spreads
- *  legs evenly; a run's own legs still land in distinct lanes. */
+/** First lane of a run's legs: a golden-ratio (Weyl) step of GITHUB_RUN_NUMBER
+ *  over LANES. With every run starting at lane 0, a 9-leg run only ever fed
+ *  lanes 0–8, so the low lanes queued every ready PR while the high ones idled.
+ *  The first fix, `n % LANES`, spread the starts but shifted adjacent runs by ONE
+ *  lane, and adjacent run numbers are the runs that overlap in time: two 12-leg
+ *  runs shared 11 lanes and queued behind each other while 11 others idled
+ *  (docs/notes/PERF-HUNT-P8-2026-11-03.md: run 41606130214 queued 12 legs
+ *  ~53 min in total, ~10 min of its 22-min wall). Stepping by LANES·φ⁻¹
+ *  (~14.8 lanes) puts consecutive starts far apart and still visits every
+ *  lane; a run's own legs stay in distinct lanes.
+ *  Two adjacent 12-leg runs share 11 lanes before, ≤ 3 after (pinned in
+ *  tests/unit/select-specs.test.mjs). */
+const GOLDEN = (Math.sqrt(5) - 1) / 2;
 export function laneBase(env = process.env) {
   const n = Number(env.GITHUB_RUN_NUMBER);
-  return Number.isInteger(n) && n > 0 ? n % LANES : 0;
+  if (!(Number.isInteger(n) && n > 0)) return 0;
+  return Math.floor(((n * GOLDEN) % 1) * LANES) % LANES;
 }
 
 // These specs already have their own jobs with runner-measured timeout
@@ -1248,6 +1258,10 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
+  // THE RACE HUD (#4289): hud-layout asserts the DOM hud.js keeps (`.hud-gaps[data-empty]`, the gaps strip) but names
+  // the module only in comments, so no import elevates it and rule 3's floor read null; a cold agent then picked
+  // hud-audit "by name". hud-mirror reads hud.js too (radioTopSlot) but is a test:gfx spec; hud-layout is the floor.
+  [/^js\/ui\/hud\.js$/, "tests/specs/hud-layout.spec.js"],
 ];
 
 /** Specs that prove nothing about a particular module: they boot the page or
@@ -1504,6 +1518,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.
   const best = [...r.selected, ...r.oversize].filter((x) => x.rank <= 2).sort((a, b) => a.rank - b.rank)[0];
   r.floor = best ? best.file : null;
+  // A floor CI splits into native --shard pieces (hud-layout: 4 x ~10 min) is too big to run whole: name the pieces.
+  const pieces = best ? r.shards.filter((x) => x.specs === best.file && x.shard).map((x) => x.shard) : [];
+  if (pieces.length) r.floorShards = { sec: best.sec, pieces, hint: `~${Math.round(best.sec / 60)} min whole; CI runs it as ${pieces.length} --shard pieces (${pieces.join(", ")}); run the piece that holds your test, or --grep it` };
   if (!best) r.floorReason = r.selected.length ? `no spec imports or is pinned to these files; ${r.selected.length} are routed by group (${browserGroups.join(", ")}) — pick by name, or run the group on the PR` : "no browser spec is routed";
   return r;
 }
@@ -1532,7 +1549,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
   const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, staleFirst: argv.includes("--stale-first"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
-  console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
+  console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}${r.floorShards ? ` — ${r.floorShards.hint}` : ""}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(
     `SELECTION NARROWER THAN THE CHANGE: this diff touches ${r.tracked.length} tracked/infra path(s) ` +

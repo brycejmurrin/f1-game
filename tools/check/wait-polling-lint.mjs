@@ -139,23 +139,41 @@ function* walk(dir) {
 // evidence for this lint.
 const EXEMPT = /^tests\/manual\//;
 
-export function lintAll(root = ROOT) {
+/* CAN THIS SOURCE HOLD A SITE AT ALL (perf P8, #4548)? Every site is a call whose
+ * callee property is the identifier `waitForFunction`, so a source without that
+ * text has none — unless the name is spelled with a unicode escape (`F`),
+ * which the `\u` clause keeps. Parsing all ~1,900 tests/ + tools/ files cost
+ * 5.6 s of the ratchet's 18 s measure(); about one in six can hold a site. The
+ * lint (`lintAll()`, its CLI, wait-polling.test.mjs's parse check) still parses
+ * everything; only `count()` — the waitNoPolling ratchet value — skips. */
+export const mayHaveSites = (src) => src.includes("waitForFunction") || src.includes("\\u");
+/** How many sources the last lintAll() parsed (ratchets.test.mjs guards the prefilter). */
+export const stats = { parsed: 0 };
+
+export function lintAll(root = ROOT, { prefilter = false } = {}) {
   const out = [];
+  stats.parsed = 0;
   for (const dir of ["tests", "tools"]) {
     const abs = path.join(root, dir);
     if (!fs.existsSync(abs)) continue;
     for (const file of walk(abs)) {
       const rel = path.relative(root, file).split(path.sep).join("/");
       if (EXEMPT.test(rel)) continue;
-      const r = lintSource(fs.readFileSync(file, "utf8"), rel);
+      const src = fs.readFileSync(file, "utf8");
+      if (prefilter && !mayHaveSites(src)) continue;
+      stats.parsed++;
+      const r = lintSource(src, rel);
       if (r.parseError || r.sites.length) out.push(r);
     }
   }
   return out;
 }
 
+/** The waitNoPolling ratchet value. A file that cannot hold a site is not parsed
+ *  (mayHaveSites), so a parse failure there no longer throws HERE — it holds no
+ *  wait to leave uncounted, and wait-polling.test.mjs still fails it by name. */
 export function count(root = ROOT) {
-  const rows = lintAll(root);
+  const rows = lintAll(root, { prefilter: true });
   // An unparseable file contributes 0 sites, so the ratchet would never move
   // for it: a parse failure is a failure, not a zero (WP1).
   const bad = rows.filter((r) => r.parseError);

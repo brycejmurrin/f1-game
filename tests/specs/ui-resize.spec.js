@@ -194,7 +194,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       // only that WHEN it happens is not tightly bounded in this environment.
       // 5s left near-zero margin against a measured 7.1s outlier; this asserts
       // the same thing (convergence, not speed) with headroom.
-      await page.waitForFunction((expected) => {
+      const settled = await page.waitForFunction((expected) => {
         const el = document.getElementById("cs-inner");
         const done = document.getElementById("cs-done");
         if (!el || !done) return false;
@@ -213,9 +213,11 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
         return db.width > 0 && db.height > 0 &&
           db.top >= 0 && db.bottom <= window.innerHeight + 1 &&
           db.left >= 0 && db.right <= window.innerWidth + 1;
-      }, fresh[name], { polling: 50, timeout: 15_000 }).catch(() => {});
+      }, fresh[name], { polling: 50, timeout: 15_000 }).then(() => true, () => false);
 
       const after = await readState(page);
+      // A timeout is "never settled", not an early sample read as a wrong value (#4363).
+      expect(settled, `${name}: sheet never settled in 15 s — ${JSON.stringify(after)}`).toBe(true);
       expect(after.shape, `${name}: data-shape after resize`).toBe(fresh[name].shape);
       expect(after.pair, `${name}: data-pair after resize`).toBe(fresh[name].pair);
       expect(after.density, `${name}: data-density after resize`).toBe(fresh[name].density);
@@ -551,11 +553,13 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
       // Poll: a busy SwiftShader box can take several frames to settle, and
       // this file's own notes measure that as up to seconds. Waiting on the
       // CONDITION rather than a fixed sleep is what AGENTS.md asks for.
-      await page.waitForFunction(() => {
+      // A timeout lands on the expect below, which names the live box and
+      // aspect; the old empty .catch hid that it was a timeout (#4363).
+      const settled = await page.waitForFunction(() => {
         const cv = document.getElementById("game");
         if (!cv || !cv.clientHeight || typeof GLX === "undefined") return false;
         return Math.abs(GLX.aspect - cv.clientWidth / cv.clientHeight) < 0.01;
-      }, null, { polling: 100, timeout: 15_000 }).catch(() => {});
+      }, null, { polling: 100, timeout: 15_000 }).then(() => true, () => false);
 
       const seen = await page.evaluate(() => {
         const cv = document.getElementById("game");
@@ -563,7 +567,7 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
                  css: `${cv.clientWidth}x${cv.clientHeight}`, buf: `${GLX.width}x${GLX.height}` };
       });
       expect(Math.abs(seen.aspect - seen.box),
-        `${label}: GLX.aspect ${seen.aspect.toFixed(4)} must match the live ${seen.css} box `
+        `${label}: ${settled ? "settled" : "never settled in 15 s"}; GLX.aspect ${seen.aspect.toFixed(4)} must match the live ${seen.css} box `
         + `(${seen.box.toFixed(4)}); backing store ${seen.buf}`).toBeLessThan(0.01);
     }
   });

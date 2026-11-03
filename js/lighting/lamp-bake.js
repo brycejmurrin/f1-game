@@ -410,7 +410,7 @@ const LampBake = (function () {
   function _now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); }
   function _install(b, track, lights, nearClamp, budget) {
     _bake = b; _src = lights; _clamp = nearClamp; _trk = track; _budget = budget; _pend = NaN; _pendSrc = null;
-    _shK = -1;
+    _shK = -1; _shSrc = null;
     if (_bake) {
       _bake.gen = ++_gen;
       try { Log.info("gfx", "lamp bake " + _bake.lamps + " lamps -> " + _bake.tiles + " tiles, atlas " + _bake.atlasW + "x" + (2 * _bake.atlasH) + " @" + _bake.cell.toFixed(2) + " m in " + _bake.ms + " ms"); } catch (_) { /* Log absent in a bare VM: the bake still returns */ }
@@ -424,7 +424,7 @@ const LampBake = (function () {
   // track object and its atlas, which must not stay resident through the build.
   function reset() {
     _pre = null; _job = null; _jobSrc = null; _jobTrk = null; _src = null; _bake = null; _trk = null;
-    _pendSrc = null; _pend = NaN; _clamp = NaN; _budget = 0; _shK = -1;
+    _pendSrc = null; _pend = NaN; _clamp = NaN; _budget = 0; _shK = -1; _shSrc = null;
   }
   // `maxTexels` (optional) caps atlas texels per layer; omitted or 0 = MAX_TEXELS.
   function forTrack(track, lights, nearClamp, now, sync, maxTexels) {
@@ -517,14 +517,16 @@ const LampBake = (function () {
   // same colour — the live slot's colour carries flicker, warm-up tint and the
   // cull fade, which left a pulsing, bluish residue inside the shadow. Found by
   // position in the source set (fixtures are static and copied verbatim).
-  let _shK = -1, _shX = NaN, _shY = NaN, _shZ = NaN;
+  // A miss is cached too (keyed on the source set): a slot that matches no baked
+  // lamp re-scanned the whole source every frame.
+  let _shK = -1, _shX = NaN, _shY = NaN, _shZ = NaN, _shSrc = null;
   function shadowCol(frame, slot, out) {
     out[0] = out[1] = out[2] = 0;
     const L = frame && frame.lights, src = _src, sc = frame && frame.lampBakeScale;
     if (!L || !src || !sc || !(slot >= 0) || slot * 15 + 5 >= L.length) return out;
     const o = slot * 15, x = L[o], y = L[o + 1], z = L[o + 2];
-    if (!(_shK >= 0 && x === _shX && y === _shY && z === _shZ && src[_shK] === x)) {
-      _shK = -1;
+    if (src !== _shSrc || x !== _shX || y !== _shY || z !== _shZ || (_shK >= 0 && src[_shK] !== x)) {
+      _shK = -1; _shSrc = src;
       for (let i = 0; i + 2 < src.length; i += 15) {
         if (src[i] === x && src[i + 1] === y && src[i + 2] === z) { _shK = i; break; }
       }
