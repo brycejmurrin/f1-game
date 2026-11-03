@@ -212,6 +212,30 @@ test("the rail's edits: stamp, undo/redo, reverse, start, delete floor, theme, w
   assert.equal(b.D.deletePoint(0), false, "the point floor holds");
 });
 
+test("one edit renders the map once and the elevation strip once per pass, not 6 + 11 times (#4546 P6)", () => {
+  const b = bootScreen();
+  const counts = { map: 0, profile: 0 };
+  const mk = b.dom.document.createElement;
+  b.dom.document.createElement = (tag) => {
+    const el = mk(tag);
+    if (String(tag).toLowerCase() === "canvas") {
+      const base = el.getContext();
+      el.getContext = () => new Proxy(base, { get: (t, k) => k === "clearRect"
+        ? () => { counts[el.getAttribute("data-role") === "profile" ? "profile" : "map"]++; } : t[k] });
+    }
+    return el;
+  };
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7); b.D.preview();
+  b.D.setTool("corner");
+  counts.map = counts.profile = 0;
+  assert.equal(b.D.applyStamp(3, 3), true);
+  assert.deepEqual({ ...counts }, { map: 1, profile: 1 }, "the commit: one map render, one strip render (was 4 + 6)");
+  counts.map = counts.profile = 0;
+  b.D.preview();
+  assert.deepEqual({ ...counts }, { map: 1, profile: 1 }, "the debounced preview: one each (was 2 + 5)");
+});
+
 test("SAVE lands in CustomTracks + Tracks.LIST (same geometry updates, never duplicates); RACE presses the title door", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });

@@ -233,6 +233,66 @@ test("an old GPU capture load failure cannot clear a newer mode", async () => {
   assert.equal(state.loading, false);
 });
 
+function spectorStub(sb) {
+  const handlers = { cap: [], err: [] };
+  const calls = [];
+  const hub = (list) => ({ add(fn) { list.push(fn); }, remove(fn) { const i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); } });
+  sb.SPECTOR = { Spector: class {
+    constructor() { this.onCapture = hub(handlers.cap); this.onError = hub(handlers.err); }
+    spyCanvases() {}
+    captureCanvas(canvas) { calls.push(canvas); }
+  } };
+  return { handlers, calls };
+}
+
+test("a second GPU capture while one is pending shares it instead of timing the first out (B5 #4549)", async () => {
+  const { sb, capture, scripts, fire } = loadGpuCapture();
+  const { handlers, calls } = spectorStub(sb);
+  const timers = [];
+  sb.setTimeout = (fn) => { timers.push(fn); return timers.length; };
+  sb.document.getElementById = () => ({ id: "game", width: 4, height: 2 });
+  const on = capture.enable("spector");
+  fire(scripts[0], "load");
+  await on;
+  const first = capture.api("capture");
+  const second = capture.api("capture");
+  assert.equal(calls.length, 1, "one captureCanvas for both callers");
+  for (const fn of handlers.cap.slice()) fn({ commands: [{ name: "drawArrays" }] });
+  for (const fn of timers) fn(); // the 8 s timeouts: must not override a real capture
+  const a = await first;
+  const b = await second;
+  assert.equal(a.ok, true, JSON.stringify(a));
+  assert.equal(a.commandCount, 1);
+  assert.deepEqual(b, a);
+});
+
+test("a failed GPU capture load clears apex26.gpuCapture so later boots do not retry it (B5 #4549)", async () => {
+  const { sb, capture, scripts, fire } = loadGpuCapture();
+  const kv = new Map();
+  sb.localStorage = { getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => kv.set(k, v), removeItem: (k) => kv.delete(k) };
+  const failed = capture.enable("spector");
+  fire(scripts[0], "error");
+  await assert.rejects(failed, /failed to load/);
+  assert.equal(kv.has("apex26.gpuCapture"), false);
+  const ok = capture.enable("webgl-lint");
+  fire(scripts[1], "load");
+  await ok;
+  assert.equal(kv.get("apex26.gpuCapture"), "webgl-lint");
+});
+
+test("switching GPU capture from Spector to webgl-lint drops the Spector instance (B5 #4549)", async () => {
+  const { sb, capture, scripts, fire } = loadGpuCapture();
+  spectorStub(sb);
+  const on = capture.enable("spector");
+  fire(scripts[0], "load");
+  assert.equal((await on).spector, true);
+  const lint = capture.enable("webgl-lint");
+  fire(scripts[1], "load");
+  const state = await lint;
+  assert.equal(state.mode, "webgl-lint");
+  assert.equal(state.spector, false);
+});
+
 test("vendored Spector + webgl-lint are hash-pinned and licensed", () => {
   const m = JSON.parse(read("vendor/gpu-capture/MANIFEST.json"));
   for (const f of Object.keys(m.files)) {

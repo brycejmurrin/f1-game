@@ -1830,7 +1830,8 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
   const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
   assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
-  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
+  const b = laneBase({ GITHUB_RUN_NUMBER: "12633" });
+  assert.ok(Number.isInteger(b) && b >= 0 && b < LANES, `run-number start is a lane: ${b}`);
   const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
     "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
   const base = LANES - 1;
@@ -1907,7 +1908,42 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   const pinned = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/career/career-ui.js"] });
   assert.equal(pinned.changed, 1);
   assert.ok(SOURCE_AFFECTED.some(([re, spec]) => re.test("js/career/career-ui.js") && spec === pinned.floor), pinned.floor);
-  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/captions.js"] });
   assert.equal(routed.floor, null);
+  assert.equal(routed.floorShards, undefined);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
+});
+
+test("lanes: adjacent runs start far apart, so concurrent runs do not queue behind each other (P8 #4548)", async () => {
+  const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  // Run numbers that start minutes apart are the ones whose legs overlap in
+  // time. With `n % LANES` two 12-leg runs N and N+1 shared 11 of 12 lanes
+  // (the ci.yml `selected-lane-<n>` group queues the second) while 11 lanes idled.
+  const legs = (n, k) => new Set(Array.from({ length: k }, (_, i) => (laneBase({ GITHUB_RUN_NUMBER: String(n) }) + i) % LANES));
+  let worst = 0, total = 0, runs = 0;
+  for (let n = 24000; n < 24480; n++) {
+    const a = legs(n, 12), b = legs(n + 1, 12);
+    const shared = [...a].filter((l) => b.has(l)).length;
+    worst = Math.max(worst, shared); total += shared; runs++;
+  }
+  assert.ok(worst <= 3, `two adjacent 12-leg runs share at most 3 lanes, worst ${worst}`);
+  assert.ok(total / runs <= 3, `mean shared lanes ${(total / runs).toFixed(2)}`);
+  // Every lane is still a start, so no lane band starves or hogs.
+  const starts = new Set(Array.from({ length: 480 }, (_, i) => laneBase({ GITHUB_RUN_NUMBER: String(24000 + i) })));
+  assert.equal(starts.size, LANES, "every lane is a start");
+});
+
+test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names its CI shard pieces", () => {
+  // hud-layout asserts the DOM hud.js keeps but names it only in comments, so no import reaches it: before the pin
+  // the floor was null and a cold agent picked hud-audit "by name".
+  assert.deepEqual(specsAffectedBySource(["js/ui/hud.js"]), ["tests/specs/hud-layout.spec.js"]);
+  const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  assert.equal(r.floor, "tests/specs/hud-layout.spec.js");
+  assert.equal(r.floorReason, undefined);
+  // ~34 min whole: the floor carries the native --shard pieces CI runs, so it is never run whole by mistake.
+  assert.ok(r.floorShards && r.floorShards.pieces.length >= 2, JSON.stringify(r.floorShards));
+  assert.deepEqual(r.floorShards.pieces, r.shards.filter((x) => x.specs === r.floor && x.shard).map((x) => x.shard));
+  assert.match(r.floorShards.hint, /--shard pieces/);
+  // The pin is narrow: a sibling HUD module stays routed-only.
+  assert.deepEqual(specsAffectedBySource(["js/ui/hud-tyres.js"]), []);
 });

@@ -583,7 +583,7 @@ for (const delay of [100, 2000]) test(`four-driver dependent telemetry graph wit
   const h = overlapHarness(url => {
     const endpoint = new URL(url).pathname;
     const rows = endpoint.endsWith("/laps")
-      ? [{ lap_number: 4, lap_duration: 90, date_start: new Date(t0).toISOString(), is_pit_out_lap: false }]
+      ? [1, 4, 16, 44].map(n => ({ driver_number: n, lap_number: 4, lap_duration: 90, date_start: new Date(t0).toISOString(), is_pit_out_lap: false }))
       : endpoint.endsWith("/car_data") ? Array.from({ length: 4 }, (_, i) => ({ date: new Date(t0 + i * 270).toISOString(),
         speed: 250, throttle: 100, brake: 0, n_gear: 8, rpm: 10000, drs: 12 }))
       : endpoint.endsWith("/location") ? Array.from({ length: 4 }, (_, i) => ({ date: new Date(t0 + i * 270).toISOString(), x: 100 + i, y: 200 + i })) : [];
@@ -598,14 +598,18 @@ for (const delay of [100, 2000]) test(`four-driver dependent telemetry graph wit
   }
   const controller = vm.runInContext("DataTelemetry.create({})", h.context);
   const values = await h.finish(Promise.all([1, 4, 16, 44].map((num, i) => controller.fetchDriverTel(123, { num }, i === 0))));
-  assert.equal(h.calls.length, 14);
+  // P7 (#4562): one session-wide /laps serves all four lanes (was one per driver: 14 calls).
+  assert.equal(h.calls.length, 11);
   assert.ok(values.every(value => value.car.length === 4 && value.loc.length === 4));
+  const laps = h.calls.filter(c => new URL(c.url).pathname.endsWith("/laps"));
+  assert.equal(laps.length, 1, "the four lanes share one session-wide laps request");
+  assert.equal(new URL(laps[0].url).searchParams.get("driver_number"), null);
   for (const num of [1, 4, 16, 44]) {
     const driver = h.calls.filter(c => new URL(c.url).searchParams.get("driver_number") === String(num));
-    assert.ok(driver[0].url.includes("/laps?"));
-    assert.ok(driver.slice(1).every(c => c.at >= driver[0].at + delay), "lap metadata settles before its dependent time-window requests start");
+    assert.equal(driver.length, num === 1 ? 4 : 2, "car + location, plus stints + pits for the primary lane");
+    assert.ok(driver.every(c => c.at >= laps[0].at + delay), "lap metadata settles before its dependent time-window requests start");
   }
-  assert.equal(h.now - 1_000_000, delay === 100 ? 5300 : 14400,
+  assert.equal(h.now - 1_000_000, delay === 100 ? 4100 : 12400,
     "fast bodies stay pacing-bound; slow bodies overlap within the two-request cap");
   assert.equal(h.peak.openf1, delay === 100 ? 1 : 2);
   assert.equal(h.timers.size, 0);
@@ -1525,4 +1529,23 @@ test("transport instances own independent cancellation scopes and late bodies ca
   assert.equal(records[1].listeners.size, 0);
   assert.equal(h.timers.size, 0);
   assert.equal(sibling.cancelAll(), 0);
+});
+
+// P7 row 2 (#4562): fastestLap used one
+// /laps?driver_number=N request per driver; a session-wide body now serves all.
+test("P7 fastestLap for two drivers costs one session-wide laps request", async () => {
+  const lap = (n, lapNo, dur, extra) => Object.assign({ driver_number: n, lap_number: lapNo, lap_duration: dur,
+    date_start: "2026-06-21T19:3" + lapNo + ":00.000Z", is_pit_out_lap: false }, extra);
+  const h = routeHarness({ "/laps?": { status: 200, body: [
+    lap(1, 2, 80.5), lap(1, 3, 79.9), lap(1, 4, 70, { is_pit_out_lap: true }), lap(1, 5, 69, { date_start: null }),
+    lap(44, 2, 81.2), lap(44, 3, 81.2), lap(44, 4, null),
+  ] } });
+  const [a, b] = await Promise.all([h.api.fastestLap(9001, 1), h.api.fastestLap(9001, 44)]);
+  const c = await h.api.fastestLap(9001, 16);
+  assert.equal(h.calls.filter(u => u.includes("/laps?")).length, 1, "concurrent lanes and a later lane share one request");
+  assert.ok(!h.calls[0].includes("driver_number"));
+  assert.equal(a.lapNumber, 3, "pit-out and dateless laps are skipped");
+  assert.equal(a.lapDuration, 79.9);
+  assert.equal(b.lapNumber, 2, "a tie keeps the earlier lap");
+  assert.equal(c, null, "a driver with no laps gets null");
 });
