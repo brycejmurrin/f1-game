@@ -794,6 +794,19 @@ const CATALOG = [
       required: ["track"],
     },
   },
+  {
+    name: "apex_circuit_info",
+    kind: "tree",
+    description: "Tree — one circuit's facts from the real centerline build (node VM, <1 s, no browser, no lock): lengthKm (official), builtM (built lap metres, the denominator of turns/sectors fractions), turns + turnCount (curated FIA apexes), sectors, cornerCount + cornerApex (the racing line's corner detector, not a hand count of turns). Skill: agent-view.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string", description: "Circuit id (required) — one of Tracks.LIST (tools/manifest.cjs CIRCUITS)." },
+        dryRun: { type: "boolean" },
+      },
+      required: ["track"],
+    },
+  },
   // 12 → 15 on 2026-10-02: three read-only session checks; 2026-10-26 (system
   // audit §7) apex_session_status and apex_ci_status left again — each was the
   // plain CLI (`session-status.mjs --json`, `ci-watch.mjs --once`) with the same
@@ -1242,6 +1255,7 @@ schemaFor("apex_select_specs").anyOf = [{ required: ["since"] }, { required: ["f
 schemaFor("apex_graph_parity").required = ["base"];
 schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
 schemaFor("apex_frame_report").required = ["track"];
+schemaFor("apex_circuit_info").required = ["track"];
 schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }, { required: ["reports"] }];   // the handler refuses without one; say so in the schema
 bound("apex_graph_parity", "id", { enum: knownCircuits() });
 bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
@@ -1699,6 +1713,11 @@ function buildArgv(name, args) {
       return [...nodeTool("check/doctor.mjs"), "--tree", "--json"];
     case "apex_frame_report":
       return frameReportArgv(args);
+    case "apex_circuit_info": {
+      const track = args.track == null ? "" : String(args.track);
+      if (!knownCircuits().includes(track)) badArgs(`apex_circuit_info needs a known track (got ${JSON.stringify(track)})`, 'Pass {"track":"monza"} — apex_catalog lists the ids.');
+      return [...nodeTool("track/circuit-info.cjs"), track, "--json"];
+    }
     case "apex_verify_change_fast": {
       const argv = [...nodeTool("ci/verify-change.mjs"), "--fast", "--json"];
       if (args.since) argv.push("--since", String(args.since));
@@ -2289,6 +2308,9 @@ export function pinOk(name, argv) {
       );
     }
   }
+  if (name === "apex_circuit_info" && (!String(argv[1]).endsWith("tools/track/circuit-info.cjs") || argv.length !== 4 || argv[3] !== "--json")) {
+    return refuse("pin_violated", "apex_circuit_info spawns circuit-info.cjs <track> --json and nothing else", 'Pass {"track":"monza"}.');
+  }
   if (name === "apex_frame_report") {
     if (!argv.some((a) => a.endsWith("frame-report.mjs")) || !argv.includes("--track")
         || argv.some((a) => /^--(out|fleet|diff|pose|tracks)(=|$)/.test(a))) {
@@ -2768,6 +2790,8 @@ const OUTPUT_SCHEMAS = {
     hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_help: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tool: S("string"), description: S("string"),
     inputSchema: S("object"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_circuit_info: cliOut({ ok: S("boolean"), track: S("string"), name: S("string"), lengthKm: S("number"), builtM: S("number"),
+    turns: S("array"), turnCount: S("number"), sectors: S("array"), cornerCount: S("number"), cornerApex: S("array"), error: S("string") }),
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
   apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
   apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
@@ -2968,6 +2992,7 @@ export const ROUTES = [
     "Neither sends, launches or steers an agent; GitHub (PR body, labels, comments) is the bus.",
   "TREE (no browser, no lock) — tests for a change: apex_pick_tests (groups) then apex_select_specs {files} (`floor` = the ONE pre-push spec); " +
     "pre-push node gate: apex_verify_change_fast; one unit file: apex_unit_test; flyby framing: apex_frame_report; " +
+    "circuit length / turns / sectors / corner count: apex_circuit_info; " +
     "one __apex expr without a browser: apex_eval {vm:true}; ?v= hashes: apex_bump_cache_check; TrackGraph parity: apex_graph_parity; " +
     "valid ids: apex_catalog; full text of any tool: apex_help; readiness: apex_doctor; offline viewer page: apex_viewer. " +
     "Plain CLIs (no wrap): circuit health `node tools/track/audit-circuit.cjs <id> --json`, car parts `node tools/car/parts-ladder.mjs --json`, " +
