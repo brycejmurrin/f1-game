@@ -15930,10 +15930,6 @@
       ]
     },
     "js/render/three/tsl-fx.js": {
-      "_decalDrop": [
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-texture-release.test.mjs"
-      ],
       "decalMaterialFor": [
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
