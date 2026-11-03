@@ -19249,9 +19249,6 @@
       ],
       "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
-      ],
-      "*": [
-        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/xr/xr-boot.js": {
@@ -19305,6 +19302,9 @@
         "tests/unit/xr-cull-union.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "recheck": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "restorePinnedBackend": [
         "tests/unit/xr-backend-pin.test.mjs"
       ],
@@ -19352,8 +19352,7 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/xr/xr-plan.js": {
