@@ -138,6 +138,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md](notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md) | What the macos-latest paravirtual GPU can and cannot measure for TLX WebGPU per-pass cost (B·H7). |
 | [notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md](notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md) | TLX phone-shaped pass census: triangles, draws and culled chunks (A·W41; steps of #2657 and #2631). |
 | [notes/TOOLING-CONSOLIDATION-2026-10-26.md](notes/TOOLING-CONSOLIDATION-2026-10-26.md) | Tooling consolidation from the 2026-10-26 system audit (lane S6, PR #3785): what changed, why, what was measured. |
+| [notes/BOOST-FIRST-PRESS-MIRRORED-2026-11-03.md](notes/BOOST-FIRST-PRESS-MIRRORED-2026-11-03.md) | The first BOOST press built the cockpit ERS bar's mirrored back-pass pipeline mid-race on WebGPU; the warm now covers both windings (#4514). |
 | [notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md](notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md) | The first BOOST press froze about 0.74-0.93 s on iPhone because of the first ERS-strip draw (A·W15, PR #3611). |
 | [notes/VOICE-OPUS-TWINS-2026-10-25.md](notes/VOICE-OPUS-TWINS-2026-10-25.md) | Opus twins for the george, fable, emma and heart voice packs (A·W51, option A). |
 
