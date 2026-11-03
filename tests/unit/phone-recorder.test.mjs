@@ -326,3 +326,23 @@ test("repeated recorder downloads release superseded blobs and keep the current 
   assert.equal(live.size, 0);
   assert.equal(revoked.length, 40);
 });
+
+// P7 row 6 (#4547): observeRate ran on every
+// rAF callback while recording and built + JSON.stringified a key each frame.
+test("P7 recording frames compare render-rate fields without a JSON key per frame", () => {
+  let strings = 0;
+  const countingJSON = { parse: JSON.parse, stringify: (...a) => { strings++; return JSON.stringify(...a); } };
+  const PR = load({ JSON: countingJSON }), f = fakeEnv();
+  let rate = { mode: "auto", tier: 60, half: false, active: true };
+  f.env.renderRate = () => rate;
+  const r = PR.create(f.env); r.start();
+  strings = 0;
+  for (let i = 0; i < 100; i++) { f.t += 16.7; r.frame(f.t); }
+  assert.equal(strings, 0, "steady frames stringify nothing");
+  const before = r.record().events.length;
+  rate = { mode: "30", tier: 30, half: false, active: true };
+  f.t += 16.7; r.frame(f.t);
+  assert.equal(r.record().events.length, before + 1, "a change still logs one render-rate event");
+  f.t += 16.7; r.frame(f.t);
+  assert.equal(r.record().events.length, before + 1, "and only once");
+});

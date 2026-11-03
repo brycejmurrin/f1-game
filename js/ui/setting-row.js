@@ -119,8 +119,15 @@ window.SettingRow = (function () {
     if (!p || wraps(p) || !p.sel || p.sel.disabled) return;
     const live = options(p.sel).filter((o) => !o.disabled).map((o) => o.value);
     const i = live.indexOf(S(p.sel.value));
+    // An unlisted value (a custom LAPS count) sits off the list: both chevrons
+    // step onto it — › the first, ‹ the last — so neither is an end (#4350).
+    if (i < 0) {
+      if (p.prev) p.prev.disabled = !live.length;
+      if (p.next) p.next.disabled = !live.length;
+      return;
+    }
     if (p.prev) p.prev.disabled = i <= 0;
-    if (p.next) p.next.disabled = i < 0 || i >= live.length - 1;
+    if (p.next) p.next.disabled = i >= live.length - 1;
   }
 
   /* Walk the FULL list from the current option, skipping disabled ones. The
@@ -135,7 +142,7 @@ window.SettingRow = (function () {
     if (!all.some((o) => !o.disabled)) return;
     const cur = S(read());
     let i = all.findIndex((o) => o.value === cur);
-    if (i < 0) i = dir > 0 ? -1 : 0;   // an unlisted value: › the first, ‹ the last
+    if (i < 0) i = dir > 0 ? -1 : n;   // an unlisted value: › the first, ‹ the last (n, not 0: wrap:false broke at j = -1)
     const wrap = wraps(p);
     for (let k = 1; k <= n; k++) {
       const j = i + dir * k;
