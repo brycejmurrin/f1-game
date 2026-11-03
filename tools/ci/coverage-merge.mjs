@@ -4,7 +4,7 @@
 /**
  * coverage-merge — one report for both halves of the suite.
  *
- *   APEX_JS_COVERAGE=1 node tools/ci/test-bg.mjs tiny            # browser half
+ *   APEX_JS_COVERAGE=1 node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # browser half (one spec)
  *   NODE_V8_COVERAGE=artifacts/coverage-node npm run test:game-vm-b   # node half
  *   node tools/ci/coverage-merge.mjs                               # merge both
  *   node tools/ci/coverage-merge.mjs --json                        # summary only

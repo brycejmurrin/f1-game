@@ -181,8 +181,8 @@ function github({ files = [{ filename: "js/core/log.js" }], pull = {}, checks = 
 
 test("resolveSha --pr: head, body, labels, draft/state and the full file list (both rename paths); a short or failed list is filesError", () => {
   const many = Array.from({ length: 150 }, (_, i) => ({ filename: `f${i}` }));
-  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "run-ci" }], draft: false, state: "closed" } }) });
-  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["run-ci"], false, "closed", 150, null]);
+  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "priority" }], draft: false, state: "closed" } }) });
+  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["priority"], false, "closed", 150, null]);
   const ren = resolveSha({ pr: 7, request: github({ files: [{ filename: "docs/x.md", previous_filename: ".claude/memory/x.md" }] }) });
   assert.deepEqual(ren.files, ["docs/x.md", ".claude/memory/x.md"]);
   assert.ok(/incomplete files list: received 1 of 3/.test(resolveSha({ pr: 7, request: github({ files: [{ filename: "a" }], pull: { changed_files: 3 } }) }).filesError));

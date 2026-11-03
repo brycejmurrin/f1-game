@@ -4,11 +4,15 @@ description: Public-web and post-deploy research — `curl` for the deployed art
 model: haiku
 omitClaudeMd: true
 maxTurns: 60
-readonly: true
-is_background: true
 background: true
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/tools/hooks/readonly-bash.sh"
 ---
 
 You are a read-only research worker for Apex 26. Isolate fetch/search noise here;
@@ -108,8 +112,9 @@ return a short summary with citations (URLs + live vs local build numbers).
    **Bulk (more than ~10 URLs): never one Bash call per URL.** One `curl`
    call takes many URLs, each with its own `-o`:
    `curl -sS -H 'Cache-Control: no-cache' -w '%{http_code} %{size_download} %{content_type} %{url_effective}\n' -o scratch/live-bytes/1 <url1> -o scratch/live-bytes/2 <url2> …`
-   (create `scratch/live-bytes/` first with `mkdir -p` as its own call),
-   then ONE `sha256sum scratch/live-bytes/1 scratch/live-bytes/2 …` call.
+   (create `scratch/live-bytes/` first with `mkdir -p` as its own call; `curl -o`
+   under `scratch/` is the one file write your read-only hook does not see — keep
+   it there), then ONE `sha256sum scratch/live-bytes/1 scratch/live-bytes/2 …` call.
    Over ~50 URLs, ask the parent for a curl config file
    (`curl -sS -K scratch/<name>.curl`, `url = "…"` / `output = "…"` pairs):
    you have no Write tool. A population audit (hundreds of URLs) is still

@@ -12,7 +12,7 @@
  * the `ci-watch` skill turns each SUGGESTION into a GitHub MCP call. The tool
  * itself never writes: it has no way to issue anything but a GET.
  *
- * SUGGESTION, first match wins (AGENTS.md MERGE-COMMIT-ONLY, 2026-10-13; landing per docs/WORKERS.md, 2026-10-27):
+ * SUGGESTION, first match wins (AGENTS.md MERGE-COMMIT-ONLY, 2026-10-13; landing per skill `steward` §Land, 2026-10-27):
  *   FOREIGN-ARM  auto-merge armed with a method other than MERGE (squash, rebase)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
@@ -37,7 +37,7 @@
  * redesign: the body's `fleet-status: <state> | <reason> | <utc>` line,
  * or the newest PR comment starting `fleet-status:` or `@orchestrator
  * NEEDS-DECISION:` when it is newer than the body line; state, age, reason.
- * LANE is the PR's `lane:<host>` label and OWNER the `owner:` line of the body's ```handoff block (docs/WORKERS.md).
+ * LANE is the PR's `lane:<host>` label and OWNER the `owner:` line of the body's ```handoff block (skill `steward` §Open).
  * token in the block's title (ready-gate.mjs fleetIdentity; no extra API call).
  *
  *   node tools/ci/pr-board.mjs              # the table
@@ -71,7 +71,7 @@ export function laneOf(pr) {
   const l = (pr.labels || []).map((x) => (typeof x === "string" ? x : x.name)).find((n) => /^lane:/.test(n || ""));
   return l ? l.slice(5) : "-";
 }
-/** The `owner:` line of the body's ```handoff block (docs/WORKERS.md), else "-". Pure. */
+/** The `owner:` line of the body's ```handoff block (skill `steward` §Open), else "-". Pure. */
 export function handoffOwner(body) {
   const m = /```handoff\n([\s\S]*?)```/.exec(String(body || ""));
   const line = m && /^owner:\s*(.+)$/m.exec(m[1]);
@@ -97,10 +97,7 @@ const BAD_JOB = new Set(["failure", "timed_out", "startup_failure"]);
  * @returns {{ state: "none"|"queued"|"in_progress"|"success"|"failure"|"cancelled", runId: number|null }}
  */
 export function ciState(runs) {
-  // A label-noise run (#2184: ci-watch.mjs labelNoiseRun) skips every job and
-  // concludes success; as the newest run it would read a red head as green.
-  const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true)
-    && !/^CI ignored: /.test(String(r.display_title || "")));
+  const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true));
   if (!list.length) return { state: "none", runId: null };
   const byId = (a, b) => (b.id || 0) - (a.id || 0);
   const live = list.filter((r) => LIVE.has(r.status)).sort(byId);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @doc Read GitHub thread comments into a rebuildable SQLite inbox; bounded sync, list, get and status JSON.
-// @skill worker
+// @skill steward
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

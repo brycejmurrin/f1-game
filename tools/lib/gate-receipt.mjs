@@ -30,7 +30,7 @@ export const MAX_AGE_MIN = 10;
  *  Without a live head or Plan hash the receipt cannot be tied to anything, so MAX_AGE_MIN still applies. */
 export const BOUND_MAX_AGE_MIN = 24 * 60;
 /** A receipt dated further ahead than this is refused (audit 4 redteam-gates G5/G7, redteam-hooks R3: one dated 2099
- *  never aged out). Clock skew between a gate and its hook is seconds; launch-gate.py already allows the same 60 s. */
+ *  never aged out). Clock skew between a gate and its hook is seconds. */
 export const MAX_FUTURE_S = 60;
 
 export const receiptDir = (root, kind) => path.join(root, "artifacts", `${kind}-gate`);

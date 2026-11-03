@@ -159,10 +159,10 @@
   {
    "severity": "HIGH",
    "kind": "DOC-DRIFT",
-   "file": "docs/ARCHITECTURE-REVIEW.md",
+   "file": "docs/notes/ARCHITECTURE-REVIEW.md",
    "line": 340,
    "claim": "The \u00a78 backlog still lists \"cam modes ~168\" as an open game.js extraction candidate, but commit 7c67f9a0 (this session, after the register was written) extracted it into js/game/cam-modes.js \u2014 the commit message itself calls it \"First of the review's backlogged game.js extractions\", yet the commit updated only CLAUDE.md, not the review.",
-   "evidence": "docs/ARCHITECTURE-REVIEW.md:338-340: \"**game.js extraction candidates**, ranked by boundary crossings (\u00a74): garage live preview ~415 ln (blocked on a car-drawing seam), camera disclosure ~324, pre-race screens ~261, cam modes ~168, liveries ~161, sky state ~107.\" \u2014 but js/game/cam-modes.js exists (108 lines, global CamModes) and git show 7c67f9a0 --stat touches CLAUDE.md, js/game/cam-modes.js, tools/manifest.cjs, tests/unit/module-size.test.mjs but no docs/ file.",
+   "evidence": "docs/notes/ARCHITECTURE-REVIEW.md:338-340: \"**game.js extraction candidates**, ranked by boundary crossings (\u00a74): garage live preview ~415 ln (blocked on a car-drawing seam), camera disclosure ~324, pre-race screens ~261, cam modes ~168, liveries ~161, sky state ~107.\" \u2014 but js/game/cam-modes.js exists (108 lines, global CamModes) and git show 7c67f9a0 --stat touches CLAUDE.md, js/game/cam-modes.js, tools/manifest.cjs, tests/unit/module-size.test.mjs but no docs/ file.",
    "fix": "OLD: \"camera disclosure ~324, pre-race screens ~261, cam modes ~168, liveries ~161, sky state ~107.\" NEW: \"camera disclosure ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes ~168 was taken in 2026-08 \u2014 now js/game/cam-modes.js, CamModes.create(G).)\"",
    "finder": "docs-vs-code",
    "verdict": "accepted-unverified"
@@ -181,10 +181,10 @@
   {
    "severity": "HIGH",
    "kind": "DOC-DRIFT",
-   "file": "docs/ARCHITECTURE-REVIEW.md",
+   "file": "docs/notes/ARCHITECTURE-REVIEW.md",
    "line": 208,
    "claim": "The \u00a77 open-defect register's \"A19 residue\" entry lists dead CSS tokens --btn-col and --ped/--act as open, but commit 938aed50 (this session, after the register was written) deleted all of them (plus --btn-edge) from css/overlays.css \u2014 fixed-but-listed-open.",
-   "evidence": "docs/ARCHITECTURE-REVIEW.md:208-210: \"**A19 residue.** Dead CSS tokens `--btn-col` (`css/overlays.css:32`) and `--ped`/`--act` (`:465`) have no consumer anywhere;\" \u2014 but grep -n '\\-\\-btn-col\\|\\-\\-ped\\|\\-\\-act\\b' css/overlays.css returns nothing, and 938aed50's message says \"Removed ... the four dead custom properties `--btn-col`/`--btn-edge`/`--ped`/`--act` (zero var() consumers)\" while its diffstat shows css/overlays.css changed and no docs/ file.",
+   "evidence": "docs/notes/ARCHITECTURE-REVIEW.md:208-210: \"**A19 residue.** Dead CSS tokens `--btn-col` (`css/overlays.css:32`) and `--ped`/`--act` (`:465`) have no consumer anywhere;\" \u2014 but grep -n '\\-\\-btn-col\\|\\-\\-ped\\|\\-\\-act\\b' css/overlays.css returns nothing, and 938aed50's message says \"Removed ... the four dead custom properties `--btn-col`/`--btn-edge`/`--ped`/`--act` (zero var() consumers)\" while its diffstat shows css/overlays.css changed and no docs/ file.",
    "fix": "OLD: \"**A19 residue.** Dead CSS tokens `--btn-col` (`css/overlays.css:32`) and `--ped`/`--act` (`:465`) have no consumer anywhere; `css/overlays.css` still carries mutually inconsistent measured cluster widths in comments (the \\\"467px\\\" family) of which at least two are stale.\" NEW: \"**A19 residue.** `css/overlays.css` still carries mutually inconsistent measured cluster widths in comments (the \\\"467px\\\" family) of which at least two are stale (the dead `--btn-col`/`--btn-edge`/`--ped`/`--act` tokens were removed in the 2026-08 cleanup batch).\" \u2014 the 467px comments do survive at css/overlays.css:182,322,460.",
    "finder": "docs-vs-code",
    "verdict": "accepted-unverified"
@@ -217,7 +217,7 @@
    "file": "docs/ARCHITECTURE.md",
    "line": 82,
    "claim": "The \"game.js pass 2\" follow-up bullet's present-tense inventory \"Four modules are out\" is stale: this session also moved physics-consts.js (a6fb6ce2) and cam-modes.js (7c67f9a0) out of game.js, and its \"next candidates\" list (quali networking block, collisions) no longer matches the crossings-ranked backlog in ARCHITECTURE-REVIEW \u00a78.",
-   "evidence": "docs/ARCHITECTURE.md:82-86: \"Four modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`, `js/game/light-store.js`, `js/game/racecontrol.js`) \u2014 8,178 \u2192 8,009 lines at the time of that pass; ... the next candidates are the quali networking block and collisions.\" \u2014 but js/game/physics-consts.js and js/game/cam-modes.js now exist (both extracted from game.js this session), and docs/ARCHITECTURE-REVIEW.md:338-341 ranks the candidates as garage preview / camera disclosure / pre-race screens / liveries / sky state.",
+   "evidence": "docs/ARCHITECTURE.md:82-86: \"Four modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`, `js/game/light-store.js`, `js/game/racecontrol.js`) \u2014 8,178 \u2192 8,009 lines at the time of that pass; ... the next candidates are the quali networking block and collisions.\" \u2014 but js/game/physics-consts.js and js/game/cam-modes.js now exist (both extracted from game.js this session), and docs/notes/ARCHITECTURE-REVIEW.md:338-341 ranks the candidates as garage preview / camera disclosure / pre-race screens / liveries / sky state.",
    "fix": "OLD: \"Four modules are out (`js/game/aerozones.js`, `js/game/skidmarks.js`, `js/game/light-store.js`, `js/game/racecontrol.js`) \u2014 8,178 \u2192 8,009 lines at the time of that pass; ... the next candidates are the quali networking block and collisions.\" NEW: \"Four modules came out in that pass (`js/game/aerozones.js`, `js/game/skidmarks.js`, `js/game/light-store.js`, `js/game/racecontrol.js`) \u2014 8,178 \u2192 8,009 lines then \u2014 and the 2026-08 cleanup added `js/game/physics-consts.js` and `js/game/cam-modes.js`; the remaining candidates are ranked by boundary crossings in ARCHITECTURE-REVIEW.md \u00a78.\"",
    "finder": "docs-vs-code",
    "verdict": "accepted-unverified"

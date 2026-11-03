@@ -43,8 +43,8 @@
  *
  * PUSHES THAT START NO CI ARE NOT HELD (#2182). `--push "<command>"` reads the
  * destination branch of every `git push` in the command (pushTargets); when
- * every one is a branch with no open PR or a draft PR without the `run-ci`
- * label (ci.yml runs on push for the deploy branch only), it prints
+ * every one is a branch with no open PR (ci.yml runs on push for the deploy
+ * branch only; every PR push, draft or ready, starts CI since 2026-11-03), it prints
  * `= queue skip — push starts no CI (…)` and exits 0 without measuring.
  * Anything it cannot resolve is measured as before. bash-guard.sh and
  * sync-pr.mjs --push call it this way.
@@ -292,28 +292,18 @@ export function pushTargets(text, current) {
 /**
  * Does a push to `branch` start a CI run? The deploy branch's push starts
  * pages.yml (the train, which calls ci.yml); ci.yml runs on pull_request
- * otherwise; a draft without `run-ci` (or the `CI: run` body line) gets one
- * 2-min `draft-ci-skipped` job. `ci` is null when the lookup failed.
+ * otherwise, for every open PR — a draft gets the fast tier plus one selected
+ * shard, a ready PR the full tier (2026-11-03: no label or body-line opt-in).
+ * `ci` is null when the lookup failed.
  */
 export function pushStartsCi(branch, request = api) {
   if (branch === DEPLOY) return { ci: true, why: `${branch}: the deploy branch` };
   const r = request(`pulls?head=${OWNER}:${encodeURIComponent(branch)}&state=open&per_page=10`);
   if (r.error || !Array.isArray(r.json)) return { ci: null, why: `${branch}: PR lookup failed (${r.error || "no array"})` };
   if (!r.json.length) return { ci: false, why: `${branch}: no open PR` };
-  const label = (p) => (p.labels || []).some((l) => l?.name === "run-ci");
-  const live = r.json.find((p) => !p.draft || label(p) || hasCiRunMarker(p.body));
-  if (live) return { ci: true, why: `${branch}: PR #${live.number}${live.draft ? (label(live) ? " (draft, run-ci)" : " (draft, CI: run)") : ""}` };
-  return { ci: false, why: `${branch}: PR #${r.json[0].number} is a draft without run-ci or a CI: run body line` };
+  const live = r.json.find((p) => !p.draft) || r.json[0];
+  return { ci: true, why: `${branch}: PR #${live.number}${live.draft ? " (draft: fast tier)" : ""}` };
 }
-
-/**
- * ci.yml's draft opt-in BODY MARKER, mirrored: a PR-body line that starts
- * `CI: run`, case-insensitive (Actions `contains` is). ci.yml prepends a
- * newline to the body and looks for "\nCI: run", so line 1 counts and a
- * mid-line quote does not; the ci-workflow tests pin both to the same cases.
- */
-export const CI_RUN_MARKER = /(?:^|\n)CI: run/i;
-export const hasCiRunMarker = (body) => CI_RUN_MARKER.test(String(body ?? ""));
 
 /** Skip the gauge only when every target is known to start no CI. */
 export function pushVerdict(text, current, request = null) {
@@ -388,7 +378,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACOS_SLOTS} macOS slots.
 Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
---push: exit 0 with "= queue skip" when every pushed branch has no open PR or a draft without run-ci.
+--push: exit 0 with "= queue skip" when every pushed branch has no open PR.
 --wait <min>: block (run it as ONE background task) until ok has held 2 min; prints the in-flight/queued trend each poll; exit 0 ok, 124 timeout.
 Informational since 2026-10-16: nothing holds a push on this line (AGENTS.md rule 4).
 Exit 0 = ok or hold (never blocks), 2 = bad args, 3 = API/token.`);

@@ -1035,7 +1035,7 @@ device pixel ratio, **GPU vendor/renderer** (real silicon vs SwiftShader),
 backend, HDR/MSAA/render scale, plus `info`, `assets`, `lightTune`,
 `lightState`, `viewState`, `physState`, `timing`, `gpuTimer` and collected
 errors — and downloads it as `apex-diag.json`. `diag({download:false})` logs
-without downloading. See [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md).
+without downloading. See the *Console recipes* section of this file.
 
 For a rendering complaint from a device you cannot reach, four keys carry most
 of the answer:
@@ -3218,7 +3218,7 @@ semantics sitting next to the numbers.
 
 These hooks are that layer (`js/agent/agentview.js`). They compose the hooks
 above and change none of them — `__apex` is unchanged underneath. Design,
-measurements and the research behind each decision: `docs/AGENT-WORLD-API.md`.
+measurements and the research behind each decision: the *Agent world API* section of this file.
 
 
 ### The surface at a glance
@@ -5381,7 +5381,7 @@ console.log(__apex.act({steer:0.2, throttle:true}, 1/60, 60))
 ```
 
 `__apex.rollout({seconds:5})` drives an interval and returns a digest rather
-than frames — see [AGENT-WORLD-API.md](AGENT-WORLD-API.md).
+than frames — see the *Agent world API* section of this file.
 
 ---
 

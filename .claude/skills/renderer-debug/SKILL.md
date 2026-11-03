@@ -1,5 +1,7 @@
 ---
 name: renderer-debug
+paths:
+  - "js/render/**"
 description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL errors, device lost, silent WebGL2 fallback, iPhone/Safari/Metal, WebXR/VR/Quest black frame. Not night washout → lighting-tuner; MAT garble → asset-pack."
 ---
 

@@ -45,7 +45,7 @@ test("headMoved warns only on a real difference", () => {
 });
 
 test("test-bg accepts --grep (both spellings) and quotes it for sh -c", () => {
-  const greps = [["--spec", "tests/specs/abudhabi-foundation.spec.js", "--grep", "pit stop"], ["--grep=a|b", "smoke"], ["smoke"]].map((a) => parseTestBgArgv(a).grep);
+  const greps = [["--spec", "tests/specs/abudhabi-foundation.spec.js", "--grep", "pit stop"], ["--grep=a|b", "--spec", "tests/specs/smoke.spec.js"], ["--spec", "tests/specs/smoke.spec.js"]].map((a) => parseTestBgArgv(a).grep);
   assert.deepEqual([...greps, shQuote("it's $x")], ["pit stop", "a|b", null, `'it'\\''s $x'`]);
 });
 
@@ -56,28 +56,7 @@ test("sw.js's required-lazy list is GENERATED from LAZY_CAREER_UI (no hand-edite
 
 const protect = (command, cwd) => spawnSync("python3", [path.join(ROOT, ".claude/hooks/protect-files.py")], { input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd }), encoding: "utf8", cwd });
 
-test("protect-files: a branch switch is not a generated-file edit; a file checkout still is", () => {
-  // Other hook suites create synthetic live-browser processes under ROOT.
-  // Use a separate repository so their sibling fixtures cannot change which
-  // guard answers this generated-file classification test.
-  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
-  const fixture = fs.mkdtempSync(path.join(ROOT, "artifacts", "checkout-hook-"));
-  try {
-    const init = spawnSync("git", ["init", "-q"], { cwd: fixture, encoding: "utf8" });
-    assert.equal(init.status, 0, init.stdout + init.stderr);
-    fs.mkdirSync(path.join(fixture, "js"));
-    fs.writeFileSync(path.join(fixture, "version.json"), "{}\n");
-    fs.writeFileSync(path.join(fixture, "js/roster.js"), "// generated fixture\n");
-    for (const c of ["git checkout -B cursor/x origin/claude/f1-game-project-26h3ng", "git switch -c cursor/x origin/y", "git checkout -B version.json origin/x", "git checkout -fB cursor/x HEAD"]) {
-      const r = protect(c, fixture);
-      assert.equal(r.status, 0, `${c}\nstatus=${r.status}\n${r.stderr}`);
-    }
-    for (const c of ["git checkout -- version.json", "git checkout HEAD -- js/roster.js"]) {
-      const r = protect(c, fixture);
-      assert.ok(r.status === 2 && r.stderr.includes("GENERATED"), `${c}\nstatus=${r.status}\n${r.stderr}`);
-    }
-  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
-});
+// protect-files reads Write/Edit only since 2026-11-03 (plan §4.7): the Bash-write classification test went with the shell parser.
 
 test("protect-files: MAIN may edit shared-contract files under a subdirectory; linked worktrees remain protected", () => {
   // git prints --git-dir absolute but --git-common-dir relative ("../../.git")
@@ -122,22 +101,4 @@ test("protect-files: MAIN may edit shared-contract files under a subdirectory; l
   } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });
 
-test("stop-guard stays silent while a `test-bg --wait` task is live; nudges (exit 2) over a bare live run", async () => {
-  const tmp = path.join(ROOT, "artifacts", "tmp-stop-guard-test");
-  fs.mkdirSync(tmp, { recursive: true });
-  const idle = "setTimeout(() => {}, 20000);\n";
-  fs.writeFileSync(path.join(tmp, "test-bg.mjs"), idle);
-  fs.writeFileSync(path.join(tmp, "run-playwright.mjs"), idle);
-  const env = { ...process.env, CLAUDE_PROJECT_DIR: ROOT };
-  const hook = () => { fs.rmSync(path.join(ROOT, "artifacts/.stop-guard"), { recursive: true, force: true }); return spawnSync("bash", [path.join(ROOT, ".claude/hooks/stop-guard.sh")], { input: "{}", encoding: "utf8", env }); };
-  const run = spawn(process.execPath, [path.join(tmp, "run-playwright.mjs")], { cwd: ROOT, stdio: "ignore" });
-  let waiter;
-  try {
-    await new Promise((r) => setTimeout(r, 300));
-    assert.equal(hook().status, 2, "a live run with no waiter is nudged");
-    waiter = spawn(process.execPath, [path.join(tmp, "test-bg.mjs"), "--wait", "--timeout", "45"], { cwd: ROOT, stdio: "ignore" });
-    await new Promise((r) => setTimeout(r, 300));
-    const r = hook();
-    assert.deepEqual([r.status, r.stderr], [0, ""]);
-  } finally { run.kill(); waiter?.kill(); fs.rmSync(tmp, { recursive: true, force: true }); fs.rmSync(path.join(ROOT, "artifacts/.stop-guard"), { recursive: true, force: true }); }
-});
+// stop-guard.sh was deleted 2026-11-03 with the local browser runs it watched (plan §4.2 / §4.7).

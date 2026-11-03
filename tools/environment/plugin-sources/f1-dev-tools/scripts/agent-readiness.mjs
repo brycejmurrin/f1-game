@@ -37,7 +37,7 @@ export function inspectAgents(names = null) {
     },
     serviceChecks: "NOT_RUN",
     limits: ["Native team controls do not address arbitrary chats or external sessions.",
-      "Cross-session state lives on GitHub (issues, labels, PR bodies, comments; the repo's docs/WORKERS.md); none of it launches or wakes a worker.",
+      "Cross-session state lives on GitHub (issues, labels, PR bodies, comments; the repo's AGENTS.md §Coordination); none of it launches or wakes a worker.",
       "Local MCP declarations and installed skills do not prove host tool exposure."],
   };
 }

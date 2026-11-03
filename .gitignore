@@ -14,8 +14,10 @@
 node_modules/
 node_modules
 # Regenerable output
-scratch/
-artifacts/
+scratch/*
+!scratch/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
 # Generated galleries and screenshot runs are published as release assets.
 # Keep the gallery builders in tools/ tracked; these are root output folders.
 /gallery/

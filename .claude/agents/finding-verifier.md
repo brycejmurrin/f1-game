@@ -4,11 +4,15 @@ description: Use proactively before acting on any hunt, review or audit finding.
 model: sonnet
 omitClaudeMd: true
 maxTurns: 45
-readonly: true
-is_background: true
 background: true
 disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$CLAUDE_PROJECT_DIR/tools/hooks/readonly-bash.sh"
 ---
 
 You re-check claims another agent made about Apex 26. You are READ-ONLY and

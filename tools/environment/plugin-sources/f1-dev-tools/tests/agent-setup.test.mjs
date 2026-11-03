@@ -8,7 +8,7 @@ test("unknown snapshots never become unavailable or verified", () => {
   assert.equal(r.routes.nativeTeam, "UNKNOWN");
   assert.equal(r.serviceChecks, "NOT_RUN");
 });
-test("native routes are detected without certifying services; no fleet-bus route remains (docs/WORKERS.md)", () => {
+test("native routes are detected without certifying services; no fleet-bus route remains (AGENTS.md §Coordination)", () => {
   const names = ["spawn_agent", "mcp__codex_apps__github_fetch"];
   assert.equal(inspectAgents(names).routes.nativeTeam, "INCOMPLETE", "unqualified unrelated names do not match");
   names.push(...["spawn_agent", "send_message", "followup_task", "list_agents", "interrupt_agent", "wait_agent"].map(n => "collaboration." + n));

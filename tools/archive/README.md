@@ -14,9 +14,9 @@ ES module).
 | `ci/measure-guard-commit.mjs` | commit-through-hook time vs the bash-guard budget | `docs/archive/notes/BASH-GUARD-TIMEOUT-MEASURE-2026-10-18.md` |
 | `gen/trees/measure-tree-budget.mjs` | tree instance budget per circuit | `docs/notes/TREE-BUDGET-2026-10-19.md` |
 | `gfx/decal-bake-probe.mjs` | decal bake pool A/B on WebGL2 | `docs/archive/notes/TLX-WEBGPU-PERF-2026-10-18.md` |
-| `net/rtc-sync-probe.mjs` | host/guest WebRTC start skew | `docs/plans/skilltest-game-systems.md`; comment in `js/net/netplay.js` |
+| `net/rtc-sync-probe.mjs` | host/guest WebRTC start skew | `docs/archive/plans/skilltest-game-systems.md`; comment in `js/net/netplay.js` |
 | `perf/touch-boost-probe.mjs` | first BOOST press on touch (CDP touch events) | `docs/notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md` |
-| `perf/devicefarm-boot.mjs` | cold boot on AWS Device Farm iPhones | `docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md`, `docs/surveys/w24d-devicefarm.md` |
+| `perf/devicefarm-boot.mjs` | cold boot on AWS Device Farm iPhones | `docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md`, `docs/archive/surveys/w24d-devicefarm.md` |
 | `perf/ers-deploy-census.mjs` | pipelines built per ERS deploy press | `docs/notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md`, `docs/notes/PERFTEST-HUNT-2026-10-24.md` |
 
 Kept live although the audit listed them as note-only: `perf/devicefarm-opus-probe.mjs`

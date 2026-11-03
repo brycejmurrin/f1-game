@@ -270,6 +270,6 @@ test("gen-ladder-figures: the report is three real rows and the figures form a l
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen/gen-ladder-figures.mjs")], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^ladder: guards \d+ ⊂ tooling-fast \d+ ⊂ gate \d+ of \d+ unit files; \d+ specs\n$/);
-  assert.equal(fs.existsSync(path.join(ROOT, "docs/notes/PREPUSH-GATE-LADDER.md")) && read("docs/notes/PREPUSH-GATE-LADDER.md").includes("GENERATED: ladder"), false,
-    "the ladder note holds no generated block any more");
+  assert.equal(read("docs/VERIFICATION.md").includes("GENERATED: ladder"), false,
+    "the ladder's home (docs/VERIFICATION.md since 2026-11-03) holds no generated block");
 });

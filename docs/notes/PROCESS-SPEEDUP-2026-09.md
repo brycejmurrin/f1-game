@@ -180,7 +180,7 @@ in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
 
 ## 3. Agent surface (MCP, skills, agents)
 
-**Security first: `tools/mcp/tinyfish-mcp.sh:41` ships a tracked TinyFish API key
+**Security first: `mcp/tinyfish-mcp.sh:41` (the wrapper was deleted 2026-11-03) shipped a tracked TinyFish API key
 (`TINYFISH_KEY_FALLBACK`) and `tinyfish-mcp.test.mjs:89` asserts it is
 there.** The repo is public. Rotate the key, remove the fallback, and change
 the test to assert the fallback is ABSENT. This is a decision for the owner,

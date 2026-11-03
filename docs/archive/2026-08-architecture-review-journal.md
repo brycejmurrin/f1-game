@@ -4,7 +4,7 @@
 > the 2026-08 architecture review produced: the full defect register, the fix
 > narratives, and the measurements behind them, exactly as written. The
 > **standing review** — current defect statuses, the guard table, the backlog —
-> lives at `docs/ARCHITECTURE-REVIEW.md`; read that first.
+> lives at `docs/notes/ARCHITECTURE-REVIEW.md`; read that first.
 >
 > Statuses in this journal were live at the time of writing and are **not
 > maintained**. Several "open" items below have since been fixed and several
@@ -679,7 +679,7 @@ I looked for."**
 **Docs.** `docs/ARCHITECTURE.md` says a circuit "can destructure any of those 84
 names" two lines after correctly calling it the 107-member contract, and says
 game.js is "~6,100 lines" against a file that has never been near that since (the current figure lives in `tests/unit/module-size.test.mjs`, not here). `docs/DEBUG-HOOKS.md` and
-`docs/AGENT-WORLD-API.md` both say "~89 hooks" (the latter annotated "measured at
+`docs/DEBUG-HOOKS.md` both say "~89 hooks" (the latter annotated "measured at
 runtime") against ~180 members on the object today.
 
 Two further doc defects were reported to this review and did **not** survive

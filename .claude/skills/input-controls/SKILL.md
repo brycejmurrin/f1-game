@@ -40,8 +40,8 @@ paired stays here. Escape/focus paths → **ui-menu-a11y**.
 node --test tests/unit/key-binds.test.mjs tests/unit/ui-improve-pass.test.mjs   # node pins
 node tools/ci/test-bg.mjs --spec tests/specs/tilt-pipeline.spec.js   # ONE spec per run; swap in the one that matches:
 #   touch-buttons, touch-steer, touch-pedals, gamepad, steering, steer-migration or sliders
-# whole group (test:input, camera specs too) only if one spec is not enough: node tools/ci/remote-group.mjs input,
-# or, when Actions is jammed: node tools/ci/test-bg.mjs input (AGENTS.md verification table)
+# whole group (test:input, camera specs too) only if one spec is not enough: node tools/ci/remote-group.mjs input
+# on the pushed branch (docs/VERIFICATION.md §By change); never a local group run
 ```
 
 ## References

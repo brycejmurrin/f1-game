@@ -16,7 +16,7 @@
    plant that stretch per tree — an `along()` loop whose emitter reads the world ground per tree
    (`terrainYAt`), as `js/circuits/scenery/spa.js` does (grep `Eau Rouge / Raidillon climb is too steep`
    and `forestRank`). Never reuse one ground sample across a wide span: Trap B in `docs/SCENERY-API.md`
-   §Grounding (`docs/SCENERY-GROUNDING.md` is a redirect stub).
+   §Grounding (`docs/SCENERY-API.md` is a redirect stub).
 4. Done = SKILL.md "Grounded". If the cause is the helper itself (`js/track/scenery/*.js`), the fix hits
    every circuit: run each audit with `--all`/`--gate` plus `props-tris.cjs <id>` on a dense circuit, and
    name the unrun ones in the PR.

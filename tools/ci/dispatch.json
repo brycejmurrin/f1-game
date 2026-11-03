@@ -1,22 +1,19 @@
 {
   "pause": false,
   "maxLaunchesPerRun": 4,
-  "maxLiveWorkers": { "claude": 8, "cursor": 1 },
+  "maxLaunchesPerDay": 24,
+  "maxLiveWorkers": 8,
   "landQueueMax": 15,
   "workerCostCapUsd": 10,
   "workerStopAtK": 300,
   "staleHours": { "default": 2, "codex": 6 },
   "launchClaimHours": 2,
-  "archiveAfterMinutes": 10,
-  "lockHours": 3,
   "foreignHours": 2,
-  "nudgeIdleMinutes": 20,
+  "nudgeAfterMinutes": 45,
   "nudgeEveryMinutes": 60,
-  "recentClosedHours": 48,
-  "model": "claude-sonnet-5-5",
   "deployBranch": "claude/f1-game-project-26h3ng",
   "repo": "brycejmurrin/f1-game",
+  "owner": "brycejmurrin",
   "boardIssueTitle": "Board",
-  "dispatchIssueTitle": "Dispatch",
-  "hosts": { "cursor": { "enabled": false, "model": "composer-2.5" } }
+  "dispatchIssueTitle": "Dispatch"
 }

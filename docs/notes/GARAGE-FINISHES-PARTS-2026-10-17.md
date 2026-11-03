@@ -58,7 +58,7 @@ Findings from the sheet:
 ## 3. Finishes: gap vs real motorsport and candidates
 
 Cost model: every candidate is **ALU in the existing per-id branch, no new texture, no new draw call, no new uniform**
-unless noted. Phone budget: there is no per-finish number documented in the repo (`docs/RENDERERS.md` /
+unless noted. Phone budget: there is no per-finish number documented in the repo (`docs/ARCHITECTURE.md` /
 `PERF-FINDINGS.md` carry none), so the rule used here is *a finish may add a vertex-id branch and ≤ ~12 ALU ops in the
 near field (fade to the base colour beyond ~26 m like the weave/brush fades), no extra texture fetch, no extra shader
 variant*. The three backends branch on an id inside one uber-shader, so ids add code size, not variants.

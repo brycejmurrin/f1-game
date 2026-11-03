@@ -49,7 +49,7 @@ Things the critique predicted would hurt, which measured clean:
 
 - **No horizontal overflow anywhere.** Not one cell, at any scale, on any shape.
 - **No WCAG 2.5.8 failures.** Zero controls under 24 CSS px across 38 screens.
-- **The rotated monitor is clean** — the cell `docs/LAYOUT-AUDIT.md` says "keeps
+- **The rotated monitor is clean** — the cell `docs/COMPONENTS.md` says "keeps
   finding bugs" found nothing this time.
 - **`data-shape` resolves correctly everywhere** it is consumed.
 - **The scroll-fade system works.** The lighting tuner's rail *looks* clipped in

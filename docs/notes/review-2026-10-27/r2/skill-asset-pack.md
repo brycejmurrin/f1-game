@@ -10,7 +10,7 @@ WALKTHROUGH ("asphalt looks garbled on TLX, check the MAT layer"):
 STRUCTURE:
 - Size is fine and the detail sits one level deep. The longest line is workflow.md:36 (~130 chars).
 - The bake denial is said 4 times: SKILL.md:26-29, :50, workflow.md:44, :64. Keep SKILL.md:26-29 and cut the rest down to "(Bryce runs it)".
-- The description is imperative ("Use when …"), not third person. It lacks the words users actually type: "garbled", "tarmac", "asphalt", "texture array". The routing queries (tests/data/skill-routing/queries/asset-pack.json:7) use "tarmac … garbled". README.md:35 has "garbled", but the description does not.
+- The description is imperative ("Use when …"), not third person. It lacks the words users actually type: "garbled", "tarmac", "asphalt", "texture array". The routing queries (skill-routing/queries/ (deleted 2026-11-03) asset-pack.json:7) use "tarmac … garbled". README.md:35 has "garbled", but the description does not.
 - workflow.md:17-19 overclaims that `assets-pack.test.mjs` "names each site". The test (:1153-1165) checks glsl `uMatTexScale[17]`, GLX/WGX `MAT_TEX_LAYERS`, and the TLX uniformArray and loop. It does NOT check `clamp(...,16.0)` (tsl-lit.js:1002), WGSL `mid > 16` (wgsl-chunks.js:101,142), WGSL `MatScaleU array<vec4<f32>,5>` (:584), or assets.js `MAT_LAYERS = 17` (:14).
 - SKILL.md:37 / workflow.md:140 give tier as `low`/`high` only. assets.js:24,742 also produce `"off"` and `"browser-bake"` (from `adopt()`), and a reader seeing "browser-bake" has no guidance.
 - workflow.md:121-123 "pinned in the updated asset/renderer contracts" is vague. It names no file.

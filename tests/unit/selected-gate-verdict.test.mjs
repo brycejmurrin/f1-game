@@ -27,12 +27,15 @@ test("success and skipped plans pass", () => {
   const empty = selectedGateVerdict({ ...base, selected: "skipped" });
   assert.equal(empty.ok, true);
   assert.match(empty.reason, /empty plan is a pass/);
+  // A draft runs the selected legs on a 5-min budget (2026-11-03): an empty plan is the same pass there,
+  // and a dropped spec is a warning, not a red (the ready run or remote-group.mjs runs it).
   for (const dropped of ["0", "2"]) {
     const draft = selectedGateVerdict({ ...base, selected: "skipped", draft: "true", dropped });
     assert.equal(draft.ok, true);
-    assert.equal(draft.reason, "draft PR: selected legs skipped (ready_for_review runs them)");
+    assert.match(draft.reason, dropped === "0" ? /empty plan is a pass/ : /the plan had no jobs/);
     assert.equal(draft.infraRetry, false);
     assert.equal(Boolean(draft.warn), dropped !== "0");
+    if (dropped !== "0") assert.match(draft.warn, /draft plan \(5-min budget\) dropped 2 routed spec/);
   }
 });
 
@@ -66,7 +69,9 @@ test("dropped routed specs still red off the train, even when selected succeeded
   const v = selectedGateVerdict({ ...base, dropped: "3" });
   assert.equal(v.ok, false);
   assert.match(v.reason, /dropped 3/);
-  assert.equal(selectedGateVerdict({ ...base, dropped: "2", draft: "true" }).ok, false);
+  const draft = selectedGateVerdict({ ...base, dropped: "2", draft: "true" });
+  assert.equal(draft.ok, true, "a draft's 5-min plan warns on a dropped spec; the ready run reds on it");
+  assert.match(draft.warn, /dropped 2 routed spec/);
   assert.equal(selectedGateVerdict({ ...base, selected: "skipped", dropped: "2" }).ok, false);
 });
 

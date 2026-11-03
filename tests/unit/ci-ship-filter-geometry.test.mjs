@@ -9,8 +9,7 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
-import { ciWorkflow, evalTemplate, LABEL_NOISE, EDIT_NOISE, LABEL_OK, EDIT_OK } from "../helpers/ci-workflow.mjs";
-import { hasCiRunMarker } from "../../tools/ci/queue-depth.mjs";
+import { ciWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
 
 test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
   const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "shipfilter");
@@ -91,137 +90,82 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
   }
 });
 
-// #2179 / #2184 (2026-10-15): the two triggers that queued CI for nothing.
-test("ci.yml runs on PRs into the deploy branch only, and a label event other than run-ci on a draft runs nothing", () => {
+// #2179 (2026-10-15) and the trigger reset (2026-11-03, docs/plans/2026-11-03-agent-surface-reset.md §4.2): PRs into
+// the deploy branch only, four event types, and no label or body-marker gate left anywhere in the workflow.
+test("ci.yml runs on PRs into the deploy branch only, on four event types, with no run-ci gate left anywhere", () => {
   const wf = parseYAML(ciWorkflow);
   // #2179: `branches` on pull_request filters the BASE. Survey PRs into
   // track-survey-assets started the full ready tier seconds before merging.
   assert.deepEqual(wf.on.pull_request.branches, ["claude/f1-game-project-26h3ng"],
     "pull_request must be scoped to PRs whose base is the deploy branch");
   assert.equal(wf.on.pull_request["branches-ignore"], undefined);
-  assert.ok(wf.on.pull_request.types.includes("labeled"), "run-ci on a draft still needs the labeled trigger");
-  // #2184: the label-noise predicate, written once per place it is used; the BODY MARKER's edit noise (2026-10-26)
-  // rides beside it everywhere.
-  const NOISE = LABEL_NOISE;
-  // 1. Its own group, BEFORE the head-ref term: it can never cancel the PR's live run.
-  const group = wf.concurrency.group;
-  assert.ok(group.includes(`${NOISE} && format('label-{0}', github.run_id))`), "a label-noise run gets a throwaway group");
-  // (The edit-noise group's VALUE is evaluated in the BODY MARKER test below: `ci-edit-<run_id>`.)
-  for (const n of [NOISE, EDIT_NOISE]) {
-    assert.ok(group.indexOf(n) < group.indexOf("github.event.pull_request.head.ref"), "the throwaway group must win over the head ref");
-    assert.ok(group.indexOf("inputs.concurrency_key") < group.indexOf(n), "a Pages call's key still comes first");
-  }
-  // 2. Every job skips on it (skipped jobs take no runner), so the run ends in seconds.
+  // `labeled` and `edited` existed for the run-ci opt-in (#2184 and its `CI: run` body-line twin); every other
+  // label or Plan tick then started a run every job had to skip and rename (~147 noise runs a day, measured
+  // 2026-10-30 → 11-03). A draft push runs unconditionally now, so the types are the four that carry a head.
+  assert.deepEqual(wf.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
+  assert.equal(wf["run-name"], undefined, "no `CI ignored:` run titles: there is no noise run left to title");
+  assert.equal(wf.concurrency.group,
+    "ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}",
+    "a Pages call's key, then run_id for dispatch/schedule, then the PR branch — no label-/edit-noise groups");
+  assert.equal(wf.jobs["draft-ci-skipped"], undefined, "the opt-out notice job is gone: a draft push runs");
+  // Nothing a job evaluates names the label, the marker, the label payload or the edit payload any more.
   for (const [id, job] of Object.entries(wf.jobs)) {
-    const cond = String(job.if || "");
-    // The skip notice's edit clause is evaluated below (no notice on any edit).
-    if (id === "draft-ci-skipped") assert.ok(cond.includes("github.event.action != 'labeled'"), "the skip notice is not re-posted by a label event");
-    // ci-verdict RUNS on a label event (P9: a skipped job's check-run is named by
-    // the raw expression); its work steps carry LABEL_OK instead, and the test
-    // below proves its evaluated name is never the required `CI` there.
-    else if (id === "ci-verdict") assert.ok(job.steps.filter((st) => st.run && /ci-verdict\.mjs/.test(st.run)).every((st) => String(st.if).includes(`${LABEL_OK} && ${EDIT_OK}`)));
-    else assert.ok(cond.includes(`${LABEL_OK} && ${EDIT_OK}`), `job ${id} must skip a label event other than run-ci on a draft, and a body edit that does not newly add the CI: run line`);
+    const evaluated = JSON.stringify([job.if, job.name, job.steps.map((st) => [st.if, st.env, st.run])]);
+    for (const relic of ["run-ci", "CI ignored", "opted out", "github.event.label", "github.event.changes"])
+      assert.ok(!evaluated.includes(relic), `job ${id} still carries the retired gate vocabulary: ${relic}`);
   }
-  // 3. A skipped job reports SUCCESS, so the noise run's verdict must not carry the required name.
-  assert.ok(wf.jobs["ci-verdict"].name.startsWith(`\${{ ${NOISE} && 'CI label event (ignored)' || ${EDIT_NOISE} && 'CI edit event (ignored)' || `));
-  assert.ok(wf.jobs["ci-verdict"].name.endsWith("|| 'CI' }}"));
-  // 4. Tools drop it by title (ci-watch.mjs labelNoiseRun, reuse-draft-fast.sh).
-  assert.equal(wf["run-name"], `\${{ ${NOISE} && format('CI ignored: label {0}', github.event.label.name) || ${EDIT_NOISE} && 'CI ignored: edit' || '' }}`);
+  // The ready_for_review reuse still refuses a green run whose tooling A shard did not run and pass.
   const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
-  assert.ok(reuse.includes("^CI ignored: /") && reuse.includes('"Structural guards (tooling A)"'),
-    "a green run whose tooling A did not run is never reused as the fast tier");
-  // run-ci is a documented label, and the docs say what it buys (no selected browser specs on a draft).
-  const labels = JSON.parse(fs.readFileSync(new URL("../../.github/labels.json", import.meta.url), "utf8"));
-  assert.ok(labels.some((l) => l.name === "run-ci"), ".github/labels.json documents run-ci");
-  assert.match(String(wf.jobs.selected.if), /!\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
-    "the selected legs skip every draft; the header and docs/TESTING.md say so");
+  assert.ok(reuse.includes('"Structural guards (tooling A)"') && !/run-ci|CI ignored/.test(reuse),
+    "a green run whose tooling A did not run is never reused as the fast tier; the label vocabulary is gone");
+  assert.equal(wf.jobs.selected.if, "${{ needs.select.outputs.any == 'true' }}",
+    "the selected legs run on a draft too (one 5-min shard: the budget test below)");
 });
 
-// THE BODY MARKER (Bryce 2026-10-26): Cursor workers 403 on adding a label, so a PR-body line starting `CI: run`
-// buys a draft exactly what run-ci buys. Evaluated, not just pinned: every job's `if`, the run name, the group and
-// the verdict name under each event, against the run-ci label as the reference.
-test("a `CI: run` body line opts a draft into the fast tier exactly like run-ci, and a body edit starts it only once", () => {
+// EVERY PUSH RUNS (2026-11-03). Evaluated, not pattern-matched: every job's `if`, the group, the verdict name and
+// the selected budget, for a draft push, a ready push and the ready flip.
+test("a draft push runs the fast tier plus the selected legs on a 5-min budget; ready adds the full tier under the name `CI`", () => {
   const wf = parseYAML(ciWorkflow);
-  const ctx = ({ action = "synchronize", draft = true, labels = [], body = "", label, changes } = {}) => ({
+  const ctx = ({ action = "synchronize", draft = true } = {}) => ({
     github: {
       event_name: "pull_request", run_id: 4242, ref_name: "77/merge",
-      event: { action, label: label ? { name: label } : undefined, changes,
-        pull_request: { draft, body, labels: labels.map((name) => ({ name })), head: { ref: "cursor/x" } } },
+      event: { action, pull_request: { draft, body: "", labels: [], head: { ref: "cursor/x" } } },
     },
     inputs: { fast_tier_run: "", concurrency_key: "", renderer_macos: false },
-    // The plan routes everything, so only the tier gates decide what runs.
-    needs: { select: { result: "success", outputs: { any: "true", any_node: "true", driving: "true", renderer: "true", xr: "true",
-      geometry: "true", geometry_targeted: "" } } },
+    // The plan routes everything, so only the tier gates decide what runs; the renderer and xr path
+    // questions are steps that sit out a draft (ci-gate-selection pins their `if`), so their outputs are
+    // empty there, and empty reads as "do not run" in both jobs.
+    needs: { select: { result: "success", outputs: { any: "true", any_node: "true", driving: "true", renderer: draft ? "" : "true",
+      xr: draft ? "" : "true", geometry: "true", geometry_targeted: "" } } },
   });
+  const budgetEnv = wf.jobs.select.steps.find((st) => st.id === "sel").env.BUDGET_MIN;
   const view = (c) => {
     const jobs = {};
     for (const [id, job] of Object.entries(wf.jobs)) jobs[id] = Boolean(job.if === undefined ? true : evalTemplate(String(job.if), c));
-    return { jobs, runName: evalTemplate(wf["run-name"], c), group: evalTemplate(wf.concurrency.group, c),
-      verdict: evalTemplate(wf.jobs["ci-verdict"].name, c) };
+    return { jobs, group: evalTemplate(wf.concurrency.group, c), verdict: evalTemplate(wf.jobs["ci-verdict"].name, c),
+      budget: evalTemplate(budgetEnv, c) };
   };
-  const ran = (v) => Object.entries(v.jobs).filter(([, on]) => on).map(([id]) => id).sort();
-  const MARK = "## Goal\r\nShip it.\r\nCI: run\r\n\r\n## Plan\r\n- [ ] a";
-
-  // Reference points.
-  const bare = view(ctx());
-  // ci-verdict runs on every non-cancelled run (audit4 D1 P9) and reports under an evaluated name, never `CI`, where it does no work.
-  assert.deepEqual(ran(bare), ["ci-verdict", "draft-ci-skipped"], "a draft with neither runs only the skip notice and the always-on aggregator");
-  assert.equal(bare.verdict, "CI draft (opted out)");
-  const label = view(ctx({ labels: ["run-ci"] }));
-  assert.ok(label.jobs["guards-a"] && label.jobs.select && label.jobs["driving-model"], "run-ci gives the fast tier");
-  assert.ok(!label.jobs["node-suites"] && !label.jobs.selected && !label.jobs.smoke, "...and nothing of the full tier");
-
-  // 1. Marker present on a push: the SAME job set as the label, the same name and group.
-  for (const body of [MARK, "CI: run", "ci: RUN please\n"]) {
-    assert.deepEqual(view(ctx({ body })), label, `body ${JSON.stringify(body)} must equal run-ci exactly`);
-    assert.ok(hasCiRunMarker(body), "queue-depth's mirror agrees");
-  }
-  assert.equal(label.verdict, "CI (draft fast tier)", "a draft never supplies the required `CI` name");
-  // 2. Marker absent or only quoted mid-line: the same as a bare draft.
-  for (const body of ["Put `CI: run` in the body", "  CI: run", "xCI: run", null, ""]) {
-    assert.deepEqual(view(ctx({ body })), bare, `body ${JSON.stringify(body)} is not the marker`);
-    assert.ok(!hasCiRunMarker(body), "queue-depth's mirror agrees");
-  }
-  // 3. A ready PR: the marker changes nothing (full tier either way).
+  const on = (v) => Object.entries(v.jobs).filter(([, x]) => x).map(([id]) => id).sort();
+  const draft = view(ctx());
+  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "lints", "sweeps-parts", "select", "selected", "selected-verdict", "driving-model", "ci-verdict"])
+    assert.ok(draft.jobs[id], `a draft push runs ${id}`);
+  for (const id of ["node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr", "train-twins", "baseline-trial"])
+    assert.ok(!draft.jobs[id], `a draft push does not run ${id} (ready_for_review does)`);
+  assert.equal(draft.verdict, "CI (draft fast tier)", "a draft never supplies the required `CI` name (#2664)");
+  assert.equal(draft.group, "ci-cursor/x", "a draft push replaces the PR's live run");
+  assert.equal(draft.budget, "5", "one ~5-min selected shard on a draft");
+  for (const action of ["opened", "synchronize", "reopened"]) assert.deepEqual(view(ctx({ action })), draft, `${action}: the same draft tier`);
   for (const action of ["synchronize", "ready_for_review"]) {
     const ready = view(ctx({ action, draft: false }));
-    assert.deepEqual(view(ctx({ action, draft: false, body: MARK })), ready, `ready ${action}: the marker is inert`);
     assert.equal(ready.verdict, "CI");
-    assert.ok(ready.jobs.selected && ready.jobs["node-suites"], "ready is the full tier");
+    assert.equal(ready.budget, "", "ready keeps select-specs' default budget");
+    for (const id of on(draft)) assert.ok(ready.jobs[id], `ready still runs ${id}`);
+    for (const id of ["node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr"]) assert.ok(ready.jobs[id], `ready runs ${id}`);
+    assert.equal(ready.group, "ci-cursor/x");
   }
-
-  // 4. `edited`: the ONE edit that gives a draft without run-ci the marker starts the fast tier in the PR's group.
-  const gained = view(ctx({ action: "edited", body: MARK, changes: { body: { from: "## Goal\r\nShip it." } } }));
-  assert.deepEqual(gained.jobs, label.jobs, "the gaining edit runs exactly run-ci's jobs");
-  assert.equal(gained.runName, "");
-  assert.equal(gained.group, "ci-cursor/x", "it replaces the PR's live run like a push");
-  assert.equal(gained.verdict, "CI (draft fast tier)");
-  const fromNull = view(ctx({ action: "edited", body: "CI: run", changes: { body: { from: null } } }));
-  assert.deepEqual(fromNull.jobs, label.jobs, "a first body (from null) that carries the marker starts it");
-
-  // 5. Every other edit is noise: nothing runs, a throwaway group (never cancels the live run), a non-`CI` name.
-  const noise = [
-    ["a Plan tick with the marker already there", { body: MARK + "\r\n- [x] b", changes: { body: { from: MARK } } }],
-    ["a title-only edit (no changes.body)", { body: MARK, changes: { title: { from: "old" } } }],
-    ["a base change", { body: MARK, changes: { base: { ref: { from: "x" }, sha: { from: "y" } } } }],
-    ["a Plan edit on a draft without the marker", { body: "## Plan\r\n- [x] a", changes: { body: { from: "## Plan\r\n- [ ] a" } } }],
-    ["the marker removed", { body: "## Plan", changes: { body: { from: MARK } } }],
-    ["the marker added on a ready PR", { draft: false, body: MARK, changes: { body: { from: "" } } }],
-    ["the marker added while run-ci is already on", { labels: ["run-ci"], body: MARK, changes: { body: { from: "" } } }],
-  ];
-  for (const [why, o] of noise) {
-    const v = view(ctx({ action: "edited", ...o }));
-    assert.deepEqual(ran(v), ["ci-verdict"], `${why}: every job but the always-on aggregator skips`);
-    assert.equal(v.runName, "CI ignored: edit", `${why}: titled for labelNoiseRun`);
-    assert.equal(v.group, "ci-edit-4242", `${why}: its own group`);
-    assert.equal(v.verdict, "CI edit event (ignored)", `${why}: never the required name`);
-  }
-  // The label path is unchanged: run-ci on a draft starts the fast tier, any other label is noise.
-  assert.deepEqual(view(ctx({ action: "labeled", label: "run-ci", labels: ["run-ci"] })).jobs, label.jobs);
-  const bug = view(ctx({ action: "labeled", label: "bug", labels: ["bug"], body: MARK }));
-  assert.deepEqual(ran(bug), ["ci-verdict"], "a non-run-ci label: only the always-on aggregator, named for the noise");
-  assert.equal(bug.runName, "CI ignored: label bug");
-  assert.equal(bug.group, "ci-label-4242");
+  // The nightly keeps its 60-min budget; a dispatch and the train keep select-specs' default.
+  assert.equal(evalTemplate(budgetEnv, { github: { event_name: "schedule", event: {} }, inputs: { concurrency_key: "" } }), "60");
+  assert.equal(evalTemplate(budgetEnv, { github: { event_name: "workflow_dispatch", event: {} }, inputs: { concurrency_key: "" } }), "");
 });
 
 test("geometry planning avoids empty fanout without guessing an unknown diff is empty", () => {
@@ -279,10 +223,10 @@ test("geometry rollup accepts only successful shards or a proven empty plan", ()
   assert.match(job.if, /needs\.select\.result == 'success'/, "a broken planner must not bless skipped shards");
 });
 
-test("draft opt-out and cancellation diagnostics preserve truthful checks and evidence", () => {
+test("cancellation diagnostics preserve truthful checks and evidence", () => {
   const jobs = parseYAML(ciWorkflow).jobs;
-  assert.match(jobs["sweeps-parts"].if, /!github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)/);
-  assert.match(jobs["ci-verdict"].name, /CI draft \(opted out\)/);
+  assert.equal(jobs["sweeps-parts"].if, undefined, "the census runs on every event, a draft push included (2026-11-03)");
+  assert.match(jobs["ci-verdict"].name, /CI \(draft fast tier\)/);
   for (const id of ["smoke", "driving-model", "xr"]) {
     const upload = jobs[id].steps.find((s) => s.name === "Failure artifacts");
     assert.equal(upload.if, "failure() || cancelled()", `${id} must keep cancellation diagnostics`);
@@ -313,39 +257,25 @@ test("every tools/ci/*.sh is cited by a workflow, another tool or a test", () =>
   assert.deepEqual(orphans, [], `orphan step scripts (nothing runs them): ${orphans.join(", ")}`);
 });
 
-test("ci-verdict always reports under an evaluated name, and never `CI` where it does no work (P9, #2664)", () => {
-  // GitHub names a SKIPPED job's check-run by the raw `name:` text, so the
-  // aggregator runs on every non-cancelled run. The invariant that makes that
-  // safe: wherever its work steps are off (a label event, a draft without
-  // run-ci), the evaluated name is not exactly "CI", so the required check
-  // stays pending rather than reporting success. Evaluated, not pattern-matched:
-  // both expressions are taken from the YAML and run over every event shape.
+test("ci-verdict always reports under an evaluated name: `CI (draft fast tier)` on a draft, `CI` everywhere else (P9, #2664)", () => {
+  // GitHub names a SKIPPED job's check-run by the raw `name:` text, so the aggregator runs on every non-cancelled
+  // run and its one work step carries no gate of its own; a draft's success must never satisfy the required
+  // check, so only the evaluated name separates the tiers. Evaluated over every event shape.
   const job = parseYAML(ciWorkflow).jobs["ci-verdict"];
-  assert.equal(job.if, "${{ !cancelled() }}", "the aggregator must not skip on a label event or an opted-out draft");
+  assert.equal(job.if, "${{ !cancelled() }}", "the aggregator must not skip");
   const work = job.steps.find((st) => st.run && /ci-verdict\.mjs/.test(st.run));
-  const noop = job.steps.find((st) => /No verdict for a label event/.test(st.name || ""));
-  assert.ok(work && noop, "the aggregate step and the no-op step");
-  // The YAML expressions run through the shared evaluator (contains/format/fromJSON for the tip's `CI: run` body routing).
-  const js = (expr) => (ev, act, lbl, draft, runCi) => evalTemplate(String(expr), {
-    github: { event_name: ev, event: { action: act, label: lbl ? { name: lbl } : undefined, changes: undefined,
-      pull_request: ev === "pull_request" ? { draft, body: "", labels: runCi ? [{ name: "run-ci" }] : [] } : undefined } },
-    inputs: { fast_tier_run: "" },
-  });
-  const name = js(job.name), works = js(work.if), idle = js(noop.if);
+  assert.ok(work && work.if === undefined, "the aggregate step runs on every run it is part of");
+  assert.ok(!job.steps.some((st) => /No verdict for a label event/.test(st.name || "")), "no label-event no-op step is left");
+  const name = (ev, act, draft) => evalTemplate(String(job.name),
+    { github: { event_name: ev, event: { action: act, pull_request: ev === "pull_request" ? { draft } : undefined } } });
   let cases = 0;
   for (const ev of ["pull_request", "push", "workflow_dispatch", "schedule"])
-    for (const act of ev === "pull_request" ? ["opened", "synchronize", "ready_for_review", "labeled"] : [undefined])
-      for (const draft of ev === "pull_request" ? [true, false] : [undefined])
-        for (const runCi of ev === "pull_request" ? [true, false] : [false])
-          for (const lbl of act === "labeled" ? ["run-ci", "bug"] : [undefined]) {
-            if (act === "labeled" && lbl === "run-ci" && !runCi) continue;   // the label just added is on the PR
-            cases++;
-            const n = name(ev, act, lbl, draft, runCi), w = !!works(ev, act, lbl, draft, runCi);
-            assert.equal(!!idle(ev, act, lbl, draft, runCi), !w, `exactly one of the two steps runs (${ev}/${act}/${lbl}/draft=${draft}/run-ci=${runCi})`);
-            if (!w) assert.notEqual(n, "CI", `a run that does no verdict work must not be named CI: ${ev}/${act}/${lbl}/draft=${draft}`);
-            if (ev === "pull_request" && draft) assert.notEqual(n, "CI", "a draft never reports the required name (#2664)");
-            if (w && !(ev === "pull_request" && draft)) assert.equal(n, "CI", `a real non-draft run is named CI: ${ev}/${act}`);
-            assert.ok(!/\$\{\{/.test(n), "an evaluated name");
-          }
-  assert.ok(cases >= 20, `${cases} event shapes`);
+    for (const act of ev === "pull_request" ? ["opened", "synchronize", "reopened", "ready_for_review"] : [undefined])
+      for (const draft of ev === "pull_request" ? [true, false] : [undefined]) {
+        cases++;
+        const n = name(ev, act, draft);
+        assert.equal(n, ev === "pull_request" && draft ? "CI (draft fast tier)" : "CI", `${ev}/${act}/draft=${draft}`);
+        assert.ok(!/\$\{\{/.test(n), "an evaluated name");
+      }
+  assert.equal(cases, 11, "every event shape");
 });

@@ -511,14 +511,14 @@ test("node jobs count: tooling-fast FAIL blocks become first-try fails on the un
     "2026-10-26T16:28:01.0Z [tooling-fast] FAIL  135/225 tests/unit/census-verdict.test.mjs duration=3.1s exit=1 loadavg=6.60",
     "2026-10-26T16:28:01.1Z [tooling-fast]   | not ok 11 - census gate repo cleans up",
     "2026-10-26T16:28:01.2Z [tooling-fast]   | ok 12 - something else",
-    "2026-10-26T16:28:02.0Z [tooling-fast] FAIL  5/225 tests/unit/safety-bans-hook.test.mjs duration=84s exit=1",
+    "2026-10-26T16:28:02.0Z [tooling-fast] FAIL  5/225 tests/unit/cross-tool-guards.test.mjs duration=84s exit=1",
     "2026-10-26T16:28:02.1Z [tooling-fast]   | not ok 5 - deny beats allow",
     "2026-10-26T16:28:03.0Z [tooling-fast] bail: 135 of 225 file(s) not started",
     "2026-10-26T16:28:03.1Z   | not ok 9 - an unattributed TAP line is ignored",
   ].join("\n");
   assert.deepEqual(parseNodeLogFails(log, 7), [
     { spec: "tests/unit/census-verdict.test.mjs", title: "census gate repo cleans up", kind: "fail", runId: 7 },
-    { spec: "tests/unit/safety-bans-hook.test.mjs", title: "deny beats allow", kind: "fail", runId: 7 },
+    { spec: "tests/unit/cross-tool-guards.test.mjs", title: "deny beats allow", kind: "fail", runId: 7 },
   ]);
   // NODE_JOB / BROWSER_JOB are the subject here: every job name is classified exactly once.
   const names = ["Structural guards (tooling B)", "Pure-node unit suites (vm-a1)", "ci / Parts option-resolution census", "Smoke (page boots, __apex responds)", "Selected specs (change-aware gate) (selected-2)"];

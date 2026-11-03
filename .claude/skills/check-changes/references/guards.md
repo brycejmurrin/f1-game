@@ -45,13 +45,10 @@ generated readers and executable changes follow the code gates below.
    node tools/ci/tooling-fast.mjs --changed --jobs=3
    ```
    Run it in the background with `--jobs=3` (AGENTS.md rule 4; the default is 1). It is the
-   worker's local floor (docs/WORKERS.md §3, with one spec); the PR's CI tiers
-   run the full ladder (AGENTS.md rule 3).
+   local floor (AGENTS.md rule 3); the PR's CI tiers run the full ladder.
    Docs/skills/tools edits: `--changed` selects the docs-integrity family.
-   Smoke + load order when you touched `index.html` or `tools/manifest.cjs`:
-   ```sh
-   node tools/ci/tooling-fast.mjs --changed && node tools/ci/test-bg.mjs smoke
-   ```
+   Smoke + load order when you touched `index.html` or `tools/manifest.cjs`: the `smoke` group runs on the
+   pushed PR (`node tools/ci/remote-group.mjs smoke` for the whole group).
    `test:tooling` also runs the slow full-fleet sweeps — reserve that for
    geometry pushes.
 
@@ -78,7 +75,7 @@ Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
 
 Push your `cursor/<topic>-<hash>` branch, never the deploy branch
 `claude/f1-game-project-26h3ng` (refused). Clear the local floor
-(docs/WORKERS.md §3) first, then commit + `git push -u origin <branch>`.
+(AGENTS.md rule 3) first, then commit + `git push -u origin <branch>`.
 
 ## Coverage and structured results
 
