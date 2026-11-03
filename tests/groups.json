@@ -158,6 +158,7 @@
     "tests/unit/car-multi-shot-tools.test.mjs",
     "tests/unit/car-presentation-canary.test.mjs",
     "tests/unit/car-presentation-vm.test.mjs",
+    "tests/unit/car-warm-token.test.mjs",
     "// W13d (#3414): STYLE Arc Script / Raised Letters sidewall lettering ΔHaus ≥ 20 mm vs medium/soft. ~2 s.",
     "tests/unit/car-wheels-w13d.test.mjs",
     "tests/unit/car-wing-foil.test.mjs",
