@@ -3649,6 +3649,22 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/shot/garage-video-checks.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/shot/garage-video.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--limit",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/shot/gen-scenery-locations.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
