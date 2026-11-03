@@ -1921,20 +1921,25 @@ test('garage engine speed retains scalar samples across mirrored or narrowed lan
 });
 // ── STYLE quick-picks and the race-aware AFTER THE RACE (2026-10-30 lane: garage further) ──
 test('STYLE quick-picks lay a whole look over the saved settings and leave crews, timing and the shipped default alone', () => {
-  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary', 'showcase', 'nightshift']);
+  // Moods the STYLES reference (rain / goldenhour / night / …) must exist so light round-trips.
+  context.GarageScene = {
+    MOODS: { shipped: {}, showroom: {}, broadcast: {}, goldenhour: {}, endurance: {}, rain: {}, night: {}, inspection: {} },
+    CUES: ['lightsup', 'spotsweep', 'flashes', 'pulse', 'beacon'],
+  };
+  assert.deepEqual(Object.keys(Arrival.STYLES), ['broadcast', 'cinema', 'documentary', 'showcase', 'nightshift', 'rainready', 'heritage', 'qualify']);
   for (const id of Object.keys(Arrival.STYLES)) {
     const v = Arrival.applyStyle({ enterCrew: 'current', speed: 2, door: 3.5 }, id);
     assert.deepEqual([v.enterCrew, v.speed, v.door], ['current', 2, 3.5], `${id}: crews and timing stay the player's`);
     for (const [k, want] of Object.entries(Arrival.STYLES[id].look)) if (k !== 'cue' && k !== 'light') assert.deepEqual(v[k], want, `${id}.${k}`);
   }
-  for (const id of ['cinema', 'documentary', 'showcase', 'nightshift']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
+  for (const id of ['cinema', 'documentary', 'showcase', 'nightshift', 'rainready', 'heritage', 'qualify']) assert.equal(Arrival.styleOf(Arrival.applyStyle(null, id)), id, `${id} reads back as itself`);
   assert.equal(Arrival.styleOf(null), null, 'the shipped look is no style');
   assert.deepEqual(Arrival.applyStyle(null, 'nope'), Arrival.settings(null), 'an unknown style is the saved settings');
   assert.equal(Arrival.settings(null).race, 'dry', 'PREVIEW RACE defaults to the shipped dry look');
 });
 test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
   const dom = makeDom(), doc = dom.document;
-  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {} }, CUES: ['lightsup'] } });
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {}, rain: {}, goldenhour: {}, night: {}, endurance: {} }, CUES: ['lightsup', 'spotsweep'] } });
   for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
@@ -1950,13 +1955,18 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
   assert.ok(bar, 'built in JS (index.html is at its shellNodes ceiling)');
   const kids = rows.children;
   assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
-  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT']);
+  assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT', 'RAIN READY', 'HERITAGE', 'QUALIFYING']);
   $('ga-style-cinema').onclick();
   assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
   assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
   $('ga-style-broadcast').onclick();
   assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
   assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
+  const more = ['rainready', 'heritage', 'qualify'].map((id) => {
+    $('ga-style-' + id).onclick();
+    return [id, saved.angle, saved.light];
+  });
+  assert.deepEqual(more, [['rainready', 'door', 'rain'], ['heritage', 'low', 'goldenhour'], ['qualify', 'high', 'night']]);
 });
 test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
   const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });
