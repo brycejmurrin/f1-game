@@ -258,7 +258,8 @@ const BenchCapture = (function () {
     const dev = safe(() => renderer().backend.device, null);
     if (dev) {
       on(L, dev, "uncapturederror", (e) => push(L.errors, { t: r2((now() - L.t0) / 1000), kind: "gpu", msg: clean(e && e.error && e.error.message) }, CAP.errors * 4));
-      safe(() => dev.lost.then((i) => { if (L.on) push(L.errors, { t: r2((now() - L.t0) / 1000), kind: "device-lost", msg: clean((i && i.reason) + ": " + (i && i.message)) }, CAP.errors * 4); crumb(L); }), null);
+      safe(() => dev.lost.then((i) => { if (!L.on) return;   // a loss after legEnd (the next leg's backend swap) must not re-write this leg's crumb
+        push(L.errors, { t: r2((now() - L.t0) / 1000), kind: "device-lost", msg: clean((i && i.reason) + ": " + (i && i.message)) }, CAP.errors * 4); crumb(L); }), null);
     }
     L.out.gpu.device = dev ? "webgpu" : "none";
     L.out.observers = {
