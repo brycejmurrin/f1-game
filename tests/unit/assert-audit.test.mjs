@@ -122,6 +122,43 @@ test("NO test in the default suite is vacuous outside a declared capture harness
   assert.deepEqual(bad, []);
 });
 
+// ── spec swallows are a ratchet (#4571) ─────────────────────────────────────
+// An empty `.catch(() => {})` on a wait turns its timeout into a pass: the
+// expects after it sample an unsettled page, or nothing is checked at all.
+// #4360-#4363 removed them from menu-keyboard, webgl-probes, menu-traversal,
+// ui-resize and ui-button-touch (9 swallowing tests across those files at
+// d921fd52). Outside the capture harness, a spec may only hold the swallows
+// pinned here, and a pin may only go down.
+const KNOWN_SPEC_SWALLOWS = { "tests/specs/menu-baseline.spec.js": 1 };
+
+test("no spec swallows a wait outside the capture harness and the pinned debt", () => {
+  const over = [];
+  for (const r of audit()) {
+    if (CAPTURE_HARNESSES.has(r.file)) continue;
+    const n = r.tests.filter((t) => t.swallow > 0 && !t.skipped).length;
+    if (n > (KNOWN_SPEC_SWALLOWS[r.file] || 0)) {
+      over.push(`${r.file}: ${n} swallowing test(s) at ${r.tests.filter((t) => t.swallow).map((t) => ":" + t.line).join(" ")}`);
+    }
+  }
+  assert.deepEqual(over, [],
+    "an empty .catch(() => {}) makes a wait unable to fail — let it throw, or keep its result and assert on it");
+  for (const f of ["menu-keyboard", "webgl-probes", "menu-traversal", "ui-resize", "ui-button-touch"]) {
+    const row = audit().find((r) => r.file === `tests/specs/${f}.spec.js`);
+    assert.ok(row, `tests/specs/${f}.spec.js has moved or gone`);
+    assert.equal(row.tests.filter((t) => t.swallow).length, 0, `${f}.spec.js swallows a wait again`);
+  }
+});
+
+test("the pinned spec swallows are still there — lower the pin when one is fixed", () => {
+  const rows = audit();
+  for (const [file, pin] of Object.entries(KNOWN_SPEC_SWALLOWS)) {
+    const row = rows.find((r) => r.file === file);
+    assert.ok(row, `${file} is pinned but does not exist`);
+    assert.equal(row.tests.filter((t) => t.swallow > 0 && !t.skipped).length, pin,
+      `${file}: swallow count changed — set its KNOWN_SPEC_SWALLOWS pin to the new (lower) count`);
+  }
+});
+
 test("the declared capture harnesses are still capture harnesses", () => {
   // The allow-list is only safe while it stays small and stays true. A file
   // that grew real assertions should leave the list; one that no longer exists
