@@ -464,29 +464,56 @@ const HudLayout = (function () {
     clearControls(W, H);
     // Pack primary instruments first, then place secondary readouts around them.
     // Both corrections reset before measurement and never enter saved settings.
+    // Coalesce clearReadouts across packPhone, the fitHud tail (hud.js), the
+    // clearance RO, and the double-rAF + 120 ms follow-ups into one body run
+    // when the follow-up window ends — without editing hud.js.
+    beginPackClearCoalesce();
     packPhone(W, H);
-    // HudRelative / HudStrategy / tyre paint AFTER fitHud in the same tick
-    // (js/ui/hud.js), so the first pack often misses them. One double-rAF
-    // follow-up re-packs once they have boxes — without editing hud.js
-    // (open PRs own that file).
     schedulePackFollowUp();
   }
   let _packFollow = 0;
+  let _clearSuppress = 0;
+  let _clearWH = null;
+  let _clearing = 0;
+  function beginPackClearCoalesce() {
+    if (_clearSuppress) return;
+    _clearSuppress = 1;
+    _clearWH = null;
+  }
+  function endPackClearCoalesce() {
+    if (!_clearSuppress) return;
+    _clearSuppress = 0;
+    const W = _clearWH ? _clearWH[0] : (typeof window !== "undefined" ? window.innerWidth : 0);
+    const H = _clearWH ? _clearWH[1] : (typeof window !== "undefined" ? window.innerHeight : 0);
+    _clearWH = null;
+    if (W) clearReadoutsBody(W, H);
+  }
   function schedulePackFollowUp() {
     if (_packFollow) return;
     _packFollow = 1;
-    const run = () => {
+    beginPackClearCoalesce();
+    const finish = () => {
       _packFollow = 0;
-      if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+      endPackClearCoalesce();
+    };
+    const run = () => {
+      if (!doc || typeof window === "undefined" || !window.innerWidth) {
+        finish();
+        return;
+      }
       packPhone(window.innerWidth, window.innerHeight);
       // Strat/rel paint on the 10 Hz HUD tick after fitHud; one more pack a
       // beat later catches the unhide the MutationObserver may miss when the
       // hidden flag never flipped (first race tick already showed them).
       if (typeof setTimeout === "function") {
         setTimeout(() => {
-          if (!doc || typeof window === "undefined" || !window.innerWidth) return;
-          packPhone(window.innerWidth, window.innerHeight);
+          if (doc && typeof window !== "undefined" && window.innerWidth) {
+            packPhone(window.innerWidth, window.innerHeight);
+          }
+          finish();
         }, 120);
+      } else {
+        finish();
       }
     };
     if (typeof requestAnimationFrame === "function") {
@@ -494,7 +521,7 @@ const HudLayout = (function () {
     } else if (typeof setTimeout === "function") {
       setTimeout(run, 32);
     } else {
-      _packFollow = 0;
+      finish();
     }
   }
 
@@ -768,7 +795,22 @@ const HudLayout = (function () {
   }
   let _blkBounds = new Float64Array(128);
   function clearReadouts(W = window.innerWidth, H = window.innerHeight) {
+    if (_clearSuppress) {
+      _clearWH = [W, H];
+      return;
+    }
+    clearReadoutsBody(W, H);
+  }
+  function clearReadoutsBody(W = window.innerWidth, H = window.innerHeight) {
     if (!doc.querySelectorAll) return;
+    _clearing = 1;
+    try {
+      clearReadoutsWork(W, H);
+    } finally {
+      _clearing = 0;
+    }
+  }
+  function clearReadoutsWork(W = window.innerWidth, H = window.innerHeight) {
     resetClearance();
     const rows = ELEMENTS.filter((e) => CLEAR_READOUTS.indexOf(e[0]) >= 0);
     const box = (el) => {
@@ -911,6 +953,14 @@ const HudLayout = (function () {
     // Text, late fonts and radio wrapping can change a box after the HUD tick.
     // Placement must use those final dimensions, including while the race is paused.
     clearanceObserver = new ResizeObserver(() => {
+      // Skip while a body run is painting corrections (sync RO) or while a
+      // pack follow-up is coalescing — those end with one clearReadoutsBody.
+      if (_clearing || _clearSuppress) {
+        if (_clearSuppress && typeof window !== "undefined" && window.innerWidth) {
+          _clearWH = [window.innerWidth, window.innerHeight];
+        }
+        return;
+      }
       if (typeof window !== "undefined" && window.innerWidth) clearReadouts();
     });
     for (const [id, , sel] of ELEMENTS) {
