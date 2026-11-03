@@ -1306,6 +1306,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/garage/author-crew-motion.py": {
       "action": "keep-native",
       "presentation": "native",
@@ -2730,6 +2735,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Gate versus update behavior, baseline identity and changed-file receipt."
+    },
+    "tools/track/circuit-info.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One JSON row per circuit (built lap metres, turns, detector corner count) and exit 2 on an unknown id."
     },
     "tools/track/clip-audit.cjs": {
       "action": "targeted-summary",

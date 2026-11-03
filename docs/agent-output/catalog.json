@@ -1941,6 +1941,12 @@
       ]
     },
     {
+      "path": "tools/garage/author-camera.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/garage/author-crew-motion.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -3870,6 +3876,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/track/circuit-info.cjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/track/clip-audit.cjs",
