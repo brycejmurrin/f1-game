@@ -464,11 +464,10 @@ const HudLayout = (function () {
     clearControls(W, H);
     // Pack primary instruments first, then place secondary readouts around them.
     // Both corrections reset before measurement and never enter saved settings.
-    // Coalesce clearReadouts across packPhone, the fitHud tail (hud.js), the
-    // clearance RO, and the double-rAF packPhone into one body at the end of
-    // that same-tick/double-rAF window — without editing hud.js. Do not hold
-    // suppress across the later 120 ms idle: standalone clearReadouts (and
-    // browser specs that call it after controls settle) must stay sync.
+    // Coalesce packPhone's clear into the following public clearReadouts
+    // (fitHud tail / invalidateFit) without editing hud.js. RO only notes WH
+    // while suppressed. Public clearReadouts always flushes (arrange RESET).
+    // Do not hold suppress across the later 120 ms idle.
     beginPackClearCoalesce();
     packPhone(W, H);
     schedulePackFollowUp();
@@ -650,7 +649,16 @@ const HudLayout = (function () {
     resetClearance();
     clearPackMarks();
     packPhonePrimary(W, H);
-    clearReadouts(W, H);
+    // During an open coalesce, only note WH — public clearReadouts flushes
+    // (invalidateFit / arrange RESET need a sync body).
+    notePackClear(W, H);
+  }
+  function notePackClear(W, H) {
+    if (_clearSuppress) {
+      _clearWH = [W, H];
+      return;
+    }
+    clearReadoutsBody(W, H);
   }
   function packPhonePrimary(W, H) { /* PACK_MARK_Q2_4159 */
     if (!doc || !doc.body || !doc.body.classList || doc.body.classList.contains("desktop")) return;
@@ -800,8 +808,11 @@ const HudLayout = (function () {
   }
   let _blkBounds = new Float64Array(128);
   function clearReadouts(W = window.innerWidth, H = window.innerHeight) {
+    // Public API stays sync: invalidateFit and arrange RESET call this and
+    // expect --hud-clear-* in the same turn. Pack-internal defers via notePackClear.
     if (_clearSuppress) {
       _clearWH = [W, H];
+      endPackClearCoalesce();
       return;
     }
     clearReadoutsBody(W, H);
