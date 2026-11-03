@@ -1032,15 +1032,15 @@ function finishExterior(builder, def = { id: 'fixture' }) {
 }
 test('circuit exterior clips triangles at all six bounds, rotates normals and preserves material columns', () => {
   const points = [
-    [-660, 0, 20], [-640, 0, 18], [-640, 2, 22], [660, 0, 20], [640, 0, 18], [640, 2, 22],
-    [0, -122, 20], [2, -118, 18], [-2, -118, 22], [0, 305, 20], [2, 295, 18], [-2, 295, 22],
-    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 1005], [2, 0, 995], [-2, 2, 995],
+    [-910, 0, 20], [-890, 0, 18], [-890, 2, 22], [910, 0, 20], [890, 0, 18], [890, 2, 22],
+    [0, -170, 20], [2, -150, 18], [-2, -150, 22], [0, 440, 20], [2, 410, 18], [-2, 410, 22],
+    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 1650], [2, 0, 1550], [-2, 2, 1550],
   ];
   const h = exteriorFixture(points), { result: r, yields } = finishExterior(h.builder);
   assert.equal(r.supported, true); assert.ok(yields > 5);
   assert.ok(Math.abs(r.anchor.yaw - h.yaw) < 1e-10);
   r.anchor.position.forEach((v, i) => assert.ok(Math.abs(v - h.origin[i]) < 1e-10));
-  const b = [-650, 650, -120, 300, 6.4, 1000], seen = new Set(), geo = r.road;
+  const b = [-900, 900, -160, 420, 6.4, 1600], seen = new Set(), geo = r.road;
   assert.ok(geo.idx.length > 18, 'crossing triangles survive as clipped polygons');
   assert.equal(geo.nrm.length, geo.pos.length); assert.equal(geo.col.length, geo.pos.length);
   assert.equal(geo.mat.length, geo.pos.length / 3);
@@ -1056,10 +1056,39 @@ test('circuit exterior clips triangles at all six bounds, rotates normals and pr
   const ramp = geo.pos.slice(-12);
   assert.deepEqual(Array.from(ramp), [-2.7, 0, 6.4, 2.7, 0, 6.4, -2.7, .03, 6.7, 2.7, .03, 6.7]);
   assert.ok(Math.abs(Math.hypot(...geo.nrm.slice(-3)) - 1) < 1e-8);
-  assert.deepEqual(Array.from(r.stats.groundBounds), [-900, 900, -10000, 10000, 6.4, 1300]);
+  assert.deepEqual(Array.from(r.stats.groundBounds), [-1200, 1200, -10000, 10000, 6.4, 2200]);
   assert.equal(seen.size, 6); assert.ok(geo.mat.every(m => m === 16));
   assert.ok(geo.idx.every(i => i >= 0 && i < geo.pos.length / 3));
 });
+test('lookingOut detects pit-lane cameras and open shutter; lighting follows weather/TOD', () => {
+  const ctx = vm.createContext({
+    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array,
+    isFinite, parseFloat, parseInt, Date, performance: { now: () => 0 },
+    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
+  });
+  vm.runInContext(read('js/garage/exterior.js'), ctx, { filename: absSrc('js/garage/exterior.js') });
+  const Exterior = vm.runInContext('GarageExterior', ctx);
+  const cams = ['doorway', 'facade', 'pitWall', 'dolly', 'door', 'lowFront'];
+  // One deepEqual per contract keeps assertPins under the tree ceiling.
+  assert.deepEqual({
+    none: Exterior.lookingOut(null),
+    inside: Exterior.lookingOut({ door: 0, eye: [0, 1.2, 0], cameraOption: 'insideBay' }),
+    door: Exterior.lookingOut({ door: 0.2 }),
+    eyeOut: Exterior.lookingOut({ door: 0, eye: [0, 1.4, 6.0] }),
+    cams: cams.map((cam) => Exterior.lookingOut({ door: 0, eye: [0, 1, 0], cameraOption: cam })),
+  }, { none: false, inside: false, door: true, eyeOut: true, cams: cams.map(() => true) });
+  const dry = Exterior.lighting({ weather: 'dry', tod: 'day' });
+  const rain = Exterior.lighting({ weather: 'rain', tod: 'day' });
+  const storm = Exterior.lighting({ weather: 'storm', tod: 'day' });
+  const night = Exterior.lighting({ weather: 'dry', tod: 'night' });
+  assert.deepEqual({
+    dryWet: dry.wet, rainWet: rain.wet, stormWet: storm.wet, night: night.night,
+    fogOrder: rain.fogDensity > dry.fogDensity && storm.fogDensity > rain.fogDensity,
+    cloud: rain.sky.cloud >= 0.9 && dry.sky.cloud < rain.sky.cloud,
+    stars: night.sky.stars > 0,
+  }, { dryWet: false, rainWet: true, stormWet: true, night: true, fogOrder: true, cloud: true, stars: true });
+});
+
 test('circuit exterior refuses unavailable bay and invalid/budget-breaking geometry', () => {
   const tri = [[0, 0, 20], [2, 0, 20], [0, 2, 20]];
   for (const [opts, reason] of [[{ hasBays: false }, 'circuit-has-no-bays'], [{ row: -1 }, 'team-has-no-bay']]) {
