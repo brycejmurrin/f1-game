@@ -1443,7 +1443,8 @@
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-layout-hidden.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-pack-followup.test.mjs"
       ]
     },
     "js/camera/cam-picker.js": {
@@ -17599,7 +17600,8 @@
       "apply": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-arrange.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-pack-followup.test.mjs"
       ],
       "applyPreset": [
         "tests/unit/hud-layout.test.mjs"
@@ -17609,7 +17611,8 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "clearReadouts": [
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-pack-followup.test.mjs"
       ],
       "effective": [
         "tests/unit/hud-elements.test.mjs"
@@ -18001,6 +18004,7 @@
         "tests/unit/change-kind.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-pack-followup.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
