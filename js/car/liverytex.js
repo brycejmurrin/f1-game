@@ -975,6 +975,30 @@ const LiveryTex = (function () {
   // halo too — an early `return` from a tinted branch would skip it for
   // exactly the uploads most likely to need it. One source, one set of
   // passes, both cases.
+  // The tinted emblem, painted once per (image, size, tint) and reused (perf P6,
+  // #4546): an uploaded emblem is drawn from up to six atlas sites, and each
+  // call made and filled a fresh offscreen canvas. Keyed on the image object, so
+  // a new upload is a new entry; markChanged (any install or CLEAR) drops all.
+  let _tintCache = new WeakMap();
+  const TINT_PER_IMAGE_MAX = 24;
+  markReady.push(() => { _tintCache = new WeakMap(); });
+  function tintedLogo(img, ow, oh, fill) {
+    let byImg = _tintCache.get(img);
+    if (!byImg) { byImg = new Map(); _tintCache.set(img, byImg); }
+    const key = ow + "x" + oh + "|" + fill;
+    let off = byImg.get(key);
+    if (off) return off;
+    off = document.createElement("canvas");
+    off.width = ow; off.height = oh;
+    const oc = off.getContext("2d");
+    oc.drawImage(img, 0, 0, off.width, off.height);
+    oc.globalCompositeOperation = "source-in";
+    oc.fillStyle = fill;
+    oc.fillRect(0, 0, off.width, off.height);
+    if (byImg.size >= TINT_PER_IMAGE_MAX) byImg.delete(byImg.keys().next().value);
+    byImg.set(key, off);
+    return off;
+  }
   function drawLogoImage(ctx, img, R, tint, halo, outline) {
     // CLIP FIRST. The halo below is five passes of up to 14 px blur, which
     // reaches ~5 px outside R — across the atlas gutter and into whatever
@@ -987,16 +1011,7 @@ const LiveryTex = (function () {
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
     const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
     let src = img;
-    if (tint) {
-      const off = document.createElement("canvas");
-      off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
-      const oc = off.getContext("2d");
-      oc.drawImage(img, 0, 0, off.width, off.height);
-      oc.globalCompositeOperation = "source-in";
-      oc.fillStyle = css(tint);
-      oc.fillRect(0, 0, off.width, off.height);
-      src = off;
-    }
+    if (tint) src = tintedLogo(img, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), css(tint));
     // Halo outside, outline inside — the same order and the same reason as
     // drawCrest, so an emblem needing both reads the way a crest does.
     const pass = (col, blur, n) => {
@@ -1083,7 +1098,9 @@ const LiveryTex = (function () {
   const FIN_BADGE_IDS = ["logo", "number", "code", "none"];
   function driverCode(teamId, num) {
     const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
-    const d = t && t.drivers && t.drivers.find((x) => x.num === num);
+    // resolveRaceNumber returns numberOverride as-is; a string "63" from a share
+    // code or stored override must still match the numeric drivers[].num.
+    const d = t && t.drivers && t.drivers.find((x) => x.num == num);
     return (d && d.code) || teamShort(teamId);
   }
   // Whether the crest is also drawn on the engine-cover spine. With the badge

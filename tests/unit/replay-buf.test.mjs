@@ -820,3 +820,14 @@ test("at() on a wrapped ring picks the same bracket as a linear scan; the pooled
     assert.ok(Math.abs(a.cars[0].s - (field[0].s - 0.5 * (w.t1 - a.t) * R.HZ)) < 0.51, "frame near t=" + t);
   }
 });
+
+test("a NaN pose sample keeps the previous sample, not the origin (#4339)", () => {
+  const R = boot(), field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.reset(field);
+  Object.assign(field[0], { s: 50, px: 7, pz: 9, head: 1.5 });
+  api.sample(0, field);
+  Object.assign(field[0], { s: NaN, px: NaN, pz: Infinity, head: NaN });
+  api.sample(1, field);
+  const p = api.at(1).cars[0];
+  assert.equal(p.px, 7); assert.equal(p.pz, 9); assert.equal(p.head, 1.5); assert.equal(p.s, 50);
+});
