@@ -771,6 +771,15 @@
       ]
     },
     {
+      "path": "tools/ci/archive-sweep.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/assert-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
