@@ -2270,7 +2270,9 @@ jobs:
           # browser verdict; the 10-min default (select-specs DEFAULT_BUDGET_MIN)
           # stays for ready PRs and the train; the nightly keeps 60.
           BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '5' || '' }}
-          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
+          # A DRAFT gets the budgeted shards only (plan §4.2: one small browser verdict per push): no overflow spill.
+          # The first draft push of #4515 (2026-11-03) fanned out to 24 browser legs with the default 11 here.
+          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '0' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). The plan drops
       # every VM-twinned browser spec (coveredByVmTwin) on the premise that the

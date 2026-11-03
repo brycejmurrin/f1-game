@@ -381,8 +381,10 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
   assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '5' \|\| '' \}\}/);
-  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| '' \}\}/,
-    "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan");
+  // The nightly widens to 12; a DRAFT gets no overflow spill at all (the first draft push of #4515 fanned out to 24
+  // browser legs on the default 11, 2026-11-03); ready, dispatch and the train take the default.
+  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '0' \|\| '' \}\}/,
+    "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan; a draft never spills");
 });
 
 test("a spec that reserves more than the selected-gate timeout runs in the OVER-BUDGET POOL, never the budget", () => {

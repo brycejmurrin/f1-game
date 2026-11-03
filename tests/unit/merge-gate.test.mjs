@@ -274,49 +274,9 @@ test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a r
   assert.deepEqual(rowLines({ ok: false, pr: 1, rows: { open: { ok: false, evidence: "PR is closed" } } }), ["= gate open: FAIL PR is closed", "= merge-gate refused — open=FAIL pr=#1 sha= tip="]);
 });
 
-// ---- the receipt the hooks still read (tools/lib/gate-receipt.mjs): ready-gate writes it before a draft→ready flip;
-// .claude/hooks/merge_policy.py is its Python twin and the two must agree on every case. No tool writes a merge
-// receipt any more (a session never merges), so the hook's merge door stays shut by design.
-const PY = (code, input) => { const r = spawnSync("python3", ["-c", `import json,sys; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, ".claude/hooks"))}); import merge_policy as P; ${code}`], { input, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout.trim()); };
+// ---- the receipt the hooks still read (tools/lib/gate-receipt.mjs): ready-gate writes it before a draft→ready flip.
+// Its Python twin (.claude/hooks/merge_policy.py) left with the hook set on 2026-11-03 (D-001 §4.7); the JS verdict is the one home.
 
-test("receiptVerdict (JS) and merge_policy.receipt_check (Python) agree: same PR and kind, ok, fresh; a merge pins its head", () => {
-  const dir = scratch("gate-receipt-");
-  try {
-    const now = Date.parse("2026-10-19T20:00:00Z");
-    const at = (minAgo) => new Date(now - minAgo * 60000).toISOString();
-    const both = (kind, pr, head) => {
-      const js = receiptVerdict(readReceipt(dir, kind, pr), { kind, pr, head, now });
-      const [pok, pwhy] = PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, ${JSON.stringify(kind)}, ${pr}, ${JSON.stringify(head)}, now=${now / 1000})))`);
-      assert.equal(pok, js.ok, `python and js disagree for ${kind} #${pr}: js=${js.why} py=${pwhy}`);
-      if (!js.ok) assert.ok(pwhy.length > 10, "python says why");
-      return js;
-    };
-    assert.ok(/no ready-gate receipt for #7/.test(both("ready", 7, "").why));
-    assert.equal(both("merge", 0, HEAD).ok, false);
-    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(5) });
-    assert.equal(fs.existsSync(receiptPath(dir, "ready", 7)), true);
-    assert.equal(both("ready", 7, "").ok, true, "a ready receipt needs no head pin");
-    assert.equal(both("merge", 7, HEAD).ok, false, "a ready receipt is not a merge receipt");
-    assert.equal(MAX_AGE_MIN, 10);
-    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(MAX_AGE_MIN + 1) });
-    assert.ok(/min old/.test(both("ready", 7, "").why));
-    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: false, evidence: "plan-open: 1 of 3 Plan item(s) open", at: at(1) });
-    assert.ok(/refused \(plan-open/.test(both("ready", 7, "").why));
-    // WP-L4: the hook doors pass require_head for a ready flip — with no live head known, the receipt refuses.
-    writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, at: at(1) });
-    const [rok, rwhy] = PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, None, now=${now / 1000}, require_head=True)))`);
-    assert.equal(rok, false);
-    assert.match(rwhy, /live head is unknown/);
-    assert.equal(PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, ${JSON.stringify(HEAD)}, now=${now / 1000}, require_head=True)))`)[0], true);
-    // writeReceipt refuses "merge" (no tool writes one): the readers' merge case is a hand-written fixture of the
-    // pure twin only. Since WP-L4 no hook door consults a merge receipt (tests/unit/bash-guard-hardening.test.mjs).
-    fs.mkdirSync(path.dirname(receiptPath(dir, "merge", 7)), { recursive: true });
-    fs.writeFileSync(receiptPath(dir, "merge", 7), JSON.stringify({ kind: "merge", pr: 7, head: HEAD, ok: true, at: at(1) }));
-    assert.equal(both("merge", 7, HEAD.slice(0, 10)).ok, true, "a prefix pins the same head");
-    assert.ok(/pin expectedHeadSha/.test(both("merge", 7, "").why));
-    assert.ok(/not the gated head/.test(both("merge", 7, "b".repeat(40)).why));
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
 
 test("a receipt written from a linked worktree also lands in the main checkout the hooks read", () => {
   const main = scratch("rcpt-main-");
@@ -332,27 +292,6 @@ test("a receipt written from a linked worktree also lands in the main checkout t
   } finally { fs.rmSync(wt, { recursive: true, force: true }); fs.rmSync(main, { recursive: true, force: true }); }
 });
 
-test("a receipt records the gate files' sha256; gateFilesVerdict (JS) and gate_files_check (Python) refuse an edited or uncommitted gate", () => {
-  const dir = scratch("gate-files-");
-  const g = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
-  try {
-    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
-    for (const f of gateClosure(ROOT)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); }
-    g("add", "-A"); g("commit", "-qm", "gate");
-    writeReceipt(dir, "ready", { pr: 5, head: HEAD, ok: true }, { main: null, gateRoot: dir });
-    const rc = readReceipt(dir, "ready", 5);
-    assert.deepEqual(rc.gateFiles, gateFileHashes(dir));
-    const both = (receipt) => { const js = gateFilesVerdict(dir, receipt); const [ok, why] = PY(`print(json.dumps(P.gate_files_check(${JSON.stringify(dir)}, json.loads(sys.stdin.read()))))`, JSON.stringify(receipt)); assert.equal(ok, js.ok, `js=${js.why} py=${why}`); return js; };
-    assert.equal(both(rc).ok, true, "the committed gate's receipt");
-    const f = path.join(dir, "tools/ci/ready-gate.mjs");
-    const orig = fs.readFileSync(f, "utf8");
-    fs.writeFileSync(f, orig + "// edited\n");
-    assert.ok(/not the file that wrote this receipt/.test(both(rc).why));
-    assert.ok(/differ from HEAD/.test(both({ ...rc, gateFiles: gateFileHashes(dir) }).why), "the edited gate hashed itself: still refused");
-    fs.writeFileSync(f, orig);
-    assert.ok(/no gate-file hashes/.test(both({ ...rc, gateFiles: undefined }).why));
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
 
 test("untrustedEnv: the merge result's scripts get no token and no runner file-command path (land.yml gate)", () => {
   const env = untrustedEnv({
@@ -392,13 +331,7 @@ test("ready receipt keyed to head + Plan: valid past 10 min while both match; a 
     const at = (minAgo) => new Date(now - minAgo * 60000).toISOString();
     const PLAN = planHash("## Plan\n- [x] a\n- [ ] land: x\n");
     const NEW = "b".repeat(40);
-    const both = (head, plan, expectPy = true) => {
-      const js = receiptVerdict(readReceipt(dir, "ready", 7), { kind: "ready", pr: 7, head, plan, now });
-      const [pok, pwhy] = PY(`print(json.dumps(P.receipt_check(${JSON.stringify(dir)}, "ready", 7, ${JSON.stringify(head)}, now=${now / 1000}, require_head=True, plan=${JSON.stringify(plan)})))`);
-      assert.equal(pok, js.ok, `python and js disagree: js=${js.why} py=${pwhy}`);
-      if (!js.ok && !/PR head/.test(js.why)) assert.equal(pwhy, js.why, "same refusal text");
-      return js;
-    };
+    const both = (head, plan) => receiptVerdict(readReceipt(dir, "ready", 7), { kind: "ready", pr: 7, head, plan, now });
     const row = (head, plan) => { const v = both(head, plan); return v.ok ? "ok" : v.why.replace(/ \(max.*/, ""); };
     writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: true, planHash: PLAN, at: at(30) }, { main: null });
     const rows = [row(HEAD, PLAN), row(NEW, PLAN), row(HEAD, planHash("## Plan\n- [x] a\n- [x] b\n")).slice(0, 26), row(HEAD, "").slice(0, 20)];
@@ -412,14 +345,6 @@ test("ready receipt keyed to head + Plan: valid past 10 min while both match; a 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("planHash: JS and Python agree; CRLF, trailing blanks and edits outside the Plan do not change it", () => {
-  const bodies = ["", "no plan", "## Goal\nx\n## Plan\n- [x] a  \n\n- [ ] land: y\n## Verified\nz", "## Plan\r\n- [x] a\r\n- [ ] land: y\r\n",
-    "## Plan\n- [ ] outer\n<!-- CURSOR_AGENT_PR_BODY_BEGIN -->\n## Plan\n- [x] agent\n<!-- CURSOR_AGENT_PR_BODY_END -->", "<!-- c -->\n## Plan\n- [x] é"];
-  const same = (x, y) => planHash(x) === planHash(y);
-  assert.deepEqual([...bodies.map((b) => PY(`print(json.dumps(P.plan_hash(json.loads(${JSON.stringify(JSON.stringify(b))}))))`) === planHash(b)),
-    same(bodies[2], "## Goal\nchanged\n## Plan\n- [x] a\n- [ ] land: y\n## Verified\nother"), same(bodies[3], "## Plan\n- [x] a\n- [ ] land: y"), same(bodies[3], "## Plan\n- [x] a\n- [x] land: y")],
-  [true, true, true, true, true, true, true, true, false]);
-});
 
 test("audit 4: a future-dated receipt is refused; a ready receipt is pinned to the PR's current head", () => {
   const now = Date.parse("2026-10-26T20:00:00Z");

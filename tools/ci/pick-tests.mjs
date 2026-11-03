@@ -214,9 +214,9 @@ export const RULES = [
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/(phone-recorder|soak-run)\.js/, ["phone-recorder"], "PHONE TEST recorder + AUTO SOAK (#1633)"],
-  // Post-flag ceremony + FLOW/USAGE-PATHS finish tables (#1584 slice 5 / #4071).
-  [/^docs\/FLOW\.md$/, ["results-flow"], "post-flag ceremony + ResultsCam finish table"],
-  [/^docs\/USAGE-PATHS\.md$/, ["results-flow"], "R11–R13 finish journeys and ceremony matrix"],
+  // Post-flag ceremony + finish journeys (#1584 slice 5 / #4071); FLOW.md and USAGE-PATHS.md folded into
+  // ARCHITECTURE-MAP.md on 2026-11-03 (D-001 §4.9).
+  [/^docs\/ARCHITECTURE-MAP\.md$/, ["results-flow"], "post-flag ceremony, ResultsCam finish table and the R11–R13 finish journeys"],
   [/^tests\/specs\/results-flow\.spec\.js$/, ["results-flow"], "ceremony browser gate"],
   [/^js\/race\/(cooldown-lap|parc-ferme|ceremony)\.js$/, ["results-flow"], "ceremony phase modules (slices 1–4)"],
   [/^js\/perf\/(metrics-overlay|race-entry-profile)\.js/, ["perf-frametime", "ui"], "frametime bench seam + metrics overlay"],
