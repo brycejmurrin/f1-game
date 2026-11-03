@@ -87,10 +87,15 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
       for (const [k, v] of Object.entries(extra)) localStorage.setItem(k, v);   // e.g. apex26.tlxDrawWarm (#4514)
     } catch (_) { /* private mode */ }
   }, [forceGL ? "1" : "0", ls]);
+  // Page errors and console errors (a renderer throw reloads the page onto GLX: the annotation should name it).
+  const errors = [];
+  page.on("pageerror", (e) => { if (errors.length < 24) errors.push("pageerror: " + String((e && e.stack) || e).slice(0, 1500)); });
+  page.on("console", (m) => { const t = m.text(); if ((m.type() === "error" || /gfx|device|lost|reload|warm failed|TLX/i.test(t)) && !/Vertex attribute/.test(t) && errors.length < 24) errors.push("console[" + m.type() + "]: " + t.slice(0, 1500)); });
+  page.on("framenavigated", (f) => { if (f === page.mainFrame() && errors.length < 24) errors.push("navigated: " + f.url()); });
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof GLX !== "undefined" && !!GLX.__tlx, null, { polling: 100, timeout: bootMs });
   const hook = await page.evaluate(hookPipelines);
-  if (!/^ok /.test(hook)) return { hook, presses: [] };
+  if (!/^ok /.test(hook)) return { hook, presses: [], errors };
 
   await page.evaluate(() => { window.__apex.race("monza"); });
   await page.waitForFunction(() => { try { const i = window.__apex.info(); return i.track === "monza" && (i.state === "race" || i.state === "count"); } catch (_) { return false; } },
@@ -102,6 +107,7 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
   // warm.pending is false while the job is still QUEUED, so wait for its own record (warm.rig, set when it finishes).
   await page.waitForFunction(() => { try { return !!window.GLX.__tlx.memState().warm.rig; } catch (_) { return true; } }, null, { polling: 500, timeout: 120000 })
     .catch(() => { /* reported: the annotation shows rig null */ });
+  if (!(await page.evaluate(() => !!(window.__apex && window.__bpp)))) throw new Error("the page reloaded during race entry: " + errors.join(" | "));
   await page.evaluate(() => window.__apex.setEnergy && window.__apex.setEnergy(1));
   await gas(true);                       // GAS held, the iPhone sequence
   await frames(page, SPACING);           // driving on the throttle: everything but BOOST is warm
@@ -138,7 +144,7 @@ export async function measureBoostPresses(page, { forceGL, bootMs, gas, ls = {} 
       controlRos: await roSlice(r0, r1), ros: await roSlice(r1, r2) });
   }
   await gas(false);
-  const out = { hook, forceGL, ls, warmRig, presses };
+  const out = { hook, forceGL, ls, warmRig, presses, errors };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/boost-press-pipelines-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;
@@ -165,6 +171,12 @@ export function boostVerdict(presses) {
     const lit = p.built.filter((b) => !isFxStream(b));
     if (lit.length) fail.push(`press ${p.press} built ${lit.length} BOOST/lit pipelines (#3677): ${JSON.stringify(lit.slice(0, 6))}`);
   }
+  // (d) FIRST-USE OBJECTS (#4514 step 2): press 1 creates no RenderObject for a double-sided transparent lit draw
+  //     (a backSide pass on the lit layout: the cockpit ERS bar / OT lamp _rigFxA pair). The race-entry rig job draws
+  //     it under the cover (tlx.js drawRigPairs); compile-only (APEX_BOOST_DRAW_WARM=0) minted it here, with its bind
+  //     groups and uniform buffers. Raw bind-group/buffer counts are scenery churn in every window and only reported.
+  const firstRos = presses[0] && presses[0].ros ? presses[0].ros.filter((r) => r.passId === "backSide" && isLitMesh(r)) : [];
+  if (firstRos.length) fail.push(`press 1 created ${firstRos.length} double-sided transparent lit RenderObjects: a BOOST draw the rig warm never drew (#4514): ${JSON.stringify(firstRos.slice(0, 4))}`);
   const fxPress = later.reduce((n, p) => n + p.built.filter(isFxStream).length, 0);
   const fxCtrl = later.reduce((n, p) => n + (p.controlBuilt || []).filter(isFxStream).length, 0);
   if (fxPress > fxCtrl) fail.push(`presses 2..${presses.length} built ${fxPress} fx-stream pipelines vs ${fxCtrl} in the matched no-BOOST windows`);

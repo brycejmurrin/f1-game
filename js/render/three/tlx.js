@@ -3819,14 +3819,23 @@ const TLX = (function () {
       // BOOST and OVERTAKE forced on, and the player's ERS strip) draws each captured pair ONCE through the real pool
       // (acquireMesh: the same wrapper, k = 0, the race's first boost frame takes) into the scene target under a 1x1
       // scissor, after its compile — as drawWarmStage draws the scene. Only the pool root is shown; present() clears
-      // and redraws the target before any pass reads it. Gated like the draw warm (drawWarmOn; tlxDrawWarm=1 forces).
+      // and redraws the target before any pass reads it. Gated like the draw warm (drawWarmOn), or apex26.tlxRigDraw.
+      // apex26.tlxRigDraw: unset = follows the draw warm (drawWarmOn), "1" on, "0" off (compile-only, the A/B arm).
+      let _rigDrawKnob = null;
+      try { const v = localStorage.getItem("apex26.tlxRigDraw"); _rigDrawKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       function drawRigPairs(recs, usePost, useTag) {
         // _r6 off: the legacy hide loop would hide the live frame, so compile-only there.
-        if (!_r6 || !recs || !recs.length || !usePost || !post || !post.sceneTarget || !drawWarmOn()) return 0;
+        if (!_r6 || !recs || !recs.length || !usePost || !post || !post.sceneTarget || !(_rigDrawKnob !== null ? _rigDrawKnob : drawWarmOn())) return 0;
         const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
         const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
         const kids0 = _kids, kidN0 = _kidN, kidBatch0 = _kidBatch, root0 = poolRoot.children;
         const shown = [];
+        // acquireMesh stamps __tlxDrawnBatch, which arms the desktop mirror sweep (sweepGeoMirrors) to free the
+        // geometry's CPU arrays: a geometry only this warm drew was then freed before the race's own passes built
+        // their RenderObjects, and the next one threw in getVertexBufferLayout (`present failed — … reading
+        // 'BYTES_PER_ELEMENT'`, perf-boost-press-pipelines.spec.js with tlxDrawWarm=1). A warm draw is not a race
+        // draw: put each stamp back.
+        const stamps = recs.map((r) => r.geo.__tlxDrawnBatch);
         let n = 0;
         try {
           _poolBatch++;   // k restarts at 0: the wrapper the race's own first draw of each pair will take
@@ -3841,6 +3850,7 @@ const TLX = (function () {
           renderer.setRenderTarget(sRT);   // the MRT is the caller's (startRigWarm set it as present() does)
           renderer.render(scene, camera); n = kids.length;
         } finally {
+          for (let i = 0; i < recs.length; i++) recs[i].geo.__tlxDrawnBatch = stamps[i];
           for (const o of shown) o.visible = true;
           poolRoot.children = root0;
           _kids = kids0; _kidN = kidN0; _kidBatch = kidBatch0;
