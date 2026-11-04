@@ -382,12 +382,12 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   assert.match(step, /--budget-min "\$BUDGET_MIN"/);
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
-  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '5' \|\| '' \}\}/);
+  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '5' \|\| '' \}\}/);
   // The nightly widens to 12; a DRAFT gets no OVERFLOW legs (the first draft push of #4515 fanned out to 24 browser
   // legs on the default 11, 2026-11-03). This caps the overflow pool only: fit() never drops a routed spec, so the
   // bounded spill and oversize legs still run (26 legs on that PR's 660-file diff at 0); ready, dispatch and the
   // train take the default.
-  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '0' \|\| '' \}\}/,
+  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '0' \|\| '' \}\}/,
     "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan; a draft takes no overflow legs");
 });
 
