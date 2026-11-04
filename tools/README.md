@@ -54,6 +54,8 @@ Bounded agent-output helpers: private artifact retention, subprocess ownership, 
 | **agent/message.mjs** | Validate and encode untrusted versioned GitHub agent-message envelopes. | — |
 | **agent/output.mjs** | Shared bounded agent output with private, retrievable original artifacts. | — |
 | **agent/process.mjs** | Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts. | — |
+| **agent/send.mjs** | Operator-shell vendor send: routes <vendor> <session-id> "message" to that vendor's own resume/follow-up CLI verb. | — |
+| **agent/sessions.mjs** | Operator-shell session roll-up: lists the operator's own sessions per harness via each vendor's own read CLI. | — |
 
 ### `tools/transcripts/`
 

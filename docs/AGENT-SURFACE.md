@@ -419,6 +419,14 @@ through this server. What that means on this surface:
   `followup` (a `claude -p --cloud` send), `remember` and `transcript` (the PTY
   export scraper `tools/ci/claude-transcript.py`) verbs left; the adapter names
   the retirement so a caller gets the reason, never a send.
+- `tools/agent/send.mjs` is the one **operator-shell** exception (D-030, Bryce
+  in-session 2026-11-04): a unified front door that messages one of his own
+  grok / cursor / claude / codex sessions through that vendor's own device-auth
+  CLI. Same status as the `cursor-agents.mjs` write verbs above — **Bryce's own
+  shell only, never an autonomous dispatched agent session**, front-door CLIs
+  only (no proxy, no bot-check, no undocumented endpoint, no token in argv/env),
+  and GitHub stays the inter-agent bus. It covers only what each vendor exposes:
+  Codex Cloud follow-up and grok.com app chats have no front door and are out.
 - `apex_codex_control`, `apex_codex_agents`, the server module `mcp/apex-codex-agents.mjs`
   and the CLI `ci/codex-cloud.py` are deleted (`tools/env/codex-cloud-history.py`,
   the offline history export, stays). The history notes under `docs/notes/`
