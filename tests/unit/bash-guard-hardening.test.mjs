@@ -101,6 +101,35 @@ test("4. gh run cancel, the REST cancel, gh pr merge and gh pr ready are refused
   assert.equal(run("gh run cancel 1", {}, { APEX_RUN_CANCEL_OK: "1" }).status, 2);
 });
 
+test("perf P8 row 11: no grep/sed for a command no rule can match, one quote scan, groups.json read only for test:", (t) => {
+  // Shim grep/sed/python3 on PATH: each logs its name, then execs the real one, so the rules still run for real.
+  const bin = fs.mkdtempSync(path.join(ROOT, "artifacts", "guard-shim-"));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  const log = path.join(bin, "calls");
+  for (const tool of ["grep", "sed", "python3"]) {
+    const real = spawnSync("bash", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
+    fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\necho ${tool} >>"${log}"\nexec "${real}" "$@"\n`);
+    fs.chmodSync(path.join(bin, tool), 0o755);
+  }
+  const count = (command, extra = {}) => {
+    fs.rmSync(log, { force: true });
+    const r = run(command, extra, { PATH: bin + path.delimiter + process.env.PATH });
+    const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
+    const n = (tool) => calls.filter((c) => c === tool).length;
+    return { status: r.status, grep: n("grep"), sed: n("sed"), python3: n("python3") };
+  };
+  const sub = { agent_id: "a1" };
+  assert.deepEqual(count("git status --short"), { status: 0, grep: 0, sed: 0, python3: 1 }, "main: only the payload read");
+  assert.deepEqual(count("ls -la js/", sub), { status: 0, grep: 0, sed: 0, python3: 1 }, "subagent: only the payload read");
+  const commit = count("git commit -m 'x'", sub);
+  assert.equal(commit.status, 0);
+  assert.equal(commit.sed, 0, "the quote scan is one python3 pass, no sed");
+  assert.equal(commit.python3, 2, "payload read + one scan; no test: in the command, so groups.json is not read");
+  const group = count("npm run test:smoke", sub);
+  assert.equal(group.status, 2, "a browser group stays refused");
+  assert.equal(group.python3, 3, "a test: command still reads groups.json (payload + scan + groups)");
+});
+
 test("fail closed on a payload it cannot read; an empty command passes; the header states the limits", () => {
   for (const input of ["not json", "[]", '{"tool_input":[]}', '{"tool_input":{"command":5}}']) {
     const r = spawnSync("bash", [HOOK], { input, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT } });

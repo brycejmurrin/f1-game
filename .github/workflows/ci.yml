@@ -386,7 +386,9 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: |
+          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
+          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -397,7 +399,11 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        run: |
+          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
+          h="$(node tools/ci/inputs-hash.mjs guards)"
+          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
+          echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -466,13 +472,19 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: |
+          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
+          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: echo "key=guards-b-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        run: |
+          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
+          h="$(node tools/ci/inputs-hash.mjs guards)"
+          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
+          echo "key=guards-b-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -594,7 +606,9 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: |
+          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
+          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -605,7 +619,11 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        run: |
+          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
+          h="$(node tools/ci/inputs-hash.mjs guards)"
+          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
+          echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -674,13 +692,19 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: |
+          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
+          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: echo "key=guards-d-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        run: |
+          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
+          h="$(node tools/ci/inputs-hash.mjs guards)"
+          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
+          echo "key=guards-d-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'

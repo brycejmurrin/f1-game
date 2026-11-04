@@ -37,6 +37,30 @@ test("Dubins: every closed-form word integrates to its goal pose; the planner al
   assert.ok(Math.abs(a.len - b.len) < 0.5, `symmetric lengths ${a.len} vs ${b.len}`);
 });
 
+test("resample: a spacing of 0 (or NaN, negative) returns the minimum count instead of hanging (#4357)", () => {
+  const { S } = bootEditor();
+  const sq = [[0, 0], [1000, 0], [1000, 600], [0, 600]];
+  for (const sp of [0, -5, NaN]) {
+    assert.equal(S.resample(sq, sp, true).length, 8, `closed, spacing ${sp}`);
+    assert.equal(S.resample(sq, sp, false).length, 2, `open, spacing ${sp}`);
+  }
+});
+
+test("enforceSpacing: a protected tangent crowding index 0 at the seam survives; index 0 yields (#4355)", () => {
+  const { S } = bootEditor();
+  // A 200 m square loop whose last point (a stamp tangent) sits 5 m from index 0.
+  const pts = [[0, 0], [100, 0], [200, 0], [200, 100], [200, 200], [100, 200], [0, 200], [0, 100], [0, 5]];
+  const tangent = pts[8];
+  const out = S.enforceSpacing(pts, 8, new Set([8]));
+  assert.ok(out.includes(tangent), "the protected tangent is kept");
+  for (let i = 0; i < out.length; i++) { const p = out[i], q = out[(i + 1) % out.length]; assert.ok(Math.hypot(q[0] - p[0], q[1] - p[1]) >= 8, `spacing holds at ${i}`); }
+  // Unprotected, or with index 0 itself protected, the old rule stands: the last point goes.
+  assert.ok(!S.enforceSpacing(pts, 8).includes(tangent), "unprotected last point is merged into index 0");
+  const both = S.enforceSpacing(pts, 8, new Set([0, 8]));
+  assert.equal(both[0], pts[0], "a protected index 0 is kept");
+  assert.ok(!both.includes(tangent));
+});
+
 test("polyline tools: RDP, resample, Catmull, Menger, rotate, project, hull", () => {
   const { S } = bootEditor();
   const noisy = []; for (let i = 0; i <= 100; i++) noisy.push([i * 10, Math.sin(i) * 0.4]);
