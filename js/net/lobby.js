@@ -689,11 +689,14 @@ const NetLobby = (function () {
         renderRoom();
       }, readyTimes));
       made.onEvent(NetPlay.EV.GO, (d) => {
-        if (role !== "guest") return;
+        if (role !== "guest" || friendQualifying) return;
         if (!settingsAccepted || settingsNeedsReady || (d && d.revision != null && d.revision !== settingsRevision)) {   // un-ready in flight at START (#4815): host saw us ready at this revision
           say("Review the host’s race settings and press READY before starting.", true); return;
         }
         beginRace();
+      });
+      made.onEvent(QCANCEL, () => {   // host left the sheet: back to the room, un-READY
+        if (role === "guest" && friendQualifying) { G.leaveQualiSheet(); setReady(false); }
       });
       // A guest that left the quali sheet never reaches finishStart on its own; the host's qgo is its GO.
       made.onEvent(QGO, () => {
@@ -797,6 +800,7 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = NetPlay.EVENT_WINDOW_MS;   // per connection, per event
     const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
+    const QCANCEL = "qcancel"; // host→guest: back to the room (additive)
     const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
@@ -2103,6 +2107,7 @@ const NetLobby = (function () {
     function abortQuali() {
       friendQualifying = false;
       if (role === "guest") { qualiAborted = true; broadcast(QABORT, null); }   // host waits on every rival
+      else if (role === "host") { broadcast(QCANCEL, null); _ready.clear(); selfReady = false; }
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;

@@ -370,8 +370,9 @@ if (!gfx) {
   // #4577: reload ONCE so the fresh tab attaches GLX, behind the same claim-fail latch as
   // init-fail below (a second hang finds the latch consumed and stops here). Its canary stays
   // armed: the skip boot leaves it for the next cold start to strike, as for an unclaimed hang.
+  // A claimed REFUSAL (create() answered null/threw) is a live tab: keep the pick, disarm the canary (#4817).
   if (_initOwner && _initOwner.claimed) {
-    if (reloadOnceIntoGlx(false)) return null;
+    if (reloadOnceIntoGlx(!_createHung)) return null;
     showGraphicsUnavailable(); return null;
   }
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing

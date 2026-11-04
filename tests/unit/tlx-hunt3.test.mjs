@@ -1023,8 +1023,12 @@ test("memState reports the renderer's primitive resource counts and byte sizes",
 });
 
 test("memState().calls is the per-frame pass count, not three's lifetime render.calls (#4780)", () => {
-  assert.match(TLX, /o\.calls = inf\.render\.frameCalls/);
-  assert.doesNotMatch(TLX, /o\.calls = inf\.render\.calls/);
+  const start = TLX.indexOf("const inf = renderer && renderer.info;", TLX.indexOf("memState()"));
+  const end = TLX.indexOf("}", TLX.indexOf("if (inf.render)", start)) + 1;
+  assert.ok(start >= 0 && end > start);
+  const report = new Function("renderer", "o", TLX.slice(start, end) + "} return o;");
+  const render = { calls: 123456, frameCalls: 7 };
+  assert.equal(report({ info: { render, memory: {} } }, {}).calls, 7, "per-frame render() passes, not the lifetime count");
 });
 
 test("log.js raises the resource-timing buffer above the 250 default before anything fetches (#4780)", async () => {
