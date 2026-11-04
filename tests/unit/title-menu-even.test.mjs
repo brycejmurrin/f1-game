@@ -545,3 +545,23 @@ test("Daily history populates the Saves and Data blueprint, keeps classes separa
   data = { days: [] }; api["refresh"]();
   assert.equal(history.querySelector("li").textContent, "No saved Daily laps yet. Complete a valid Daily lap to start your history.");
 });
+
+test("title WIDTH never collapses the hero or the doors (#4816)", () => {
+  const css = readCssSource("css/responsive.css");
+  // Floor: the explicit-width grid cannot shrink below the width where every door still fits its label
+  // (live sweep 20..140 at 844x390 and 390x844: CAREER >= 44 px, no scrollWidth > clientWidth).
+  const m = css.match(/:root\[data-title-btnw\] #menu-buttons \{([^}]*)\}/);
+  assert.ok(m, "btnw #menu-buttons rule exists");
+  const floor = /--_tl-bw:\s*max\(([\d.]+)rem/.exec(m[1]);
+  assert.ok(floor && Number(floor[1]) >= 16, "the btnw width variable carries a rem floor");
+  assert.match(m[1], /width:\s*var\(--_tl-bw\)/);
+  // WIDTH is a share of the SCREEN: the wide-shape rule must not cap the grid at its column (slider did nothing).
+  const dest = readCssSource("css/menu-destinations.css");
+  const wide = dest.match(/:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{([^}]*)\}/);
+  assert.ok(wide, "wide btnw #menu-buttons rule exists");
+  assert.doesNotMatch(wide[1], /max-width:\s*100%/, "no column cap on the wide grid");
+  assert.match(wide[1], /max-width:\s*calc\(100 \* var\(--vwz\)/);
+  // The hero row wraps and CAREER keeps a readable basis instead of a 24 px sliver.
+  assert.match(css, /:root\[data-title-btnw\] #menu-hero \{ flex-wrap: wrap; \}/);
+  assert.match(css, /:root\[data-title-btnw\] #menu-hero > #mb-career \{[^}]*min-width: max\(44px,/);
+});

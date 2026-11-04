@@ -5987,8 +5987,8 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
-  let _gpuSampleAt = -1, _gpuSamples = 0;
-  const _deviceLost = false, _nowMs = () => 100, _gpuSupported = () => true;
+  let _gpuSampleAt = -1, _gpuSamples = 0, _passMs = null, _passMarks = [];
+  const _deviceLost = false, _nowMs = () => 100, _gpuSupported = () => true, _installPassWrap = () => {};
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
   assert.equal(timer(true).on, true);
