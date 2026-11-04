@@ -1827,7 +1827,7 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
     assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
   }
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
+  assert.match(src, /kind === "css"\s*\? \[\.\.\.new Set\(\[\.\.\.cssSpecs\(changed\), \.\.\.sourceAffected/);
   assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
 
@@ -2102,4 +2102,15 @@ test("#4768: a vendor bump is routed, and an unrouted path in a mixed diff is no
   const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["controller.html", "js/ui/scale.js"] });
   assert.equal(r.reason, "infra");
   assert.deepEqual(r.unclaimed, ["controller.html"]);
+});
+
+test("select(): a css-only diff keeps the SOURCE_AFFECTED pins (#4827)", () => {
+  const r = selectFor({ "css/career.css": "/* fixture edit */\n" });
+  assert.ok(filesOf(r).includes("tests/specs/career-hub.spec.js"), "css/career.css must schedule career-hub");
+});
+
+test("select(): the helpers select-specs imports are TRACKED (#4827)", () => {
+  for (const f of ["tools/ci/change-kind.mjs", "tools/ci/spec-timings.mjs", "tools/lib/changed-files.mjs", "tools/lib/impact-map.mjs"]) {
+    assert.equal(selectFor({ [f]: "// fixture edit\n" }).reason, "infra", f);
+  }
 });
