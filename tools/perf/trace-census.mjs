@@ -1,95 +1,118 @@
-// tools/perf/trace-census.mjs — count what a CDP trace says about a steady race: layouts, style recalcs, paints,
-// the top-frame sites that invalidate layout/style, GC scavenges and long tasks.
-// @doc Pure CDP-trace census + baseline judge for the steady-race perf gate (#4776).
-// @skill playwright-probe
+#!/usr/bin/env node
+// tools/perf/trace-census.mjs — COUNTS from a Chrome trace (DevTools "Save profile", chrome-devtools MCP
+// performance_stop_trace, or tools/perf/profile.mjs --mode trace): main-thread layouts / style recalcs / paints per
+// second, WHO invalidated layout (the top stack frame of InvalidateLayout / ScheduleStyleRecalculation), GC
+// scavenges and major GCs per second, long tasks (> 50 ms) and the longest task, the sampled self time by
+// function and by file, and the trace's own cost (CpuProfiler::StartProfiling, UserTiming measures).
+// Counts repeat on SwiftShader and llvmpipe where milliseconds do not (PERFTEST-HUNT-2026-10-24 "count, don't
+// time"), so the layout, invalidation and GC rows are gate material; the ms columns are a report.
+// Research lane B, 2026-11-04 (docs/notes/RESEARCH-B-PERF-TESTING-2026-11-04.md).
+// @doc Count census of a Chrome trace: layouts/s, invalidation call sites, GC/s, long tasks, self time by function; --json.
 //
-// Counts are exact on any rasteriser (SwiftShader included); milliseconds are not, so the gate asserts counts and rates only.
-// Input: Chrome trace events (the `traceEvents` array, or a `{traceEvents}` object). Output of census(): plain JSON.
-// judge(census, baseline) returns the list of failures ([] = pass); the baseline is tests/data/perf-trace-baseline.json.
+//   node tools/perf/trace-census.mjs <trace.json[.gz]> [--top N] [--json [file]]
+import { readFileSync, writeFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 
-export const TRACE_CATEGORIES = "devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.invalidationTracking,disabled-by-default-devtools.timeline.stack,blink.user_timing,v8.cpu_profiler";
-const LONG_TASK_US = 50000;
-const round = (n, d = 2) => +n.toFixed(d);
+const LAYOUT_EVENTS = ["UpdateLayoutTree", "Layout", "Paint", "PrePaint", "Commit", "Layerize"];
+const INVALIDATORS = ["InvalidateLayout", "ScheduleStyleRecalculation"];
 
-/** `file:function` of a stack's first frame (a line number moves on any edit; the function name does not). */
-export function siteKey(frame) {
-  if (!frame) return "(no stack)";
-  const url = String(frame.url || "").split("?")[0];
-  const file = url.slice(url.lastIndexOf("/") + 1) || "(native)";
-  return `${file}:${frame.functionName || "(anonymous)"}`;
+/** Strip the local server origin and the cache stamp from a script URL. */
+export const shortUrl = (u) => String(u || "").replace(/^https?:\/\/[^/]+\//, "").replace(/\?v=[^:]*/, "");
+
+/** Parse a trace file (JSON array, {traceEvents}, or gzip of either) into its event list. */
+export function readTrace(file) {
+  let buf = readFileSync(file);
+  if (buf[0] === 0x1f && buf[1] === 0x8b) buf = gunzipSync(buf);
+  const j = JSON.parse(buf.toString("utf8"));
+  return Array.isArray(j) ? j : j.traceEvents || [];
 }
 
-function topFrame(ev) {
-  const st = ev.args && ev.args.data && ev.args.data.stackTrace;
-  return Array.isArray(st) && st.length ? st[0] : null;
-}
+const pct = (sorted, p) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] : null);
 
-/**
- * @param {object[]|{traceEvents:object[]}} trace
- * @param {{markStart?:string, markEnd?:string, windowS?:number, frames?:number, skipFirstMs?:number}} [opts]  windowS: the steady window in seconds
- *   (default: first to last timeline event); frames: rendered frames in the window, for the per-1000-frames GC rate.
- */
-export function census(trace, opts = {}) {
-  let events = Array.isArray(trace) ? trace : (trace && trace.traceEvents) || [];
-  let startTs = null;
-  if (opts.markStart && opts.markEnd) {   // performance.mark()s bracket the steady window; everything outside (track build, warm-up) is dropped
-    const at = (n) => { const m = events.find((e) => e.name === n && e.ts); return m ? m.ts : null; };
-    startTs = at(opts.markStart); const endTs = at(opts.markEnd);
-    if (startTs != null && endTs != null) { events = events.filter((e) => e.ts >= startTs && e.ts <= endTs); if (!opts.windowS) opts = { ...opts, windowS: (endTs - startTs) / 1e6 }; }
-    else startTs = null;
-  }
-  let t0 = Infinity, t1 = -Infinity;
-  for (const e of events) {
-    if (e.ph !== "X" && e.ph !== "B") continue;
-    if (e.name === "RunTask" || e.name === "Layout" || e.name === "Paint") { t0 = Math.min(t0, e.ts); t1 = Math.max(t1, e.ts + (e.dur || 0)); }
-  }
-  const windowS = opts.windowS || (t1 > t0 ? (t1 - t0) / 1e6 : 0);
-  const perS = (n) => (windowS > 0 ? round(n / windowS) : 0);
-  const timed = (name) => events.filter((e) => e.name === name && e.ph === "X");
-  const layouts = timed("Layout"), styles = timed("UpdateLayoutTree"), paints = timed("Paint");
-  const dirty = layouts.map((e) => (e.args && e.args.beginData && e.args.beginData.dirtyObjects) || 0);
+/** The census over a list of trace events. Every count is exact; every ms is informational. */
+export function census(events, { top = 20 } = {}) {
+  const mains = new Set();
+  for (const e of events) if (e.name === "thread_name" && e.args && e.args.name === "CrRendererMain") mains.add(`${e.pid}:${e.tid}`);
+  const isMain = (e) => mains.size === 0 || mains.has(`${e.pid}:${e.tid}`);
+  let tmin = Infinity, tmax = -Infinity;
+  const tasks = []; let longTasks = 0;
+  const counts = {}; for (const n of LAYOUT_EVENTS) counts[n] = { n: 0, ms: 0, max: 0 };
+  const gc = { scavenges: 0, scavengeMs: 0, majors: 0, majorMs: 0, maxPauseMs: 0 };
   const invalidators = {};
-  const tally = (kind, name) => {
-    for (const e of events) {
-      if (e.name !== name) continue;
-      const k = `${kind} ← ${siteKey(topFrame(e))}`;
-      invalidators[k] = (invalidators[k] || 0) + 1;
+  let layoutDirty = 0, layoutTotal = 0, styleElements = 0, styleWithCount = 0;
+  const overhead = { profilerStartMs: 0, userTimingMeasures: 0, userTimingMs: 0 };
+  for (const e of events) {
+    if (!isMain(e)) continue;
+    const d = (e.dur || 0) / 1000;
+    if (e.ph === "X") {
+      // Bounds from the main thread's complete events only: metadata rows carry a process-start ts.
+      if (typeof e.ts === "number") { if (e.ts < tmin) tmin = e.ts; if (e.ts + (e.dur || 0) > tmax) tmax = e.ts + (e.dur || 0); }
+      if (e.name === "RunTask") { tasks.push(d); if (d > 50) longTasks++; }
+      else if (counts[e.name]) { const c = counts[e.name]; c.n++; c.ms += d; if (d > c.max) c.max = d; }
+      else if (e.name === "MinorGC") { gc.scavenges++; gc.scavengeMs += d; if (d > gc.maxPauseMs) gc.maxPauseMs = d; }
+      else if (e.name === "MajorGC") { gc.majors++; gc.majorMs += d; if (d > gc.maxPauseMs) gc.maxPauseMs = d; }
+      else if (e.name === "CpuProfiler::StartProfiling") overhead.profilerStartMs += d;
+      else if (e.name === "UserTiming::Measure") { overhead.userTimingMeasures++; overhead.userTimingMs += d; }
+      if (e.name === "Layout" && e.args && e.args.beginData) { layoutDirty += e.args.beginData.dirtyObjects || 0; layoutTotal += e.args.beginData.totalObjects || 0; }
+      if (e.name === "UpdateLayoutTree" && e.args && typeof e.args.elementCount === "number") { styleElements += e.args.elementCount; styleWithCount++; }
     }
-  };
-  tally("InvalidateLayout", "InvalidateLayout");
-  tally("ScheduleStyleRecalculation", "ScheduleStyleRecalculation");
-  const minor = events.filter((e) => e.name === "MinorGC" || e.name === "V8.GCScavenger");
-  const major = events.filter((e) => e.name === "MajorGC" || e.name === "V8.GCCompactor");
-  const gcMs = (list) => list.reduce((m, e) => Math.max(m, (e.dur || 0) / 1000), 0);
-  const frames = opts.frames || 0;
-  const tasks = timed("RunTask").sort((a, b) => a.ts - b.ts);
-  // The profiler attach alone is a 600-665 ms task (research B §2.5): tasks starting in the first `skipFirstMs` of the window are excluded.
-  const cut = (startTs != null ? startTs : tasks.length ? tasks[0].ts : 0) + (opts.skipFirstMs || 0) * 1000;
-  const longTasks = tasks.filter((e) => e.ts >= cut && (e.dur || 0) > LONG_TASK_US);
+    if (INVALIDATORS.includes(e.name)) {
+      const st = e.args && e.args.data && e.args.data.stackTrace;
+      const topF = st && st[0];
+      const key = topF ? `${e.name} ${topF.functionName || "(anon)"} ${shortUrl(topF.url)}:${topF.lineNumber}` : `${e.name} (no stack)`;
+      invalidators[key] = (invalidators[key] || 0) + 1;
+    }
+  }
+  const seconds = Number.isFinite(tmin) && tmax > tmin ? (tmax - tmin) / 1e6 : 0;
+  const perS = (n) => (seconds ? +(n / seconds).toFixed(2) : null);
+  tasks.sort((a, b) => a - b);
+  // Sampled CPU profile: self samples per function and per file (any thread; ProfileChunk nodes carry callFrames).
+  const nodes = new Map(); const self = new Map(); let samples = 0;
+  for (const c of events) {
+    if (c.name !== "ProfileChunk") continue;
+    const cp = c.args && c.args.data && c.args.data.cpuProfile; if (!cp) continue;
+    for (const n of cp.nodes || []) nodes.set(n.id, n);
+    for (const s of cp.samples || []) { samples++; self.set(s, (self.get(s) || 0) + 1); }
+  }
+  const fnRows = [...self.entries()].map(([id, n]) => { const cf = (nodes.get(id) || {}).callFrame || {}; return { fn: cf.functionName || "(anon)", url: shortUrl(cf.url), line: cf.lineNumber, samples: n, pct: samples ? +(100 * n / samples).toFixed(2) : null }; })
+    .sort((a, b) => b.samples - a.samples);
+  const byFile = {}; for (const r of fnRows) byFile[r.url || "(native/idle)"] = (byFile[r.url || "(native/idle)"] || 0) + r.samples;
+  const fileRows = Object.entries(byFile).map(([url, n]) => ({ url, samples: n, pct: samples ? +(100 * n / samples).toFixed(2) : null })).sort((a, b) => b.samples - a.samples);
+  const layout = {}; for (const n of LAYOUT_EVENTS) layout[n] = { n: counts[n].n, perS: perS(counts[n].n), ms: +counts[n].ms.toFixed(1), maxMs: +counts[n].max.toFixed(2) };
   return {
-    windowS: round(windowS, 1),
-    frames,
-    layout: { Layout: { count: layouts.length, perS: perS(layouts.length), meanDirty: layouts.length ? round(dirty.reduce((a, b) => a + b, 0) / layouts.length, 1) : 0 },
-      UpdateLayoutTree: { count: styles.length, perS: perS(styles.length) }, Paint: { count: paints.length, perS: perS(paints.length) } },
-    invalidators,
-    gc: { scavenges: minor.length, scavengesPer1000Frames: frames ? round((minor.length * 1000) / frames) : 0, scavengePerS: perS(minor.length), maxScavengeMs: round(gcMs(minor)), majors: major.length },
-    tasks: { total: tasks.length, longOver50ms: longTasks.length, longestMs: round(longTasks.reduce((m, e) => Math.max(m, e.dur / 1000), 0), 1) },
+    seconds: +seconds.toFixed(2), mainThreads: mains.size,
+    tasks: { n: tasks.length, longOver50ms: longTasks, p50Ms: pct(tasks, 0.5), p99Ms: pct(tasks, 0.99), maxMs: tasks.length ? tasks[tasks.length - 1] : null },
+    layout,
+    layoutDirtyAvg: counts.Layout.n ? +(layoutDirty / counts.Layout.n).toFixed(1) : null,
+    layoutTotalAvg: counts.Layout.n ? +(layoutTotal / counts.Layout.n).toFixed(0) : null,
+    styleElementsAvg: styleWithCount ? +(styleElements / styleWithCount).toFixed(1) : null,
+    invalidators: Object.entries(invalidators).sort((a, b) => b[1] - a[1]).slice(0, top).map(([site, n]) => ({ site, n, perS: perS(n) })),
+    gc: { ...gc, scavengesPerS: perS(gc.scavenges), scavengeMs: +gc.scavengeMs.toFixed(1), majorMs: +gc.majorMs.toFixed(1), maxPauseMs: +gc.maxPauseMs.toFixed(2) },
+    overhead: { ...overhead, profilerStartMs: +overhead.profilerStartMs.toFixed(1), userTimingMs: +overhead.userTimingMs.toFixed(1) },
+    profile: { samples, topSelf: fnRows.slice(0, top), byFile: fileRows.slice(0, top) },
   };
 }
 
-/** Failures of `c` against `baseline` ({headroom, layout:{perS}, gcPer1000Frames, invalidatorSites:[...]}) — [] passes. */
-export function judge(c, baseline) {
-  const fail = [];
-  const h = baseline.headroom || 1.25;
-  const lim = baseline.layout && baseline.layout.perS;
-  if (lim != null && c.layout.Layout.perS > lim * h) fail.push(`Layout/s ${c.layout.Layout.perS} > baseline ${lim} x ${h}`);
-  const limGc = baseline.gcPer1000Frames;
-  if (limGc != null && c.gc.scavengesPer1000Frames > limGc * h) fail.push(`scavenges per 1000 frames ${c.gc.scavengesPer1000Frames} > baseline ${limGc} x ${h}`);
-  const allowed = new Set(baseline.invalidatorSites || []);
-  for (const k of Object.keys(c.invalidators)) {
-    const site = k.split(" ← ")[1];
-    if (!allowed.has(site)) fail.push(`new invalidator site ${site} (${c.invalidators[k]}x ${k.split(" ← ")[0]}): review it, then add it to the baseline`);
-  }
-  if (c.tasks.longOver50ms > (baseline.longTasks || 0)) fail.push(`${c.tasks.longOver50ms} tasks over 50 ms (longest ${c.tasks.longestMs} ms) after the warm-up window`);
-  return fail;
+export function format(c) {
+  const L = [];
+  L.push(`trace ${c.seconds}s  main tasks ${c.tasks.n}  long(>50ms) ${c.tasks.longOver50ms}  task p50 ${c.tasks.p50Ms?.toFixed(2)} p99 ${c.tasks.p99Ms?.toFixed(2)} max ${c.tasks.maxMs?.toFixed(1)} ms`);
+  for (const [n, v] of Object.entries(c.layout)) L.push(`  ${n.padEnd(16)} n ${String(v.n).padStart(6)}  /s ${String(v.perS).padStart(7)}  ms ${String(v.ms).padStart(8)}  max ${v.maxMs}`);
+  L.push(`  Layout dirty avg ${c.layoutDirtyAvg} of ${c.layoutTotalAvg} objects; style recalc avg ${c.styleElementsAvg} elements`);
+  L.push(`gc scavenges ${c.gc.scavenges} (${c.gc.scavengesPerS}/s, ${c.gc.scavengeMs} ms)  majors ${c.gc.majors} (${c.gc.majorMs} ms)  max pause ${c.gc.maxPauseMs} ms`);
+  L.push(`overhead profiler start ${c.overhead.profilerStartMs} ms; User Timing measures ${c.overhead.userTimingMeasures} (${c.overhead.userTimingMs} ms)`);
+  L.push("invalidation sites:"); for (const r of c.invalidators) L.push(`  ${String(r.n).padStart(6)}  ${r.perS}/s  ${r.site}`);
+  L.push(`profile samples ${c.profile.samples}; top self:`); for (const r of c.profile.topSelf) L.push(`  ${String(r.pct).padStart(6)}%  ${r.fn.padEnd(30)} ${r.url ? `${r.url}:${r.line}` : "(native)"}`);
+  L.push("by file:"); for (const r of c.profile.byFile) L.push(`  ${String(r.pct).padStart(6)}%  ${r.url}`);
+  return L.join("\n");
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const argv = process.argv.slice(2);
+  const file = argv.find((a) => !a.startsWith("--"));
+  if (!file || argv.includes("--help")) { console.error("usage: node tools/perf/trace-census.mjs <trace.json[.gz]> [--top N] [--json [file]]"); process.exit(file ? 0 : 2); }
+  const ti = argv.indexOf("--top"); const top = ti >= 0 ? +argv[ti + 1] || 20 : 20;
+  const c = census(readTrace(file), { top });
+  const ji = argv.indexOf("--json");
+  if (ji >= 0) { const out = argv[ji + 1] && !argv[ji + 1].startsWith("--") ? argv[ji + 1] : null; const s = JSON.stringify(c, null, 2); if (out) { writeFileSync(out, s); console.log(`wrote ${out}`); } else console.log(s); }
+  else console.log(format(c));
 }

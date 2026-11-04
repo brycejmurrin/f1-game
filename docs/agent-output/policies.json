@@ -296,6 +296,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/byte-budget.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/check-gctx.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -2031,6 +2036,21 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/map/build-project-map.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One summary line (node and edge counts, output dir); the JSON on --stdout."
+    },
+    "tools/map/explorer.html": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Page template; the __MAP_DATA__ marker the generator replaces."
+    },
+    "tools/map/flows.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Curated flow steps (file, symbol, line, note) the generator checks for staleness."
+    },
     "tools/mcp/apex-claude-agents.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -2351,6 +2371,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/trace-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-second layout / style / paint rows, the GC and long-task line, the trace-overhead line, the invalidation-site rows and the self-time rows; --json writes the same census as JSON."
+    },
     "tools/perf/devicefarm-host.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2451,7 +2476,7 @@
       "presentation": "native",
       "preserve": "@c8"
     },
-    "tools/perf/trace-census.mjs": {
+    "tools/perf/trace-gate.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"

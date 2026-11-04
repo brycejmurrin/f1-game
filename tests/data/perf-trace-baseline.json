@@ -4,7 +4,7 @@
   "warmMs": 8000,
   "skipMs": 1000,
   "headroom": 1.25,
-  "layout": { "perS": 25.1 },
+  "layoutPerS": 25.1,
   "gcPer1000Frames": 65,
   "invalidatorSites": [
     "(no stack)",

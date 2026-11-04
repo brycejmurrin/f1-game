@@ -43,6 +43,6 @@ test("normals straddling a 0.01 bin edge still pair", () => {
   const mk = (nx) => { const l = Math.hypot(nx, 1); return [1 / l, nx / l, 0]; };
   // ny = 0.0049/0.0051 rad-ish: rounds to 0.00 vs 0.01 yet dot ~ 1
   const a = wall(0, 0, mk(0.0049)), b = wall(0, 0, mk(0.0051));
-  assert.equal(run([a, b]).pairs, 0, "default gate: bins stay as before");
-  assert.equal(run([a, b], { adjacentBins: true }).pairs, 1);
+  assert.equal(run([a, b]).pairs, 1, "adjacent bins are the default (#4724)");
+  assert.equal(run([a, b], { adjacentBins: false }).pairs, 0, "--no-adjacent-bins keeps the old bins");
 });

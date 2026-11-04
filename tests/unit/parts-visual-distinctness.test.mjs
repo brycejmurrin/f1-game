@@ -158,12 +158,12 @@ test("classify is a pure function of the measured row", () => {
   assert.equal(classify({ ...base, dHaus: 0.01, dHausVis: 0.01, movedArea: 0.5 }), "WEAK");
 });
 
-test("attribute names the inert key on a flagged row", async () => {
+test("attribute names the inert key on a flagged row", async (t) => {
   // The triage path has to work on the day it is needed, not the day it is
   // written — and it is the only thing that turns "this option is thin" into
   // "this ONE key is clamped dead". Exercised on a known-flagged row.
   const row = (await rows()).find((r) => !["OK", "BASELINE"].includes(r.cls) && !r.broken);
-  if (!row) return;                       // catalog fully healthy — nothing to triage
+  if (!row) return t.skip("catalog fully healthy — nothing to triage");
   const keys = attribute(M, row);
   for (const k of keys) assert.equal(typeof k.dHaus, "number");
 });

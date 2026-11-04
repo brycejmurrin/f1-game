@@ -1936,6 +1936,92 @@ const CarBodyGeom = (function () {
         }
         return ring[4];
       },
+      // Decal triangles `lift` m off the RENDERED sculpted flank between z0 > z1 and pod fractions
+      // f0 < f1, for decals laid in layers (#3959). podFlank slid 2-4 mm in x, which lies IN a
+      // shallow facet, and its chords twisted off the loft: each 60 cm station quad is two planar
+      // triangles split on the q0-q2 diagonal, which the reversed left ring runs the other way.
+      // So every decal cell is cut on the skin's own facet edges and diagonal, and each vertex is
+      // lifted off the skin triangles it lies on (least squares where it sits on a crease), so a quad
+      // shared by two layers stays parallel to the skin and the layers stay `lift` apart.
+      // Each triangle is [x, y, z, f] x 3, wound outward for `side` (+1 right, -1 left).
+      flankTris(z0, z1, f0, f1, lift, side) {
+        if (!sculpt) return null;
+        const st = podStops, fr = [0, 0.22, 0.65, 1], left = side < 0, E = 1e-9;
+        const rings = new Map(), ringAt = (k) => { if (!rings.has(k)) rings.set(k, sculptPodRing(podSample(st[k].z), 1, sculpt)); return rings.get(k); };
+        const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+        const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+        const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        // Skin triangle of interval k, ring facet i (ring[i] -> ring[i+1]) holding param (s, t):
+        // its three param corners and 3D corners. Right: q0-q2 is (0,0)-(1,1); left: (0,1)-(1,0).
+        const tri = (k, i, s, t) => {
+          const A = ringAt(k), B = ringAt(k + 1), C = (ss, tt) => (ss ? B : A)[i + tt];
+          const P = (ss, tt) => { const r = C(ss, tt); return [r[0], r[1], ss ? st[k + 1].z : st[k].z]; };
+          const c = !left ? (t <= s ? [[0, 0], [1, 0], [1, 1]] : [[0, 0], [1, 1], [0, 1]])
+            : (t >= 1 - s ? [[0, 1], [1, 1], [1, 0]] : [[0, 1], [1, 0], [0, 0]]);
+          return { c, P: c.map(([ss, tt]) => P(ss, tt)), mid: ringAt(k).reduce((m, p) => [m[0] + p[0] / A.length, m[1] + p[1] / A.length], [0, 0]) };
+        };
+        const normal = (T) => { const n = cross(sub(T.P[1], T.P[0]), sub(T.P[2], T.P[0])), l = Math.hypot(...n) || 1;
+          const o = dot(n, [T.P[0][0] - T.mid[0], T.P[0][1] - T.mid[1], 0]) < 0 ? -1 : 1; return n.map(v => v * o / l); };
+        const onSkin = (T, s, t) => {   // affine in the param triangle
+          const [a, b, c] = T.c, d = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+          const u = ((s - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (t - a[1])) / d, v = ((b[0] - a[0]) * (t - a[1]) - (s - a[0]) * (b[1] - a[1])) / d;
+          return [0, 1, 2].map(j => T.P[0][j] + (T.P[1][j] - T.P[0][j]) * u + (T.P[2][j] - T.P[0][j]) * v);
+        };
+        const nL = ringAt(0).length;
+        const vert = (k, i, s, t) => {
+          const p = onSkin(tri(k, i, s, t), s, t), ns = [];
+          for (const ds of [-1e-4, 1e-4]) for (const dt of [-1e-4, 1e-4]) {
+            let kk = k, ii = i, ss = s + ds, tt = t + dt;
+            if (ss < 0) { if (kk === 0) continue; kk--; ss += 1; } else if (ss > 1) { if (kk >= st.length - 2) continue; kk++; ss -= 1; }
+            if (tt < 0) { if (ii === 0) continue; ii--; tt += 1; } else if (tt > 1) { if (ii >= nL - 2) continue; ii++; tt -= 1; }
+            const n = normal(tri(kk, ii, ss, tt));
+            if (!ns.some(m => dot(m, n) > 1 - 1e-9)) ns.push(n);
+          }
+          // Least squares m.n = lift over every incident plane (Tikhonov-pulled to the mean normal):
+          // a sharp crease would over-lift a mitre past the 3 mm seal.
+          const sum = ns.reduce((m, n) => [m[0] + n[0], m[1] + n[1], m[2] + n[2]], [0, 0, 0]), l = Math.hypot(...sum) || 1;
+          const N = sum.map(v => v / l), lam = 1e-3;
+          const M3 = [0, 1, 2].map(r => [0, 1, 2].map(c => ns.reduce((acc, n) => acc + n[r] * n[c], 0) + (r === c ? lam : 0)));
+          const rhs = [0, 1, 2].map(r => lift * (sum[r] + lam * N[r]));
+          const det3 = (m) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+          const D = det3(M3), off = [0, 1, 2].map(c => det3(M3.map((row, r) => row.map((v, j) => j === c ? rhs[r] : v))) / D);
+          return [side * (p[0] + off[0]), p[1] + off[1], p[2] + off[2]];
+        };
+        const lo = Math.max(0, f0), hi = Math.min(1, f1);
+        if (hi - lo < 1e-6) return [];
+        const zs = [z0, ...st.map(p => p.z).filter(z => z < z0 - E && z > z1 + E), z1];
+        const fs = [lo, ...[0.22, 0.65].filter(f => f > lo + E && f < hi - E), hi];
+        const out = [];
+        for (let a = 0; a < zs.length - 1; a++) {
+          const zm = (zs[a] + zs[a + 1]) / 2;
+          let k = 0; while (k < st.length - 2 && st[k + 1].z >= zm) k++;
+          const span = st[k].z - st[k + 1].z, sOf = (z) => Math.max(0, Math.min(1, (st[k].z - z) / span));
+          const sa = sOf(zs[a]), sb = sOf(zs[a + 1]);
+          for (let b = 0; b < fs.length - 1; b++) {
+            const fm = (fs[b] + fs[b + 1]) / 2; let i = 1; while (i < 3 && fm > fr[i]) i++;
+            const tOf = (f) => (f - fr[i - 1]) / (fr[i] - fr[i - 1]), ta = tOf(fs[b]), tb = tOf(fs[b + 1]);
+            const g = (q) => left ? q[1] - (1 - q[0]) : q[1] - q[0];
+            const rect = [[sa, ta], [sb, ta], [sb, tb], [sa, tb]];
+            for (const sign of [-1, 1]) {
+              const poly = [];
+              for (let m = 0; m < 4; m++) {
+                const A = rect[m], B = rect[(m + 1) % 4], ga = g(A) * sign, gb = g(B) * sign;
+                if (ga <= E) poly.push(A);
+                if ((ga < -E && gb > E) || (ga > E && gb < -E)) {   // the edge crosses the diagonal: exact point on it
+                  if (A[0] === B[0]) poly.push([A[0], left ? 1 - A[0] : A[0]]);
+                  else poly.push([left ? 1 - A[1] : A[1], A[1]]);
+                }
+              }
+              if (poly.length < 3) continue;
+              let area = 0; for (let m = 0; m < poly.length; m++) { const p = poly[m], q = poly[(m + 1) % poly.length]; area += p[0] * q[1] - q[0] * p[1]; }
+              if (Math.abs(area) < 1e-10) continue;
+              const V = poly.map(([s, t]) => [...vert(k, i, s, t), fr[i - 1] + t * (fr[i] - fr[i - 1])]);
+              for (let m = 1; m < V.length - 1; m++) out.push(left ? [V[m + 1], V[m], V[0]] : [V[0], V[m], V[m + 1]]);
+            }
+          }
+        }
+        return out;
+      },
     };
   }
 

@@ -1341,6 +1341,7 @@
       "*": [
         "tests/specs/music-library.spec.js",
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/project-map.test.mjs",
         "tests/unit/rival-attach-init.test.mjs"
       ]
     },
@@ -5378,6 +5379,7 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/project-map.test.mjs",
         "tests/unit/ready-gate.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -7917,6 +7919,7 @@
         "tests/unit/tolerance-diff.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
+        "tests/unit/trace-census.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
         "tests/unit/vm-filename-lint.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
@@ -8048,6 +8051,7 @@
       "place": [
         "tests/unit/garage-camera-rigs.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-entrance-motion.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "resolve": [
@@ -8059,8 +8063,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-departure-wheels.test.mjs",
-        "tests/unit/garage-entrance-motion.test.mjs"
+        "tests/unit/garage-departure-wheels.test.mjs"
       ]
     },
     "js/garage/crew-motion.js": {
@@ -18324,7 +18327,8 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
-        "tests/unit/trace-census.test.mjs"
+        "tests/unit/trace-census.test.mjs",
+        "tests/unit/trace-gate.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18902,6 +18906,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
     },
@@ -19523,6 +19528,9 @@
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
+      "spawn": [
+        "tests/unit/select-specs.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
@@ -19531,8 +19539,7 @@
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
