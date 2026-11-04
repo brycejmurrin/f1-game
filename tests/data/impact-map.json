@@ -4243,6 +4243,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs"
       ],
       "inCareer": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -14205,6 +14206,9 @@
       ],
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
       ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",

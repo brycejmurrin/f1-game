@@ -132,7 +132,7 @@ function adoptTeamIdentity() {
   }
 }
 function identityValue(key, fallback) {
-  return inCareer() && career.flavour === "myteam" && career.myTeamIdentity && Object.hasOwn(career.myTeamIdentity, key) ? career.myTeamIdentity[key] : fallback;
+  return inCareer() && career.flavour === "myteam" && career.myTeamIdentity && Object.hasOwn(career.myTeamIdentity, key) && career.myTeamIdentity[key] != null ? career.myTeamIdentity[key] : fallback;
 }
 function setIdentityValue(key, value) {
   if (!inCareer() || career.flavour !== "myteam" || blocked() || (careerRevision != null && currentRevision() !== careerRevision) || typeof CareerTeamIdentity === "undefined") return false;
