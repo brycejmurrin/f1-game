@@ -1,5 +1,7 @@
 # #3959 engineCover~sidepods z-fight — normal-lift sweep (2026-11-04)
 
+Kind: measurement · Re-measure-by: 2026-12-04
+
 Re-measured on deploy tip `1f00b697` with
 `node tools/car/car-fit-audit.mjs --bodies=needle,brick,anteater,arched,wedge,barge --baseline <tip baseline>` (48 s/run).
 Tip baseline: 45 ZFIGHT `engineCover~sidepods` rows on the six concept bodies.
