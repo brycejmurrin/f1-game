@@ -915,6 +915,11 @@ async function applyCareer(file, revisions) {
   const bag = file.careers;
   if (!bag || typeof bag !== "object" || Array.isArray(bag)) return refused("invalid careers");
   if (Object.keys(bag).length > CAREER_BAG_KEYS_MAX) return refused("too many careers");
+  if (typeof CareerBackup === "undefined" && typeof CareerUI !== "undefined" && CareerUI.ready) {
+    // CareerBackup rides LAZY_CAREER_UI (kicked at boot); wait for it, then re-read revisions.
+    try { await CareerUI.ready(); } catch (_) { /* refused below */ }
+    revisions = null;
+  }
   if (typeof CareerBackup === "undefined") return refused("career backup unavailable");
   const slots = [];
   let skipped = 0, liveSlot;
