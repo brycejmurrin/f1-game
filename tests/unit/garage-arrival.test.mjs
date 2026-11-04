@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
 import { fnSource } from '../helpers/fn-source.mjs';
+import { gameSource } from '../helpers/game-source.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
@@ -91,6 +92,7 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
   const { $ } = harness();
   let saved = null;
   const read = Arrival.bindSettings($, { get: () => saved, set: (_, value) => { saved = value; } });
+  $('ga-moment-pitIn').onclick();   // the rows edit the picked moment: WORK ON CAR's arrival is PIT IN
   $('ga-speed').value = '2'; $('ga-speed').onchange();
   $('ga-angle').value = 'right'; $('ga-angle').onchange();
   $('ga-fov').value = '70'; $('ga-fov').onchange();
@@ -100,7 +102,7 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
   assert.equal(arrival.state.active, false);
   $('ga-enabled').checked = false; $('ga-enabled').onchange();
   arrival.start(); assert.equal(arrival.state.active, false);
-  $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().speed, 1);
+  $('ga-reset').onclick(); assert.equal(read().speed, 1); assert.equal(read().enabled, true, 'RESET: the moment back to the shipped look');
   arrival.start(); assert.equal(arrival.state.active, true);
   assert.equal(Arrival.settings({ speed: Infinity, fov: -100, angle: 'outside' }).fov, 40);
   assert.equal(Arrival.settings({ speed: Infinity }).speed, 1);
@@ -412,14 +414,15 @@ test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-ou
   const calls = [];
   Arrival.bindSettings($, { get: () => null, set() {} }, { preview: (dir, b) => { calls.push(dir); if (dir) return true; const was = playing; playing = false; return was; } });
   $('garrival').hidden = false;
-  $('ga-preview-in').onclick(); $('ga-preview-out').onclick(); $('ga-preview-home').onclick();
-  assert.deepEqual(calls, ['in', 'out', 'home']);
+  for (const m of ['start', 'pitIn', 'pitOut', 'home']) { $('ga-moment-' + m).onclick(); $('ga-preview').onclick(); }
+  assert.deepEqual(calls, ['start', 'pitIn', 'pitOut', 'home'], 'PREVIEW plays the picked moment');
+  assert.deepEqual(['in', 'out', 'home', 'pitOut'].map((x) => h.start(null) || Arrival.momentOf(x)), ['pitIn', 'start', 'home', 'pitOut'], 'a shipped direction still names its moment');
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, false, 'DONE mid-playback stops it, the panel stays');
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, true, 'the next DONE closes the tool');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW PIT STOP<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW RACE START<\/button>/);
+  assert.match(shell, /<button id="ga-preview" type="button">PREVIEW<\/button>\s*<button id="ga-reset"/);
 });
 
 test('a circuit already raced opens RACE! on the garage: its programs are not warmed a second time', () => {
@@ -1259,7 +1262,10 @@ test('entry and departure crew choices save independently and fall back safely f
   $('ga-crew-out').value = 'none'; $('ga-crew-out').onchange();
   assert.equal(read().enterCrew, 'welcome'); assert.equal(Arrival.poseOut(2, read(), true).crew, 'none');
   assert.equal(Arrival.settings({ enterCrew: 'unknown', leaveCrew: 3 }).leaveCrew, 'mix');
-  $('ga-reset').onclick(); assert.equal(saved, null); assert.equal(read().enterCrew, 'mix');
+  $('ga-reset').onclick(); assert.equal(read().enterCrew, 'mix');
+  // A save from before the four moments (flat fields only) is every moment's base.
+  saved = { enterCrew: 'welcome', leaveCrew: 'guides' };
+  for (const m of Arrival.MOMENTS) assert.deepEqual([Arrival.settingsFor(saved, m).enterCrew, Arrival.settingsFor(saved, m).leaveCrew], ['welcome', 'guides'], m);
 });
 
 
@@ -1541,7 +1547,7 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   for (const v of ['cut', 'left', 'right']) add(angle, 'option').value = v;
   row('ga-crew-in', 'select'); row('ga-fov', 'input'); row('ga-crew-out', 'select');
   const foot = add(doc.getElementById('garrival-inner'), 'div');
-  for (const id of ['ga-preview-in', 'ga-preview-out', 'ga-reset']) add(foot, 'button', id);
+  for (const id of ['ga-preview', 'ga-reset']) add(foot, 'button', id);
   const $ = (id) => doc.getElementById(id);
   A.bindSettings($, { get: () => null, set() {} });
   A.bindSettings($, { get: () => null, set() {} });
@@ -1559,7 +1565,9 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   assert.deepEqual($('ga-light-home').children.map((o) => o.value).slice(0, 2), ['auto', 'asset']);
   for (const id of ['ga-move', 'ga-sway', 'ga-zoom', 'ga-swell']) assert.equal($(id).tagName, 'SELECT', id);
   for (const id of ['ga-captions', 'ga-bars']) assert.equal($(id).type, 'checkbox', id);
-  assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview-in', 'ga-preview-out', 'ga-preview-home', 'ga-reset'], 'PREVIEW AFTER RACE joins the other previews');
+  assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview', 'ga-reset', 'ga-copy-all'], 'COPY TO ALL MOMENTS joins RESET');
+  assert.equal(rows.children[0].id, 'ga-moments', 'the MOMENT tabs head the rows');
+  assert.deepEqual($('ga-moments').children.map((b) => [b.id, b.textContent]), [['ga-moment-start', 'RACE START'], ['ga-moment-pitIn', 'PIT IN'], ['ga-moment-pitOut', 'PIT OUT'], ['ga-moment-home', 'RACE END']]);
   assert.equal(rows.querySelector('label[for="ga-carspeed"]').textContent, 'CAR SPEED');
 });
 test('endRace notes the result; the next non-pit garage visit plays it once (gated, never for the harness)', () => {
@@ -1957,14 +1965,15 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
   assert.equal(kids[kids.indexOf($('ga-enabled').closest('.set-row')) - 1], bar, 'right above PLAY ANIMATIONS');
   assert.deepEqual(bar.querySelectorAll('button').map((b) => b.textContent), ['BROADCAST', 'CINEMA', 'DOCUMENTARY', 'SHOWCASE', 'NIGHT SHIFT', 'RAIN READY', 'HERITAGE', 'QUALIFYING']);
   $('ga-style-cinema').onclick();
-  assert.deepEqual([saved.angle, saved.bars, saved.captions], ['crane', true, false]);
+  const look = () => saved.moments.start;   // a style lands in the picked moment (RACE START first)
+  assert.deepEqual([look().angle, look().bars, look().captions], ['crane', true, false]);
   assert.equal($('ga-style-cinema').getAttribute('aria-pressed'), 'true');
   $('ga-style-broadcast').onclick();
-  assert.deepEqual([saved.angle, saved.light, saved.cue], ['director', 'broadcast', 'lightsup']);
+  assert.deepEqual([look().angle, look().light, look().cue], ['director', 'broadcast', 'lightsup']);
   assert.deepEqual(['broadcast', 'cinema'].map((id) => $('ga-style-' + id).getAttribute('aria-pressed')), ['true', 'false']);
   const more = ['rainready', 'heritage', 'qualify'].map((id) => {
     $('ga-style-' + id).onclick();
-    return [id, saved.angle, saved.light];
+    return [id, look().angle, look().light];
   });
   assert.deepEqual(more, [['rainready', 'door', 'rain'], ['heritage', 'low', 'goldenhour'], ['qualify', 'high', 'night']]);
 });
@@ -2005,4 +2014,60 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
   G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
   const d = note([rival, player], {});
   assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
+});
+test('PIT OUT: start({out}) plays the drive-out at PIT OUT\'s own (quicker) base, ends inactive, skip finishes it, caption says RACE', () => {
+  const { $, arrival } = harness();
+  arrival.start({ out: true });
+  assert.equal(arrival.moment, 'pitOut'); assert.equal(arrival.config.speed, 1.6, 'PIT OUT\'s base is 1.6x');
+  assert.equal(arrival.state.direction, 'out');
+  assert.equal($('cs-arrival-skip').textContent, 'SKIP TO RACE');
+  assert.equal($('cs-inner').inert, true);
+  let steps = 0;
+  while (arrival.state.active && steps < 1000) { arrival.step(0.1); steps++; }
+  const quick = steps;
+  assert.ok(!arrival.state.active && $('cs-inner').inert === false, 'ends on its own and unlocks the sheet');
+  const slow = Arrival.create(harness().$, () => false, () => ({ moments: { pitOut: { speed: 1 } } }));   // its own SKIP button
+  slow.start({ out: true });
+  steps = 0;
+  while (slow.state.active && steps < 1000) { slow.step(0.1); steps++; }
+  assert.ok(quick < steps * 0.75, `1.6x release (${quick} steps) is shorter than its own 1x (${steps})`);
+  arrival.start({ out: true }); $('cs-arrival-skip').onclick();
+  assert.ok(!arrival.state.active, 'skip ends the show');
+  arrival.start(); assert.equal(arrival.state.direction, 'in'); assert.equal($('cs-arrival-skip').textContent, 'SKIP TO WORK');
+});
+test('PIT OUT wiring: DONE/BACK in a pit stop route through startPitOut, which fires done once', () => {
+  const g = gameSource();
+  assert.equal((g.match(/setupCam\.startPitOut\(closePitWork\)/g) || []).length, 2, 'cs-done and garageBack');
+});
+
+test('THE FOUR MOMENTS: an edit lands in the picked moment only; COPY TO ALL and RESET act on the picked one', () => {
+  const { $ } = harness(); let saved = null;
+  const read = Arrival.bindSettings($, { get: () => saved, set: (_, v) => { saved = v; } });
+  assert.equal($('garrival')['data-moment'], 'start', 'RACE START is picked first');
+  $('ga-angle').value = 'high'; $('ga-angle').onchange();
+  $('ga-moment-pitIn').onclick(); assert.equal($('garrival')['data-moment'], 'pitIn');
+  assert.equal(read().angle, 'cut', 'PIT IN keeps its own angle');
+  $('ga-angle').value = 'low'; $('ga-angle').onchange();
+  $('ga-fov').value = '70'; $('ga-fov').onchange();
+  assert.deepEqual([...Arrival.MOMENTS].map((m) => Arrival.settingsFor(saved, m).angle), ['high', 'low', 'cut', 'cut']);
+  assert.equal(Arrival.settingsFor(saved, 'pitOut').speed, 1.6, 'PIT OUT keeps its quicker base');
+  // every moment can be switched off on its own; RACE END's switch is PLAY AFTER A RACE too
+  $('ga-moment-home').onclick(); $('ga-enabled').checked = false; $('ga-enabled').onchange();
+  assert.deepEqual([...Arrival.MOMENTS].map((m) => Arrival.settingsFor(saved, m).enabled), [true, true, true, false]);
+  assert.equal(Arrival.settingsFor({ afterRace: false }, 'home').enabled, false, 'an old PLAY AFTER A RACE off keeps RACE END off');
+  assert.deepEqual([...Arrival.ROW_MOMENTS.homeCrew], ['home'], 'AFTER-RACE rows are RACE END\'s only');
+  $('ga-moment-pitIn').onclick(); $('ga-copy-all').onclick();
+  assert.deepEqual([...Arrival.MOMENTS].map((m) => Arrival.settingsFor(saved, m).angle), ['low', 'low', 'low', 'low'], 'COPY TO ALL');
+  assert.equal(Arrival.settingsFor(saved, 'home').enabled, true, 'a copy carries the picked moment\'s switch');
+  $('ga-reset').onclick();
+  assert.deepEqual([...Arrival.MOMENTS].map((m) => Arrival.settingsFor(saved, m).angle), ['low', 'cut', 'low', 'low'], 'RESET: the picked moment only');
+  assert.equal(Arrival.saved({ moments: { pitIn: { angle: 'x' }, bogus: {} } }).moments.pitIn.angle, 'cut', 'moments normalize; unknown ids drop');
+  assert.equal(Object.keys(Arrival.saved({ moments: { bogus: {} } })).includes('moments'), false);
+});
+test('THE FOUR MOMENTS: each sequence plays its own moment (race start, pit in, pit out, race end, previews)', () => {
+  const { $ } = harness();
+  const a = Arrival.create($, () => false, () => ({ moments: { pitIn: { angle: 'high' }, pitOut: { angle: 'low' }, home: { angle: 'door' } } }));
+  a.start(); assert.equal(a.config.angle, 'high');
+  a.start({ out: true }); assert.equal(a.config.angle, 'low');
+  a.start({ home: { result: 'win' } }); assert.equal(a.config.angle, 'door');
 });

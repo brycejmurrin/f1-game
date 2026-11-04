@@ -263,3 +263,11 @@ test("--ref still refreshes origin/<branch>: the sha, the green lookup and the w
   const call = src.indexOf("fetchOrigin(branch);"), refGate = src.indexOf('if (!argv.includes("--ref")) {', call);
   assert.ok(call > 0 && refGate > call, "main fetches before it branches on --ref");
 });
+
+test("runShardArgs: menu-baseline runs apart and off llvmpipe (its goldens are SwiftShader captures, #4891)", () => {
+  const scripts = { "test:mix": "node tools/ci/run-playwright.mjs tests/specs/menu-baseline.spec.js tests/specs/active-aero.spec.js" };
+  const plan = JSON.stringify({ shards: [["tests/specs/menu-baseline.spec.js", "tests/specs/active-aero.spec.js"]] });
+  const r = runShardArgs({ group: "mix", plan, shard: "1", total: "1", workers: "1" }, scripts);
+  assert.deepEqual(r.runs.map((u) => [u.args.includes("tests/specs/menu-baseline.spec.js"), u.env]),
+    [[false, undefined], [true, { APEX_GL: "", LIBGL_ALWAYS_SOFTWARE: "" }]]);
+});

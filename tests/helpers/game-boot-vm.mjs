@@ -13,7 +13,9 @@
  *                                  opts.claimed says whether it took the canvas
  *   ApexRoster.DEFERRED.three/webgpu  one inert fixture file
  *                                  (tests/fixtures/gfx-boot/refusing-backend.js),
- *                                  so the fetch settles without the three island
+ *                                  so the fetch settles without the three island;
+ *                                  opts.deferred = { three: [] | undefined, … }
+ *                                  replaces a group (a pick whose files are gone)
  *   GLX.init                       returns opts.glxInit (default true); false is
  *                                  "the canvas was already claimed"
  *   navigator.gpu                  present with a resolving adapter unless gpu:false
@@ -59,8 +61,9 @@ export async function bootGame(opts = {}) {
     afterFile(rel, ctx) {
       if (rel === "js/roster.js") {
         const R = ctx.ApexRoster;
+        const groups = Object.assign({ three: [FIXTURE], webgpu: [FIXTURE] }, opts.deferred);
         ctx.ApexRoster = Object.freeze(Object.assign({}, R,
-          { DEFERRED: Object.freeze(Object.assign({}, R.DEFERRED, { three: [FIXTURE], webgpu: [FIXTURE] })) }));
+          { DEFERRED: Object.freeze(Object.assign({}, R.DEFERRED, groups)) }));
       } else if (rel === "js/render/gfx.js") {
         ctx.Gfx = Object.assign({}, ctx.Gfx, {
           createInitOwner: () => { counts.initOwners++; return { claimed: !!opts.claimed, abort() {} }; },

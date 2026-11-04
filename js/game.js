@@ -2707,7 +2707,7 @@ function entrySettings() {
   if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
   return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
     teamIdx, driverIdx, difficulty, raceGrid, champGrid, duelSetting(), duelLegend, raceTyreWear,
-    raceReliability, raceDirtyAir, raceAeroMode, simSeed(),   // not raceIndex: the body bumps it, and a repeat start would read as a new request
+    raceReliability, raceDirtyAir, DamageHandling.isEnabled(), raceAeroMode, simSeed(),   // not raceIndex: the body bumps it, and a repeat start would read as a new request
     wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
     netPlay.active(), raceSettings && raceSettings.netRoom,
     season ? _seasonEntryIds.get(season) : null, season && season.round,
@@ -3092,6 +3092,9 @@ const G = {
     raceReliability = v; store.set("reliability", v);
   },
   armReliability: (field) => armReliability(field || cars),
+  // DAMAGE: HANDLING (#1578): the opt-in; a VS FRIEND room rule (#3971, LobbySettings RULES).
+  get raceDamage() { return DamageHandling.isEnabled(); },
+  set raceDamage(v) { DamageHandling.setEnabled(v === true); store.set("damageHandling", v === true); },
   // TYRE WEAR: the race setting and the live model (js/physics/tyre-model.js).
   get raceTyreWear() { return raceTyreWear; },
   set raceTyreWear(v) {
@@ -9041,7 +9044,7 @@ function leaveGarage() {
    Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
@@ -9055,7 +9058,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each

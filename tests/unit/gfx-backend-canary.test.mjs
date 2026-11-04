@@ -794,55 +794,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // !skipClaim`, a refused create disarming the probe without writing webgl2)
   // is BEHAVIOUR now: tests/unit/game-boot-claim-fail.test.mjs boots js/game.js
   // in the VM (tests/helpers/game-boot-vm.mjs, #4878) — not repeated here as source text.
-  // A STORED PICK MUST NOT OUTLIVE ITS FILES. With DEFERRED = {} after the
-  // 2026-09-03 spike-out, BACKEND_FILES.three is undefined; the boot armed the
-  // probe and then threw inside loadBackendScripts on `files.map`. It was caught
-  // and GLX rendered, and the next boot's revert cleared the pick — so it
-  // self-healed and no test saw it. The gate below is what stops the throw and
-  // the "never presented a frame" warning about a backend that was never
-  // fetched. Nothing here executes the boot block, so this is a source pin.
-  const bootSrc = code("js/render/renderer-boot.js");
-  assert.match(bootSrc, /const group = pref === "three" \? BACKEND_FILES\.three/,
-    "the opt-in must resolve its DEFERRED group before arming anything");
-  assert.match(bootSrc, /optIn = [^;]*group && group\.length/,
-    "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
-
-  const wgx = code("js/render/webgpu/wgx.js");
-  const lossCallback = wgx.match(/device\.lost\.then\(function\s*\(info\)\s*\{\s*if\s*\(info && info\.reason === "destroyed"\) return;/);
-  assert.ok(lossCallback, "device.lost registers its recovery callback");
-  // Extract the callback itself: capture cleanup may grow the body without
-  // changing the visible-loss ladder, so a character budget is not its contract.
-  const lossBody = fnBody(wgx.slice(lossCallback.index).replace(
-    /^device\.lost\.then\(function\s*\(info\)/, "function deviceLoss(info)"), "deviceLoss");
-  assert.match(lossBody, /if\s*\(!hidden\)\s*\{[^]*?_wgxEscalate\("device lost \("[^;]*,\s*true\);\s*return;/,
-    "visible device.lost climbs the ladder through forced _wgxEscalate");
-  assert.match(fnBody(wgx, "_wgxEscalate"), /_lost\s*=\s*true;\s*_rejectCapture\([^;]*;\s*_healReset\(\)/,
-    "loss escalation rejects queued capture before recovery bookkeeping");
-  assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
-  assert.doesNotMatch(lossBody, /setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
-  assert.match(wgx, /\bWGX_LITE\b/);
-  assert.match(wgx, /\bIS_WEBKIT\b/);
-  assert.match(wgx, /WGX_LITE\s*&&\s*format\s*===\s*"rgba16float"\s*\)\s*format\s*=\s*"bgra8unorm"/);
-  assert.match(wgx, /_sceneProbeOn\s*=\s*!_outProbeOff\s*&&\s*!WGX_LITE\b/);
-  // The loss ladder (full → lite → minimal → GLX, persisted in
-  // apex26.gfxWgxLevel), the JS strike cap in begin()/present(), the
-  // HEAL_SESSIONS step-down, the minimal rung's no-post/no-sky path and the
-  // apex26.gfxBound label are all driven on the mock device by
-  // tests/unit/webgpu-lifecycle.test.mjs ("device.lost climbs the ladder",
-  // "…climbs to minimal", "minimal rung: no post targets…", "a JS throw in
-  // begin() strikes out…", "clean sessions heal the ladder") — not repeated
-  // here as source text.
-  assert.match(wgx, /_allocFail\(\s*"createMesh"/, "lazy mesh creation on the render path degrades to inert, not a throw");
-  // createChunkedMesh moved to wgx-chunked.js (GLX-seam peel); it still routes
-  // through core.allocFail so a failed upload stays inert, not a throw.
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
-  // allocDrawSlot() returns -1 when the draw ring is full: a chunk must drop
-  // its draw, not index the ring at -1 (RangeError mid-frame). The night
-  // flush drops the open run; per-chunk breaks out of the chunk loop.
-  // One assertPinsAll site covers both full-ring exits (ratchet at tip ceiling).
-  assert.match(code("js/render/webgpu/wgx-chunked.js"),
-    /if \(s < 0\) return -1;[\s\S]*if \(s2 < 0\) \{ run\.active = false; return; \}/);
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(cslot < 0\) break;/);
+  // The rest of this group is BEHAVIOUR too (#1682 step 2; mutation evidence in
+  // each file's header and the PR body), not repeated here as source text:
+  //  - a stored pick whose DEFERRED group is gone or empty binds GLX without
+  //    arming the probe or fetching: game-boot-claim-fail.test.mjs ("files are gone")
+  //  - the WGX loss ladder — a visible device.lost forced through _wgxEscalate,
+  //    a queued capture rejected, the last rung surrendering through the
+  //    apex26.gfxClaimFail latch and never a webgl2 pick, WGX_LITE on WebKit,
+  //    the rgba16float swapchain downgrade, no scene probe on the lite stack,
+  //    an out-of-memory createMesh / createChunkedMesh degrading inert and
+  //    escalating, and a full draw ring dropping chunked draws instead of
+  //    using slot -1: webgpu-lifecycle.test.mjs (the "#1682 step 2" block, the
+  //    capture-mode device.lost tests, the Safari UA tests and the ladder tests).
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
   const a = bootPicker({
@@ -4858,83 +4821,20 @@ test("GLX chunked road draws honor depth bias and back faces, then restore state
   assert.equal(h.count("polygonOffset"), 0, "ordinary scenery needs no depth bias");
 });
 
-test("the flyby plays on the pre-race loading screen only; the picker pre-builds it hidden once the pick settles", () => {
-  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const raceSettings = read("js/race/race-settings.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const menus = read("js/ui/select-screen.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
-    "the boot builds no world for the title");
-  assert.match(raceSettings, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
-    "opening race settings schedules the flyby of the chosen circuit (120 ms)");
-  // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
-  // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
-  assert.match(raceSettings, /wire\("rs-time", \(\) => G\.raceTimeOfDay, \(v\) => \{ G\.raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
-    "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
-  assert.match(menus, /scheduleFlybyTrack\(true\)/,
-    "a circuit tile pre-builds after the settle delay, never on the tap itself");
-  // 400 ms, not the old 1.5 s: the idle gate (menuIdle) is what keeps the build
-  // off a tapping player; the settle only holds back the scenery fetch, and at
-  // 1.5 s it made a RACE! tap within ~5 s of the picker meet the build card.
-  assert.match(game, /settle \? 400 : 120/);
-  // Under a menu that draws nothing the canvas is hidden — so neither a finished
-  // race's last frame nor the garage's car sits behind the title. Since
-  // 2026-09-16 RACE SETTINGS is no longer an exception: the warmed world is
-  // spent on the LOADING SCREEN's cinematic instead, between RACE! and the grid,
-  // so the settings rows are read against black rather than a moving world.
-  // The gate runs before every early return, and a freshly built world still
-  // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\) \|\| \(typeof MenuTeardown !== "undefined" && MenuTeardown\.cover && MenuTeardown\.cover\(\)\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/);
-  assert.match(raceSettings, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\); \} catch \(e\) \{[^}]*startRace\(\); \}/,
-    "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
-  assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
-    "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
-  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
-  assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
-    "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
-  // endRace's OWN call: over all of game.js the match began at startRaceBody's
-  // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
-  assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
-    "endRace clears the 2D rain overlay the way quitToMenu already did");
-  // ResultsCam.live() + heldWarm: order pins below use the full render body.
-  const renderBody = fnSource(game, "function render(dt)");
-  for (const boundary of ["const menuBlank", "if (setupPreviewOn && !heldWarm)", "if (!track) return;"]) {
-    assert.ok(renderBody.includes(boundary), "render contains the boundary: " + boundary);
-  }
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
-    "the visibility gate precedes the garage-preview return");
-  const resultsGate = renderBody.search(/if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/);
-  assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
-    "results freeze precedes the garage-preview return");
-  assert.match(renderBody, /!resultsCam\.live\(\)/,
-    "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
-    "the visibility gate precedes the no-track return");
-  assert.match(game, /const builtWorldFits = \(def\) => builtTrackId === def\.id && builtTrackNight === sessionDarkFor\(def\)/,
-    "loadTrack's memo still makes a repeat build free");
-});
-
-test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
-  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
-  assert.match(human, /c\.wake = wakeOf\(tg, tc\._snapX - c\.x\)/, "the player's tow uses the AI's window and fade");
-  assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
-  assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
-  // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
-  const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
-  // The car-draw frame step advances private visual phases. The numeric
-  // multi-view/traction-isolation checks live in mirror-pass-carbuild.test.mjs.
-  const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const phases = fnSource(cd, "function advanceWheelPhases(dt)");
-  assert.match(phases, /CarWheels\.phaseStep\(c\.speed, dt, R, c\.wheelLock \|\| 0\)[\s\S]*phase\.front = CarWheels\.wrapPhase/,
-    "frame step uses CarWheels.phaseStep (v/R·dt); fronts freeze via (1−lock)");
-  assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
-  // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
-  assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
-  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
-  const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
-});
+// The flyby / menu render() gate and the driving-feel groups are behaviour now
+// (#1682 step 3), each assertion mutation-checked:
+//   tests/unit/menu-render-gate-vm.test.mjs — title builds no world, the 400/120 ms
+//     settle, menuBlank under the picker / sheets / build card, owed and queued warm
+//     frames, results freeze before the garage preview, ResultsCam.live, endRace's
+//     rain overlay, clearMenuScreens' disarm order, the loadTrack memo;
+//   tests/unit/race-settings-vm.test.mjs — open and TIME OF DAY schedule the flyby,
+//     RACE! through raceIntro (and its throw), QUALIFYING without it;
+//   tests/unit/select-screen-fixes.test.mjs — a tile schedules the settled pre-build;
+//   tests/unit/driving-feel-vm.test.mjs — the player's tow window, fade, gain and
+//     driver-state gate, every car's lift after-fire and flame;
+//   tests/unit/player-forces.test.mjs — no lock-up rolling backwards;
+//   tests/unit/lockup-smoke-vm / mirror-pass-carbuild — the bias-scaled lock, the
+//     front phase freeze; tests/unit/audio-tune.test.mjs — the wind drops in a tow.
 
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/lighting/knobs.js");
@@ -5834,22 +5734,26 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   const rel = tlx.slice(tlx.indexOf("function releaseGeoMirrors("));
   const body = rel.slice(0, rel.indexOf("\n      }"));
   const boundsAt = body.indexOf("computeBoundingSphere()");
-  // The free is `a.array = null`, and it MUST be null rather than a zero-length
-  // typed array — the same rule releaseMirrors carries above, for the same
-  // reason and on the same evidence: nulling shipped and rendered for months,
-  // and a zero-length array is the ONLY delta between gpu-census run 26 on
-  // macos-latest/Metal (8x "Index range ... does not fit in index buffer size
-  // (0)") and run 27, which passed. A mechanism was asserted for this and then
-  // WITHDRAWN — it came from _getAttributeMemorySize(), which is renderer.info
-  // accounting, not allocation — so this guard stands on the hardware A/B alone.
-  // COMMENTS STRIPPED, for the reason recorded above: the first version of the
-  // sibling check matched the prose explaining the rule and failed a good file.
+  // The free is a zero-length view of the same class, NEVER null (#4900):
+  // three r187 recomputes getRenderCacheKey on every needsRenderUpdate(), and
+  // getVertexBufferLayout reads array.BYTES_PER_ELEMENT / _getVertexFormat
+  // array.constructor of every attribute with no null guard — a nulled car
+  // caster threw in present ~37 s into a TLX WebGPU race (PR #4880 census).
+  // gpu-census run 26's zero-byte buffer was an INDEX array and never-uploaded
+  // chunks; this function keeps the index and frees only uploaded attributes,
+  // so the zero-length view never reaches createAttribute.
+  // COMMENTS STRIPPED: the first version of the sibling check matched the prose
+  // explaining the rule and failed a good file.
   const bodyCode = fnBody(code("js/render/three/tlx.js"), "releaseGeoMirrors");
-  const dropAt = bodyCode.indexOf("a.array = null");
+  const dropAt = bodyCode.indexOf("a.array = new a.array.constructor(0)");
   assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
-  assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
-  assert.doesNotMatch(bodyCode, /\.array\s*=\s*new\s+\S*constructor\(0\)/,
-    "a zero-length array is what Metal refused (gpu-census 26 vs 27) — NULL the mirror");
+  assert.ok(dropAt > 0, "releaseGeoMirrors must free to a zero-length view of the same class (#4900)");
+  assert.doesNotMatch(bodyCode, /\.array\s*=\s*null/,
+    "a null mirror throws in getRenderCacheKey (null BYTES_PER_ELEMENT) on the next new pipeline (#4900)");
+  assert.match(bodyCode, /if \(!uploaded\(a\)\)/,
+    "only an attribute with a GPU buffer may be emptied — a zero-length array uploads a zero-byte buffer");
+  assert.doesNotMatch(bodyCode, /g\.index\.array\s*=/,
+    "never the index: a zero-length index array is a zero-byte index buffer (gpu-census 26)");
   assert.ok(bodyCode.indexOf("computeBoundingSphere()") < dropAt,
     "the bounds must be computed BEFORE the arrays are freed, or three computes a NaN sphere from a missing array");
   assert.match(body, /radius >= 0/,

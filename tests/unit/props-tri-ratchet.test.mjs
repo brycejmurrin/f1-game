@@ -54,6 +54,11 @@ const require = createRequire(import.meta.url);
 // fence line and the hidden-face strip deleted the enclosed run, so the growth
 // is authored barrier coming back into view (korea: +4830 of +7154 from
 // structures.js guardrail/fence instances), not new geometry.
+// 2026-11-04: bahrain 192688 -> 193949 (+0.65 %). Pre-strip tris unchanged (210600): #4883's
+// tyre-cap lift (structures.js, alternate caps 2*MIN_SEP higher so end-to-end tops never
+// share a plane) exposes each cap's end-face sliver the hidden-face strip used to delete —
+// +874 of the delta measured by reverting that change alone; place()'s slot lift +11; the
+// rest is earlier in-band drift. Visible geometry, the intended cost of the coplanar fix.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

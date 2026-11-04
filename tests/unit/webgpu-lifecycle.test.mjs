@@ -21,6 +21,7 @@ const WGX_BUNDLE = deferredWebgpuSources.join("\n");
 const WGX_POST_SOURCE = await readFile(new URL(P.WGX_POST, ROOT), "utf8");
 const WGX_SHADOW_SOURCE = await readFile(new URL(P.WGX_SHADOW, ROOT), "utf8");
 const WGX_CHUNKED_SOURCE = await readFile(new URL(P.WGX_CHUNKED, ROOT), "utf8");
+const LAMP_CHUNKS_SOURCE = await readFile(new URL("js/render/shared/lamp-chunks.js", ROOT), "utf8");
 const WGX_MAIN_SOURCE = await readFile(new URL(P.WGX, ROOT), "utf8");
 const WGX_ROADLUT_SOURCE = await readFile(new URL(P.WGX_ROADLUT, ROOT), "utf8");   // wgx.js destructures WGXRoadLut at eval
 const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
@@ -175,6 +176,12 @@ function makeGpuHarness(opts = {}) {
   let failTextureAt = Infinity;
   let failViewAt = Infinity;
   let failBindGroupAt = Infinity;
+  let failBindGroupMsg = "injected bind-group failure";
+  // h.recordCopies(): from then on the encoder has copyTextureToBuffer and logs
+  // each call (the runtime output probe's readback). Off by default, and off
+  // through create(): its present smoke test would read the mock's zeros as black.
+  const copies = [];
+  let recordCopies = false;
   let now = 10_000;
 
   // opts.recordPass: every render-pass call lands in passCalls ([name, args]) — the draws a pass recorded.
@@ -270,6 +277,7 @@ function makeGpuHarness(opts = {}) {
         beginRenderPass: (desc) => { if (opts.recordPass) passCalls.push(["beginRenderPass", [desc]]); return pass; },
         resolveQuerySet() {},
         copyBufferToBuffer() {},
+        ...(recordCopies ? { copyTextureToBuffer: (src, dst, size) => { copies.push({ src, dst, size }); } } : {}),
         finish: () => ({}),
       };
     },
@@ -312,7 +320,7 @@ function makeGpuHarness(opts = {}) {
     },
     createBindGroup(desc) {
       bindGroupCalls += 1;
-      if (bindGroupCalls === failBindGroupAt) throw new Error("injected bind-group failure");
+      if (bindGroupCalls === failBindGroupAt) throw new Error(failBindGroupMsg);
       // VALIDATE, the way a real implementation does. This mock used to accept
       // any descriptor at all, so a group built from resources that did not
       // exist yet passed every test and then threw on a real device. That is
@@ -486,7 +494,10 @@ function makeGpuHarness(opts = {}) {
     textureCount: () => textureCalls,
     failNextTexture(offset = 1) { failTextureAt = textureCalls + offset; },
     failNextView(offset = 1) { failViewAt = viewCalls + offset; },
-    failNextBindGroup(offset = 1) { failBindGroupAt = bindGroupCalls + offset; },
+    // msg: the error's text — "out of memory" is what _allocFail escalates on.
+    failNextBindGroup(offset = 1, msg = "injected bind-group failure") { failBindGroupAt = bindGroupCalls + offset; failBindGroupMsg = msg; },
+    copies,
+    recordCopies() { recordCopies = true; },
     clearFailures() { failTextureAt = failViewAt = failBindGroupAt = Infinity; },
     advanceTime(ms) { now += ms; },
     fireWindow(type) { windowListeners.get(type)?.(); },
@@ -3476,7 +3487,7 @@ test("WGX per-chunk lamp table: freeing a track's meshes rewinds the allocator i
   seedLog(ctx);
   const run = (src, tail) => vm.runInContext(`${src.replace(/^const\b/gm, "var")}\n${tail || ""}`, ctx);
   run(LIGHT_BUDGET_SOURCE); run(FRUSTUM_SOURCE);
-  run(await readFile(new URL("js/render/shared/lamp-chunks.js", ROOT), "utf8"));
+  run(LAMP_CHUNKS_SOURCE);
   run(WGX_CHUNKED_SOURCE);
   const writes = [];
   const core = {
@@ -4061,4 +4072,161 @@ for (const fullPost of [false, true]) test(`capture submission releases readback
     assert.equal(state.resolves, succeeds ? 2 : 1, failure + ": next capture resolves");
     assert.ok(buffers.every(b => b.destroys === 1), failure + ": no double destruction");
   }
+});
+
+// ── #1682 step 2: the WGX half of gfx-backend-canary's "refused WGX/TLX create" group, as behaviour ──
+// Mutation evidence — each broken by hand, the named test went red:
+//   wgx.js: `!_outProbeOff && !WGX_LITE` → `!_outProbeOff`         → "output probe … never on WGX_LITE"
+//   wgx.js: _wgxEscalate writes apex26.gfxBackend=webgl2            → both "never … WEBGL2" tests
+//   wgx.js: drop the last rung's gfxClaimFail setItem               → "minimal rung's loss … session latch"
+//   wgx.js: drop _rejectCapture from _wgxEscalate                   → "settles a queued capture"
+//   wgx.js / wgx-chunked.js: drop _allocFail("createMesh") / allocFail("createChunkedMesh") → the two OOM tests
+//   wgx-chunked.js: drop `s < 0`, `s2 < 0` or `cslot < 0`           → "a full draw ring"
+
+test("a visible device.lost settles a queued capture and never writes WEBGL2 over the pick", async () => {
+  const storage = new Map([["apex26.gfxBackend", "webgpu"]]);
+  const session = new Map();
+  const h = makeGpuHarness({ storage, session, onReload() {} });
+  const gfx = await h.create();
+  const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
+  h.loseDevice({ reason: "unknown" });
+  await rejection;
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "the loss climbed the ladder");
+  assert.equal(storage.get("apex26.gfxBackend"), "webgpu", "a device loss keeps the player's pick");
+});
+
+test("the minimal rung's loss surrenders through the session latch, never a WEBGL2 pick", async () => {
+  const storage = new Map([["apex26.gfxBackend", "webgpu"], ["apex26.gfxWgxLevel", "2"]]);
+  const session = new Map();
+  const h = makeGpuHarness({ storage, session, onReload() {} });
+  await h.create();
+  h.loseDevice({ reason: "unknown" });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "the tab falls back to GLX for this session only");
+  assert.equal(storage.get("apex26.gfxBackend"), "webgpu", "the stored pick is not rewritten to webgl2");
+});
+
+test("the runtime output probe reads back on the full stack and never on WGX_LITE", async () => {
+  const frame = async (ua) => {
+    const h = makeGpuHarness({ ua });
+    const gfx = await h.create();
+    h.recordCopies();
+    gfx.resize();
+    const mesh = gfx.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+      col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+    assert.equal(gfx.begin({}), true);
+    gfx.draw(mesh, new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), {});
+    gfx.present({});
+    return h.copies.length;
+  };
+  assert.equal(await frame(""), 1, "a drawn desktop frame queues one 4x4 readback");
+  assert.equal(await frame("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"),
+    0, "the lite stack (WebKit) never reads the scene back");
+});
+
+test("an out-of-memory createMesh degrades to an inert mesh and escalates instead of throwing", async () => {
+  const storage = new Map();
+  let reloads = 0;
+  const h = makeGpuHarness({ storage, onReload: () => { reloads += 1; } });
+  const gfx = await h.create();
+  h.failNextBindGroup(1, "out of memory");
+  const mesh = gfx.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+  h.clearFailures();
+  assert.equal(mesh.count, 0, "inert, not a throw into tick()");
+  assert.equal(mesh.vbuf, null);
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /^createMesh alloc: out of memory/, "the failure is named");
+  assert.equal(storage.get("apex26.gfxWgxLevel"), "1", "memory pressure climbs the ladder");
+  assert.equal(reloads, 1);
+});
+
+test("an out-of-memory road-LUT bind group on a hasTrk createMesh degrades inert instead of throwing", async () => {
+  const storage = new Map();
+  const h = makeGpuHarness({ storage, onReload() {} });
+  const gfx = await h.create();
+  // trk present => the LUT bind group is the FIRST allocation, outside the old try.
+  h.failNextBindGroup(1, "out of memory");
+  let mesh;
+  assert.doesNotThrow(() => {
+    mesh = gfx.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+      col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2], trk: [0, 0, 5, 1, 0, 5, 2, 0, 5], mat: [16, 16, 16] });
+  }, "an OOM must not escape into tick()");
+  h.clearFailures();
+  assert.equal(mesh.count, 0, "inert mesh");
+  assert.equal(mesh.vbuf, null);
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /^createMesh alloc: out of memory/);
+});
+
+test("an out-of-memory createChunkedMesh escalates and falls back to a plain mesh", async () => {
+  const storage = new Map();
+  const h = makeGpuHarness({ storage, onReload() {} });
+  const gfx = await h.create();
+  // No trk: a hasTrk road is createMesh pieces, not chunks (its own OOM test is above).
+  const pos = [], nrm = [], col = [], idx = [], mat = [];
+  for (let t = 0; t < 2400; t++) {   // >= 2000 triangles, or it is a plain createMesh by design
+    const x = (t % 60) * 30, z = Math.floor(t / 60) * 30, v = pos.length / 3;
+    pos.push(x, 0, z, x + 1, 0, z, x, 0, z + 1);
+    for (let k = 0; k < 3; k++) { nrm.push(0, 1, 0); col.push(1, 1, 1); mat.push(0); }
+    idx.push(v, v + 1, v + 2);
+  }
+  h.failNextBindGroup(1, "out of memory");
+  const m = gfx.createChunkedMesh({ pos, nrm, col, idx, mat }, 72);
+  h.clearFailures();
+  assert.ok(m, "a handle comes back");
+  assert.equal(m.chunks, null, "the fallback is a plain mesh, drawable");
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /^createChunkedMesh alloc: out of memory/);
+});
+
+// A full draw ring: allocDrawSlot() answers -1. Every chunked path must drop the
+// draw — never write, bind or draw slot -1 (a RangeError mid-frame, or a bound
+// offset of -256 on a real device).
+function ringHarness(capacity, coreExtra = {}) {
+  const ctx = vm.createContext({ window: {}, Float32Array, Uint32Array, Float64Array, Math, WeakMap, Map, Array, Object, Number,
+    GPUBufferUsage: {} });
+  seedLog(ctx);
+  // Each source keeps its own filename, so a stack names the real file and line.
+  const run = (src, file) => vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: absSrc(file) });
+  run(LIGHT_BUDGET_SOURCE, "js/render/shared/light-budget.js"); run(FRUSTUM_SOURCE, "js/render/shared/frustum.js");
+  run(LAMP_CHUNKS_SOURCE, "js/render/shared/lamp-chunks.js"); run(WGX_CHUNKED_SOURCE, P.WGX_CHUNKED);
+  const log = { slots: [], writes: [], offsets: [], draws: 0 };
+  let next = 0;
+  const core = {
+    litPass: { setBindGroup(i, bg, dyn) { log.offsets.push(dyn[0]); } }, litOpts: (o) => Object.assign({ surfaceId: 0 }, o),
+    allocDrawSlot: () => { const s = next < capacity ? next++ : -1; log.slots.push(s); return s; },
+    writeDraw(s) { log.writes.push(s); }, setPipe() {}, litPipeline: () => null, setBG0() {}, activeFrameBG: null,
+    dynOff: [0], DRAW_STRIDE: 256, DRAW_F32_STRIDE: 64, drawBindGroup: null, drawRing: new Float32Array(64 * 8),
+    identInstanceBuf: null, bindLitVerts() {}, drawGeom() { log.draws++; },
+    frameViewProj: null, frameNL: 0, frameLights: null, fcPlanes: [], framePerChunk: 0, frameRoadChunkLamps: 0,
+    CHUNK_IDX_CAP: 16384, chunkIdxSBO: {}, device: { queue: { writeBuffer() {} } }, freeBuf() {}, LAMP_MASK_ALL: -1,
+    ...coreExtra,
+  };
+  const API = vm.runInContext("WGXChunked", ctx).init(core);
+  return { API, core, log };
+}
+
+test("a full draw ring drops chunked draws instead of using slot -1", () => {
+  const M = new Float32Array(16);
+  const chunks = (n, vbuf) => Array.from({ length: n }, (_, i) => ({ min: [i * 60, 0, -10], max: [i * 60 + 60, 4, 10], count: 3, first: i * 3, vbuf }));
+  // Day, unchunked: the one slot is refused, nothing is drawn.
+  const day = ringHarness(0);
+  day.API.drawChunked({ vbuf: {}, chunks: null, count: 3 }, M, {});
+  assert.deepEqual(day.log.writes, [], "no draw state for a slot the ring refused");
+  assert.equal(day.log.draws, 0);
+  // Per-chunk lamps: two slots, then the ring is full — the loop stops at the third chunk.
+  const lamps = new Float32Array(400 * 15);
+  for (let i = 0; i < 400; i++) { const o = i * 15; lamps[o] = i * 18; lamps[o + 1] = 6; lamps[o + 6] = 30; }
+  const pc = ringHarness(2, { framePerChunk: 1, frameAllLights: lamps });
+  pc.API.drawChunked({ vbuf: {}, chunks: chunks(6) }, M, {});
+  assert.ok(pc.log.slots.includes(-1), "the fixture filled the ring");
+  assert.ok(pc.log.writes.every((s) => s >= 0) && pc.log.offsets.every((o) => o >= 0), "slot -1 never written or bound");
+  assert.equal(pc.log.draws, 2, "only the chunks that got a slot draw");
+  // Night merged runs (AABB lamp masks): the base slot, then a full ring — a
+  // run that needs its own masked slot is dropped, not drawn through slot -1.
+  const nr = ringHarness(1, { frameNL: 12, frameLights: lamps, lampPass: 0, frameViewProj: M, fcPlanesIsFrame: true,
+    fcPlanes: Array.from({ length: 6 }, () => [0, 0, 0, 1]),   // every chunk inside
+    frameCullDist: 1e9, frameCullFog: 1e9, frameEye: [0, 0, 0] });
+  nr.API.drawChunked({ vbuf: {}, chunks: chunks(6).map((c) => Object.assign(c, { vbuf: {} })) }, M, {});
+  assert.ok(nr.log.slots.includes(-1), "the fixture filled the ring");
+  assert.ok(nr.log.writes.every((s) => s >= 0) && nr.log.offsets.every((o) => o >= 0), "slot -1 never written or bound");
+  assert.equal(nr.log.draws, 1, "only the run that holds the base slot draws");
 });
