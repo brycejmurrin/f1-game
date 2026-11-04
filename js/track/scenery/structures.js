@@ -310,6 +310,7 @@ const SceneryStructures = (function () {
       // (NODE_COLOR); only the two-colour slab bodies keep both tints in the key.
       const stackKey = slab ? `tyre-stack|${st}|${tyre.join(",")}|${cap.join(",")}` : `tyre-stack|${st}`;
       const capKey = `tyre-cap|${st}`;
+      let capN = 0;
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
@@ -330,8 +331,12 @@ const SceneryStructures = (function () {
             }
           },
           { kind: "tyreWall", k, side });
+        // Every other cap stands MIN_SEP higher: end-to-end caps never share a top plane
+        // (flat coplanar-audit, adjacent bins), nor one with a wall coping at the same height.
+        const lift = 0.04 + ((capN++ & 1) ? 2 * TrackGeom.MIN_SEP : 0);
         ctx.instance(capKey,
-          Object.assign({ s: [1, 1, spacing], col: slab ? tyre : cap }, place),
+          Object.assign({ s: [1, 1, spacing], col: slab ? tyre : cap }, place,
+            { o: [p.c[0] + p.u[0] * lift, p.c[1] + p.u[1] * lift, p.c[2] + p.u[2] * lift] }),
           (rec) => {
             if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], TrackGraph.NODE_COLOR);
             else if (st === "airfence") rec.box([0, 1.14, 0], [1.5, 0.14, 1], TrackGraph.NODE_COLOR);
