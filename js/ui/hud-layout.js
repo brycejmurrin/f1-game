@@ -1352,6 +1352,7 @@ const HudLayout = (function () {
         inp.value = String(e[k]);
         out.textContent = txt(k, e[k]); paintSum(); paintPreset();
         previewPending = true;
+        setTimeout(paintTap, 0);   // after the preview applied
       };
       // Drafts stay in the native field. In particular, a minus sign or an
       // exponent halfway through typing must neither save nor fade the form.
@@ -1385,6 +1386,31 @@ const HudLayout = (function () {
     why.id = "pm-hl-why";
     body.appendChild(why);
 
+    // Non-blocking (#4704): a piece the player placed wins, so this only NAMES the tap targets it covers.
+    const tap = el("p", { className: "adv-help", attrs: { "aria-live": "polite" } });
+    tap.id = "pm-hl-tap";
+    body.appendChild(tap);
+    const TAP_SEL = [["PAUSE", "#pausebtn"], ["CAMERA", "#btn-cam"], ["BOOST", "#btn-boost"], ["STEER", "#btn-steer-left"],
+      ["STEER", "#btn-steer-right"], ["BRAKE", "#btn-brake"], ["THROTTLE", "#btn-throttle"]];
+    function tapOverlaps(id) {
+      const found = [], row = ELEMENTS.find((e) => e[0] === id), piece = row && doc.querySelector(row[2]);
+      if (!piece || piece.hidden) return found;
+      const a = piece.getBoundingClientRect();
+      if (!(a.width && a.height)) return found;
+      for (const [name, s] of TAP_SEL) {
+        const t = doc.querySelector(s);
+        if (!t || t.hidden || found.includes(name)) continue;
+        const b = t.getBoundingClientRect();
+        if (b.width && b.height && Math.min(a.right, b.right) - Math.max(a.left, b.left) > 3 &&
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 3) found.push(name);
+      }
+      return found;
+    }
+    function paintTap() {
+      const hit = tapOverlaps(sel);
+      tap.textContent = hit.length ? "Heads up: this overlaps the " + hit.join(", ") + " button" + (hit.length > 1 ? "s" : "") + ". It stays where you put it." : "";
+    }
+
     const resetOne = el("button", { type: "button", className: "opt-btn", textContent: "RESET ELEMENT" });
     resetOne.id = "pm-hl-reset-el";
     resetOne.addEventListener("click", () => { resetEl(sel, editing, editingProf); paintAll(); peek(true, 900); });
@@ -1415,7 +1441,7 @@ const HudLayout = (function () {
       if (setPick.value !== editing) setPick.value = editing;
       if (pick.value !== sel) pick.value = sel;
       for (const p of painters) p();
-      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden();
+      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden(); paintTap();
     }
     // Open: preview the layout being edited and outline the selected element.
     // Closed: the race shows the camera's layout again.
