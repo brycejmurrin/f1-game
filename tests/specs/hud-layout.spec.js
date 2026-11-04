@@ -1605,7 +1605,7 @@ test.describe("track-limits chip", () => {
 test.describe("POS cell ink follows its plate", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
-  test("HIGH CONTRAST on/off x broadcast/standard x rank flash up/down/none", async ({ page }) => {
+  test("HIGH CONTRAST on/off x broadcast/standard x rank flash up/down/none (dark plate, #4871)", async ({ page }) => {
     await race(page, "buttons", false, { sal: 0, sar: 0, sat: 0, sab: 0 });
     const rows = await page.evaluate(() => {
       // Computed colours come back as rgb()/rgba(), oklab() (a color-mix) or color(srgb …).
@@ -1623,8 +1623,8 @@ test.describe("POS cell ink follows its plate", () => {
         throw new Error("unparsed colour " + c);
       };
       // The ground an element paints on: its own and its ancestors' backgrounds over a black scene.
-      const ground = (el) => { const stack = []; for (let e = el; e && e !== document.body; e = e.parentElement) stack.push(rgba(getComputedStyle(e).backgroundColor));
-        let g = [0, 0, 0]; for (const [r, gg, b, a] of stack.reverse()) g = [r * a + g[0] * (1 - a), gg * a + g[1] * (1 - a), b * a + g[2] * (1 - a)]; return g; };
+      const ground = (el, scene = [0, 0, 0]) => { const stack = []; for (let e = el; e && e !== document.body; e = e.parentElement) stack.push(rgba(getComputedStyle(e).backgroundColor));
+        let g = scene; for (const [r, gg, b, a] of stack.reverse()) g = [r * a + g[0] * (1 - a), gg * a + g[1] * (1 - a), b * a + g[2] * (1 - a)]; return g; };
       const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
       const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
       const ratio = (a, b) => (Math.max(L(a), L(b)) + 0.05) / (Math.min(L(a), L(b)) + 0.05);
@@ -1634,6 +1634,9 @@ test.describe("POS cell ink follows its plate", () => {
       still.textContent = "#hud, #hud * { transition: none !important; animation: none !important; }";
       document.head.appendChild(still);
       const pos = document.getElementById("hud-pos"), label = document.querySelector("#hud-box-pos .hud-label");
+      const box = document.getElementById("hud-box-pos");
+      // Bryce's export thins every plate to PANEL OPACITY 65 (#4871); the plate must stay dark at it.
+      document.documentElement.style.setProperty("--hud-panel-a", "0.65");
       const out = [];
       for (const hc of [true, false]) for (const bc of [false, true]) for (const delta of [null, "up", "down"]) {
         AppearanceOpts.setContrast(hc ? "high" : "off");   // the settings row's own path
@@ -1644,15 +1647,22 @@ test.describe("POS cell ink follows its plate", () => {
           if (!el || !el.getClientRects().length) continue;
           const ink = rgba(getComputedStyle(el).color), g = ground(el);
           const inkOn = ink.slice(0, 3).map((c, i) => c * ink[3] + g[i] * (1 - ink[3]));
-          out.push({ hc, bc, delta, what, ratio: +ratio(inkOn, g).toFixed(2), ink: getComputedStyle(el).color, ground: g.map(Math.round) });
+          out.push({ hc, bc, delta, what, ratio: +ratio(inkOn, g).toFixed(2), ink: getComputedStyle(el).color, ground: g.map(Math.round),
+            // THE PLATE ITSELF (#4526, #4871): dark over a WHITE scene (a sunlit sky), so a light plate under dark ink fails
+            // here even though its ink ratio passes. Standard profile only: BROADCAST's tower owns its own POS.
+            plateL: bc ? null : +L(ground(box, [255, 255, 255])).toFixed(3) });
         }
       }
+      document.documentElement.style.removeProperty("--hud-panel-a");
       still.remove();
       return out;
     });
     expect(rows.length, "the POS value and label must both be probed").toBeGreaterThanOrEqual(24);
     // Anti-vacuity: the cells must not all measure alike (a broken colour read did, at 18.05:1).
     expect(new Set(rows.map((r) => r.ratio)).size, `the probe must see different inks/plates: ${JSON.stringify(rows)}`).toBeGreaterThan(2);
+    const light = rows.filter((r) => r.plateL != null && r.plateL >= 0.2);
+    expect(rows.filter((r) => r.plateL != null).length, "the standard-profile plate must be probed").toBeGreaterThanOrEqual(12);
+    expect(light, `the standard POS plate must be dark (luminance < 0.2 over a white scene) in both contrasts and through a pass: ${JSON.stringify(light)}`).toEqual([]);
     const bad = rows.filter((r) => r.ratio < 4.5);
     expect(bad, `every POS ink must clear 4.5:1 on the plate it actually paints on: ${JSON.stringify(bad)}`).toEqual([]);
   });
