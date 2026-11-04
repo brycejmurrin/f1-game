@@ -174,3 +174,30 @@ test("endRace disarms the ceremony flag in the quali and TT early returns (#4769
   assert.ok(quali, "quali early return must call RaceCeremony.want(false) before returning");
   assert.match(g, /if \(isTimeTrial\(\)\) \{ RaceCeremony\.want\(false\); buildTTResults\(\)/);
 });
+
+test("RACE END: an unskipped ceremony brings the car home before the sheet; skipped / refused shows it at once", () => {
+  // played: the hook holds the sheet until done()
+  let b = boot(), done = null;
+  let G = Gbase({ els: { results: b.results }, cars: cars(2) });
+  let api = b.R.create(G, { raceEndHome: (d) => { done = d; return true; } });
+  api.start(G.cars, {}); api.skip(); api.skip();
+  assert.equal(api.status().phase, "results");
+  assert.equal(b.results.hidden, true, "sheet waits for the garage show");
+  done();
+  assert.equal(b.results.hidden, false, "done() reveals the sheet");
+  // a reset mid-show (quit) must not resurrect the sheet
+  b = boot(); done = null;
+  G = Gbase({ els: { results: b.results }, cars: cars(2) });
+  api = b.R.create(G, { raceEndHome: (d) => { done = d; return true; } }); api.start(G.cars, {}); api.skip(); api.skip(); api.reset(); done();
+  assert.equal(b.results.hidden, true);
+  // refused (off / automation / no note): immediate
+  b = boot();
+  G = Gbase({ els: { results: b.results }, cars: cars(2) });
+  api = b.R.create(G, { raceEndHome: () => false }); api.start(G.cars, {}); api.skip(); api.skip();
+  assert.equal(b.results.hidden, false);
+  // a harness seek is a skip: no show
+  b = boot(); let called = 0;
+  G = Gbase({ els: { results: b.results } });
+  api = b.R.create(G, { raceEndHome: () => { called++; return true; } }); api.start(G.cars, {}); api.seek("results");
+  assert.equal(called, 0); assert.equal(b.results.hidden, false);
+});

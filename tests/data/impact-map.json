@@ -12803,6 +12803,7 @@
         "tests/unit/race-ceremony.test.mjs"
       ],
       "reset": [
+        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "resetLive": [
@@ -15300,7 +15301,8 @@
       ],
       "*": [
         "tests/unit/build-worker.test.mjs",
-        "tests/unit/deploy-tool.test.mjs"
+        "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
     "js/render/shared/gltf.js": {
@@ -15549,7 +15551,11 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cull": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "cullMirror": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "free": [
         "tests/unit/build-worker.test.mjs",

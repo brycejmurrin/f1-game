@@ -71,3 +71,17 @@ Now:
 - UI: four MOMENT tabs head the tuner (the workspace's always-visible row), every row edits the picked moment,
   rows that mean nothing there hide (`ROW_MOMENTS`), one PREVIEW plays it, COPY TO ALL MOMENTS and a per-moment
   RESET sit in the tools fold. Each moment has its own PLAY ANIMATIONS switch (RACE END's absorbs PLAY AFTER A RACE).
+
+## Slice B — race end, track → garage (#4745 moment 4)
+
+- `RaceCeremony` reveals the results sheet through one hook: when the ceremony reaches `results` (podium done, or its
+  beats skipped by the player) and was not harness-seeked, `G.raceEndHome(reveal)` (game.js) opens the bay and plays the
+  existing `poseHome` show (`setupCam.startRaceEnd`); the sheet appears when it ends or is skipped (SKIP / Esc / tap). A reset
+  mid-show (quit) never resurrects the sheet (`phase === "results"` guard).
+- Same gates as before: `garageArrival.moments.home.enabled` / AFTER THE RACE, reduced motion and automation fall
+  through to the sheet at once; no pending result note = no show. The note is consumed, so the later garage visit
+  does not replay it.
+- Bay-local and the race is over: no control exists to move (`docs/PHYSICS.md`). No new module; the code is ~25 lines
+  in already-resident files (boot budget).
+- Not run: browser evidence (CI shard). Open for Bryce: whether the show should also open the garage MENU after it
+  (today it hands straight to the results; GARAGE stays reachable from MENU).

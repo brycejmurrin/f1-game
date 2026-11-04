@@ -5473,6 +5473,14 @@ phone A/B, say) keeps it; `__tlx.roadSplit(true)` removes the key, and
 `__tlx.roadSplit()` reads the state. The picture is identical either way (0 px on one
 frozen frame, `scratch/h15/split-pix.mjs`); only the triangle count changes.
 
+The TLX lite mirror's sub-range cull (phone rungs only: a dense scenery chunk that
+straddles the mirror's radial cap draws only its 24 m sub-ranges inside the cap,
+so the cap is the reach) is on by default. `__tlx.mirrorSub(false)` goes back to
+whole-chunk culling and stores `apex26.tlxMirrorSub = "0"`; `__tlx.mirrorSub(true)`
+removes the key; `__tlx.mirrorSub()` reads the state. Unlike the road split this
+changes the mirror's picture: scenery past the cap no longer draws there
+(PR #4886, `docs/notes/PERF-HELMET-VISOR-2026-11-04.md` §4b).
+
 The manual TLX sharpening-limit prototype uses `apex26.tlxSharpenLimit`: set
 `localStorage.setItem("apex26.tlxSharpenLimit", "1")` and reload to enable it.
 Set it to `"0"` (or remove the key) and reload to restore the default off state.
