@@ -217,10 +217,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const flavorArg = args.find((a) => a.startsWith("--flavor="));
   const flag = args.find((a) => a !== flavorArg);
   if (["--help", "-h"].includes(flag)) {
-    console.log("Usage: node tools/lib/chromium-path.mjs [--path|--cache-path] [--flavor=auto|chromium|shell]\nRead-only executable/cache discovery; never launches a browser.");
+    console.log("Usage: node tools/lib/chromium-path.mjs [--path|--cache-path|--both] [--flavor=auto|chromium|shell]\n--both prints the executable line then the cache line (either may be empty; exit 0) in one spawn.\nRead-only executable/cache discovery; never launches a browser.");
     process.exit(0);
   }
-  if (args.length > (flavorArg ? 2 : 1) || (flag && !["--path", "--cache-path"].includes(flag))) {
+  if (args.length > (flavorArg ? 2 : 1) || (flag && !["--path", "--cache-path", "--both"].includes(flag))) {
     console.error("Unknown arguments; use --help"); process.exit(2);
   }
   if (flag === "--cache-path") {
@@ -230,6 +230,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try { r = resolveChromium({ browserFlavor: flavorArg ? flavorArg.slice("--flavor=".length) : "auto" }); }
   catch (err) { console.error(err.message); process.exit(2); }
   if (flag === "--path") { if (r) console.log(r.path); process.exit(r ? 0 : 1); }
+  if (flag === "--both") { console.log(`${r ? r.path : ""}\n${browserCachePath() || ""}`); process.exit(0); }
   console.log(`browsers.json chromium revision: ${browsersJsonRevision("chromium") || "(playwright-core not installed)"}`);
   console.log(`roots: ${browserRoots().join(", ") || "(none exist)"}`);
   console.log(r ? `chromium: ${r.path}\nvia:      ${r.source}` : "chromium: (none installed — Playwright's bundled default)");

@@ -621,6 +621,11 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/fat-shard.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-piece plan vs the count split, one line per piece; an unlistable spec keeps the count shard"
+    },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
       "presentation": "native",

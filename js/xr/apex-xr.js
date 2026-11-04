@@ -155,6 +155,7 @@ const ApexXR = (function () {
 
   function invalidate() {
     _plan = null;
+    _caps = null;   // re-read apex26.xrCaps: XrBoot.recheck may have rewritten it
   }
 
   /** True when the live gfx bind matches the armed plan (or VR is off). */

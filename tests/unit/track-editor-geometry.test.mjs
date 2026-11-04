@@ -37,6 +37,30 @@ test("Dubins: every closed-form word integrates to its goal pose; the planner al
   assert.ok(Math.abs(a.len - b.len) < 0.5, `symmetric lengths ${a.len} vs ${b.len}`);
 });
 
+test("resample: a spacing of 0 (or NaN, negative) returns the minimum count instead of hanging (#4357)", () => {
+  const { S } = bootEditor();
+  const sq = [[0, 0], [1000, 0], [1000, 600], [0, 600]];
+  for (const sp of [0, -5, NaN]) {
+    assert.equal(S.resample(sq, sp, true).length, 8, `closed, spacing ${sp}`);
+    assert.equal(S.resample(sq, sp, false).length, 2, `open, spacing ${sp}`);
+  }
+});
+
+test("enforceSpacing: a protected tangent crowding index 0 at the seam survives; index 0 yields (#4355)", () => {
+  const { S } = bootEditor();
+  // A 200 m square loop whose last point (a stamp tangent) sits 5 m from index 0.
+  const pts = [[0, 0], [100, 0], [200, 0], [200, 100], [200, 200], [100, 200], [0, 200], [0, 100], [0, 5]];
+  const tangent = pts[8];
+  const out = S.enforceSpacing(pts, 8, new Set([8]));
+  assert.ok(out.includes(tangent), "the protected tangent is kept");
+  for (let i = 0; i < out.length; i++) { const p = out[i], q = out[(i + 1) % out.length]; assert.ok(Math.hypot(q[0] - p[0], q[1] - p[1]) >= 8, `spacing holds at ${i}`); }
+  // Unprotected, or with index 0 itself protected, the old rule stands: the last point goes.
+  assert.ok(!S.enforceSpacing(pts, 8).includes(tangent), "unprotected last point is merged into index 0");
+  const both = S.enforceSpacing(pts, 8, new Set([0, 8]));
+  assert.equal(both[0], pts[0], "a protected index 0 is kept");
+  assert.ok(!both.includes(tangent));
+});
+
 test("polyline tools: RDP, resample, Catmull, Menger, rotate, project, hull", () => {
   const { S } = bootEditor();
   const noisy = []; for (let i = 0; i <= 100; i++) noisy.push([i * 10, Math.sin(i) * 0.4]);
@@ -467,4 +491,19 @@ test("validate: 201 control points read 'Too many points', not the ±10 km 'boun
   assert.ok(!v.issues.some((i) => i.code === "bounds"), "…and the loop is not blamed on the map bounds: " + codes);
   assert.equal(v.ok, false);
   assert.ok(V.check(design({ pts: [[0, 0], [20000, 0], [0, 20000], [-9000, 0], [0, -9000], [900, 900], [-900, 900], [900, -900]] })).issues.some((i) => i.code === "bounds"), "a real off-map point still says bounds");
+});
+
+test("check() evaluates the pure TrackPit.window once per verdict (P6 #4546)", () => {
+  const { V, ctx } = bootEditor();
+  const d = design();
+  const plainVerdict = (v) => JSON.parse(JSON.stringify({ ok: v.ok, issues: v.issues, stats: v.stats }));
+  const ref = plainVerdict(V.check(d));
+  const pit = ctx.TrackPit, args = [];
+  ctx.TrackPit = Object.assign({}, pit, { window: (...a) => { args.push(a); return pit.window(...a); } });
+  let v;
+  try { v = V.check(d); } finally { ctx.TrackPit = pit; }
+  // Before: the pit-reach gate and the stats each called it (2).
+  assert.equal(args.length, 1, "TrackPit.window calls per check: " + args.length);
+  assert.deepEqual(plainVerdict(v), ref, "the verdict is unchanged");
+  assert.ok(Number.isFinite(v.stats.pitEntryM) && Number.isFinite(v.stats.pitExitM), "the shared window still feeds the stats");
 });

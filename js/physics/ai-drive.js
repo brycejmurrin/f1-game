@@ -29,8 +29,10 @@ const AiDrive = (function () {
   function houseStyle(team, seat, stats) {
     const s = stats || (team && team.stats);
     if (!s) { _house.attack = 0; _house.hold = 0; return _house; }
-    _house.attack = clamp(((s.speed + s.accel) * 0.5 - 85) / 25, -1, 1);
-    _house.hold = clamp(((s.cornering + s.braking) * 0.5 - 85) / 25, -1, 1);
+    // A stat a partial record lacks reads as the neutral 85, not NaN (NaN rode into followGap/brakeTarget/otFireRate).
+    const st = (v) => (Number.isFinite(v) ? v : 85);
+    _house.attack = clamp(((st(s.speed) + st(s.accel)) * 0.5 - 85) / 25, -1, 1);
+    _house.hold = clamp(((st(s.cornering) + st(s.braking)) * 0.5 - 85) / 25, -1, 1);
     if (seat === 0) {
       _house.attack = clamp(_house.attack + 0.10, -1, 1);
       _house.hold = clamp(_house.hold - 0.06, -1, 1);
@@ -446,7 +448,7 @@ const AiDrive = (function () {
     const closing = (ctx.speed || 0) - (ctx.aheadSpeed != null ? ctx.aheadSpeed : ctx.speed || 0);
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;   // closing rates ride the pace scale (as otWant)
     // 0..1 pieces
-    const gapScore = clamp(1 - (gap || 9) / 9, 0, 1);           // closer = better
+    const gapScore = clamp(1 - (Number.isFinite(gap) ? gap : 9) / 9, 0, 1);   // closer = better (a 0 m gap is the closest, not 9 m)
     const roomScore = clamp(room / 3.2, 0, 1);
     const closeScore = clamp(0.45 + closing / (8 * ref / 72), 0, 1);
     const straight = clamp(1 - Math.abs(ctx.kAhead || 0) / 0.012, 0, 1);

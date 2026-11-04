@@ -114,7 +114,8 @@ test("a poll runs the owner's command once and answers with its comment id", asy
   assert.equal(gh.thread.filter((c) => c.body.includes('"re":77')).length, 1, "answered exactly once");
 });
 
-// A thread like GitHub's: oldest first, `since` (inclusive, on updated_at) and per_page honoured.
+// A thread like GitHub's: oldest first, `since` (inclusive, on updated_at) and per_page honoured; the ETag is the
+// page's content, so an unchanged page answers If-None-Match with 304 as api.github.com does.
 function pagedGitHub() {
   const thread = [];
   const calls = [];
@@ -122,7 +123,7 @@ function pagedGitHub() {
   const at = (s) => new Date(Date.parse(HELLO_AT) + s * 1000).toISOString().replace(".000Z", "Z");
   const fetch = async (url, opts) => {
     calls.push({ url, opts });
-    const json = (status, body) => ({ status, ok: status < 300, json: async () => body, headers: { get: () => null } });
+    const json = (status, body, etag = null) => ({ status, ok: status < 300, json: async () => body, headers: { get: (k) => (k.toLowerCase() === "etag" ? etag : null) } });
     if (opts.method === "POST") {
       const c = { id: 5000 + thread.length, created_at: at(n), updated_at: at(n++), author_association: "OWNER", body: JSON.parse(opts.body).body };
       thread.push(c);
@@ -130,7 +131,10 @@ function pagedGitHub() {
     }
     const q = new URL(url).searchParams;
     const since = q.get("since");
-    return json(200, thread.filter((c) => c.updated_at >= since).slice(0, +q.get("per_page")));
+    const page = thread.filter((c) => c.updated_at >= since).slice(0, +q.get("per_page"));
+    const etag = 'W/"' + page.map((c) => c.id + "@" + c.updated_at).join(",") + '"';
+    if (opts.headers["If-None-Match"] === etag) return json(304, null);
+    return json(200, page, etag);
   };
   const add = (c) => { const t = at(n++); thread.push({ created_at: t, updated_at: t, author_association: "OWNER", ...c }); };
   return { fetch, calls, thread, add };
