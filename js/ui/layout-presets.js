@@ -253,17 +253,18 @@ const LayoutPresets = (function () {
   /** The shape changed from `was` (the stored `live` wins): park the outgoing
    *  values, apply the parked ones. True when values were swapped. */
   function syncShape(was) {
-    const st = shapes(), now = shapeNow(), a = studio(), from = st.live || was;
-    if (!a || !store() || !st.split || !from || from === now) return false;
+    const st = shapes(), now = shapeNow(), a = studio(), from = st.live || was, s = store();
+    if (!a || !s || !st.split || !from || from === now) return false;
     const cur = a.snapshot(), out = pick(cur), park = st.park;
-    store().set(SHAPES_KEY, { v: 1, split: true, live: now, park: out });
+    s.set("appearanceShapes", { v: 1, split: true, live: now, park: out });
     if (!park || JSON.stringify(park) === JSON.stringify(out)) return false;
     a.applySnapshot(Object.assign(cur, park), { history: false });
     return true;
   }
   function setShapeSplit(on) {
-    if (!store()) return false;
-    store().set(SHAPES_KEY, { v: 1, split: !!on, live: shapeNow(), park: null });
+    const s = store();
+    if (!s) return false;
+    s.set("appearanceShapes", { v: 1, split: !!on, live: shapeNow(), park: null });
     return true;
   }
   const ORIENT_ROW = "pm-orientation";
