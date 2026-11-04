@@ -1638,6 +1638,38 @@ test("a joiner whose ICE fails while a guest is in the room reopens the SAME cod
   } finally { h.lobby.cancel(); }
 });
 
+test("a FULL code room reopens the same code when a guest leaves (#4820)", async () => {
+  const { h, made, rooms, ts, until, withGuest } = codeRoomHarness();
+  try {
+    await withGuest();
+    for (const [n, who] of [[2, "g2"], [3, "g3"]]) {
+      const t = ts[ts.length - 1];
+      await rooms[rooms.length - 1].onJoiner(who, "answer-" + n);
+      t.status = "open";
+      await until(() => made.length === n, "guest " + n + " session bound");
+      if (n === 2) await until(() => rooms.length === 3, "room reopened for guest 3");
+    }
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(h.lobby.status().guests, 3);
+    const before = rooms.length;
+    ts[1].closers[0]("remote");                       // guest 2 leaves
+    await until(() => rooms.length === before + 1, "the freed seat reopened the code");
+    assert.equal(rooms[rooms.length - 1].code, "ABC234");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a second HELLO from one guest does not re-send the whole catch-up (#4820)", async () => {
+  const { h, made, until, withGuest } = codeRoomHarness();
+  try {
+    await withGuest();
+    const hellos = () => made[0].sent.filter((m) => m.t === "hello").length;
+    made[0].deliver("hello", { team: "alpha", driver: 0 });
+    const afterFirst = hellos();
+    made[0].deliver("hello", { team: "beta", driver: 1 });
+    assert.equal(hellos(), afterFirst, "no catch-up to the sender on a repeat HELLO");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a failed joiner with NOBODY in the room does not reopen it later", async () => {
   // The other half of the same branch: teardown() owns the empty room, and a
   // stale codeReopen must not reopen it on some later, unrelated connect.

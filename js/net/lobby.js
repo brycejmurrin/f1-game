@@ -14,7 +14,7 @@ const NetLobby = (function () {
     // The room code we closed while a guest's answer negotiates, and must
     // reopen once that connection is up (see onJoiner: one negotiation in
     // flight at a time). Null when we are not hosting a room.
-    let codeReopen = null;
+    let codeReopen = null, fullCode = null;
     let _answersSeen = null;   // {code, set}: answers already taken for this room code (see codeHost)
     let codeReopenTimer = null;        // the pending 250 ms reopen — owned, cancellable
     let codeRoomCode = null;           // the code codeRoom (or a pending reopen) advertises
@@ -329,8 +329,9 @@ const NetLobby = (function () {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
             }
           }
-          // A removed player must not walk back in on the code onConnected reopened.
-          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();
+          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();   // a removed player must not walk back in on the reopened code
+          else if (!wasHostEvict && role === "host" && !friendQualifying && fullCode && !codeReopenTimer) {
+            codeReopen = fullCode; fullCode = null; reopenRoom(true); }   // a full room consumed its reopen (#4820)
         }
         renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
       });
@@ -570,6 +571,7 @@ const NetLobby = (function () {
         if (v && transports.get(id) === t) { _verify.set(id, v); say("Connected. Check both screens show code " + v + "."); renderRoom(); }
       });
       if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
+      if (transports.size >= MAX_GUESTS && codeReopen) fullCode = codeReopen;
       reopenRoom(transports.size < MAX_GUESTS);
       session = [...sessions.values()][0];
       clearInterval(pumpTimer);
@@ -638,7 +640,7 @@ const NetLobby = (function () {
         // under its one connection and they overwrite each other, so it never
         // learns that the other guests exist at all.
         const who = role === "host" ? id : (p.from || id);
-        _peers.set(who, p);
+        const firstHello = !_peers.has(who); _peers.set(who, p);   // #4820: catch-up once per connection
         // THE ROSTER IS RELAYED, not just the state. Guests have no connection
         // to each other, so unless the host passes this on, B never hears that
         // C is here — a peer with no slot for C drops every packet about it,
@@ -651,15 +653,13 @@ const NetLobby = (function () {
             try { sess.sendEvent(NetPlay.EV.HELLO, tagged); } catch (e) { /* a dead session must not stop the relay */ }
           }
           // ...and the new arrival needs everyone who was already here.
-          for (const [k, prof] of _peers) {
+          if (firstHello) for (const [k, prof] of _peers) {
             if (k === id || !prof) continue;
             try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) { /* a dead session must not stop the relay */ }
           }
-          // READY the same way: HELLO catch-up alone left late joiners showing
-          // "choosing" for peers who were already READY (live 3p repro on
-          // github.io, 2026-10-05). Live toggles are relayed below; this is
-          // the snapshot of who is ready RIGHT NOW.
-          catchUpReady(made, id);
+          // READY the same way: a late joiner showed "choosing" for peers already
+          // READY (live 3p repro, 2026-10-05). Live toggles relay below.
+          if (firstHello) catchUpReady(made, id);
         } else if (p.from == null && p.rank != null) myRank = p.rank;   // the host told us where we stand
         // Learning what they picked is the moment a clash becomes knowable.
         resolveSeatClash();
@@ -1315,7 +1315,7 @@ const NetLobby = (function () {
     // race-settings exits back to the hidden #vsfriend dialog. Nobody can join a
     // race that has already started, so stop advertising one.
     function sealRoom() {
-      codeReopen = null; codeParked = null;     // no silent reopen on some later, unrelated connect
+      fullCode = null; codeReopen = null; codeParked = null;     // no silent reopen on some later, unrelated connect
       clearTimeout(codeReopenTimer); codeReopenTimer = null;   // incl. one already in flight
       stopCodeWait();        // cancel the poll loop AND close the Nostr room
       dropPending();         // and the half-built invite transport it minted
