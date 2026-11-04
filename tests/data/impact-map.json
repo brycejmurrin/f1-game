@@ -15569,6 +15569,7 @@
       ],
       "*": [
         "tests/unit/godray-keep-nearest.test.mjs",
+        "tests/unit/tlx-closures-4674.test.mjs",
         "tests/unit/tlx-post-orient-cover-webgpu.test.mjs"
       ]
     },
@@ -16172,6 +16173,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "updateFrame": [
+        "tests/unit/tlx-closures-4674.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
