@@ -1,18 +1,15 @@
-/* Apex 26 — GarageLive: the garage's LIVE atlas. The timing screen's track map, the telemetry traces, the next-race sign and its flag, the sponsor banners, the contact shadow and the lamp pools — everything that follows the game rather than the team, repainted per circuit or career round. Split out of scene.js. */
+/* Apex 26 — GarageLive: the garage's LIVE atlas. The timing screen's track map, the telemetry traces, the next-race
+   sign and its flag, the sponsor banners, the gantry LCDs, the contact shadow and the lamp pools — everything that
+   follows the game rather than the team, repainted per circuit or career round. */
 const GarageLive = (function () {
   "use strict";
-  const { HALF_W, Z_DOOR, scale, rgb, css } = GaragePrims;
+  const { HALF_W, scale, rgb, css } = GaragePrims;
   const { SCREEN, GANTRY } = GarageEquipment;
 
-// ── the LIVE atlas ─────────────────────────────────────────────────────────
-// A SECOND, smaller atlas for everything that follows the game rather than
-// the team: the timing screen's track map, the next-race sign, the sponsor
-// banners, and two soft gradients (the car's contact shadow, the lamp pools).
-// Separate from the 1024 dress on purpose — that one repaints on a team or
-// paint change and is full; this one is 512 and can be repainted per circuit
-// or per career round for a quarter of the upload.
-// Extra cells (gantry LCDs, desk spill, floor reflection) live in the free
-// 512×64 strip under the flag/race row — no new eager script, same 512 canvas.
+// ── atlas layout ───────────────────────────────────────────────────────────
+// A SECOND, smaller atlas next to the 1024 team dress on purpose: that one
+// repaints on a team or paint change and is full; this one is 512 and can be
+// repainted per circuit or per career round for a quarter of the upload.
 const LIVE = 512;
 const L_MAP    = { x: 0,   y: 0,   w: 256, h: 200 };
 const L_TRACE  = { x: 256, y: 0,   w: 256, h: 128 };
@@ -43,141 +40,180 @@ const FLAGS = {
   UAE: ["h", "#00732f", "#fff", "#000"], UK: ["h", "#012169", "#fff", "#c8102e", "#fff", "#012169"],
   USA: ["h", "#b22234", "#fff", "#b22234", "#fff", "#b22234", "#fff", "#b22234"],
 };
+const NO_FLAG = ["h", "#555", "#888"];
+const FALLBACK_SPONSORS = ["APEX 26", "PIT LANE", "PADDOCK", "GRID"];
+
+const bodyColour = (liv) => rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+const accentColour = (liv) => rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+const trackName = (track) => String(track.name || track.id).toUpperCase();
+
+// A radial fill of cell R centred at (mid-x, R.y + R.h * cyFrac).
+function radialCell(c, R, cyFrac, r0, r1, stops) {
+  const cx = R.x + R.w / 2, cy = R.y + R.h * cyFrac;
+  const gr = c.createRadialGradient(cx, cy, r0, cx, cy, r1);
+  for (const [at, col] of stops) gr.addColorStop(at, col);
+  c.fillStyle = gr; c.fillRect(R.x, R.y, R.w, R.h);
+}
+
+// ── painting ───────────────────────────────────────────────────────────────
+// ctx (all optional): { track, night, weather, career, round, last, sponsor }.
 function paintLive(cv, team, liv, ctx) {
-  const ctx2 = cv.getContext("2d");
-  ctx2.clearRect(0, 0, LIVE, LIVE);
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
-  const track = ctx && ctx.track;
-  // TIMING SCREEN: the circuit the next race runs at, drawn from its own
-  // control points, with the round and the last result under it.
-  {
-    const R = L_MAP;
-    // Night: a slightly lifted panel so LIVE_OPTS.glow reads as an LCD, not a poster.
-    ctx2.fillStyle = (ctx && ctx.night) ? "#0c1218" : "#070a0e"; ctx2.fillRect(R.x, R.y, R.w, R.h);
-    ctx2.fillStyle = css(scale(c1, 0.75)); ctx2.fillRect(R.x, R.y, R.w, 30);
-    ctx2.fillStyle = "#f2f3f5"; ctx2.font = "700 18px system-ui, sans-serif";
-    ctx2.textAlign = "left"; ctx2.textBaseline = "middle";
-    ctx2.fillText(track ? String(track.name || track.id).toUpperCase() : "NO CIRCUIT", R.x + 10, R.y + 15, R.w - 20);
-    // A raw Tracks.LIST entry that has not hydrated (LAZY_CIRCUIT meta stub) THROWS on
-    // `.points` ("has no path"): skip the map only, so the flag, banners and career footer
-    // below still paint; GarageScene.ctxKey repaints once the circuit is resident.
-    let P = null;
-    try { P = track && track.points; } catch (e) { P = null; }
-    const M = P && P.length > 3 ? mapProj(P) : null;
-    if (M) {
-      // North up: -z is away from the driver at s = 0, so z runs DOWN the screen.
-      ctx2.strokeStyle = "#232a33"; ctx2.lineWidth = 9; ctx2.lineJoin = "round";
-      ctx2.beginPath();
-      for (let i = 0, n = M.px.length; i <= n; i++) { const j = i % n; if (i) ctx2.lineTo(M.px[j], M.pz[j]); else ctx2.moveTo(M.px[j], M.pz[j]); }
-      ctx2.stroke();
-      ctx2.strokeStyle = css(c2); ctx2.lineWidth = 3.5; ctx2.stroke();
-      ctx2.fillStyle = "#f2f3f5"; ctx2.beginPath();
-      ctx2.arc(M.px[0], M.pz[0], 4.5, 0, Math.PI * 2); ctx2.fill();
-    }
-    // Footer: the round and what happened last time out.
-    ctx2.fillStyle = "#11151b"; ctx2.fillRect(R.x, R.y + R.h - 40, R.w, 40);
-    ctx2.font = "700 15px system-ui, sans-serif"; ctx2.fillStyle = "#9aa4b2";
-    const last = ctx && ctx.last;
-    const foot = ctx && ctx.career
-      ? (last ? (last.dnf ? `LAST: DNF · ${String(last.dnf).toUpperCase()}` : `LAST: P${last.p} · ${last.pts | 0} PTS`) : "SEASON OPENER")
-      : (track ? `${String(track.country || "").toUpperCase()}${ctx && ctx.night ? " · NIGHT" : ""}` : "SELECT A CIRCUIT");
-    ctx2.fillText(foot, R.x + 10, R.y + R.h - 20, R.w - 20);
-    ctx2.textAlign = "right"; ctx2.fillStyle = css(c2);
-    ctx2.fillText(ctx && ctx.weather && ctx.weather !== "dry" ? String(ctx.weather).toUpperCase() : "", R.x + R.w - 10, R.y + R.h - 20);
-    ctx2.textAlign = "left";
-  }
-  // Soft gradients: the contact shadow under the car and the lamp pools.
-  // Night Shift / endurance (ctx.night) cools and lifts the pools so the bay
-  // reads as lit epoxy instead of a flat grey slab under dark keys.
-  const night = !!(ctx && ctx.night);
-  const poolInner = night ? "rgba(190,220,255,0.52)" : "rgba(255,238,205,0.34)";
-  const poolOuter = night ? "rgba(140,180,230,0)" : "rgba(255,238,205,0)";
-  for (const [R, inner, outer] of [[L_SHADOW, "rgba(0,0,0,0.78)", "rgba(0,0,0,0)"],
-                                   [L_POOL, poolInner, poolOuter]]) {
-    const gr = ctx2.createRadialGradient(R.x + R.w / 2, R.y + R.h / 2, 4, R.x + R.w / 2, R.y + R.h / 2, R.w / 2);
-    gr.addColorStop(0, inner); gr.addColorStop(1, outer);
-    ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
-  }
-  // Gantry LCDs + desk spill + floor reflection — painted once into the free
-  // strip so drawDecal at LIVE_OPTS.glow makes the hung screens and the desk
-  // read as emissive without a second atlas or a new eager module.
-  {
-    // Fill-only (no stroke): scene-live.test.mjs counts stroke() as a map draw,
-    // so a stroked waveform here would fail the unhydrated-stub gate.
-    const R = L_GANTRY;
-    ctx2.fillStyle = "#05070a"; ctx2.fillRect(R.x, R.y, R.w, R.h);
-    for (let k = 0; k < 3; k++) {
-      const x0 = R.x + k * (R.w / 3) + 2, w = R.w / 3 - 4, y0 = R.y + 2, h = R.h - 4;
-      ctx2.fillStyle = night ? "#0e1620" : "#0b1016"; ctx2.fillRect(x0, y0, w, h);
-      ctx2.fillStyle = k === 1 ? css(scale(c2, night ? 1.35 : 1.1)) : (night ? "#9ad0ff" : "#ffc45a");
-      for (let i = 0; i <= 14; i++) {
-        const u = i / 14, px = x0 + 3 + (w - 6) * u;
-        const py = y0 + h * 0.55 - Math.sin(u * 8 + k * 1.7) * h * 0.22 - Math.sin(u * 19) * h * 0.07;
-        ctx2.fillRect(px - 1, py - 1.2, 2.2, 2.4);
-      }
-      // Bright status chip so the glow gate (>0.5 luma) fires on the face.
-      ctx2.fillRect(x0 + 3, y0 + 3, 10, 4);
-    }
-  }
-  {
-    const R = L_SPILL;
-    const cx = R.x + R.w / 2, cy = R.y + R.h * 0.35;
-    const gr = ctx2.createRadialGradient(cx, cy, 2, cx, cy, R.w * 0.55);
-    gr.addColorStop(0, night ? "rgba(170,210,255,0.55)" : "rgba(180,210,240,0.32)");
-    gr.addColorStop(0.55, night ? "rgba(120,160,210,0.18)" : "rgba(140,170,200,0.10)");
-    gr.addColorStop(1, "rgba(100,140,180,0)");
-    ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
-  }
-  {
-    // Radial (not linear): the scene-live unit fake canvas only stubs
-    // createRadialGradient; a linear fill would throw out of paintLive there.
-    const R = L_REFLECT;
-    const cx = R.x + R.w / 2, cy = R.y + R.h * 0.2;
-    const gr = ctx2.createRadialGradient(cx, cy, 2, cx, cy, R.h * 0.95);
-    gr.addColorStop(0, night ? "rgba(160,200,255,0.28)" : "rgba(220,230,240,0.16)");
-    gr.addColorStop(0.55, night ? "rgba(110,150,200,0.10)" : "rgba(180,190,200,0.06)");
-    gr.addColorStop(1, "rgba(80,100,120,0)");
-    ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
-  }
-  // SPONSOR BANNERS: the career's backer leads, the team's own partners fill.
-  const names = [];
-  if (ctx && ctx.sponsor && ctx.sponsor.label) names.push(String(ctx.sponsor.label).toUpperCase());
-  const pack = liv && liv.sponsors && LiveryTex.SPONSOR_PACKS && LiveryTex.SPONSOR_PACKS[liv.sponsors];
-  const teamNames = pack || (LiveryTex.SPONSORS && LiveryTex.SPONSORS[team.id]) || ["APEX 26", "PIT LANE", "PADDOCK", "GRID"];
-  for (let i = 0; i < teamNames.length && names.length < 4; i++) if (names.indexOf(teamNames[i]) < 0) names.push(teamNames[i]);
-  for (let b = 0; b < 2; b++) {
-    const R = L_BANNER[b];
-    ctx2.fillStyle = b ? "#eef0f3" : css(scale(c1, 0.55)); ctx2.fillRect(R.x, R.y, R.w, R.h);
-    ctx2.fillStyle = b ? css(scale(c1, 0.75)) : "#f2f3f5";
-    ctx2.font = "800 34px system-ui, sans-serif"; ctx2.textBaseline = "middle";
-    ctx2.textAlign = "center";
-    ctx2.fillText(`${names[b * 2] || ""}      ${names[b * 2 + 1] || ""}`, R.x + R.w / 2, R.y + R.h / 2, R.w - 24);
-    ctx2.fillStyle = css(c2); ctx2.fillRect(R.x, R.y + R.h - 5, R.w, 5);
-  }
-  // NEXT RACE sign: the flag and the name.
-  {
-    const R = L_FLAG, f = FLAGS[track && track.country] || ["h", "#555", "#888"];
-    const n = f.length - 1;
-    for (let i = 0; i < n; i++) {
-      ctx2.fillStyle = f[i + 1];
-      if (f[0] === "h") ctx2.fillRect(R.x, R.y + (R.h * i) / n, R.w, R.h / n + 1);
-      else ctx2.fillRect(R.x + (R.w * i) / n, R.y, R.w / n + 1, R.h);
-    }
-    if (track && track.country === "Japan") { ctx2.fillStyle = "#bc002d"; ctx2.beginPath(); ctx2.arc(R.x + R.w / 2, R.y + R.h / 2, 18, 0, Math.PI * 2); ctx2.fill(); }
-    if (track && track.country === "Canada") { ctx2.fillStyle = "#ff0000"; ctx2.fillRect(R.x + R.w / 2 - 12, R.y + 14, 24, 36); }
-    if (track && (track.country === "UK")) { ctx2.fillStyle = "#c8102e"; ctx2.fillRect(R.x + R.w / 2 - 8, R.y, 16, R.h); }
-    const T = L_RACE;
-    ctx2.fillStyle = "#0a0c10"; ctx2.fillRect(T.x, T.y, T.w, T.h);
-    ctx2.fillStyle = css(c2); ctx2.fillRect(T.x, T.y, 6, T.h);
-    ctx2.fillStyle = "#9aa4b2"; ctx2.font = "700 18px system-ui, sans-serif"; ctx2.textAlign = "left";
-    ctx2.fillText(ctx && ctx.career ? `NEXT · ROUND ${(ctx.round | 0) + 1}` : "NEXT RACE", T.x + 18, T.y + 18);
-    ctx2.fillStyle = "#f2f3f5"; ctx2.font = "800 28px system-ui, sans-serif";
-    ctx2.fillText(track ? `${String(track.name || track.id).toUpperCase()} GP` : "—", T.x + 18, T.y + 44, T.w - 30);
-  }
+  const c = cv.getContext("2d");
+  c.clearRect(0, 0, LIVE, LIVE);
+  const c1 = bodyColour(liv), c2 = accentColour(liv);
+  const live = ctx || {};
+  const night = !!live.night;
+  paintTimingScreen(c, live, c1, c2);
+  paintSoftGradients(c, night);
+  paintGantryLcds(c, night, c2);
+  paintDeskSpill(c, night);
+  paintFloorSheen(c, night);
+  paintBanners(c, sponsorNames(team, liv, live.sponsor), c1, c2);
+  paintFlag(c, live.track);
+  paintRaceSign(c, live, c2);
   return cv;
 }
-const z2z = (q) => q[2];
+
+// TIMING SCREEN: the circuit the next race runs at, drawn from its own control
+// points, with the round and the last result under it.
+function paintTimingScreen(c, ctx, c1, c2) {
+  const R = L_MAP, track = ctx.track;
+  // Night: a slightly lifted panel so LIVE_OPTS.glow reads as an LCD, not a poster.
+  c.fillStyle = ctx.night ? "#0c1218" : "#070a0e"; c.fillRect(R.x, R.y, R.w, R.h);
+  c.fillStyle = css(scale(c1, 0.75)); c.fillRect(R.x, R.y, R.w, 30);
+  c.fillStyle = "#f2f3f5"; c.font = "700 18px system-ui, sans-serif";
+  c.textAlign = "left"; c.textBaseline = "middle";
+  c.fillText(track ? trackName(track) : "NO CIRCUIT", R.x + 10, R.y + 15, R.w - 20);
+  // A raw Tracks.LIST entry that has not hydrated (LAZY_CIRCUIT meta stub) THROWS on
+  // `.points` ("has no path"): skip the map only, so the flag, banners and career footer
+  // still paint; GarageScene.ctxKey repaints once the circuit is resident.
+  let P = null;
+  try { P = track && track.points; } catch (e) { P = null; }
+  const M = P && P.length > 3 ? mapProj(P) : null;
+  if (M) {
+    // North up: -z is away from the driver at s = 0, so z runs DOWN the screen.
+    c.strokeStyle = "#232a33"; c.lineWidth = 9; c.lineJoin = "round";
+    c.beginPath();
+    const n = M.px.length;
+    c.moveTo(M.px[0], M.pz[0]);
+    for (let i = 1; i <= n; i++) c.lineTo(M.px[i % n], M.pz[i % n]);
+    c.stroke();
+    c.strokeStyle = css(c2); c.lineWidth = 3.5; c.stroke();
+    c.fillStyle = "#f2f3f5"; c.beginPath();
+    c.arc(M.px[0], M.pz[0], 4.5, 0, Math.PI * 2); c.fill();
+  }
+  c.fillStyle = "#11151b"; c.fillRect(R.x, R.y + R.h - 40, R.w, 40);
+  c.font = "700 15px system-ui, sans-serif"; c.fillStyle = "#9aa4b2";
+  c.fillText(timingFooter(ctx), R.x + 10, R.y + R.h - 20, R.w - 20);
+  c.textAlign = "right"; c.fillStyle = css(c2);
+  c.fillText(ctx.weather && ctx.weather !== "dry" ? String(ctx.weather).toUpperCase() : "", R.x + R.w - 10, R.y + R.h - 20);
+  c.textAlign = "left";
+}
+
+// Career: what happened last time out. Otherwise the country (and NIGHT).
+function timingFooter(ctx) {
+  const track = ctx.track, last = ctx.last;
+  if (ctx.career) {
+    if (!last) return "SEASON OPENER";
+    return last.dnf ? `LAST: DNF · ${String(last.dnf).toUpperCase()}` : `LAST: P${last.p} · ${last.pts | 0} PTS`;
+  }
+  return track ? `${String(track.country || "").toUpperCase()}${ctx.night ? " · NIGHT" : ""}` : "SELECT A CIRCUIT";
+}
+
+// The car's contact shadow and the lamp pools. At night (Night Shift,
+// endurance) the pools cool and lift so the bay reads as lit epoxy instead of
+// a flat grey slab under dark keys.
+function paintSoftGradients(c, night) {
+  const poolInner = night ? "rgba(190,220,255,0.52)" : "rgba(255,238,205,0.34)";
+  const poolOuter = night ? "rgba(140,180,230,0)" : "rgba(255,238,205,0)";
+  radialCell(c, L_SHADOW, 0.5, 4, L_SHADOW.w / 2, [[0, "rgba(0,0,0,0.78)"], [1, "rgba(0,0,0,0)"]]);
+  radialCell(c, L_POOL, 0.5, 4, L_POOL.w / 2, [[0, poolInner], [1, poolOuter]]);
+}
+
+// Three hung LCD faces, each a dotted waveform. Fill-only (no stroke):
+// scene-live.test.mjs counts stroke() as a map draw, so a stroked waveform
+// here would fail the unhydrated-stub gate.
+function paintGantryLcds(c, night, c2) {
+  const R = L_GANTRY;
+  c.fillStyle = "#05070a"; c.fillRect(R.x, R.y, R.w, R.h);
+  for (let k = 0; k < 3; k++) {
+    const x0 = R.x + k * (R.w / 3) + 2, w = R.w / 3 - 4, y0 = R.y + 2, h = R.h - 4;
+    c.fillStyle = night ? "#0e1620" : "#0b1016"; c.fillRect(x0, y0, w, h);
+    c.fillStyle = k === 1 ? css(scale(c2, night ? 1.35 : 1.1)) : (night ? "#9ad0ff" : "#ffc45a");
+    for (let i = 0; i <= 14; i++) {
+      const u = i / 14, px = x0 + 3 + (w - 6) * u;
+      const py = y0 + h * 0.55 - Math.sin(u * 8 + k * 1.7) * h * 0.22 - Math.sin(u * 19) * h * 0.07;
+      c.fillRect(px - 1, py - 1.2, 2.2, 2.4);
+    }
+    // Bright status chip so the glow gate (>0.5 luma) fires on the face.
+    c.fillRect(x0 + 3, y0 + 3, 10, 4);
+  }
+}
+
+function paintDeskSpill(c, night) {
+  radialCell(c, L_SPILL, 0.35, 2, L_SPILL.w * 0.55, [
+    [0, night ? "rgba(170,210,255,0.55)" : "rgba(180,210,240,0.32)"],
+    [0.55, night ? "rgba(120,160,210,0.18)" : "rgba(140,170,200,0.10)"],
+    [1, "rgba(100,140,180,0)"]]);
+}
+
+// Radial, not linear: the scene-live unit fake canvas only stubs
+// createRadialGradient; a linear fill would throw out of paintLive there.
+function paintFloorSheen(c, night) {
+  radialCell(c, L_REFLECT, 0.2, 2, L_REFLECT.h * 0.95, [
+    [0, night ? "rgba(160,200,255,0.28)" : "rgba(220,230,240,0.16)"],
+    [0.55, night ? "rgba(110,150,200,0.10)" : "rgba(180,190,200,0.06)"],
+    [1, "rgba(80,100,120,0)"]]);
+}
+
+// Up to four names: the career's backer leads, the team's own partners fill.
+function sponsorNames(team, liv, sponsor) {
+  const names = [];
+  if (sponsor && sponsor.label) names.push(String(sponsor.label).toUpperCase());
+  const pack = liv && liv.sponsors && LiveryTex.SPONSOR_PACKS && LiveryTex.SPONSOR_PACKS[liv.sponsors];
+  const teamNames = pack || (LiveryTex.SPONSORS && LiveryTex.SPONSORS[team.id]) || FALLBACK_SPONSORS;
+  for (let i = 0; i < teamNames.length && names.length < 4; i++) if (names.indexOf(teamNames[i]) < 0) names.push(teamNames[i]);
+  return names;
+}
+
+// Two banners, two names each: a dark team-colour one and a light one.
+function paintBanners(c, names, c1, c2) {
+  for (let b = 0; b < 2; b++) {
+    const R = L_BANNER[b];
+    c.fillStyle = b ? "#eef0f3" : css(scale(c1, 0.55)); c.fillRect(R.x, R.y, R.w, R.h);
+    c.fillStyle = b ? css(scale(c1, 0.75)) : "#f2f3f5";
+    c.font = "800 34px system-ui, sans-serif"; c.textBaseline = "middle";
+    c.textAlign = "center";
+    c.fillText(`${names[b * 2] || ""}      ${names[b * 2 + 1] || ""}`, R.x + R.w / 2, R.y + R.h / 2, R.w - 24);
+    c.fillStyle = css(c2); c.fillRect(R.x, R.y + R.h - 5, R.w, 5);
+  }
+}
+
+// NEXT RACE flag: the stripes, then the three emblems a stripe cannot carry.
+function paintFlag(c, track) {
+  const R = L_FLAG, country = track && track.country, f = FLAGS[country] || NO_FLAG;
+  const n = f.length - 1;
+  for (let i = 0; i < n; i++) {
+    c.fillStyle = f[i + 1];
+    if (f[0] === "h") c.fillRect(R.x, R.y + (R.h * i) / n, R.w, R.h / n + 1);
+    else c.fillRect(R.x + (R.w * i) / n, R.y, R.w / n + 1, R.h);
+  }
+  if (country === "Japan") { c.fillStyle = "#bc002d"; c.beginPath(); c.arc(R.x + R.w / 2, R.y + R.h / 2, 18, 0, Math.PI * 2); c.fill(); }
+  if (country === "Canada") { c.fillStyle = "#ff0000"; c.fillRect(R.x + R.w / 2 - 12, R.y + 14, 24, 36); }
+  if (country === "UK") { c.fillStyle = "#c8102e"; c.fillRect(R.x + R.w / 2 - 8, R.y, 16, R.h); }
+}
+
+// NEXT RACE sign: the round (career) and the race name.
+function paintRaceSign(c, ctx, c2) {
+  const T = L_RACE, track = ctx.track;
+  c.fillStyle = "#0a0c10"; c.fillRect(T.x, T.y, T.w, T.h);
+  c.fillStyle = css(c2); c.fillRect(T.x, T.y, 6, T.h);
+  c.fillStyle = "#9aa4b2"; c.font = "700 18px system-ui, sans-serif"; c.textAlign = "left";
+  c.fillText(ctx.career ? `NEXT · ROUND ${(ctx.round | 0) + 1}` : "NEXT RACE", T.x + 18, T.y + 18);
+  c.fillStyle = "#f2f3f5"; c.font = "800 28px system-ui, sans-serif";
+  c.fillText(track ? `${trackName(track)} GP` : "—", T.x + 18, T.y + 44, T.w - 30);
+}
+
 // The timing-screen map's bounds scan and projection depend only on the track's
 // points (L_MAP is fixed), not the colours: a colour-drag repaint reuses them.
 // Keyed on the points array and its length; the strokes still redraw every paint.
@@ -186,29 +222,30 @@ function mapProj(P) {
   if (mapMemo && mapMemo.P === P && mapMemo.n === P.length) return mapMemo;
   const R = L_MAP, n = P.length;
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
-  for (let i = 0; i < n; i++) { x0 = Math.min(x0, P[i][0]); x1 = Math.max(x1, P[i][0]); z0 = Math.min(z0, P[i][2]); z1 = Math.max(z2z(P[i]), z1); }
+  for (let i = 0; i < n; i++) {
+    x0 = Math.min(x0, P[i][0]); x1 = Math.max(x1, P[i][0]);
+    z0 = Math.min(z0, P[i][2]); z1 = Math.max(z1, P[i][2]);
+  }
   const pad = 22, top = R.y + 40, bh = R.h - 40 - 46, bw = R.w - pad * 2;
   const sc = Math.min(bw / Math.max(1e-3, x1 - x0), bh / Math.max(1e-3, z1 - z0));
   const ox = R.x + pad + (bw - (x1 - x0) * sc) / 2, oz = top + (bh - (z1 - z0) * sc) / 2;
   const px = new Float64Array(n), pz = new Float64Array(n);
-  for (let i = 0; i < n; i++) { const q = P[i]; px[i] = ox + (q[0] - x0) * sc; pz[i] = oz + (z2z(q) - z0) * sc; }
+  for (let i = 0; i < n; i++) { px[i] = ox + (P[i][0] - x0) * sc; pz[i] = oz + (P[i][2] - z0) * sc; }
   mapMemo = { P, n, px, pz };
   return mapMemo;
 }
+
 // Two of the six engineer screens carry LIVE traces: a scrolling pair of
 // channels that move with time, so the bank reads as monitors rather than a
-// poster of monitors. Painted into L_TRACE and laid over the dress quad.
+// poster of monitors. Painted into L_TRACE every frame it is shown.
 function paintTrace(cv, liv, now) {
   const c = cv.getContext("2d");
   const R = L_TRACE;
   const t = now / 1000;
-  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  const c2 = accentColour(liv);
   c.fillStyle = "#05070a"; c.fillRect(R.x, R.y, R.w, R.h);
   for (let k = 0; k < 2; k++) {
-    const x0 = R.x + k * (R.w / 2) + 3;
-    const w = R.w / 2 - 6;
-    const y0 = R.y + 3;
-    const h = R.h - 6;
+    const x0 = R.x + k * (R.w / 2) + 3, w = R.w / 2 - 6, y0 = R.y + 3, h = R.h - 6;
     c.fillStyle = "#0d141c"; c.fillRect(x0, y0, w, h);
     c.strokeStyle = "rgba(140,175,210,0.28)"; c.lineWidth = 1;
     for (let g = 1; g < 4; g++) { c.beginPath(); c.moveTo(x0 + 4, y0 + h * g / 4); c.lineTo(x0 + w - 4, y0 + h * g / 4); c.stroke(); }
@@ -227,72 +264,14 @@ function paintTrace(cv, liv, now) {
     c.fillText(k ? `${410 + Math.round(Math.sin(t * 0.7) * 35)}°C` : `${Math.round(62 + Math.sin(t * 0.4) * 30)}%`, x0 + w - 6, y0 + 4);
   }
 }
-// The quads the live atlas lands on. `floor` is its own group: the shadow and
-// pools draw with no glow (they are not signage), everything else at the
-// dress's 0.62. Gantry LCDs, desk spill and a thin epoxy reflection share the
-// same draw — still one createTexMesh per side, no new eager script.
-function buildLive(FIXTURES) {
-  const g = {};
-  for (const k of ["mid", "floor", "nx", "px", "door"]) g[k] = { pos: [], nrm: [], uv: [], idx: [] };
-  const zd = Z_DOOR - 0.03, xw = HALF_W - 0.03;
-  // The screen face, on the housing's -Z side (see buildEquipment).
-  const sx = SCREEN[0], sy = SCREEN[1], sz = SCREEN[2] - 0.051;
-  dquadR(g.mid, [[sx + 0.88, sy - 0.68, sz], [sx - 0.88, sy - 0.68, sz], [sx - 0.88, sy + 0.68, sz], [sx + 0.88, sy + 0.68, sz]], [0, 0, -1], L_MAP);
-  // Contact shadow: the car's footprint, y 0.006 above the wheel boxes (0.003).
-  dquadR(g.floor, [[-1.7, 0.006, -3.4], [1.7, 0.006, -3.4], [1.7, 0.006, 3.8], [-1.7, 0.006, 3.8]], [0, 1, 0], L_SHADOW);
-  // Lamp pools under the two keys and four fills.
-  for (let i = 0; i < 6; i++) {
-    const F = FIXTURES[i], r = F[13] ? 2.2 : 1.6, x = F[0] + F[6] * 1.2, z = F[2] + F[8] * 1.2;
-    dquadR(g.floor, [[x - r, 0.005, z - r], [x + r, 0.005, z - r], [x + r, 0.005, z + r], [x - r, 0.005, z + r]], [0, 1, 0], L_POOL);
-  }
-  // Soft pools near the nose / rear-jack corners (no mesh lamps — 18k-tri cap).
-  for (const [lx, lz] of [[-2.85, 3.35], [3.05, -3.55]]) {
-    const r = 1.35;
-    dquadR(g.floor, [[lx - r, 0.005, lz - r], [lx + r, 0.005, lz - r], [lx + r, 0.005, lz + r], [lx - r, 0.005, lz + r]], [0, 1, 0], L_POOL);
-  }
-  // Subtle epoxy reflection under the timing screen and along the -X desk —
-  // a thin sheen, not a second car mirror (that stays in scene.js).
-  dquadR(g.floor, [[sx - 1.2, 0.007, sz - 1.6], [sx + 1.2, 0.007, sz - 1.6], [sx + 1.2, 0.007, sz + 0.4], [sx - 1.2, 0.007, sz + 0.4]], [0, 1, 0], L_REFLECT);
-  dquadR(g.floor, [[-5.4, 0.007, GANTRY.z - 1.6], [-3.6, 0.007, GANTRY.z - 1.6], [-3.6, 0.007, GANTRY.z + 1.6], [-5.4, 0.007, GANTRY.z + 1.6]], [0, 1, 0], L_REFLECT);
-  // Two live trace tiles over the dress screen bank (D_SCREEN spans z 2.15..
-  // -0.95, y 1.10..2.65 on -X; each tile is a third by a half of it), 5 mm
-  // proud of THAT quad — which stands 0.19 m off the wall on the monitor bank
-  // block. The first cut put these 5 mm off the WALL, inside the bank, where
-  // the depth test deleted them: the traces animated into a block for a week
-  // and the screens showed only the dress paint.
-  const xt = -xw + 0.195;
-  dquadR(g.nx, [[xt, 1.10, 2.15], [xt, 1.10, 0.08], [xt, 1.875, 0.08], [xt, 1.875, 2.15]], [1, 0, 0], L_TRACE);
-  // Lower bank row: same live atlas cell so four of six dress tiles carry glow.
-  dquadR(g.nx, [[xt, 1.875, 2.15], [xt, 1.875, 0.08], [xt, 2.65, 0.08], [xt, 2.65, 2.15]], [1, 0, 0], L_TRACE);
-  // Hung gantry LCDs (GarageEquipment.monitorGantry): housing centre at x+0.11
-  // with half-depth 0.01, so the bay-facing face is at x+0.12; sit 6 mm proud
-  // of THAT face (into the bay, less-negative x) so the depth test keeps the
-  // atlas over the LCD mesh instead of burying it inside the bezel.
-  const gx = GANTRY.x + 0.126;
-  for (let i = 0; i < GANTRY.dz.length; i++) {
-    const cz = GANTRY.z + GANTRY.dz[i], hy = 0.105, hz = 0.16;
-    const cell = { x: L_GANTRY.x + i * (L_GANTRY.w / 3), y: L_GANTRY.y, w: L_GANTRY.w / 3, h: L_GANTRY.h };
-    dquadR(g.nx, [[gx, 1.92 - hy, cz + hz], [gx, 1.92 - hy, cz - hz], [gx, 1.92 + hy, cz - hz], [gx, 1.92 + hy, cz + hz]], [1, 0, 0], cell);
-  }
-  // Desk spill under the gantry (worktop at y 0.86 in buildProps): soft glow
-  // pooled on the bench so Night Shift stops reading as a flat grey slab.
-  dquadR(g.nx, [[-5.35, 0.872, GANTRY.z - 1.35], [-4.55, 0.872, GANTRY.z - 1.35], [-4.55, 0.872, GANTRY.z + 1.35], [-5.35, 0.872, GANTRY.z + 1.35]], [0, 1, 0], L_SPILL);
-  // Banners on the side walls, in the y 1.72-2.12 band both walls have free
-  // forward of the data boards.
-  dquadR(g.nx, [[-xw, 1.72, 4.6], [-xw, 1.72, 2.4], [-xw, 2.12, 2.4], [-xw, 2.12, 4.6]], [1, 0, 0], L_BANNER[0]);
-  dquadR(g.px, [[xw, 1.72, 2.4], [xw, 1.72, 4.6], [xw, 2.12, 4.6], [xw, 2.12, 2.4]], [-1, 0, 0], L_BANNER[1]);
-  // Next-race sign ON THE SHUTTER (z 6.24, where the door wordmark lives),
-  // under that wordmark's y 2.60 and above the shutter's 1.98 bottom rail.
-  // It was on the door wall at x 4.2..5.2, which the REAR preset frames only
-  // as its extreme top-left corner — measured, the flag was half off the edge.
-  dquadR(g.door, [[3.42, 2.26, 6.24], [2.94, 2.26, 6.24], [2.94, 2.50, 6.24], [3.42, 2.50, 6.24]], [0, 0, -1], L_FLAG);
-  dquadR(g.door, [[3.98, 2.04, 6.24], [2.94, 2.04, 6.24], [2.94, 2.21, 6.24], [3.98, 2.21, 6.24]], [0, 0, -1], L_RACE);
-  return g;
-}
-function dquadR(out, c, n, region) {
-  const u = { uL: region.x / LIVE, uR: (region.x + region.w) / LIVE, vT: 1 - region.y / LIVE, vB: 1 - (region.y + region.h) / LIVE };
+
+// ── the quads the atlas lands on ───────────────────────────────────────────
+// One textured quad sampling atlas cell `region`; corners c wind CCW about n.
+function atlasQuad(out, c, n, region) {
+  const uL = region.x / LIVE, uR = (region.x + region.w) / LIVE;
+  const vT = 1 - region.y / LIVE, vB = 1 - (region.y + region.h) / LIVE;
+  const uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
   const i = out.pos.length / 3;
-  const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
   for (let k = 0; k < 4; k++) {
     out.pos.push(c[k][0], c[k][1], c[k][2]);
     out.nrm.push(n[0], n[1], n[2]);
@@ -300,11 +279,72 @@ function dquadR(out, c, n, region) {
   }
   out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
 }
+// Facing +Y at height y, over x0..x1 by z0..z1.
+const upQuad = (out, y, x0, x1, z0, z1, region) =>
+  atlasQuad(out, [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], [0, 1, 0], region);
+// On the plane x, rising y0..y1; the image's left edge is at zL, right at zR.
+const xQuad = (out, x, nx, y0, y1, zL, zR, region) =>
+  atlasQuad(out, [[x, y0, zL], [x, y0, zR], [x, y1, zR], [x, y1, zL]], [nx, 0, 0], region);
+// On the plane z facing -Z (toward the deep end), image left at xL, right at xR.
+const zQuad = (out, z, y0, y1, xL, xR, region) =>
+  atlasQuad(out, [[xL, y0, z], [xR, y0, z], [xR, y1, z], [xL, y1, z]], [0, 0, -1], region);
+const poolQuad = (out, x, z, r) => upQuad(out, 0.005, x - r, x + r, z - r, z + r, L_POOL);
 
-  // Atlas rects / FLAGS / z2z / dquadR stay module-local (paint + build use them).
-  // LIVE stays public — GarageScene.uploadLive sizes the canvas from it.
-  // L_GANTRY / L_SPILL / L_REFLECT stay local; garage-live unit tests read them
-  // through build() vertex counts and paintLive pixel probes.
+// `floor` is its own group: the shadow and pools draw with no glow (they are
+// not signage), everything else at the dress's 0.62. FIXTURES is GarageScene's
+// lamp table: [x, y, z, ..., aimX (6), aimY, aimZ (8), ..., wide (13)].
+function buildLive(FIXTURES) {
+  const g = {};
+  for (const k of ["mid", "floor", "nx", "px", "door"]) g[k] = { pos: [], nrm: [], uv: [], idx: [] };
+  const xw = HALF_W - 0.03;
+  // The timing screen face, on the housing's -Z side (see buildEquipment).
+  const sx = SCREEN[0], sy = SCREEN[1], sz = SCREEN[2] - 0.051;
+  zQuad(g.mid, sz, sy - 0.68, sy + 0.68, sx + 0.88, sx - 0.88, L_MAP);
+  // Contact shadow: the car's footprint, y 0.006 above the wheel boxes (0.003).
+  upQuad(g.floor, 0.006, -1.7, 1.7, -3.4, 3.8, L_SHADOW);
+  // Lamp pools under the two keys and four fills, pushed 1.2 m along each aim.
+  for (let i = 0; i < 6; i++) {
+    const F = FIXTURES[i];
+    poolQuad(g.floor, F[0] + F[6] * 1.2, F[2] + F[8] * 1.2, F[13] ? 2.2 : 1.6);
+  }
+  // Soft pools near the nose / rear-jack corners (no mesh lamps — 18k-tri cap).
+  poolQuad(g.floor, -2.85, 3.35, 1.35);
+  poolQuad(g.floor, 3.05, -3.55, 1.35);
+  // A thin epoxy sheen under the timing screen and along the -X desk, not a
+  // second car mirror (that stays in scene.js).
+  upQuad(g.floor, 0.007, sx - 1.2, sx + 1.2, sz - 1.6, sz + 0.4, L_REFLECT);
+  upQuad(g.floor, 0.007, -5.4, -3.6, GANTRY.z - 1.6, GANTRY.z + 1.6, L_REFLECT);
+  // Two live trace rows over the dress screen bank (D_SCREEN spans z 2.15..
+  // -0.95, y 1.10..2.65 on -X). They sit 5 mm proud of THAT quad, which stands
+  // 0.19 m off the wall on the monitor bank block: 5 mm off the wall would be
+  // inside the bank, where the depth test deletes them.
+  const xt = -xw + 0.195;
+  xQuad(g.nx, xt, 1, 1.10, 1.875, 2.15, 0.08, L_TRACE);
+  xQuad(g.nx, xt, 1, 1.875, 2.65, 2.15, 0.08, L_TRACE);
+  // Hung gantry LCDs (GarageEquipment.monitorGantry): the bay-facing face of
+  // the housing is at x + 0.12; sit 6 mm proud of it so the depth test keeps
+  // the atlas over the LCD mesh instead of burying it inside the bezel.
+  const gx = GANTRY.x + 0.126;
+  for (let i = 0; i < GANTRY.dz.length; i++) {
+    const cz = GANTRY.z + GANTRY.dz[i], hy = 0.105, hz = 0.16;
+    const cell = { x: L_GANTRY.x + i * (L_GANTRY.w / 3), y: L_GANTRY.y, w: L_GANTRY.w / 3, h: L_GANTRY.h };
+    xQuad(g.nx, gx, 1, 1.92 - hy, 1.92 + hy, cz + hz, cz - hz, cell);
+  }
+  // Desk spill on the gantry worktop (y 0.86 in buildProps).
+  upQuad(g.nx, 0.872, -5.35, -4.55, GANTRY.z - 1.35, GANTRY.z + 1.35, L_SPILL);
+  // Banners on the side walls, in the y 1.72-2.12 band both walls have free
+  // forward of the data boards.
+  xQuad(g.nx, -xw, 1, 1.72, 2.12, 4.6, 2.4, L_BANNER[0]);
+  xQuad(g.px, xw, -1, 1.72, 2.12, 2.4, 4.6, L_BANNER[1]);
+  // Next-race sign ON THE SHUTTER (z 6.24, where the door wordmark lives),
+  // under that wordmark's y 2.60 and above the shutter's 1.98 bottom rail: the
+  // REAR preset frames the door wall beside it only at its extreme corner.
+  zQuad(g.door, 6.24, 2.26, 2.50, 3.42, 2.94, L_FLAG);
+  zQuad(g.door, 6.24, 2.04, 2.21, 3.98, 2.94, L_RACE);
+  return g;
+}
+
+  // LIVE is public: GarageScene.uploadLive sizes the canvas from it.
   return { LIVE, paintLive, paintTrace, build: buildLive };
 })();
 if (typeof window !== "undefined") window.GarageLive = GarageLive;
