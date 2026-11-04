@@ -121,4 +121,19 @@ membership audit (is every unit file in some group?).
 
 ## Issues filed
 
-Filled in by the PR when the issues open (numbers in the PR body).
+All `ready` plus an `area:*`; PR #4765 carries this note.
+
+| Row | Issue |
+|---|---|
+| 1 | #4767 input: rotating the phone never releases a held HUD button |
+| 2, 7 | #4768 ci: a vendor bump in a mixed diff is routed to no spec |
+| 3 | #4769 race: a quali/TT flag leaks `RaceCeremony.want` into the next race |
+| 4 (+5 as needs-browser) | #4770 net: the ICE-restart courier ignores the private relay |
+| 6 | #4771 tests: seven unit tests return before any assertion |
+| 8 | #4772 ui: BUTTON SIZE keeps a stale "fits N%" after a race |
+| 9 | #4773 career: four save-migration holes |
+| 10 | #4774 tests: the unit suite is not runnable under `NODE_V8_COVERAGE` |
+| 11 | #4775 net: fuzz the phone-pad wire and the session heartbeat |
+
+Not filed: row 12 (session.js hidden forgiveness, NEEDS-BROWSER: a real-iPhone suspend/resume reading comes first)
+and the refuted WGX row.
