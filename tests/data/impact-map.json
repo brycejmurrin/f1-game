@@ -18901,6 +18901,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
+        "tests/unit/select-specs.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
     },

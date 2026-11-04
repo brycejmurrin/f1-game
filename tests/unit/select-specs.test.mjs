@@ -2034,3 +2034,13 @@ test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names it
   // The pin is narrow: a sibling HUD module stays routed-only.
   assert.deepEqual(specsAffectedBySource(["js/ui/hud-tyres.js"]), []);
 });
+
+test("#4768: a vendor bump is routed, and an unrouted path in a mixed diff is not 'matched'", () => {
+  for (const [f, group] of [["vendor/three-0.187.0/three.core.min.js", "gfx"], ["vendor/rapier-0.19.3/package.json", "collisions"],
+    ["vendor/jsqr-1.4.0/jsQR.js", "net-unit"], ["vendor/gpu-capture/webgl-lint.js", "hooks"]]) {
+    assert.ok(pick([f]).has(group), `${f} -> ${group}`);
+  }
+  const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["controller.html", "js/ui/scale.js"] });
+  assert.equal(r.reason, "infra");
+  assert.deepEqual(r.unclaimed, ["controller.html"]);
+});
