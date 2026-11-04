@@ -500,7 +500,6 @@ const Collide = (() => {
       // Trace-owned replay cars keep their recorded pose and speed, including
       // overlaps and pit-lane positions. They are never local contact bodies.
       if (ownsPose(a) || ownsPose(b)) return null;
-      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       // Net remotes draw from delayed sample() but contact must use predict()
       // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
       const aProg = a._nOk ? a._nProg : a.prog;
@@ -516,6 +515,8 @@ const Collide = (() => {
       if (adProg > LCAR_MAX && adProg < L - LCAR_MAX) return null;
       dProg = ((dProg + L / 2) % L + L) % L - L / 2;
       if (Math.abs(dProg) > LCAR_MAX) return null;
+      // After the prog rejects: owns() is a call, and a far pair is null either way (same result, fewer calls in the all-pairs path).
+      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       const dX = aX - bX;
       if (!Number.isFinite(dX)) return null;
       // Pair extents, yaw-aware (see LCAR_MAX above). Identical to LCAR/WCAR
