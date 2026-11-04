@@ -89,8 +89,9 @@ const XrSession = (function () {
 
   async function probe() {
     _probed = true;
-    _supported = false;
+    // Keep any known-good _supported until the await resolves (#4354).
     if (typeof navigator === "undefined" || !navigator.xr || !navigator.xr.isSessionSupported) {
+      _supported = false;
       emit("capability", { supported: false, reason: "no-navigator-xr" });
       return false;
     }
