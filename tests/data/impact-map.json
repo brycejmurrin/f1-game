@@ -179,7 +179,8 @@
     },
     "js/agent/apex-lifecycle.js": {
       "lifecycle": [
-        "tests/specs/render-lifecycle.spec.js"
+        "tests/specs/render-lifecycle.spec.js",
+        "tests/unit/apex-lifecycle.test.mjs"
       ]
     },
     "js/agent/apex-lobby.js": {
