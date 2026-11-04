@@ -12802,6 +12802,7 @@
         "tests/unit/race-ceremony.test.mjs"
       ],
       "reset": [
+        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "resetLive": [

@@ -484,6 +484,19 @@ function startPitOut(done) {
   endHome(); arrival.start({ out: true });
   return true;
 }
+// RACE END (#4745 slice B): the same home show, played between the podium and the results sheet. The caller opens the
+// bay (open) and gets done() once when the show ends, is skipped, or cancelled by a teardown (never). Off by
+// PLAY ANIMATIONS / AFTER THE RACE, reduced motion, the harness and a stale/missing note: false, nothing opened.
+let raceEnd = null;
+function fireRaceEnd() { const p = raceEnd; raceEnd = null; if (p) p.done(); }
+function startRaceEnd(done, open) {
+  const p = pendingHome, cfg = GarageArrival.settingsFor(G.store.get("garageArrival", null), "home");
+  pendingHome = null;
+  if (!p || !cfg.enabled || !cfg.afterRace || reducedMotion() || (typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation())) return false;
+  raceEnd = { done }; open(); endHome(); arrival.start({ home: p });
+  return true;
+}
+function skipRaceEnd() { if (!raceEnd) return false; arrival.finish(); fireRaceEnd(); return true; }
 const pitOutActive = () => !!pitOut;
 function skipPitOut() { if (!pitOut) return false; arrival.finish(); firePitOut(); return true; }
 function cancelPitOut() { pitOut = null; }
@@ -1035,7 +1048,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
-  if (pitOut && !driveOut && !preview && !home.active && !(arriving && arriving.active)) firePitOut();   // the release ended or was skipped
+  if ((pitOut || raceEnd) && !driveOut && !preview && !home.active && !(arriving && arriving.active)) { firePitOut(); fireRaceEnd(); }   // the release / the way home ended or was skipped
   // ENTRY/EXIT CAMERA OPTIONS (lazy): replace/clamp the arrival eye so the default
   // never clips through a culled wall. Override layer — does not edit arrival.js.
   if (arriving && arriving.active && typeof GarageCameraOptions !== "undefined") {
@@ -1491,7 +1504,7 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { pitOut = null; arrival.cancel(); sequenceLook(null); }, startPitOut, pitOutActive, skipPitOut, noteResult, startHome,
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { pitOut = null; raceEnd = null; arrival.cancel(); sequenceLook(null); }, startPitOut, pitOutActive, skipPitOut, startRaceEnd, skipRaceEnd, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
