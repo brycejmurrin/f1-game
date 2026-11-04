@@ -910,14 +910,11 @@ function buildSelect(opts) {
       const row = trackTile(t, i, { readOnly: true, active: !seasonComplete && r === rnd });
       if (r < rnd || seasonComplete) row.dataset.done = "1";
       if (!seasonComplete && r === rnd) row.setAttribute("aria-current", "step");
-      // Touch has no hover: a tap pins the "name · country" tip for 2.5 s
-      // (#4822; :active only painted it under the finger, while pressed).
-      row.addEventListener("click", () => {
-        for (const o of els.selTracks.querySelectorAll("[data-tip-open]")) delete o.dataset.tipOpen;
-        row.dataset.tipOpen = "1";
-        clearTimeout(row._tipT);
-        row._tipT = setTimeout(() => { delete row.dataset.tipOpen; }, 2500);
-      });
+      row.onclick = () => {
+        const o = els.selTracks.querySelector("[data-tip-open]");
+        if (o && o !== row) o.removeAttribute("data-tip-open");
+        row.toggleAttribute("data-tip-open");
+      };
       const rn = document.createElement("span");
       rn.className = "sur-rnd";
       rn.textContent = "R" + (r + 1);

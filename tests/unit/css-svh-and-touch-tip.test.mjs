@@ -19,9 +19,16 @@ test("no dvh unit in a css declaration (svh is the house unit)", () => {
   assert.deepEqual(hits, [], "use svh (css/tokens.css §Height uses svh)");
 });
 
-test("season tile tip has a tap route, not only :active/:hover", () => {
-  const sel = strip(fs.readFileSync(path.join(root, "css/select.css"), "utf8"));
-  assert.match(sel, /\.track-row\[data-tip\]\[data-tip-open\]::before/);
-  const js = fs.readFileSync(path.join(root, "js/ui/select-screen.js"), "utf8");
-  assert.match(js, /dataset\.tipOpen\s*=/);
+test("a [data-tip] ::before shown by :active is also shown by a pressed-free route", () => {
+  // Rule over every css file: a selector list that paints a data-tip on
+  // :active must also list a selector with no :active/:hover, so touch has a
+  // route that is not "only while the finger is down".
+  const bad = [];
+  for (const f of css) {
+    for (const m of strip(fs.readFileSync(path.join(root, "css", f), "utf8")).matchAll(/([^{}]+)\{/g)) {
+      const sels = m[1].split(",").map((x) => x.trim()).filter((x) => /\[data-tip\]/.test(x) && /::before/.test(x));
+      if (sels.some((x) => /:active/.test(x)) && !sels.some((x) => !/:(active|hover)/.test(x))) bad.push(`${f}: ${sels[0]}`);
+    }
+  }
+  assert.deepEqual(bad, []);
 });
