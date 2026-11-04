@@ -1615,7 +1615,8 @@ function gridOrderFor(base) {
 // procedure once the track is clear — keeping laps, the race clock, best laps,
 // grid positions and penalties. Lapped cars keep their lap count and grid
 // behind (prog is cumulative). A race already at its flag stands as it is.
-// Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
+// B5.14.4: every car is repaired and gets one free tyre change (pits.redFlagFit); a red never resumed classifies
+// on the penultimate lap's order (B5.14.2, endRace). Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
 // race never goes red (RaceControl holds a safety car instead).
 // STREAM: the restart re-runs the countdown, so it draws one extra simRnd()
 // for the new startHold. Deliberate — the lights are a real second start.
@@ -1628,7 +1629,7 @@ function redFlagRestart() {
   // car 150 m behind a leader that had just crossed (one lap number lower, not
   // lapped) a full lap down after the restart. The leader re-runs its lap; every
   // other car keeps the laps it was actually down at the flag, by distance.
-  const lead = order[0];
+  const lead = order[0]; RaceControl.trimLedger(lead ? Math.max(0, lead.lap - 1) + 1 : 0);   // the laps the leader re-runs are not in the ledger twice
   const leadProg = lead ? lead.prog : 0, leadLap = lead ? Math.max(0, lead.lap - 1) : 0;
   order.forEach((c, i) => {
     const slot = TrackMesh.gridSlot(track, i);
@@ -1677,7 +1678,9 @@ function redFlagRestart() {
     // pit window on most circuits, so a car holding the lane when the flag flew
     // would restart still reading inLane() — pinned at the pit limiter for ~12 s
     // on Monza. pitStops/pitNext/pitPlan are untouched: same race. Ledger 2026-09-22.
-    pits.clearArm(c);
+    // B5.14.4 (vii, viii): a suspension allows a tyre change and repair of accident damage, free of the pit lane.
+    // pitStops is not counted, so a red satisfies the two-compound rule the way the regs let it (#4834).
+    pits.clearArm(c); Damage.reset(c); pits.redFlagFit(c);
     // AND IT IS A STANDING START: re-plan the launch. gridUp arms this once,
     // launchDone disarms it when the first getaway ends, and nothing re-armed
     // it — so the restart the countdown calls "a real second start" was the
@@ -1707,7 +1710,7 @@ function redFlagRestart() {
   Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
   return true;
 }
-function gridUp(preOrder) {
+function gridUp(preOrder) { RaceControl.trimLedger(0);
   // WHERE THIS GRID CAME FROM, and the reason it is worth a variable: the
   // else-branch below SPLICES THE LOCAL PLAYER TO P12, which is a per-peer
   // adjustment — car X ends up at a different gridPos on each machine. A
@@ -2967,7 +2970,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // race's average speed, come off its progress (RaceControl.runOrder).
   const run = cars.filter((c) => !c.finished && !c.retired && !c.dsq);
   const leadProg = Math.max(0, ...fin.concat(run).map((c) => c.prog || 0));
-  run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT))));
+  run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT)))); if (suspended) RaceControl.penultimateOrder(run);   // B5.14.2: a red never resumed takes the order of the lap before the signal lap
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
