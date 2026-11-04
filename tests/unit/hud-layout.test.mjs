@@ -1661,15 +1661,31 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
 // clearReadouts that follows flushes that coalesce in one body (public API stays
 // sync). RO only notes WH while suppressed. Tip follow-up skip: after a clear
 // with an unchanged packSig, rAF/120 ms packs do not run another body.
+// Each selector gets its own painted box, and a --hud-clear-x/y write moves it like the real CSS would.
+function makeBoxes() {
+  const boxes = new Map();
+  return (sel) => {
+    if (boxes.has(sel)) return boxes.get(sel);
+    const off = { x: 0, y: 0 };
+    const b = {
+      style: {
+        setProperty(k, v) { if (k === "--hud-clear-x") off.x = parseFloat(v); else if (k === "--hud-clear-y") off.y = parseFloat(v); },
+        removeProperty(k) { if (k === "--hud-clear-x") off.x = 0; else if (k === "--hud-clear-y") off.y = 0; },
+        getPropertyValue: () => "",
+      },
+      setAttribute() {}, removeAttribute() {}, hasAttribute: () => false,
+      getBoundingClientRect: () => ({ left: off.x, top: off.y, right: 10 + off.x, bottom: 10 + off.y, width: 10, height: 10 }),
+    };
+    boxes.set(sel, b);
+    return b;
+  };
+}
+
 test("fit pack follow-up coalesces clearReadouts to one body run", () => {
   const CLEAR_SEL = ".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror";
   let bodyRuns = 0;
   const raf = [], timers = [];
-  const blank = {
-    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
-    setAttribute() {}, removeAttribute() {}, hasAttribute: () => false,
-    getBoundingClientRect: () => ({ left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }),
-  };
+  const blankFor = makeBoxes();
   const viewport = { innerWidth: 844, innerHeight: 390 };
   const ctx = {
     console,
@@ -1682,7 +1698,7 @@ test("fit pack follow-up coalesces clearReadouts to one body run", () => {
       documentElement: { style: { cssText: "" } },
       getElementById: () => null,
       addEventListener() {},
-      querySelector: () => blank,
+      querySelector: (sel) => blankFor(sel),
       querySelectorAll: (sel) => {
         if (sel === CLEAR_SEL) bodyRuns++;
         return [];
@@ -1716,11 +1732,7 @@ test("fit without a tail clear still flushes coalesce on the rAF follow-up", () 
   const CLEAR_SEL = ".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror";
   let bodyRuns = 0;
   const raf = [], timers = [];
-  const blank = {
-    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
-    setAttribute() {}, removeAttribute() {}, hasAttribute: () => false,
-    getBoundingClientRect: () => ({ left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }),
-  };
+  const blankFor = makeBoxes();
   const viewport = { innerWidth: 844, innerHeight: 390 };
   const ctx = {
     console,
@@ -1733,7 +1745,7 @@ test("fit without a tail clear still flushes coalesce on the rAF follow-up", () 
       documentElement: { style: { cssText: "" } },
       getElementById: () => null,
       addEventListener() {},
-      querySelector: () => blank,
+      querySelector: (sel) => blankFor(sel),
       querySelectorAll: (sel) => {
         if (sel === CLEAR_SEL) bodyRuns++;
         return [];
