@@ -342,3 +342,22 @@ test("Collide relaxation stops after a pass that reached no contact (hunt-2 P6)"
   assert.match(body, /if \(pass > 0 && !_colTouched\) break;/);
   assert.match(lift(src, "_colResolvePair"), /if \(!ct\) return;\s*_colTouched = true;/);
 });
+
+test("GLX dynamic VBOs grow geometrically and the particle sun fallback is not a per-call array (#4530)", () => {
+  const glx = read("js/render/glx/glx.js");
+  const m = glx.match(/const growCap = \(need, cap\) => (.+);/);
+  assert.ok(m, "growCap helper moved");
+  const growCap = new Function("need", "cap", `return ${m[1]};`);
+  // A skid trail creeping up one quad at a time must not reallocate per step.
+  let cap = 0, allocs = 0;
+  for (let need = 30; need <= 30 * 4000; need += 30) if (need > cap) { cap = growCap(need, cap); allocs++; }
+  assert.ok(allocs <= 25, `creeping growth reallocated ${allocs} times (want O(log n))`);
+  assert.ok(cap >= 30 * 4000, "capacity covers the request");
+  for (const [fn, capName] of [["drawSkidBatch", "markBatchCap"], ["drawDrivingLine", "lineCap"], ["drawGlow", "glowCap"]]) {
+    const body = lift(glx, fn);
+    assert.match(body, new RegExp(`${capName} = growCap\\(`), `${fn} must grow ${capName} geometrically`);
+  }
+  const part = lift(glx, "drawParticles");
+  assert.match(part, /particleCap\[addBit\] = growCap\(/);
+  assert.equal(part.includes("[1, 0.98, 0.9]"), false, "the sun fallback is a module constant");
+});
