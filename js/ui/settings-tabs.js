@@ -63,6 +63,28 @@ const SettingsNav = (function () {
     }
   }
 
+  /* #4798 settings-lazy gate: row-wiring initialisers (SettingRow.wire only, no
+     eval-time state) queue here instead of running in the DCL task. They run on
+     the first Settings enter, the first tap/key, or idle; an already-complete
+     document (tests, late loads) runs them at once. Order is registration order. */
+  let lazyQ = [], lazyArmed = false;
+  function lazyFlush() {
+    const q = lazyQ; lazyQ = [];
+    if (typeof document !== "undefined") for (const t of ["pointerdown", "keydown", "click"]) document.removeEventListener(t, lazyFlush, true);
+    for (const fn of q) { try { fn(); } catch (e) { Log.warn("game", "SettingsNav.lazy init failed: " + (e && e.message)); } }
+  }
+  function lazy(fn) {
+    if (typeof fn !== "function") return;
+    if (typeof document === "undefined" || document.readyState === "complete") { fn(); return; }
+    lazyQ.push(fn);
+    if (lazyArmed) return;
+    lazyArmed = true;
+    for (const t of ["pointerdown", "keydown", "click"]) document.addEventListener(t, lazyFlush, true);
+    enterFns.push(lazyFlush);
+    if (typeof requestIdleCallback === "function") requestIdleCallback(lazyFlush, { timeout: 4000 });
+    else setTimeout(lazyFlush, 1500);
+  }
+
   // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
   // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
   let presetsLoad = null;
@@ -347,6 +369,7 @@ const SettingsNav = (function () {
     showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
+    lazy,
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
   };
 })();
