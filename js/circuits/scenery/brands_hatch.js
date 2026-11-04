@@ -164,8 +164,8 @@
       // 0.071..0.084), so a flight through the apex folds its back rows over
       // each other past the centre of the turn (clip-audit 2026-10-05: ~200
       // tread-on-tread pairs). Two flights either side of the apex instead.
-      terrace(0.054, 0.069, -1, 16, { rows: 7, rise: 0.9 });
-      terrace(0.085, 0.095, -1, 16, { rows: 7, rise: 0.9 });
+      terrace(0.054, 0.069, -1, 16, { rows: 7, rise: 0.92 });
+      terrace(0.085, 0.095, -1, 16, { rows: 7, rise: 0.92 });
       // No terrace at 0.180..0.205: in the built frame that span is the
       // Paddock Hill + Hailwoods stand footprints (sl(0.004)..sl(0.050), block
       // 2) and the Paddock Hill Bar — a terrace there ran through all three.

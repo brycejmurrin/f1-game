@@ -1143,7 +1143,7 @@ const TrackBuildProps = (function () {
       }
       const gy = terrainYAt(cx, cz);
       const dz = deeper || 0, hh = (sz[1] + dz) / 2;
-      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + hh - dz - 0.8, cz];
+      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + hh - dz - 0.8 + jitter, cz];   // + jitter: consecutive same-height tops never share a plane (flat coplanar-audit)
       if (addBox(out, c, dz ? [sz[0], sz[1] + dz, sz[2]] : sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       const top = [c[0] + u[0] * hh, c[1] + u[1] * hh, c[2] + u[2] * hh];
       note("prop", c, sz, { k, side });
