@@ -561,6 +561,11 @@ test("title WIDTH never collapses the hero or the doors (#4816)", () => {
   assert.ok(wide, "wide btnw #menu-buttons rule exists");
   assert.doesNotMatch(wide[1], /max-width:\s*100%/, "no column cap on the wide grid");
   assert.match(wide[1], /max-width:\s*calc\(100 \* var\(--vwz\)/);
+  // #4862: the grid spans the overlay and pins its outer edge, so WIDTH resizes instead of translating. A centring
+  // margin on a column item made the slider shift the cluster sideways.
+  assert.match(wide[1], /grid-column:\s*1 \/ -1/);
+  assert.match(wide[1], /margin-inline:\s*0;/);
+  assert.doesNotMatch(dest, /#overlay #menu-buttons \{[^}]*margin-inline:[^};]*--_tl-bw/, "no WIDTH-driven margin in landscape");
   // The hero row wraps and CAREER keeps a readable basis instead of a 24 px sliver.
   assert.match(css, /:root\[data-title-btnw\] #menu-hero \{ flex-wrap: wrap; \}/);
   assert.match(css, /:root\[data-title-btnw\] #menu-hero > #mb-career \{[^}]*min-width: max\(44px,/);
