@@ -206,6 +206,7 @@ const SaveSchemaRegistry = (function () {
     rendezvous: entry("js/net/rendezvous.js", "raw", 1, "rawScalar"),
     seasonCfg: entry("js/career/season-cal.js", "json", 1, "season"),
     shareUndo: entry("js/ui/share-code.js", "json", 1, "json"),
+    xrCaps: entry("js/xr/apex-xr.js", "raw", 1, "rawScalar"),   // stored immersive-vr answer: boots read it, never probe (#4324)
     xrEnterPending: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
     xrPrevBackend: entry("js/xr/xr-boot.js", "raw", 1, "rawScalar"),
   };

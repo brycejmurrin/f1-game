@@ -98,10 +98,10 @@
       "spec": "tests/specs/garage-pick-cost.spec.js",
       "since": "2026-10-26",
       "owner": "brycejmurrin",
-      "why": "Red on three trains 2026-10-24 (jobs 120727767999, 120787689026, 120791576239; ci-7d listed them as parts-* because the leg log's running line named a parts spec, but the failing test is this one) with 'livery atlas textures seen across the picks' after green PR runs.",
+      "why": "Red on three trains 2026-10-24 (jobs 120727767999, 120787689026, 120791576239; ci-7d listed them as parts-* because the leg log's running line named a parts spec, but the failing test is this one) with 'livery atlas textures seen across the picks' after green PR runs. Also PR #4517 run 41578144983 job 125726502580 (2026-11-03): 'pick 2: atlases built' 3 > 2, passed on retry; same atlas-reuse cause, diff touches no atlas code.",
       "title": "garage livery pick cost \u203a a livery pick blits its cards and keeps car / atlas / texture work under a ceiling",
       "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/40066723043/job/120791576239",
-      "signature": "^livery atlas textures seen across the picks",
+      "signature": "^(livery atlas textures seen across the picks|pick \\d+: atlases built )",
       "expires": "2026-11-09",
       "review": "By 2026-11-09, make the livery pick reuse its atlas texture (the TLX texture pool, as in the garage-livery-churn row); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
     },
@@ -115,6 +115,17 @@
       "signature": "^spa: previous circuit chunk geometries are still in the render-object set",
       "expires": "2026-11-13",
       "review": "By 2026-11-13, remove this row once the exact test passes without retry on three Metal runs. Platform removes it after a clean week. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/track-designer.spec.js",
+      "since": "2026-11-03",
+      "owner": "brycejmurrin",
+      "why": "Passed only on retry. PR #4612 (AI-only diff, no designer code) run 41620767417 attempt 1, shard oversize-track-designer-2of2: the 844x390 variant's File-menu <summary> read inactive after a 20 s toBeFocused wait. It was the shard's first test, run while the service worker took control (4.4 s navigate). The 390x844 variant passed in the same job; attempt 2 passed. Exempts only this assertion message at 844x390.",
+      "title": "invalid native file import keeps its status readable and focus in place at 844x390",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41620767417/job/125870188283",
+      "signature": "^expect\\(locator\\)\\.toBeFocused\\(\\) failed",
+      "expires": "2026-11-17",
+      "review": "By 2026-11-17, remove this row once the exact test passes without retry on three PR runs, or fix the cold-start focus race in the spec. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
     }
   ]
 }

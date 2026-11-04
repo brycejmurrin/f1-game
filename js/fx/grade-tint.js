@@ -15,9 +15,10 @@ const GradeTint = (function () {
     const m = _carPaintScratch;
     m.roughness = M4.clamp((base.roughness != null ? base.roughness : 0.4) / LT.carGloss, 0.02, 1);
     m.metalness = M4.clamp((base.metalness || 0) * LT.carMetal, 0, 1);
-    m.specular  = (base.specular  || 0) * LT.carSpecular;
-    m.clearcoat = (base.clearcoat || 0) * LT.carClearcoat;
-    m.emissive  = (base.emissive  || 0) * LT.carGlow;
+    // Tuner knobs can exceed 1; clamp every lit channel the way roughness/metal already do.
+    m.specular  = M4.clamp((base.specular  || 0) * LT.carSpecular, 0, 1);
+    m.clearcoat = M4.clamp((base.clearcoat || 0) * LT.carClearcoat, 0, 1);
+    m.emissive  = M4.clamp((base.emissive  || 0) * LT.carGlow, 0, 1);
     m.carPaint  = base.carPaint != null ? base.carPaint : 0;
     m.sparkle   = base.sparkle  != null ? base.sparkle  : 1;
     m.carFinish = true;   // the lit shaders run the livery finish 60-85 block on car paint draws only
@@ -30,21 +31,21 @@ const GradeTint = (function () {
     const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
     const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;
     const r = rgb[0] - m, g = rgb[1] - m, b = rgb[2] - m;
-    // The CSS hue-rotate matrix can go out of gamut; clamp like sat() so a grade
-    // multiplier never feeds a negative channel into the post (shadow/hi knobs).
+    // The CSS hue-rotate matrix can go out of gamut; clamp 0..1 so a grade
+    // multiplier never feeds a negative or >1 channel into the post.
     return [
-      Math.max(0, m + (r * (0.213 + c * 0.787 - s * 0.213) + g * (0.715 - c * 0.715 - s * 0.715) + b * (0.072 - c * 0.072 + s * 0.928))),
-      Math.max(0, m + (r * (0.213 - c * 0.213 + s * 0.143) + g * (0.715 + c * 0.285 + s * 0.140) + b * (0.072 - c * 0.072 - s * 0.283))),
-      Math.max(0, m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072))),
+      M4.clamp(m + (r * (0.213 + c * 0.787 - s * 0.213) + g * (0.715 - c * 0.715 - s * 0.715) + b * (0.072 - c * 0.072 + s * 0.928)), 0, 1),
+      M4.clamp(m + (r * (0.213 - c * 0.213 + s * 0.143) + g * (0.715 + c * 0.285 + s * 0.140) + b * (0.072 - c * 0.072 - s * 0.283)), 0, 1),
+      M4.clamp(m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072)), 0, 1),
     ];
   }
 
   function sat(rgb, amt) {
     if (!rgb || amt === 1) return rgb;
     const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;
-    return [Math.max(0, m + (rgb[0] - m) * amt),
-            Math.max(0, m + (rgb[1] - m) * amt),
-            Math.max(0, m + (rgb[2] - m) * amt)];
+    return [M4.clamp(m + (rgb[0] - m) * amt, 0, 1),
+            M4.clamp(m + (rgb[1] - m) * amt, 0, 1),
+            M4.clamp(m + (rgb[2] - m) * amt, 0, 1)];
   }
 
   return { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY, carPaint, hue, sat };
