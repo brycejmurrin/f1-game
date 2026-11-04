@@ -32,6 +32,33 @@ const WheelState = (function () {
   // a reset, a rescue — not dynamics: the rims re-sync to the new body speed.
   const RESYNC_A = 80;
 
+  // ABS / TC levels (Tier2 §5, #3983): torque clamps with hysteresis. Latch when
+  // |κ| passes the level's threshold, cut the demand by `cut`, hold ABS_HOLD s,
+  // release above threshold + KAPPA_HYST (below it, in |κ| terms). Default "off"
+  // = no clamp, so the opt-in wheel state behaves exactly as before.
+  const KAPPA_HYST = 0.06;
+  const ABS_HOLD = 0.05;
+  const ASSIST = Object.freeze({
+    medium: Object.freeze({ abs: 0.20, tc: 0.22, cut: 0.55 }),
+    full: Object.freeze({ abs: 0.12, tc: 0.14, cut: 0.45 }),
+  });
+  let _level = "off";
+  /** "off" | "medium" | "full"; anything else reads as off. Session state, not persisted yet. */
+  function assistLevel() { return _level; }
+  function setAssistLevel(v) { _level = (v === "medium" || v === "full") ? v : "off"; return _level; }
+
+  /** One clamp: returns the demand to use; `latch` is { on, t } mutated in place. */
+  function clampDemand(latch, k, dirOk, aReq, thr, cut, dt, cap) {
+    const kAbs = dirOk ? Math.abs(k) : 0;
+    if (kAbs > thr) { latch.on = 1; latch.t = ABS_HOLD; }
+    else if (latch.on) {
+      latch.t -= dt;
+      if (latch.t <= 0 && kAbs < Math.max(0, thr - KAPPA_HYST)) latch.on = 0;
+    }
+    // Cut, and never ask more than the tyre can give: a binary pedal's demand sits far above capacity.
+    return latch.on ? Math.sign(aReq) * Math.min(Math.abs(aReq) * (1 - cut), cap * 0.95) : aReq;
+  }
+
   let _enabled = false;
   let _resolved = false;
 
@@ -230,7 +257,17 @@ const WheelState = (function () {
     const dt = opts.dt;
     sync(c, dt);
     const vx = c.speed || 0;
-    const aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
+    let aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
+    if (_level !== "off") {
+      const A = ASSIST[_level];
+      const lf = c._absF || (c._absF = { on: 0, t: 0 });
+      const lr = c._tcR || (c._tcR = { on: 0, t: 0 });
+      // ABS: front brake demand while rolling forwards; TC: rear drive demand.
+      if (aReqF < 0 && vx > KAPPA_VMIN) aReqF = clampDemand(lf, c.kappaF, c.kappaF < 0, aReqF, A.abs, A.cut, dt, +opts.muLongF || 0);
+      else lf.on = 0;
+      if (aReqR > 0) aReqR = clampDemand(lr, c.kappaR, c.kappaR > 0, aReqR, A.tc, A.cut, dt, +opts.muLongR || 0);
+      else lr.on = 0;
+    }
     const muLongF = Math.max(1e-3, +opts.muLongF || 0);
     const muLongR = Math.max(1e-3, +opts.muLongR || 0);
 
@@ -275,6 +312,6 @@ const WheelState = (function () {
   // ensure/sync/kappaOf + the KAPPA_*/WHEEL_J/LOCK_*/SPIN_*/RESYNC_* knobs are
   // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
-    enabled, setEnabled, axleStep, stepPlayer,
+    enabled, setEnabled, axleStep, stepPlayer, assistLevel, setAssistLevel,
   });
 })();
