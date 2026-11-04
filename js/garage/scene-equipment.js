@@ -1,14 +1,17 @@
-/* Apex 26 — GarageEquipment: the pit equipment standing in the bay. The rear jack, the wheel guns on their hose reels, the tyre trolleys, floor boxes, the fan, the trophy cabinet and the timing-screen housing, built into the per-wall groups by build(g, liv, ctx). Split out of scene.js. */
+/* Apex 26 — GarageEquipment: the pit equipment standing in the bay. build(g, liv, ctx) parks the rear jack, the wheel guns on their hose reels, the tyre trolleys, floor boxes, the extractor fan, the trophy cabinet and the timing-screen housing in the per-wall groups; the other builders are the workshop models GarageScene.buildProps places. */
 const GarageEquipment = (function () {
   "use strict";
   const { Z_BACK, STEEL, DARK, block, cyl, tube, hose, MAT, scale, rgb, tile } = GaragePrims;
 
 const RUBBER = [0.045, 0.045, 0.050];
-const HOSE = [0.12, 0.14, 0.20];   // module-local paint colour (hoseReel / serviceRig)
+const HOSE = [0.12, 0.14, 0.20];
+const STEEL_DIM = scale(STEEL, 0.55);
+// Shared positions: the fan blades (GarageScene.draw) spin at FAN, the live timing
+// face (GarageLive.buildLive) sits on SCREEN, and the live monitor faces hang from
+// GANTRY. GarageScene.buildProps parks monitorGantry at the same x/z, so moving one
+// means moving the other.
 const FAN = [4.5, 3.32];
-const SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
-// Monitor gantry anchor (lockstep with scene.js buildProps: monitorGantry(g.nx, …)).
-// Live atlas quads and the hung-screen mesh share this so a move stays one edit.
+const SCREEN = [2.9, 3.30, 5.15];
 const GANTRY = { x: -4.70, z: -1.85, dz: [-1.15, 0, 1.15] };
 // Above-white LCD / lamp colours: the lit shader's glow gate needs >1.0 albedo.
 const LCD = [1.28, 1.38, 1.55];
@@ -22,9 +25,9 @@ function caster(out, x, z, radius) {
   tube(out, [x - 0.048, radius, z], [x + 0.048, radius, z], radius * 0.36, STEEL, 8, MAT.METAL);
   for (const sx of [-1, 1]) block(out, x + sx * 0.043, radius + 0.05, z, 0.008, 0.06, 0.018, STEEL, MAT.METAL);
 }
-// Blender study coordinates (X right, Y back, Z up) → game Y-up metres.
-// turn is a quarter turn: +1 faces +X, -1 faces -X, 0 faces +Z.
-// Ported from the editable three-prop study; use existing runtime materials.
+// The workshop models were authored in Blender (X right, Y back, Z up); point()
+// maps those coordinates to game Y-up metres. turn is a quarter turn: +1 faces
+// +X, -1 faces -X, 0 faces +Z. Steel parts get the metal material, the rest flat.
 function workshopFrame(out, x, z, c1, baseY, turn) {
   const point = (p) => [x + (turn ? -turn * p[1] : p[0]), (baseY || 0) + p[2], z + (turn ? -turn * p[0] : -p[1])];
   const box = (p, size, color) => {
@@ -103,7 +106,6 @@ function starterCart(out, cx, cz, c1) {
   hose(out, [[cx + 0.2, 0.62, cz], [cx + 0.55, 0.22, cz + 0.28], [cx + 0.40, 0.08, cz + 0.08], [cx + 0.75, 0.08, cz + 0.42]], 0.02, [0.48, 0.22, 0.06], 6);
 }
 function tyreTrolley(out, x, z, comps, c1) {
-  const dark = scale(STEEL, 0.55);
   for (const sx of [-1, 1]) tube(out, [x + sx * 0.42, 0.58, z - 1.3], [x + sx * 0.42, 0.58, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
   for (const ez of [-1.3, 1.3]) tube(out, [x - 0.42, 0.58, z + ez], [x + 0.42, 0.58, z + ez], 0.025, STEEL, 6, MAT.METAL);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -125,10 +127,9 @@ function tyreTrolley(out, x, z, comps, c1) {
     block(out, x + 0.17, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
     hose(out, [[x + 0.19, 0.30, wz], [x + 0.30, 0.20, wz + 0.1], [x + 0.30, 0.20, z + 1.45]], 0.012, HOSE, 5);
   }
-  block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, dark);                     // blanket controller
+  block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, STEEL_DIM);                  // blanket controller
   for (let l = 0; l < 4; l++) block(out, x + 0.30 + (l % 2 ? 0.04 : -0.04), 0.50 + (l < 2 ? 0.04 : -0.02), z + 1.565, 0.012, 0.012, 0.005, l % 3 ? [0.2, 0.9, 0.3] : [0.9, 0.5, 0.1]);   // status LEDs
 }
-// Full-detail workshop models. The trackside lite bay keeps its cheaper recipe.
 function toolChest(out, x, z, c1) {
   const s = x > 0 ? -1 : 1;
   block(out, x, 0.62, z, 0.36, 0.52, 0.80, scale(c1, 0.55));
@@ -233,14 +234,14 @@ function floorFan(out, x, z, c1) {
   tube(out, [x - 0.08, cy, z], [x + 0.08, cy, z], 0.055, DARK, 10);
 }
 function serviceRig(out, x, z, c1) {
-  // Fuel / air service cart (Blender fuel-air-rig-px): main bottle, slim air bottle, dual gauge faces.
+  // Fuel / air service cart: main bottle, slim air bottle, dual gauge faces.
   block(out, x, 0.66, z, 0.42, 0.50, 0.36, scale(c1, 0.5));
   block(out, x, 0.18, z, 0.41, 0.025, 0.35, STEEL);
   block(out, x, 1.18, z, 0.44, 0.03, 0.38, STEEL);
   cyl(out, x - 0.08, 1.21, z, 0.13, 0.38, scale(STEEL, 0.75), 10, MAT.METAL);
   cyl(out, x - 0.08, 1.59, z, 0.04, 0.08, STEEL, 6, MAT.METAL);
   tube(out, [x - 0.08, 1.69, z - 0.04], [x - 0.08, 1.69, z + 0.04], 0.012, [0.75, 0.15, 0.10], 6);
-  cyl(out, x + 0.18, 1.21, z, 0.055, 0.32, scale(STEEL, 0.55), 8, MAT.METAL);
+  cyl(out, x + 0.18, 1.21, z, 0.055, 0.32, STEEL_DIM, 8, MAT.METAL);
   block(out, x + 0.18, 1.55, z, 0.04, 0.03, 0.04, [0.15, 0.35, 0.85]);
   block(out, x - 0.43, 0.97, z, 0.012, 0.14, 0.22, DARK);
   // Dual gauges as flat faces (tube gauges blew the 700-tri model budget).
@@ -256,15 +257,13 @@ function serviceRig(out, x, z, c1) {
   tube(out, [x - 0.40, 1.30, z - 0.26], [x - 0.40, 1.30, z + 0.26], 0.025, RUBBER, 8);
   hose(out, [[x - 0.08, 1.50, z], [x - 0.30, 1.25, z + 0.10], [x - 0.30, 0.90, z + 0.10], [x - 0.25, 0.65, z + 0.10]], 0.02, HOSE, 6);
 }
-// Engineers' monitor gantry (Blender monitor-gantry-nx): rail + three hung screens.
-// Screen faces are above-white so the lit glow gate reads them as LCDs even
-// before the live atlas quads land (GarageLive.build paints the faces).
+// Engineers' monitor gantry: a rail and three hung screens. The screen faces are
+// above-white so the lit glow gate reads them as LCDs even before the live atlas
+// quads land (GarageLive.buildLive paints the faces). c1 is unused; callers pass it.
 function monitorGantry(out, x, z, c1) {
   const s = x < 0 ? 1 : -1;
-  const drops = (z === GANTRY.z && Math.abs(x - GANTRY.x) < 1e-6) ? GANTRY.dz : [-1.15, 0, 1.15];
   block(out, x, 2.55, z, 0.04, 0.055, 1.70, STEEL, MAT.METAL);
-  for (let i = 0; i < drops.length; i++) {
-    const dz = drops[i];
+  for (const dz of GANTRY.dz) {
     // Drop as a thin block (tube hangers blew the bay trophy budget by a few tris).
     block(out, x, 2.36, z + dz, 0.015, 0.19, 0.015, STEEL, MAT.METAL);
     block(out, x + s * 0.09, 1.92, z + dz, 0.03, 0.26, 0.40, DARK);
@@ -273,20 +272,15 @@ function monitorGantry(out, x, z, c1) {
     block(out, x + s * 0.116, 1.92, z + dz, 0.004, 0.20, 0.32, [1.55, 1.62, 1.78]);
   }
 }
-// Floor work lamp (Blender work-lamp-rig): stand + head aimed at the car.
+// Floor work lamp: stand and head aimed at the car. Exported but not parked:
+// two lamps blow the 18k-tri workshop budget once trophies are earned, so the
+// lamp pools come from the live atlas (GarageLive.buildLive) instead.
 function workLamp(out, x, z, c1) {
   cyl(out, x, 0, z, 0.15, 0.05, DARK, 8);
   tube(out, [x, 0.05, z], [x, 1.52, z], 0.022, STEEL, 6, MAT.METAL);
   block(out, x, 1.66, z, 0.16, 0.07, 0.16, scale(c1, 0.45));
   block(out, x, 1.64, z + 0.11, 0.12, 0.045, 0.018, LAMP_FACE);
   tube(out, [x, 1.58, z], [x + 0.18, 1.40, z + 0.22], 0.012, STEEL, 5, MAT.METAL);
-}
-// LED light boom under a side-wall service shelf (Blender lighting-rig-*).
-function lightBoom(out, x, z, halfLen, c1) {
-  block(out, x, 3.72, z, 0.035, 0.018, halfLen, scale(STEEL, 0.55));
-  block(out, x, 3.695, z, 0.025, 0.006, halfLen - 0.12, [1.22, 1.28, 1.40]);
-  for (const dz of [-halfLen + 0.35, 0, halfLen - 0.35])
-    block(out, x, 3.78, z + dz, 0.04, 0.04, 0.04, scale(c1, 0.5));
 }
 function wheelDolly(out, x, z, c1) {
   block(out, x, 0.18, z, 0.55, 0.035, 0.30, scale(c1, 0.55));
@@ -298,30 +292,23 @@ function wheelDolly(out, x, z, c1) {
   tube(out, [x - 0.42, 0.64, z + 0.22], [x + 0.42, 0.64, z + 0.22], 0.025, RUBBER, 8);
 }
 
-function buildEquipment(g, liv, ctx) {
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  const dark = scale(STEEL, 0.55);
-  // Parked outside the rear sight line.
-  rearJack(g.mid, 2.85, -4.55, c1);
-  // WHEEL GUNS on their hoses. A boom off each cable tray carries a reel over
-  // the box with its hose RETRACTED — the first pass ran a hose from each reel
-  // straight down to each gun, and four 5 m diagonals crossing the car read
-  // as guy-lines in every preset. Between stops the guns lie by their wheels
-  // on a coil of hose from a floor manifold at the box edge, which is what a
-  // real bay looks like and keeps everything below knee height.
-  // z -1.75, in the gap between the side walls' wordmark bays (z -1.1..1.1
-  // and -2.4..-4.6): at z 0.1 the reel and its drop hung straight in front of
-  // the middle wordmark, which the SIDE preset reads as a sign cut in two.
+// WHEEL GUNS. A boom off each cable tray carries a reel over the box with its
+// hose retracted; between stops each gun lies by its wheel on a floor-level coil
+// from a manifold at the box edge. Hoses from reel to gun read as guy-lines
+// crossing the car in every preset. BZ -1.75 sits between the side walls'
+// wordmark bays (z -1.1..1.1 and -2.4..-4.6) so the SIDE preset never sees a
+// reel cutting a wordmark in two.
+function wheelGunStations(g, c1) {
   const BZ = -1.75;
   for (const sd of [-1, 1]) {
     const bx = sd * 2.3;
-    tube(g.mid, [sd * 4.6, 4.40, BZ], [bx, 4.40, BZ], 0.045, dark, 6, MAT.METAL);   // boom
+    tube(g.mid, [sd * 4.6, 4.40, BZ], [bx, 4.40, BZ], 0.045, STEEL_DIM, 6, MAT.METAL);   // boom
     for (let i = 0; i < 3; i++)
       block(g.mid, sd * (2.9 + i * 0.6), 4.40, BZ, 0.02, 0.09, 0.02, STEEL);        // hangers
     hoseReel(g.mid, bx, 4.13, BZ, c1);
     hose(g.mid, [[bx, 3.95, BZ], [bx, 3.50, BZ]], 0.025, HOSE, 6);
     block(g.mid, bx, 3.46, BZ, 0.04, 0.05, 0.04, STEEL);                             // coupling
-    block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, dark);                       // floor manifold
+    block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, STEEL_DIM);                  // floor manifold
     for (const wz of [1.7, -1.6]) {
       const gx = sd * 2.65;
       const gz = wz + (wz > 0 ? 0.55 : -0.55);
@@ -335,20 +322,13 @@ function buildEquipment(g, liv, ctx) {
       wheelGun(g.mid, gx, gz, wz > 0 ? -1 : 1, sd, c1);
     }
   }
-  // Existing parking positions and static wall batches are preserved.
-  starterCart(g.mid, -1.95, -4.75, c1);
-  const wet = ctx && (ctx.weather === "wet" || ctx.weather === "rain");
-  tyreTrolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1], c1);
-  tyreTrolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0], c1);
-  // FLOOR: a painted box at each wheel and the hazard hatch at the threshold.
+}
+// FLOOR: a painted box at each wheel and the hazard hatch at the threshold.
+function floorMarkings(g) {
   const PAINT = [0.66, 0.67, 0.70];
   const HAZ = [0.80, 0.68, 0.10];
-  for (const w of [[0.79, 1.7], [-0.79, 1.7], [0.76, -1.6], [-0.76, -1.6]]) {
-    const x = w[0];
-    const z = w[1];
-    const hx = 0.30;
-    const hz = 0.46;
-    const t = 0.035;
+  const hx = 0.30, hz = 0.46, t = 0.035;
+  for (const [x, z] of [[0.79, 1.7], [-0.79, 1.7], [0.76, -1.6], [-0.76, -1.6]]) {
     tile(g.mid, x - hx, x + hx, z - hz, z - hz + t, PAINT, 0.003, MAT.ASPHALT);
     tile(g.mid, x - hx, x + hx, z + hz - t, z + hz, PAINT, 0.003, MAT.ASPHALT);
     tile(g.mid, x - hx, x - hx + t, z - hz, z + hz, PAINT, 0.003, MAT.ASPHALT);
@@ -356,7 +336,9 @@ function buildEquipment(g, liv, ctx) {
   }
   for (let i = -7; i <= 7; i++)
     tile(g.mid, i * 0.40 - 0.13, i * 0.40 + 0.13, 5.62, 5.98, i % 2 ? HAZ : DARK, 0.003, MAT.ASPHALT);
-  // CONDUIT drops off the cable trays to a junction box on each side wall.
+}
+// CONDUIT drops off the cable trays to a junction box on each side wall.
+function conduits(g) {
   for (const sd of [-1, 1]) {
     const w = sd < 0 ? g.nx : g.px;
     for (const z of [-2.3, 2.3]) {
@@ -364,11 +346,11 @@ function buildEquipment(g, liv, ctx) {
       block(w, sd * 5.30, 1.92, z, 0.05, 0.11, 0.09, scale(STEEL, 0.45));
     }
   }
-  // EXTRACTOR FAN housing, high on the back wall; the blades are a separate
-  // mesh so they can turn (fanMesh, drawn in draw()).
-  // At y 3.32, r 0.36 (top at 3.68): the FRONT preset's frame tops out at
-  // y 3.76 on this wall and cut it at 3.75 and again at 3.45; the pit board
-  // below tops out at 2.92.
+}
+// EXTRACTOR FAN housing, high on the back wall; the blades are a separate mesh
+// so they can turn (GarageScene.draw). Its top (y 3.68) stays under the FRONT
+// preset's frame edge on this wall (3.76) and above the pit board (2.92).
+function extractorFan(g) {
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.02], [FAN[0], FAN[1], Z_BACK + 0.22], 0.36, scale(STEEL, 0.7), 16, MAT.METAL);
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.10], [FAN[0], FAN[1], Z_BACK + 0.24], 0.32, [0.03, 0.032, 0.038], 16);   // the dark throat
   for (let i = 0; i < 3; i++) {                                                  // guard bars
@@ -377,50 +359,63 @@ function buildEquipment(g, liv, ctx) {
     const dy = Math.sin(a) * 0.33;
     tube(g.back, [FAN[0] - dx, FAN[1] - dy, Z_BACK + 0.27], [FAN[0] + dx, FAN[1] + dy, Z_BACK + 0.27], 0.012, STEEL, 5, MAT.METAL);
   }
-  // TROPHY CABINET, counter height under the +X pit board: a glass case the
-  // career fills. Empty in free play it still holds the two helmets.
-  {
-    const cx = 4.55;
-    const cz = Z_BACK + 0.32;
-    const wins = Math.min(8, (ctx && ctx.wins) | 0);
-    block(g.back, cx, 0.55, cz, 0.62, 0.55, 0.30, scale(c1, 0.45));               // plinth
-    block(g.back, cx, 1.40, cz, 0.64, 0.30, 0.32, DARK);                           // case back
-    block(g.back, cx, 1.40, cz + 0.30, 0.64, 0.30, 0.008, [0.22, 0.26, 0.32]);     // glass (dark, reflective look)
-    block(g.back, cx, 1.24, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));             // shelf
-    for (let i = 0; i < wins; i++) {                                               // trophies
-      const tx = cx - 0.50 + (i % 4) * 0.33;
-      const ty = i < 4 ? 1.25 : 1.55;
-      cyl(g.back, tx, ty, cz, 0.05, 0.03, [0.85, 0.70, 0.25], 8, MAT.METAL);
-      cyl(g.back, tx, ty + 0.03, cz, 0.018, 0.10, [0.92, 0.78, 0.30], 6, MAT.METAL);
-      cyl(g.back, tx, ty + 0.13, cz, 0.045, 0.08, [0.95, 0.82, 0.32], 8, MAT.METAL);
-    }
-    if (wins < 5) block(g.back, cx, 1.55, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));   // upper shelf
-    for (const hx of [-0.42, 0.42]) {                                              // the drivers' helmets
-      cyl(g.back, cx + hx, wins < 5 ? 1.565 : 1.25, cz, 0.11, 0.16, scale(c1, 1.1), 10);
-      cyl(g.back, cx + hx, (wins < 5 ? 1.565 : 1.25) + 0.16, cz, 0.09, 0.05, scale(c1, 1.1), 10);
-      block(g.back, cx + hx, (wins < 5 ? 1.565 : 1.25) + 0.10, cz + 0.10, 0.07, 0.03, 0.02, [0.06, 0.06, 0.07]);   // visor
-    }
+}
+// TROPHY CABINET, counter height under the +X pit board: a glass case the career
+// fills with up to eight trophies. The drivers' helmets take the upper shelf until
+// a fifth trophy needs it, then drop to the lower one.
+function trophyCabinet(g, c1, wins) {
+  const cx = 4.55;
+  const cz = Z_BACK + 0.32;
+  block(g.back, cx, 0.55, cz, 0.62, 0.55, 0.30, scale(c1, 0.45));               // plinth
+  block(g.back, cx, 1.40, cz, 0.64, 0.30, 0.32, DARK);                           // case back
+  block(g.back, cx, 1.40, cz + 0.30, 0.64, 0.30, 0.008, [0.22, 0.26, 0.32]);     // glass (dark, reflective look)
+  block(g.back, cx, 1.24, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));             // shelf
+  for (let i = 0; i < wins; i++) {                                               // trophies
+    const tx = cx - 0.50 + (i % 4) * 0.33;
+    const ty = i < 4 ? 1.25 : 1.55;
+    cyl(g.back, tx, ty, cz, 0.05, 0.03, [0.85, 0.70, 0.25], 8, MAT.METAL);
+    cyl(g.back, tx, ty + 0.03, cz, 0.018, 0.10, [0.92, 0.78, 0.30], 6, MAT.METAL);
+    cyl(g.back, tx, ty + 0.13, cz, 0.045, 0.08, [0.95, 0.82, 0.32], 8, MAT.METAL);
   }
-  // TIMING SCREEN over the door end, hung from the truss and facing the car —
-  // the REAR and HERO presets look straight at it. The face is a dress quad
-  // from the live atlas (buildLive); this is only the housing and its hangers.
-  // Off-centre (x +2.9, top-left from the REAR preset) so the shutter's
-  // wordmark stays readable behind it, and at y 3.3 because that preset's
-  // frame tops out at y 3.62 on the door wall.
+  if (wins < 5) block(g.back, cx, 1.55, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));   // upper shelf
+  const helmetY = wins < 5 ? 1.565 : 1.25;
+  for (const hx of [-0.42, 0.42]) {
+    cyl(g.back, cx + hx, helmetY, cz, 0.11, 0.16, scale(c1, 1.1), 10);
+    cyl(g.back, cx + hx, helmetY + 0.16, cz, 0.09, 0.05, scale(c1, 1.1), 10);
+    block(g.back, cx + hx, helmetY + 0.10, cz + 0.10, 0.07, 0.03, 0.02, [0.06, 0.06, 0.07]);   // visor
+  }
+}
+// TIMING SCREEN housing over the door end, hung from the truss and facing the
+// car (the REAR and HERO presets look straight at it); GarageLive.buildLive lays
+// the face on it. Off-centre so the shutter's wordmark stays readable behind it,
+// and low enough to sit inside the REAR preset's frame (top y 3.62 on that wall).
+function timingScreen(g) {
   block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2], 0.92, 0.72, 0.05, DARK);
   block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2] + 0.04, 0.96, 0.76, 0.02, scale(STEEL, 0.5));   // bezel
-  // Cool emissive lip behind the live timing face — Night Shift reads the
-  // housing as a lit panel instead of a dark slab when the atlas is still settling.
+  // Emissive lip behind the face, so Night Shift reads a lit panel while the atlas settles.
   block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2] - 0.01, 0.84, 0.64, 0.008, LCD);
   for (const hx of [-0.7, 0.7]) tube(g.mid, [SCREEN[0] + hx, SCREEN[1] + 0.72, SCREEN[2]], [SCREEN[0] + hx, 4.98, SCREEN[2]], 0.02, STEEL, 6, MAT.METAL);
-  // workLamp / lightBoom stay exported builders (garage-mesh envelopes) but are
-  // not parked here: two lamps blow the 18k-tri workshop budget once trophies
-  // are earned. Lamp pools come from the LIVE atlas (GarageLive.build) instead.
 }
 
+// The calls below use the module's own builders, not the exported copies: the
+// exports are test seams and GarageScene.buildProps' parking, not build()'s.
+function buildEquipment(g, liv, ctx) {
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  rearJack(g.mid, 2.85, -4.55, c1);   // parked outside the rear sight line
+  wheelGunStations(g, c1);
+  starterCart(g.mid, -1.95, -4.75, c1);
+  const wet = ctx && (ctx.weather === "wet" || ctx.weather === "rain");
+  tyreTrolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1], c1);
+  tyreTrolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0], c1);
+  floorMarkings(g);
+  conduits(g);
+  extractorFan(g);
+  trophyCabinet(g, c1, Math.min(8, (ctx && ctx.wins) | 0));
+  timingScreen(g);
+}
 
-  // HOSE stays module-local (hoseReel / serviceRig paint). COMPOUND + starterCart /
-  // tyreTrolley / rearJack stay exported — garage-mesh unit seams.
-  return { RUBBER, FAN, SCREEN, GANTRY, LCD, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, lightBoom, wheelDolly, build: buildEquipment };
+  // HOSE and STEEL_DIM stay module-local. RUBBER, COMPOUND, starterCart, tyreTrolley
+  // and rearJack have no js/ caller: garage-mesh tests build them alone.
+  return { RUBBER, FAN, SCREEN, GANTRY, LCD, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;
