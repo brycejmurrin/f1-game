@@ -40,6 +40,7 @@ export function parseArgs(argv) {
 /** The settle gate (#4783): every step reaches its size within 2 presented frames and the texture count returns to the start. */
 export function verdict(sm) {
   const fails = [];
+  if (sm.warmTimedOut || sm.framesOk === false) fails.push("never presenting (warm " + (sm.warmTimedOut ? "timed out" : "done") + ", frames " + (sm.framesOk === false ? "stalled" : "ok") + ")");
   if (!sm.fixedTargets && sm.unsettledSteps) fails.push(`${sm.unsettledSteps} step(s) never reached the scaled post-target size`);
   if (!sm.fixedTargets && sm.maxSettleFrames > 2) fails.push(`settle took ${sm.maxSettleFrames} presented frames (> 2)`);
   if (sm.texturesEnd !== sm.texturesStart) fails.push(`textures ${sm.texturesStart} -> ${sm.texturesEnd} after the sweep`);
@@ -72,21 +73,39 @@ async function main() {
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
     await page.waitForFunction((id) => { try { const i = window.__apex.info(); return i.track === id && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, o.track, { polling: 100, timeout: 240000 });
     await waitFrames(page, 8, 400000);
+    // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
+    // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
+    // A frame is one top-level render (no render target); three's info.render.frame is not trusted to advance.
+    await page.evaluate(() => {
+      const r = window.GLX.__tlx.renderer;
+      if (r.__resWrap) return;
+      r.__resWrap = true; window.__resFrames = 0;
+      const orig = r.render.bind(r);
+      r.render = function () { if (!r.getRenderTarget()) window.__resFrames++; return orig.apply(this, arguments); };
+    });
+    const presented = (n, ms = 240000) => page.evaluate(([k, t]) => new Promise((res) => {
+      const f0 = window.__resFrames, t0 = performance.now();
+      const id = setInterval(() => { const done = window.__resFrames >= f0 + k; if (done || performance.now() - t0 > t) { clearInterval(id); res(done); } }, 100);
+    }), [n, ms]);
+    // Soft: a warm that never ends is reported (warmTimedOut), not a hang.
+    const warmed = () => page.evaluate(() => new Promise((res) => {
+      const t0 = performance.now();
+      const id = setInterval(() => { const w = !!(window.GLX.warming && window.GLX.warming()); if (!w || performance.now() - t0 > 150000) { clearInterval(id); res(!w); } }, 200);
+    }));
     const read = () => page.evaluate(() => {
       const t = window.GLX && window.GLX.__tlx;
       const ps = t && t.postState ? t.postState() : null;
       const inf = t && t.renderer && t.renderer.info && t.renderer.info.memory;
       const cv = t && t.renderer && t.renderer.domElement;
       return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null,
-        frame: t && t.renderer && t.renderer.info ? t.renderer.info.render.frame : null,   // three's PRESENTED frame count (rAF ticks run far ahead on lavapipe)
-        warming: !!(window.GLX && window.GLX.warming && window.GLX.warming()), canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
+        frame: window.__resFrames, warming: !!(window.GLX.warming && window.GLX.warming()),
+        canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
     });
-    // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
-    // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
-    const presented = (n) => page.waitForFunction((k) => { const t = window.GLX && window.GLX.__tlx; if (!t || (window.GLX.warming && window.GLX.warming())) return false; const w = window.__resWait || (window.__resWait = { f0: null }); const f = t.renderer.info.render.frame; if (w.f0 == null) w.f0 = f; if (f >= w.f0 + k) { w.f0 = null; return true; } return false; }, n, { polling: 200, timeout: 400000 });
     const api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
-    if (o.webgpu) await presented(5);   // sweep only once present() is running
+    const warmTimedOut = !(await warmed());
+    const framesOk = await presented(5);   // sweep only once present() is running
+    if (!framesOk) console.error("res-scale-census: no top-level render in 240s (warming=" + (await read()).warming + ")");
     const base = await read();
     base.scaleBase = base.fixed ? base.targets : [base.canvas ? base.canvas[0] : base.targets[0], base.canvas ? base.canvas[1] : base.targets[1]];
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
@@ -97,7 +116,7 @@ async function main() {
       const want = [Math.max(1, Math.round(prev.scaleBase[0] * s)), Math.max(1, Math.round(prev.scaleBase[1] * s))];
       let r = null, settledAfter = null;
       for (let k = 0; k <= Math.max(o.settle, 8) && settledAfter == null; k++) {
-        await presented(1);
+        await presented(1, 60000);
         r = await read();
         if (r.targets && r.targets[0] === want[0] && r.targets[1] === want[1]) settledAfter = k + 1;
       }
@@ -109,7 +128,7 @@ async function main() {
     const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
       maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length,
       maxSettleFrames: Math.max(0, ...rows.map((r) => r.settledAfter || 0)), unsettledSteps: rows.filter((r) => r.step === "scale" && r.settledAfter == null).length,
-      texturesStart: rows[0].textures, texturesEnd: prev.textures, fixedTargets: base.fixed };
+      warmTimedOut, framesOk, texturesStart: rows[0].textures, texturesEnd: prev.textures, fixedTargets: base.fixed };
     summary.verdict = verdict(summary);
     for (const r of rows) console.log(JSON.stringify(r));
     console.log(JSON.stringify({ summary }));
