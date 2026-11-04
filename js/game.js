@@ -1431,7 +1431,7 @@ function driverSkill(team, d, di) {
     skill: DriverRatings.skill(r, roll),
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
-    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism),
+    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism), composure: DriverRatings.style01(r.composure),
   };
 }
 const buildPace = DriverRatings.buildPace;

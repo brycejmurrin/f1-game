@@ -7,35 +7,35 @@ const DriverRatings = (function () {
   const AXES = ["pace", "craft", "awareness", "consistency", "experience"];
   // Style axes: signed −30..+30, zero-mean across the authored grid, NEVER in
   // overall()/skill() or the top-speed product. Appended after the quality tuple.
-  const STYLE_AXES = ["aggression", "optimism"];
+  const STYLE_AXES = ["aggression", "optimism", "composure"];
   const STYLE_SCALE = 30;   // authored units → traits −1..+1 via / STYLE_SCALE
 
-  // [pace, craft, awareness, consistency, experience, aggression, optimism].
+  // [pace, craft, awareness, consistency, experience, aggression, optimism, composure].
   // Slice 2: craft/awareness/consistency pairwise |r|<0.5; pace frozen.
   // Slice 3: style columns interleaved by overall rank (sum 0 each).
   const BASE = {
-    VER: [96, 96, 92, 94,  92,  30,  24], // still the pace king
-    LEC: [94, 89, 84, 86,  84,  24,  18], // craft high; awareness soft spot kept
-    NOR: [93, 78, 81, 90,  72, -18, -12], // 2025 champion — craft reshuffled for decorrelation
-    PIA: [91, 74, 71, 90,  62, -10,  -8],
-    RUS: [90, 82, 70, 90,  78,  12,  30], // metronome with optimistic brake markers
-    HAM: [89, 95, 88, 88, 100, -30, -24], // pace has ebbed; racecraft has not
-    SAI: [88, 88, 85, 88,  90, -24, -18],
-    ALO: [86, 96, 76, 88, 100,  18,  12], // craft elite; OT product preserved vs tip
-    GAS: [84, 84, 82, 82,  86, -12, -30],
-    ALB: [84, 84, 81, 84,  78,   8,   6],
-    ANT: [84, 90, 86, 74,  32,  -8,  -6], // quick, raw
-    HUL: [82, 84, 86, 86,  94,  10,   8],
-    OCO: [82, 82, 73, 80,  84,  -6, -10],
-    HAD: [82, 78, 66, 78,  30,   2,   4],
-    PER: [80, 88, 88, 74,  92,   6,  10],
-    BEA: [80, 76, 78, 76,  34,  -2,  -4],
-    LAW: [79, 76, 74, 74,  38,   1,   1],
-    BOT: [79, 82, 76, 84,  96,   4,   2],
-    COL: [78, 88, 85, 70,  30,  -4,  -2],
-    BOR: [77, 72, 70, 73,  24,   0,   0],
-    LIN: [76, 70, 85, 68,  12,   0,   0], // rookie
-    STR: [74, 72, 87, 72,  80,  -1,  -1], // pay seat
+    VER: [96, 96, 92, 94,  92,  30,  24, 20], // still the pace king
+    LEC: [94, 89, 84, 86,  84,  24,  18, -18], // craft high; awareness soft spot kept
+    NOR: [93, 78, 81, 90,  72, -18, -12, 6], // 2025 champion — craft reshuffled for decorrelation
+    PIA: [91, 74, 71, 90,  62, -10,  -8, 16],
+    RUS: [90, 82, 70, 90,  78,  12,  30, 10], // metronome with optimistic brake markers
+    HAM: [89, 95, 88, 88, 100, -30, -24, 22], // pace has ebbed; racecraft has not
+    SAI: [88, 88, 85, 88,  90, -24, -18, 14],
+    ALO: [86, 96, 76, 88, 100,  18,  12, 24], // craft elite; OT product preserved vs tip
+    GAS: [84, 84, 82, 82,  86, -12, -30, -4],
+    ALB: [84, 84, 81, 84,  78,   8,   6, 8],
+    ANT: [84, 90, 86, 74,  32,  -8,  -6, -22], // quick, raw
+    HUL: [82, 84, 86, 86,  94,  10,   8, 6],
+    OCO: [82, 82, 73, 80,  84,  -6, -10, -6],
+    HAD: [82, 78, 66, 78,  30,   2,   4, -20],
+    PER: [80, 88, 88, 74,  92,   6,  10, -8],
+    BEA: [80, 76, 78, 76,  34,  -2,  -4, -2],
+    LAW: [79, 76, 74, 74,  38,   1,   1, -10],
+    BOT: [79, 82, 76, 84,  96,   4,   2, 12],
+    COL: [78, 88, 85, 70,  30,  -4,  -2, -14],
+    BOR: [77, 72, 70, 73,  24,   0,   0, -12],
+    LIN: [76, 70, 85, 68,  12,   0,   0, -16], // rookie
+    STR: [74, 72, 87, 72,  80,  -1,  -1, -6], // pay seat
   };
 
   // The MY TEAM free agents (Career.freeAgents(), js/career/career.js), keyed by
@@ -95,6 +95,7 @@ const DriverRatings = (function () {
       // Style from the second hash — not zero-mean for unrated codes (only BASE is).
       aggression:  clamp(spread2(0), -STYLE_SCALE, STYLE_SCALE),
       optimism:    clamp(spread2(1), -STYLE_SCALE, STYLE_SCALE),
+      composure:   clamp(spread2(2), -STYLE_SCALE, STYLE_SCALE),
     };
   }
 
@@ -107,6 +108,7 @@ const DriverRatings = (function () {
           pace: row[0], craft: row[1], awareness: row[2], consistency: row[3], experience: row[4],
           aggression: row[5] != null ? row[5] : 0,
           optimism: row[6] != null ? row[6] : 0,
+          composure: row[7] != null ? row[7] : 0,
         }
       : fromTier(tier, code);
     if (deltas) {
