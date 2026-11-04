@@ -2924,7 +2924,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // Qualifying ends in its own sheet: the player's flying lap is measured
   // against the simulated field and becomes the grid. Mirrors the TT return
   // below — first branch out, before any race classification is built.
-  if (isQuali()) {
+  if (isQuali()) { RaceCeremony.want(false);   // a natural flag armed it but only afterClassify consumes it: no leak into the next race's SKIP TO RESULTS
     cars = qualiField || cars; qualiField = null;   // handed back: left set, quitToMenu's mid-quali swap later replaced the RACE's field with this one
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
@@ -2939,7 +2939,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
     qualiNet.refreshQualiGate();
     return;
   }
-  if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
+  if (isTimeTrial()) { RaceCeremony.want(false); buildTTResults(); els.results.hidden = false; return; }   // same leak as quali above
   careerSettlement = null;   // whatever the last career round paid is not this race's news
   // The only human RETIRED and the race ended early (RaceControl.finishDelay
   // counts a retired human as done). An AI whose drawn failure it had already
