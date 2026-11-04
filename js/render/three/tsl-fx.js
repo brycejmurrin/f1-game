@@ -5,6 +5,10 @@
 "use strict";
 
 (function () {
+  // Per-frame knob read + fallback colours at module scope: no closure or array is allocated in updateFrame (#4674).
+  const _kn = (T, id, def) => (T && T[id] != null ? T[id] : def);
+  const _AMB_SKY = Object.freeze([0.3, 0.32, 0.36]);
+  const _AMB_GROUND = Object.freeze([0.2, 0.19, 0.18]);
   function fx(THREE, TSL, opts) {
     const {
       Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv, varying,
@@ -413,19 +417,18 @@
     function updateFrame(frame) {
       _decalFrame++;   // new frame: last frame's decal mats are evictable again
       const T = (frame && frame.tune) || null;
-      const k = (id, def) => (T && T[id] != null ? T[id] : def);
-      const kM = k("keyMul", 1), aM = k("ambientMul", 1);
+      const kM = _kn(T, "keyMul", 1), aM = _kn(T, "ambientMul", 1);
       const d = frame.sunDir;
       if (d) U.sunDir.value.set(d[0], d[1], d[2]);
       const s = frame.sunColor;
       if (s) U.sunColor.value.set(s[0] * kM, s[1] * kM, s[2] * kM);
-      const as = frame.ambientSky || [0.3, 0.32, 0.36];
-      const ag = frame.ambientGround || [0.2, 0.19, 0.18];
+      const as = frame.ambientSky || _AMB_SKY;
+      const ag = frame.ambientGround || _AMB_GROUND;
       U.ambSky.value.set(as[0] * aM, as[1] * aM, as[2] * aM);
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
       const fc = frame.fogColor;
       if (fc) U.fogColor.value.set(fc[0], fc[1], fc[2]);
-      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * k("fogDensityMul", 1);
+      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * _kn(T, "fogDensityMul", 1);
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, lineOnPace, lineLift, lineBrake, lineOpacity,
