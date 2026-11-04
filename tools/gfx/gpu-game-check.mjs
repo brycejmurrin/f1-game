@@ -892,7 +892,7 @@ try {
 
   // menu-full: PLAYER PACE (LoadingScreen.isAutomation honours ?fullIntro=1) —
   // the garage drive-out and the flyby a harness otherwise skips.
-  await page.goto(`http://127.0.0.1:${port}/index.html?${garageCapture ? "" : "gfxdebug=1&"}${entry === "menu-full" ? "fullIntro=1" : ""}`,
+  await page.goto(`http://127.0.0.1:${port}/index.html?${garageCapture ? "" : "gfxdebug=1&gpuTimer=1&"}${entry === "menu-full" ? "fullIntro=1" : ""}`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
   // 120 s. This was once raised to 300 s on the theory that windows-latest was
@@ -1760,6 +1760,25 @@ try {
       glx: "one TIME_ELAPSED query from begin() to the end of post: main scene + post; sun/lamp/car shadow, env and mirror passes run before begin()",
     }[be] : "bound backend unknown";
   }
+  // PER-PASS GPU SPLIT (#4784, TLX only, ?gpuTimer=1 above): median ms per pass over a few resolved frames, with the
+  // adapter facts so a SwiftShader row is never read beside a Metal row. Null/absent on software or without
+  // timestamp-query — never an error.
+  try {
+    const bp = await bounded(() => page.evaluate(async () => {
+      const A = window.__apex, rows = {}; let adapter = null, soft = null, supported = false;
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const q = A && A.gpuTimer && A.gpuTimer();
+        if (!q) break;
+        supported = !!q.supported; adapter = q.adapter || adapter; soft = q.software;
+        if (q.byPass) for (const k of Object.keys(q.byPass)) (rows[k] || (rows[k] = [])).push(q.byPass[k]);
+      }
+      const med = {};
+      for (const k of Object.keys(rows)) { const a = rows[k].sort((x, y) => x - y); med[k] = { medianMs: +a[Math.floor(a.length / 2)].toFixed(3), n: a.length }; }
+      return { supported, software: soft, adapter, byPass: Object.keys(med).length ? med : null };
+    }), 20000, "gpu-by-pass");
+    out.gpuByPass = bp;
+  } catch (e) { out.gpuByPass = { error: String((e && e.message) || e).slice(0, 100) }; }
   checkpoint("gfx-read");
   const shot = flag("--shot", null);
   if (shot) {

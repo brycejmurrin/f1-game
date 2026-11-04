@@ -3348,6 +3348,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/baselines/race-entry-swiftshader.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/perf/baselines/vm-alloc.json",
       "classification": "data",
       "outputPolicy": "no-direct-output"
