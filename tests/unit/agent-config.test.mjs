@@ -689,9 +689,9 @@ test(".cursor/environment.json allowlists exactly the .mcp.json servers, with th
 
 // 2026-11-03: the per-agent memory stores (.claude/agent-memory/) and their `memory:` cards are gone
 // (plan §4.6); a store that comes back needs its schema and expiry rule pinned again here.
-test("no agent-memory store is committed without a schema and an expiry rule", () => {
+test("no agent-memory store is committed without a schema and an expiry rule", (t) => {
   const dir = path.join(ROOT, ".claude/agent-memory");
-  if (!fs.existsSync(dir)) return;
+  if (!fs.existsSync(dir)) return t.skip("no .claude/agent-memory store committed");
   for (const s of fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory())) {
     const rel = `.claude/agent-memory/${s.name}/MEMORY.md`;
     assert.ok(exists(rel), `${s.name} has a memory dir but no MEMORY.md index`);
