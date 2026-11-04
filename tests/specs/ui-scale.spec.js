@@ -1594,6 +1594,49 @@ test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
       expect(rows[3].w - rows[2].w, `${side}: WIDTH 40 -> 50 grows the cluster`).toBeGreaterThan(40);
     }
   });
+
+  test("the real WIDTH slider, with Bryce's whole export and SETTINGS open, resizes from the outer edge", async ({ page }) => {
+    // Bryce's path (#4862 reopen): his WHOLE settings file (UI SIZE, HUD, title layout), SETTINGS opened from the
+    // title, APPEARANCE › TITLE LAYOUT's WIDTH slider moved while the page peeks. The sweep above calls
+    // TitleLayout.apply() with the sheet shut and the shipped UI SIZE.
+    await page.goto("/");
+    await page.waitForFunction(() => typeof SettingsExport !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    const applied = await page.evaluate(async () => {
+      const file = await (await fetch("/tests/data/settings-defaults-export.json")).json();
+      return SettingsExport.applySettings(file);
+    });
+    expect(applied.ok, "Bryce's export applies").toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => typeof TitleLayout !== "undefined" && document.body.dataset.shape === "wide",
+      null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => TitleLayout.current("wide").btns.width), "his saved WIDTH").toBe(20);
+    await page.evaluate(() => document.getElementById("mb-settings").click());
+    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      TitleLayout.build();
+      for (const id of ["pm-titlescreen", "pm-titlelayout"]) { const d = document.getElementById(id); if (d) d.open = true; }
+    });
+    const rows = [];
+    for (const width of [20, 30, 40, 50, 60, 70, 80, 90, 100]) {
+      rows.push(await page.evaluate((width) => {
+        const inp = document.getElementById("pm-tl-btns-width");
+        inp.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+        inp.value = String(width);
+        inp.dispatchEvent(new Event("input", { bubbles: true }));
+        const b = document.getElementById("menu-buttons").getBoundingClientRect();
+        return { width, left: b.left, right: b.right, w: b.width,
+          hero: document.getElementById("menu-hero").getBoundingClientRect().width,
+          peek: document.documentElement.dataset.appearancePeek || "" };
+      }, width));
+    }
+    for (const [i, row] of rows.entries()) {
+      expect(row.peek, `WIDTH ${row.width} peeks the title`).toBe("title");
+      expect(Math.abs(row.right - rows[0].right), `outer (right) edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+      if (i) expect(row.w, `cluster width at WIDTH ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
+    }
+    expect(rows[rows.length - 1].w - rows[0].w, "WIDTH 20 -> 100 grows the cluster").toBeGreaterThan(300);
+    expect(rows[rows.length - 1].hero - rows[0].hero, "WIDTH 20 -> 100 grows the hero").toBeGreaterThan(300);
+  });
 });
 
 test.describe("Factory Home on touch", () => {
