@@ -405,7 +405,6 @@ const GarageArrival = (function () {
       }
       rows.insertBefore(tabs, rows.firstChild || null);
     }
-    // COPY TO ALL joins RESET in the foot (EditorWorkspace moves the foot's actions into its tools fold).
     const reset = $("ga-reset");
     if (reset && reset.parentNode) {
       const b = make("button", "", "COPY TO ALL MOMENTS"), kids = Array.from(reset.parentNode.children);
@@ -416,7 +415,6 @@ const GarageArrival = (function () {
   /* Rows that only mean something for some moments (the crew that meets or sees
    * the car off, AFTER THE RACE's by-result picks); every other row is every
    * moment's. PLAY AFTER A RACE folds into RACE END's PLAY ANIMATIONS. */
-  // Keyed by setting (bindSettings' fields: ENTER CREW is enterCrew's row, and so on).
   const ROW_MOMENTS = Object.freeze({ enterCrew: ["pitIn"], leaveCrew: ["start", "pitOut"],
     light: ["start", "pitIn", "pitOut"], cue: ["start", "pitIn", "pitOut"], afterRace: [],
     homeCrew: ["home"], homeLight: ["home"], homeCue: ["home"], result: ["home"], race: ["home"] });
@@ -487,7 +485,6 @@ const GarageArrival = (function () {
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
       }
     }
-    // An edit lands in the picked moment only; the other three keep theirs.
     const store1 = (moments) => {
       const v = raw(), base = Object.assign({}, v && typeof v === "object" ? v : {});
       base.moments = moments;
@@ -520,7 +517,6 @@ const GarageArrival = (function () {
       store1(ms); refresh(); if (changed) changed();
     };
     shotEls.forEach((el, i) => { if (el) el.onchange = () => { const value = read(); value.shots[i] = el.value; save(value); }; });
-    // RESET: the picked moment back to the shipped look (the others keep theirs).
     $("ga-reset").onclick = () => {
       const ms = momentsNow();
       ms[moment] = settings(MOMENT_BASE[moment] || {});
@@ -539,7 +535,6 @@ const GarageArrival = (function () {
       if (typeof document !== "undefined" && document.body) document.body.classList.add("lt-open");
       if (done && done.focus) done.focus();
     };
-    // PREVIEW plays the picked moment, with its own settings.
     const play = $("ga-preview");
     if (play) play.onclick = () => { if (preview) preview(moment, play); };
     if (panel && done) done.onclick = () => {
