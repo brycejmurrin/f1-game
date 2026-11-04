@@ -1,8 +1,6 @@
-/* Apex 26 — RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut,
- * slow orbit behind the results sheet, and a short highlights montage from the
- * solo ReplayBuf tags. Solo presentation only — never touches netplay authority
- * or career settlement. Off on mobile / PerfGov.tier() >= 2. Cap orbit/highlight
- * redraws at 30 fps. Curvature only via G.camVantage (broadcast-only). */
+/* Apex 26 — RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results
+ * sheet, and a highlights montage from the solo ReplayBuf tags. Solo only; off on mobile / PerfGov.tier() >= 2.
+ * Redraws capped at 30 fps. Curvature only via G.camVantage (broadcast-only). */
 "use strict";
 const ResultsCam = (function () {
   const CHEQ_S = 2.2;
@@ -21,23 +19,19 @@ const ResultsCam = (function () {
   }
 
   /** Pure: finish-line side vantage extras for camVantage("side", …). */
-  function chequeredExtra(player, out) {
-    const o = out || {};
-    if (player && player.px != null) { const c = o.carPos || (o.carPos = [0, 0]); c[0] = player.px; c[1] = player.pz; } else o.carPos = null;
+  function chequeredExtra(player, o) {
+    const c = o.carPos || (o.carPos = [0, 0]);
+    c[0] = player && player.px; c[1] = player && player.pz;
+    if (!(player && player.px != null)) o.carPos = null;
     o.carHead = player && player.head;
-    o.noLook = true; o.frameSubject = true; o.snap = true;
     return o;
   }
 
   /** Pure: orbit eye/target around a world point (winner). */
   function orbitPose(cx, cy, cz, yaw, out) {
-    const o = out || { eye: [0, 0, 0], target: [0, 0, 0], fov: 55 };
-    const eye = o.eye, target = o.target;
-    eye[0] = cx + Math.sin(yaw) * ORBIT_RADIUS;
-    eye[1] = cy + ORBIT_HEIGHT;
-    eye[2] = cz + Math.cos(yaw) * ORBIT_RADIUS;
-    target[0] = cx; target[1] = cy + 1.2; target[2] = cz;
-    o.fov = 55;
+    const o = out || { eye: [0, 0, 0], target: [0, 0, 0], fov: 55 }, e = o.eye, t = o.target;
+    e[0] = cx + Math.sin(yaw) * ORBIT_RADIUS; e[1] = cy + ORBIT_HEIGHT; e[2] = cz + Math.cos(yaw) * ORBIT_RADIUS;
+    t[0] = cx; t[1] = cy + 1.2; t[2] = cz;
     return o;
   }
 
@@ -83,14 +77,12 @@ const ResultsCam = (function () {
     let replayApi = null;
     const anchor = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const bankScratch = { dy: 0, roll: 0 };
-    // Pooled: one dbgCam, one extra, one pose and one orbit pose live for the whole session (no per-step garbage).
-    const _cam = { eye: [0, 0, 0], target: [0, 0, 0], fov: 55, far: 900, fog: 1.0, _resultsCam: true };
+    const _cam = { eye: [0, 0, 0], target: [0, 0, 0], fov: 55, far: 900, fog: 1, _resultsCam: true };  // pooled
     const _extra = { carPos: null, carHead: 0, noLook: true, frameSubject: true, snap: true, dt: 0 };
     const _cheq = { eye: null, target: null, fov: 58 };
     const _orbit = { eye: [0, 0, 0], target: [0, 0, 0], fov: 55 };
-    let _cut = true, _stepDt = 0;   // _cut: first side solve of a phase/clip snaps; later ones ease through CamFeel (no hop at a bend flip)
     const _cheqTgt = [0, 0, 0];
-    let _sideS = 0, _sideX = 0, _sideSp = 0;
+    let _cut = true, _stepDt = 0, _sideS = 0, _sideX = 0, _sideSp = 0;   // _cut: first solve snaps
     function solveSide() { return G.camVantage("side", _sideS, _sideX, _sideSp, 0, _extra); }
     const allowed = () => enabled(G) && (!eligible || eligible()) &&
       !(G.netPlay && G.netPlay.active && G.netPlay.active());
@@ -128,12 +120,9 @@ const ResultsCam = (function () {
     }
     function publish(pose) {
       if (!pose || !pose.eye) return;
-      // race lens (fog 1, race far plane), not the dev free-cam default -- #4957
-      const c = _cam;
-      c.eye[0] = pose.eye[0]; c.eye[1] = pose.eye[1]; c.eye[2] = pose.eye[2];
-      c.target[0] = pose.target[0]; c.target[1] = pose.target[1]; c.target[2] = pose.target[2];
-      c.fov = pose.fov || 55;
-      c.far = G.gfx && G.gfx.isMobile ? 1100 : 900;
+      const c = _cam;   // race lens (fog 1), not the dev free-cam default (#4957)
+      for (let i = 0; i < 3; i++) { c.eye[i] = pose.eye[i]; c.target[i] = pose.target[i]; }
+      c.fov = pose.fov || 55; c.far = G.gfx && G.gfx.isMobile ? 1100 : 900;
       G.dbgCam = c;
     }
     function subject() {
@@ -160,9 +149,7 @@ const ResultsCam = (function () {
       _cut = false;
       if (!v || !v.eye) return null;
       _cheq.eye = v.eye; _cheq.fov = v.fov || 58;
-      let tg = v.tgt || v.target;
-      if (!tg) { tg = _cheqTgt; tg[0] = p.px; tg[1] = p.py || 1; tg[2] = p.pz; }
-      _cheq.target = tg;
+      _cheq.target = v.tgt || v.target || (_cheqTgt[0] = p.px, _cheqTgt[1] = p.py || 1, _cheqTgt[2] = p.pz, _cheqTgt);
       return _cheq;
     }
     function doOrbit(p = subject()) {
@@ -292,9 +279,7 @@ const ResultsCam = (function () {
     };
   }
 
-  // ORBIT_RADIUS / ORBIT_HEIGHT / HIGHLIGHT_* / FRAME_DT / enabled /
-  // chequeredExtra stay module-local — no external readers (tests pin
-  // create / orbitPose / highlightsReel / CHEQ_S / ORBIT_PERIOD_S).
+  // Constants and helpers stay module-local; tests pin create / orbitPose / highlightsReel / CHEQ_S / ORBIT_PERIOD_S.
   return {
     create, CHEQ_S, ORBIT_PERIOD_S, orbitPose, highlightsReel,
   };
