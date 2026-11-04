@@ -843,7 +843,10 @@ var RadioVoice = (function () {
       try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); primed = true; }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
       const ctx = audioCtx();
-      if (ctx && ctx.state === "suspended" && ctx.resume) {
+      // SOUND OFF suspends the context (engine.js mutedSuspended); waking it here
+      // would render silence for the whole session, as nothing re-suspends it.
+      const muted = typeof GameAudio !== "undefined" && GameAudio && typeof GameAudio.enabled === "function" && !GameAudio.enabled();
+      if (ctx && !muted && ctx.state === "suspended" && ctx.resume) {
         try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* gesture spent */ }
       }
     }
