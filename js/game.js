@@ -6301,7 +6301,7 @@ function updateCarAdvance(c, dt, ranked, S) {
         const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < lapRec.fieldSectorBests[c._secIdx]) lapRec.fieldSectorBests[c._secIdx] = e;
       }
-      c._secValid = fwd || c._secIdx == null; c._secIdx = ns; c._secT0 = c.lapTime;
+      if (c.isPlayer) EnergyPlan.sectorExit(c, fwd, isTimeTrial()); c._secValid = fwd || c._secIdx == null; c._secIdx = ns; c._secT0 = c.lapTime;
     }
   }
   // Sector detection (curated splits via sectorAt). Must run before finish-line

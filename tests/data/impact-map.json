@@ -12966,13 +12966,25 @@
       ]
     },
     "js/race/energy-plan.js": {
+      "forecast": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
       "fromStore": [
         "tests/unit/energy-plan.test.mjs"
       ],
       "isNeutral": [
         "tests/unit/energy-plan.test.mjs"
       ],
+      "learn": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
       "plan": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/energy-plan.test.mjs"
+      ],
+      "setOverride": [
         "tests/unit/energy-plan.test.mjs"
       ],
       "setPlan": [
