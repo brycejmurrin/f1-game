@@ -541,11 +541,19 @@ for (const v of VIEWS) {
     const MODES = [["tilt", false], ["tilt", true], ["buttons", false], ["buttons", true], ["touch", false], ["touch", true]];
     test("steer x gears: controls, readouts and safe area", async ({ page }) => {
       await race(page, MODES[0][0], MODES[0][1], v);
+      // TILT FALLS BACK TO BUTTONS 1.5 s after it is picked when no motion sensor
+      // reads (game.js enableTilt) unless headlessMode is set; on a slow runner that
+      // timer fires mid-matrix and the "tilt" case silently measures buttons.
+      // headless(true) only skips render(), the HUD DOM is untouched (freeze is
+      // already on). The fallback may have fired during boot, so tilt is re-entered
+      // below through another mode, now under headless.
+      await page.evaluate(() => window.__apex.headless(true));
       for (const [steer, manual] of MODES) {
         const label = `[${v.name} ${steer}/${manual ? "manual" : "auto"}] `;
         {
           await page.evaluate(([s, m]) => {
             const set = (id, val) => { const el = document.getElementById(id); el.value = val; el.dispatchEvent(new Event("change", { bubbles: true })); };
+            if (s === "tilt") set("pm-steer-sel", "buttons");   // re-enter tilt under headless (see above)
             set("pm-steer-sel", s);
             set("pm-gears-sel", m ? "manual" : "auto");
           }, [steer, manual]);
