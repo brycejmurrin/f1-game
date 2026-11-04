@@ -2045,7 +2045,8 @@
         "tests/unit/free-cam.test.mjs"
       ],
       "create": [
-        "tests/unit/free-cam.test.mjs"
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/photo-kit.test.mjs"
       ],
       "decorate": [
         "tests/unit/free-cam.test.mjs"
@@ -2064,7 +2065,8 @@
       ],
       "place": [
         "tests/unit/flyby-lighting.test.mjs",
-        "tests/unit/free-cam.test.mjs"
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/photo-kit.test.mjs"
       ],
       "publish": [
         "tests/unit/free-cam.test.mjs"
@@ -2089,9 +2091,6 @@
       ],
       "wheelSpeed": [
         "tests/unit/free-cam.test.mjs"
-      ],
-      "*": [
-        "tests/unit/photo-kit.test.mjs"
       ]
     },
     "js/camera/mode-switch.js": {
@@ -2303,13 +2302,16 @@
     "js/camera/photo-cam.js": {
       "create": [
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "enterPhotoMode": [
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "exitPhotoMode": [
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "updatePhotoCam": [
@@ -5362,6 +5364,7 @@
         "tests/unit/log-namespaces.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ready-gate.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -5533,6 +5536,7 @@
         "tests/unit/pace-math.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
@@ -8919,6 +8923,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9004,6 +9009,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9050,6 +9056,7 @@
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9460,6 +9467,7 @@
       ],
       "*": [
         "tests/unit/camera-feel.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/reject-lint.test.mjs",
@@ -9473,6 +9481,7 @@
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/phone-pad.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9506,6 +9515,7 @@
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
@@ -15118,6 +15128,9 @@
       "setPalette": [
         "tests/unit/driving-line.test.mjs"
       ],
+      "setPhoto": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
       "speedAt": [
         "tests/specs/smoke.spec.js",
         "tests/unit/driving-line.test.mjs"
@@ -18617,6 +18630,7 @@
       ],
       "create": [
         "tests/specs/photo-studio.spec.js",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
       "crop": [
@@ -18647,7 +18661,6 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/prepush-floor.test.mjs"
       ]
     },
