@@ -136,6 +136,9 @@ function optionalApi(endpoint, run) {
   }
 }
 
+// A Claude cloud-session token cannot create releases (HTTP 403); the workflow can.
+export const FORBIDDEN_HINT = "HTTP 403: this token cannot create releases (typical in a Claude cloud session). Next step: upload the capture directory as a CI artifact, then dispatch the archive-evidence.yml workflow (workflow_dispatch with run_id, artifact_name and label), or run --receipt ... --publish from a token with contents:write. See docs/EVIDENCE-STORAGE.md §Cloud sessions.";
+
 export function publishEvidence(receiptPath, run = runDefault) {
   const dir = path.dirname(receiptPath);
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
@@ -154,9 +157,14 @@ export function publishEvidence(receiptPath, run = runDefault) {
     const notesPath = path.join(dir, "release-notes.md");
     fs.writeFileSync(notesPath, notes);
     // No --clobber, edits or deletions. gh stages assets in a draft before publication.
-    run("gh", ["release", "create", receipt.tag, ...receipt.assets.map((f) => path.join(dir, f.name)), "--repo", REPOSITORY,
-      "--target", STORAGE_ANCHOR, "--title", `Evidence: ${receipt.label} (${receipt.sourceSha.slice(0, 12)})`,
-      "--prerelease", "--latest=false", "--notes-file", notesPath]);
+    try {
+      run("gh", ["release", "create", receipt.tag, ...receipt.assets.map((f) => path.join(dir, f.name)), "--repo", REPOSITORY,
+        "--target", STORAGE_ANCHOR, "--title", `Evidence: ${receipt.label} (${receipt.sourceSha.slice(0, 12)})`,
+        "--prerelease", "--latest=false", "--notes-file", notesPath]);
+    } catch (e) {
+      if (/HTTP 403/.test(String(e.stderr || e.message || ""))) throw new Error(FORBIDDEN_HINT);
+      throw e;
+    }
     release = optionalApi(endpoint, run);
   }
   if (!release || release.draft || !release.prerelease || release.tag_name !== receipt.tag || release.target_commitish !== STORAGE_ANCHOR) throw new Error("release metadata does not match evidence receipt; inspect the release before retrying");
