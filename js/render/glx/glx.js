@@ -2737,7 +2737,7 @@ const GLXBackend = (function () {
       layers: Array.from(matTexScales).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
       scales: Array.from(matTexScales),
     }),
-    freeTexture,
+    freeTexture, flushTexPool() {},   // flushTexPool: TLX-only pool, no-op here
     texCensus,                    // resident texture bytes — see the ledger above
     drawDecal,
     chunkedTrackCoords: true,

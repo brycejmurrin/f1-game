@@ -1923,7 +1923,7 @@ const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGo
 function dropTrackWorld() {
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
   shadowPass.reset(); freeTrackMeshes(track);
-  track = null; builtTrackId = null;
+  track = null; builtTrackId = null; if (gfx && gfx.flushTexPool) gfx.flushTexPool();   // retired atlases go with the world (TLX)
   if (typeof LampBake !== "undefined") LampBake.reset();
 }
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
