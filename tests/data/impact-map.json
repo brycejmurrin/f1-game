@@ -17602,9 +17602,6 @@
       "loadProfile": [
         "tests/unit/appearance-studio.test.mjs"
       ],
-      "normalizeShapes": [
-        "tests/unit/appearance-shapes.test.mjs"
-      ],
       "normalizeSnapshot": [
         "tests/unit/appearance-studio.test.mjs"
       ],
@@ -17632,9 +17629,6 @@
       "setScene": [
         "tests/unit/appearance-studio.test.mjs"
       ],
-      "setShapeSplit": [
-        "tests/unit/appearance-shapes.test.mjs"
-      ],
       "snapshot": [
         "tests/unit/appearance-studio.test.mjs"
       ],
@@ -17642,6 +17636,7 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "*": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -18475,6 +18470,7 @@
     },
     "js/ui/layout-presets.js": {
       "apply": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/layout-presets.test.mjs"
       ],
       "current": [
@@ -18485,6 +18481,15 @@
       ],
       "mount": [
         "tests/unit/layout-presets.test.mjs"
+      ],
+      "normalizeShapes": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
+      "restore": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
+      "setShapeSplit": [
+        "tests/unit/appearance-shapes.test.mjs"
       ],
       "snapshot": [
         "tests/unit/layout-presets.test.mjs"
@@ -19305,6 +19310,9 @@
       "panel": [
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "presets": [
+        "tests/unit/player-tools-ui.test.mjs"
       ],
       "show": [
         "tests/unit/player-tools-ui.test.mjs",

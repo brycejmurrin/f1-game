@@ -1,14 +1,15 @@
 // #4529 part 1: portrait and landscape keep separate appearance values on the
-// same device (AppearanceStudio SHAPE_KEYS + apex26.appearanceShapes).
+// same device (LayoutPresets SHAPE_KEYS + apex26.appearanceShapes, loaded by AppearanceStudio).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 
-const SRC = new URL("../../js/ui/appearance-studio.js", import.meta.url);
-const source = fs.readFileSync(SRC, "utf8")
-  .replace(/^const AppearanceStudio/m, "var AppearanceStudio");
+const read = (rel) => fs.readFileSync(new URL("../../" + rel, import.meta.url), "utf8");
+const STUDIO = "js/ui/appearance-studio.js", PRESETS = "js/ui/layout-presets.js";
+const studioSrc = read(STUDIO).replace(/^const AppearanceStudio/m, "var AppearanceStudio");
+const presetsSrc = read(PRESETS).replace(/^const LayoutPresets/m, "var LayoutPresets");
 const exported = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
 
 /** Bryce's real iPhone export, flattened to the store keys it sets. */
@@ -32,9 +33,11 @@ function boot(values, shape = "wide") {
     window: { matchMedia: () => ({ matches: false }) },
     document: { readyState: "loading", addEventListener() {}, body, getElementById: () => null },
   });
-  vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  // The lazy half first, as if SettingsNav.presets() had already loaded it.
+  vm.runInContext(presetsSrc, context, { filename: absSrc(PRESETS) });
+  vm.runInContext(studioSrc, context, { filename: absSrc(STUDIO) });
   const rotate = (next) => { attrs["data-shape"] = next; for (const o of observers) o.fn(); };
-  return { studio: context.AppearanceStudio, values, writes, rotate };
+  return { studio: context.LayoutPresets, values, writes, rotate };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
@@ -68,11 +71,12 @@ test("portrait and landscape keep separate values for the shape keys", () => {
   assert.deepEqual(plain(values.titleLayout), exported.settings.appearance.titleLayout);
 });
 
-test("a stored state for the other shape applies at boot", () => {
+test("a stored state for the other shape applies at boot", async () => {
   const first = boot(bryceStore(), "wide");
   first.rotate("tall"); first.values.hudScale = 100; first.rotate("wide");
   const saved = plain(first.values);
   const again = boot(structuredClone(saved), "tall");
+  await Promise.resolve(); await Promise.resolve();   // the boot swap waits for AppearanceStudio to exist
   assert.equal(again.values.hudScale, 100, "booting in portrait reads portrait's copy");
   assert.equal(again.studio.shapes().park.hudScale, 155.25, "landscape's copy is parked");
 });
@@ -97,4 +101,26 @@ test("junk in the stored state reads as SEPARATE with nothing parked", () => {
   assert.equal(n.split, false); assert.equal(n.live, null);
   assert.equal(n.park.hudScale, 200, "clamped like the live key");
   assert.ok(!("menuAccent" in n.park), "only shape keys are parked");
+});
+
+test("eager AppearanceStudio loads the lazy swap on a rotation, and at boot only for a stale saved shape", async () => {
+  const run = (values, shape) => {
+    const calls = [], observers = [], attrs = { "data-shape": shape };
+    const store = { get: (k, d) => (k in values ? values[k] : d), set: () => true };
+    const context = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
+      SettingsNav: { presets: () => { calls.push(1); return Promise.resolve(false); } },
+      MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
+      window: { matchMedia: () => ({ matches: false }) },
+      document: { readyState: "loading", addEventListener() {}, body: { getAttribute: (k) => attrs[k] ?? null }, getElementById: () => null } });
+    vm.runInContext(studioSrc, context, { filename: absSrc(STUDIO) });
+    return { calls, rotate: (s) => { attrs["data-shape"] = s; for (const fn of observers) fn(); } };
+  };
+  const fresh = run(bryceStore(), "tall");
+  await Promise.resolve();
+  assert.equal(fresh.calls.length, 0, "an untouched save loads nothing at boot");
+  fresh.rotate("wide");
+  assert.equal(fresh.calls.length, 1, "a rotation loads the APPEARANCE bundle");
+  const stale = run({ ...bryceStore(), appearanceShapes: { v: 1, split: true, live: "wide", park: null } }, "tall");
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(stale.calls.length, 1, "booting in the other shape loads it");
 });
