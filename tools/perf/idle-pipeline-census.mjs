@@ -42,7 +42,8 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size }); } catch (_) { /* naming is best-effort */ }
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size, usage: desc && desc.usage,
+          from: (new Error().stack || "").split("\n").slice(2, 9).map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, "")).join(" < ").slice(0, 600) }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
     };
