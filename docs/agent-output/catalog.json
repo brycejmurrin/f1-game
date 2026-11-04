@@ -77,6 +77,16 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/agent/sessions.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--limit"
+      ]
+    },
+    {
       "path": "tools/archive/ci/measure-guard-commit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

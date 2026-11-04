@@ -66,6 +66,11 @@
       "presentation": "native",
       "preserve": "The vendor CLI's own stdout (the session reply) and exit status; stderr tail on failure. No inference of delivery or ACK beyond what the CLI returns."
     },
+    "tools/agent/sessions.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One typed line per listed session (vendor, id, state, title) and exit status; per-vendor stderr tail. Lists only; no provider state is changed."
+    },
     "tools/archive/ci/measure-guard-commit.mjs": {
       "action": "keep-native",
       "presentation": "native",
