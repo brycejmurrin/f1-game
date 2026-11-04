@@ -13,6 +13,9 @@
       ],
       "nextCorner": [
         "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "*": [
+        "tests/unit/curvature-channels.test.mjs"
       ]
     },
     "js/agent/agentview-raster.js": {
@@ -1960,6 +1963,7 @@
         "tests/unit/flyby-shots.test.mjs"
       ],
       "solve": [
+        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/flyby-fleet.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/flyby-pose-inverse.test.mjs",
@@ -2830,6 +2834,7 @@
       ],
       "*": [
         "tests/specs/quali.spec.js",
+        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
@@ -11964,6 +11969,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "*": [
+        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
@@ -12034,6 +12040,9 @@
       ],
       "update": [
         "tests/unit/body-attitude.test.mjs"
+      ],
+      "*": [
+        "tests/unit/curvature-channels.test.mjs"
       ]
     },
     "js/physics/brake-cue.js": {
@@ -12140,6 +12149,7 @@
         "tests/unit/ai-stuck-vm.test.mjs"
       ],
       "*": [
+        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/pick-tests.test.mjs"
       ]
@@ -12782,6 +12792,9 @@
       ],
       "warmShape": [
         "tests/unit/car-fields-vm.test.mjs"
+      ],
+      "*": [
+        "tests/unit/curvature-channels.test.mjs"
       ]
     },
     "js/race/ceremony.js": {

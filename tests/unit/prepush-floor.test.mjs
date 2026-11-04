@@ -150,7 +150,7 @@ test("pick-tests prints the checklist for a new js module on the command line", 
   const fixture = fs.mkdtempSync(path.join(artifacts, "pick-tests-cli-"));
   try {
     for (const dir of ["tools/ci", "tools/lib", "js"]) fs.mkdirSync(path.join(fixture, dir), { recursive: true });
-    for (const rel of ["tools/ci/pick-tests.mjs", "tools/lib/changed-files.mjs"])
+    for (const rel of ["tools/ci/pick-tests.mjs", "tools/lib/changed-files.mjs", "tools/lib/emit-json.mjs"])
       fs.copyFileSync(path.join(process.cwd(), rel), path.join(fixture, rel));
     fs.writeFileSync(path.join(fixture, "package.json"), JSON.stringify({ scripts: {} }));
     fs.writeFileSync(path.join(fixture, PROBE_REL), '\"use strict\";\nconst ProbeNew = (() => ({}))();\n');
