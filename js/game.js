@@ -3411,7 +3411,6 @@ const G = {
   onPeerQuali: (...a) => qualiNet.onPeerQuali(...a),
   onPeerQualiLive: (...a) => qualiNet.onPeerQualiLive(...a),
   openQualiForNet: (...a) => qualiNet.openQualiForNet(...a),
-  // The host cancelled friend quali: leave the sheet as BACK does.
   leaveQualiSheet: () => { qualiSheet.close(); quali.clear(); session = "race"; qualiNet.resetOnBackWithAbort(); },
   refreshQualiGate: (...a) => qualiNet.refreshQualiGate(...a),
   // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
