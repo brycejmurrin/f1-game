@@ -1,6 +1,7 @@
 /* replay-buf.test.mjs — instant-replay ring (js/camera/replay-buf.js).
  * Budget, wrap, interpolate, restore equality, solo/net scrub gates,
  * career-settle / endRace source pins, pause-menu scrub audio (game-vm).
+ * Dock repaint gate and frame-step search: docs/notes/PERF-HUNT-P6-2026-11-03.md row 3.
  * Run: node --test tests/unit/replay-buf.test.mjs
  */
 import { test } from "node:test";
@@ -654,6 +655,57 @@ test("paused replay keeps unchanged contact-sheet options and refreshes changed 
   assert.equal(replacements, paints + 1, "new footage metadata updates the choices once");
   assert.equal(picker.children.length, 3); assert.equal(picker.value, "1");
   api.tickScrub(0); assert.equal(replacements, paints + 1);
+  api.endScrub();
+});
+
+test("a paused or stopped replay does not repaint the dock every frame (#4546 P6)", () => {
+  let lookups = 0;
+  const els = {};
+  const doc = { getElementById: (id) => { lookups++; return (els[id] ||= { id, hidden: false, disabled: false, textContent: "", value: "", children: [],
+    replaceChildren() { this.children = []; }, appendChild(o) { this.children.push(o); } }); },
+    createElement: () => ({}) };
+  const R = boot(doc), field = cars(1), G = { cars: field, paused: true, raceT: 4 };
+  const api = R.create(G);
+  for (let i = 0; i <= R.HZ * 4; i++) api.sample(i / R.HZ, field);
+  assert.equal(api.beginScrub(), true);
+  api.stepFrame(-1);
+  const label = els["pm-replay-label"].textContent;
+  lookups = 0;
+  for (let i = 0; i < 60; i++) api.tickScrub(1 / 60);
+  assert.equal(lookups, 0, "stopped: 60 frames, no DOM reads (was 13 per frame)");
+  api.pushTag("pass", 3, 0); api.tickScrub(0);
+  assert.ok(lookups > 0, "new tag metadata still repaints");
+  lookups = 0; G.paused = false; api.tickScrub(0);
+  assert.ok(lookups > 0, "a pause flip still repaints (contact-sheet button)");
+  lookups = 0;
+  api.stepFrame(1);
+  assert.ok(lookups > 0, "a user action always repaints");
+  assert.equal(els["pm-replay-label"].textContent, api.status().scrubT.toFixed(3) + "s", "the label tracks the stepped frame");
+  assert.notEqual(els["pm-replay-label"].textContent, label);
+  api.endScrub();
+});
+
+test("frame step lands on recorded timestamps across uneven spacing and the ring wrap", () => {
+  const R = boot(), field = cars(1), G = { cars: field, paused: true, raceT: 0 };
+  const api = R.create(G);
+  // uneven spacing: skip slots now and then, as a slow frame would
+  const recorded = [];
+  let t = 0;
+  for (let i = 0; i < R.HZ * 40; i++) { t += (i % 7 === 3 ? 3 : 1) / R.HZ; G.raceT = t; if (api.sample(t, field)) recorded.push(t); }
+  const w = api.status();
+  const kept = recorded.filter((x) => x >= w.t0 - 1e-12);
+  assert.ok(kept.length === w.frames, "the window holds the newest samples (wrapped)");
+  assert.equal(api.beginScrub(), true);
+  for (const k of [1, 5, Math.floor(kept.length / 2), kept.length - 2]) {
+    api.apply(kept[k]);
+    api.stepFrame(-1); assert.equal(api.status().scrubT, kept[k - 1], "previous recorded frame");
+    api.apply(kept[k]);
+    api.stepFrame(1); assert.equal(api.status().scrubT, kept[k + 1], "next recorded frame");
+    api.apply((kept[k] + kept[k + 1]) / 2);
+    api.stepFrame(-1); assert.equal(api.status().scrubT, kept[k], "between frames: back to the earlier one");
+  }
+  api.apply(kept[0]); assert.equal(api.stepFrame(-1), false, "nothing before the oldest frame");
+  api.apply(kept[kept.length - 1]); assert.equal(api.stepFrame(1), false, "nothing after the newest frame");
   api.endScrub();
 });
 

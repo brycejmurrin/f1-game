@@ -1726,7 +1726,7 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
     `baseColorFactor lost: ${[...mesh.col].slice(0, 3)}`);
 });
 
-test("webbake writes a ZIP that real unzip accepts", () => {
+test("webbake writes a ZIP that real unzip accepts", (ctx) => {
   // The browser baker hands its output back as a single archive, written by a
   // ~40-line STORE-method ZIP encoder with no library behind it. A wrong CRC or
   // a bad central-directory offset produces a file that *looks* fine and fails
@@ -1756,7 +1756,7 @@ test("webbake writes a ZIP that real unzip accepts", () => {
     return blob.arrayBuffer().then((ab) => {
       fs.writeFileSync(zipPath, Buffer.from(ab));
       const t = cp.spawnSync("unzip", ["-t", zipPath], { encoding: "utf8" });
-      if (t.error && t.error.code === "ENOENT") return;          // no unzip on this box
+      if (t.error && t.error.code === "ENOENT") return ctx.skip("no unzip on this box");   // B3: a bare return read as a pass
       assert.equal(t.status, 0, `unzip -t rejected the archive:\n${t.stdout}${t.stderr}`);
       const got = cp.spawnSync("unzip", ["-p", zipPath, "manifest.json"], { encoding: "utf8" });
       assert.equal(got.status, 0, "could not extract manifest.json");
@@ -2506,4 +2506,15 @@ test("pack models/ has no orphan bins outside the manifest index",
   const keyed = new Set(Object.values(manifest.models || {}).map((rec) => path.basename(rec.file)));
   const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
   assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
+});
+
+test("diffRoleIndex treats a null manifest or role index as empty, never throws (#4356)", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  const noLive = diffRoleIndex(idx, null);
+  assert.deepEqual(noLive.indexOnly, ["a", "b"]);
+  assert.deepEqual(noLive.liveOnly, []);
+  assert.deepEqual(noLive.badRole, ["b:bogus"]);
+  const noIndex = diffRoleIndex(null, { models: { c: {} } });
+  assert.deepEqual(noIndex, { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex(undefined, undefined), { indexOnly: [], liveOnly: [], badRole: [] });
 });

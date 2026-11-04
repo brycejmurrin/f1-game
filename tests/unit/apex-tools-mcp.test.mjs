@@ -3,7 +3,7 @@
 import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync, spawn } from "node:child_process";
+import { spawnSync as rawSpawnSync, spawn as rawSpawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import { createRequire } from "node:module";
@@ -14,6 +14,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const MCP = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
 const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
+
+// Every child this file starts goes through these two wrappers, so the last
+// test can hold the file to a spawn budget: a cold `node apex-tools-mcp.mjs`
+// costs ~0.13 s, and one-process-per-case loops made this the slowest unit
+// file (P8 #4548). Batch argument checks through callMany instead.
+const SPAWNS = { sync: 0, async: 0 };
+const spawnSync = (...a) => { SPAWNS.sync++; return rawSpawnSync(...a); };
+const spawn = (...a) => { SPAWNS.async++; return rawSpawn(...a); };
+// 2026-11-03: 365 children before batching, 191 after (the budget test at the end of the file).
+const SPAWN_BUDGET = 200;
 
 /** Temp dir guaranteed outside artifacts/ and scratch/ (TMPDIR may live under artifacts/). */
 function mkOutsideTemp(prefix = "apex-mcp-outside-") {
@@ -65,6 +75,29 @@ function callCli(name, args = {}, extraEnv = {}) {
     },
   );
   return r;
+}
+
+/** Many `call`s through ONE `serve` process. `call` and `tools/call` share dispatch(); each reply is returned in
+ *  callCli's shape — status is the CLI's exit (isError ? 1 : 0), stdout its JSON body, stderr the session's — so a
+ *  loop of callCli assertions reads the same. Arguments must be objects: a non-object is a JSON-RPC -32602 on
+ *  serve but a bad_args body on the CLI, so those cases stay on callCli. */
+function callMany(calls, extraEnv = {}) {
+  for (const [name, args] of calls) assert.ok(args && typeof args === "object" && !Array.isArray(args), `callMany(${name}): object arguments only`);
+  const r = spawnSync(process.execPath, [MCP, "serve"], {
+    encoding: "utf8",
+    input: calls.map(([name, args], i) => JSON.stringify({ jsonrpc: "2.0", id: i + 1, method: "tools/call", params: { name, arguments: args } })).join("\n") + "\n",
+    env: { ...process.env, APEX_MCP_MOCK: "1", ...extraEnv },
+    cwd: ROOT,
+    timeout: 30000,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  assert.equal(r.status, 0, r.error?.message || r.stderr);
+  const byId = new Map(r.stdout.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l)).map((m) => [m.id, m]));
+  return calls.map(([name], i) => {
+    const m = byId.get(i + 1);
+    assert.ok(m && m.result, `${name}: no tools/call result: ${JSON.stringify(m)}`);
+    return { status: m.result.isError ? 1 : 0, stdout: m.result.content[0].text, stderr: r.stderr };
+  });
 }
 
 test("apex-tools-mcp.mjs and shell entry exist", () => {
@@ -552,19 +585,25 @@ test("apex_select_specs files plans a hypothetical change; paths stay repo-relat
   const argv = JSON.parse(r.stdout).argv;
   assert.equal(argv[argv.indexOf("--files") + 1], "js/ui/hud.js,css/hud.css", argv);
   assert.deepEqual(argv.filter((a) => a === "--since"), [], argv);
-  for (const bad of [["/etc/passwd"], ["../x.js"], ["a.js,b.js"]]) {
-    assert.equal(JSON.parse(callCli("apex_select_specs", { dryRun: true, files: bad }).stdout).error, "bad_args", bad);
+  const bads = [["/etc/passwd"], ["../x.js"], ["a.js,b.js"]];
+  const replies = callMany(bads.map((files) => ["apex_select_specs", { dryRun: true, files }]));
+  for (const [i, bad] of bads.entries()) {
+    assert.equal(JSON.parse(replies[i].stdout).error, "bad_args", bad);
   }
 });
 
 test("a capitalised circuit id is taken as the lowercase id; catalog filter narrows the general catalog", () => {
-  const shot = JSON.parse(callCli("apex_shot", { dryRun: true, track: "Monza" }).stdout);
+  const [shotR, typoR, catR, nopeR] = callMany([
+    ["apex_shot", { dryRun: true, track: "Monza" }], ["apex_shot", { dryRun: true, track: "Monzaa" }],
+    ["apex_catalog", { filter: "monza" }], ["apex_nope", {}],
+  ]);
+  const shot = JSON.parse(shotR.stdout);
   assert.ok(shot.argv.some((a) => a === "monza"), shot.argv);
-  assert.equal(JSON.parse(callCli("apex_shot", { dryRun: true, track: "Monzaa" }).stdout).error, "bad_args");
-  const cat = JSON.parse(callCli("apex_catalog", { filter: "monza" }).stdout);
+  assert.equal(JSON.parse(typoR.stdout).error, "bad_args");
+  const cat = JSON.parse(catR.stdout);
   assert.deepEqual(cat.tracks, ["monza"]);
   assert.deepEqual(cat.cams, []);
-  assert.equal(JSON.parse(callCli("apex_nope", {}).stdout).fix.split(" ")[0], "apex_help");
+  assert.equal(JSON.parse(nopeR.stdout).fix.split(" ")[0], "apex_help");
 });
 
 test("apex_select_specs without since → bad_args", () => {
@@ -623,8 +662,10 @@ test("tree pins: graph-parity needs base; a retired wrap is unknown", () => {
   assert.equal(JSON.parse(gpMiss.stdout).error, "bad_args");
 
   // A trimmed wrap must be refused as unknown, not silently routed to a CLI (2026-09 and 2026-11-03 trims alike).
-  for (const name of ["apex_verify_track", "apex_rotate_markings_check", "apex_track_audit", "apex_car_audit", "apex_locations", "apex_profile_query", "apex_diagnostics", "apex_codex_control", "apex_codex_agents", "apex_inbox_sync"]) {
-    const gone = callCli(name, { dryRun: true, id: "monza" });
+  const retired = ["apex_verify_track", "apex_rotate_markings_check", "apex_track_audit", "apex_car_audit", "apex_locations", "apex_profile_query", "apex_diagnostics", "apex_codex_control", "apex_codex_agents", "apex_inbox_sync"];
+  const goneAll = callMany(retired.map((name) => [name, { dryRun: true, id: "monza" }]));
+  for (const [i, name] of retired.entries()) {
+    const gone = goneAll[i];
     assert.equal(gone.status, 1, name);
     assert.equal(JSON.parse(gone.stdout).error, "unknown_tool", name);
   }
@@ -676,15 +717,15 @@ test("apex_frame_report: tree tool, validated track / u / frames / shots, never 
     [{ track: "monza", shots: "scratch" }, "path_escaped", /artifacts\/ or scratch\//],
     [{ track: "monza", shots: "scratch/frame-report-test-missing.json" }, "bad_args", /not found/],
   ];
-  for (const [args, error, msg] of refused) {
-    const r = callCli("apex_frame_report", { dryRun: true, ...args });
+  const replies = callMany([...refused.map(([args]) => args), { track: "monza", target: "deploy" }].map((args) => ["apex_frame_report", { dryRun: true, ...args }]));
+  for (const [i, [args, error, msg]] of refused.entries()) {
+    const r = replies[i];
     assert.equal(r.status, 1, `${JSON.stringify(args)} should be refused: ${r.stdout}`);
     const b = body(r);
     assert.equal(b.error, error, JSON.stringify(args));
     assert.match(b.message, msg, JSON.stringify(args));
   }
-  const gone = callCli("apex_frame_report", { dryRun: true, track: "monza", target: "deploy" });
-  assert.equal(body(gone).error, "tree_only");
+  assert.equal(body(replies.at(-1)).error, "tree_only");
 
   // A shots file under scratch/ is passed through (absolute); a symlink out of
   // scratch/ is refused once resolved.
@@ -717,7 +758,6 @@ test("committed catalog JSON matches tools/list and never binds 0.0.0.0", () => 
 });
 
 test("serve-http /healthz and /mcp stay on loopback", async () => {
-  const { spawn } = await import("node:child_process");
   const child = spawn(process.execPath, [MCP, "serve-http"], {
     env: { ...process.env, APEX_MCP_HTTP_PORT: "0", APEX_MCP_MOCK: "1" },
     cwd: ROOT,
@@ -953,7 +993,6 @@ test("a live Node-only test-bg group does not impersonate Playwright", () => {
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
   // Server MUST be a sibling process. spawnSync(MCP) blocks this event loop,
   // so an in-process http.Server cannot answer the occupancy probe.
-  const { spawn } = await import("node:child_process");
   const child = spawn(
     process.execPath,
     [
@@ -1064,14 +1103,22 @@ test("real results of the fast tree tools conform to their advertised outputSche
 
 test("all advertised schemas reject unknown keys; argument shapes, enums and bounds are enforced", () => {
   const listed = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }])[0].result.tools;
-  for (const tool of listed) {
+  // One serve process answers every case; replies carry the CLI's exit status (callMany).
+  const unknownKey = callMany(listed.map((tool) => [tool.name, { dryRun: true, unsupported: true }]));
+  for (const [i, tool] of listed.entries()) {
     assert.equal(tool.inputSchema.additionalProperties, false, tool.name);
-    const r = callCli(tool.name, { dryRun: true, unsupported: true });
+    const r = unknownKey[i];
     assert.equal(r.status, 1, tool.name);
     assert.equal(JSON.parse(r.stdout).error, "bad_args", tool.name);
   }
+  // A non-object is -32602 on serve (the stdio test) but bad_args + exit 1 on the CLI: these three stay on callCli.
+  for (const [name, args] of [["apex_pick_tests", null], ["apex_pick_tests", []], ["apex_status", 2]]) {
+    const r = callCli(name, args);
+    assert.equal(r.status, 1, `${name}: ${r.stdout} ${r.stderr}`);
+    assert.equal(JSON.parse(r.stdout).error, "bad_args", `${name}: ${r.stdout}`);
+    assert.doesNotMatch(r.stderr, /TypeError|uncaught/i);
+  }
   const invalid = [
-    ["apex_pick_tests", null], ["apex_pick_tests", []], ["apex_status", 2],
     ["apex_pick_tests", { files: "js/car/parts.js" }], ["apex_pick_tests", { files: [12] }],
     ["apex_pick_tests", { staged: "false" }], ["apex_status", { dryRun: "false" }],
     ["apex_eval", { track: "unknown" }], ["apex_garage", { op: "bogus" }],
@@ -1084,8 +1131,8 @@ test("all advertised schemas reject unknown keys; argument shapes, enums and bou
     ["apex_pick_tests", { files: Array(257).fill("js/car/parts.js") }],
     ["apex_pick_tests", JSON.parse('{"__proto__":{}}')],
   ];
-  for (const [name, args] of invalid) {
-    const r = callCli(name, args);
+  for (const [i, r] of callMany(invalid).entries()) {
+    const [name] = invalid[i];
     assert.equal(r.status, 1, `${name}: ${r.stdout} ${r.stderr}`);
     assert.equal(JSON.parse(r.stdout).error, "bad_args", `${name}: ${r.stdout}`);
     assert.doesNotMatch(r.stderr, /TypeError|uncaught/i);
@@ -1093,7 +1140,7 @@ test("all advertised schemas reject unknown keys; argument shapes, enums and bou
 });
 
 test("positional values cannot replace pinned CLI flags", () => {
-  for (const [name, args] of [
+  const flagLike = [
     ["apex_graph_parity", { base: "HEAD", id: "--all" }],
     ["apex_graph_parity", { base: "--all", id: "monza" }],
     ["apex_pick_tests", { files: ["--since", "HEAD"] }],
@@ -1101,12 +1148,13 @@ test("positional values cannot replace pinned CLI flags", () => {
     ["apex_eval", { expr: "--backend=webgpu" }],
     ["apex_garage", { op: "open", team: "--out" }],
     ["apex_agent", { detail: "--url" }],
-  ]) {
-    const r = callCli(name, { ...args, dryRun: true });
+  ];
+  const res = callMany([...flagLike, ["apex_eval", { expr: "-1" }]].map(([name, args]) => [name, { ...args, dryRun: true }]));
+  for (const r of res.slice(0, -1)) {
     assert.equal(r.status, 1, r.stdout);
     assert.equal(JSON.parse(r.stdout).error, "bad_args");
   }
-  assert.equal(callCli("apex_eval", { dryRun: true, expr: "-1" }).status, 0);
+  assert.equal(res.at(-1).status, 0);
 });
 
 test("output preflight resolves existing and nearest ancestors without creating paths", () => {
@@ -1118,13 +1166,14 @@ test("output preflight resolves existing and nearest ancestors without creating 
     fs.symlinkSync(outside, path.join(dir, "escape"));
     fs.symlinkSync(path.join(outside, "file.png"), path.join(dir, "file.png"));
     fs.symlinkSync(path.join(outside, "missing"), path.join(dir, "dangling"));
-    for (const out of [path.join(dir, "escape", "nested", "new.png"), path.join(dir, "file.png"), path.join(dir, "dangling", "new.png")]) {
-      const r = callCli("apex_shot", { dryRun: true, out });
+    const safe = path.join(dir, "not-created", "new.png");
+    const outs = [path.join(dir, "escape", "nested", "new.png"), path.join(dir, "file.png"), path.join(dir, "dangling", "new.png"), safe];
+    const res = callMany(outs.map((out) => ["apex_shot", { dryRun: true, out }]));
+    for (const r of res.slice(0, -1)) {
       assert.equal(r.status, 1, r.stdout);
       assert.ok(["path_escaped", "bad_args"].includes(JSON.parse(r.stdout).error));
     }
-    const safe = path.join(dir, "not-created", "new.png");
-    assert.equal(callCli("apex_shot", { dryRun: true, out: safe }).status, 0);
+    assert.equal(res.at(-1).status, 0);
     assert.equal(fs.existsSync(path.dirname(safe)), false);
     assert.equal(fs.readFileSync(path.join(outside, "file.png"), "utf8"), "untouched");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); }
@@ -1145,13 +1194,16 @@ test("read-only framing refuses executable shot sources; legacy literals require
     assert.deepEqual(readShots(legacy, { trustedJs: true }), [shot]);
     assert.throws(() => readShots(malicious), /JSON data/);
     assert.equal(globalThis.__apexFrameSurveyExecuted, undefined);
-    for (const shots of [legacy, malicious]) {
-      const r = callCli("apex_frame_report", { dryRun: true, track: "monza", shots });
+    const res = callMany([
+      ...[legacy, malicious].map((shots) => ["apex_frame_report", { dryRun: true, track: "monza", shots }]),
+      ["apex_frame_report", { dryRun: true, track: "monza", shots: json, trustedShotsJs: true }],
+    ]);
+    for (const r of res.slice(0, 2)) {
       assert.equal(r.status, 1, r.stdout);
       assert.equal(JSON.parse(r.stdout).error, "bad_args");
       assert.match(JSON.parse(r.stdout).message, /JSON/);
     }
-    assert.equal(callCli("apex_frame_report", { dryRun: true, track: "monza", shots: json, trustedShotsJs: true }).status, 1);
+    assert.equal(res[2].status, 1);
     fs.writeFileSync(json, "[{}]");
     assert.throws(() => readShots(json), /no string id/);
     assert.equal(callCli("apex_frame_report", { dryRun: true, track: "monza", shots: json }).status, 1);
@@ -1178,12 +1230,11 @@ test("stdio survives null/scalar/batch/malformed envelopes and invalid arguments
 });
 
 test("doctor wrapper pins inspection only and rejects caller-supplied command/root/catalog", () => {
-  const r = callCli("apex_doctor", { dryRun: true });
+  const keys = ["root", "catalog", "command", "install", "url"];
+  const [r, ...refused] = callMany([["apex_doctor", { dryRun: true }], ...keys.map((key) => ["apex_doctor", { dryRun: true, [key]: "untrusted" }])]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.stdout).argv.slice(1), [path.join(ROOT, "tools/check/doctor.mjs"), "--tree", "--json"]);
-  for (const key of ["root", "catalog", "command", "install", "url"]) {
-    assert.equal(callCli("apex_doctor", { dryRun: true, [key]: "untrusted" }).status, 1, key);
-  }
+  for (const [i, key] of keys.entries()) assert.equal(refused[i].status, 1, key);
 });
 
 test("probe backend and wait errors fail before dispatch; integer boundary plans remain exact", () => {
@@ -1377,18 +1428,20 @@ test("runSpawn never blocks, and a cancel or timeout kills the child's process g
 
 test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad input", () => {
   const body = (r) => JSON.parse(r.stdout);
-  const ok = (name, args, re) => {
-    const r = callCli(name, { dryRun: true, ...args });
+  // ok/bad queue a call and its check; every call then runs in ONE serve process (callMany) and the checks
+  // run in order. `then` gets the ok body for its extra assertions.
+  const queued = [];
+  const ok = (name, args, re, then) => queued.push([[name, { dryRun: true, ...args }], (r) => {
     assert.equal(r.status, 0, `${name} ${JSON.stringify(args)}: ${r.stdout}${r.stderr}`);
     const b = body(r);
     if (re) assert.match(JSON.stringify(b.argv ?? b.command), re, name);
-    return b;
-  };
-  const bad = (name, args, code = "bad_args") => {
-    const b = body(callCli(name, args));
+    if (then) then(b);
+  }]);
+  const bad = (name, args, code = "bad_args") => queued.push([[name, args], (r) => {
+    const b = body(r);
     assert.equal(b.ok, false, `${name} ${JSON.stringify(args)} should refuse`);
     assert.equal(b.error, code, `${name} ${JSON.stringify(args)}: ${b.message}`);
-  };
+  }]);
   ok("apex_track", { op: "open", track: "spa" }, /track-session\.mjs","--serve","--track","spa","--out",".*artifacts\/track-session\/spa/);
   bad("apex_track", { op: "open", track: "atlantis" });
   bad("apex_track", { op: "open", track: "spa", out: "/tmp/x" }, "path_escaped");
@@ -1396,9 +1449,10 @@ test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad
   bad("apex_track", { op: "shot", frac: 2 });
   bad("apex_track", { op: "shot" }, "track_not_open");
   ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
-  const matrix = ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
-  assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
-  assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
+  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/, (matrix) => {
+    assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
+    assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
+  });
   ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
   ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
   bad("apex_job_start", { kind: "rm_rf" });
@@ -1411,14 +1465,16 @@ test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
   // apex_unit_test: one file under tests/unit/, optional --test-name-pattern.
-  const unit = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" });
-  assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/);
-  const pat = ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs", pattern: "HELMET" });
-  assert.match(JSON.stringify(pat.argv), /"--test","--test-name-pattern","HELMET","tests\/unit\/hud-layout\.test\.mjs"\]$/);
+  ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs" }, null,
+    (unit) => assert.match(JSON.stringify(unit.argv), /"--test","tests\/unit\/hud-layout\.test\.mjs"\]$/));
+  ok("apex_unit_test", { file: "tests/unit/hud-layout.test.mjs", pattern: "HELMET" }, null,
+    (pat) => assert.match(JSON.stringify(pat.argv), /"--test","--test-name-pattern","HELMET","tests\/unit\/hud-layout\.test\.mjs"\]$/));
   bad("apex_unit_test", { file: "tests/specs/camera.spec.js" });
   bad("apex_unit_test", { file: "tests/unit/" + "no-such-file.test.mjs" });   // a missing file is refused (docs-integrity: not a path literal)
   bad("apex_unit_test", { file: "../etc/passwd" });
   bad("apex_unit_test", {});
+  const replies = callMany(queued.map(([call]) => call));
+  queued.forEach(([, check], i) => check(replies[i]));
   const src = fs.readFileSync(MCP, "utf8");
   for (const n of ["apex_track", "apex_ui_fit", "apex_ui_shot"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "browser"`), `${n} takes the browser lock`);
   for (const n of ["apex_job_start", "apex_job_status", "apex_job_cancel"]) assert.match(src, new RegExp(`name: "${n}",\\s*week: 7,\\s*kind: "tree"`), `${n} is a tree tool`);
@@ -1597,10 +1653,12 @@ test("shot-survey --plan-json carries cams into the plan", () => {
 // argv the server built and pinned — never one a JSON caller supplies.
 test("hud_shot / hud_survey jobs take a server-pinned argv only", async () => {
   const body = (r) => JSON.parse(r.stdout);
-  for (const kind of ["hud_shot", "hud_survey"]) {
-    const bare = body(callCli("apex_job_start", { dryRun: true, kind }));
+  const kinds = ["hud_shot", "hud_survey"];
+  const replies = callMany(kinds.flatMap((kind) => [["apex_job_start", { dryRun: true, kind }], ["apex_job_start", { dryRun: true, kind, _argv: ["/bin/sh", "-c", "id"] }]]));
+  for (const [i, kind] of kinds.entries()) {
+    const bare = body(replies[2 * i]);
     assert.equal(bare.error, "bad_args", `${kind} without a pinned argv must refuse`);
-    const smuggled = body(callCli("apex_job_start", { dryRun: true, kind, _argv: ["/bin/sh", "-c", "id"] }));
+    const smuggled = body(replies[2 * i + 1]);
     assert.equal(smuggled.error, "bad_args", `${kind} must reject a caller argv`);
   }
   const { createExtras, HUD_JOB_ARGV, JOB_KINDS } = await import("../../tools/mcp/apex-extras.mjs");
@@ -1621,35 +1679,48 @@ test("hud_shot / hud_survey jobs take a server-pinned argv only", async () => {
 
 test("apex_graph_parity all:true routes to the graph_parity_all job, never the 180 s spawn", () => {
   const body = (r) => JSON.parse(r.stdout);
-  const all = callCli("apex_graph_parity", { dryRun: true, base: "HEAD~1", all: true });
+  const badJobs = [{ kind: "graph_parity_all" }, { kind: "graph_parity_all", base: "--output=/x" }, { kind: "graph_parity_all", base: "a b" }];
+  const [all, jobReply, ...rest] = callMany([
+    ["apex_graph_parity", { dryRun: true, base: "HEAD~1", all: true }],
+    ["apex_job_start", { dryRun: true, kind: "graph_parity_all", base: "origin/main" }],
+    ...badJobs.map((args) => ["apex_job_start", { dryRun: true, ...args }]),
+    ["apex_graph_parity", { dryRun: true, all: true }],
+  ]);
   assert.equal(all.status, 0, all.stdout + all.stderr);
   const b = body(all);
   assert.equal(b.kind, "graph_parity_all");
   assert.equal(b.routed, "apex_job_start graph_parity_all");
   assert.deepEqual(b.env, { BASE: "HEAD~1" });
   assert.match(JSON.stringify(b.argv), /graph-parity\.cjs","--all"\]$/);
-  const job = body(callCli("apex_job_start", { dryRun: true, kind: "graph_parity_all", base: "origin/main" }));
+  const job = body(jobReply);
   assert.deepEqual(job.env, { BASE: "origin/main" });
-  for (const args of [{ kind: "graph_parity_all" }, { kind: "graph_parity_all", base: "--output=/x" }, { kind: "graph_parity_all", base: "a b" }]) {
-    const r = body(callCli("apex_job_start", { dryRun: true, ...args }));
+  for (const [i, args] of badJobs.entries()) {
+    const r = body(rest[i]);
     assert.equal(r.error, "bad_args", JSON.stringify(args));
   }
-  assert.equal(body(callCli("apex_graph_parity", { dryRun: true, all: true })).error, "bad_args", "base stays required");
+  assert.equal(body(rest.at(-1)).error, "bad_args", "base stays required");
 });
 
 test("apex_track shot carries el and h: eye pitch / eye height, orbit aim height", () => {
   const body = (r) => JSON.parse(r.stdout);
-  const eye = body(callCli("apex_track", { dryRun: true, op: "shot", frac: 0.523, cam: "eye", el: -12, h: 206 }));
+  const bads = [{ h: 5000 }, { h: -500 }, { h: "206" }, { el: 120 }, { dist: 0 }, { az: 1e6 }];
+  const [eyeReply, orbitReply, ...rest] = callMany([
+    ["apex_track", { dryRun: true, op: "shot", frac: 0.523, cam: "eye", el: -12, h: 206 }],
+    ["apex_track", { dryRun: true, op: "shot", frac: 0.523, cam: "orbit", el: 15, dist: 120, h: 206 }],
+    ...bads.map((bad) => ["apex_track", { dryRun: true, op: "shot", ...bad }]),
+    ["apex_track", { op: "shot", h: 10 }],
+  ]);
+  const eye = body(eyeReply);
   assert.equal(eye.ok, true, JSON.stringify(eye));
   assert.equal(eye.command.el, -12);
   assert.equal(eye.command.h, 206);
-  const orbit = body(callCli("apex_track", { dryRun: true, op: "shot", frac: 0.523, cam: "orbit", el: 15, dist: 120, h: 206 }));
+  const orbit = body(orbitReply);
   assert.deepEqual([orbit.command.cam, orbit.command.h, orbit.command.dist], ["orbit", 206, 120]);
-  for (const bad of [{ h: 5000 }, { h: -500 }, { h: "206" }, { el: 120 }, { dist: 0 }, { az: 1e6 }]) {
-    const r = body(callCli("apex_track", { dryRun: true, op: "shot", ...bad }));
+  for (const [i, bad] of bads.entries()) {
+    const r = body(rest[i]);
     assert.equal(r.error, "bad_args", JSON.stringify(bad));
   }
-  assert.equal(body(callCli("apex_track", { op: "shot", h: 10 })).error, "track_not_open", "a real shot still needs a session");
+  assert.equal(body(rest.at(-1)).error, "track_not_open", "a real shot still needs a session");
   // The page half: h reaches eyeAt / orbit, an explicit el re-aims eye through view({eye,yaw,pitch}).
   const ts = fs.readFileSync(path.join(ROOT, "tools/shot/track-session.mjs"), "utf8");
   assert.match(ts, /a\.eyeAt\(o\.frac, o\.lat \|\| 0, o\.h == null \? 2\.5 : o\.h, o\.lookFrac\)/);
@@ -1831,7 +1902,6 @@ test("serve-http answers /healthz and a JSON-RPC tools/list on loopback, then st
   const net = await import("node:net");
   const http = await import("node:http");
   const port = await new Promise((res, rej) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); s.on("error", rej); });
-  const { spawn } = await import("node:child_process");
   const child = spawn(process.execPath, [MCP, "serve-http"], { cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1", APEX_MCP_HTTP_PORT: String(port) }, stdio: ["ignore", "ignore", "pipe"] });
   const req = (method, urlPath, body) => new Promise((res, rej) => {
     const r = http.request({ host: "127.0.0.1", port, path: urlPath, method, headers: body ? { "Content-Type": "application/json" } : {} }, (m) => {
@@ -1900,17 +1970,17 @@ test("shot surveys take the authored location ids shot-survey.mjs --list-locatio
   const { listSurveyLocations } = await import("../../tools/lib/survey-scenarios.mjs");
   assert.ok(listSurveyLocations("monaco").some((l) => l.id === "monaco/turn-1"));
   assert.ok(listSurveyLocations("spa").some((l) => l.id === "spa/eau-rouge" && l.aliases.includes("eau rouge")));
-  const plan = JSON.parse(callCli("apex_shot_survey", { track: "monaco", location: "monaco/turn-1",
-    angles: ["apex"], dryRun: true }).stdout);
+  const [plan, batch, comparison] = callMany([
+    ["apex_shot_survey", { track: "monaco", location: "monaco/turn-1", angles: ["apex"], dryRun: true }],
+    ['apex_shot_survey', { tracks: ['monaco', 'spa'], locations: ['monaco/turn-1', 'spa/eau-rouge'], angles: ['overview'], dryRun: true }],
+    ['apex_shot_survey', { track: 'monaco', location: 'monaco/turn-1', profile: 'comparison', dryRun: true }],
+  ]).map((r) => JSON.parse(r.stdout));
   assert.equal(plan.shots[0].location, "monaco/turn-1");
   assert.equal(plan.options.profile, 'preview');
-  const batch = JSON.parse(callCli('apex_shot_survey', { tracks: ['monaco', 'spa'],
-    locations: ['monaco/turn-1', 'spa/eau-rouge'], angles: ['overview'], dryRun: true }).stdout);
   assert.equal(batch.ok, true);
   assert.equal(batch.plans.spa.shots[0].location, 'spa/eau-rouge');
   assert.equal(batch.plans.monaco.shots[0].location, 'monaco/turn-1');
   assert.equal(batch.options.profile, 'preview');
-  const comparison = JSON.parse(callCli('apex_shot_survey', { track: 'monaco', location: 'monaco/turn-1', profile: 'comparison', dryRun: true }).stdout);
   assert.equal(comparison.options.profile, 'comparison');
 });
 
@@ -1941,30 +2011,38 @@ test('custom survey collection flows through the location catalog and async job 
 
 // A misspelled key used to hide behind "tool needs <required>" / the anyOf message; the typo is the likelier mistake.
 test("a misspelled key is reported with a did-you-mean before the missing required argument", () => {
-  const msg = (name, args) => { const b = JSON.parse(callCli(name, args).stdout); return `${b.message} | ${b.fix}`; };
-  assert.match(msg("apex_unit_test", { fil: "x" }), /unknown argument fil \| Did you mean "file"\?/);
-  assert.match(msg("apex_graph_parity", { bse: "HEAD", id: "monza" }), /unknown argument bse \| Did you mean "base"\?/);
-  assert.match(msg("apex_shot_survey", { trak: "monza" }), /unknown argument trak \| Did you mean "track"\?/);
+  const [fil, bse, trak, none] = callMany([
+    ["apex_unit_test", { fil: "x" }], ["apex_graph_parity", { bse: "HEAD", id: "monza" }],
+    ["apex_shot_survey", { trak: "monza" }], ["apex_unit_test", {}],
+  ]).map((r) => { const b = JSON.parse(r.stdout); return `${b.message} | ${b.fix}`; });
+  assert.match(fil, /unknown argument fil \| Did you mean "file"\?/);
+  assert.match(bse, /unknown argument bse \| Did you mean "base"\?/);
+  assert.match(trak, /unknown argument trak \| Did you mean "track"\?/);
   // No typo: the missing required argument is still named.
-  assert.match(msg("apex_unit_test", {}), /tool needs file \| Pass "file"/);
+  assert.match(none, /tool needs file \| Pass "file"/);
 });
 
 // apex_verify_change_fast is ~10 min (tooling-fast on one job): past the host cap and its own 600 s. It runs as a job.
 test("apex_verify_change_fast routes to a background verify_change_fast job, pinned --fast --json, sync:true opts out", () => {
   const body = (r) => JSON.parse(r.stdout);
-  const job = body(callCli("apex_job_start", { kind: "verify_change_fast", since: "HEAD~1", staged: true, dryRun: true }));
+  // One serve process (APEX_MCP_MOCK=1, as callCli): the real call routes, mock mode starts no process.
+  const [job, flag, plan, routed, sync] = callMany([
+    ["apex_job_start", { kind: "verify_change_fast", since: "HEAD~1", staged: true, dryRun: true }],
+    ["apex_job_start", { kind: "verify_change_fast", since: "--wait", dryRun: true }],
+    ["apex_verify_change_fast", { dryRun: true }],
+    ["apex_verify_change_fast", { since: "HEAD~1" }],
+    ["apex_verify_change_fast", { since: "HEAD~1", sync: true, dryRun: true }],
+  ]).map(body);
   assert.equal(job.ok, true);
   assert.deepEqual(job.argv.slice(1).map((a) => a.replace(/^.*\/tools\//, "tools/")), ["tools/ci/verify-change.mjs", "--fast", "--json", "--since", "HEAD~1", "--staged"]);
   assert.equal(job.browser, false, "a tree job: no browser lock");
-  assert.match(body(callCli("apex_job_start", { kind: "verify_change_fast", since: "--wait", dryRun: true })).message, /may not start with a CLI flag|since must be a git ref/);
+  assert.match(flag.message, /may not start with a CLI flag|since must be a git ref/);
   // The tool: dryRun keeps its plan; a real call routes (mock mode: no process is started).
-  assert.equal(body(callCli("apex_verify_change_fast", { dryRun: true })).out.plan, true);
-  const routed = body(callCli("apex_verify_change_fast", { since: "HEAD~1" }, { APEX_MCP_MOCK: "1" }));
+  assert.equal(plan.out.plan, true);
   assert.equal(routed.routed, "apex_job_start verify_change_fast", JSON.stringify(routed));
   assert.equal(routed.kind, "verify_change_fast");
   assert.match(routed.hint, /apex_job_status/);
   // sync:true is still accepted (it blocks); its dryRun shows the same pinned argv.
-  const sync = body(callCli("apex_verify_change_fast", { since: "HEAD~1", sync: true, dryRun: true }));
   assert.ok(sync.argv.includes("--fast") && sync.argv.includes("--json") && !sync.argv.includes("--wait"));
 });
 
@@ -2432,25 +2510,29 @@ test("servers boot with no node_modules: static import graphs (apex-tools, js-de
 // Semantic inspection wrappers: browser-free contract tests, with injected CLI
 // execution. A browser pass is owned by the parent and is not implied here.
 test('UI inspector schema bounds sizes, selectors, flags and local target', () => {
-  for (const args of [
+  const badArgs = [
     { viewports: Array(9).fill({ width: 844, height: 390 }) },
     { safe: [0, 1, 2] }, { safe: [0, 0, 201, 0] },
     { selector: 'x'.repeat(513) }, { screen: 'not-a-screen' },
     { boot: { width: 239, height: 390 } }, { flags: '--help' },
     { roundtrip: true },
-  ]) {
-    const r = callCli('apex_ui_inspect', { ...args, dryRun: true });
+  ];
+  const offTree = [{ target: 'deploy' }, { url: 'https://example.com' }, { out: '../escape' }];
+  const good = { screen: 'title', selector: '--help', styles: '#title', viewports: [{ width: 844, height: 390 }], touch: true, safe: [0, 59, 21, 59], roundtrip: true };
+  const replies = callMany([...badArgs, good, ...offTree].map((args) => ['apex_ui_inspect', { ...args, dryRun: true }]));
+  for (const [i, args] of badArgs.entries()) {
+    const r = replies[i];
     assert.equal(r.status, 1, JSON.stringify(args));
     assert.equal(JSON.parse(r.stdout).error, 'bad_args');
   }
-  const r = callCli('apex_ui_inspect', { screen: 'title', selector: '--help', styles: '#title', viewports: [{ width: 844, height: 390 }], touch: true, safe: [0, 59, 21, 59], roundtrip: true, dryRun: true });
+  const r = replies[badArgs.length];
   assert.equal(r.status, 0, r.stderr);
   const b = JSON.parse(r.stdout);
   assert.ok(b.argv.includes('--selector=--help'), 'selector cannot turn into CLI option');
   assert.ok(b.argv.includes('844x390'));
   assert.equal(b.lockOwner, 'tools/ui/explorer.mjs');
-  for (const args of [{ target: 'deploy' }, { url: 'https://example.com' }, { out: '../escape' }]) {
-    assert.equal(callCli('apex_ui_inspect', { ...args, dryRun: true }).status, 1);
+  for (const [i, args] of offTree.entries()) {
+    assert.equal(replies[badArgs.length + 1 + i].status, 1, JSON.stringify(args));
   }
 });
 
@@ -2513,10 +2595,10 @@ test('saved UI diffs are browser free, reject incompatible or oversized evidence
 });
 
 test('named UI mission plans cannot supply actions or unbounded capture budgets', () => {
-  for (const args of [{ mission: 'anything' }, { mission: 'first-race', maxShots: 6 }, { mission: 'first-race', timeoutSeconds: 181 }, { mission: 'first-race', actions: [] }]) {
-    assert.equal(callCli('apex_ui_mission_plan', { ...args, dryRun: true }).status, 1);
-  }
-  const r = callCli('apex_ui_mission_plan', { mission: 'first-race', maxShots: 2, timeoutSeconds: 60, dryRun: true });
+  const refused = [{ mission: 'anything' }, { mission: 'first-race', maxShots: 6 }, { mission: 'first-race', timeoutSeconds: 181 }, { mission: 'first-race', actions: [] }];
+  const replies = callMany([...refused, { mission: 'first-race', maxShots: 2, timeoutSeconds: 60 }].map((args) => ['apex_ui_mission_plan', { ...args, dryRun: true }]));
+  for (const [i, args] of refused.entries()) assert.equal(replies[i].status, 1, JSON.stringify(args));
+  const r = replies.at(-1);
   assert.equal(r.status, 0, r.stderr);
   const b = JSON.parse(r.stdout);
   assert.equal(b.planOnly, true); assert.equal(b.written, false);
@@ -2525,18 +2607,24 @@ test('named UI mission plans cannot supply actions or unbounded capture budgets'
 });
 
 test('garage plan uses canonical frame/paint/team selectors and explicit budgets without a browser', () => {
-  for (const args of [
+  const refused = [
     { team: 'invented' }, { frames: ['unknown'] },
     { frames: ['spineTop', 'spineSide'], maxShots: 1 },
     { field: 'spineLogo', options: ['unknown'] },
     { field: 'spineLogo' }, { maxShots: 17 }, { budgetSeconds: 181 },
-  ]) assert.equal(callCli('apex_garage_plan', { ...args, dryRun: true }).status, 1, JSON.stringify(args));
-  const r = callCli('apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], maxShots: 1, budgetSeconds: 180 });
+  ];
+  const replies = callMany([
+    ...refused.map((args) => ['apex_garage_plan', { ...args, dryRun: true }]),
+    ['apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], maxShots: 1, budgetSeconds: 180 }],
+    ['apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], field: 'finish', options: ['gloss', 'chrome'], maxShots: 2, budgetSeconds: 180 }],
+  ]);
+  for (const [i, args] of refused.entries()) assert.equal(replies[i].status, 1, JSON.stringify(args));
+  const r = replies.at(-2);
   assert.equal(r.status, 0, r.stderr);
   const b = JSON.parse(r.stdout);
   assert.equal(b.browser, false); assert.equal(b.planOnly, true);
   assert.equal(b.plan.shotCount, 1); assert.equal(b.plan.budget, 180);
-  const gloss = callCli('apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], field: 'finish', options: ['gloss', 'chrome'], maxShots: 2, budgetSeconds: 180 });
+  const gloss = replies.at(-1);
   assert.equal(gloss.status, 0, gloss.stderr + gloss.stdout);
   const finishPlan = JSON.parse(gloss.stdout);
   assert.equal(finishPlan.browser, false); assert.equal(finishPlan.planOnly, true);
@@ -2563,18 +2651,19 @@ test('canonical catalog and car filters integrate with the published MCP schemas
 test('the four diagnostics job kinds stay on apex_job_start (the apex_diagnostics wrap left 2026-11-03)', async () => {
   const { DIAGNOSTIC_JOB_KINDS } = await import('../../tools/mcp/diagnostics-tools.mjs');
   assert.deepEqual([...DIAGNOSTIC_JOB_KINDS], ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']);
-  for (const kind of DIAGNOSTIC_JOB_KINDS) {
-    const run = callCli('apex_job_start', { kind, dryRun: true });
+  const kinds = [...DIAGNOSTIC_JOB_KINDS];
+  const replies = callMany([...kinds, 'shell'].map((kind) => ['apex_job_start', { kind, dryRun: true }]));
+  for (const [i, kind] of kinds.entries()) {
+    const run = replies[i];
     assert.equal(run.status, 0, run.stderr + run.stdout);
     const plan = JSON.parse(run.stdout);
     assert.equal(plan.kind, kind);
     assert.ok(plan.argv.some(s => s.endsWith('/tools/perf/diagnostics.mjs')), 'persistent bounded supervisor owns execution');
   }
-  assert.equal(callCli('apex_job_start', { kind: 'shell', dryRun: true }).status, 1);
+  assert.equal(replies.at(-1).status, 1);
 });
 
 test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
-  const { spawnSync } = await import("node:child_process");
   const r = spawnSync(process.execPath, ["tools/shot/track-session.mjs", "--serve", "--track", "monza", "--output-root", "scratch/none", "--designs", "scratch/none.json"], { encoding: "utf8", timeout: 20000 });
   assert.doesNotMatch(r.stderr, /unknown flag/);
 });
@@ -3168,4 +3257,45 @@ test("MCP concurrency: retrying admission release never replaces uncertain peer 
     assert.equal(fs.readFileSync(file, "utf8"), peer);
     assert.equal(takeJobAdmission(dir, owner, birth), null);
   } finally { fs.renameSync = rename; fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("cold start: the MCP server and its CLI never load Playwright (P8 #4548)", () => {
+  // tools/ui/menu-screens.mjs (imported for listScreenIds) used to require
+  // "playwright" at the top for its device table: ~0.4 s of core bundle on every
+  // `serve`, `help` and CLI `call`, and this file spawns ~150 of them.
+  // Perf hunt P8, #4548.
+  const probe = path.join(os.tmpdir(), `apex-pw-probe-${process.pid}.cjs`);
+  fs.writeFileSync(probe, `process.on("exit", () => {
+    const hit = Object.keys(require.cache).filter((k) => /[\\\\/]playwright(-core)?[\\\\/]/.test(k));
+    if (hit.length) process.stderr.write("PLAYWRIGHT-LOADED " + hit[0] + "\\n");
+  });\n`);
+  try {
+    const r = spawnSync(process.execPath, ["--require", probe, MCP, "help"], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /PLAYWRIGHT-LOADED/, "apex-tools-mcp help loaded Playwright");
+    // Positive control: the probe does see a Playwright load when one happens.
+    const c = spawnSync(process.execPath, ["--require", probe, "-e", "require('playwright')"], { cwd: ROOT, encoding: "utf8", timeout: 60000 });
+    assert.match(c.stderr, /PLAYWRIGHT-LOADED/, "the probe must detect a real load");
+  } finally { fs.rmSync(probe, { force: true }); }
+});
+
+test("menu-screens: VIEWPORTS rows read without Playwright until a device config is read", async () => {
+  const m = await import("../../tools/ui/menu-screens.mjs");
+  const names = m.VIEWPORTS.map(([n]) => n);
+  assert.ok(names.includes("ios-iphone-landscape-844"));
+  const row = m.VIEWPORTS.find(([n]) => n === "ios-iphone-landscape-844");
+  const [, cfg, why, inset] = row;
+  assert.deepEqual(cfg.viewport, { width: 844, height: 390 });
+  assert.equal(cfg.isMobile, true, "device descriptor fields are spread in");
+  assert.match(why, /844x390/);
+  assert.deepEqual(inset, { t: 0, r: 47, b: 21, l: 47 });
+  assert.equal(row[1], cfg, "the config is built once");
+});
+
+// Keep LAST: node:test runs this file's top-level tests in order, so this sees
+// every child the file started (P8 #4548: 365 before callMany, 191 after; a
+// --test-name-pattern run counts fewer and passes).
+test("spawn budget: argument checks share one serve process instead of a child per case", () => {
+  const total = SPAWNS.sync + SPAWNS.async;
+  assert.ok(total <= SPAWN_BUDGET, `this file started ${total} child processes (${SPAWNS.sync} sync, ${SPAWNS.async} async; budget ${SPAWN_BUDGET}); batch new argument checks through callMany`);
 });

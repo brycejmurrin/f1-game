@@ -1026,6 +1026,69 @@ test("XrBoot.mountUi: no navigator.xr fetches nothing; an armed VR mode or a pen
   assert.equal(probed, 0);
 });
 
+// #4324: any isSessionSupported call marks the page "webxrdevice", which Chrome
+// will not restore from the back/forward cache. Boots after the first read the
+// stored apex26.xrCaps answer; only SETTINGS (XrBoot.recheck) asks again.
+test("XrBoot.mountUi: a stored apex26.xrCaps answer decides the fetch without probing", async () => {
+  let probed = 0;
+  const xr = { isSessionSupported: async () => { probed++; return true; } };
+  assert.deepEqual(await mountWith({ xr, ls: { "apex26.xrCaps": "0" } }), []);
+  assert.equal((await mountWith({ xr, ls: { "apex26.xrCaps": "1" } })).length, 1);
+  assert.equal(probed, 0, "a stored answer never reaches navigator.xr");
+});
+
+function lazyXrBoot(values, xr) {
+  const ctx = bootXr();
+  const element = () => ({ hidden: false, disabled: false, setAttribute() {}, addEventListener() {}, appendChild() {} });
+  ctx.localStorage = { getItem: (k) => values.get(k) ?? null, setItem: (k, v) => values.set(k, v), removeItem: (k) => values.delete(k) };
+  ctx.navigator = { xr };
+  ctx.document = { readyState: "loading", body: element(), addEventListener() {}, createElement: element };
+  ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-boot.js") });
+  ctx.ApexRoster = { LAZY_XR: ["plan", "opts", "apex", "session", "ui"], LAZY_XR_EDGES: [] };
+  ctx.ScriptLoader = { create: () => ({ load: async () => {
+    for (const name of ["xr-plan", "xr-opts", "apex-xr", "xr-session", "xr-ui"])
+      vm.runInContext(read(`js/xr/${name}.js`).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(`js/xr/${name}.js`) });
+    return true;
+  } }) };
+  return ctx;
+}
+const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+
+test("a later boot with a stored positive answer shows ENTER VR with zero isSessionSupported calls", async () => {
+  let probed = 0;
+  const values = new Map([["apex26.xrCaps", "1"]]);
+  const ctx = lazyXrBoot(values, { isSessionSupported: async () => { probed++; return true; } });
+  ctx.XrBoot.mountUi();
+  await settle();
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false, "ENTER VR still appears");
+  assert.equal(ctx.XROpts.capsVr(), true);
+  assert.equal(probed, 0, "boot never asks navigator.xr once the answer is stored");
+});
+
+test("XrBoot.recheck (SETTINGS) re-asks the headset and rewrites the stored answer both ways", async () => {
+  let answer = true, probed = 0;
+  const values = new Map([["apex26.xrCaps", "0"]]);
+  const ctx = lazyXrBoot(values, { isSessionSupported: async () => { probed++; return answer; } });
+  ctx.XrBoot.mountUi();
+  await settle();
+  assert.equal(probed, 0);
+  assert.equal(typeof ctx.XrSession, "undefined", "a stored no fetches nothing at boot");
+  assert.equal(await ctx.XrBoot.recheck(), true, "a headset plugged in since is found from SETTINGS");
+  assert.equal(probed, 1);
+  assert.equal(values.get("apex26.xrCaps"), "1");
+  assert.equal(ctx.XrSession.isSupported(), true);
+  assert.equal(ctx.XrUi.ensureButton().hidden, false);
+  assert.equal(ctx.XROpts.capsVr(), true);
+  answer = false;
+  assert.equal(await ctx.XrBoot.recheck(), false);
+  assert.equal(values.get("apex26.xrCaps"), "0");
+  assert.equal(ctx.XrSession.isSupported(), false);
+  assert.equal(ctx.XrUi.ensureButton().hidden, true, "the button hides again");
+  assert.equal(ctx.XROpts.capsVr(), false);
+});
+
 
 test("XrInput prefers only a usable left stick and otherwise accepts the right controller", () => {
   const { XrInput } = bootXr();
