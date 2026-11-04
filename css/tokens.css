@@ -557,6 +557,8 @@
      keeps the row's own ink. --faster/--slower are the HUD's existing
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #5fe88a;
+  /* UPGRADE cyan: an owned/upgraded part in the garage (css/carsetup.css), shared with the HUD. */
+  --upgrade: #4df;
   --slower: #ff3b30;
   /* Red as TEXT: --slower is a fill (Lc 40 as ink). Toward --text, so it follows
      the CVD remaps and darkens under LIGHT; Lc >= 60 (apca-timing.test.mjs). */
@@ -733,6 +735,8 @@ body:not(.desktop) {
      slider's 20 % put the 0.55 gap plate at 0.11 alpha — white ink straight
      on a sunlit sky. Below 45 % the slider changes nothing; unset is still 1. */
   --hud-panel-a-eff: max(0.45, var(--hud-panel-a, 1));
+  /* The HUD's one panel plate (timing strip, cluster plates): --look-hud-bg x PANEL OPACITY. */
+  --hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent);
   --ui-compact-brand-scale: min(var(--ui-scale), 1);
   --ui-compact-scale: min(var(--ui-scale), 1.25);
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
