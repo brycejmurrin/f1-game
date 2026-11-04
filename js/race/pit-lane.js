@@ -1134,8 +1134,8 @@ var PitLane = (function () {
     }
 
     /** FIA 2026 SR B5.14.4 (vii): tyres may be changed under a red flag. One free set for this car, fitted by the
-     *  SAME path as a stop (serviceCar) but without a stop: pitStops is untouched, so the plan keeps its numbering and
-     *  replan's `made` fallback reads the longer log. The player's set is their pitNext or AUTO; an AI's is the
+     *  SAME path as a stop (serviceCar) but without a stop: pitStops is untouched (an AI's planned stop it stands in for is
+     *  dropped from the plan below), and replan's `made` fallback reads the longer log. The player's set is their pitNext or AUTO; an AI's is the
      *  plan's next compound (aiClassFor: the weather's tread when the road wants one). */
     function redFlagFit(c) {
       if (!c || !G.tyres || !G.tyres.on()) return false;
@@ -1144,6 +1144,13 @@ var PitLane = (function () {
         setNext(c, G.tyres.classRecord(aiClassFor(c, want, !!c.tyre && (c.tyre.tread || 0) !== want)));
       }
       serviceCar(c);
+      // …and an AI's fit IS its next planned stop (#4938): consume it, or it boxed on lapsAt for the same compound
+      // (replan is held off by lapsOn < 2 near the restart, and never runs for a scripted plan).
+      const plan = !c.human && c.pitPlan, d = c.pitStops || 0;
+      if (plan && plan.seq && plan.stops > d && c.tyre && plan.seq[d + 1] === classOfCode(c.tyre.code)) {
+        plan.seq.splice(d, 1); plan.lapsAt.splice(d, 1); plan.stops--;
+        if (plan.stints) { const at = [0].concat(plan.lapsAt, [G.lapsTarget]); plan.stints = at.slice(1).map((v, i) => Math.max(0, v - at[i])); }
+      }
       return true;
     }
 
