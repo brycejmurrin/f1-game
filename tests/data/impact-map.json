@@ -19607,13 +19607,17 @@
         "tests/unit/service-worker.test.mjs"
       ],
       "onVisible": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "prepareLazyLoad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "render": [
         "tests/unit/a11y-pwa-pass.test.mjs"
+      ],
+      "*": [
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/ui/watch-transport.js": {

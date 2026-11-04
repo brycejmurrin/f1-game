@@ -4,14 +4,14 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 const source = fs.readFileSync(new URL('../../js/ui/update-check.js', import.meta.url), 'utf8');
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-function harness(fetchImpl, abort = true) {
+function harness(fetchImpl, abort = true, opts = {}) {
   let clock = 100, calls = 0, serial = 0;
   const timers = new Map(), signals = [];
   const sb = vm.createContext({ Promise, Number, Date, Object, ...(abort ? { AbortController } : {}),
     setTimeout(fn, ms) { const id = ++serial; timers.set(id, { fn, at: clock + ms }); return id; },
     clearTimeout(id) { timers.delete(id); }, setInterval: () => 1, clearInterval() {}, navigator: {} });
   vm.runInContext(source + ';globalThis.U = UpdateCheck;', sb);
-  const api = sb.U.create({ booted: 100, now: () => clock, fetch: (url, init) => {
+  const api = sb.U.create({ ...opts, booted: 100, now: () => clock, fetch: (url, init) => {
     calls++; signals.push(init.signal); return fetchImpl(calls);
   } });
   return { api, timers, signals, calls: () => calls, async advance(ms) {
@@ -46,4 +46,17 @@ test('successful and rejected reads release their deadline', async () => {
     assert.equal(await h.api.check(true), !fail);
     assert.equal(h.timers.size, 0); assert.equal(h.api.state().checking, false); h.api.stop();
   }
+});
+test('a boot whose shell guard did not report success re-checks after the 30 s backoff, not 10 minutes (#4925)', async () => {
+  const newer = () => Promise.resolve({ ok: true, json: async () => ({ build: 105 }) });
+  const failed = harness(newer);
+  await failed.advance(29000); failed.api.onVisible(); await flush();
+  assert.equal(failed.calls(), 0);
+  await failed.advance(2000); failed.api.onVisible(); await flush();
+  assert.equal(failed.calls(), 1); assert.equal(failed.api.state().ready, 105); failed.api.stop();
+  const ok = harness(newer, true, { guardOk: 1 });
+  await ok.advance(31000); ok.api.onVisible(); await flush();
+  assert.equal(ok.calls(), 0, 'a guard that read version.json keeps the 10-minute throttle');
+  await ok.advance(10 * 60 * 1000); ok.api.onVisible(); await flush();
+  assert.equal(ok.calls(), 1); ok.api.stop();
 });

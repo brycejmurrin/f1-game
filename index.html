@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-AeLreRKLyHmzWVUwCsEdK9LF4XrDWEj5IOeI0xAa2jo=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-5Gn6TjBXLR8q/qU9pcWhQLPxwxHLHdNmP/WZh/OUy6k=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-AeLreRKLyHmzWVUwCsEdK9LF4XrDWEj5IOeI0xAa2jo=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -252,7 +252,9 @@
     fetch("version.json?_=" + Date.now(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (v) {
-        if (!v || !v.build || v.build <= loaded) return;
+        if (!v || !v.build) return;
+        window.__apexGuardOk = 1;  // UpdateCheck's throttle starts now, not 30 s on (#4925)
+        if (v.build <= loaded) return;
         var key = "apex26.shellReloadedTo";
         if (sessionStorage.getItem(key) === String(v.build)) return;  // already tried this build
         sessionStorage.setItem(key, String(v.build));

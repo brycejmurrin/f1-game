@@ -2,8 +2,8 @@
 const UpdateCheck = (function () {
   "use strict";
 
-  // Re-read version.json when the tab comes back, at most this often. The
-  // boot guard has just read it, so the clock starts at boot.
+  // Re-read version.json when the tab comes back, at most this often. The clock
+  // starts at boot only if index.html's guard read it (window.__apexGuardOk, #4925).
   const THROTTLE_MS = 10 * 60 * 1000;
   // Bounded wait for the store's mirror flush before reloading: an update must
   // never hang on a stuck IndexedDB, and pagehide flushes again anyway.
@@ -12,10 +12,8 @@ const UpdateCheck = (function () {
   // after it must not reload a second time for the same build.
   const RELOAD_KEY = "apex26.shellReloadedTo";
   const FOLLOW_MS = 2000;
-  // A version.json read that FAILED (offline, a deploy window, a bad body) is
-  // asked again after this, not after the full throttle: the throttle exists to
-  // spare a successful check, and counting a failed one against it hid an
-  // update for ten minutes on exactly the flaky link that dropped the request.
+  // A FAILED version.json read (here or the boot guard's) is retried after this,
+  // not the throttle, which only spares a successful check.
   const FAIL_BACKOFF_MS = 30 * 1000;
   const CHECK_WAIT_MS = 15000;
   // What the player reads when a lazy load was refused to avoid mixing builds.
@@ -62,7 +60,8 @@ const UpdateCheck = (function () {
     const inRace = o.inRace || (() => false);
     const chip = o.chip || (() => null);
     let generationRequest = null, generationController = null, generation = 0;
-    let lastCheck = now();
+    const guardOk = o.guardOk != null ? o.guardOk : typeof window !== "undefined" && window.__apexGuardOk;
+    let lastCheck = guardOk ? now() : now() - THROTTLE_MS + FAIL_BACKOFF_MS;
     let ready = 0;
     let inflight = null;
     let follow = 0;   // once ready: re-render on a slow timer, so the chip follows race start / finish
@@ -83,11 +82,8 @@ const UpdateCheck = (function () {
       }
     }
 
-    // A lazy load was REFUSED because it would mix builds (blocked()). The refusal
-    // itself stays — a file asked for as the old build would be answered with the
-    // new one — but it used to be silent: DATA, VS FRIEND, sound and an unvisited
-    // circuit were dead buttons with only a small chip to explain them. Say so,
-    // once per pending build, on the chip the player is already being offered.
+    // A lazy load REFUSED to avoid mixing builds (blocked()) used to be silent:
+    // dead buttons. Say so once per pending build, on the chip already offered.
     function noteRefused() {
       if (!(ready > booted) || refusedFor === ready) return;
       refusedFor = ready;
