@@ -9671,14 +9671,16 @@
         "tests/unit/all-lights-fill.test.mjs"
       ],
       "rankStats": [
-        "tests/unit/frame-lights-rank-cache.test.mjs"
+        "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs"
       ],
       "release": [
         "tests/unit/frame-lights-release.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "resetRankStats": [
-        "tests/unit/frame-lights-rank-cache.test.mjs"
+        "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs"
       ],
       "setFrameLights": [
         "tests/unit/all-lights-fill.test.mjs",
@@ -9686,6 +9688,7 @@
         "tests/unit/frame-lights-rank-cache.test.mjs",
         "tests/unit/frame-lights-shed.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/mirror-lights.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
@@ -9694,6 +9697,7 @@
       ],
       "viewLights": [
         "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/mirror-lights.test.mjs"
       ],
       "*": [
@@ -9723,6 +9727,7 @@
         "tests/unit/light-presets-knob-range.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-sun-scratch.test.mjs",
@@ -9787,6 +9792,7 @@
         "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -9867,6 +9873,7 @@
       "buildTrackLights": [
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
@@ -15155,6 +15162,7 @@
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",

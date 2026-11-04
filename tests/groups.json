@@ -593,6 +593,8 @@
     "tests/unit/light-store-copy.test.mjs",
     "tests/unit/light-store-perchunk-pin.test.mjs",
     "tests/unit/lighting-ab-catalog.test.mjs",
+    "// HUNT-LIGHTING-2026-11-03: pause drops mirror rank; gap-fill side; neon hw||7.",
+    "tests/unit/lighting-hunt-gaps.test.mjs",
     "tests/unit/lighting-reapply.test.mjs",
     "tests/unit/lighting-rebuild.test.mjs",
     "// D·W27b: blend ticks reuse the live sun-colour arrays (no Array.map) and",
