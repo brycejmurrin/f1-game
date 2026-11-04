@@ -910,11 +910,7 @@ function buildSelect(opts) {
       const row = trackTile(t, i, { readOnly: true, active: !seasonComplete && r === rnd });
       if (r < rnd || seasonComplete) row.dataset.done = "1";
       if (!seasonComplete && r === rnd) row.setAttribute("aria-current", "step");
-      row.onclick = () => {
-        const o = els.selTracks.querySelector("[data-tip-open]");
-        if (o && o !== row) o.removeAttribute("data-tip-open");
-        row.toggleAttribute("data-tip-open");
-      };
+      row.onclick = () => { for (const o of els.selTracks.children) o.toggleAttribute("data-tip-open", o === row && !o.hasAttribute("data-tip-open")); };
       const rn = document.createElement("span");
       rn.className = "sur-rnd";
       rn.textContent = "R" + (r + 1);
