@@ -12,6 +12,8 @@
  *   reloadOnceIntoGlx: drop the `!_claimSkipped` gate → "at most once" red
  *   start(): `armed && !skipClaim` → `armed`          → "claim-skip boot" red
  *   GLX tail: drop the probe removeItem               → "refused create" red
+ *   start(): `!!(group && group.length)` → `!!group`  → "empty THREE/WEBGPU group" red
+ *   start(): `!!(group && group.length)` → `true`     → all three "files are gone" red
  *
  * Run: node --test tests/unit/game-boot-claim-fail.test.mjs
  */
@@ -75,3 +77,25 @@ test("a refused create on a live tab disarms the probe and keeps the pick (GLX a
   assert.equal(b.ss.getItem("apex26.gfxBound"), "webgl2", "the live backend is published");
   assert.ok(b.G, "the boot carried on to the G façade");
 });
+
+// A STORED PICK MUST NOT OUTLIVE ITS FILES (#1682 step 2, from gfx-backend-canary's
+// "refused WGX/TLX create" group). With DEFERRED = {} after the 2026-09-03
+// spike-out, the boot armed the probe and then threw inside the script loader on
+// `files.map`; GLX rendered and the next boot's revert cleared the pick, so it
+// self-healed and no test saw it. The opt-in gate resolves the group first.
+for (const [label, pick, deferred] of [
+  ["an empty THREE group", "three", { three: [] }],
+  ["a missing THREE group", "three", { three: undefined }],
+  ["an empty WEBGPU group", "webgpu", { webgpu: [] }],
+]) {
+  test(`a stored pick whose files are gone (${label}) binds GLX without arming or fetching`, async () => {
+    const b = await bootGame({ ls: { [PICK]: pick }, deferred });
+    assert.equal(b.bootError, null, "the boot does not throw");
+    assert.equal(b.initOwners, 0, "the canvas is never offered to the missing backend");
+    assert.deepEqual(b.creates, [], "no create() for files that are not there");
+    assert.equal(b.glxInits, 1, "GLX attaches this boot");
+    assert.equal(b.ss.getItem("apex26.gfxFallbackWhy"), "no " + pick + " script group in the roster", "the fallback says why");
+    assert.equal(b.ls.getItem(PROBE), null, "no probe is left armed for a backend that was never fetched");
+    assert.equal(b.ls.getItem(PICK), pick, "the pick stays: it binds again once its files return");
+  });
+}
