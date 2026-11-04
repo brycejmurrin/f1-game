@@ -1431,7 +1431,7 @@ function driverSkill(team, d, di) {
     skill: DriverRatings.skill(r, roll),
     craft: (r.craft || 75) / 100, awareness: (r.awareness || 75) / 100,
     experience: (r.experience || 75) / 100, consistency: (r.consistency || 75) / 100,
-    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism),
+    aggression: DriverRatings.style01(r.aggression), optimism: DriverRatings.style01(r.optimism), composure: DriverRatings.style01(r.composure),
   };
 }
 const buildPace = DriverRatings.buildPace;
@@ -6301,7 +6301,7 @@ function updateCarAdvance(c, dt, ranked, S) {
         const e = c.lapTime - (ns === 0 ? s3Past : 0) - c._secT0;
         if (e >= 2 && e < lapRec.fieldSectorBests[c._secIdx]) lapRec.fieldSectorBests[c._secIdx] = e;
       }
-      c._secValid = fwd || c._secIdx == null; c._secIdx = ns; c._secT0 = c.lapTime;
+      if (c.isPlayer) EnergyPlan.sectorExit(c, fwd, isTimeTrial()); c._secValid = fwd || c._secIdx == null; c._secIdx = ns; c._secT0 = c.lapTime;
     }
   }
   // Sector detection (curated splits via sectorAt). Must run before finish-line

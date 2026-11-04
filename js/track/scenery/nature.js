@@ -1373,6 +1373,7 @@ const SceneryNature = (function () {
         if (!ctx.barrierClear(p.c[0], p.c[2], HEDGE_W / 2)) blocked.add(k);
       });
       ctx.indexSolid(s0, s1, side, gap - HEDGE_W / 2, HEDGE_W);
+      let hn = 0;
       ctx.along(s0, s1, 4, (k, spacing) => {
         if (blocked.has(k)) return;
         const p = anchor(k, side, gap);
@@ -1385,7 +1386,8 @@ const SceneryNature = (function () {
         }
         const base = col || [0.18, 0.36, 0.16], hb = [p.r, p.u, p.t];
         const hj = h * (0.9 + hash(k * 5.1 + side) * 0.2);
-        addBox(out, vadd(p.c, p.u, (hj - 0.4) / 2), [HEDGE_W, hj + 0.4, spacing], base, hb);   // base sunk 0.4
+        const hl = (hn++ & 1) ? TrackGeom.MIN_SEP : 0;   // alternate slabs stand MIN_SEP aside (coplanar-audit)
+        addBox(out, vadd(vadd(p.c, p.u, (hj - 0.4) / 2), p.r, hl), [HEDGE_W, hj + 0.4, spacing], base, hb);   // base sunk 0.4
         const lump = 0.25 + hash(k * 7.7 + side) * 0.5, lx = (hash(k * 3.3 + side) - 0.5) * HEDGE_W * 0.4;
         addBox(out, vadd(vadd(vadd(p.c, p.u, hj + lump * 0.5 - 0.2), p.r, lx), p.t, (hash(k * 9.1) - 0.5) * spacing * 0.3),
                [HEDGE_W * (0.5 + hash(k * 2.2) * 0.3), lump, spacing * 0.55],
