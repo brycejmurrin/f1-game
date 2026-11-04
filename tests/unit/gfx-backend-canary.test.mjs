@@ -5734,22 +5734,26 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   const rel = tlx.slice(tlx.indexOf("function releaseGeoMirrors("));
   const body = rel.slice(0, rel.indexOf("\n      }"));
   const boundsAt = body.indexOf("computeBoundingSphere()");
-  // The free is `a.array = null`, and it MUST be null rather than a zero-length
-  // typed array — the same rule releaseMirrors carries above, for the same
-  // reason and on the same evidence: nulling shipped and rendered for months,
-  // and a zero-length array is the ONLY delta between gpu-census run 26 on
-  // macos-latest/Metal (8x "Index range ... does not fit in index buffer size
-  // (0)") and run 27, which passed. A mechanism was asserted for this and then
-  // WITHDRAWN — it came from _getAttributeMemorySize(), which is renderer.info
-  // accounting, not allocation — so this guard stands on the hardware A/B alone.
-  // COMMENTS STRIPPED, for the reason recorded above: the first version of the
-  // sibling check matched the prose explaining the rule and failed a good file.
+  // The free is a zero-length view of the same class, NEVER null (#4900):
+  // three r187 recomputes getRenderCacheKey on every needsRenderUpdate(), and
+  // getVertexBufferLayout reads array.BYTES_PER_ELEMENT / _getVertexFormat
+  // array.constructor of every attribute with no null guard — a nulled car
+  // caster threw in present ~37 s into a TLX WebGPU race (PR #4880 census).
+  // gpu-census run 26's zero-byte buffer was an INDEX array and never-uploaded
+  // chunks; this function keeps the index and frees only uploaded attributes,
+  // so the zero-length view never reaches createAttribute.
+  // COMMENTS STRIPPED: the first version of the sibling check matched the prose
+  // explaining the rule and failed a good file.
   const bodyCode = fnBody(code("js/render/three/tlx.js"), "releaseGeoMirrors");
-  const dropAt = bodyCode.indexOf("a.array = null");
+  const dropAt = bodyCode.indexOf("a.array = new a.array.constructor(0)");
   assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
-  assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
-  assert.doesNotMatch(bodyCode, /\.array\s*=\s*new\s+\S*constructor\(0\)/,
-    "a zero-length array is what Metal refused (gpu-census 26 vs 27) — NULL the mirror");
+  assert.ok(dropAt > 0, "releaseGeoMirrors must free to a zero-length view of the same class (#4900)");
+  assert.doesNotMatch(bodyCode, /\.array\s*=\s*null/,
+    "a null mirror throws in getRenderCacheKey (null BYTES_PER_ELEMENT) on the next new pipeline (#4900)");
+  assert.match(bodyCode, /if \(!uploaded\(a\)\)/,
+    "only an attribute with a GPU buffer may be emptied — a zero-length array uploads a zero-byte buffer");
+  assert.doesNotMatch(bodyCode, /g\.index\.array\s*=/,
+    "never the index: a zero-length index array is a zero-byte index buffer (gpu-census 26)");
   assert.ok(bodyCode.indexOf("computeBoundingSphere()") < dropAt,
     "the bounds must be computed BEFORE the arrays are freed, or three computes a NaN sphere from a missing array");
   assert.match(body, /radius >= 0/,
