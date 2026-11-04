@@ -592,7 +592,8 @@ struct FrameU {
   bakeB      : vec4<f32>,     // off 624  (scale rgb = frame.lampBakeScale, on)
   bakeC      : vec4<f32>,     // off 640  (shadow lamp's baked rgb = LampBake.shadowCol, T texels per tile)
   bakeD      : vec4<f32>,     // off 656  (tilesX, tilesY, atlas texture w, atlas texture h = 2 atlasH)
-};                            // size 672
+  wind       : vec4<f32>,     // off 672  FOLIAGE WIND (dir x, dir z, speed, detail 0/1) — knobs windDir / windSpeed / windDetail
+};                            // size 688
 `;
   // LIT: WGSL port of js/render/glx/shaders/glsl-lit.js (LIT_VS/LIT_FS). Uniform layout must match wgx.js _writeFrame/_writeDraw.
   const LIT = `${FRAME_U}struct Light {
@@ -836,6 +837,33 @@ fn vs_main(
     col = aCol * aInstColor;
   }
   var wp = model * vec4<f32>(aPos, 1.0);
+  // Material id, decoded BEFORE the position leaves the vertex stage so FOLIAGE
+  // can sway (it used to be decoded after wp was final). Same maths as below.
+  let swayCode = round(aNrm.w * 32767.0) / 256.0;
+  if (swayCode >= 1.0 && swayCode <= 18.0) {
+    let sm = swayCode - 1.0;
+    let sid = floor(sm + 0.5);
+    let mfr = clamp(sm - sid, 0.0, 1.0);
+    if (sid == 6.0 && mfr > 0.002) {
+      // FOLIAGE wind: GLX LIT_VS constant for constant (js/render/glx/shaders/glsl-lit.js).
+      let W = F.wind;
+      let w = clamp(mfr / 0.45, 0.0, 1.0);
+      let spd = W.z;
+      let det = W.w;
+      let along = wp.x * W.x + wp.z * W.y;
+      let t = F.params0.z;
+      let leaf = clamp((aCol.g - aCol.r) * 5.0, 0.0, 1.0);
+      let bph = (sin(wp.y * 1.9 + wp.x * 0.8) + sin(wp.z * 1.4 - wp.y * 1.1)) * 0.5;
+      let stiff = mix(1.0, 0.55 + 0.45 * leaf, det);
+      let gust = t * (spd * 1.1 + 0.6) - along * 0.07 + bph * 0.9 * w * det;
+      let bend = sin(gust) * 0.55 + sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+      let amp = spd * 0.32 * w * w * stiff;
+      let wn0 = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz) * aNrm.xyz;
+      let flPh = t * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7 + bph * 2.0 * det;
+      let flAmp = mix(1.0, leaf * 2.0, det);
+      wp = vec4<f32>(wp.xyz + vec3<f32>(W.x, 0.0, W.y) * (bend * amp) + wn0 * (sin(flPh) * spd * 0.05 * w * flAmp), wp.w);
+    }
+  }
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
   // No 4th vertex attribute — Dawn zeros it (and pos fetch) even in a
@@ -2672,7 +2700,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 672,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane) + pitBox (your box) + bakeA..D
+    FRAME_UNIFORM_BYTES: 688,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane) + pitBox (your box) + bakeA..D
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light
