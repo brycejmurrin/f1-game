@@ -8,9 +8,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { buildContext } = require("../lib/track-build-vm.cjs");
-// Catalog writes still use the legacy TRACK_VM-wide hasher so merge-gate keeps working
-// until tools/shot/scenery-source-hash.cjs is narrowed (#4525). sceneryCatalogDigest
-// below is the garage-immune fingerprint used by track-shot-survey tooling-fast.
+// Catalog sourceDigest comes from the garage-immune hasher (#4525). sceneryCatalogDigest
+// below is the same contract for tooling-fast pins (does not hash the hasher file itself).
 const { scenerySourceDigest } = require("./scenery-source-hash.cjs");
 
 const root = path.resolve(__dirname, "../..");
