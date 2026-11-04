@@ -41,6 +41,22 @@ What the helmet adds, ranked:
    REFRACTION, off by default and off in Bryce's export). Its GPU cost is the compositor's, which no software probe
    measures.
 
+## 1b. Real GPU: macOS gpu-census, TLX on WebGPU (Dawn on Metal), monaco, phone tier, visor CLEAR
+
+Runs 41874226665 (helmet) and 41877458922 (chase), both on `ae67cb87`, `path: webgpu`, Apple adapter. The ls seed
+`apex26.hudMirror=on` did not take (`mirror.mode` read `auto`), so chase drew no mirror: the gap is everything HELMET
+adds. `gpuByPass` reads `supported: false` on the runner, so there are no per-pass GPU times.
+
+| leg | median passes | submits | normal frame ms | uploads KB/frame | writeBuffer/frame | createBuffer/frame | createBindGroup/frame |
+|---|---|---|---|---|---|---|---|
+| chase | 11 | 11 | 9.36 | 19.7 | 52.1 | 0.40 | 0.17 |
+| helmet + visor | 15 | 13 | 14.03 | 24.8 | 74.4 | 0.80 | 0.26 |
+
+The four extra passes are the mirror: its MRT scene pass (276x79, ssrTag and depth discarded) once a frame, plus ~2.7
+single-target passes on the same target, the mip levels the cockpit glass samples (`glassLod` 2.2, chain capped at
+`mipCap` 3, A-H5). The largest upload site is the merged-chunk index regrow (`createIndexAttribute`, 138 KB, 0.02 per
+frame), already tracked in `TLX-WEBGPU-PERF-3-2026-10-30.md` §3. The runner's frame time is a CI Mac's, not an iPhone's.
+
 ## 2. CPU spans, monaco, phone tier, seed 42, 60 frames, 2 repeats (`__apex.perf` spans, ms mean per frame)
 
 | arm | render | hud | physics | frame |
@@ -86,6 +102,5 @@ Only the phone answers these; Lavapipe and SwiftShader cannot:
 
 ## Next
 
-- macOS gpu-census (real Metal; helmet + visor + mirror, phone tier): run 41874226665. The chase arm is dispatched
-  after it. Add both rows' `gpuByPass` here.
+- A gpu-census run with timestamp queries (`gpuByPass`) on a runner that supports them: the mirror's GPU ms.
 - If Bryce picks (a): the scenery split, measured with `--by-mesh` before and after on monaco and monza.
