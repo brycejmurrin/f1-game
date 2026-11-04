@@ -2639,6 +2639,16 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
   assert.equal(reloaded(), 1);
 });
 
+test("SETTINGS shows why this boot bound WebGL2 (apex26.gfxFallbackWhy), hidden when unset (#4824)", () => {
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "three" }, ss: { "apex26.gfxFallbackWhy": "boot canary: three never presented a frame last load" } });
+  assert.ok(a.byId["pm-gfx-why"], "why line injected");
+  assert.match(a.byId["pm-gfx-why"].textContent, /^WebGL2 this boot: boot canary: three never presented/);
+  assert.equal(a.byId["pm-gfx-why"].hidden, false);
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "three" } });
+  assert.equal(b.byId["pm-gfx-why"].textContent, "");
+  assert.equal(b.byId["pm-gfx-why"].hidden, true);
+});
+
 test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () => {
   const a = bootPicker({
     ls: { "apex26.gfxBackend": "webgl2" },

@@ -1743,8 +1743,37 @@ function tallyOf(c) {
   return t;
 }
 
+// A season rollover edits ~140 lines of the career in place, so it is guarded like
+// scoreRound: refuse a stale revision up front, snapshot, and if the save is
+// refused restore in place (the `season` object stays game.js's live alias) so
+// RAM never shows a year that is not on disk.
 function rollover() {
-  if (!career || blocked()) return null;
+  if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) {
+    if (career && careerRevision != null && currentRevision() !== careerRevision) {
+      careerConflict = true;
+      lastSave = { ok: false, durable: false, reason: "conflict" };
+    }
+    return null;
+  }
+  const original = JSON.parse(JSON.stringify(career));
+  const seasonRef = career.season;
+  const result = rolloverApply();
+  if (lastSave && lastSave.ok) return result;
+  const reason = (lastSave && lastSave.reason) || "conflict";
+  const replace = (target, source) => {
+    for (const key of Object.keys(target)) if (!Object.prototype.hasOwnProperty.call(source, key)) delete target[key];
+    Object.assign(target, source);
+  };
+  const restoredSeason = original.season;
+  replace(career, original);
+  career.season = seasonRef;
+  replace(seasonRef, restoredSeason);
+  careerConflict = true;
+  lastSave = { ok: false, durable: false, reason };
+  return null;
+}
+
+function rolloverApply() {
   const dStand = driverStandings();
   const tStand = teamStandings();
   // Dice and the expected order belong to the year that just ended. year++

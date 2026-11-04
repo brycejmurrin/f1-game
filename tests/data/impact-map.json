@@ -1044,6 +1044,7 @@
         "tests/unit/radio-voice.test.mjs"
       ],
       "unlock": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
       "voicesFor": [
