@@ -15301,6 +15301,7 @@
       "*": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
@@ -15587,6 +15588,7 @@
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ]
     },
@@ -17067,6 +17069,7 @@
     "js/track/core/hidden-faces.js": {
       "strip": [
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/track-build-grids.test.mjs"
       ],
       "*": [
