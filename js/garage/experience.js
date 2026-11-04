@@ -2,19 +2,25 @@
 const GarageExperience = (function () {
   "use strict";
 
+  // Ambient clock: advances only while moving, at most 100 ms per step, so a
+  // stalled or backgrounded frame never jumps the ambient motion.
   function clock(now = 0) {
     let at = now, last = now;
-    return { step(wall, moving) {
-      const gap = Math.max(0, Math.min(100, wall - last));
-      last = wall;
-      if (moving) at += gap;
-      return at;
-    }, reset(wall) { at = last = wall; }, get value() { return at; } };
+    return {
+      step(wall, moving) {
+        const gap = Math.max(0, Math.min(100, wall - last));
+        last = wall;
+        if (moving) at += gap;
+        return at;
+      },
+      reset(wall) { at = last = wall; },
+      get value() { return at; },
+    };
   }
 
-  // Composed home shots use the existing orbit rig and its panel lens shift.
-  // Garage inspection presets remain unchanged; these views give a menu visit
-  // its own framing without changing any saved driving or photo preference.
+  // Home menu framings for the orbit rig (with its panel lens shift). They are
+  // separate from the garage inspection presets, so a menu visit never changes
+  // a saved driving or photo camera.
   const HOME_SHOTS = Object.freeze({
     hero: Object.freeze({ az: Math.PI * 0.78, el: 0.30, dist: 8.35 }),
     front: Object.freeze({ az: Math.PI * 0.16, el: 0.24, dist: 6.4, fov: 54, maxDist: 6.4 }),
@@ -135,23 +141,34 @@ const GarageExperience = (function () {
     function show(opt) {
       const c = compare(team, parts, cat, current, opt, tune, cap);
       head.textContent = opt.label;
-      const stats = c.deltas.filter((d) => d.value).map((d) => d.label + " " + (d.value > 0 ? "+" : "") + d.value);
       detail.textContent = opt.id === (current && current.id) ? "Fitted · inspect the car or compare another option."
-        : (c.cost > 0 ? "+" : "") + c.cost + " cr vs fitted · " + (Number.isFinite(cap) ? c.remaining + " cr remaining" : "Free build")
-          + (stats.length ? " · " + stats.join(" / ") : " · Same displayed performance");
+        : comparisonText(c, cap);
     }
     if (current) show(current);
     return show;
   }
 
-  function careerKey(ctx) {
+  function comparisonText(c, cap) {
+    const signed = (n) => (n > 0 ? "+" : "") + n;
+    const stats = c.deltas.filter((d) => d.value).map((d) => d.label + " " + signed(d.value));
+    return signed(c.cost) + " cr vs fitted · " + (Number.isFinite(cap) ? c.remaining + " cr remaining" : "Free build")
+      + (stats.length ? " · " + stats.join(" / ") : " · Same displayed performance");
+  }
+
+  // The career's achievements, or null outside an active career.
+  function careerAchievements(ctx) {
     const a = ctx && ctx.achievements;
-    return a && a.active ? [a.facility, a.wins, a.podiums, a.titles].join(":") : "-";
+    return a && a.active ? a : null;
+  }
+
+  function careerKey(ctx) {
+    const a = careerAchievements(ctx);
+    return a ? [a.facility, a.wins, a.podiums, a.titles].join(":") : "-";
   }
 
   function buildFacility(g, liv, ctx) {
-    const a = ctx && ctx.achievements;
-    if (!a || !a.active) return;
+    const a = careerAchievements(ctx);
+    if (!a) return;
     const { block, DARK, STEEL, Z_BACK, rgb } = GaragePrims;
     const accent = rgb(liv && liv.c2, STEEL);
     // Each two earned facility levels install a research workstation; geometry
@@ -171,8 +188,8 @@ const GarageExperience = (function () {
   }
 
   function paintCareer(cv, ctx) {
-    const a = ctx && ctx.achievements;
-    if (!a || !a.active) return;
+    const a = careerAchievements(ctx);
+    if (!a) return;
     const c = cv.getContext("2d");
     c.fillStyle = "#10141b"; c.fillRect(0, 320, 512, 64);
     c.fillStyle = "#f2f3f5"; c.textAlign = "center"; c.textBaseline = "middle";
@@ -182,5 +199,8 @@ const GarageExperience = (function () {
     c.fillText(a.wins + " WINS · " + a.podiums + " PODIUMS · " + a.titles + " TITLES", 256, 365, 490);
   }
 
-  return Object.freeze({ clock, homeShot, homeSession, canOrbit, freePane, fitHome, statsOf, compare, partSummary, careerKey, buildFacility, paintCareer });
+  return Object.freeze({
+    clock, homeShot, homeSession, canOrbit, freePane, fitHome,
+    statsOf, compare, partSummary, careerKey, buildFacility, paintCareer,
+  });
 })();
