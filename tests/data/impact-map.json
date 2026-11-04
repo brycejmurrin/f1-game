@@ -10020,6 +10020,7 @@
         "tests/unit/net-rendezvous.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs"
@@ -10101,6 +10102,7 @@
         "tests/unit/net-transport.test.mjs"
       ],
       "*": [
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs"
       ]
     },
@@ -10492,6 +10494,20 @@
         "tests/unit/no-bare-console.test.mjs"
       ]
     },
+    "js/net/overlay-net.js": {
+      "codeFromHash": [
+        "tests/unit/overlay-net.test.mjs"
+      ],
+      "join": [
+        "tests/unit/overlay-net.test.mjs"
+      ],
+      "overlayUrl": [
+        "tests/unit/overlay-net.test.mjs"
+      ],
+      "view": [
+        "tests/unit/overlay-net.test.mjs"
+      ]
+    },
     "js/net/qr.js": {
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
@@ -10742,12 +10758,14 @@
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "seededRnd": [
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "shutdown": [
@@ -10774,10 +10792,12 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "createDiffer": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-net.test.mjs"
       ],
       "frame": [
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
       ],

@@ -1311,6 +1311,7 @@
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
@@ -3715,6 +3716,11 @@
     {
       "path": "js/net/nostr.js",
       "global": "NetNostr",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/overlay-net.js",
+      "global": "OverlayNet",
       "roster": "LAZY_NET"
     },
     {
