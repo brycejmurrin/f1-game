@@ -92,3 +92,12 @@ of up to 9 frames per step until the 25-min job cap cancelled it, losing the JSO
 the `renderer.render` wrapper stopped seeing presents. Run 13 counts tlx.js's own present counter
 (`backendState().presents`) as well, dumps rAF ticks, both counters over 3 s, game state and device errors when frames
 stop, and aborts with the JSON instead of running into the cap.
+
+Run 13 (a4e654ca, perf-census-webgpu 41916040537): **verdict ok.** Every step of the sweep (1, .9, .8, .7, .6, .5, .7, 1)
+reached its scaled post-target size after 1 presented frame (gate: <= 2), 9 render-target resizes per step (63 over the
+sweep), textures 47 at the start and 47 at the end, no page errors, warm done. So `renderScale()` DOES resize the post
+targets on the WebGPU path; the flat 960x540 / `rtResizes` 2 of the first census was the probe (a step issued during the
+pipeline warm and counted in rAF ticks). Run 12's "stall" was the probe too: the `renderer.render` wrapper counts 0 in
+every row of run 13 (`frame: 0`) while tlx.js's own counter advanced, i.e. present() reaches three without passing the
+instance method that wrapper replaced. `backendState().presents` is the frame clock for any future WebGPU census. The
+trailing `page closed during scale 1` lines are the teardown's `browser.close()` (stale step label), not a crash.
