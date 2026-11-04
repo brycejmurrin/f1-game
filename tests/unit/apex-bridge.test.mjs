@@ -309,3 +309,13 @@ test("a failing reply post does not skip the queued commands behind it (HUNT-202
   for (let i = 0; i < 3; i++) await b.api.pollOnce();
   assert.deepEqual([...new Set(ran)].sort(), [1, 2, 3], "commands 2 and 3 still ran after command 1's reply failed");
 });
+
+test("frames and snap settle with {error:'hidden'} when rAF never fires (locked phone, B5 #4696)", async () => {
+  const extra = { requestAnimationFrame: () => 0, setTimeout: (fn) => { setImmediate(fn); return 1; }, clearTimeout() {},
+    document: { getElementById: () => null, hidden: true } };
+  const b = load({ search: "", extra });
+  const f = await b.api.handle({ cmd: "frames", args: { seconds: 1 } });
+  assert.equal(f.value.error, "hidden");
+  const s = await b.api.handle({ cmd: "snap" });
+  assert.equal(s.value.error, "hidden");
+});
