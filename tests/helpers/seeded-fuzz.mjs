@@ -86,17 +86,34 @@ function hugeString(rng) {
   return out.slice(0, n);
 }
 
+/** Define a REAL own enumerable key (even `__proto__`): plain assignment goes
+ *  through the prototype setter and never creates one. */
+function setOwn(o, k, v) {
+  Object.defineProperty(o, k, { value: v, enumerable: true, configurable: true, writable: true });
+  return o;
+}
+
+/** The attack shape: JSON.parse makes `__proto__` an own key, a literal does not. */
 function protoObject(rng) {
-  const body = {
-    __proto__: { polluted: true },
-    constructor: { prototype: { polluted: true } },
-    v: NaN,
-    money: Infinity,
-    team: undefined,
-    nested: { __proto__: { x: 1 }, y: rng.int(9) },
-  };
-  if (rng.bool()) body["__proto__"] = { again: true };
+  const body = JSON.parse(
+    '{"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},' +
+    '"nested":{"__proto__":{"x":1}}}',
+  );
+  body.v = NaN;
+  body.money = Infinity;
+  body.team = undefined;
+  body.nested.y = rng.int(9);
+  if (rng.bool()) setOwn(body, "__proto__", { again: true });
   return body;
+}
+
+/** True when `v` or anything under it has an own `__proto__` key. */
+export function hasOwnProtoDeep(v, seen = new Set()) {
+  if (!v || typeof v !== "object" || seen.has(v)) return false;
+  seen.add(v);
+  if (Object.hasOwn(v, "__proto__")) return true;
+  for (const k of Object.keys(v)) if (hasOwnProtoDeep(v[k], seen)) return true;
+  return false;
 }
 
 function mutateBytes(bytes, rng) {
@@ -149,7 +166,7 @@ export function mutate(corpus, rng) {
     try {
       const clone = JSON.parse(JSON.stringify(corpus));
       if (kind === 5) {
-        clone.__proto__ = { polluted: true };
+        setOwn(clone, "__proto__", { polluted: true });
         return clone;
       }
       if (kind === 6) {
@@ -163,7 +180,7 @@ export function mutate(corpus, rng) {
         return clone;
       }
       if (kind === 7) {
-        clone[rng.pick(["__proto__", "constructor", "toString", "valueOf"])] = protoObject(rng);
+        setOwn(clone, rng.pick(["__proto__", "constructor", "toString", "valueOf"]), protoObject(rng));
         return clone;
       }
       if (kind === 8) return null;
