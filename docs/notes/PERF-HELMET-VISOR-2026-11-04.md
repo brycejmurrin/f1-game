@@ -80,7 +80,7 @@ frame), already tracked in `TLX-WEBGPU-PERF-3-2026-10-30.md` §3. The runner's f
   (7f6622e8), and `_size` compares numbers. Nothing per frame touches layout.
 - **Mirror mip chain on WebGPU.** Already capped (A-H5, `_mirMipCap = 3`).
 
-## 4. For Bryce (`needs-decision`)
+## 4. For Bryce (decided: (a), his own `decision: a`, 2026-11-04 20:19Z; built in §4b)
 
 The mirror is the one big cost the helmet adds, and every way to make it cheaper changes what the mirror shows:
 
@@ -90,6 +90,28 @@ The mirror is the one big cost the helmet adds, and every way to make it cheaper
   the main pass is untouched.
 - (b) Mirror at 1 frame in 2 on the phone rung (#4272, already with Bryce): halves the mirror's whole cost, reads as lag.
 - (c) Leave it.
+
+## 4b. Built: the lite mirror's sub-range cull (TLX)
+
+`tlx-chunked.js` lays out every draw chunk of at least 24,000 indices (~8k triangles) as 24 m sub-cells (cell / 3,
+re-binned per lamp cell), back to back, each an index range with its own AABB. Same triangles, reordered only inside
+that chunk, so the main pass draws exactly what it drew. `cullMirror` lists a chunk whole when it lies inside the cap
+and replaces a chunk that straddles the cap with its in-reach sub-ranges. Those are index views with no GPU buffer of
+their own, so only the mirror slot's `mergeVisible` draws them. Phone rungs only (`frame.mirrorLite`): the full rung's
+280 m picture is unchanged. The worst overshoot past 120 m falls from the chunk's far side (~350 m) to one sub-cell
+diagonal (~34 m). A/B: `__tlx.mirrorSub(false)` or `apex26.tlxMirrorSub=0`. GLX and WGX are unchanged; Bryce plays TLX.
+
+Measured: `pass-census.mjs monaco --mobile --by-mesh --camera helmet`, 120 frames, TLX WebGL2 pin, before (the cull at
+7c4a3b24) and after (this change):
+
+| | mirror 138x39 calls / tris | main 640x640 calls / tris | total calls / tris |
+|---|---|---|---|
+| before | 10 / 66,010 | 55.2 / 177,395 | 75.8 / 249,186 |
+| after | 10 / 28,027 | 55.3 / 177,731 | 75.9 / 211,539 |
+
+The mirror draws 58% fewer triangles at the same call count, and the main pass is within noise. The big merged draw
+of the world-scenery record (`idx=347990`, 23k + 16k tris per frame in the mirror) is gone from the mirror. Its rows are
+now sub-range draws of 4–5k tris each. Device numbers are still PHONE TEST work (§5).
 
 ## 5. PHONE TEST (Bryce's iPhone, skill `phone-bridge`)
 
@@ -103,4 +125,4 @@ Only the phone answers these; Lavapipe and SwiftShader cannot:
 ## Next
 
 - A gpu-census run with timestamp queries (`gpuByPass`) on a runner that supports them: the mirror's GPU ms.
-- If Bryce picks (a): the scenery split, measured with `--by-mesh` before and after on monaco and monza.
+- PHONE TEST 1 again with the sub-range cull on vs `__tlx.mirrorSub(false)`: the mirror's saving on an Apple GPU.

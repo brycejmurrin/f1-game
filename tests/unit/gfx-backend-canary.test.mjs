@@ -1058,6 +1058,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxWebKitGL",
     // The road-split A/B arm: __tlx.roadSplit(false) writes "0" (tlx.js); RESET restores the split.
     "apex26.tlxRoadSplit",
+    // The lite mirror's sub-range cull arm: __tlx.mirrorSub(false) writes "0" (tlx.js); RESET restores it.
+    "apex26.tlxMirrorSub",
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
