@@ -79,11 +79,11 @@ async function main() {
       const cv = t && t.renderer && t.renderer.domElement;
       return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null,
         frame: t && t.renderer && t.renderer.info ? t.renderer.info.render.frame : null,   // three's PRESENTED frame count (rAF ticks run far ahead on lavapipe)
-        warming: !!(t && t.warming && t.warming()), canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
+        warming: !!(window.GLX && window.GLX.warming && window.GLX.warming()), canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
     });
     // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
     // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
-    const presented = (n) => page.waitForFunction((k) => { const t = window.GLX && window.GLX.__tlx; if (!t || t.warming()) return false; const w = window.__resWait || (window.__resWait = { f0: null }); const f = t.renderer.info.render.frame; if (w.f0 == null) w.f0 = f; if (f >= w.f0 + k) { w.f0 = null; return true; } return false; }, n, { polling: 200, timeout: 400000 });
+    const presented = (n) => page.waitForFunction((k) => { const t = window.GLX && window.GLX.__tlx; if (!t || (window.GLX.warming && window.GLX.warming())) return false; const w = window.__resWait || (window.__resWait = { f0: null }); const f = t.renderer.info.render.frame; if (w.f0 == null) w.f0 = f; if (f >= w.f0 + k) { w.f0 = null; return true; } return false; }, n, { polling: 200, timeout: 400000 });
     const api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
     if (o.webgpu) await presented(5);   // sweep only once present() is running
