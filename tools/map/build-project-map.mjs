@@ -5,7 +5,7 @@
  *
  *   node tools/map/build-project-map.mjs                 # → artifacts/project-map/project-map.json
  *   node tools/map/build-project-map.mjs --html          # also artifacts/project-map/index.html (tools/map/explorer.html + data)
- *   node tools/map/build-project-map.mjs --lsp           # symbols from apex-lsp's tsc project (documentSymbol), not the espree pass
+ *   node tools/map/build-project-map.mjs --lsp           # symbols from apex-lsp's lsp_outline (tsc project), not the espree pass
  *   node tools/map/build-project-map.mjs --flows=<json>  # curated "where does X happen" chains (default tools/map/flows.json; stale steps flagged)
  *   node tools/map/build-project-map.mjs --stdout        # the JSON on stdout, nothing written
  *
@@ -171,19 +171,27 @@ export function scanFile(rel, src = read(rel)) {
   return { globals, refs };
 }
 
-// ── symbols via apex-lsp (documentSymbol over the tsc project) ─────────────
+// ── symbols via apex-lsp: the lsp_outline tool itself (tsc documentSymbol + its IIFE export resolution) ──
+/** Parse lsp_outline text: a `Name  :line  …` head per global, `  [export] a, b  kind  :line` rows under it. */
+export function parseOutline(text) {
+  const out = [];
+  for (const line of text.split("\n")) {
+    const head = /^(?:window\.)?([A-Za-z_$][\w$]*)\s+:(\d+)\s/.exec(line);
+    if (head) { out.push({ name: head[1], line: +head[2], kind: "lsp", members: [] }); continue; }
+    const row = /^\s+\[export\]\s+(.+?)\s{2,}\S+\s+:\d+/.exec(line);
+    if (row && out.length) for (const m of row[1].split(/,\s*/)) if (/^[\w$]+$/.test(m)) out[out.length - 1].members.push(m);
+  }
+  return out;
+}
 async function lspGlobals(files) {
-  const { Lsp } = await import("../mcp/lsp-mcp.mjs");
+  const { Lsp, callTool } = await import("../mcp/lsp-mcp.mjs");
   const lsp = new Lsp();
-  await lsp.prepare();
   const out = new Map();
   try {
     for (const f of files) {
-      const tree = await lsp.outlineOf(f).catch(() => []);
-      out.set(f, tree.filter((n) => n.name && !/^<|callback$/.test(n.name)).map((n) => ({
-        name: n.name, line: n.range.start.line + 1, kind: `lsp:${n.kind}`,
-        members: (n.children || []).map((c) => c.name).filter((x) => x && !/^</.test(x)),
-      })));
+      const r = await callTool(lsp, "lsp_outline", { file: f, limit: 2000 }).catch(() => null);
+      const syms = r && !r.isError ? parseOutline(r.content[0].text) : [];
+      if (syms.length) out.set(f, syms);   // an anonymous IIFE (js/game.js, js/roster.js) keeps the espree row
     }
   } finally { lsp.stop(); }
   return out;
@@ -300,7 +308,12 @@ export async function buildMap({ lsp = false, flows = null } = {}) {
       ...own.rules.filter((r) => r.globs.some((re) => re.test(f))).map((r) => `rule:${r.name}`),
       ...own.agentsMd.filter((d) => f.startsWith(d + "/")).map((d) => `agents:${d}/AGENTS.md`),
     ];
-    let symbols = (lspSyms?.get(f) || s.globals).map((g) => ({ name: g.name, line: g.line, kind: g.kind, members: g.members.slice(0, 400),
+    // --lsp: lsp_outline rows lead; espree adds the globals and members tsc's outline does not list
+    const merged = lspSyms?.has(f) ? [
+      ...lspSyms.get(f).map((g) => ({ ...g, members: [...new Set([...g.members, ...(s.globals.find((x) => x.name === g.name)?.members || [])])] })),
+      ...s.globals.filter((g) => !lspSyms.get(f).some((x) => x.name === g.name)),
+    ] : s.globals;
+    let symbols = merged.map((g) => ({ name: g.name, line: g.line, kind: g.kind, members: g.members.slice(0, 400),
       ...((declarers.get(g.name) || []).length > 1 ? { declaredBy: declarers.get(g.name).length } : {}) }));
     if (f === manifest.PATHS.GAME && gctx) {
       // game.js is one async IIFE: its public surface is the `const G = {…}` façade it hands every create(G) module.
@@ -332,7 +345,7 @@ export async function buildMap({ lsp = false, flows = null } = {}) {
   return {
     meta: {
       generator: "tools/map/build-project-map.mjs", head: git(["rev-parse", "--short", "HEAD"]), generated: new Date().toISOString(),
-      symbols: lsp ? "apex-lsp documentSymbol" : "espree + eslint-scope", nodes: nodes.length, edges: edges.length,
+      symbols: lsp ? "apex-lsp lsp_outline (espree where it has no named global)" : "espree + eslint-scope", nodes: nodes.length, edges: edges.length,
       churnDays: 30, churnSince: ch.oldest, churnCommits: ch.commits, missing,
       skills: own.skills.map((k) => ({ name: k.name, desc: k.desc })),
     },
