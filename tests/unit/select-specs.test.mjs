@@ -796,12 +796,14 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     `hud-layout.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
     "it boots a full race per case and cannot pass there; see Pages #1967");
 
+  // #4837: the steer x gears matrix now shares one boot per viewport, so the
+  // spec is ~33 tests / ~21 min and may fit the budgeted cut like physics-hotpath
+  // does (see the next test). The RULE is unchanged: wherever it lands, its job's
+  // per-test cap must clear its declaration (asserted below).
   const r = fit([pin], 26);
-  assert.deepEqual(r.selected, [], "the budgeted gate must not select it");
-  assert.ok(measuredCheap(pin),
-    "hud-layout is measured under gate/3 — if that flips, restore the overBudgetRun pin");
-  assert.ok(r.oversize.some((s) => s.file === pin),
-    "measuredCheap + too big for the cut → oversize (still not selected)");
+  assert.ok(measuredCheap(pin), "hud-layout is measured under gate/3");
+  assert.ok(r.selected.length + r.oversize.length + r.overBudgetRun.length >= 1,
+    "hud-layout lands in a shard somewhere (selected, oversize or over-budget pool)");
   const job = shards(r).find((j) => j.specs.split(" ").includes(pin));
   assert.ok(job && job.perTest >= own / 1000, `its job's per-test cap clears its ${own / 1000}s declaration`);
 });
