@@ -1290,6 +1290,23 @@ test('circuit exterior retains distant rendered road while tyre lookup remains a
   }
 });
 
+test("a body-colour draft drag leaves the bay geometry; SAVE or CANCEL rebuilds it once", () => {
+  const { GarageScene, meshes } = harness();
+  const eye = [0, 1.6, 0];
+  GarageScene.draw(TEAM, LIV, eye, null, 0);
+  const g = GarageScene.debug().geomKey, n = meshes.length;
+  for (let i = 0; i < 10; i++) GarageScene.draw(TEAM, { ...LIV, c1: [0.1 + i * 0.05, 0.2, 0.9 - i * 0.05], draft: true }, eye, null, 0);
+  assert.equal(GarageScene.debug().geomKey, g, "10 distinct c1 draft ticks keep the saved-paint geometry");
+  const drafted = meshes.length;
+  GarageScene.draw(TEAM, { ...LIV, c1: [0.9, 0.1, 0.1] }, eye, null, 0);   // SAVE: the draft ends on a new saved paint
+  assert.notEqual(GarageScene.debug().geomKey, g, "save rebuilds the bay on the new paint");
+  const saved = meshes.length;
+  assert.ok(saved > drafted, "one rebuild after save");
+  GarageScene.draw(TEAM, { ...LIV, c1: [0.9, 0.1, 0.1] }, eye, null, 0);
+  assert.equal(meshes.length, saved, "and only one");
+  assert.ok(n > 0);
+});
+
 // #4546 P6: a paint-drag step (a new c1) is a geometry rebuild and a new dressId.
 // It used to build the bay floor twice (rebuild + ensureMirrorFade) and allocate a
 // fresh 1024² dress canvas; now the fade copies the rebuilt floor and the dress

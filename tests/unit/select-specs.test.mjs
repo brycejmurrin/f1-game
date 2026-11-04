@@ -25,10 +25,10 @@ import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
-import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs } from "../../tools/ci/fat-shard.mjs";
+import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1998,8 +1998,10 @@ test("fat-shard: the n rewritten legs select every test exactly once, even one t
     const [name, file] = flag.split("=");
     assert.equal(name, i === n ? "--test-list-invert" : "--test-list");
     const lines = fs.readFileSync(file, "utf8").trim().split("\n");
-    assert.ok(lines.every((l) => l.startsWith(`${f} › `)), "lines name the file then the title path");
-    const named = new Set(lines.map((l) => l.slice(`${f} › `.length)));
+    // rootDir-relative (#4812): a repo-relative "tests/specs/…" line matches no test.
+    const head = `specs/hud-layout.spec.js › `;
+    assert.ok(lines.every((l) => l.startsWith(head)), `lines name the rootDir-relative file then the title path: ${lines[0]}`);
+    const named = new Set(lines.map((l) => l.slice(head.length)));
     for (const t of real) if (named.has(t) !== (name === "--test-list-invert")) hits.set(t, hits.get(t) + 1);
   }
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -2020,6 +2022,61 @@ test("fat-shard: the n rewritten legs select every test exactly once, even one t
   }
 });
 
+// #4812: the plan above was balanced, yet hud-layout piece 4/4 ran all 56 tests
+// (26-40 min) while 1..3 ran none: the list lines named "tests/specs/…" and
+// Playwright matches them against rootDir-relative paths. Only REAL Playwright
+// can say what a list selects, so this lists each leg with it (no browser:
+// --list loads the config and the spec, ~1 s a call).
+const PW_CLI = path.join(ROOT, "node_modules/@playwright/test/cli.js");
+const pwList = (args) => new Promise((resolve, reject) => {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const kid = spawn(process.execPath, [PW_CLI, "test", ...args, "--list", "--reporter=json"], { cwd: ROOT, env });
+  let out = "", err = "";
+  kid.stdout.on("data", (d) => { out += d; });
+  kid.stderr.on("data", (d) => { err += d; });
+  kid.on("error", reject);
+  kid.on("close", () => {
+    try {
+      const j = JSON.parse(out);
+      const ids = [];
+      const walk = (s, at) => {
+        for (const x of s.suites || []) walk(x, [...at, x.title]);
+        for (const sp of s.specs || []) for (const t of sp.tests || [{}]) ids.push([t.projectName, ...at, sp.title].join(" › "));
+      };
+      for (const s of j.suites || []) walk(s, [s.title]);
+      resolve({ rootDir: j.config.rootDir, ids });
+    } catch (e) { reject(new Error(`playwright --list ${args.join(" ")}: ${e.message}\n${err.slice(-800)}`)); }
+  });
+});
+
+test("#4812 fat-shard: real Playwright runs every fat-spec test on exactly one leg, piece n within 1.5x its share", { skip: !fs.existsSync(PW_CLI) && "no @playwright/test" }, async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-pw-"));
+  try {
+    const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+    await Promise.all(FAT_SPECS.map(async (f) => {
+      const n = fatPieces(f);
+      const all = await pwList([f]);
+      assert.equal(path.relative(ROOT, all.rootDir), PW_ROOT_DIR, "Playwright's rootDir is the one list lines are written against");
+      assert.equal(listFile(f), path.relative(all.rootDir, path.join(ROOT, f)).split(path.sep).join("/"));
+      const legs = await Promise.all(Array.from({ length: n }, (_, k) => {
+        const r = fatShardArgs([f, `--shard=${k + 1}/${n}`], { db, fallbackSec: FAT_UI_SEC_PER_TEST, outDir });
+        assert.ok(r.args.some((a) => a.startsWith("--test-list")), `${f} leg ${k + 1}: ${r.note}`);
+        return pwList(r.args);
+      }));
+      const hits = new Map(all.ids.map((id) => [id, 0]));
+      for (const leg of legs) for (const id of leg.ids) hits.set(id, (hits.get(id) ?? 0) + 1);
+      assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], `${f}: every test on exactly one leg`);
+      const sizes = legs.map((l) => l.ids.length);
+      const share = all.ids.length / n;
+      assert.ok(sizes.every((m) => m > 0), `${f}: no empty leg (${sizes.join("/")})`);
+      assert.ok(sizes[n - 1] <= 1.5 * share, `${f}: piece ${n}/${n} lists ${sizes[n - 1]} of ${all.ids.length} tests (share ${share.toFixed(1)}; legs ${sizes.join("/")})`);
+    }));
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  }
+});
+
 test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names its CI shard pieces", () => {
   // hud-layout asserts the DOM hud.js keeps but names it only in comments, so no import reaches it: before the pin
   // the floor was null and a cold agent picked hud-audit "by name".
@@ -2033,4 +2090,14 @@ test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names it
   assert.match(r.floorShards.hint, /--shard pieces/);
   // The pin is narrow: a sibling HUD module stays routed-only.
   assert.deepEqual(specsAffectedBySource(["js/ui/hud-tyres.js"]), []);
+});
+
+test("#4768: a vendor bump is routed, and an unrouted path in a mixed diff is not 'matched'", () => {
+  for (const [f, group] of [["vendor/three-0.187.0/three.core.min.js", "gfx"], ["vendor/rapier-0.19.3/package.json", "collisions"],
+    ["vendor/jsqr-1.4.0/jsQR.js", "net-unit"], ["vendor/gpu-capture/webgl-lint.js", "hooks"]]) {
+    assert.ok(pick([f]).has(group), `${f} -> ${group}`);
+  }
+  const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["controller.html", "js/ui/scale.js"] });
+  assert.equal(r.reason, "infra");
+  assert.deepEqual(r.unclaimed, ["controller.html"]);
 });

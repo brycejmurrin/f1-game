@@ -210,7 +210,8 @@ const STRIP = {
   //   strip-after 255274 → 255214.
   // → #3280 cantilever gantries keep one mast (2026-10-26): the two Monaco
   //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
-  monaco: { before: 274099, after: 255176 },
+  // → #4724 coplanar slab offsets (hedge/fence/street-barrier panels): 274099 → 274063, strip-after 255176 → 254867.
+  monaco: { before: 274063, after: 254867 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -262,7 +263,8 @@ const STRIP = {
   // → #3859 D scenery train fix (2026-10-26): Curva Grande stonePines at gap 22.
   //   Re-measured on the mega wave 5 merged tree: 315410 → 315393, strip-after
   //   286386 → 286363. #3374: stand-span pine clear + lake hedge split → 313432 / 284510.
-  monza: { before: 313432, after: 284510 },
+  // → #4724 coplanar slab offsets: strip-after 284510 → 284209.
+  monza: { before: 313432, after: 284209 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {
