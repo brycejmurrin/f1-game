@@ -3244,6 +3244,7 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
@@ -3253,7 +3254,6 @@
       "*": [
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/fin-design.test.mjs",
-        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
@@ -3554,6 +3554,7 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -3567,7 +3568,6 @@
       "*": [
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/fin-design.test.mjs",
-        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
@@ -9544,40 +9544,54 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeEvent": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeHud": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeSample": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeEvent": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeHaptic": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeHello": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeHud": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeSample": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "hudOf": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs"
+      ],
       "padUrl": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "pairingFromUrl": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs"
       ],
       "teamHex": [
         "tests/unit/phone-pad.test.mjs"
@@ -10065,6 +10079,7 @@
     },
     "js/net/ice.js": {
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-session.test.mjs",
@@ -10094,6 +10109,7 @@
         "tests/unit/net-snapshot.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10105,6 +10121,7 @@
       ],
       "createInterp": [
         "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
@@ -10115,9 +10132,6 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
-      ],
-      "*": [
-        "tests/unit/fuzz-untrusted-inputs.test.mjs"
       ]
     },
     "js/net/lobby-codes.js": {
@@ -10126,6 +10140,7 @@
         "tests/unit/lobby-codes.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -10356,9 +10371,11 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "clampWire": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-roster.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10420,6 +10437,7 @@
       ],
       "start": [
         "tests/specs/multiplayer-session.spec.js",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -10431,6 +10449,7 @@
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "stop": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -10440,6 +10459,7 @@
         "tests/unit/net-start-arming.test.mjs"
       ],
       "tick": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-roster.test.mjs",
@@ -10447,6 +10467,9 @@
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "validClassification": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs"
       ]
     },
     "js/net/nostr.js": {
@@ -10483,6 +10506,7 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10603,6 +10627,7 @@
         "tests/unit/net-session.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10617,6 +10642,7 @@
         "tests/unit/net-roster.test.mjs"
       ],
       "pump": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -10636,6 +10662,7 @@
     "js/net/snapshot.js": {
       "createInterp": [
         "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
@@ -10676,10 +10703,12 @@
     },
     "js/net/strategy-wire.js": {
       "applyStrategy": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10692,6 +10721,7 @@
         "tests/unit/netplay-resilience.test.mjs"
       ],
       "strategyState": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs"
       ]
@@ -10702,6 +10732,7 @@
         "tests/unit/net-transport.test.mjs"
       ],
       "loopback": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-session.test.mjs",
@@ -10720,6 +10751,7 @@
         "tests/unit/net-transport.test.mjs"
       ],
       "wire": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs"
       ]
     },
@@ -19091,6 +19123,7 @@
       "create": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/scale-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs"
