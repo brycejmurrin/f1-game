@@ -8640,6 +8640,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-scene-fallbacks.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
