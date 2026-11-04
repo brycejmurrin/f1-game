@@ -13190,6 +13190,9 @@
       "choices": [
         "tests/unit/pit-pick-memo.test.mjs"
       ],
+      "clearArm": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
       "committing": [
         "tests/unit/pit-lane.test.mjs"
       ],

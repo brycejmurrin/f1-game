@@ -1888,3 +1888,20 @@ test("a level AI-AI side rub takes ONE k for the pair, so bucket order cannot pi
   const yA = A.sideYieldsA(0, 2, -2, A.cornerK(ka, kb)), yB = A.sideYieldsA(0, -2, 2, A.cornerK(kb, ka));
   assert.notEqual(yA, yB, "exactly one of the pair yields");
 });
+
+// B5 #4549: `(gap || 9)` read a touching 0 m blocker as 9 m away, so the fire rate was LOWEST at contact range.
+test("otFireRate: a 0 m blocker gap scores as the closest gap, not as 9 m", () => {
+  const at = (g) => A.otFireRate({ traits: mid, blockerGap: g, gapAhead: g, roomL: 3, roomR: 2,
+    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false });
+  assert.ok(at(0) >= at(0.5), `0 m ${at(0)} should be >= 0.5 m ${at(0.5)}`);
+  assert.ok(at(0) > at(9), "contact range beats a 9 m gap");
+});
+
+// B5 #4549: a stats record missing one field gave NaN attack/hold, which rode into followGap/brakeTarget/otFireRate.
+test("houseStyle: a partial stats record stays finite (a missing stat reads neutral)", () => {
+  const h = Object.assign({}, A.houseStyle(null, 0, { speed: 90 }));
+  assert.ok(Number.isFinite(h.attack) && Number.isFinite(h.hold), JSON.stringify(h));
+  const full = Object.assign({}, A.houseStyle(null, 2, { speed: 90, accel: 85, cornering: 85, braking: 85 }));
+  const part = Object.assign({}, A.houseStyle(null, 2, { speed: 90 }));
+  assert.deepEqual(part, full, "the missing three read as 85");
+});
