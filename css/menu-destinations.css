@@ -271,11 +271,12 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 }
 #overlay #menu-buttons .bigbtn > span { transform: none; }
 #overlay #menu-buttons #mb-career {
-  background: color-mix(in oklab, var(--red) 45%, var(--carbon));
-  color: var(--hud-ink-light); border-color: transparent;
+  background: var(--grad-primary);
+  color: var(--menu-accent-ink, var(--text)); border-color: transparent;
 }
 #overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
 #overlay #menu-buttons .bigbtn::before { background: none; }
+#overlay #menu-buttons #mb-career::before { background: var(--grad-primary-hot); }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
 /* At comfortable heights the destinations retain their groups instead of
    dissolving into a field of equal tiles. DOM order is the reading order. */

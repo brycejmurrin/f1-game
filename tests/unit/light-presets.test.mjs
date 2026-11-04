@@ -577,7 +577,13 @@ test("no preset sets a condition-gated knob where its gate is shut (dead entries
   const src = read("js/race/storm-flash.js");
   assert.match(src, /if \(raining && s\._ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
   assert.match(read("js/lighting/atmosphere.js"), /if \(isNightSession\) _nightAmbientBand\(\);/, "the night-band gate moved — re-check this test");
-  assert.match(read("js/lighting/profiles.js"), /const TOD_KEYED = new Set\(\["sunElev", "sunAzim"\]\);/, "the sun keying moved — re-check this test");
+  // Sun keying, behaviourally: a saved wet-key sun edit must not move the
+  // resolved sun (the "|dry" slot's value wins in every weather).
+  const saved = { "monza|dawn|dry": { sunElev: 12, sunAzim: 200 }, "monza|dawn|wet": { sunElev: 55, sunAzim: 10 } };
+  const dry = resolveLive("monza", "dawn", "dry", { saved: JSON.parse(JSON.stringify(saved)) }).LT;
+  const wet = resolveLive("monza", "dawn", "wet", { saved: JSON.parse(JSON.stringify(saved)) }).LT;
+  for (const id of ["sunElev", "sunAzim"]) assert.equal(wet[id], dry[id], `${id} follows the weather key again`);
+  assert.notEqual(wet.sunElev, 55, "wet-key sunElev leaked into the resolved sun");
   const P = presets(), dead = [];
   for (const [key, o] of Object.entries(P)) {
     const [, tod, wx] = key.split("|");

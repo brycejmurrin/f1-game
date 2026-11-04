@@ -10,15 +10,20 @@ import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
 
 const read = (p) => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
-const context = vm.createContext({});
-vm.runInContext(read('js/garage/crew-draw.js'), context, { filename: absSrc('js/garage/crew-draw.js') });
-// rigSample is module-private: evaluate arrival.js with one accessor appended after the
-// index block (a closure, so the sampler's consts are read after the IIFE ran).
+// Two contexts: V8 coverage keeps a `typeof GarageData` lookup that missed once (NODE_V8_COVERAGE), so the
+// "before the data lands" probe runs in its own context and never shares a closure with the loaded one.
 const END = '  // @blender-rigs-index:end\n';
 const ARRIVAL = read('js/garage/arrival.js').replace(END, END + '  globalThis.__rigs = () => ({ RIGS, RIG_IDS, RIG_LABEL, rigSample, rigData });\n');
-vm.runInContext(ARRIVAL, context, { filename: absSrc('js/garage/arrival.js') });
-const before = vm.runInContext('__rigs()', context);
+function arrivalContext(tag) {
+  const context = vm.createContext({});
+  vm.runInContext(read('js/garage/crew-draw.js') + '\n// ' + tag, context, { filename: absSrc('js/garage/crew-draw.js') });
+  // rigSample is module-private: arrival.js carries one accessor appended after the index block.
+  vm.runInContext(ARRIVAL + '\n// ' + tag, context, { filename: absSrc('js/garage/arrival.js') });
+  return context;
+}
+const before = vm.runInContext('__rigs()', arrivalContext('before'));
 const NOT_YET = { ids: [...before.RIG_IDS], sample: before.rigSample('crane', 'in', 0.5) };
+const context = arrivalContext('loaded');
 vm.runInContext(read('js/garage/garage-data.js'), context, { filename: absSrc('js/garage/garage-data.js') });
 const { RIG_IDS, RIG_LABEL, rigSample, rigData } = vm.runInContext('__rigs()', context);
 const RIGS = Object.fromEntries(RIG_IDS.map((id) => [id, rigData(id)]));
