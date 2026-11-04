@@ -980,6 +980,9 @@
         "tests/unit/s8-once-per-frame.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "flushDecoded": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
       "halt": [
         "tests/unit/battle-earcon.test.mjs",
         "tests/unit/race-radio.test.mjs",
@@ -1383,6 +1386,9 @@
         "tests/unit/voice-pack.test.mjs"
       ],
       "ensureStaged": [
+        "tests/unit/voice-pack.test.mjs"
+      ],
+      "flushDecoded": [
         "tests/unit/voice-pack.test.mjs"
       ],
       "norm": [

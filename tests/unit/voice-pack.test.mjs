@@ -1143,6 +1143,26 @@ test("the decoded clip cache is bounded by SECONDS per voice, oldest out first (
   assert.equal(desk.d.cache.george.clips, 22, "desktop: the larger budget, still under the 80-clip count bound");
 });
 
+test("one decoded-PCM budget across voice packs, flushed on quit (#4676)", async () => {
+  const clips = {};
+  for (let i = 0; i < 40; i++) clips["w" + i] = [i * 4, 4, 4];
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GLX: { isMobile: true },
+    GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 4 }),
+      radioVoice: (parts, at) => ({ end: at, stop() {} }) },
+    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ binary: integrity(160), clips }), arrayBuffer: () => Promise.resolve(new ArrayBuffer(160)) }),
+  });
+  const P = sb.VoicePack.create({});
+  const ids = ["george", "fable", "bella", "emma"];
+  for (const id of ids) assert.equal(await P.load(id), true);
+  for (let i = 0; i < 12; i++) for (const id of ids) { P.speak(id, "w" + i, { channel: "radio" }); await new Promise((r) => setImmediate(r)); }
+  const total = () => Object.values(J(P.debug().cache)).reduce((a, c) => a + c.secs, 0);
+  assert.ok(total() > 0 && total() <= 24, `four voices hold ${total()} s`);
+  P.flushDecoded();
+  assert.equal(total(), 0, "quit-to-menu flush empties every voice");
+  assert.equal(await P.load("george"), true, "the .bin survives the flush");
+});
+
 // THE PIT GARAGE STOPS THE RADIO. openPitWork freezes the race behind
 // #carsetup WITHOUT the pause card, so the #pausemenu observer that halts the
 // radio never fires, and the frozen card never ages out: an engineer line, a
