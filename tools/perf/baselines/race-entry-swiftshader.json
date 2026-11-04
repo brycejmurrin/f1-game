@@ -1,0 +1,8 @@
+{
+  "scenario": "perf-race-entry SwiftShader, bahrain, 1440x900, menu START RACE (full intro)",
+  "ratio": 1.3,
+  "measured": null,
+  "runs": { "blockMs": [], "maxBlockMs": [], "longTaskCount": [] },
+  "baseline": { "blockMs": null, "maxBlockMs": null, "longTaskCount": null },
+  "loafScriptAllow": ["tracks.js", "game.js", "car-draw.js", "three.webgpu"]
+}

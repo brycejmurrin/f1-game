@@ -57,3 +57,26 @@ export function raceOnlyStages(diff, raceFloorMs = 50, practiceCeilMs = 5) {
   if (!diff?.rows) return [];
   return diff.rows.filter((r) => (r.raceMs ?? 0) >= raceFloorMs && (r.practiceMs ?? 0) <= practiceCeilMs).map((r) => r.n);
 }
+
+/** SwiftShader long-task baseline (#4777): tools/perf/baselines/race-entry-swiftshader.json. */
+export function loadBaseline() {
+  return JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "perf", "baselines", "race-entry-swiftshader.json"), "utf8"));
+}
+
+/** Pure check: measured long-task numbers vs baseline x ratio. Returns failure strings ([] = pass; null baseline = record-only). */
+export function longTaskFailures(snap, base) {
+  const b = base.baseline, out = [];
+  if (b.blockMs == null) return out;
+  const r = base.ratio;
+  if (snap.blockMs > b.blockMs * r) out.push(`blockMs ${snap.blockMs} > ${b.blockMs} x ${r}`);
+  if (snap.maxBlockMs > b.maxBlockMs * r) out.push(`maxBlockMs ${snap.maxBlockMs} > ${b.maxBlockMs} x ${r}`);
+  if (snap.longTasks.length > b.longTaskCount) out.push(`long-task count ${snap.longTasks.length} > ${b.longTaskCount}`);
+  return out;
+}
+
+/** Attributed LoAF script URLs that match no allow-list entry (substring). */
+export function loafUnlisted(snap, allow) {
+  const seen = new Set();
+  for (const f of snap.loaf || []) for (const s of f.scripts) if (s.url && !allow.some((a) => s.url.includes(a))) seen.add(s.url);
+  return [...seen].sort();
+}

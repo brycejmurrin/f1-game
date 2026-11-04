@@ -80,6 +80,7 @@
     "// #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).",
     "tests/unit/assert-match-ratchet.test.mjs",
     "tests/unit/assets-pack.test.mjs",
+    "tests/unit/assets-unfilter-cap.test.mjs",
     "// #3296: material filmstrip PNGs require albedoMd5/normalMd5 (same as model md5).",
     "tests/unit/assets-verify-material-md5.test.mjs",
     "tests/unit/audit-circuit.test.mjs",

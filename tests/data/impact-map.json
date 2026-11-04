@@ -7759,6 +7759,7 @@
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -7775,6 +7776,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/render-rate.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ],
@@ -15084,6 +15086,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/assets-unfilter-cap.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/import-models.test.mjs",
