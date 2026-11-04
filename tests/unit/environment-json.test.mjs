@@ -263,6 +263,41 @@ test("SessionStart reuses a discovered browser and routes missing-browser instal
   assert.equal(fs.existsSync(calls), false);
 });
 
+test("SessionStart (perf P8): a failed npm install is not blindly re-run; one node spawn finds browser and cache", (t) => {
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratch, "session-install-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const put = (rel, text, executable = false) => {
+    const file = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, text);
+    if (executable) fs.chmodSync(file, 0o755);
+    return file;
+  };
+  put("package.json", "{}");   // no node_modules/.package-lock.json: the install branch runs
+  const calls = path.join(dir, "calls");
+  const browser = put("browser", "#!/bin/sh\nexit 0\n", true);
+  put("bin/node", '#!/bin/sh\ncase "$*" in *chromium-path.mjs*) printf "chromium-path %s\\n" "$*" >>"$APEX_TEST_CALLS"; printf "%s\\n%s\\n" "$APEX_TEST_BROWSER" /pw-cache ;; esac\n', true);
+  // npm fails; APEX_TEST_NET puts a transient network error in its log (stdout lands in artifacts/session-install.log).
+  put("bin/npm", '#!/bin/sh\nprintf "npm\\n" >>"$APEX_TEST_CALLS"\n[ -z "$APEX_TEST_NET" ] || echo "npm error code ECONNRESET"\nexit 1\n', true);
+  put("bin/git", "#!/bin/sh\nexit 1\n", true);
+  const hook = path.join(ROOT, ".claude/hooks/session-start.sh");
+  const env = { ...process.env, CLAUDE_PROJECT_DIR: dir, PATH: path.join(dir, "bin") + path.delimiter + process.env.PATH,
+    APEX_SKIP_SESSION_INSTALL: "", APEX_SKIP_BROWSER_INSTALL: "1", APEX_TEST_CALLS: calls, APEX_TEST_BROWSER: browser, APEX_TEST_NET: "" };
+  const lines = (re) => fs.readFileSync(calls, "utf8").split("\n").filter((l) => re.test(l));
+  let result = spawnSync("bash", [hook], { encoding: "utf8", env, timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /npm install: FAILED/);
+  assert.equal(lines(/^npm$/).length, 1, "a non-network npm failure runs once, not twice");
+  assert.deepEqual(lines(/^chromium-path/).map((l) => l.replace(/^.*chromium-path\.mjs/, "")), [" --both"], "one discovery spawn");
+  assert.match(result.stdout, new RegExp(`Chromium: present \\(${browser.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)`));
+  fs.unlinkSync(calls);
+  result = spawnSync("bash", [hook], { encoding: "utf8", env: { ...env, APEX_TEST_NET: "1" }, timeout: 10000 });
+  assert.match(result.stdout, /npm install: FAILED/);
+  assert.equal(lines(/^npm$/).length, 2, "an ECONNRESET in the log earns exactly one retry");
+});
+
 test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.json", () => {
   const env = JSON.parse(fs.readFileSync(ENV_JSON, "utf8"));
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));

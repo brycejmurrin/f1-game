@@ -215,6 +215,14 @@ it is absent on about:blank whatever the Chrome flags say.`);
 // Route through the repo wrapper (same as cdmcp-cli.py / .mcp.json). Do not
 // hard-code a Playwright browser path — this box may only ship Google Chrome.
 const srv = spawn(WRAPPER, ["run"], { stdio: ["pipe", "pipe", "pipe"] });
+// B3: a call timeout rejected straight to the top-level await, so the process died with the server (and its browser)
+// still running. Every exit path, crash included, now stops it; a server that dies first fails pending calls at once.
+process.on("exit", () => { try { srv.kill(); } catch (_) {} });
+srv.on("exit", (code, sig) => {
+  if (!pending.size) return;
+  console.error(`[mcp-cli] the server exited (${sig || code}) with ${pending.size} call(s) unanswered`);
+  process.exit(1);
+});
 
 let buf = "";
 const pending = new Map();

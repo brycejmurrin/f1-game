@@ -1264,7 +1264,11 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const team = teamOf(career.team);
   const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
   const pts = scored(player) ? (table[pos - 1] || 0) : 0;
-  const prize = prizeFor(pos);
+  // A DNF earns no position prize, as it earns no points (#4535 decision 1): a
+  // retired car lands at the foot of `order`, so prizeFor(pos) paid the tail rate
+  // for a race not finished. A DNF classified past 90 % distance still scores and
+  // is still paid. The salary is a contract, not a result: it still pays.
+  const prize = scored(player) ? prizeFor(pos) : 0;
   // AN OWNER IS NOT ON THE PAYROLL. The guide (career-ui "how the money works")
   // and docs/CAREER.md: a driver is paid a salary, an owner by sponsors. MY TEAM
   // still paid the start() deal's salary + points bonus every round, under a
@@ -1286,7 +1290,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   });
   // ...and owns BOTH cars, so both earn prize money ("two cars in the points is
   // two payments"): the hired team-mate's finish was paid to nobody.
-  const matePrize = owner && mate ? prizeFor(matePos) : 0;
+  const matePrize = owner && mate && scored(mate) ? prizeFor(matePos) : 0;   // same rule as `prize`
 
   // MY TEAM's wage bill comes off the balance, never off the fitted cap, so
   // hiring well costs upgrades rather than legality. Wages can exceed a round's
