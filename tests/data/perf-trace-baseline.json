@@ -1,7 +1,8 @@
 {
   "//": "Baseline for tests/specs/perf-trace-census.spec.js (#4776). Seeded from research lane B's two 26-29 s monza traces (Layout 25.9-28.8/s); the first CI run's census.json replaces the provisional gcPer1000Frames. Headroom is x1.25; never widen it. A new invalidator site is added here in the PR that introduces it (key = file:function, stable across edits).",
   "track": "monza",
-  "warmMs": 3000,
+  "warmMs": 8000,
+  "skipMs": 0,
   "headroom": 1.25,
   "layout": { "perS": 28.8 },
   "gcPer1000Frames": null,

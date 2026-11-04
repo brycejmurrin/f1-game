@@ -38,13 +38,15 @@ test("steady race: layouts/s, invalidator sites, GC and long tasks stay inside t
     requestAnimationFrame(tick);
   });
   await page.waitForTimeout(BASELINE.warmMs);
+  await page.evaluate(() => performance.mark("census:start"));
   const t0 = await page.evaluate(() => ({ f: /** @type {any} */ (window).__censusFrames, t: performance.now() }));
   await page.waitForTimeout(WINDOW_MS);
   const t1 = await page.evaluate(() => ({ f: /** @type {any} */ (window).__censusFrames, t: performance.now() }));
+  await page.evaluate(() => performance.mark("census:end"));
   await cdp.send("Tracing.end");
   await done;
 
-  const c = census(chunks, { windowS: (t1.t - t0.t) / 1000, frames: t1.f - t0.f, skipFirstMs: BASELINE.warmMs });
+  const c = census(chunks, { markStart: "census:start", markEnd: "census:end", frames: t1.f - t0.f, skipFirstMs: BASELINE.skipMs });
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, "census.json"), JSON.stringify(c, null, 2));
   testInfo.annotations.push({ type: "census", description: JSON.stringify(c) });

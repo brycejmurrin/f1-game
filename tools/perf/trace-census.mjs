@@ -7,7 +7,7 @@
 // Input: Chrome trace events (the `traceEvents` array, or a `{traceEvents}` object). Output of census(): plain JSON.
 // judge(census, baseline) returns the list of failures ([] = pass); the baseline is tests/data/perf-trace-baseline.json.
 
-export const TRACE_CATEGORIES = "devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.invalidationTracking,v8.cpu_profiler";
+export const TRACE_CATEGORIES = "devtools.timeline,disabled-by-default-devtools.timeline,disabled-by-default-devtools.timeline.invalidationTracking,disabled-by-default-devtools.timeline.stack,blink.user_timing,v8.cpu_profiler";
 const LONG_TASK_US = 50000;
 const round = (n, d = 2) => +n.toFixed(d);
 
@@ -26,11 +26,18 @@ function topFrame(ev) {
 
 /**
  * @param {object[]|{traceEvents:object[]}} trace
- * @param {{windowS?:number, frames?:number, skipFirstMs?:number}} [opts]  windowS: the steady window in seconds
+ * @param {{markStart?:string, markEnd?:string, windowS?:number, frames?:number, skipFirstMs?:number}} [opts]  windowS: the steady window in seconds
  *   (default: first to last timeline event); frames: rendered frames in the window, for the per-1000-frames GC rate.
  */
 export function census(trace, opts = {}) {
-  const events = Array.isArray(trace) ? trace : (trace && trace.traceEvents) || [];
+  let events = Array.isArray(trace) ? trace : (trace && trace.traceEvents) || [];
+  let startTs = null;
+  if (opts.markStart && opts.markEnd) {   // performance.mark()s bracket the steady window; everything outside (track build, warm-up) is dropped
+    const at = (n) => { const m = events.find((e) => e.name === n && e.ts); return m ? m.ts : null; };
+    startTs = at(opts.markStart); const endTs = at(opts.markEnd);
+    if (startTs != null && endTs != null) { events = events.filter((e) => e.ts >= startTs && e.ts <= endTs); if (!opts.windowS) opts = { ...opts, windowS: (endTs - startTs) / 1e6 }; }
+    else startTs = null;
+  }
   let t0 = Infinity, t1 = -Infinity;
   for (const e of events) {
     if (e.ph !== "X" && e.ph !== "B") continue;
@@ -57,7 +64,7 @@ export function census(trace, opts = {}) {
   const frames = opts.frames || 0;
   const tasks = timed("RunTask").sort((a, b) => a.ts - b.ts);
   // The profiler attach alone is a 600-665 ms task (research B §2.5): tasks starting in the first `skipFirstMs` of the window are excluded.
-  const cut = tasks.length ? tasks[0].ts + (opts.skipFirstMs || 0) * 1000 : 0;
+  const cut = (startTs != null ? startTs : tasks.length ? tasks[0].ts : 0) + (opts.skipFirstMs || 0) * 1000;
   const longTasks = tasks.filter((e) => e.ts >= cut && (e.dur || 0) > LONG_TASK_US);
   return {
     windowS: round(windowS, 1),

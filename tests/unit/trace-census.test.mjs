@@ -39,3 +39,11 @@ test("siteKey ignores query and line", () => {
   assert.equal(siteKey(frame("f", "http://h/a/b.js?v=3")), "b.js:f");
   assert.equal(siteKey(null), "(no stack)");
 });
+
+test("marks bracket the window: events outside are dropped, the rate uses the mark span", () => {
+  const ev = [X("Layout", 0, 10), X("RunTask", 0, 900000), { name: "m:s", ph: "R", ts: 5e6 }, X("Layout", 6e6, 10), X("Layout", 7e6, 10), X("RunTask", 8e6, 90000), { name: "m:e", ph: "R", ts: 9e6 }, X("Layout", 20e6, 10)];
+  const c = census(ev, { markStart: "m:s", markEnd: "m:e" });
+  assert.equal(c.layout.Layout.count, 2);
+  assert.equal(c.windowS, 4);
+  assert.equal(c.tasks.longOver50ms, 1, "the 900 ms build task is before the start mark");
+});
