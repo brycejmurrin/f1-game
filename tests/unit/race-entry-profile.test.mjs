@@ -598,14 +598,14 @@ test("long-animation-frame entries are recorded with script attribution (#4777)"
   assert.equal(P.snapshot().loafSupported, true);
   observers["long-animation-frame"]({
     getEntries: () => [
-      { startTime: 1005, duration: 120, blockingDuration: 70, scripts: [{ sourceURL: "https://x/js/game.js", duration: 100 }] },
+      { startTime: 1005, duration: 120, blockingDuration: 70, scripts: [{ sourceURL: "https://x/js/track/tracks.js", duration: 100 }] },
       { startTime: 10, duration: 90, blockingDuration: 40, scripts: [] }, // before window — dropped
     ],
   });
   const s = P.snapshot();
   assert.equal(s.loaf.length, 1);
   assert.equal(s.loaf[0].blockMs, 70);
-  assert.equal(JSON.stringify(s.loaf[0].scripts), JSON.stringify([{ url: "https://x/js/game.js", ms: 100 }]));
+  assert.equal(JSON.stringify(s.loaf[0].scripts), JSON.stringify([{ url: "https://x/js/track/tracks.js", ms: 100 }]));
   const none = load({ PerformanceObserver: class { constructor() {} observe() {} disconnect() {} }, performance: { now: () => 0 } });
   none.begin("y");
   assert.equal(none.snapshot().loafSupported, null);

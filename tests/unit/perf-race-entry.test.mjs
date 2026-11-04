@@ -38,6 +38,6 @@ test("longTaskFailures gates blockMs / maxBlockMs / count at baseline x ratio; n
 });
 
 test("loafUnlisted names scripts outside the allow-list; empty URLs are ignored", () => {
-  const snap = { loaf: [{ scripts: [{ url: "https://x/js/game.js?v=1" }, { url: "" }, { url: "https://x/js/new/thing.js" }] }] };
+  const snap = { loaf: [{ scripts: [{ url: "https://x/js/track/tracks.js?v=1" }, { url: "" }, { url: "https://x/js/new/thing.js" }] }] };
   assert.deepEqual([...loafUnlisted(snap, loadBaseline().loafScriptAllow)], ["https://x/js/new/thing.js"]);
 });
