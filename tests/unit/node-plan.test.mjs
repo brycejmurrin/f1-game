@@ -273,3 +273,10 @@ test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-
   assert.ok(!cota.run.includes("test:vm-page-b"));
   assert.ok(!plan(["js/circuits/dijon.js"]).run.some((s) => s.startsWith("test:vm-page")));
 });
+
+test("#4832: an edited ADAPTED spec unions with the routing of the rest of the diff", () => {
+  const specA = "tests/specs/albert-park-foundation.spec.js";
+  const withCircuit = plan([specA, "js/circuits/imola.js"]);
+  assert.ok(withCircuit.run.includes("test:vm-page-b"), "imola routes vm-page-b");
+  assert.deepEqual(plan([specA, "js/agent/apex.js"]).run, plan(["js/agent/apex.js"]).run);
+});
