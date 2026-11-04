@@ -26,7 +26,7 @@ var SessionRecords = (function () {
         tune: PHYS.map(k => G[k]), controls: G.recordControls(), weather: G.weatherArc ? G.weatherArc.from : G.raceWeather,
         weatherPlan: G.weatherArc ? [G.weatherArc.from, G.weatherArc.to, G.weatherArc.dur] : null,
         tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay,
-        ...(G.raceDamage ? { damage: true } : null) };   // only when ON: every existing ghost key stays valid (#3971)
+        ...(G.raceDamage && G.session !== "tt" ? { damage: true } : null) };   // only when ON: every existing ghost key stays valid (#3971)
     }
     function current() { return Ghost.contextKey(config()); }
     // Only the hidden GP wear preference differed in these historical TT keys.
