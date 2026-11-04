@@ -1572,18 +1572,23 @@ test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
         rows.push(await page.evaluate(({ wide, side, width }) => {
           TitleLayout.apply({ ...wide, side, btns: { ...wide.btns, width } });
           const box = id => document.getElementById(id).getBoundingClientRect();
-          const grid = box("menu-buttons");
+          const grid = box("menu-buttons"), o = box("overlay"), cs = getComputedStyle(document.getElementById("overlay"));
           return { width, left: grid.left, right: grid.right, w: grid.width, hero: box("menu-hero").width,
-            career: box("mb-career").width };
+            career: box("mb-career").width, inL: o.left + parseFloat(cs.paddingLeft), inR: o.right - parseFloat(cs.paddingRight) };
         }, { wide, side, width }));
       }
       const first = rows[0], last = rows[rows.length - 1];
       for (const [i, row] of rows.entries()) {
         // The #4816 guard: WIDTH 20 (and every step) keeps CAREER a real door.
         expect(row.career, `CAREER at WIDTH ${row.width} (${side})`).toBeGreaterThanOrEqual(44);
-        // The outer edge (right; left when swapped) stays put: WIDTH resizes, never translates.
-        const edge = side === "swap" ? row.left - first.left : row.right - first.right;
-        expect(Math.abs(edge), `${side} outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+        // The outer edge (right; left when swapped) stays put: WIDTH resizes, never translates. Once the cluster
+        // fills the overlay, X (-2 here) has no room left and clamps: the box then sits inside the overlay.
+        expect(row.left, `${side} left inside the overlay at WIDTH ${row.width}`).toBeGreaterThanOrEqual(row.inL - 1);
+        expect(row.right, `${side} right inside the overlay at WIDTH ${row.width}`).toBeLessThanOrEqual(row.inR + 1);
+        if (row.w < row.inR - row.inL - 1) {
+          const edge = side === "swap" ? row.left - first.left : row.right - first.right;
+          expect(Math.abs(edge), `${side} outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+        }
         if (i) {
           expect(row.w, `cluster width ${side} ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
           expect(row.hero, `hero width ${side} ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].hero - 0.5);
@@ -1624,14 +1629,21 @@ test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
         inp.value = String(width);
         inp.dispatchEvent(new Event("input", { bubbles: true }));
         const b = document.getElementById("menu-buttons").getBoundingClientRect();
+        const o = document.getElementById("overlay"), ob = o.getBoundingClientRect(), cs = getComputedStyle(o);
         return { width, left: b.left, right: b.right, w: b.width,
+          inL: ob.left + parseFloat(cs.paddingLeft), inR: ob.right - parseFloat(cs.paddingRight),
           hero: document.getElementById("menu-hero").getBoundingClientRect().width,
           peek: document.documentElement.dataset.appearancePeek || "" };
       }, width));
     }
     for (const [i, row] of rows.entries()) {
       expect(row.peek, `WIDTH ${row.width} peeks the title`).toBe("title");
-      expect(Math.abs(row.right - rows[0].right), `outer (right) edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+      // The edge holds until the cluster fills the overlay; then Bryce's X -2 clamps and the box stays inside it.
+      expect(row.left, `left inside the overlay at WIDTH ${row.width}`).toBeGreaterThanOrEqual(row.inL - 1);
+      expect(row.right, `right inside the overlay at WIDTH ${row.width}`).toBeLessThanOrEqual(row.inR + 1);
+      if (row.w < row.inR - row.inL - 1) {
+        expect(Math.abs(row.right - rows[0].right), `outer (right) edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+      }
       if (i) expect(row.w, `cluster width at WIDTH ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
     }
     expect(rows[rows.length - 1].w - rows[0].w, "WIDTH 20 -> 100 grows the cluster").toBeGreaterThan(300);
