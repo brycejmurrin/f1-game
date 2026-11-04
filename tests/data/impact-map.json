@@ -17585,6 +17585,7 @@
     },
     "js/ui/appearance-studio.js": {
       "applyPreset": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "applySnapshot": [
@@ -17621,6 +17622,7 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "reset": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "saveProfile": [
@@ -17639,10 +17641,10 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "undo": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "*": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -18501,6 +18503,7 @@
         "tests/unit/layout-presets.test.mjs"
       ],
       "undo": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/layout-presets.test.mjs"
       ]
     },
