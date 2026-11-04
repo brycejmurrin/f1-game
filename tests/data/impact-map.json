@@ -4633,6 +4633,7 @@
     "js/career/season-cal.js": {
       "applyConfig": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4657,6 +4658,7 @@
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "config": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -7869,6 +7871,7 @@
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/game-boot-claim-fail.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",

@@ -441,6 +441,8 @@
     "tests/unit/frozen-globals.test.mjs",
     "tests/unit/frustum-buckets.test.mjs",
     "tests/unit/gallery-capture-draws.test.mjs",
+    "// js/game.js boot to its renderer verdict (#4878): claim-fail reload, latch, probe; game-boot-vm, ~3 s.",
+    "tests/unit/game-boot-claim-fail.test.mjs",
     "tests/unit/game-ctx-surface.test.mjs",
     "// Expensive game-systems CLIs (ai-pace/field/line/human, player-dyn,",
     "// physics-tune-sweep, career-economy) must answer --help without booting",
