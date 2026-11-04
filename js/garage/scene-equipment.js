@@ -414,8 +414,8 @@ function buildEquipment(g, liv, ctx) {
   timingScreen(g);
 }
 
-  // HOSE and STEEL_DIM stay module-local. RUBBER, COMPOUND, starterCart, tyreTrolley
-  // and rearJack have no js/ caller: garage-mesh tests build them alone.
+  // HOSE and STEEL_DIM stay module-local. COMPOUND, starterCart, tyreTrolley and
+  // rearJack have no js/ caller: garage-mesh tests build them alone.
   return { RUBBER, FAN, SCREEN, GANTRY, LCD, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;
