@@ -151,7 +151,6 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
   #hud-pos[data-delta] { animation: pos-flash 0.5s ease-out; }
 }
 @keyframes pos-flash { from { transform: scale(1.18); } }
-:root { --hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent); }
 /* ONE TIMING STRIP (design pass 2a, docs/notes/DESIGN-PASS-2A-HUD-2026-10-30.md): one plate, hairline
    dividers, the team keyline once on POS, the one light cell (the rank you hunt). A rank change keeps its
    hue on a dark pill for the flash. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
