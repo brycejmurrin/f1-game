@@ -165,13 +165,15 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 /* Explicit widths use the same independent stack. This layer also owns the
    destination placements, so an overlay-layer fix alone cannot undo subgrid. */
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-  grid-column: 2; grid-row: 1;
+  grid-row: 1;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: none; grid-auto-rows: max-content;
-  /* WIDTH is a share of the SCREEN (20..100), not of this column: the old column cap pinned the grid at the
-     column's ~381 px from WIDTH ~45 up, so the slider did nothing (#4816). Narrower than the column it stays centred;
-     wider, it grows toward the art (right-anchored, left-anchored when swapped), never off the screen edge. */
-  max-width: calc(100 * var(--vwz) - var(--gap)); justify-self: end; margin-inline: 0 max(0%, calc((100% - var(--_tl-bw)) / 2));
+  /* WIDTH is a share of the SCREEN (20..100), not of the button column (#4816). The grid spans the WHOLE overlay
+     and pins its outer edge (right; left when swapped): WIDTH only moves the inner edge toward the art, so the
+     slider resizes and never translates (#4862). No centring margin and no item wider than its area: the old
+     centred-then-end-aligned column item shifted sideways, and overflow alignment differs per engine. */
+  grid-column: 1 / -1; justify-self: end; margin-inline: 0;
+  max-width: calc(100 * var(--vwz) - var(--gap));
   max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
@@ -180,7 +182,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   grid-column: 1; grid-row: auto; width: 100%; min-width: 0;
 }
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { flex-wrap: wrap; }
-:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-column: 1; justify-self: start; margin-inline: max(0%, calc((100% - var(--_tl-bw)) / 2)) 0; }
+:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { justify-self: start; }
 /* A 20%-wide saved cluster cannot hold two readable destinations or three
    creation tools. Change their composition at the cluster's own width; leave
    an explicitly requested ROW layout in the player's control. */

@@ -390,9 +390,7 @@ body[data-hl-set="helmet"] #hud-gearbox {
 body.hud-prof-minimal #hud-sectors,
 body.hud-prof-minimal #hud-box-best,
 body.hud-prof-minimal #hud-energy,
-body.hud-prof-minimal #hud-ot,
-body.hud-prof-minimal #hud-aero,
-body.hud-prof-minimal #hud-bb { display: none !important; }
+body.hud-prof-minimal #hud-ot { display: none !important; }
 /* …BUT THE PIT CUE IS PROMOTED, NOT DROPPED. MINIMAL hides the map, and with it
    the only other thing that says where the pit entry is — so the cue, the one
    element that knows both the direction (its arrow) and the distance (its
@@ -418,9 +416,7 @@ body.hud-gaps-low.hud-hide-map .hud-gaps {
 }
 body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
-body.hud-bcam #hud-aero,
 body.hud-bcam #hud-energy,
-body.hud-bcam #hud-bb,
 body.hud-bcam #hud-limits { display: none !important; }
 body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
 /* TV cameras keep speed and drop the gearbox plate, so the number sat on the
@@ -516,16 +512,19 @@ body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
    Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
 body.hud-met-timing #hud-energy,
 body.hud-met-timing #hud-ot,
-body.hud-met-timing #hud-aero,
 body.hud-met-compact #hud-energy,
-body.hud-met-compact #hud-ot,
-body.hud-met-compact #hud-aero { display: none !important; }
-body.hud-met-timing #hud-bb,
-body.hud-met-compact #hud-bb { display: none !important; }
+body.hud-met-compact #hud-ot { display: none !important; }
 /* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
    lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
    A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
 body:not(.desktop) #hud-bb:not([data-hl-user]) { display: none; }
+/* AERO and BRAKE BIAS hide in plain `display: none`: no rule anywhere sets a
+   `display` on either id, so there is nothing for `!important` to beat. The
+   hide reasons (MINIMAL, TV cameras, TIMING / COMPACT metrics, a replay, the
+   per-element toggles) are ONE rule now, not six. */
+body:is(.hud-prof-minimal, .hud-bcam, .hud-met-timing, .hud-met-compact, .bc-on, .watch-controls-on) :is(#hud-aero, #hud-bb),
+body[data-hud-hide~="aero"] #hud-aero,
+body[data-hud-hide~="bb"] #hud-bb { display: none; }
 body.hud-met-driver #hud-sectors,
 body.hud-met-driver #hud-box-best,
 body.hud-met-compact #hud-sectors,
@@ -599,8 +598,6 @@ body[data-hud-hide~="gear"] #hud-gearbox { display: none !important; }
 body[data-hud-hide~="energy"] #hud-energy,
 body[data-hud-hide~="tyre"] #hud-tyre { display: none !important; }
 body[data-hud-hide~="ot"] #hud-ot,
-body[data-hud-hide~="aero"] #hud-aero,
-body[data-hud-hide~="bb"] #hud-bb,
 body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 /* SETTINGS checklist for the toggles above (runtime #pm-hud-elements). */
 #pm-hud-elements-list {
@@ -2131,7 +2128,7 @@ body.lt-open .touchbtn { display: none !important; }
    its own camera control. The timing tower and the PiP stay. */
 body.bc-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
 body.bc-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-work) { display: none !important; }
-body.bc-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
+body.bc-on :is(#hud-ot, #hud-sectors, #hud-limits) { display: none !important; }
 body.bc-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
 body.bc-on :is(.touchbtn, #campicker) { display: none !important; }
 body.bc-on :is(#btn-cam, #announce, #lights) { display: none !important; }
