@@ -4329,7 +4329,7 @@ function quitToMenuAfterCtxLost() {
     if (_softEl) _softEl.style.visibility = "";
   } catch (_) { /* harness: recovery must not throw over teardown */ }
   if (typeof restoreMenuAfterGraphicsReset === "function") restoreMenuAfterGraphicsReset();
-  if (typeof showCtxLostNotice === "function") showCtxLostNotice();
+  if (typeof showCtxLostNotice === "function") showCtxLostNotice({ force: true });
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
 }
 if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {

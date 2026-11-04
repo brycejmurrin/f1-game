@@ -129,3 +129,28 @@ test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
   assert.ok(i >= 0);
   assert.ok(game.slice(i, i + 400).includes('GfxEscalation.resetReloadBudget()'));
 });
+
+// #4818: blocked sessionStorage (getItem throws) must not show the card on a plain boot; only a forced real-loss call does.
+test("showCtxLostNotice: throwing sessionStorage stays hidden unless forced", () => {
+  const src = read("js/ui/select-screen.js");
+  const start = src.indexOf("const showCtxLostNotice = (opts) => {");
+  assert.ok(start >= 0, "showCtxLostNotice takes opts");
+  const end = src.indexOf("\n};\n", start) + 4;
+  const body = src.slice(start, end);
+  const run = (arg) => {
+    const card = { hidden: true };
+    const said = [];
+    const ctx = vm.createContext({
+      sessionStorage: { getItem() { throw new Error("SecurityError"); }, setItem() { throw new Error("SecurityError"); }, removeItem() { throw new Error("SecurityError"); } },
+      CTX_LOST_NOTICE_KEY: "n", CTX_LOST_EXHAUSTED_KEY: "e", CTX_LOST_NOTICE_MSG: "m", CTX_LOST_EXHAUSTED_MSG: "x",
+      ctxLostNotice: card, ctxLostSpoken: false, G: { state: "menu", announce: (m) => said.push(m) },
+      $: () => null, LiveRegion: { say: (m) => said.push(m) },
+    });
+    vm.runInContext(body + "\nshowCtxLostNotice(" + (arg ? JSON.stringify(arg) : "") + ");", ctx, { filename: absSrc("js/ui/select-screen.js") });
+    return { hidden: card.hidden, said };
+  };
+  const boot = run();
+  assert.equal(boot.hidden, true);
+  assert.deepEqual(boot.said, []);
+  assert.equal(run({ force: true }).hidden, false);
+});
