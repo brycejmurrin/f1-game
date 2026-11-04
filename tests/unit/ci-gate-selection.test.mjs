@@ -302,7 +302,7 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   // Decisions D1/D2 (the CI selection plan, PR #2560 §6): no draft
   // (run-ci or not) and no Pages call runs the node slices; ready PRs, the
   // nightly and dispatch do.
-  assert.ok(nodeIf.includes("!(github.event_name == 'pull_request' && github.event.pull_request.draft) &&"),
+  assert.ok(nodeIf.includes("!(github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast')) &&"),
     "node-suites skips every draft, every draft, now that drafts otherwise run");
   assert.match(nodeIf, /inputs\.concurrency_key == ''/, "node-suites skips on the Pages call");
   const steps = node.split(/\n      - /).slice(1);
@@ -338,7 +338,7 @@ test("test:xr is path-gated (a filter step of select → xr) and feeds ci-verdic
   assert.match(filter.run, /js\/xr\//);
   assert.match(filter.run, /vr-emulated/);
   assert.match(selectJob, /^      xr: \$\{\{ steps\.xrfilter\.outputs\.xr \}\}$/m);
-  assert.match(String(filter.if), /pull_request' && !github\.event\.pull_request\.draft/,
+  assert.match(String(filter.if), /pull_request' && !\(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)/,
     "the xr filter must skip draft PRs (heavy Chromium suite; fast tier)");
   const xr = (ciWorkflow.split("\n  xr:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(xr, "xr job missing");

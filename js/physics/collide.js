@@ -500,7 +500,6 @@ const Collide = (() => {
       // Trace-owned replay cars keep their recorded pose and speed, including
       // overlaps and pit-lane positions. They are never local contact bodies.
       if (ownsPose(a) || ownsPose(b)) return null;
-      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       // Net remotes draw from delayed sample() but contact must use predict()
       // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
       const aProg = a._nOk ? a._nProg : a.prog;
@@ -516,6 +515,8 @@ const Collide = (() => {
       if (adProg > LCAR_MAX && adProg < L - LCAR_MAX) return null;
       dProg = ((dProg + L / 2) % L + L) % L - L / 2;
       if (Math.abs(dProg) > LCAR_MAX) return null;
+      // After the prog rejects: owns() is a call, and a far pair is null either way (same result, fewer calls in the all-pairs path).
+      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       const dX = aX - bX;
       if (!Number.isFinite(dX)) return null;
       // Pair extents, yaw-aware (see LCAR_MAX above). Identical to LCAR/WCAR
@@ -609,11 +610,14 @@ const Collide = (() => {
         // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
         // second (collision bench S5). The flag is idempotent and stays.
         if (corr > CORR_EPS) {
-          if (a.human || b.human) a.contactT = b.contactT = 0.22;
+          // A net-owned (VS FRIEND) car is POSED from its owner's packets: its speed and flag are not ours to write (as the rear-end path below, #2164).
+          const nA = netPlay.owns(a), nB = netPlay.owns(b);
+          if (a.human || b.human) { if (!nA) a.contactT = 0.22; if (!nB) b.contactT = 0.22; }
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
           // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
-          else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
+          // A static body (retired wreck, net-owned rival: inv-mass 0) can never yield — its scrub is moot — so the mover yields (#4826). A net-owned car's speed and flag are never written (#4833).
+          if (!iA ? false : !iB ? true : AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last && !nA) a.speed = scrub(a.speed, rubScrub); if (!nA) a.contactT = 0.22; }
+          else { if (last && !nB) b.speed = scrub(b.speed, rubScrub); if (!nB) b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars
           // touching with no correction left to apply — re-fired audio, shake

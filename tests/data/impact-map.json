@@ -252,6 +252,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
@@ -1044,6 +1045,7 @@
         "tests/unit/radio-voice.test.mjs"
       ],
       "unlock": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
       "voicesFor": [
@@ -2838,6 +2840,7 @@
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
@@ -4630,6 +4633,7 @@
     "js/career/season-cal.js": {
       "applyConfig": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4654,6 +4658,7 @@
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "config": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -5673,6 +5678,7 @@
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "resolve": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "validateKey": [
@@ -7864,6 +7870,7 @@
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/game-boot-claim-fail.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
@@ -8418,6 +8425,9 @@
       "hoseReel": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "monitorGantry": [
+        "tests/unit/garage-live-glow.test.mjs"
+      ],
       "noseTrolley": [
         "tests/unit/garage-mesh.test.mjs"
       ],
@@ -8467,6 +8477,7 @@
     },
     "js/garage/scene-live.js": {
       "paintLive": [
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ],
       "*": [
@@ -8493,6 +8504,7 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -11023,6 +11035,9 @@
       "hookCounts": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
+      "passStats": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
       "phaseStats": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
@@ -11323,7 +11338,8 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {
@@ -12624,12 +12640,18 @@
       "enabled": [
         "tests/unit/wheel-state.test.mjs"
       ],
+      "mode": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
       "setAssistLevel": [
         "tests/unit/wheel-state.test.mjs"
       ],
       "setEnabled": [
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "setMode": [
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
@@ -15141,6 +15163,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/assets-unfilter-cap.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/import-models.test.mjs",
@@ -17006,6 +17029,7 @@
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -17070,6 +17094,7 @@
     "js/track/core/pit.js": {
       "build": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -17082,6 +17107,7 @@
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -17464,7 +17490,9 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
+        "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
@@ -18383,7 +18411,8 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
-        "tests/unit/trace-census.test.mjs"
+        "tests/unit/trace-census.test.mjs",
+        "tests/unit/trace-gate.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18566,6 +18595,9 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/ui/look-avail.js": {

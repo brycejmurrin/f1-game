@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { fuzz, mutate, findBadLiveValues, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
+import { fuzz, mutate, findBadLiveValues, makeRng, hasOwnProtoDeep, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
@@ -743,4 +743,16 @@ test("200 GhostShare decodes stay under 2 s of CPU", async (t) => {
   // Cap the slice itself so a sudden regression (inflate loops, etc.) fails here.
   assert.ok(slice < 2000, `200 GhostShare trials took ${slice} ms of CPU (budget 2000 ms)`);
   t.diagnostic(`budget slice: ${slice} ms for 200 GhostShare.decode trials`);
+});
+
+test("seeded fuzz generates real own __proto__ keys and pollutes nothing (#4829)", () => {
+  const rng = makeRng("x");
+  let own = 0;
+  for (let i = 0; i < 2000; i++) {
+    const v = mutate({ a: 1, b: "s" }, rng);
+    if (hasOwnProtoDeep(v)) own++;
+    assert.equal({}.polluted, undefined, "trial " + i + " polluted Object.prototype");
+    assert.equal({}.again, undefined);
+  }
+  assert.ok(own > 0, "no mutation had an own __proto__ key in 2000 trials");
 });

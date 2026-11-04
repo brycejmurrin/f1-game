@@ -382,12 +382,12 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   assert.match(step, /--budget-min "\$BUDGET_MIN"/);
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
-  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '5' \|\| '' \}\}/);
+  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '5' \|\| '' \}\}/);
   // The nightly widens to 12; a DRAFT gets no OVERFLOW legs (the first draft push of #4515 fanned out to 24 browser
   // legs on the default 11, 2026-11-03). This caps the overflow pool only: fit() never drops a routed spec, so the
   // bounded spill and oversize legs still run (26 legs on that PR's 660-file diff at 0); ready, dispatch and the
   // train take the default.
-  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '0' \|\| '' \}\}/,
+  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '0' \|\| '' \}\}/,
     "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan; a draft takes no overflow legs");
 });
 
@@ -796,12 +796,14 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     `hud-layout.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
     "it boots a full race per case and cannot pass there; see Pages #1967");
 
+  // #4837: the steer x gears matrix now shares one boot per viewport, so the
+  // spec is ~33 tests / ~21 min and may fit the budgeted cut like physics-hotpath
+  // does (see the next test). The RULE is unchanged: wherever it lands, its job's
+  // per-test cap must clear its declaration (asserted below).
   const r = fit([pin], 26);
-  assert.deepEqual(r.selected, [], "the budgeted gate must not select it");
-  assert.ok(measuredCheap(pin),
-    "hud-layout is measured under gate/3 — if that flips, restore the overBudgetRun pin");
-  assert.ok(r.oversize.some((s) => s.file === pin),
-    "measuredCheap + too big for the cut → oversize (still not selected)");
+  assert.ok(measuredCheap(pin), "hud-layout is measured under gate/3");
+  assert.ok(r.selected.length + r.oversize.length + r.overBudgetRun.length >= 1,
+    "hud-layout lands in a shard somewhere (selected, oversize or over-budget pool)");
   const job = shards(r).find((j) => j.specs.split(" ").includes(pin));
   assert.ok(job && job.perTest >= own / 1000, `its job's per-test cap clears its ${own / 1000}s declaration`);
 });
@@ -1825,7 +1827,7 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
     assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
   }
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
+  assert.match(src, /kind === "css"\s*\? \[\.\.\.new Set\(\[\.\.\.cssSpecs\(changed\), \.\.\.sourceAffected/);
   assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
 
@@ -2100,4 +2102,15 @@ test("#4768: a vendor bump is routed, and an unrouted path in a mixed diff is no
   const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["controller.html", "js/ui/scale.js"] });
   assert.equal(r.reason, "infra");
   assert.deepEqual(r.unclaimed, ["controller.html"]);
+});
+
+test("select(): a css-only diff keeps the SOURCE_AFFECTED pins (#4827)", () => {
+  const r = selectFor({ "css/career.css": "/* fixture edit */\n" });
+  assert.ok(filesOf(r).includes("tests/specs/career-hub.spec.js"), "css/career.css must schedule career-hub");
+});
+
+test("select(): the helpers select-specs imports are TRACKED (#4827)", () => {
+  for (const f of ["tools/ci/change-kind.mjs", "tools/ci/spec-timings.mjs", "tools/lib/changed-files.mjs", "tools/lib/impact-map.mjs"]) {
+    assert.equal(selectFor({ [f]: "// fixture edit\n" }).reason, "infra", f);
+  }
 });

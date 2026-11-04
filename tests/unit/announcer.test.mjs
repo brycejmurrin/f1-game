@@ -1436,3 +1436,14 @@ test("storm introductions warn of heavy rain and preserve the existing wet circu
   assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
   assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
 });
+
+test("unlock() does not resume a context that SOUND OFF suspended (#4831)", () => {
+  for (const [on, want] of [[false, 0], [true, 1]]) {
+    const { G, context } = load();
+    let resumes = 0;
+    context.window.RadioSquelchCtx = { state: "suspended", resume() { resumes++; return Promise.resolve(); } };
+    context.GameAudio.enabled = () => on;
+    G.radio.unlock();
+    assert.equal(resumes, want, on ? "sound on: the prime still wakes the context" : "sound off: stays suspended");
+  }
+});

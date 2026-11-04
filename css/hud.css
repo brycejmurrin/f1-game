@@ -68,7 +68,7 @@
    Readouts clear their measured rectangles independently of HUD scale. */
 :root {
   --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
-  --tap-hud: calc(var(--tap) * var(--hud-btn-z));
+  --tap-hud: calc(44px * var(--hud-btn-z)); /* HUD-only base: no --ui-scale in the chain (#4819) */
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
    and PAUSE paint 44px on a phone. Restating it on body:not(.desktop) was tried
@@ -137,7 +137,7 @@
    top band at ~0.95 and dropped the gap chip on every phone (hud-mock
    2026-10-14); fitHud's key carries the flip, so the tower re-centres once. */
 #hud-delta[data-pending] #hud-delta-n { visibility: hidden; }
-body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
+body:not(.desktop) #hud-delta[data-pending] { display: none; }
 /* THE LAP JUST DRIVEN: in a race the TIME box holds it for 3 s after the line
    (js/ui/hud.js, data-hold) — green when it is a personal best. Same digits,
    same slot: colour only, no width. */
@@ -152,17 +152,13 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
 }
 @keyframes pos-flash { from { transform: scale(1.18); } }
 /* ONE TIMING STRIP (design pass 2a, docs/notes/DESIGN-PASS-2A-HUD-2026-10-30.md): one plate, hairline
-   dividers, the team keyline once on POS, the one light cell (the rank you hunt). A rank change keeps its
-   hue on a dark pill for the flash. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
+   dividers, the team keyline once on POS. A rank change recolours the POS text only. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
 body:not(.hud-prof-broadcast) .hud-top { gap: 0; background: var(--hud-strip-bg); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) .hud-top > .hud-box { --hud-box-stripe: 0px; background: none; border-radius: 0; box-shadow: inset 1px 0 0 var(--plate-line); }
-body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-ink-light); box-shadow: inset 3px 0 0 var(--accent);
+body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-strip-bg); box-shadow: inset 3px 0 0 var(--accent);
   border-radius: var(--r-xs) 0 0 var(--r-xs); }
-body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-dark); text-shadow: none; }
-/* HIGH CONTRAST (the shipped default) gives every .hud-box its dark plate at (1,2,0), which turned the light POS
-   cell dark under its dark ink: "22/22" at ~1.06:1 (UI hunt #3). The hero cell keeps its light plate. */
-:root[data-ui-contrast="high"]:has(> body:not(.hud-prof-broadcast)) #hud-box-pos { background: var(--hud-ink-light); }
-body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
+body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-light); text-shadow: none; }
+/* POS is dark like the rest of the strip, white text. A pass changes the TEXT colour only (no pill). */
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower-ink); }
 /* Progress first, timing second. LAP closes the progress group with an inset
@@ -394,9 +390,7 @@ body[data-hl-set="helmet"] #hud-gearbox {
 body.hud-prof-minimal #hud-sectors,
 body.hud-prof-minimal #hud-box-best,
 body.hud-prof-minimal #hud-energy,
-body.hud-prof-minimal #hud-ot,
-body.hud-prof-minimal #hud-aero,
-body.hud-prof-minimal #hud-bb { display: none !important; }
+body.hud-prof-minimal #hud-ot { display: none !important; }
 /* …BUT THE PIT CUE IS PROMOTED, NOT DROPPED. MINIMAL hides the map, and with it
    the only other thing that says where the pit entry is — so the cue, the one
    element that knows both the direction (its arrow) and the distance (its
@@ -422,9 +416,7 @@ body.hud-gaps-low.hud-hide-map .hud-gaps {
 }
 body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
-body.hud-bcam #hud-aero,
 body.hud-bcam #hud-energy,
-body.hud-bcam #hud-bb,
 body.hud-bcam #hud-limits { display: none !important; }
 body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
 /* TV cameras keep speed and drop the gearbox plate, so the number sat on the
@@ -520,16 +512,19 @@ body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
    Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
 body.hud-met-timing #hud-energy,
 body.hud-met-timing #hud-ot,
-body.hud-met-timing #hud-aero,
 body.hud-met-compact #hud-energy,
-body.hud-met-compact #hud-ot,
-body.hud-met-compact #hud-aero { display: none !important; }
-body.hud-met-timing #hud-bb,
-body.hud-met-compact #hud-bb { display: none !important; }
+body.hud-met-compact #hud-ot { display: none !important; }
 /* BRAKE BIAS is a desktop readout by default: on a touch device its extra row
    lifted OVERTAKE / AERO into the sector box (hud-layout.spec broadcast + heli).
    A player who places it in MOVE & SIZE (data-hl-user) still gets it. */
 body:not(.desktop) #hud-bb:not([data-hl-user]) { display: none; }
+/* AERO and BRAKE BIAS hide in plain `display: none`: no rule anywhere sets a
+   `display` on either id, so there is nothing for `!important` to beat. The
+   hide reasons (MINIMAL, TV cameras, TIMING / COMPACT metrics, a replay, the
+   per-element toggles) are ONE rule now, not six. */
+body:is(.hud-prof-minimal, .hud-bcam, .hud-met-timing, .hud-met-compact, .bc-on, .watch-controls-on) :is(#hud-aero, #hud-bb),
+body[data-hud-hide~="aero"] #hud-aero,
+body[data-hud-hide~="bb"] #hud-bb { display: none; }
 body.hud-met-driver #hud-sectors,
 body.hud-met-driver #hud-box-best,
 body.hud-met-compact #hud-sectors,
@@ -588,7 +583,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
 #hud-delta[data-sign="slow"] .hud-value { color: var(--slower-ink); }
-#hud-delta[hidden] { display: none !important; }
+#hud-delta[hidden] { display: none; }
 /* Ghost reference is a hollow ring, not only the faster/slower ink. */
 #hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
 /* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
@@ -603,8 +598,6 @@ body[data-hud-hide~="gear"] #hud-gearbox { display: none !important; }
 body[data-hud-hide~="energy"] #hud-energy,
 body[data-hud-hide~="tyre"] #hud-tyre { display: none !important; }
 body[data-hud-hide~="ot"] #hud-ot,
-body[data-hud-hide~="aero"] #hud-aero,
-body[data-hud-hide~="bb"] #hud-bb,
 body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
 /* SETTINGS checklist for the toggles above (runtime #pm-hud-elements). */
 #pm-hud-elements-list {
@@ -2121,11 +2114,7 @@ body.lt-open .touchbtn { display: none !important; }
   background: var(--hc-hud-plate);
   outline: 1px solid var(--hc-hud-line);   /* outline leaves the inset team stripe intact */
 }
-/* …except the timing strip's POS cell, which keeps its light plate: its ink is --hud-ink-dark
-   (design pass 2a), and the solid dark plate above (#announce in :is() outranks the POS rule)
-   painted the player's rank dark on dark (Bryce, iPhone, 2026-10-30). */
-/* (1,3,0) over the plate's (1,2,0); outside BROADCAST, whose tower has its own POS. */
-:root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *) { background: var(--hud-ink-light); }
+/* The POS cell takes the same dark plate as every .hud-box (white ink, #4526): no light-cell exception. */
 @media (forced-colors: active) { .hud-box { --hud-box-stripe: 0px; } } /* tokens.css supplies the system border */
 /* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
    A REAL RACE WATCH / HIGHLIGHTS run (body.bc-on). The picture is a
@@ -2139,7 +2128,7 @@ body.lt-open .touchbtn { display: none !important; }
    its own camera control. The timing tower and the PiP stay. */
 body.bc-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
 body.bc-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-work) { display: none !important; }
-body.bc-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
+body.bc-on :is(#hud-ot, #hud-sectors, #hud-limits) { display: none !important; }
 body.bc-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
 body.bc-on :is(.touchbtn, #campicker) { display: none !important; }
 body.bc-on :is(#btn-cam, #announce, #lights) { display: none !important; }

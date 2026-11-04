@@ -29,6 +29,19 @@ const ELEVATION_TRACKS = [
 // Circuits with `banked: true` (raised outer edge through the fast corners).
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 
+// BROWSER SAMPLE (#4837, Bryce's decision 2026-11-04: "option 1, sample in the
+// browser, the rest in the VM"). The per-circuit grade/road-following recipe has a
+// full VM twin (tests/unit/elevation-tracks-vm.test.mjs, same launches and
+// thresholds, all 40 circuits, run by the gated game-vm group), so the browser keeps
+// only the circuits that exercise something the VM cannot see under a REAL render:
+// the two banking bowls, the steepest grade (monaco), the heaviest build (mugello),
+// Eau Rouge (spa) and cota's climbing turn 1. The other 34 stay DECLARED (the twin's
+// count guard in tools/ci/twinned-specs.mjs and circuit-scope.test.mjs compares
+// declared tests) and skip in the browser, ~21 s each. APEX_ELEVATION_ALL=1 runs
+// every circuit here again.
+const BROWSER_SAMPLE = new Set(["zandvoort", "madrid", "monaco", "mugello", "spa", "cota"]);
+const FULL_BROWSER_SWEEP = process.env.APEX_ELEVATION_ALL === "1";
+
 // The two launch speeds the gradient probes start from, named because the
 // assertions below compare against them. AGENTS.md's PACE rule: a speed
 // compared against a bare literal goes stale the moment PACE is retuned, and
@@ -210,6 +223,8 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
 
   for (const id of ELEVATION_TRACKS) {
     test(`${id}: slope gravity behaves + road-following holds on the grade`, async ({ page }) => {
+      test.skip(!FULL_BROWSER_SWEEP && !BROWSER_SAMPLE.has(id),
+        "covered by tests/unit/elevation-tracks-vm.test.mjs; APEX_ELEVATION_ALL=1 runs it here");
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await startRace(page, id);

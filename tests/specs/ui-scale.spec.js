@@ -1511,7 +1511,11 @@ test.describe("Custom Home width on touch", () => {
       if (index !== 1) {
         const box = await page.locator("#menu-buttons").boundingBox();
         expect(box).toBeTruthy();
-        expect(Math.abs(box.width - viewport.width * 0.2)).toBeLessThanOrEqual(1);
+        // WIDTH 20 asks for 20 % of the screen, but the grid is floored at the narrowest width where every door
+        // fits its label (#4816): never narrower than asked, and CAREER MODES stays a real door.
+        expect(box.width).toBeGreaterThanOrEqual(viewport.width * 0.2 - 1);
+        expect(box.width).toBeLessThanOrEqual(viewport.width * 0.5);
+        expect((await page.locator("#mb-career").boundingBox()).width).toBeGreaterThanOrEqual(44);
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.y).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
@@ -1541,6 +1545,54 @@ test.describe("Custom Home width on touch", () => {
     await testInfo.attach("custom-home-inspection", {
       body: JSON.stringify(observations), contentType: "application/json",
     });
+  });
+});
+
+test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+
+  test("raising WIDTH widens the cluster and the hero with its outer edge fixed", async ({ page }) => {
+    // Bryce's real landscape layout (tests/data/settings-defaults-export.json): WIDTH 20, SIZE 91, X -2.
+    const wide = {
+      btns: { x: -2, y: -2, size: 91, width: 20 },
+      title: { x: 3, y: 9, size: 106 },
+      art: { x: -6, y: 0, size: 88 },
+      layout: "grid", side: "auto",
+    };
+    await page.addInitScript(value => {
+      localStorage.setItem("apex26.titleLayout", JSON.stringify(value));
+    }, { v: 2, wide });
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex && typeof TitleLayout !== "undefined",
+      null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("body")).toHaveAttribute("data-shape", "wide");
+    for (const side of ["auto", "swap"]) {
+      const rows = [];
+      for (const width of [20, 30, 40, 50, 60, 80, 100]) {
+        rows.push(await page.evaluate(({ wide, side, width }) => {
+          TitleLayout.apply({ ...wide, side, btns: { ...wide.btns, width } });
+          const box = id => document.getElementById(id).getBoundingClientRect();
+          const grid = box("menu-buttons");
+          return { width, left: grid.left, right: grid.right, w: grid.width, hero: box("menu-hero").width,
+            career: box("mb-career").width };
+        }, { wide, side, width }));
+      }
+      const first = rows[0], last = rows[rows.length - 1];
+      for (const [i, row] of rows.entries()) {
+        // The #4816 guard: WIDTH 20 (and every step) keeps CAREER a real door.
+        expect(row.career, `CAREER at WIDTH ${row.width} (${side})`).toBeGreaterThanOrEqual(44);
+        // The outer edge (right; left when swapped) stays put: WIDTH resizes, never translates.
+        const edge = side === "swap" ? row.left - first.left : row.right - first.right;
+        expect(Math.abs(edge), `${side} outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+        if (i) {
+          expect(row.w, `cluster width ${side} ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
+          expect(row.hero, `hero width ${side} ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].hero - 0.5);
+        }
+      }
+      expect(last.w - first.w, `${side}: WIDTH 20 -> 100 grows the cluster`).toBeGreaterThan(300);
+      expect(last.hero - first.hero, `${side}: WIDTH 20 -> 100 grows the hero`).toBeGreaterThan(300);
+      expect(rows[3].w - rows[2].w, `${side}: WIDTH 40 -> 50 grows the cluster`).toBeGreaterThan(40);
+    }
   });
 });
 
