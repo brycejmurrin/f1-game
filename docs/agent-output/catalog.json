@@ -2917,6 +2917,26 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/map/build-project-map.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/map/explorer.html",
+      "classification": "asset",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/map/flows.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/mcp/apex-claude-agents.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

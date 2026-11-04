@@ -153,6 +153,22 @@ args over new `G` façade members. Extract cohesive blocks with
 - [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) — historical open/fixed register
 - [AGENT-SURFACE.md](AGENT-SURFACE.md) — skills, MCP, hooks map
 
+## Project map
+
+`node tools/map/build-project-map.mjs --html` writes `artifacts/project-map/project-map.json` and a
+self-contained explorer page `artifacts/project-map/index.html` (template `tools/map/explorer.html`).
+Both are regenerable output, never committed. The node set is `tools/manifest.cjs`. Each node carries
+layer, area, roster (`boot`, `deferred:*`, `lazy:*`), lines, 30-day commit count, header doc, owning
+skills (a `paths:` glob, or a SKILL.md that names the file), rule files, CI groups (`pick-tests.mjs`),
+the tests that name its path, and the globals it declares with their exported members. Edges: `calls`
+(A references a global B declares; espree + eslint-scope, the script-global model apex-lsp's tsc
+project uses), `facade` (`G.*` reads, from `tools/check/check-gctx.mjs`), `loads-before` (the
+manifest's `HARD_EDGES` / `*_EDGES`) and `tested-by`. `--lsp` takes symbols from apex-lsp
+documentSymbol instead. The Flows view reads `tools/map/flows.json`: curated file:line chains (boot,
+frame tick, touch steering, race start, finish, career, VS FRIEND, `__apex`). Each run marks a step
+whose line no longer names its symbol `stale`; fix the step in that file when the code moves. A
+shallow clone undercounts churn: run `git fetch --shallow-since=<30 days ago> origin <branch>` first.
+
 ---
 
 ## session flow (menu → race → results)

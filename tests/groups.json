@@ -805,6 +805,8 @@
     "tests/unit/process-dashboard.test.mjs",
     "tests/unit/profile-lib.test.mjs",
     "tests/unit/profile-mcp.test.mjs",
+    "// Project map generator (tools/map/build-project-map.mjs): node set == manifest js roster, flows not stale; ~12 s.",
+    "tests/unit/project-map.test.mjs",
     "// provenance: tools/ci/lib/provenance.mjs over tests/fixtures/provenance (Bryce's click vs an app write, decision: comments, label events, paginated readers); no network; < 0.2 s.",
     "tests/unit/provenance.test.mjs",
     "// The branch-prune rule behind prune-branches.yml: merged-only, never an",

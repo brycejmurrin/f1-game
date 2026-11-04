@@ -2031,6 +2031,21 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/map/build-project-map.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One summary line (node and edge counts, output dir); the JSON on --stdout."
+    },
+    "tools/map/explorer.html": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Page template; the __MAP_DATA__ marker the generator replaces."
+    },
+    "tools/map/flows.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Curated flow steps (file, symbol, line, note) the generator checks for staleness."
+    },
     "tools/mcp/apex-claude-agents.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
