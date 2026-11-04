@@ -1406,6 +1406,7 @@ const LAZY_NET = [
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
+  "js/net/overlay-net.js",      // OverlayNet: the stream overlay over the same wire (STREAM OVERLAY in SETTINGS; overlay.html#ov=CODE)
 ];
 
 // WORKER SCRIPTS: no <script> tag and never injected into the page — each is

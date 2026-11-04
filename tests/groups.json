@@ -2083,6 +2083,7 @@
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],

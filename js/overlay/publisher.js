@@ -94,31 +94,46 @@ const OverlayPublisher = (function () {
 
   // GAME PAGE BOOT: listen for overlays; on the first one, make sure __apex is
   // loaded (GameMetrics holds game.js's memoised loader) and publish; stop at none.
+  // Listeners are the same-browser BroadcastChannel bridge PLUS an optional net hub
+  // (OverlayNet.hub, attached by the STREAM OVERLAY setting) behind one bridge face.
+  let booted = null;   // the game page's controller; the STREAM OVERLAY setting reaches it via current()
   function boot() {
     if (typeof document === "undefined" || !document.getElementById("announce") || typeof OverlayBridge === "undefined") return null;
-    let pub = null;
-    const bridge = OverlayBridge.host({
-      onPeers(n) {
-        if (n > 0 && !pub) {
-          const ready = window.__apex ? Promise.resolve()
-            : typeof GameMetrics !== "undefined" && GameMetrics.agentLoader && GameMetrics.agentLoader()
-              ? Promise.resolve(GameMetrics.agentLoader()()) : Promise.resolve();
-          ready.then(() => {
-            if (pub || bridge.peers() === 0) return;
-            Log.info("ui", "overlay listener connected: publishing");
-            pub = start({ bridge, apex: () => window.__apex || null, document,
-              teams: typeof Teams !== "undefined" ? Teams.LIST : [] });
-          }, () => Log.warn("ui", "overlay: the agent surface did not load"));
-        } else if (n === 0 && pub) {
-          pub.stop(); pub = null;
-          Log.info("ui", "overlay listeners gone: stopped publishing");
-        }
-      },
-    });
-    return bridge;
+    let pub = null, net = null, local = null;
+    const total = () => (local ? local.peers() : 0) + (net ? net.peers() : 0);
+    const both = {
+      peers: total,
+      takeFresh() { const a = local && local.takeFresh(), b = net && net.takeFresh(); return !!(a || b); },
+      send(frame) { const a = local && local.send(frame), b = net && net.send(frame); return !!(a || b); },
+    };
+    function update() {
+      const n = total();
+      if (n > 0 && !pub) {
+        const ready = window.__apex ? Promise.resolve()
+          : typeof GameMetrics !== "undefined" && GameMetrics.agentLoader && GameMetrics.agentLoader()
+            ? Promise.resolve(GameMetrics.agentLoader()()) : Promise.resolve();
+        ready.then(() => {
+          if (pub || total() === 0) return;
+          Log.info("ui", "overlay listener connected: publishing");
+          pub = start({ bridge: both, apex: () => window.__apex || null, document,
+            teams: typeof Teams !== "undefined" ? Teams.LIST : [] });
+        }, () => Log.warn("ui", "overlay: the agent surface did not load"));
+      } else if (n === 0 && pub) {
+        pub.stop(); pub = null;
+        Log.info("ui", "overlay listeners gone: stopped publishing");
+      }
+    }
+    local = OverlayBridge.host({ onPeers: update });
+    return booted = {
+      // The STREAM OVERLAY hub: its onPeers must call update() (attach hands that back).
+      attachNet(make) { net = make(update); return net; },
+      detachNet() { if (net) { net.close(); net = null; update(); } },
+      peers: total,
+      close() { if (local) local.close(); },
+    };
   }
 
-  return Object.freeze({ TICK_MS, css, input, tapCaptions, start, boot });
+  return Object.freeze({ TICK_MS, css, input, tapCaptions, start, boot, current: () => booted });
 })();
 Object.freeze(OverlayPublisher);
 if (typeof document !== "undefined" && !document.querySelector('main#overlay[role="region"]')) OverlayPublisher.boot();

@@ -378,3 +378,26 @@ Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;
 like the shell's; its script list is `CONTROLLER` in `tools/manifest.cjs`,
 written by `gen-shell.mjs`. The phone runs no service worker and no store.
 Tests: `tests/unit/phone-pad.test.mjs` (both halves over the loopback transport).
+
+## Stream overlay over the wire (`js/net/overlay-net.js`, `overlay.html#ov=CODE`)
+
+`OverlayBridge` (BroadcastChannel) reaches a second window of the *same browser*; OBS's Browser Source is a
+separate profile, so SETTINGS → STREAM OVERLAY also rides the VS FRIEND / phone-pad wire. The button mints a room
+(`NetRendezvous`, same six-letter codes, same public/private relay rules) and shows a copyable
+`overlay.html#ov=CODE` link plus connected/waiting. The viewer is **passive**: it never enters
+`NetSession`/`NetPlay`, so it takes no seat (`MAX_GUESTS` is untouched) and sends only a hello. Up to
+`OverlayNet.MAX_VIEWERS` (3) viewers; the room stays open for the next one, so an OBS reload re-dials the same code.
+
+Wire (OverlayFeed v1): `STATE` carries `["F", frame]` — the differ's 4 Hz patches and a 2 s full frame (lossy; a
+dropped patch heals at the next full frame, and the viewer drops any seq it has already passed). `EVENT` carries one
+`{t:"hi"}` each way; the viewer's hello resets the host differ so the first frame a viewer sees is FULL. A patch
+repeating an already-shown caption id has the caption stripped, so a duplicate cannot re-arm the card.
+`OverlayPublisher` publishes while *either* the BroadcastChannel bridge or the net hub has a listener.
+`tests/unit/overlay-net.test.mjs` drives both ends over `NetTransport.loopback()` with latency, loss and jitter.
+
+**Manual OBS checklist (Windows, macOS) — NOT RUN by the agent; Bryce to record results:**
+1. Game → SETTINGS → STREAM OVERLAY → ON; COPY LINK.
+2. OBS → Sources → Browser → paste the link, 1920×1080, "Shutdown source when not visible" off.
+3. Status in the game reads "1 overlay connected"; tower and captions paint within ~10 s of the first lap.
+4. Refresh the OBS source: it re-dials and the first paint is a full frame.
+5. STREAM OVERLAY → OFF: the source shows the waiting card; no netplay seat was ever taken.
