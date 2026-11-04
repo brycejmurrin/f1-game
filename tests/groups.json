@@ -80,6 +80,7 @@
     "// #1682: repo-wide assert.match under tests/unit only goes down (source-pin → behaviour).",
     "tests/unit/assert-match-ratchet.test.mjs",
     "tests/unit/assets-pack.test.mjs",
+    "tests/unit/assets-unfilter-cap.test.mjs",
     "// #3296: material filmstrip PNGs require albedoMd5/normalMd5 (same as model md5).",
     "tests/unit/assets-verify-material-md5.test.mjs",
     "tests/unit/audit-circuit.test.mjs",
@@ -129,6 +130,7 @@
     "tests/unit/browser-workers.test.mjs",
     "tests/unit/build-client-drop.test.mjs",
     "tests/unit/build-gallery.test.mjs",
+    "tests/unit/byte-budget.test.mjs",
     "tests/unit/cam-avoid.test.mjs",
     "tests/unit/cam-comfort.test.mjs",
     "// Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.",
@@ -474,6 +476,8 @@
     "tests/unit/garage-interior-gate.test.mjs",
     "// The Blender garage light cues (ctx.cue in GarageScene.live) and the podium / rain / neon moods.",
     "tests/unit/garage-light-cues.test.mjs",
+    "// LIVE atlas emissive gantry LCDs, night lamp pools, desk spill and floor reflection (Lane 7).",
+    "tests/unit/garage-live-glow.test.mjs",
     "// Garage room LOOKS (design preview): every look builds a valid bay and changes the room.",
     "tests/unit/garage-looks.test.mjs",
     "tests/unit/garage-perf-mesh-free.test.mjs",
@@ -531,6 +535,7 @@
     "// insertAdjacentHTML writes a constant or is in the reasoned allowlist",
     "// (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.",
     "tests/unit/html-sink-lint.test.mjs",
+    "tests/unit/hud-dom-budget-vm.test.mjs",
     "tests/unit/hud-feel.test.mjs",
     "tests/unit/hud-metrics-layout.test.mjs",
     "tests/unit/hud-minimap-pitmark.test.mjs",
@@ -748,7 +753,6 @@
     "tests/unit/pause-taps.test.mjs",
     "tests/unit/perf-frametime.test.mjs",
     "tests/unit/perf-governor.test.mjs",
-    "// Hot-function microbench in the game VM (step, physState, nodeAt): 6x the checked-in per-call baseline, and a 4x within-run window spread.",
     "tests/unit/perf-hot-bench.test.mjs",
     "// Perf sweep 2026-10-29 behaviour checks (game VM + fake AudioContext): SOUND OFF suspends, a tap does not wake it, SFX OFF builds no engine graph. ~3 s.",
     "tests/unit/perf-hunt-4.test.mjs",
@@ -1146,6 +1150,8 @@
     "tests/unit/tools-w13a-quick-validate.test.mjs",
     "// Chrome trace → counts (layouts/s, invalidation call sites, GC/s, long tasks, self time): synthetic fixture, no browser (RESEARCH-B-PERF-TESTING-2026-11-04).",
     "tests/unit/trace-census.test.mjs",
+    "// Trace gate (#4776): window by marks + judge vs tests/data/perf-trace-baseline.json on the shared census. No browser.",
+    "tests/unit/trace-gate.test.mjs",
     "tests/unit/track-accuracy-validator.test.mjs",
     "// Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.",
     "tests/unit/track-build-grids.test.mjs",
@@ -1584,6 +1590,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hud-dom-budget-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -1602,6 +1609,7 @@
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
+        "tests/unit/perf-vm-op-counts.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1699,6 +1707,7 @@
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
+        "tests/unit/perf-vm-op-counts.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1812,6 +1821,7 @@
         "tests/unit/obs-act-edge-vm.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
+        "tests/unit/perf-vm-op-counts.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
@@ -2090,6 +2100,7 @@
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
@@ -2143,6 +2154,12 @@
     "test:perf-session": {
       "files": [
         "tests/specs/perf-session-budgets.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:perf-trace-census": {
+      "files": [
+        "tests/specs/perf-trace-census.spec.js"
       ],
       "kind": "browser"
     },

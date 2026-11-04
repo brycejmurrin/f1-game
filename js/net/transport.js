@@ -666,8 +666,11 @@ const NetTransport = (function () {
   // The default ICE-restart courier (see rtc()): the room service's Nostr bus,
   // hosting the restart offer / replying to it under a per-connection code.
   // Null where there is no bus, which leaves the grace window as the only cure.
+  // Also null with a private relay configured: restarts must not leak to the
+  // public relays (rendezvous.js treats the private relay as a security boundary).
   function nostrCourier() {
     if (typeof NetNostr === "undefined" || !NetNostr.available()) return null;
+    if (typeof NetRendezvous !== "undefined" && NetRendezvous.usingPrivateRelay && NetRendezvous.usingPrivateRelay()) return null;
     return {
       offer: (code, sdp, token) => NetNostr.directExchange({ code, send: sdp, token }),
       answer: (code, reply, token, listen) => NetNostr.directExchange({ code, reply, token, listen: !!listen }),

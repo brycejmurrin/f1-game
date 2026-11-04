@@ -2838,6 +2838,7 @@
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
@@ -3245,6 +3246,7 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ],
@@ -3254,7 +3256,6 @@
       "*": [
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/fin-design.test.mjs",
-        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
@@ -3555,6 +3556,7 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/crest-marks.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
@@ -3568,7 +3570,6 @@
       "*": [
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/fin-design.test.mjs",
-        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs"
@@ -5673,6 +5674,7 @@
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "resolve": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "validateKey": [
@@ -7761,6 +7763,7 @@
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -8417,6 +8420,9 @@
       "hoseReel": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "monitorGantry": [
+        "tests/unit/garage-live-glow.test.mjs"
+      ],
       "noseTrolley": [
         "tests/unit/garage-mesh.test.mjs"
       ],
@@ -8466,6 +8472,7 @@
     },
     "js/garage/scene-live.js": {
       "paintLive": [
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ],
       "*": [
@@ -8492,6 +8499,7 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -9547,40 +9555,54 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeEvent": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeHud": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeSample": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeEvent": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeHaptic": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeHello": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeHud": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "encodeSample": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "hudOf": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs"
+      ],
       "padUrl": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "pairingFromUrl": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs"
       ],
       "teamHex": [
         "tests/unit/phone-pad.test.mjs"
@@ -10006,6 +10028,7 @@
         "tests/unit/net-rendezvous.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs"
@@ -10068,6 +10091,7 @@
     },
     "js/net/ice.js": {
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-session.test.mjs",
@@ -10086,6 +10110,7 @@
         "tests/unit/net-transport.test.mjs"
       ],
       "*": [
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs"
       ]
     },
@@ -10097,6 +10122,7 @@
         "tests/unit/net-snapshot.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10108,6 +10134,7 @@
       ],
       "createInterp": [
         "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
@@ -10118,9 +10145,6 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
-      ],
-      "*": [
-        "tests/unit/fuzz-untrusted-inputs.test.mjs"
       ]
     },
     "js/net/lobby-codes.js": {
@@ -10129,6 +10153,7 @@
         "tests/unit/lobby-codes.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -10359,9 +10384,11 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "clampWire": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-roster.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10423,6 +10450,7 @@
       ],
       "start": [
         "tests/specs/multiplayer-session.spec.js",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -10434,6 +10462,7 @@
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "stop": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -10443,6 +10472,7 @@
         "tests/unit/net-start-arming.test.mjs"
       ],
       "tick": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-roster.test.mjs",
@@ -10450,6 +10480,9 @@
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "validClassification": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs"
       ]
     },
     "js/net/nostr.js": {
@@ -10469,6 +10502,20 @@
         "tests/unit/no-bare-console.test.mjs"
       ]
     },
+    "js/net/overlay-net.js": {
+      "codeFromHash": [
+        "tests/unit/overlay-net.test.mjs"
+      ],
+      "join": [
+        "tests/unit/overlay-net.test.mjs"
+      ],
+      "overlayUrl": [
+        "tests/unit/overlay-net.test.mjs"
+      ],
+      "view": [
+        "tests/unit/overlay-net.test.mjs"
+      ]
+    },
     "js/net/qr.js": {
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
@@ -10486,6 +10533,7 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10606,6 +10654,7 @@
         "tests/unit/net-session.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10620,6 +10669,7 @@
         "tests/unit/net-roster.test.mjs"
       ],
       "pump": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -10639,6 +10689,7 @@
     "js/net/snapshot.js": {
       "createInterp": [
         "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
@@ -10679,10 +10730,12 @@
     },
     "js/net/strategy-wire.js": {
       "applyStrategy": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs"
       ],
       "create": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -10695,6 +10748,7 @@
         "tests/unit/netplay-resilience.test.mjs"
       ],
       "strategyState": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs"
       ]
@@ -10705,24 +10759,28 @@
         "tests/unit/net-transport.test.mjs"
       ],
       "loopback": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-transport.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "seededRnd": [
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-transport.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "shutdown": [
         "tests/unit/net-transport.test.mjs"
       ],
       "wire": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs"
       ]
     },
@@ -10742,10 +10800,12 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "createDiffer": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-net.test.mjs"
       ],
       "frame": [
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
       ],
@@ -10968,6 +11028,9 @@
         "tests/unit/gpu-test-run.test.mjs"
       ],
       "hookCounts": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "passStats": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
       "phaseStats": [
@@ -11270,7 +11333,8 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {
@@ -12571,12 +12635,18 @@
       "enabled": [
         "tests/unit/wheel-state.test.mjs"
       ],
+      "mode": [
+        "tests/unit/wheel-state.test.mjs"
+      ],
       "setAssistLevel": [
         "tests/unit/wheel-state.test.mjs"
       ],
       "setEnabled": [
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
+        "tests/unit/wheel-state.test.mjs"
+      ],
+      "setMode": [
         "tests/unit/wheel-state.test.mjs"
       ],
       "stepPlayer": [
@@ -14846,6 +14916,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -15087,6 +15158,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/assets-unfilter-cap.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/import-models.test.mjs",
@@ -16282,6 +16354,7 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -16378,6 +16451,7 @@
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/model-sway-parity.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
@@ -16950,6 +17024,7 @@
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -17014,6 +17089,7 @@
     "js/track/core/pit.js": {
       "build": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -17026,6 +17102,7 @@
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
@@ -17408,7 +17485,9 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
+        "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
@@ -18327,7 +18406,8 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
-        "tests/unit/trace-census.test.mjs"
+        "tests/unit/trace-census.test.mjs",
+        "tests/unit/trace-gate.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18510,6 +18590,9 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/ui/look-avail.js": {
@@ -19108,6 +19191,7 @@
       "create": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/debris-opts.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/scale-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs"
@@ -19527,6 +19611,9 @@
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
+      "spawn": [
+        "tests/unit/select-specs.test.mjs"
+      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
@@ -19535,8 +19622,7 @@
         "tests/unit/worker-pack-strip.test.mjs"
       ],
       "*": [
-        "tests/unit/global-registry.test.mjs",
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/workers/bitmap-decode-worker.js": {

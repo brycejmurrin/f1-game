@@ -799,3 +799,22 @@ test("setTimeoutMs raises the silence that ends the session", () => {
   for (let i = 201; i <= 300; i++) p.a.pump(t + i * 100);  // 30 s
   assert.equal(p.a.alive(), false, "past it");
 });
+
+test("a local clock stepped BACKWARDS (suspend/NTP) does not freeze an adaptive rival (presentedAt only moved forward)", () => {
+  // interp.sample() never rewinds presentedAt so a delay burst cannot replay a
+  // pose. A clock that steps back 3 s is not a burst: the old guard froze the
+  // rival at its last pose until local time caught up with it again.
+  const it = NetSnapshot.createInterp({ total: 5000, adaptive: true });
+  const pose = (peerT) => ({ s: peerT / 10, x: 0, head: 0, speed: 100, lap: 1 });
+  for (let p = 0; p <= 2000; p += 50) it.push(p, pose(p), p + 60);          // local = peer + 60
+  it.sample(2060);
+  const STEP = 3000;
+  let last = null;
+  for (let p = 2050; p <= 4000; p += 50) {                                   // local = peer + 60 - STEP
+    const local = p + 60 - STEP;
+    it.push(p - STEP, pose(p), local);
+    last = it.sample(local);
+  }
+  const expected = (4000 - 150) / 10;                                        // ~150 ms behind the newest peer pose
+  assert.ok(Math.abs(last.s - expected) < 40, `rival frozen after the clock stepped back: s=${last.s}, expected ~${expected}`);
+});

@@ -62,7 +62,8 @@ const SaveSchemaRegistry = (function () {
     "crewLook": entry("js/garage/scene-crew.js", "raw", 1, "rawScalar"),
     "crewVisit": entry("js/garage/arrival.js", "raw", 1, "rawScalar"),
     "career": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "json", 1, "json"),
-    "career.freeMoney": entry("js/career/career.js", "json", 1, "bool"),
+    "career.freeMoney": entry("js/career/career.js", "json", 1, "bool"), // legacy key: read once, copied to freeMoney, then cleared
+    "freeMoney": entry("js/career/career.js", "json", 1, "bool"),
     "careerSlot": entry("js/career/career.js", "json", 1, "careerSlot"),
     "circuitMastery": entry("js/race/race-insights.js", "json", 1, "json"),
     "customTeam": entry("js/career/custom-team.js", "json", 1, "json"),
@@ -174,6 +175,7 @@ const SaveSchemaRegistry = (function () {
     "trackId": entry("js/game.js", "json", 1, "string"),
     "turn": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "turnApi": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "wheelAssist": entry("js/physics/wheel-state.js (ABS/TC level; default off)", "raw", 1, "rawScalar"),
     "wheelState": entry("js/physics/wheel-state.js (opt-in #1628; default OFF)", "raw", 1, "rawScalar"),
     "wgxCapture": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "wgxInsetInPass": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),

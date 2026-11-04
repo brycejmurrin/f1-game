@@ -184,7 +184,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
 
 test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the sheet", () => {
   assert.match(SOURCE, /renderRoom\(\); if \(G\.refreshQualiGate\) G\.refreshQualiGate\(\);/);
-  assert.match(SOURCE, /if \(!sessions\.size\) \{ friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
+  assert.match(SOURCE, /if \(!sessions\.size\) \{\s*const wasGuest = role === "guest";\s*friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null;\s*cancel\(\); if \(G\.quitToMenu\) G\.quitToMenu\(\);/);
   assert.match(SOURCE, /if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
   assert.match(SOURCE, /cancel\(\);\s*\n\s*if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
 });
@@ -1638,6 +1638,38 @@ test("a joiner whose ICE fails while a guest is in the room reopens the SAME cod
   } finally { h.lobby.cancel(); }
 });
 
+test("a FULL code room reopens the same code when a guest leaves (#4820)", async () => {
+  const { h, made, rooms, ts, until, withGuest } = codeRoomHarness();
+  try {
+    await withGuest();
+    for (const [n, who] of [[2, "g2"], [3, "g3"]]) {
+      const t = ts[ts.length - 1];
+      await rooms[rooms.length - 1].onJoiner(who, "answer-" + n);
+      t.status = "open";
+      await until(() => made.length === n, "guest " + n + " session bound");
+      if (n === 2) await until(() => rooms.length === 3, "room reopened for guest 3");
+    }
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(h.lobby.status().guests, 3);
+    const before = rooms.length;
+    ts[1].closers[0]("remote");                       // guest 2 leaves
+    await until(() => rooms.length === before + 1, "the freed seat reopened the code");
+    assert.equal(rooms[rooms.length - 1].code, "ABC234");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a second HELLO from one guest does not re-send the whole catch-up (#4820)", async () => {
+  const { h, made, until, withGuest } = codeRoomHarness();
+  try {
+    await withGuest();
+    const hellos = () => made[0].sent.filter((m) => m.t === "hello").length;
+    made[0].deliver("hello", { team: "alpha", driver: 0 });
+    const afterFirst = hellos();
+    made[0].deliver("hello", { team: "beta", driver: 1 });
+    assert.equal(hellos(), afterFirst, "no catch-up to the sender on a repeat HELLO");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a failed joiner with NOBODY in the room does not reopen it later", async () => {
   // The other half of the same branch: teardown() owns the empty room, and a
   // stale codeReopen must not reopen it on some later, unrelated connect.
@@ -2240,6 +2272,33 @@ test("a peer leaving during the same race build still releases the empty room an
   } finally { build.resolve(false); await starting; h.lobby.cancel(); }
 });
 
+test("the host leaving during a non-quali race build keeps the guest's rules intact and announces afterwards", async () => {
+  const { h, made, closers } = closableHarness();
+  h.G.raceLaps = 5; h.G.difficulty = "hard";
+  const build = deferred();
+  let quits = 0; const said = [];
+  h.G.startRace = () => build.promise;
+  h.G.quitToMenu = () => { quits++; };
+  h.G.announce = (m) => said.push(m);
+  h.G.netPlay = { start() { assert.fail("no networking without a peer"); } };
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    made[0].deliver("settings", initialGuestSettings()); h.lobby.setReady(true);
+    made[0].deliver("go", { revision: 0 });
+    closers[0]("transport");
+    assert.equal(h.G.raceLaps, 3, "rules stay the host's while the build reads them");
+    assert.equal(h.G.difficulty, "normal");
+    build.resolve({ ok: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(quits, 1, "the empty room quits to the menu");
+    assert.deepEqual(said, ["THE HOST LEFT — BACK TO MENU"]);
+    assert.equal(h.G.raceLaps, 5, "own rules return once the room is torn down");
+  } finally { build.resolve(false); h.lobby.cancel(); }
+});
+
 test("a start that throws after the quali sheet cancels and quits instead of failing silently (bug-hunt H30)", async () => {
   const { h } = await guestInQuali();
   let quits = 0;
@@ -2718,5 +2777,19 @@ test("Escape follows the visible BACK on a sub-step and CLOSE on the choice; BAC
     assert.equal(door(), "vs-close");
     assert.equal(h.elements.get("vs-join").hidden, false, "JOIN is offered again");
     assert.equal(h.elements.get("vs-code-join").hidden, false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest that un-readied inside one round trip of START still takes GO at the host's revision (#4815)", async () => {
+  const { h, s } = await connectedGuest();
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    h.lobby.setReady(true); h.lobby.setReady(false);
+    s.deliver("go", { revision: 0 });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(starts, 1, "ready at the host's revision, un-ready in flight: GO starts, not a silent refusal");
+    s.deliver("settings", { ...initialGuestSettings(), laps: 7, revision: 1 });
+    s.deliver("go", { revision: 0 });
+    assert.equal(starts, 1, "a stale revision is still refused");
   } finally { h.lobby.cancel(); }
 });
