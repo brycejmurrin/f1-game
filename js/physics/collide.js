@@ -610,11 +610,15 @@ const Collide = (() => {
         // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
         // second (collision bench S5). The flag is idempotent and stays.
         if (corr > CORR_EPS) {
-          if (a.human || b.human) a.contactT = b.contactT = 0.22;
+          // A net-owned (VS FRIEND) car is POSED from its owner's packets: its speed and flag are not ours to write (as the rear-end path below, #2164).
+          const nA = netPlay.owns(a), nB = netPlay.owns(b);
+          if (a.human || b.human) { if (!nA) a.contactT = 0.22; if (!nB) b.contactT = 0.22; }
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
           // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
-          else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
+          // The local car always yields to a net-owned one; sideYieldsA decides only when both can move.
+          const yA = nA === nB ? AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn)) : nB;
+          if (yA) { if (last && !nA) a.speed = scrub(a.speed, rubScrub); if (!nA) a.contactT = 0.22; }
+          else { if (last && !nB) b.speed = scrub(b.speed, rubScrub); if (!nB) b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars
           // touching with no correction left to apply — re-fired audio, shake
