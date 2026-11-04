@@ -85,3 +85,10 @@ rung threw the same way. Runs 1-10 never reached a scale step because a car-shad
 had freed threw on its next render-state change, and the reload loop followed. That is a player-facing desktop WebGPU
 bug, filed as #4900 and fixed by #4904 (f6aebe48). This branch is synced past it; the next `perf-census-webgpu` run is
 the first that can reach the render-scale sweep and judge the settle gate.
+
+Run 12 (7724ba33, synced past #4904): the throw and the reload are gone (no `present failed`, no `nullattr`, governor
+held at tier 0), but `no top-level render in 240s (warming=false)` right after, and the sweep then waited 60 s for each
+of up to 9 frames per step until the 25-min job cap cancelled it, losing the JSON. Either the page stopped presenting or
+the `renderer.render` wrapper stopped seeing presents. Run 13 counts tlx.js's own present counter
+(`backendState().presents`) as well, dumps rAF ticks, both counters over 3 s, game state and device errors when frames
+stop, and aborts with the JSON instead of running into the cap.

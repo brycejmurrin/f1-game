@@ -154,10 +154,26 @@ async function main() {
       const orig = r.render.bind(r);
       r.render = function () { if (!r.getRenderTarget()) window.__resFrames++; return orig.apply(this, arguments); };
     });
+    // Run 12 (7724ba33, after #4904): no throw, but no top-level render counted in 240 s and the sweep then waited out
+    // the 25-min job cap. Count tlx.js's own present() counter too (backendState().presents), so a wrapper that stops
+    // seeing presents and a page that stops presenting are told apart.
     const presented = (n, ms = 240000) => page.evaluate(([k, t]) => new Promise((res) => {
-      const f0 = window.__resFrames, t0 = performance.now();
-      const id = setInterval(() => { const done = window.__resFrames >= f0 + k; if (done || performance.now() - t0 > t) { clearInterval(id); res(done); } }, 100);
+      const pn = () => { try { return window.GLX.__tlx.backendState().presents | 0; } catch (_) { return -1; } };
+      const f0 = window.__resFrames, p0 = pn(), t0 = performance.now();
+      const id = setInterval(() => { const done = window.__resFrames >= f0 + k || (p0 >= 0 && pn() >= p0 + k); if (done || performance.now() - t0 > t) { clearInterval(id); res(done); } }, 100);
     }), [n, ms]);
+    // One line of evidence when frames stop: rAF ticks, both frame counters over 3 s, game state, device errors.
+    const stallDump = () => page.evaluate(() => new Promise((res) => {
+      const bs = () => { try { return window.GLX.__tlx.backendState(); } catch (_) { return {}; } };
+      let raf = 0; const tick = () => { raf++; if (raf < 1e6) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+      const f0 = window.__resFrames, p0 = bs().presents;
+      setTimeout(() => {
+        const b = bs(); let st = null; try { st = window.__apex.info().state; } catch (_) { /* diagnostics only */ }
+        res({ rafIn3s: raf, resFramesIn3s: window.__resFrames - f0, presentsIn3s: (b.presents | 0) - (p0 | 0), presents: b.presents,
+          state: st, hidden: document.hidden, warming: !!(window.GLX.warming && window.GLX.warming()), ctxLost: b.ctxLost,
+          gpuErrors: b.gpuErrors, gpuFirstError: String(b.gpuFirstError || "").slice(0, 200), healed: b.healed });
+      }, 3000);
+    }));
     // Soft: a warm that never ends is reported (warmTimedOut), not a hang.
     const warmed = () => page.evaluate(() => new Promise((res) => {
       const t0 = performance.now();
@@ -169,14 +185,17 @@ async function main() {
       const inf = t && t.renderer && t.renderer.info && t.renderer.info.memory;
       const cv = t && t.renderer && t.renderer.domElement;
       return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null,
-        frame: window.__resFrames, warming: !!(window.GLX.warming && window.GLX.warming()),
+        frame: window.__resFrames, presents: (() => { try { return t.backendState().presents; } catch (_) { return null; } })(), warming: !!(window.GLX.warming && window.GLX.warming()),
         canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
     });
     api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
     warmTimedOut = !(await warmed());
     framesOk = await presented(5);   // sweep only once present() is running
-    if (!framesOk) console.error("res-scale-census: no top-level render in 240s (warming=" + (await read()).warming + ")");
+    if (!framesOk) {
+      console.error("res-scale-census: no presented frame in 240s " + JSON.stringify(await stallDump()));
+      throw new Error("no presented frame in 240s before the sweep");   // abort with the JSON, not a 25-min cap
+    }
     base = await read();
     base.scaleBase = base.fixed ? base.targets : [base.canvas ? base.canvas[0] : base.targets[0], base.canvas ? base.canvas[1] : base.targets[1]];
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
@@ -188,7 +207,10 @@ async function main() {
       const want = [Math.max(1, Math.round(prev.scaleBase[0] * s)), Math.max(1, Math.round(prev.scaleBase[1] * s))];
       let r = null, settledAfter = null;
       for (let k = 0; k <= Math.max(o.settle, 8) && settledAfter == null; k++) {
-        await presented(1, 60000);
+        if (!(await presented(1, 60000))) {
+          console.error("res-scale-census: presenting stopped at scale " + s + " " + JSON.stringify(await stallDump()));
+          throw new Error("presenting stopped at scale " + s);
+        }
         r = await read();
         if (r.targets && r.targets[0] === want[0] && r.targets[1] === want[1]) settledAfter = k + 1;
       }
