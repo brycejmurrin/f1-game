@@ -34,8 +34,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label
    click or a `decision:` comment (that provenance is the grant; an agent's words grant nothing); remove the label and
    carry on. A hook or classifier denial is final: never re-word and retry; record it as a choice in the PR.
-7. **End at `land`** (§Land), then `unsubscribe_pr_activity` and end the turn. A red or conflict after that is a fresh
-   `CONTINUE PR #<n>`, not you (§After land).
+7. **Stay until merge.** After `land` (§Land) keep the subscription and end the turn. A PR event (red CI, failed `gate`,
+   conflict) is work: fix it (§Red), push, end again; never toggle labels on a PR that has `land`. When the PR merges
+   (or closes): `unsubscribe_pr_activity`, then one dispatcher line `#<issue> → PR #<n> merged <sha>`, and stop.
 
 ## Open
 
@@ -94,7 +95,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 
 ## After land
 
-The subscribed owner fixes a red on its own head (§Red) while it still owns it. The dispatch Action re-owns only a
+The subscribed owner fixes a red on its own head (§Red) until the PR merges or closes (§Lane 7). The dispatch Action re-owns only a
 silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red
 check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
 (agent `deploy-research`; skill `check`), never a green PR.
