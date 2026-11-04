@@ -625,10 +625,14 @@ var GameAudio = (function () {
     return { buf: out, loop: { start: 0, end: (b - a) / sr }, win: { start: a / sr, end: b / sr } };
   }
 
+  // TRANSIENT activation only (#4830): hasBeenActive stays true for the whole
+  // session after the first tap, but a context created from a timer is outside
+  // any gesture and WebKit leaves it locked. With no gesture in progress the
+  // request waits in deviceRebuildPending for resumeIfNeeded.
   function stickyUserActivation() {
     try {
       const ua = typeof navigator !== "undefined" && navigator.userActivation;
-      return !!(ua && (ua.isActive || ua.hasBeenActive));
+      return !!(ua && ua.isActive);
     } catch (e) { return false; }
   }
 
