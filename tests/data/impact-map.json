@@ -5941,6 +5941,9 @@
       "enforceNearPlane": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
+      "forMoment": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
       "inJamb": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
@@ -7999,6 +8002,12 @@
       "rigU": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "saved": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "select": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -8006,6 +8015,9 @@
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
+      ],
+      "settingsFor": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "shotsFor": [
         "tests/unit/garage-arrival.test.mjs"
@@ -8640,6 +8652,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-scene-fallbacks.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
