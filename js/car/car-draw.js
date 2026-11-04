@@ -521,13 +521,9 @@ const CarDraw = (function () {
         if (key.indexOf(prefix) === 0) dropDecalTexture(key);
       });
     }
-    // SAVE & FIT always mints a fresh custom_<ts> id (setup-sheet) and only drops
-    // draft keys (invalidateDecalTextures(team, true)). The new id cache-misses and
-    // schedulePlayerHiRes uploads another 2048×2560 (~26.7 MB) while the previous
-    // fitted id's atlas stays live (#3609). Drop every non-draft atlas for this
-    // team whose key is not under the CURRENT fitted id. Skip while a draft is
-    // live for the team so CANCEL still restores the saved 2048.
-    const _sweptRev = new Map();   // team id -> store rev last swept (the fitted id only changes on a store write)
+    // SAVE & FIT mints a fresh custom_<ts> id; drop every non-draft atlas of the team not under the
+    // CURRENT fitted id (#3609). Skipped while a draft is live (CANCEL restores the saved 2048).
+    const _sweptRev = new Map();   // team -> store rev last swept
     function dropSupersededFittedAtlases(team) {
       const d = G.livDraftOverride;
       if (d && d.teamId === team.id) { _sweptRev.delete(team.id); return; }
@@ -797,11 +793,7 @@ const CarDraw = (function () {
     function getCarDecalTexture(team, num, isPlayer, allowHiRes) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       if (_draftSpare.length && !G.livDraftOverride) freeDraftSpares();
-      // isPlayer is part of the key: on the mobile tier the player's atlas uploads
-      // at 512² and AI atlases at 256², so a team the player later switches to
-      // must not reuse a cached AI-resolution atlas (and vice versa).
-      // A SAVE & FIT that minted a new id: free the previous fitted atlas before
-      // this miss schedules another ~26.7 MB upload (#3609).
+      // isPlayer is part of the key (mobile: player 512², AI 256²). SAVE & FIT: free the old fitted atlas first (#3609).
       if (isPlayer) dropSupersededFittedAtlases(team);
       const key = decalKeyFor(team, num, isPlayer);
       const wantHi = !!isPlayer && allowHiRes !== false;

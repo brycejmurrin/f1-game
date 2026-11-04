@@ -59,10 +59,8 @@ const FieldLod = (function () {
     const k = Math.tan(fovY * 0.5) / REF_HALF_TAN;
     return k * k;
   }
-  // HYSTERESIS. A car hovering at a threshold flipped its decal on and off
-  // every few frames. With `car` given, its last tier is kept on it (car._lodTier)
-  // and a boundary is crossed outward only past +10 % of its distance and back
-  // inward only inside -10 %. Without `car`, the plain table (tests, __apex).
+  // HYSTERESIS: with `car`, the last verdict is kept (car._lodTier / WeakMaps) and a cut flips outward
+  // only past +10 % and back only inside -10 %. Without `car`, the plain table (tests, __apex).
   const HYST_OUT = 1.1 * 1.1, HYST_IN = 0.9 * 0.9;
   function crossed(d2, m, beyond, sticky) {
     if (!sticky) return d2 > sq(m);
@@ -94,7 +92,7 @@ const FieldLod = (function () {
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
-  const _nearOf = new WeakMap();   // car -> {flame, cast, flaps} sticky verdicts (not a car field: see _farOf)
+  const _nearOf = new WeakMap();   // car -> sticky verdicts
   function near(k, m, d2, car) {
     if (!car) return d2 < sq(m);
     let o = _nearOf.get(car); if (!o) _nearOf.set(car, o = {});
