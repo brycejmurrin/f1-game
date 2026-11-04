@@ -366,7 +366,6 @@ const FULL = [
   "js/overlay/feed.js",        // OverlayFeed: shared v1 frame schema + 2 s full-frame diff
   "js/race/tv-graphics.js",    // TvGraphics: broadcast-profile pass/battle/fastest-lap cards
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
-  "js/overlay/render.js",      // OverlayRender: transform-only overlay.html painter; inert in the game shell
   "js/overlay/bridge.js",      // OverlayBridge: BroadcastChannel game ⇄ overlay.html (overlay.html loads it too)
   "js/overlay/publisher.js",   // OverlayPublisher: 4 Hz __apex sampler + #announce caption tap, only while an overlay listens
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
@@ -401,8 +400,7 @@ const FULL = [
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",
-  "js/perf/gfx-debug-overlay.js",
-  "js/perf/three-inspector.js",   // ThreeInspector: opt-in (?inspector=1) dev panel; lazy import() of vendor addons/inspector, never precached
+  // gfx-debug-overlay.js → LAZY_DEV; three-inspector.js → LAZY_AGENT (#4978: flag-gated, off the boot shell)
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
@@ -1051,6 +1049,7 @@ const LAZY_AGENT = [
   "js/agent/apex-lobby.js",
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
+  "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; only apex.js boots it (#4978); lazy import() of vendor addons/inspector
   "js/agent/apex.js",
   "js/agent/apex-bridge.js", // ApexBridge: apex-cmd comments on one GitHub issue (?bridge=<n> + device token), reads __apex at call time
 ];
@@ -1062,6 +1061,23 @@ const LAZY_EDGES = [
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
   ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
+  ["js/perf/three-inspector.js", "js/agent/apex.js"],   // ApexApi.create calls ThreeInspector.boot(gfx)
+];
+
+// DEV PANELS (#4978). Flag-gated diagnostics a player never sees: no <script>
+// tag, no SW seed (the LAZY_AGENT rule). LazyBundles.bootDevPanels injects the
+// group at boot only when one of its flags is set (gfxdebug: ?gfxdebug=1 /
+// apex26.gfxDebug="1"); each file self-installs on a later turn, so a late or
+// failed inject only means no overlay.
+const LAZY_DEV = [
+  "js/perf/gfx-debug-overlay.js", // GfxDebug: ON-SCREEN GFX DIAGNOSTIC
+];
+
+// overlay.html's own painter (#4978): the stream-overlay page tags it after
+// js/overlay/bridge.js (overlay-publisher.test.mjs); the game shell never runs
+// it (its self-boot needs main#overlay[role=region], which index.html lacks).
+const OVERLAY_PAGE = [
+  "js/overlay/render.js",   // OverlayRender: transform-only overlay.html painter
 ];
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
@@ -1798,7 +1814,7 @@ module.exports = {
   MOVED,
   SW_LOCALES,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
-  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
+  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,

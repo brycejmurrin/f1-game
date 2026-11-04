@@ -170,6 +170,7 @@
     "js/agent/apex-lobby.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
+    "js/perf/three-inspector.js",
     "js/agent/apex.js",
     "js/agent/apex-bridge.js"
   ],
@@ -201,7 +202,14 @@
     [
       "js/agent/agentview-corners.js",
       "js/agent/agentview.js"
+    ],
+    [
+      "js/perf/three-inspector.js",
+      "js/agent/apex.js"
     ]
+  ],
+    LAZY_DEV: [
+    "js/perf/gfx-debug-overlay.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
