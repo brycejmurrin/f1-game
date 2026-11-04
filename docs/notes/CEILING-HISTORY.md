@@ -1,5 +1,15 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-04 — PR #4764 (cursor/lazy-coach-export-backup-a1): career-backup moves to LAZY_CAREER_UI (#4748)
+
+`(tree) raceEntryBytes` 2075000 → **2111780** (+36780). Deliberate raise past the 40-line
+absorb. This is accounting, not growth: `js/career/career-backup.js` (1069 lines) left the
+eager base roster for the LAZY_CAREER_UI bundle, which a race entry already loads (the
+career bundle is kicked at boot), so its bytes now count on the race-entry path while
+`eagerGzip` falls by 6000 (the same PR lowers that ceiling). The title screen no longer
+evaluates it. The race-entry golden list gains the file. Fragment delta:
+`ratchets.d/cursor--lazy-coach-export-backup-a1.json`.
+
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
