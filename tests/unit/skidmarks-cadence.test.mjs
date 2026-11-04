@@ -166,8 +166,8 @@ test("other cars stamp on their own cadence, inside a capped share of the ring",
 
 test("rival quota refreshes oldest rival marks without moving the player ring", () => {
   const skids = make(), timer = { t: 0 }, mat = IDENT.slice();
-  for (let i = 0; i < 80; i++) { mat[12] = -1000 - i; skids.stamp(mat, true, 1); }
-  for (let i = 0; i < 600; i++) { mat[12] = i; skids.stampFor(timer, mat, true, 1); }
+  for (let i = 0; i < 80; i++) { mat[12] = -1 - i; skids.stamp(mat, true, 1); }
+  for (let i = 0; i < 600; i++) { mat[12] = i / 4; skids.stampFor(timer, mat, true, 1); }
   const centers = [];
   skids.draw({ drawSkidBatch: (verts, n) => {
     for (let i = 0; i < n * 5; i += 30) centers.push((verts[i] + verts[i + 10]) / 2);
@@ -175,7 +175,19 @@ test("rival quota refreshes oldest rival marks without moving the player ring", 
   } });
   assert.equal(skids.otherCount, 40);
   assert.equal(centers.filter((x) => x < 0).length, 80);
-  assert.ok(centers.includes(599), "newest rival stamp is retained");
+  assert.ok(centers.includes(149.75), "newest rival stamp is retained");
   mat[12] = -2000; skids.stamp(mat, true, 1);
   assert.equal(skids.otherCount, 40, "rival replacement did not advance the player ring");
+});
+
+test("the batched trail drops marks beyond the cull radius and rebuilds when the eye moves", () => {
+  const skids = make(), mat = IDENT.slice();
+  mat[12] = 1000; skids.stamp(mat, true, 1);
+  mat[12] = 10; skids.stamp(mat, true, 1);
+  const seen = [];
+  const gfx = { drawSkidBatch: (v, n, rebuilt) => { seen.push([n, rebuilt]); return true; } };
+  skids.draw(gfx, [0, 0, 0]);
+  skids.draw(gfx, [5, 0, 0]);
+  skids.draw(gfx, [990, 0, 0]);
+  assert.deepEqual(seen, [[6, true], [6, false], [6, true]], "far mark culled; eye move >16 m rebuilds");
 });
