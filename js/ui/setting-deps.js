@@ -427,11 +427,19 @@ const SettingDeps = (function () {
     pending = true;
     setTimeout(() => { pending = false; refresh(); }, 48);
   }
+  /* #4747: the listeners, the document-wide MutationObserver and the first
+     refresh() no longer run in the DCL task. init() fires on the first of: a
+     Settings page entering, the first tap/key/input (captured, one-shot, then
+     soon() re-runs for that same event), or idle. Rules also cover the race
+     setup, photo studio, garage and Spotify sheets, so the listeners stay
+     installed once armed rather than detaching with the Settings sheet. */
+  let armed = false;
   function init() {
+    if (armed) return;
+    armed = true;
     const d = doc();
     if (!d) return;
-    for (const t of ["change", "input", "click"]) d.addEventListener(t, soon, true);
-    if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) SettingsNav.onEnter(soon);
+    for (const t of ["change", "input", "click"]) { d.removeEventListener(t, first, true); d.addEventListener(t, soon, true); }
     // Owners grey their controls on their own clocks (Spotify connecting, a
     // DAILY race opening): follow every disabled / aria-disabled change.
     if (typeof MutationObserver !== "undefined" && d.documentElement) {
@@ -439,8 +447,17 @@ const SettingDeps = (function () {
     }
     refresh();
   }
+  function first() { init(); soon(); }
+  function arm() {
+    const d = doc();
+    if (!d) return;
+    for (const t of ["change", "input", "click"]) d.addEventListener(t, first, true);
+    if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) SettingsNav.onEnter(() => { init(); soon(); });
+    if (typeof requestIdleCallback === "function") requestIdleCallback(init, { timeout: 4000 });
+    else setTimeout(init, 1500);
+  }
   if (doc()) {
-    if (doc().readyState === "loading") doc().addEventListener("DOMContentLoaded", init, { once: true });
+    if (doc().readyState === "loading") doc().addEventListener("DOMContentLoaded", arm, { once: true });
     else init();
   }
 
