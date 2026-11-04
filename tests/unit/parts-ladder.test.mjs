@@ -16,6 +16,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
+import { seedLog } from "../helpers/seed-log.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
@@ -91,8 +95,6 @@ test("the career budget cap clears the dearest works car and stays under the top
   // was 2035 and one rung of BUDGET_MULT put its budget at 2340 — the dearest
   // build the catalog can express, to the credit. The economy stopped
   // constraining anything, and RAISE THE CAP bought nothing.
-  const src = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
-  assert.match(src, /_budgetCap = all - top;/, "budgetCap must be derived from the catalog");
   let all = 0, top = 0;
   for (const cat of M.Parts.CATALOG) {
     let hi = 0;
@@ -108,15 +110,56 @@ test("the career budget cap clears the dearest works car and stays under the top
     `budget cap ${cap} is below ${dearest.id}'s own works car (${dearest.cost}) — a team ` +
     `must always be able to rebuild the car it fields`);
   assert.ok(cap < all, `budget cap ${cap} reaches the whole top shelf (${all})`);
-  // And the cap has to actually BIND: if every team's top rung already fits
-  // under it, the cap is decoration. The rungs are career.js's own BUDGET_MULT
-  // (budgetAt rounds works × multiplier), read from source, not copied here.
-  const multSrc = src.match(/const BUDGET_MULT = (\[[^\]]*\]);/);
-  assert.ok(multSrc, "BUDGET_MULT moved; check this test, not the code");
-  const mult = JSON.parse(multSrc[1]);
-  assert.ok(mult.length > 1 && mult.every((m) => m >= 1), `BUDGET_MULT ${multSrc[1]} is not a rising ladder`);
-  const topRung = Math.max(...works.map((w) => Math.round(w.cost * Math.max(...mult))));
-  assert.ok(topRung > cap, `no team's budget ladder (max ${topRung}) ever reaches the cap ${cap}`);
+  // And the cap has to actually BIND, measured through the REAL career.js: drive
+  // Career.budget() up every BUDGET_MULT rung for each works team (the ladder is
+  // career.js's own, not copied here). No rung may exceed max(cap, works), the
+  // top rung must be held to exactly that cap for someone, and the cap must be
+  // the one DERIVED from the catalog: repricing a part moves the budget with it.
+  const careerFor = (teamId, mutate) => {
+    const stored = new Map();
+    const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+      GameStore: { CAREER_V: 3, store: { get: (k, d) => (stored.has(k) ? stored.get(k) : d), set: (k, v) => stored.set(k, v) },
+        seasonDriverId: (t, i) => t + ":" + i, migrateCareer: (c) => c },
+      Tracks: { LIST: [] } });
+    seedLog(ctx);
+    seedHash32(ctx);
+    for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js"])
+      vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+    if (mutate) vm.runInContext(mutate, ctx, { filename: absSrc("js/car/parts.js") });
+    for (const f of ["js/data/driver-ratings.js", "js/career/career-planning.js", "js/career/career.js"])
+      vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+    const Career = vm.runInContext("Career", ctx);
+    assert.ok(Career.start({ flavour: "driver", teamId, seed: 1 }), `career for ${teamId} must start`);
+    Career.engage(true);
+    return { Career, data: Career.data() };
+  };
+  let hitCap = false, ladderLen = 0;
+  for (const w of works) {
+    const { Career, data } = careerFor(w.id);
+    const rungs = [];
+    for (let lvl = 0; lvl < 8; lvl++) {
+      data.budgetLvl = lvl;
+      rungs.push(Career.budget());
+    }
+    ladderLen = Math.max(ladderLen, new Set(rungs).size);
+    for (const b of rungs) {
+      assert.ok(b <= Math.max(cap, w.cost), `${w.id}: budget ${b} exceeds the cap ${cap} and its own works car ${w.cost}`);
+      if (b === cap && cap > w.cost) hitCap = true;
+    }
+    assert.ok(rungs[0] >= w.cost || rungs[0] === cap, `${w.id}: level 0 budget ${rungs[0]} cannot rebuild its works car ${w.cost}`);
+  }
+  assert.ok(ladderLen > 1, "BUDGET_MULT is not a rising ladder");
+  assert.ok(hitCap, `no team's budget ladder ever reaches the cap ${cap}: the cap is decoration`);
+  // Derivation: raise the dearest option of the CHEAPEST category by 50 cr
+  // (the dearest category is subtracted out of the cap) inside the career's own
+  // Parts and the top rung must move with the catalog.
+  const mut = `(() => { const c = Parts.CATALOG.reduce((a, x) => Math.max(...x.options.map(o => o.cost || 0)) < Math.max(...a.options.map(o => o.cost || 0)) ? x : a);
+    const o = c.options.reduce((a, x) => (x.cost || 0) > (a.cost || 0) ? x : a); o.cost += 50; })()`;
+  const richest = works.reduce((a, b) => (b.cost > a.cost ? b : a)).id;
+  const topBudget = (m) => { const k = careerFor(richest, m); k.data.budgetLvl = 3; return k.Career.budget(); };
+  const baseTop = topBudget(), raised = topBudget(mut);
+  assert.equal(raised, baseTop + 50,
+    `budget cap is not derived from the catalog: ${baseTop} -> ${raised}`);
 });
 
 test("liveSet is deterministic and exact in price", () => {
