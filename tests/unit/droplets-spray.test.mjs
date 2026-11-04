@@ -408,9 +408,27 @@ test("spray: shuffled Float32 distances preserve the capped nearest-N threshold 
   }
 });
 
-test("game.js wires the nearest-N gate, sprayStr/sprayRate and the Droplets tick", () => {
-  const g = gameSource();
-  assert.match(g, /Particles\.sprayAdmit\(_sdx \* _sdx \+ _sdz \* _sdz\)/);
-  assert.match(g, /Particles\.sprayStr\(vStd\(c\.speed\), Storm\.sprayK\(raceWeather\), frame\.wetness\)/);
-  assert.match(g, /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
+test("real game: wet-race spray scales dry < wet < rain < storm through the render loop", async () => {
+  const { createRequire } = await import("node:module");
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const A = g.apex, G = g.G, P = vm.runInContext("Particles", g.ctx);
+  // The physics harness's renderer returns [] frustum planes; use the shipped math.
+  G.gfx.makeFrustumPlanes = vm.runInContext("Frustum", g.ctx).makeFrustumPlanes;
+  const live = {};
+  for (const w of ["dry", "wet", "rain", "storm"]) {
+    A.weather(w); A.race(); A.camera("chase"); A.setInput({ throttle: true });
+    let sum = 0;
+    for (let i = 0; i < 40; i++) { g.step(15); A.snapCam(true); sum += P.count(); }
+    live[w] = sum;
+  }
+  // Same car, throttle and camera: only the sky differs. The live pool is the
+  // end-to-end observable and includes rain streaks, so it proves the spray
+  // emit path (wet gate, sprayAdmit, spray: mutation-checked by disabling the
+  // gate), not the exact sprayK split, which sprayStr's own tests pin.
+  assert.ok(live.dry < live.wet && live.wet < live.rain && live.rain < live.storm, JSON.stringify(live));
+});
+
+test("game.js ticks the lens Droplets once per rendered frame (wiring pin; the lens canvas is not observable in the VM)", () => {
+  assert.match(gameSource(), /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
 });

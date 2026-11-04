@@ -453,7 +453,7 @@ const Car3D = (function () {
     // edge clears the surface — but a flank CREASE anchored this way renders
     // identically to no change at all (two rendered attempts). Anything
     // that has to sit ON the flank must sample the built surface instead.
-    function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH) {
+    function addPodFlankSpan(zFront, zRear, yFrac, height, col, surface, proud, fracH, lift) {
       // Never bridge a detail across a loft crease: each segment follows the
       // same station interval as the underlying sidepod surface.
       const stops = [zFront, ...(anchors.podStops || anchors.podStations).map((p) => p.z)
@@ -461,16 +461,10 @@ const Car3D = (function () {
       for (const side of [-1, 1]) {
         for (let i = 0; i < stops.length - 1; i++) {
           const a = anchors.podAt(stops[i]), b = anchors.podAt(stops[i + 1]);
-            if (anchors.podSculpt) {
+            if (anchors.podSculpt) {   // one flank re-mesh shared with car-mesh podDecal (#3959)
               const half = fracH ? height * 0.5 : Math.min(height / (a.top - a.bottom), 0.78) * 0.5;
-              const cuts = [yFrac - half, ...[0.22, 0.65].filter(f => f > yFrac - half && f < yFrac + half), yFrac + half];
-              const point = (z, f) => { const p = anchors.podFlank(z, f); return [side * (p[0] + 0.002), p[1], z]; };
-              for (let k = 0; k < cuts.length - 1; k++) {
-                const q = [point(stops[i], cuts[k]), point(stops[i + 1], cuts[k]),
-                  point(stops[i + 1], cuts[k + 1]), point(stops[i], cuts[k + 1])];
-                if (side < 0) q.reverse();
-                addQuad(out, ...q, col, surface);
-              }
+              for (const t of anchors.flankTris(stops[i], stops[i + 1], yFrac - half, yFrac + half, lift || 0.0016, side))
+                addTri(out, t[0].slice(0, 3), t[1].slice(0, 3), t[2].slice(0, 3), col, surface);
               continue;
             }
           addSpan(out,
@@ -1239,7 +1233,7 @@ const Car3D = (function () {
       const drlBar = anchors.noseAt(styledTipZ - 0.05);
       addBox(out, 0, drlBar.top + 0.005, drlBar.z, noseTrimW(anchors.noseAt(drlBar.z + 0.010), 0.13), 0.010, 0.020, drlC, SURFACES.glass);
     }
-    if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, teamStyle.noseCurve ? 0.10 : 0.035, accentC, SURFACES.paint, 0.012, !!teamStyle.noseCurve));
+    if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, teamStyle.noseCurve ? 0.10 : 0.035, accentC, SURFACES.paint, 0.012, !!teamStyle.noseCurve, 0.0019));   // its own layer, 0.3 mm over the 1.6 mm board where they overlap; under the 3 mm seal (#3959)
 
     const stripeC = _ckAcc(liv.stripe) || null;   // monocoque crest runs z 0.05..1.05 — right under the eye
     const stripeTipZ = styledTipZ - 0.04;
