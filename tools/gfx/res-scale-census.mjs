@@ -37,6 +37,17 @@ export function parseArgs(argv) {
   return o;
 }
 
+/** The settle gate (#4783): every step reaches its size within 2 presented frames and the texture count returns to the start. */
+export function verdict(sm) {
+  const fails = [];
+  if (sm.aborted) fails.push("sweep aborted (page navigated/crashed mid-step)");
+  if (sm.warmTimedOut || sm.framesOk === false) fails.push("never presenting (warm " + (sm.warmTimedOut ? "timed out" : "done") + ", frames " + (sm.framesOk === false ? "stalled" : "ok") + ")");
+  if (!sm.fixedTargets && sm.unsettledSteps) fails.push(`${sm.unsettledSteps} step(s) never reached the scaled post-target size`);
+  if (!sm.fixedTargets && sm.maxSettleFrames > 2) fails.push(`settle took ${sm.maxSettleFrames} presented frames (> 2)`);
+  if (sm.texturesEnd !== sm.texturesStart) fails.push(`textures ${sm.texturesStart} -> ${sm.texturesEnd} after the sweep`);
+  return fails.length ? "FAIL: " + fails.join("; ") : "ok";
+}
+
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const srv = await startStaticServer(ROOT);
@@ -50,6 +61,13 @@ async function main() {
         localStorage.setItem("apex26.gfxBackend", "three");
         localStorage.setItem("apex26.tlxForceGL", webgpu ? "0" : "1");
         localStorage.setItem("apex26.tyreWear", JSON.stringify("off"));
+        // Slow-CI cap raise, as pass-census sets it: lavapipe's pipeline warm outlasts the default boot step, and the
+        // resulting present failure reloads the page (run 41880521034).
+        if (webgpu) localStorage.setItem("apex26.gfxBootStepMs", "45000");
+        // SCREENSHOTS = NATIVE, as pass-census sets it: without it a headless software adapter takes tlx.js's soft-blit
+        // present (GPU readback every frame). Run 7 (d287a735) still hit `present failed — null BYTES_PER_ELEMENT`
+        // with boot cap, go() and grid parity; this is the last storage difference between the two censuses (#4783).
+        if (webgpu) sessionStorage.setItem("apex26.wgxCapture", "0");
         for (const k of Object.keys(ls)) localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, ls[k]);
       } catch (_) { /* no storage: defaults */ }
     }, { ls: o.ls, webgpu: o.webgpu });
@@ -58,34 +76,160 @@ async function main() {
     await ctx.route("https://api.openf1.org/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
     const page = await ctx.newPage();
     page.on("pageerror", (e) => errors.push(String(e).slice(0, 300)));
+    // A step that reloads or crashes the page is a finding (#4783), not noise: say when and what the page logged.
+    let stepNow = "boot";
+    page.on("framenavigated", (f) => { if (f === page.mainFrame()) console.error(`res-scale-census: main frame navigated during ${stepNow}: ${f.url()}`); });
+    page.on("crash", () => console.error(`res-scale-census: page crashed during ${stepNow}`));
+    let logged = 0;
+    page.on("console", (m) => { if (logged < 80 && /error|warn|lost|reload|sentinel|strike|crash|context/i.test(m.type() + " " + m.text())) { logged++; console.error(`  [page ${m.type()} @${stepNow}] ${m.text().slice(0, /\n\s+at /.test(m.text()) || /res-scale-census/.test(m.text()) ? 2000 : 300)}`); } });
+    page.on("close", () => console.error(`res-scale-census: page closed during ${stepNow}`));
+    page.on("framedetached", (f) => console.error(`res-scale-census: frame detached during ${stepNow}: ${f.url()}`));
+    page.on("requestfailed", (r) => console.error(`  [requestfailed @${stepNow}] ${r.url().slice(0, 120)} ${r.failure() && r.failure().errorText}`));
+    browser.on("disconnected", () => console.error(`res-scale-census: browser disconnected during ${stepNow}`));
     await page.goto(srv.url + (srv.url.includes("?") ? "&" : "?") + "three-devtools=1", { waitUntil: "load" });
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
     await page.waitForFunction((id) => { try { const i = window.__apex.info(); return i.track === id && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, o.track, { polling: 100, timeout: 240000 });
+    // pass-census parity: start the race and leave the grid (jump to 10%). Run 41882017262: on the grid, WebGPU present
+    // failed (null vertex attribute, "color" not found) and the page reloaded; pass-census never sits on the grid.
+    if (o.webgpu) await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
+    // Hold the governor's tier: a scale sweep needs the same feature ladder at every step, and run 8 (a45f687f, with
+    // wgxCapture parity) still failed ~40 s into the race. pass-census finishes in ~20 s, so a tier shed by the governor
+    // on slow lavapipe is the remaining candidate: it rebuilds pipelines for car-shadow geometry whose CPU arrays
+    // sweepCarShadowMirrors already freed (three reads attribute.array in getVertexBufferLayout). Tier moves are logged.
+    if (o.webgpu) {
+      const g = await page.evaluate(() => {
+        const A = window.__apex, h = A.govHold(true);
+        let last = h.tier;
+        setInterval(() => { const t = A.govHold().tier; if (t !== last) { console.warn("res-scale-census tier " + last + " -> " + t); last = t; } }, 250);
+        // Run 9 (31e8443e): tier held at 0, no move, same failure ~35 s on. Run 10 (5bcf6b8f) wrapped createRenderPipeline
+        // and logged nothing: the vendored r187 throws EARLIER, in getRenderCacheKey -> getVertexBufferLayoutCacheKey,
+        // which reads `attribute.array.BYTES_PER_ELEMENT` for every attribute whenever needsRenderUpdate() is true (any
+        // material or render-context state change), not only for a new pipeline. Wrap that, catch the throw and dump.
+        const be = window.GLX.__tlx.renderer.backend, t0 = performance.now();
+        const desc = (a) => !a ? "?" : (a.name || "") + (a.isInstancedBufferAttribute ? "[inst]" : "") + (a.isInterleavedBufferAttribute ? "[ilv]" : "")
+          + (a.array == null ? "=NULL" : ":" + (a.array.constructor && a.array.constructor.name));
+        h.pipeWrap = !!(be && typeof be.getRenderCacheKey === "function");
+        if (h.pipeWrap && !be.__resPipeWrap) {
+          be.__resPipeWrap = true; window.__resPipes = 0;
+          const orig = be.getRenderCacheKey.bind(be);
+          let warned = 0;
+          be.getRenderCacheKey = function (ro) {
+            window.__resPipes++;
+            let attrs = null;
+            try { attrs = typeof ro.getAttributes === "function" ? ro.getAttributes() : null; } catch (_) { /* diagnostics only */ }
+            const bad = attrs ? attrs.filter((a) => !a || a.array == null) : [];
+            const say = (why) => {
+              if (warned++ >= 12) return;
+              try {
+                const o = ro.object || {}, m = ro.material || {}, g = ro.geometry || {};
+                const path = []; for (let p = o; p && path.length < 5; p = p.parent) path.push((p.name || "") + "/" + p.type);
+                const ga = g.attributes || {};
+                console.warn("res-scale-census " + why + " t=" + ((performance.now() - t0) / 1000).toFixed(1) + "s kind=" + g.__tlxKind
+                  + " freed=" + !!g.__tlxFreed + " obj=" + path.join("<") + " mat=" + (m.name || "") + "/" + m.type
+                  + " vcol=" + !!m.vertexColors + " ro=[" + (attrs ? attrs.map(desc).join(",") : "n/a")
+                  + "] geo=[" + Object.keys(ga).map((k) => k + (ga[k] && ga[k].array == null ? "=NULL" : "")).join(",")
+                  + "] idx=" + (g.index ? (g.index.array == null ? "NULL" : "ok") : "none") + " pipes=" + window.__resPipes);
+              } catch (_) { /* diagnostics only */ }
+            };
+            if (bad.length) say("nullattr cachekey");
+            try { return orig.apply(this, arguments); } catch (err) { say("cachekey threw (" + String(err && err.message).slice(0, 80) + ")"); throw err; }
+          };
+        }
+        return h;
+      });
+      console.error("res-scale-census: governor held " + JSON.stringify(g));
+    }
     await waitFrames(page, 8, 400000);
+    stepNow = "pre-sweep";
+    // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
+    // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
+    // A frame is one top-level render (no render target); three's info.render.frame is not trusted to advance.
+    let base = null, prev = null, api = "?", warmTimedOut = false, framesOk = true;
+    try {
+    await page.evaluate(() => {
+      const r = window.GLX.__tlx.renderer;
+      if (r.__resWrap) return;
+      r.__resWrap = true; window.__resFrames = 0;
+      const orig = r.render.bind(r);
+      r.render = function () { if (!r.getRenderTarget()) window.__resFrames++; return orig.apply(this, arguments); };
+    });
+    // Run 12 (7724ba33, after #4904): no throw, but no top-level render counted in 240 s and the sweep then waited out
+    // the 25-min job cap. Count tlx.js's own present() counter too (backendState().presents), so a wrapper that stops
+    // seeing presents and a page that stops presenting are told apart.
+    const presented = (n, ms = 240000) => page.evaluate(([k, t]) => new Promise((res) => {
+      const pn = () => { try { return window.GLX.__tlx.backendState().presents | 0; } catch (_) { return -1; } };
+      const f0 = window.__resFrames, p0 = pn(), t0 = performance.now();
+      const id = setInterval(() => { const done = window.__resFrames >= f0 + k || (p0 >= 0 && pn() >= p0 + k); if (done || performance.now() - t0 > t) { clearInterval(id); res(done); } }, 100);
+    }), [n, ms]);
+    // One line of evidence when frames stop: rAF ticks, both frame counters over 3 s, game state, device errors.
+    const stallDump = () => page.evaluate(() => new Promise((res) => {
+      const bs = () => { try { return window.GLX.__tlx.backendState(); } catch (_) { return {}; } };
+      let raf = 0; const tick = () => { raf++; if (raf < 1e6) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+      const f0 = window.__resFrames, p0 = bs().presents;
+      setTimeout(() => {
+        const b = bs(); let st = null; try { st = window.__apex.info().state; } catch (_) { /* diagnostics only */ }
+        res({ rafIn3s: raf, resFramesIn3s: window.__resFrames - f0, presentsIn3s: (b.presents | 0) - (p0 | 0), presents: b.presents,
+          state: st, hidden: document.hidden, warming: !!(window.GLX.warming && window.GLX.warming()), ctxLost: b.ctxLost,
+          gpuErrors: b.gpuErrors, gpuFirstError: String(b.gpuFirstError || "").slice(0, 200), healed: b.healed });
+      }, 3000);
+    }));
+    // Soft: a warm that never ends is reported (warmTimedOut), not a hang.
+    const warmed = () => page.evaluate(() => new Promise((res) => {
+      const t0 = performance.now();
+      const id = setInterval(() => { const w = !!(window.GLX.warming && window.GLX.warming()); if (!w || performance.now() - t0 > 150000) { clearInterval(id); res(!w); } }, 200);
+    }));
     const read = () => page.evaluate(() => {
       const t = window.GLX && window.GLX.__tlx;
       const ps = t && t.postState ? t.postState() : null;
       const inf = t && t.renderer && t.renderer.info && t.renderer.info.memory;
-      return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null };
+      const cv = t && t.renderer && t.renderer.domElement;
+      return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null,
+        frame: window.__resFrames, presents: (() => { try { return t.backendState().presents; } catch (_) { return null; } })(), warming: !!(window.GLX.warming && window.GLX.warming()),
+        canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
     });
-    const api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
+    api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
-    const base = await read();
+    warmTimedOut = !(await warmed());
+    framesOk = await presented(5);   // sweep only once present() is running
+    if (!framesOk) {
+      console.error("res-scale-census: no presented frame in 240s " + JSON.stringify(await stallDump()));
+      throw new Error("no presented frame in 240s before the sweep");   // abort with the JSON, not a 25-min cap
+    }
+    base = await read();
+    base.scaleBase = base.fixed ? base.targets : [base.canvas ? base.canvas[0] : base.targets[0], base.canvas ? base.canvas[1] : base.targets[1]];
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
-    let prev = base;
+    prev = base;
     for (const s of o.scales) {
+      stepNow = "scale " + s;
       const ms = await page.evaluate((v) => { const t0 = performance.now(); window.__apex.renderScale(v); return +(performance.now() - t0).toFixed(2); }, s);
-      await waitFrames(page, o.settle, 400000);
-      const r = await read();
-      rows.push({ step: "scale", scale: s, callMs: ms, ...r, dResizes: r.rtResizes - prev.rtResizes });
+      // Settle in presented frames and count how many the post target needs to follow (issue gate: <= 2).
+      const want = [Math.max(1, Math.round(prev.scaleBase[0] * s)), Math.max(1, Math.round(prev.scaleBase[1] * s))];
+      let r = null, settledAfter = null;
+      for (let k = 0; k <= Math.max(o.settle, 8) && settledAfter == null; k++) {
+        if (!(await presented(1, 60000))) {
+          console.error("res-scale-census: presenting stopped at scale " + s + " " + JSON.stringify(await stallDump()));
+          throw new Error("presenting stopped at scale " + s);
+        }
+        r = await read();
+        if (r.targets && r.targets[0] === want[0] && r.targets[1] === want[1]) settledAfter = k + 1;
+      }
+      r = { ...r, scaleBase: prev.scaleBase };
+      rows.push({ step: "scale", scale: s, callMs: ms, ...r, want, settledAfter, dResizes: r.rtResizes - prev.rtResizes });
       prev = r;
     }
-    const total = prev.rtResizes - base.rtResizes;
+    } catch (e) { stepNow = "aborted"; rows.push({ step: "aborted", error: String(e).slice(0, 300), lastRow: rows[rows.length - 1] }); console.error("res-scale-census aborted at " + (rows[rows.length - 2] ? "scale " + rows[rows.length - 2].scale : "start") + ": " + e); process.exitCode = 1; }
+    if (!base) base = prev = { rtResizes: 0, textures: null, targets: [0, 0], fixed: false };
+    if (!rows.length) rows.push({ step: "start", ...base });
+    const total = (prev.rtResizes || 0) - (base.rtResizes || 0);
     const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
-      maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length };
+      maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length,
+      maxSettleFrames: Math.max(0, ...rows.map((r) => r.settledAfter || 0)), unsettledSteps: rows.filter((r) => r.step === "scale" && r.settledAfter == null).length,
+      warmTimedOut, framesOk, texturesStart: rows[0].textures, texturesEnd: prev.textures, aborted: rows.some((r) => r.step === "aborted"), fixedTargets: base.fixed };
+    summary.verdict = verdict(summary);
     for (const r of rows) console.log(JSON.stringify(r));
     console.log(JSON.stringify({ summary }));
+    if (o.webgpu && summary.verdict !== "ok") { console.error("res-scale-census " + summary.verdict); process.exitCode = 1; }
     if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify({ rows, summary }, null, 2)); }
   } finally {
     await browser.close().catch(() => {});
