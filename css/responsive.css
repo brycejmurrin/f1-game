@@ -252,8 +252,15 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    undoes --ui-scale; dividing by the size undoes the cluster's own zoom. The
    rows then fill the cluster instead of their per-shape shipped widths. */
 :root[data-title-btnw] #menu-buttons {
-  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
-  max-width: none; min-width: 0; justify-self: center;
+  --_tl-bw: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
+  width: var(--_tl-bw);
+  max-width: none; min-width: 0;
+  /* CENTRED ON ITS COLUMN even when wider than it (portrait: the shipped width is
+     already ~94 % of the screen, so every WIDTH step overran the column and a
+     centred grid item pins to the start edge). A start-aligned item with a
+     symmetric margin stays centred, and 100 % reaches both screen edges. */
+  justify-self: start;
+  margin-inline: calc((100% - var(--_tl-bw)) / 2);
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
