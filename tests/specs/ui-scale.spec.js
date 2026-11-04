@@ -1511,7 +1511,11 @@ test.describe("Custom Home width on touch", () => {
       if (index !== 1) {
         const box = await page.locator("#menu-buttons").boundingBox();
         expect(box).toBeTruthy();
-        expect(Math.abs(box.width - viewport.width * 0.2)).toBeLessThanOrEqual(1);
+        // WIDTH 20 asks for 20 % of the screen, but the grid is floored at the narrowest width where every door
+        // fits its label (#4816): never narrower than asked, and CAREER MODES stays a real door.
+        expect(box.width).toBeGreaterThanOrEqual(viewport.width * 0.2 - 1);
+        expect(box.width).toBeLessThanOrEqual(viewport.width * 0.5);
+        expect((await page.locator("#mb-career").boundingBox()).width).toBeGreaterThanOrEqual(44);
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.y).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
