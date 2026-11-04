@@ -184,7 +184,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
 
 test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the sheet", () => {
   assert.match(SOURCE, /renderRoom\(\); if \(G\.refreshQualiGate\) G\.refreshQualiGate\(\);/);
-  assert.match(SOURCE, /if \(!sessions\.size\) \{ friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
+  assert.match(SOURCE, /if \(!sessions\.size\) \{\s*const wasGuest = role === "guest";\s*friendQualifying = false; clearInterval\(pumpTimer\); pumpTimer = null;\s*cancel\(\); if \(G\.quitToMenu\) G\.quitToMenu\(\);/);
   assert.match(SOURCE, /if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
   assert.match(SOURCE, /cancel\(\);\s*\n\s*if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
 });
@@ -2238,6 +2238,33 @@ test("a peer leaving during the same race build still releases the empty room an
     assert.equal(h.lobby.status().guests, 0);
     assert.equal(h.elements.get("vsfriend").hidden, true);
   } finally { build.resolve(false); await starting; h.lobby.cancel(); }
+});
+
+test("the host leaving during a non-quali race build keeps the guest's rules intact and announces afterwards", async () => {
+  const { h, made, closers } = closableHarness();
+  h.G.raceLaps = 5; h.G.difficulty = "hard";
+  const build = deferred();
+  let quits = 0; const said = [];
+  h.G.startRace = () => build.promise;
+  h.G.quitToMenu = () => { quits++; };
+  h.G.announce = (m) => said.push(m);
+  h.G.netPlay = { start() { assert.fail("no networking without a peer"); } };
+  try {
+    await h.lobby.join();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+    made[0].deliver("settings", initialGuestSettings()); h.lobby.setReady(true);
+    made[0].deliver("go", { revision: 0 });
+    closers[0]("transport");
+    assert.equal(h.G.raceLaps, 3, "rules stay the host's while the build reads them");
+    assert.equal(h.G.difficulty, "normal");
+    build.resolve({ ok: true });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(quits, 1, "the empty room quits to the menu");
+    assert.deepEqual(said, ["THE HOST LEFT — BACK TO MENU"]);
+    assert.equal(h.G.raceLaps, 5, "own rules return once the room is torn down");
+  } finally { build.resolve(false); h.lobby.cancel(); }
 });
 
 test("a start that throws after the quali sheet cancels and quits instead of failing silently (bug-hunt H30)", async () => {
