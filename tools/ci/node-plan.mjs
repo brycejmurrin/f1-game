@@ -229,9 +229,10 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
   for (const [script, needs] of Object.entries(scoped)) {
     if (editedAdapted.length && (script === "test:vm-page" || script === "test:vm-page-a" || script === "test:vm-page-b")) {
       const target = new Set(editedAdapted.map(adaptedPageGroupFor).filter(Boolean).map((g) => `test:vm-page-${g}`));
-      if (target.has(script) || (script === "test:vm-page" && target.size === 0)) run.push(script);
-      else { skip.push(script); why[script] = "edited ADAPTED spec is in another vm-page partition"; }
-      continue;
+      if (target.has(script) || (script === "test:vm-page" && target.size === 0)) { run.push(script); continue; }
+      // Union, not override: a script outside the edited spec's partition still
+      // runs when the rest of the diff routes it (#4832); otherwise it is skipped.
+      if (!needs.some((n) => g.has(n))) { skip.push(script); why[script] = "edited ADAPTED spec is in another vm-page partition"; continue; }
     }
     if (!needs.some((n) => g.has(n))) { skip.push(script); why[script] = "no routed group"; continue; }
     // A circuit-only diff: a script whose files never build the touched
