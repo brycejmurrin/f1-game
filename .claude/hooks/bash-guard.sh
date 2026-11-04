@@ -50,6 +50,14 @@ except Exception:
 sys.stdout.write(c or "")' 2>/dev/null) || {
   echo "BLOCKED: bash-guard could not read the command out of the hook payload (not JSON, or an unexpected shape), so none of its rules ran and the command is refused (fail closed)." >&2; exit 2; }
 [ -n "$CMD" ] || exit 0
+# Fast path (perf P8 row 11): every rule below needs one of these literals in the command text (kill: pkill/killall/
+# pgrep…kill/kill; 2: the BROWSER tokens; 3: commit, hookspath (the (?i) rule, hence the lowercase); 4: cancel,
+# merge, ready; the subagent hatch rule: allow-), so a command with none of them passes without a grep. A new rule adds its literal here.
+case "${CMD,,}" in
+  *kill*|*commit*|*hookspath*|*cancel*|*merge*|*ready*|*test-bg*|*playwright*|*verify-change*|*debug-chrome*|\
+  *gfx-probe*|*probe-mcp*|*shot/*|*ui/*|*npm*|*chrome-start*|*allow-*) ;;
+  *) exit 0 ;;
+esac
 
 refuse() { echo "BLOCKED: $1" >&2; exit 2; }
 SCAN=$(printf '%s' "$CMD" | python3 /dev/fd/3 3<<'PY' 2>/dev/null) || refuse "bash-guard could not scan the command (fail closed)."
@@ -94,7 +102,8 @@ if printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"\s*:\s*"[^"]|/subagen
   has '\.claude/allow-(protected|context-cap)\b' \
     && refuse "a subagent cannot lift a guard (.claude/allow-protected / allow-context-cap; AGENTS.md rule 10): report the edit for the parent."
   P='((node|python3?)\s+)?([^\s;&|()]*/)?'
-  BG=$(python3 -c '
+  BG=""   # groups.json only feeds the `npm run … test:<group>` alternative: no "test:" in the command, no python3
+  [[ "$CMD" == *test:* ]] && BG=$(python3 -c '
 import json, re, sys
 try:
     g = json.load(open(sys.argv[1]))["groups"]
