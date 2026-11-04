@@ -1,0 +1,17 @@
+{
+  "//": "Baseline for tests/specs/perf-trace-census.spec.js (#4776). Measured on CI (llvmpipe, monza, 844x390, 20 s window after an 8 s warm-up) in two runs, run ids 41799368957 and the retry: Layout/s 25.05 and 24.78 (limit = max x 1.25 headroom, rounded up); scavenges per 1000 frames 65 and 35.7 (max 65 recorded; the spread is large, hence the headroom). The invalidator list is the union of the sites seen in both runs, keyed file:function (stable across edits); a new site is added here in the PR that introduces it. Long tasks (>50 ms, after the first 1000 ms of the window): windowed CI runs measured 1 (67 ms), 0, 0, 1 (53.7 ms); the issue asked for 0 but one 50-70 ms task recurs on llvmpipe in half the runs, so the limit is 2 (max measured 1 x headroom, rounded up) -- a stable gate, still red on a burst of long tasks. Never widen headroom to pass.",
+  "track": "monza",
+  "warmMs": 8000,
+  "skipMs": 1000,
+  "headroom": 1.25,
+  "layoutPerS": 25.1,
+  "gcPer1000Frames": 65,
+  "invalidatorSites": [
+    "(no stack)",
+    "hud.js:hText", "hud.js:hStyle", "hud.js:hData", "hud.js:hToggle", "hud.js:updateHud",
+    "live-region.js:write", "live-region.js:(anon)",
+    "hud-damage.js:paint", "hud-layout.js:screenBounds", "hud-radio-lane.js:laneRect",
+    "announce-banner.js:showAnnounce", "announce-banner.js:tick"
+  ],
+  "longTasks": 2
+}

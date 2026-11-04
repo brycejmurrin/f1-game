@@ -991,7 +991,8 @@ export const TRACKED = [
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|fat-shard\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
+  /^tools\/lib\/(changed-files|impact-map)\.mjs$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|fat-shard\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|change-kind\.mjs|spec-timings\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
@@ -1494,7 +1495,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // Docs-only PRs skip the selected matrix at the plan (required check
   // names still report). Never a pull_request paths filter: those leave
   // required checks pending.
-  const candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
+  const candidates = lightDiff ? [] : kind === "css"
+    ? [...new Set([...cssSpecs(changed), ...sourceAffected, ...impactAffected, ...changedSpecs, ...failedInScope])]
+    : routed;
   // A path no pick-tests rule claims, riding with a routed edit, must not hide behind that edit's groups
   // (issue #4768: a vendor bump + one UI file ran only the UI groups). Same fail-safe as TRACKED.
   const unclaimed = lightDiff ? [] : selectionReceipt(changed, scripts).unclaimed;
