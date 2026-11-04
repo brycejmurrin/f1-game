@@ -582,6 +582,9 @@ function buildSetup() {
   const team = Teams.LIST[G.teamIdx];
   // A draft is ONE team's paint: after a team pick it would SAVE & FIT onto the new team.
   if (csLivCreating && csLivTeamId !== team.id) discardLivDraft();
+  // #4928: a search is one visit, one team; any rebuild supersedes a pending search rebuild.
+  clearTimeout(csLivSearchTimer);
+  if (csLivQueryTeam !== team.id) { csLivQuery = ""; csLivFactoryOpen = null; csLivQueryTeam = team.id; }
   tuneExperiments.capture(team);
   const parts = getTeamParts(team.id);
 
@@ -905,7 +908,7 @@ function statDeltaChips(opt) {
 }
 
 let livBuild = 0;   // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
-let csLivQuery = "";           // #3339: filter string sticky across rebuilds
+let csLivQuery = "", csLivQueryTeam = null, csLivSearchTimer = 0;   // #3339 sticky across rebuilds; #4928 not visits/teams
 // #3339: factory <details> open state. null = platform default (desktop open so
 // End/Home can land past content-visibility; phone collapsed for scroll). Once
 // the player toggles, the boolean sticks across rebuilds.
@@ -1053,12 +1056,12 @@ function buildLiveryOptions(container, team) {
     search.value = csLivQuery;
     search.autocomplete = "off";
     search.onclick = (e) => e.stopPropagation();
-    let searchTimer = 0;
     search.oninput = () => {
       csLivQuery = search.value;
       // Debounce rebuild so each keystroke is not a full swatch pass.
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
+      clearTimeout(csLivSearchTimer);
+      csLivSearchTimer = setTimeout(() => {
+        if (csLivCreating || $("carsetup")?.hidden) return;
         const caret = search.selectionStart;
         buildSetup();
         const again = $("cs-options")?.querySelector(".cs-liv-search");
@@ -1084,13 +1087,9 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
-      // A blank canvas is blank PAINT, not a different car. Every pill defaults
-      // to the plain 2020s shape — a standard shark fin on a standard spine —
-      // and no 2026 team runs that: teams.js puts every one of them on
-      // finShape "none" + spineHeight "dorsal". So NEW starts on the TEAM'S
-      // OWN shape (its livery pills) with none of its detail paint, not a
-      // silhouette the player never chose and could only discover by comparing
-      // it with the grid: the only thing a new paint job changes is the paint.
+      // A blank canvas is blank PAINT, not a different car: the pills' default
+      // 2020s fin/spine is no 2026 team's (teams.js), so NEW starts on the
+      // TEAM'S OWN shape with none of its detail paint.
       const shape = {};
       if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
       csLivDraft = livDraftFromOwn(Object.assign({ c1: team.color, c2: team.color2 }, shape), "", team.id);
@@ -1104,7 +1103,7 @@ function buildLiveryOptions(container, team) {
 
   const customs = [], factory = [], factoryHidden = [];
   for (const liv of getLiveries(team)) {
-    if (!match(liv)) continue;
+    if (liv.id !== cur && !match(liv)) continue;   // the FITTED row never filters out (#4928)
     const isCustom = customIds.has(liv.id);
     if (isCustom) customs.push(liv);
     else if (liv.id === cur || q) factory.push(liv); // fitted + search hits stay visible
@@ -1113,11 +1112,9 @@ function buildLiveryOptions(container, team) {
   for (const liv of customs) container.appendChild(makeLiveryRow(team, liv, cur, true));
   for (const liv of factory) container.appendChild(makeLiveryRow(team, liv, cur, false));
 
-  // Collapse the rest of the factory catalogue when it would dominate the scroll.
-  // Desktop defaults OPEN: MenuNav's End uses checkVisibility, which hides closed
-  // <details> children, so a closed fold stranded End on the summary and failed
-  // menu-keyboard's "last livery card" assertion (#3860 selected-2). Phone keeps
-  // the #3339 collapsed default (hover: none). Search still forces open.
+  // Collapse the rest of the factory catalogue. Desktop defaults OPEN: MenuNav's
+  // End skips closed <details> children (#3860). Phone keeps the #3339 collapsed
+  // default (hover: none). Search still forces open.
   if (factoryHidden.length) {
     const fold = document.createElement("details");
     fold.className = "cs-liv-factory";
@@ -1688,7 +1685,7 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
+  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; clearTimeout(csLivSearchTimer); csLivQuery = ""; csLivFactoryOpen = null; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
 // ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's

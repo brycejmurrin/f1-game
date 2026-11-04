@@ -17,7 +17,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function load(shipped = {}) {
+function load(shipped = {}, { realDefaults = false } = {}) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, console, Object, Array, Number, JSON, isFinite,
@@ -30,6 +30,13 @@ function load(shipped = {}) {
   });
   seedLog(ctx);
   ctx.window = ctx;
+  // GarageDefaults is what defaults() reads for the WORKS sheet (#4922): the stub
+  // serves the same shipped table the GameStore mock does, or the real file.
+  if (realDefaults) {
+    vm.runInContext(readFileSync(join(ROOT, "js/data/garage-defaults.js"), "utf8"), ctx, { filename: absSrc("js/data/garage-defaults.js") });
+    const GD = vm.runInContext("GarageDefaults", ctx);
+    ctx.GameStore.store.get = (k, d) => (stored.has(k) ? stored.get(k) : (GD.has(k) ? GD.get(k) : d));
+  } else ctx.GarageDefaults = { has: (k) => k in shipped, get: (k) => JSON.parse(JSON.stringify(shipped[k])) };
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
@@ -137,7 +144,23 @@ test("reset returns to the SHIPPED sheet a fresh install gets, not the works def
   assert.notDeepEqual(host(S.get("mercedes")), fresh);
   assert.deepEqual(host(S.reset("mercedes")), fresh, "reset must land where a fresh install lands");
   assert.deepEqual(host(S.get("mercedes")), fresh);
+  assert.equal(S.isDefault("mercedes"), true, "the reset target reads WORKS, not TUNED (#4922)");
+  assert.deepEqual(host(S.mods("mercedes")), { speed: 1, accel: 1, cornering: 1, braking: 1 }, "and is identity");
+  assert.equal(S.rake("mercedes"), 0);
   const { S: bare } = load();
   bare.set("mclaren", { arbF: 11 });
   assert.equal(bare.reset("mclaren").arbF, 6, "a team with no shipped sheet still resets to the works default");
+});
+
+test("the REAL shipped garage: every team's fresh car is WORKS and identity, before and after RESET (#4922)", () => {
+  const { Teams, S } = load({}, { realDefaults: true });
+  for (const t of Teams.LIST) {
+    for (const when of ["fresh", "reset"]) {
+      if (when === "reset") { S.set(t.id, { arbF: 1, rideR: 80 }); assert.equal(S.isDefault(t.id), false, t.id); S.reset(t.id); }
+      assert.equal(S.isDefault(t.id), true, t.id + " " + when + " reads WORKS");
+      assert.deepEqual(host(S.mods(t.id)), { speed: 1, accel: 1, cornering: 1, braking: 1 }, t.id + " " + when);
+      assert.equal(S.rake(t.id), 0, t.id + " " + when);
+      assert.equal(S.balance(t.id), 0, t.id + " " + when);
+    }
+  }
 });

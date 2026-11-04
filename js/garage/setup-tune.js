@@ -20,8 +20,7 @@ const SetupTune = (function () {
     brakeBias: { min: 50, max: 62, step: 0.5, label: "BRAKE BIAS", unit: " % F" },
   };
   const FIELDS = Object.keys(RANGE);
-  // Works baselines. The untouched car is EXACTLY the car it always was: every
-  // multiplier below is 1 at the team's own default, whatever that default is.
+  // Works baselines: every multiplier below is 1 at the team's own default.
   const BASE = { arbF: 6, arbR: 6, rideF: 25, rideR: 60, brakeBias: 56 };
   const DEFAULTS = {
     redbull: { arbF: 8, arbR: 6, rideF: 22, rideR: 62 },
@@ -33,13 +32,17 @@ const SetupTune = (function () {
   };
   const BB_REF = PhysicsConsts.BB_REF;   // 0.56 — where the ellipse split is exactly 1/1
 
-  function defaults(teamId) { return Object.assign({}, BASE, DEFAULTS[teamId] || {}); }
+  // #4922: WORKS is what a fresh install gets and RESET lands on: a shipped setup.<team> wins.
+  function defaults(teamId) {
+    const d = Object.assign({}, BASE, DEFAULTS[teamId] || {});
+    const s = typeof GarageDefaults !== "undefined" && GarageDefaults.has(KEY + teamId) ? GarageDefaults.get(KEY + teamId) : null;
+    if (s && typeof s === "object") for (const k of FIELDS) { const v = clampField(k, s[k]); if (v != null) d[k] = v; }
+    return d;
+  }
   function clampField(k, v) {
     const r = RANGE[k];
-    // typeof, not Number(): a damaged field must fall back to the WORKS value,
-    // and Number(null) / Number("") / Number(false) are all 0 — which would
-    // silently clamp to the bottom of the range instead. A numeric STRING is
-    // accepted because that is what an <input type=range> hands back.
+    // typeof, not Number(): Number(null/""/false) is 0, which would clamp a damaged
+    // field to the range floor, not the WORKS value. A numeric STRING is an <input type=range>'s.
     const n = typeof v === "number" ? v : (typeof v === "string" && v.trim() !== "" ? Number(v) : NaN);
     if (!Number.isFinite(n)) return null;
     const q = Math.round((n - r.min) / r.step) * r.step + r.min;
@@ -72,12 +75,9 @@ const SetupTune = (function () {
     return FIELDS.every((k) => t[k] === d[k]);
   }
 
-  // ANTI-ROLL BARS → the four-channel contract. Deltas are counted from the
-  // team's own default so an untouched car is exactly 1.0. Stiffer overall
-  // (total): sharper turn-in (cornering up) at the cost of traction (accel
-  // down); stiffer FRONT than rear (split): more stable under braking, less
-  // traction. The additional axleGrip channel below expresses
-  // front/rear balance through lateral load transfer.
+  // ANTI-ROLL BARS → the four-channel contract, deltas from the team's default (untouched = 1.0).
+  // Stiffer overall: sharper turn-in, less traction; stiffer FRONT: stabler braking, less
+  // traction. axleGrip below carries front/rear balance through lateral load transfer.
   function mods(teamId) {
     const t = get(teamId), d = defaults(teamId);
     const total = ((t.arbF - d.arbF) + (t.arbR - d.arbR)) / 2;

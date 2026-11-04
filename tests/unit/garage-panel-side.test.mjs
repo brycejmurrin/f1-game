@@ -324,3 +324,28 @@ test("garage frames memoise the career sponsor + achievements on (store.rev, res
   assert.equal(h.calls.meta, 3);
   assert.equal(h.garageCtx().wins, 2, "and the tally follows the pushed win");
 });
+
+// #4923: two cascade bugs in the PANEL HEIGHT / PANEL WIDTH rules, pinned on the CSS itself.
+test("PANEL HEIGHT bottom-docks the shortened sheet in landscape; PANEL WIDTH above 100 widens it on ≥1800px too (#4923)", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const rules = cssRules(read("css/carsetup.css"));
+  assert.equal(decl(rules, ":root[data-look-garage-ph] #carsetup #cs-inner", "align-self", { context: /orientation: landscape/ }), "end",
+    "a set height turns the dock's stretch into start: landscape must re-dock it at the bottom");
+  // Resolve the --cs-sheet-w formula at 1920 CSS px, ui-scale 1, for a panel-width factor.
+  const sheetW = (sel, pw, context) => {
+    const v = decl(rules, sel, "--cs-sheet-w", context ? { context } : {});
+    assert.ok(v, sel + " declares --cs-sheet-w");
+    const js = v.replace(/var\(--look-garage-pw, 1\)/g, String(pw)).replace(/var\(--vwz\)/g, "19.2").replace(/var\(--ui-scale\)/g, "1")
+      .replace(/100%/g, "1920").replace(/px/g, "").replace(/calc\(/g, "(").replace(/clamp\(/g, "CL(").replace(/min\(/g, "Math.min(");
+    return vm.runInNewContext(js, { Math, CL: (a, b, c) => Math.max(a, Math.min(b, c)) }, { filename: "carsetup-css-calc-probe" });
+  };
+  const wide = /min-width: 1800px/;
+  const shipped = sheetW("#carsetup", 1, wide);
+  assert.equal(shipped, 560);
+  assert.equal(sheetW(":root[data-look-garage-pw] #carsetup", 1, wide), shipped, "100% is the shipped cap");
+  assert.ok(sheetW(":root[data-look-garage-pw] #carsetup", 1.1, wide) > shipped, "110% is wider than 100%, not narrower");
+  assert.ok(sheetW(":root[data-look-garage-pw] #carsetup", 0.8, wide) < shipped, "80% is narrower");
+  const edit = sheetW("#carsetup:has(.cs-liv-editor)", 1, wide);
+  assert.equal(sheetW(":root[data-look-garage-pw] #carsetup:has(.cs-liv-editor)", 1, wide), edit);
+  assert.ok(sheetW(":root[data-look-garage-pw] #carsetup:has(.cs-liv-editor)", 1.2, wide) > edit);
+});

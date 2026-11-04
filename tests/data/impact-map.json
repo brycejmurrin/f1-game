@@ -4120,6 +4120,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "conflicted": [
@@ -4522,6 +4523,9 @@
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
+      "clear": [
+        "tests/unit/setup-screens-state.test.mjs"
+      ],
       "garageMetadata": [
         "tests/unit/career-experience.test.mjs"
       ],
@@ -4535,8 +4539,7 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "*": [
-        "tests/unit/career-hire-rating.test.mjs",
-        "tests/unit/setup-screens-state.test.mjs"
+        "tests/unit/career-hire-rating.test.mjs"
       ]
     },
     "js/career/regulations.js": {
@@ -5969,6 +5972,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/setup-tune.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
     },
@@ -8909,7 +8913,8 @@
         "tests/unit/mechanics-coherence.test.mjs"
       ],
       "balance": [
-        "tests/unit/garage-followups.test.mjs"
+        "tests/unit/garage-followups.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
       ],
       "bbScales": [
         "tests/unit/setup-tune.test.mjs"

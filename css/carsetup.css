@@ -2009,6 +2009,10 @@ body[data-ga-bars]::after { bottom: 0; }
   height: calc(100% * var(--look-garage-ph, 1));
   min-height: 0;
 }
+/* #4923: a set height turns the dock's `stretch` into `start`; landscape says bottom. */
+@media (orientation: landscape) {
+  :root[data-look-garage-ph] #carsetup #cs-inner { align-self: end; }
+}
 
 /* PANEL SIDE: LEFT. The dock is `place-items` alone, so mirroring it is one
    word. The camera stack hugs the sheet's inner edge, so it mirrors with the
@@ -2069,15 +2073,20 @@ body[data-ga-bars]::after { bottom: 0; }
    fade, and the mask only paints once ScrollFade adds that class. */
 #cs-inner:not([data-pair="on"]) #cs-tabs { --sfade-r: 52px; }
 
-/* Ultrawide and 1440p: the 420px cap left a thin strip beside a huge car.
-   560px still reserves 640 visual px for the car. The look-pw rule (two ids)
-   outranks this when the player has set a panel width. */
+/* Ultrawide and 1440p: 560px still reserves 640 visual px for the car. */
 @media (min-width: 1800px) {
   #carsetup {
     --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 640px / var(--ui-scale)), 560px));
   }
   #carsetup:has(.cs-liv-editor) {
     --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), 520px));
+  }
+  /* #4923: PANEL WIDTH scales THIS cap here, or 110% read narrower than 100%. */
+  :root[data-look-garage-pw] #carsetup {
+    --cs-sheet-w: min(100%, calc(560px * var(--look-garage-pw, 1)), clamp(410px, calc(100 * var(--vwz) - 640px / var(--ui-scale)), calc(560px * var(--look-garage-pw, 1))));
+  }
+  :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
+    --cs-sheet-w: min(100%, calc(520px * var(--look-garage-pw, 1)), clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), calc(520px * var(--look-garage-pw, 1))));
   }
 }
 

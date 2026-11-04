@@ -676,6 +676,7 @@ function loadSetupUi(opts = {}) {
   };
   // Optional matchMedia so the factory-fold desktop/phone default is testable.
   if (opts.matchMedia) extra.matchMedia = opts.matchMedia;
+  if (opts.timers) Object.assign(extra, opts.timers);
   const sb = sandbox(dom, extra);
   vm.runInNewContext(src("js/garage/setup-experiments.js"), sb, { filename: absSrc("js/garage/setup-experiments.js") });
   vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
@@ -795,6 +796,43 @@ test("garage: livery grid search + factory fold (#3339)", () => {
   phone.ui.buildSetup();
   assert.equal(phone.$("cs-options").querySelector("details.cs-liv-factory").open, false,
     "phone keeps the factory fold collapsed");
+});
+
+test("garage: the livery search is one visit and one team; the fitted row never filters out; its timer dies with the tap (#4928)", () => {
+  const factory = [];
+  for (let i = 0; i < 6; i++) factory.push({ id: i ? "f" + i : "default", name: i === 3 ? "Gold Rush" : "Paint " + i, c1: [1, 0, 0], c2: [0, 0, 1] });
+  const pending = new Map(); let seq = 0;
+  const timers = { setTimeout: (fn) => { pending.set(++seq, fn); return seq; }, clearTimeout: (id) => { pending.delete(id); } };
+  const { dom, ui, G, $, observers } = loadSetupUi({ getLiveries: () => factory, timers });
+  const mo = observers.find((o) => o.target === $("carsetup"));
+  const rows = () => $("cs-options").querySelectorAll("button").filter((b) => b.dataset.csLivery).map((b) => b.dataset.csLivery);
+  const typeQuery = (q) => { const box = $("cs-options").querySelector(".cs-liv-search"); box.value = q; box.oninput(); };
+  const fire = () => { const fns = [...pending.values()]; pending.clear(); fns.forEach((fn) => fn()); };
+  ui.openSetup(); empty(dom, "cs-options"); ui.buildSetup();
+  typeQuery("gold"); empty(dom, "cs-options"); fire();
+  assert.deepEqual([...rows()].sort(), ["default", "f3"], "the hit plus the FITTED row, which a query never hides");
+  assert.equal($("cs-options").querySelector(".cs-liv-search").value, "gold", "sticky across a rebuild in one visit (#3339)");
+
+  // A tap inside the debounce window: the tap's own rebuild supersedes the search rebuild.
+  typeQuery("paint");
+  empty(dom, "cs-options"); ui.buildSetup();
+  $("cs-options").querySelector(".cs-liv-create").onclick();
+  const editor = $("cs-options").querySelector(".cs-liv-editor");
+  assert.ok(editor, "editor open");
+  assert.equal(pending.size, 0, "the pending search rebuild was cancelled by the tap's rebuild");
+
+  // Close the garage: query and timer both die, the next visit is unfiltered.
+  typeQuery("gold");   // a stale input handler from the grid build, still alive in the DOM
+  $("carsetup").hidden = true; mo.cb([]);
+  assert.equal(pending.size, 0, "closing the garage cancels the search timer");
+  $("carsetup").hidden = false; empty(dom, "cs-options"); ui.buildSetup();
+  assert.equal($("cs-options").querySelector(".cs-liv-search").value, "", "a new visit starts unfiltered");
+  assert.equal(rows().length, factory.length, "every livery is listed again");
+
+  // A team change resets it too.
+  typeQuery("gold"); empty(dom, "cs-options"); fire();
+  G.teamIdx = 2; empty(dom, "cs-options"); ui.buildSetup();
+  assert.equal($("cs-options").querySelector(".cs-liv-search").value, "", "another team's list is not filtered by this team's query");
 });
 
 test("career hub: the round's brief is three pressable choices, with the taken one marked", () => {
