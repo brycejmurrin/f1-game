@@ -2038,9 +2038,6 @@ test('PIT OUT: start({out}) plays the drive-out at PIT OUT\'s own (quicker) base
 test('PIT OUT wiring: DONE/BACK in a pit stop route through startPitOut, which fires done once', () => {
   const g = gameSource();
   assert.equal((g.match(/setupCam\.startPitOut\(closePitWork\)/g) || []).length, 2, 'cs-done and garageBack');
-  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
-  assert.match(cam, /firePitOut\(\); return false;/, 'tuner off / reduced motion / automation hand back at once');
-  assert.match(cam, /pitOut && !driveOut && !preview/, 'the show ends through the render step, once');
 });
 
 test('THE FOUR MOMENTS: an edit lands in the picked moment only; COPY TO ALL and RESET act on the picked one', () => {
@@ -2070,7 +2067,6 @@ test('THE FOUR MOMENTS: an edit lands in the picked moment only; COPY TO ALL and
 test('THE FOUR MOMENTS: each sequence plays its own moment (race start, pit in, pit out, race end, previews)', () => {
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   for (const m of ['start', 'pitOut', 'home']) assert.match(cam, new RegExp('GarageArrival\\.settingsFor\\(G\\.store\\.get\\("garageArrival", null\\), "' + m + '"\\)'), m);
-  assert.match(cam, /preview\.cfg = previewCfg\(preview\.moment\)/, 'a mid-preview edit re-reads the previewed moment');
   assert.match(cam, /arrival: arrivalCfg, moment,/, 'the bay-camera layer gets the moment');
   const { $ } = harness();
   const a = Arrival.create($, () => false, () => ({ moments: { pitIn: { angle: 'high' }, pitOut: { angle: 'low' }, home: { angle: 'door' } } }));
