@@ -176,6 +176,11 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   // Wrapper objects (#4778): post-warm pair must be flat per class. Soft unless STRICT, like the heap slope.
   const wg = wrapperGrowth(wrapperSeries, CYCLES);
   test.info().annotations.push({ type: "gpu-wrapper-series", description: JSON.stringify(wrapperSeries) });
+  // CI observation (#4778): which API the census really saw, and whether the wrapper counts were non-null.
+  const lastRow = readings.filter((r) => r.at === "menu").pop() || {};
+  const wrapperObserved = wrapperSeries.length > 0 && wrapperSeries.every((r) => r.wrappers && Object.values(r.wrappers).some((v) => typeof v === "number"));
+  test.info().annotations.push({ type: "gpu-wrapper-observed", description: JSON.stringify({ api: lastRow.backend && lastRow.backend.api, wrapperObserved }) });
+  if (lastRow.backend && lastRow.backend.api === "webgpu" && !wrapperObserved) softMsgs.push("WebGPU api observed but wrapper counts are null (census blind)");
   if (!wg.ok) softMsgs.push(`wrapper growth cycle${CYCLES}−cycle${CYCLES - 1}: ${wg.issues.join("; ")}`);
   if (slope.heapSoftFail) {
     softMsgs.push(`heap slope ${slope.heapDelta} MiB > soft ${HEAP_SLOPE_SOFT_MB} (MEMORY-TOOLING nightly; post-warm after ${WARM_CYCLES})`);
