@@ -58,7 +58,7 @@ const ExtraRigs = (function () {
       running[n++] = r;
     }
     running.length = n;
-    running.sort((a, b) => b.prog - a.prog);
+    running.sort(byProgDesc);
     const fights = (typeof Broadcast !== "undefined" && Broadcast.battles)
       ? Broadcast.battles(running, vScale)
       : localBattles(running, vScale);
@@ -90,10 +90,14 @@ const ExtraRigs = (function () {
     return out.sort((x, y) => x.score - y.score);
   }
 
+  const _carRes = { s: 0, x: 0, p: null, t: null, r: null, hw: 0 };   // filled in place; callers read it synchronously
+  function byProgDesc(a, b) { return b.prog - a.prog; }
   function carSample(track, car, out) {
     const s = wrapS(track, car.s || 0), x = car.x || 0;
     Tracks.sample(track, s, out);
-    return { s, x, p: out.p, t: out.t, r: out.r, hw: out.hw };
+    const r = _carRes;
+    r.s = s; r.x = x; r.p = out.p; r.t = out.t; r.r = out.r; r.hw = out.hw;
+    return r;
   }
 
   /** Frame the car ahead or behind in a battle — both cars stay in shot. */

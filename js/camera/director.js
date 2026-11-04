@@ -107,6 +107,7 @@ const Director = (function () {
     // Pooled rows + array (as Broadcast.battles pools its fights): the list is
     // rebuilt on every cut-eligible tick and used only inside it.
     const runRows = [], runOut = [];
+    function byProgDesc(a, b) { return b.prog - a.prog; }
     function runningList() {
       const cars = G.cars || [];
       let n = 0;
@@ -119,7 +120,7 @@ const Director = (function () {
         runOut[n++] = r;
       }
       runOut.length = n;
-      runOut.sort((a, b) => b.prog - a.prog);
+      runOut.sort(byProgDesc);
       return runOut;
     }
     function clearDbg(snap) {
@@ -163,7 +164,9 @@ const Director = (function () {
       if (!v || !v.eye || !v.tgt) return false;
       scratchEye[0] = v.eye[0]; scratchEye[1] = v.eye[1]; scratchEye[2] = v.eye[2];
       scratchTgt[0] = v.tgt[0]; scratchTgt[1] = v.tgt[1]; scratchTgt[2] = v.tgt[2];
-      if (!_dbgCam) _dbgCam = { eye: scratchEye, target: scratchTgt, fov: 55, far: 6000 };
+      // fog 1.0 + the race far plane: without them render() treats this as the dev free cam (fog x0.15, far 6000, no fog cull) -- #4957
+      if (!_dbgCam) _dbgCam = { eye: scratchEye, target: scratchTgt, fov: 55, far: 900, fog: 1.0 };
+      _dbgCam.far = G.gfx && G.gfx.isMobile ? 1100 : 900;
       _dbgCam.fov = v.fov || 55;
       ownCamera = G.dbgCam = _dbgCam;
       onAirShot = shot;

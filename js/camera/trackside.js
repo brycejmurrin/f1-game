@@ -97,6 +97,7 @@ const TracksideCams = (function () {
    * Live pose for vantage.js. Mutates nothing on the car; caches the active
    * index on the track. `extra.carPos` (when present) aims at the subject car.
    */
+  const _res = { eye: null, tgt: null, fov: 0, index: 0, count: 0, n: 0, cut: false };   // pooled result (vantage reads it synchronously)
   function pose(track, s, x, extra) {
     const cams = build(track);
     if (!cams.length) return null;
@@ -127,7 +128,9 @@ const TracksideCams = (function () {
     let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
     if (fov < FOV_FAR) fov = FOV_FAR;
     if (fov > FOV_NEAR) fov = FOV_NEAR;
-    return { eye: _eye, tgt: _tgt, fov: fov, index: idx, count: cams.length, n: c.n, cut: cut };
+    const r = _res;
+    r.eye = _eye; r.tgt = _tgt; r.fov = fov; r.index = idx; r.count = cams.length; r.n = c.n; r.cut = cut;
+    return r;
   }
 
   /** A restart / seek is a CUT: forget the held cam so hysteresis cannot keep the old one. */
