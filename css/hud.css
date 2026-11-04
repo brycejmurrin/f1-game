@@ -137,7 +137,7 @@
    top band at ~0.95 and dropped the gap chip on every phone (hud-mock
    2026-10-14); fitHud's key carries the flip, so the tower re-centres once. */
 #hud-delta[data-pending] #hud-delta-n { visibility: hidden; }
-body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
+body:not(.desktop) #hud-delta[data-pending] { display: none; }
 /* THE LAP JUST DRIVEN: in a race the TIME box holds it for 3 s after the line
    (js/ui/hud.js, data-hold) — green when it is a personal best. Same digits,
    same slot: colour only, no width. */
@@ -588,7 +588,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
 #hud-delta[data-sign="slow"] .hud-value { color: var(--slower-ink); }
-#hud-delta[hidden] { display: none !important; }
+#hud-delta[hidden] { display: none; }
 /* Ghost reference is a hollow ring, not only the faster/slower ink. */
 #hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
 /* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
