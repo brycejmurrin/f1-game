@@ -25,7 +25,9 @@ import { spawn } from "node:child_process";
 const HOME = process.env.HOME;
 const ROUTES = {
   grok:   (id, msg) => ({ bin: `${HOME}/.grok/bin/grok`,         args: ["-r", id, "-p", msg] }),
-  cursor: (id, msg) => ({ bin: `${HOME}/.local/bin/cursor-agent`, args: ["-p", "--resume", id, "--output-format", "text", msg] }),
+  // --trust: cursor-agent refuses an untrusted cwd otherwise. --mode ask keeps the
+  // resumed chat read-only (Q&A, no edits/shell): this is a messaging tool, not a driver.
+  cursor: (id, msg) => ({ bin: `${HOME}/.local/bin/cursor-agent`, args: ["-p", "--trust", "--mode", "ask", "--resume", id, "--output-format", "text", msg] }),
   codex:  (id, msg) => ({ bin: "codex",                           args: ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "resume", id, msg] }),
   claude: (id, msg) => ({ bin: "claude",                          args: ["-p", msg, "--resume", id, "--output-format", "text"],
                           env: scrubClaudeEnv({ CLAUDE_CONFIG_DIR: process.env.APEX_CLAUDE_ALT_DIR || "/root/.claude-alt" }) }),
@@ -56,5 +58,7 @@ if (!ROUTES[vendor] || !id || !msg) {
 }
 const { out, err, code } = await run(ROUTES[vendor](id, msg));
 if (out) console.log(out);
-if (err) console.error("[stderr] " + err.split("\n").slice(-3).join("\n"));
+// Surface stderr only on failure: a clean reply is stdout, and some CLIs (e.g.
+// codex) write a token-usage footer to stderr that would otherwise bury it.
+if (code !== 0 && err) console.error("[stderr] " + err.split("\n").slice(-3).join("\n"));
 process.exit(code === 0 ? 0 : 1);
