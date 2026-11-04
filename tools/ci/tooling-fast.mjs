@@ -1021,8 +1021,17 @@ function helpersNaming(rel, root = ROOT) {
   }).map((n) => `tests/helpers/${n}`);
 }
 
-/** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
+/** A changelog fragment (not the README): `gen-changelog --check` inside `gen:check` is its only validator (#4718). */
+const CHANGELOG_FRAGMENT = /^docs\/changelog\.d\/(?!README\.md$)[^/]+\.md$/;
+
+/** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. A fragment in the diff adds `genCheck`. */
 export function selectToolingFastChanged(changed, opts = {}) {
+  const r = selectChangedCore(changed, opts);
+  if (!r.genCheck && changed.some((f) => CHANGELOG_FRAGMENT.test(String(f).replace(/\\/g, "/")))) r.genCheck = true;
+  return r;
+}
+
+function selectChangedCore(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
   const pool = (opts.topicalFiles || (opts.allFiles ? [] : topicalPool())).filter((f) => !tfSet.has(f));
@@ -1062,7 +1071,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
       return { files: seedFiles, reason: "generated-only", genCheck: true, generated: genOnly,
         shards: shardsCoveringFiles(seedFiles, allFiles), changed: changed.length };
     }
-    const sub = selectToolingFastChanged(authored, { ...opts, noGeneratedSplit: true });
+    const sub = selectChangedCore(authored, { ...opts, noGeneratedSplit: true });
     const files = [...allFiles, ...pool].filter((f) => seeds.has(f) || sub.files.includes(f));
     return { ...sub, files, genCheck: true, generated: genOnly, changed: changed.length,
       shards: shardsCoveringFiles(files, allFiles) };

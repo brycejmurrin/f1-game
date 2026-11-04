@@ -75,6 +75,26 @@ test("input maps __apex field/info/sectorState onto the v1 frame, with team colo
   assert.equal(empty.state, "idle"); assert.equal(empty.rows.length, 0);
 });
 
+// Ranked findings: docs/notes/HUNT-OVERLAY-2026-11-03.md (#1 false BATTLE gapS:0).
+test("input synthesises prog/speed from gaps so BATTLE follows the 1.0 s gate (HUNT-OVERLAY)", () => {
+  const { Pub, Feed } = load();
+  const close = Feed.frame(Pub.input({ field: FIELD, info: { state: "race" }, teams: TEAMS }));
+  assert.ok(close.battle, "0.84 s to the car ahead is a battle");
+  assert.equal(close.battle.ahead, "LEC");
+  assert.equal(close.battle.behind, "YOU");
+  assert.ok(Math.abs(close.battle.gapS - 0.84) < 0.02, "gapS tracks intervalS, not 0");
+  const wideField = {
+    ...FIELD,
+    positions: [
+      FIELD.positions[0],
+      { ...FIELD.positions[1], gapToLeaderS: 5, intervalS: 5 },
+      { ...FIELD.positions[2], gapToLeaderS: 14, intervalS: 9 },
+    ],
+  };
+  const wide = Feed.frame(Pub.input({ field: wideField, info: { state: "race" }, teams: TEAMS }));
+  assert.equal(wide.battle, null, "a 5 s interval must not paint BATTLE");
+});
+
 test("the caption tap turns #announce changes into captions with fresh ids, and null when hidden", () => {
   const { Pub } = load();
   const els = { "announce-num": { textContent: "" }, "announce-who": { textContent: "" }, "announce-text": { textContent: "" } };

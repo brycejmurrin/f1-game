@@ -214,7 +214,7 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
   const hc = tokens.match(/:root\[data-ui-contrast="high"\] \{([^}]*)\}/);
   assert.ok(hc && /--hud-panel-a-eff:\s*1;/.test(hc[1]), "HIGH CONTRAST must pin --hud-panel-a-eff at 1");
   // Every listed plate reads the one strip token, which multiplies the effective token.
-  assert.ok(hud.includes("--hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent);"),
+  assert.ok(tokens.includes("--hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent);"),
     "--hud-strip-bg is the one panel token");
   for (const sel of [".hud-box {", ".hud-gaps {", "#hud-gearbox {", "#hud-tach {", "#minimap {", "#hud-sectors {",
     "#hud-limits {", "#announce {", "#bc-tower {"]) {

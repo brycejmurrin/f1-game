@@ -542,6 +542,18 @@ const AiDrive = (function () {
   // as it was measured to be.
   const YAW_AERO = -0.28 / AI_DF;
   function yawScale(speed, load, grip, pace, vmax) { return lateralScale(speed, load, grip, pace, vmax, YAW_AERO); }
+  // Both scales of one AI car-step from one q and one prefix (game.js asks for
+  // yawScale and lateralScale with the same inputs). Same operator order as
+  // lateralScale, so out.yaw === yawScale(...) and out.lat === lateralScale(..., aero) bit for bit.
+  // AI_DF*aero stays per scale: AI_DF*YAW_AERO is NOT folded.
+  const _lsOut = { yaw: 1, lat: 1 };   // pooled: the caller reads it before the next call
+  function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
+    const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
+    const pre = (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip);
+    out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
+    out.lat = pre * (1 + AI_DF * aero * q * q);
+    return out;
+  }
   // Solve k*v² = lat*(1 + D*(v/V)²) analytically: v² = lat / (k - lat*D/V²)
   // below the top speed V, and the flat (1 + D) envelope past it.
   // No iterative solver in the per-car, per-node brake lookahead.
@@ -1069,6 +1081,14 @@ const AiDrive = (function () {
   }
   function sbsCommitT(ctx) { return sbsConcedes(ctx) ? SBS_COMMIT_MIN : 2; }
   function sbsEase(ctx) { return sbsConcedes(ctx) ? 0.94 : 0.97; }
+  // Commit time and ease from ONE sbsConcedes (game.js used sbsCommitT then sbsEase = two coverConcede runs).
+  const _slOut = { commitT: 2, ease: 0.97 };   // pooled
+  function sbsLimits(ctx, out = _slOut) {
+    const c = sbsConcedes(ctx);
+    out.commitT = c ? SBS_COMMIT_MIN : 2;
+    out.ease = c ? 0.94 : 0.97;
+    return out;
+  }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -1622,7 +1642,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

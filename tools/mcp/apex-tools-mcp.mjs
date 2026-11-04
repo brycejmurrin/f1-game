@@ -35,6 +35,7 @@ import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } f
 import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
 import { GARAGE_PLAN_SCHEMA, createGaragePlanHandler } from "./garage-plan.mjs";
 // The apex_diagnostics wrap left on 2026-11-03; its typed job properties still feed apex_job_start's schema.
+import { MODERN, versionError, discoverResult, modernize } from "./mcp-modern.mjs";
 import { DIAGNOSTICS_TOOL } from "./diagnostics-tools.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
@@ -45,6 +46,7 @@ import { pathToFileURL } from "node:url";
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
+const SUPPORTED_VERSIONS = [MODERN, PROTOCOL];
 const SERVER_NAME = "apex-tools-mcp";
 const SERVER_VERSION = "1.19.0";
 const HTTP_HOST = "127.0.0.1";
@@ -3062,6 +3064,17 @@ async function handleRpc(msg) {
     return null;
   }
 
+  const bad = versionError(msg, SUPPORTED_VERSIONS);
+  if (bad) return bad;
+  if (method === "server/discover") {
+    return discoverResult(mid, SUPPORTED_VERSIONS, {
+      capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
+      info: { name: SERVER_NAME, version: SERVER_VERSION }, instructions: ROUTES });
+  }
+  return modernize(msg, await handleRpcLegacy(msg, method, hasId, mid));
+}
+
+async function handleRpcLegacy(msg, method, hasId, mid) {
   if (method === "initialize") {
     return {
       jsonrpc: "2.0",

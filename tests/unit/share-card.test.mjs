@@ -330,6 +330,9 @@ test("the preview says so when a card is over the byte budget, and CLOSE resolve
   await tick();
   assert.equal(dom.byId.get("scp-status").textContent, "This card is too large to share. Try another size.");
   assert.equal(dom.byId.get("scp-share").hidden, true, "no SHARE where nothing can share files");
+  // HUNT-SHARE-2026-11-03.md #1: a failed draw must re-enable actions (SAVE still no-ops without a blob).
+  assert.equal(dom.byId.get("scp-save").disabled, false, "draw failure does not latch SAVE disabled");
+  assert.equal(dom.byId.get("scp-share").disabled, false, "draw failure does not latch SHARE disabled");
   dom.byId.get("scp-close").onclick();
   assert.equal(await done, "cancelled");
   assert.equal(dom.byId.get("share-card-preview").isConnected, false);

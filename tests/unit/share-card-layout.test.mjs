@@ -85,6 +85,26 @@ test("table cards (race, ten-row season, career with hero, linked) stay in bound
   }
 });
 
+// HUNT-SHARE-2026-11-03.md #3: daily STREAK text must not run its maxWidth under the QR tile.
+test("daily streak maxWidth stops short of the QR on every linked spec", () => {
+  const layout = load();
+  const measure = (text, size) => String(text).length * size * 0.62;
+  const model = {
+    ...MODEL,
+    hero: { label: "BEST LAP", value: "1:21.345", medal: "GOLD", streak: 12 },
+    rows: [], chart: null, link: "https://example.test/#share=x",
+  };
+  for (const [name, spec] of Object.entries(layout.SPECS)) {
+    const ops = layout.layout(model, name, measure);
+    const streak = ops.find((op) => op.id === "streak");
+    const qr = ops.find((op) => op.op === "qr");
+    assert.ok(streak && qr, name);
+    assert.ok(streak.x + streak.maxWidth <= qr.x + 0.001,
+      `${name}: streak maxWidth ends at ${streak.x + streak.maxWidth}, QR at ${qr.x}`);
+    assert.ok(streak.x >= 0 && streak.y >= 0 && streak.y <= spec.height, name);
+  }
+});
+
 test("ghost chart card keeps traces inside the panel, clear of the QR, on every spec", () => {
   const layout = load();
   const measure = (text, size) => String(text).length * size * 0.62;

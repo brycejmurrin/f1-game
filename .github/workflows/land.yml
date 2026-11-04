@@ -125,7 +125,8 @@ name: Land
 # (https://docs.github.com/en/actions/concepts/security/github_token), so a merge made with it starts no pages.yml
 # train. `LAND_TOKEN` (fine-grained PAT or GitHub App token: contents, pull requests and workflows write on this
 # repository) arms when set; the fallback to `GITHUB_TOKEN` still lands the PR but warns, and the 6-hourly Pages cron
-# (or a manual dispatch) ships it.
+# (or a manual dispatch) ships it. Without the workflows permission, arm refuses a PR that touches
+# `.github/workflows/` ("without `workflow` scope", #4667); Bryce added it on 2026-11-04 (#4726).
 
 on:
   # Both privileged triggers run the deploy branch's file. No job checks out the PR: land-gate checks out the deploy

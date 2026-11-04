@@ -101,7 +101,13 @@ node tools/shot/publish-evidence.mjs --dir artifacts/track-survey/monza --label 
 ```
 
 Publication uses authenticated `gh` access to `brycejmurrin/f1-game` with permission
-to write repository contents. It creates one `evidence-<label>-<archive-hash>`
+to write repository contents. **Cloud sessions:** a Claude cloud-session token cannot create releases, so `--publish`
+fails with HTTP 403 and prints the next step: upload the capture as a CI artifact, then
+dispatch `archive-evidence.yml` (`run_id`, `artifact_name`, `label`); the prepared
+`receipt.json` can also be retried with `--receipt ... --publish` from a token with
+contents write.
+
+It creates one `evidence-<label>-<archive-hash>`
 prerelease per bundle with `--latest=false`.
 It does not edit an existing release, overwrite an asset, or publish a game build.
 Evidence tags point to the fixed parentless scaffold commit

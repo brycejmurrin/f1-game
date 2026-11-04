@@ -883,3 +883,21 @@ test("a NaN pose sample keeps the previous sample, not the origin (#4339)", () =
   const p = api.at(1).cars[0];
   assert.equal(p.px, 7); assert.equal(p.pz, 9); assert.equal(p.head, 1.5); assert.equal(p.s, 50);
 });
+
+test("contact sheet restore seek that throws still clears sheetBusy (B5 #4696)", async () => {
+  let calls = 0, G;
+  const R = boot(undefined, { PhotoStudio: { async contactSheet(_ts, seek) {
+    calls++;
+    if (calls === 1) { seek(1); G.cars = cars(1); }   // field replaced mid-capture: the restore seek throws "frame unavailable"
+    return true;
+  } } });
+  const field = cars(1);
+  G = { cars: field, player: field[0], paused: true, camMode: 3, dbgCam: { eye: [1, 2, 3] }, photoCam: { pos: [4, 5, 6], yaw: 1, pitch: 2, fov: 50 } };
+  const api = R.create(G); api.reset(field);
+  for (let t = 0; t <= 4; t++) { field[0].px = t; api.sample(t, field); }
+  api.pushTag("spin", 2, 0); api.beginScrub(false); api.apply(3);
+  await api.contactSheet(0);
+  assert.equal(calls, 1);
+  await api.contactSheet(0);
+  assert.equal(calls, 2, "sheetBusy was released: a second capture is allowed to start");
+});
