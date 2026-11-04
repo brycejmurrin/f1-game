@@ -1,8 +1,16 @@
 {
-  "scenario": "perf-race-entry SwiftShader, bahrain, 1440x900, menu START RACE (full intro)",
+  "scenario": "perf-race-entry SwiftShader (CI), bahrain, 1440x900, menu START RACE (full intro)",
   "ratio": 1.3,
-  "measured": null,
-  "runs": { "blockMs": [], "maxBlockMs": [], "longTaskCount": [] },
+  "measured": "2026-11-04",
+  "runs": {
+    "blockMs": [113333, 97023],
+    "maxBlockMs": [30684, 40719],
+    "longTaskCount": [38, 31]
+  },
   "baseline": { "blockMs": null, "maxBlockMs": null, "longTaskCount": null },
-  "loafScriptAllow": ["tracks.js", "game.js", "car-draw.js", "three.webgpu"]
+  "loafScriptAllow": [
+    "tracks.js", "game.js", "car-draw.js", "three.webgpu",
+    "assets.js", "build-client.js", "race-settings.js", "setting-deps.js",
+    "scroll-fade.js", "aria-state.js", "xr-boot.js", "audio/engine.js", "audio/soundtrack.js"
+  ]
 }
