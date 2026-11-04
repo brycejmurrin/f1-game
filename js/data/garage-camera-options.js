@@ -132,15 +132,35 @@ const GarageCameraOptions = (function () {
     return ax > BAY.jambX - BAY.jambClear && ax < BAY.jambX + BAY.jambClear;
   }
 
+  // PER MOMENT (#4745: GarageArrival MOMENTS): each of the four moments may pick its own bay camera and
+  // STAY INSIDE; an untouched moment uses ENTRY (pit in, race end) or EXIT (race start, pit out).
+  const MOMENT_IDS = Object.freeze(["start", "pitIn", "pitOut", "home"]);
+  const MOMENT_EXIT = Object.freeze({ start: true, pitOut: true });
   function settings(value) {
     const v = value && typeof value === "object" ? value : {};
     const shot = (id, fallback) => (SHOT_IDS.includes(id) ? id : fallback);
-    return {
+    const out = {
       entryShot: shot(v.entryShot, DEFAULT.entryShot),
       exitShot: shot(v.exitShot, DEFAULT.exitShot),
       stayInside: v.stayInside !== false,
       style: STYLE_IDS.includes(v.style) ? v.style : null,
     };
+    const ms = {};
+    if (v.moments && typeof v.moments === "object") {
+      for (const m of MOMENT_IDS) {
+        const e = v.moments[m];
+        if (e && typeof e === "object" && SHOT_IDS.includes(e.shot)) ms[m] = { shot: e.shot, stayInside: e.stayInside !== false };
+      }
+    }
+    if (Object.keys(ms).length) out.moments = ms;
+    return out;
+  }
+  /** A moment's { shot, stayInside, own }: its own pick, else the shared ENTRY / EXIT one. */
+  function forMoment(opts, moment, dir) {
+    const cfg = settings(opts), own = moment && cfg.moments && cfg.moments[moment];
+    if (own) return { shot: own.shot, stayInside: own.stayInside, own: true };
+    const exit = moment ? !!MOMENT_EXIT[moment] : dir === "out";
+    return { shot: exit ? cfg.exitShot : cfg.entryShot, stayInside: cfg.stayInside, own: false };
   }
 
   function read(store) {
@@ -186,9 +206,10 @@ const GarageCameraOptions = (function () {
   }
 
   /** Prefer the player's shot; otherwise the style's safe default (Showcase → doorway). */
-  function resolveShot(opts, dir) {
-    const shot = shotForDir(opts, dir);
-    if (shot !== DEFAULT.entryShot && shot !== DEFAULT.exitShot) return shot;
+  function resolveShot(opts, dir, moment) {
+    const mo = moment ? forMoment(opts, moment, dir) : null;
+    const shot = mo ? mo.shot : shotForDir(opts, dir);
+    if ((mo && mo.own) || (shot !== DEFAULT.entryShot && shot !== DEFAULT.exitShot)) return shot;
     if (opts.style && STYLE_SHOT[opts.style]) return STYLE_SHOT[opts.style];
     return shot;
   }
@@ -327,9 +348,10 @@ const GarageCameraOptions = (function () {
    */
   function applyArrival(pose, opts, meta) {
     if (!pose || !pose.eye) return pose;
-    const cfg = settings(opts);
     const dir = meta && meta.dir === "out" ? "out" : (pose.direction === "out" || pose.sequence === "out" ? "out" : "in");
-    const shot = resolveShot(cfg, dir);
+    const moment = meta && MOMENT_IDS.includes(meta.moment) ? meta.moment : null;
+    const cfg = Object.assign(settings(opts), { stayInside: moment ? forMoment(opts, moment, dir).stayInside : settings(opts).stayInside });
+    const shot = resolveShot(cfg, dir, moment);
     const doorwayOk = shot === "doorway" || shot === "pitWall" || shot === "facade"
       || pose.camera === "door" || pose.camera === "dolly";
     // Facade: allow the authored outside look only when the player asked for it
@@ -424,7 +446,7 @@ const GarageCameraOptions = (function () {
   }
 
   // ---- UI (injected: index.html is shrink-only) ----
-  let _bound = false;
+  let _bound = false, _paint = null;
   function bindUi($, store, hooks) {
     if (_bound || typeof document === "undefined" || !$) return false;
     const onChange = hooks && typeof hooks.onChange === "function" ? hooks.onChange : null;
@@ -441,6 +463,16 @@ const GarageCameraOptions = (function () {
       if (onChange) onChange(next);
       return next;
     }
+    // The moment the GARAGE ENTER & LEAVE tabs picked (GarageArrival writes #garrival[data-moment]).
+    const momentNow = () => {
+      const root = $("garrival"), m = root && root.getAttribute ? root.getAttribute("data-moment") : null;
+      return MOMENT_IDS.includes(m) ? m : "start";
+    };
+    function saveMoment(partial) {
+      const cur = read(store), m = momentNow(), ms = Object.assign({}, cur.moments || {});
+      ms[m] = Object.assign({}, forMoment(cur, m), partial);
+      return save({ moments: ms });
+    }
 
     // GARRIVAL: ENTRY / EXIT shot pickers + stay-inside, after STYLE or at top.
     if (rows && !$("ga-cam-options")) {
@@ -450,7 +482,7 @@ const GarageCameraOptions = (function () {
       box.setAttribute("aria-label", "Entry and exit cameras");
       const help = document.createElement("p");
       help.className = "adv-help";
-      help.textContent = "ENTRY / EXIT CAMERA: where the lens sits during PREVIEW PIT STOP and PREVIEW RACE START. INSIDE BAY is the default — the lens never backs through a wall. DOORWAY keeps a clean line through the shutter. OUTSIDE FACADE is the intentional pit-lane look (turns Stay inside off).";
+      help.textContent = "BAY CAMERA: where the lens sits for the moment picked at the top (each of the four keeps its own). INSIDE BAY is the default — the lens never backs through a wall. DOORWAY keeps a clean line through the shutter. OUTSIDE FACADE is the intentional pit-lane look (turns Stay inside off).";
       box.appendChild(help);
 
       const mkSelect = (id, label, ids) => {
@@ -474,10 +506,8 @@ const GarageCameraOptions = (function () {
         row.appendChild(cell);
         return { row, sel };
       };
-      const entry = mkSelect("ga-entry-shot", "ENTRY CAMERA", SHOT_IDS);
-      const exit = mkSelect("ga-exit-shot", "EXIT CAMERA", SHOT_IDS);
-      box.appendChild(entry.row);
-      box.appendChild(exit.row);
+      const bay = mkSelect("ga-bay-shot", "BAY CAMERA", SHOT_IDS);
+      box.appendChild(bay.row);
 
       const stayRow = document.createElement("div");
       stayRow.className = "set-row";
@@ -502,12 +532,8 @@ const GarageCameraOptions = (function () {
       if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, styleBar ? styleBar.nextSibling : anchor);
       else rows.insertBefore(box, rows.firstChild);
 
-      entry.sel.onchange = () => {
-        const v = entry.sel.value;
-        save({ entryShot: v, stayInside: v !== "facade" });
-      };
-      exit.sel.onchange = () => save({ exitShot: exit.sel.value });
-      stay.onchange = () => save({ stayInside: stay.checked });
+      bay.sel.onchange = () => { const v = bay.sel.value; saveMoment({ shot: v, stayInside: v !== "facade" }); };
+      stay.onchange = () => saveMoment({ stayInside: stay.checked });
     }
 
     // DIRECTOR · THREE CAMERAS truncates to "DIRECTOR - THRE" at the 12rem select
@@ -556,12 +582,12 @@ const GarageCameraOptions = (function () {
     }
 
     function paint() {
-      const v = read(store);
-      const e = $("ga-entry-shot"), x = $("ga-exit-shot"), s = $("ga-stay-inside");
-      if (e) e.value = v.entryShot;
-      if (x) x.value = v.exitShot;
+      const v = forMoment(read(store), momentNow());
+      const b = $("ga-bay-shot"), s = $("ga-stay-inside");
+      if (b) b.value = v.shot;
       if (s) s.checked = v.stayInside;
     }
+    _paint = paint;
     paint();
     return true;
   }
@@ -569,6 +595,7 @@ const GarageCameraOptions = (function () {
   return Object.freeze({
     STORE_KEY, BAY, VIEW_PRESETS, SHOT_IDS, SHOT_LABEL, STYLE_IDS, STYLE_SHOT, ANGLE_FRAME, DEFAULT,
     NEAR_PLANE,
+    MOMENT_IDS, forMoment, refreshUi: () => { if (_paint) _paint(); },
     settings, read, write, clampEye, clearJamb, outsideBay, inJamb, maxDistInside,
     samplePath, applyArrival, viewPreset, bindUi, pathTable, enforceNearPlane,
   });
