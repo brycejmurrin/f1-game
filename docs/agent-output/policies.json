@@ -2366,6 +2366,11 @@
       "presentation": "native",
       "preserve": "@c7"
     },
+    "tools/perf/baselines/race-entry-swiftshader.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
     "tools/perf/baselines/vm-alloc.json": {
       "action": "no-direct-output",
       "presentation": "native",
