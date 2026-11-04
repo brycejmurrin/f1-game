@@ -167,3 +167,10 @@ test("want + afterClassify: armed eligible defers sheet; default shows it", () =
   assert.equal(R.afterClassify(G, G.cars, {}), false);
   assert.equal(results.hidden, false);
 });
+
+test("endRace disarms the ceremony flag in the quali and TT early returns (#4769)", () => {
+  const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const quali = g.match(/if \(isQuali\(\)\) \{ RaceCeremony\.want\(false\);/);
+  assert.ok(quali, "quali early return must call RaceCeremony.want(false) before returning");
+  assert.match(g, /if \(isTimeTrial\(\)\) \{ RaceCeremony\.want\(false\); buildTTResults\(\)/);
+});

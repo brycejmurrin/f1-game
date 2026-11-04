@@ -245,9 +245,10 @@ const DataRealRace = (function () {
       const go = (tr) => {
         if (myGen !== bodyGen || (slot && slot.isConnected === false)) return false;
         if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
-        startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);
-        return launchRace(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        const ok = launchRace(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });
+        if (ok) startLap = fromLap;   // only an accepted launch moves the shared JUMP IN lap
+        return ok;   // intro: the pre-race card and announcer is in js/race/real-race.js launch
       };
       if (traceFits(traces, script)) return go(traces);
       return loadTraces(script, slot, go);

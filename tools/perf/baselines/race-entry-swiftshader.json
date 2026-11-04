@@ -1,0 +1,31 @@
+{
+  "scenario": "perf-race-entry (CI), bahrain, 1440x900, menu START RACE (full intro); one baseline per software-GL lane (APEX_GL; unset = swiftshader)",
+  "note": "Baseline = max of the observed runs; the ratio applies to all three numbers. A lane with a null baseline only records. CI load swings software-GL block times up to ~75% run to run, so this catches large regressions only. Only LoAF scripts that ran >= loafMinScriptMs are checked against loafScriptAllow (heavy ones measured >= 370 ms, incidental UI scripts <= 49 ms). The long-task ring holds 64, so a count at 64 is saturated.",
+  "ratio": 1.3,
+  "measured": "2026-11-04",
+  "lanes": {
+    "swiftshader": {
+      "runs": {
+        "blockMs": [113333, 97023, 133258, 170215],
+        "maxBlockMs": [30684, 40719, 70915, 72541],
+        "longTaskCount": [38, 31, 37, 37]
+      },
+      "baseline": { "blockMs": 170215, "maxBlockMs": 72541, "longTaskCount": 38 }
+    },
+    "llvmpipe": {
+      "runs": {
+        "blockMs": [40284],
+        "maxBlockMs": [5037],
+        "longTaskCount": [64]
+      },
+      "baseline": { "blockMs": null, "maxBlockMs": null, "longTaskCount": null }
+    }
+  },
+  "loafMinScriptMs": 100,
+  "loafScriptAllow": [
+    "tracks.js", "game.js", "car-draw.js", "three.webgpu",
+    "assets.js", "build-client.js", "race-settings.js", "setting-deps.js",
+    "scroll-fade.js", "aria-state.js", "xr-boot.js", "audio/engine.js", "audio/soundtrack.js",
+    "garage/prebuild.js"
+  ]
+}

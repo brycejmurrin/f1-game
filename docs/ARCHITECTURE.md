@@ -753,6 +753,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
+| `overlay-net.js` | `OverlayNet` | LAZY_NET | OverlayNet: the NETWORK half of the stream overlay (plan slice 3). |
 <!-- /@gen-arch:modules -->
 
 ---

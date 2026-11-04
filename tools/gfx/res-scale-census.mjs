@@ -14,22 +14,23 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { censusInitScript, waitFrames } from "../lib/mem-census.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 export function parseArgs(argv) {
-  const o = { track: "monza", scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.7, 1], settle: 4, json: null, ls: {} };
+  const o = { track: "monza", scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.7, 1], settle: 4, json: null, ls: {}, webgpu: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => argv[++i];
     if (a === "--track") o.track = next();
     else if (a === "--scales") o.scales = next().split(",").map(Number).filter((v) => v >= 0.5 && v <= 1);
     else if (a === "--settle") o.settle = Math.max(1, +next() | 0);
     else if (a === "--json") o.json = next();
+    else if (a === "--webgpu") o.webgpu = true;   // three's WebGPU backend on Mesa lavapipe
     else if (a === "--ls") { const [k, v] = next().split("="); o.ls[k] = v; }
     else if (a === "-h" || a === "--help") {
-      console.log("usage: node tools/gfx/res-scale-census.mjs [--track id] [--scales a,b,c] [--settle frames] [--json PATH] [--ls key=value]");
+      console.log("usage: node tools/gfx/res-scale-census.mjs [--track id] [--scales a,b,c] [--settle frames] [--json PATH] [--ls key=value] [--webgpu]");
       process.exit(0);
     } else throw new Error("unknown argument " + a);
   }
@@ -39,19 +40,19 @@ export function parseArgs(argv) {
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const srv = await startStaticServer(ROOT);
-  const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling", "--disable-renderer-backgrounding"] });
+  const browser = await launchChromium(o.webgpu ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new", "--disable-background-timer-throttling", "--disable-renderer-backgrounding"], env: { ...process.env, ...WEBGPU_LAVAPE_ENV } } : { args: ["--use-angle=swiftshader", "--disable-background-timer-throttling", "--disable-renderer-backgrounding"] });
   const rows = [], errors = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
-    await ctx.addInitScript((ls) => {
+    await ctx.addInitScript(({ ls, webgpu }) => {
       window.__TEST_MODE = true;
       try {
         localStorage.setItem("apex26.gfxBackend", "three");
-        localStorage.setItem("apex26.tlxForceGL", "1");
+        localStorage.setItem("apex26.tlxForceGL", webgpu ? "0" : "1");
         localStorage.setItem("apex26.tyreWear", JSON.stringify("off"));
         for (const k of Object.keys(ls)) localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, ls[k]);
       } catch (_) { /* no storage: defaults */ }
-    }, o.ls);
+    }, { ls: o.ls, webgpu: o.webgpu });
     await ctx.addInitScript(censusInitScript);
     await ctx.route("https://api.jolpi.ca/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
     await ctx.route("https://api.openf1.org/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
@@ -68,6 +69,8 @@ async function main() {
       const inf = t && t.renderer && t.renderer.info && t.renderer.info.memory;
       return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null };
     });
+    const api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
+    if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
     const base = await read();
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
     let prev = base;
@@ -79,7 +82,7 @@ async function main() {
       prev = r;
     }
     const total = prev.rtResizes - base.rtResizes;
-    const summary = { track: o.track, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
+    const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
       maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length };
     for (const r of rows) console.log(JSON.stringify(r));
     console.log(JSON.stringify({ summary }));

@@ -1343,10 +1343,12 @@ const TrackBuildProps = (function () {
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
         const rr = norm(cross(f, upOf(track, kA)));
+        // Colour rides the placement (NODE_COLOR), so Monaco's three barrier
+        // colours share one model key and one batch instead of three.
         const lat = (panelN++ & 1) * TrackGeom.MIN_SEP;
-        instance(`street-barrier|${col.join(",")}`,
-          { o: [cx + rr[0] * lat, cy + WH / 2, cz + rr[2] * lat], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
-          (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
+        instance("street-barrier",
+          { o: [cx + rr[0] * lat, cy + WH / 2, cz + rr[2] * lat], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len], col },
+          (rec) => rec.box([0, 0, 0], [WT, WH, 1], TrackGraph.NODE_COLOR),
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];
       };

@@ -779,6 +779,7 @@
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
+        "tests/unit/perf-vm-op-counts.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -882,6 +883,7 @@
         "tests/unit/pace-arming-vm.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
+        "tests/unit/perf-vm-op-counts.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -1001,6 +1003,7 @@
         "tests/unit/obs-act-edge-vm.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
+        "tests/unit/perf-vm-op-counts.test.mjs",
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
@@ -1311,6 +1314,7 @@
         "tests/unit/net-transport.test.mjs",
         "tests/unit/net-trystero-api.test.mjs",
         "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/overlay-net.test.mjs",
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
@@ -1379,6 +1383,15 @@
       "kind": "browser",
       "files": [
         "tests/specs/perf-session-budgets.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "perf-trace-census",
+      "script": "test:perf-trace-census",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-trace-census.spec.js"
       ],
       "twinned": false
     },
@@ -3715,6 +3728,11 @@
     {
       "path": "js/net/nostr.js",
       "global": "NetNostr",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/overlay-net.js",
+      "global": "OverlayNet",
       "roster": "LAZY_NET"
     },
     {

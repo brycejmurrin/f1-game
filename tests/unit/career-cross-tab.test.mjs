@@ -898,3 +898,29 @@ test("missing or denied browser locks fail closed while leaving career reads and
     assert.equal(h.store.write("volume", 0.5).durable, true);
   }
 });
+
+// ---- #4773 source-shape guards ----
+const readSrc = (f) => readFileSync(join(ROOT, f), "utf8");
+
+test("migrateSlots skips a legacy save whose version is not readable", () => {
+  const src = readSrc("js/career/career.js");
+  const body = /for \(const item of found\) \{[\s\S]*?next\[f\]\+\+;\n  \}/.exec(src)[0];
+  assert.match(body, /careerVersion\(c\.v\)/);
+  assert.match(body, /cv == null \|\| Number\.isNaN\(cv\)/);
+  assert.ok(body.indexOf("cv == null") < body.indexOf("store.set(slotKey"), "version check precedes the move");
+});
+
+test("CareerPlanning.protect rejects a null/garbage version via careerVersion", () => {
+  assert.match(readSrc("js/career/career-planning.js"), /SaveMigrate\.careerVersion\(c\.v\)[\s\S]*?v == null/);
+});
+
+test("freeMoney key is outside the /^apex26\\.career/ writer-locked prefix", () => {
+  const src = readSrc("js/career/career.js");
+  const m = /function freeMoney\(on\) \{([\s\S]*?)\n\}/.exec(src)[1];
+  const keys = [...m.matchAll(/store\.set\("([^"]+)"/g)].map((x) => x[1]);
+  assert.deepEqual([...new Set(keys)], ["freeMoney", "career.freeMoney"]);
+  assert.equal(keys[0], "freeMoney", "the user-facing write goes to the unlocked key first");
+  assert.ok(!/^apex26\.career/.test("apex26." + keys[0]));
+  assert.match(m, /store\.get\("career\.freeMoney"/, "legacy value still read once");
+  assert.match(readSrc("js/core/save-schema-registry.js"), /"freeMoney": entry/);
+});

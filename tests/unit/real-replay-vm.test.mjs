@@ -403,3 +403,25 @@ test("WATCH seeks and playing show recorded sets including a same-compound resto
     G.quitToMenu();
   } finally { g.close(); }
 });
+
+// B1 follow-up (#4756): a followed car that retires left `running`, indexOf gave -1
+// and previous/next jumped to the LEADER. It now steps from the slot the car held.
+test("follow(±1) from a retired car steps from its old slot, not the leader", async () => {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  try {
+    const { G } = g;
+    const RR = vm.runInContext("RealRace", g.ctx);
+    const { script } = scriptIn(g);
+    const traces = { frame: "track", cars: { 63: line(-14, 50, 0, -5, 200), 16: line(-22, 48, 1, -5, 200), 18: line(-30, 45, -1, -5, 60) } };
+    RR.launch(script, { seat: "LEC", watch: true, camera: "heli", traces, startLap: 1 });
+    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
+    g.step(2);
+    g.apex.go();
+    assert.equal(RR.replay().follow("STR"), "STR", "the last car");
+    RR.replay().setSpeed(8);
+    g.step(60 * 8);
+    const by = (code) => G.cars.find((c) => c.code === code);
+    assert.equal(by("STR").retired, true, "its data ended");
+    assert.equal(RR.replay().follow(-1), "LEC", "previous: the car that ran ahead of it, not the leader");
+  } finally { g.close(); }
+});
