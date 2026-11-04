@@ -3,6 +3,7 @@
 // layers), driven in a VM with DOM/canvas stubs. Visual-only modules: these pin
 // the GATES and SCALING (rain rate, onboard-only, caps, reduced motion, LOW off,
 // nearest-N, storm/wetness/speed), not pixels — a browser shot is the sign-off.
+// Ranked FX hunt: docs/notes/HUNT-FX-2026-11-03.md (#2 reduced-cap trim, #3 helmet remap).
 // Run: node --test tests/unit/droplets-spray.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -298,6 +299,27 @@ test("helmet impact: reduced motion and other onboard cameras keep the bead-only
       assert.deepEqual([after.x,after.y,calls.rotate],[before.x,before.y,0],"reduced water stays still without streaks");
     }
   }
+});
+
+test("droplets: reduced motion mid-session trims the live pool to the halved cap", () => {
+  const { D } = makeDroplets({ mobile: false });
+  for (let i = 0; i < 600; i++) D.tick(1 / 60, true, 1, true, 0, false);
+  const full = D.stats().n;
+  assert.ok(full > D.cap(false, true), `storm fills past the reduced ceiling (${full})`);
+  D.tick(1 / 60, true, 1, true, 0, true);
+  assert.ok(D.stats().n <= D.cap(false, true), `trimmed to reduced cap: ${D.stats().n}`);
+});
+
+test("droplets: classic→helmet cam flip remaps bead radii onto the helmet band", () => {
+  const { D, setHelmet } = makeDroplets({ helmet: false, seed: 7 });
+  run(D, 1, true, 1, false, 0, false);
+  const before = D.stats().first.radius;
+  assert.ok(before < 0.011, `classic spawn stays under the helmet floor (${before})`);
+  setHelmet(true);
+  D.tick(1 / 60, true, 1, false, 0, false);
+  const after = D.stats().first.radius;
+  assert.ok(after >= 0.011, `helmet remap lifts the bead (${before} → ${after})`);
+  assert.ok(after > before * 3, "scale jump is the classic→helmet band ratio");
 });
 
 test("helmet rain: atlas follows helmet camera changes even paused, and stays cached between changes", () => {
