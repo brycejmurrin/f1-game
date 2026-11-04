@@ -394,8 +394,8 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
     Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
     MutationObserver: class {
-      constructor(cb) { this.cb = cb; observers.push(this); }
-      observe() {}
+      constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+      observe(t) { this.targets.push(t); }
     },
     ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
     matchMedia: () => ({ matches: false }),
@@ -405,9 +405,11 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
   vm.runInContext(source, context);
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   sceneHits.length = 0; // attach() refreshes the live Home scene once; this test is about OPEN
-  assert.equal(observers.length, 1, "studio watches the appearance panel");
+  // The other observer is the orientation watch on body[data-shape] (#4529).
+  const watch = observers.filter((o) => o.targets.includes(panel));
+  assert.equal(watch.length, 1, "studio watches the appearance panel");
   panel.hidden = false;
-  observers[0].cb([{ attributeName: "hidden" }]);
+  watch[0].cb([{ attributeName: "hidden" }]);
   assert.equal(panel.getAttribute("aria-busy"), "true");
   assert.equal(sceneHits.length, 0, "preview must not run on the same turn as the open click");
   assert.ok(rafQueue.length >= 1);
