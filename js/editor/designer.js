@@ -223,11 +223,21 @@ const TrackDesigner = (function () {
     if (sel >= design.pts.length) sel = -1;
     if (span >= design.pts.length) span = -1;
     if (ctxAt >= 0) hideCtx();                         // its point index may name another point now
-    if (cv) cv.batch(() => { cv.setPoints(design.pts); cv.setSelection(sel, span); });
-    schedulePreview();
-    scheduleDraft();
-    refreshControls();
+    held(() => {
+      if (cv) { cv.setPoints(design.pts); cv.setSelection(sel, span); }
+      schedulePreview();
+      scheduleDraft();
+      refreshControls();
+    });
     Log.debug("track", "designer edit: " + (kind || "change") + " (" + design.pts.length + " pts)");
+  }
+  /** Run fn with the map canvas and the profile strip held: each repaints once at the
+   *  end. afterChange, refreshControls and runPreview each reached the map through
+   *  two paths and the strip through up to five setters (#4546 P6: 4 map + 8 strip
+   *  renders per edit → 2 + 2). Both batches nest. */
+  function held(fn) {
+    const inProf = () => (prof && prof.batch ? prof.batch(fn) : fn());
+    return cv && cv.batch ? cv.batch(inProf) : inProf();
   }
   function schedulePreview() { clearTimeout(previewT); previewT = setTimeout(runPreview, PREVIEW_MS); }
   function runPreview() {
@@ -237,11 +247,13 @@ const TrackDesigner = (function () {
     // A design the registry refuses outright (a loop under 1 km, a point out
     // of range) builds nothing and may name no red: never show "All checks pass".
     if (!verdict.ok && !verdict.red) verdict = Object.assign({}, verdict, { red: 1, issues: verdict.issues.concat([{ code: "bounds", level: "red", msg: "This loop cannot be built — make it bigger (2.5–7 km) and keep its points in range" }]) });
-    if (cv) cv.batch(() => { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); refreshMapView(); });
-    renderIssues(); renderStats(); announceChecks();
-    if (workspace) workspace.review(verdict);
-    renderInsight();
-    renderProfile();
+    held(() => {
+      if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); refreshMapView(); }
+      renderIssues(); renderStats(); announceChecks();
+      if (workspace) workspace.review(verdict);
+      renderInsight();
+      renderProfile();
+    });
     const blocked = !verdict.ok;
     for (const b of [ui.save, ui.race, ui.tt]) if (b) { b.disabled = blocked; b.setAttribute("aria-disabled", blocked ? "true" : "false"); }
     return verdict;
@@ -828,7 +840,8 @@ const TrackDesigner = (function () {
         tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
       const home = tuck ? body : root;
-      if (foot.parentNode !== home) home.appendChild(foot);   // a no-op re-append can drop focus from SAVE/RACE
+      // A no-op re-append can drop focus from SAVE/RACE; a real move blurs the focused chip (#4600), so hand it back.
+      if (foot.parentNode !== home) { const a = document.activeElement, kept = a && foot.contains(a) ? a : null; home.appendChild(foot); if (kept && document.activeElement !== kept) kept.focus({ preventScroll: true }); }
       root.dataset.foot = tuck ? "in" : "out";
     };
     if (typeof addEventListener === "function") addEventListener("resize", seatFoot);
@@ -1340,6 +1353,9 @@ const TrackDesigner = (function () {
   }
   function refreshControls() {
     if (!built || !design) return;
+    held(refreshControlsNow);
+  }
+  function refreshControlsNow() {
     refreshMapView();
     if (ui.modes) for (const b of ui.modes.children) {
       const on = b.dataset.mode === mode;

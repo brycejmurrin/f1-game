@@ -13,6 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadCrests, replay, cssOf } from "../../tools/car/crest-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -815,4 +816,91 @@ test("crestTone/crestFrame: defaults are op-identical, every combo is distinct, 
     assert.ok(ctx.ops.length < 600, `${tone}/${frame} bounded`);
   }
   assert.equal(seen.size, 15);
+});
+
+// ── tracePath parses each path once (car atlas perf P6, #4546) ─────────────
+// tracePath re-parsed a crest's SVG path string char by char on every trace — up to
+// 7 traces a site (3 halo, 3 outline, 1 fill), ~9 sites an atlas. It now parses once
+// per `d` and replays. Pinned: the recorded canvas call sequence equals the old
+// parser's (kept below as the oracle) for every shipped path and the three trap
+// strings, and a second trace of the same `d` calls no parseFloat.
+// The pre-#4546 tracePath, verbatim but for Log.warn → warn(). The oracle.
+function oldTracePath(ctx, f, d, warn) {
+  let i = 0, cmd = "";
+  const num = () => {
+    while (i < d.length && (d[i] === " " || d[i] === ",")) i++;
+    const st = i;
+    while (i < d.length && "-+.0123456789eE".indexOf(d[i]) >= 0) i++;
+    return parseFloat(d.slice(st, i));
+  };
+  ctx.beginPath();
+  let guard = d.length * 4 + 16;
+  while (i < d.length) {
+    if (guard-- <= 0) { warn("tracePath: no progress in '" + d.slice(0, 40) + "' at " + i); break; }
+    const c = d[i];
+    if (c === " " || c === ",") { i++; continue; }
+    if (c >= "A" && c <= "Z") { cmd = c; i++; }
+    else if (!(c >= "0" && c <= "9") && "-+.".indexOf(c) < 0) { i++; continue; }
+    if (cmd === "Z") { ctx.closePath(); cmd = ""; continue; }
+    const before = i;
+    const x = num(), y = num();
+    if (i === before) { i++; continue; }
+    if (!isFinite(x) || !isFinite(y)) continue;
+    if (cmd === "M") { ctx.moveTo(f.X(x), f.Y(y)); cmd = "L"; }
+    else ctx.lineTo(f.X(x), f.Y(y));
+  }
+}
+
+function recorder() {
+  const calls = [];
+  return { calls, beginPath: () => calls.push(["B"]), closePath: () => calls.push(["Z"]),
+    moveTo: (x, y) => calls.push(["M", x, y]), lineTo: (x, y) => calls.push(["L", x, y]) };
+}
+// A non-trivial fit so a replay that skipped f.X/f.Y, or swapped them, shows.
+const F = { X: (u) => 13.25 + u * 401.5, Y: (v) => -7.5 + v * 233.75, S: (q) => q * 300 };
+
+const readSrc = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
+function loadCrestsModule() {
+  const counter = { parseFloat: 0 };
+  const sandbox = {
+    console, Map, Set, Math, Object, Array, String, Number, JSON, isFinite, isNaN,
+    parseFloat: (s) => { counter.parseFloat++; return parseFloat(s); },
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  for (const f of ["js/core/log.js", "js/car/crest-paths.js", "js/car/crest-draw.js"])
+    vm.runInContext(readSrc(f), sandbox, { filename: absSrc(f) });
+  const stub = () => {};
+  const { tracePath } = vm.runInContext("LiveryCrests", sandbox).create({ css: String, fit: stub, drawWordmark: stub,
+    teamShort: String, crestSpecFor: stub, crestKey: String, legendOf: stub, CREST_DISC: {}, CREST_MARGIN: 0.05,
+    STROKE_MIN: 0, TEXT_MIN: 0 });
+  return { tracePath, counter, CrestPaths: vm.runInContext("CrestPaths", sandbox) };
+}
+
+const TRAPS = ["M0 0L1 1Z\n", "M0 0L1 1z", "M0 0L1 1Zm2 2l3 3z"];
+
+test("tracePath draws exactly what the old parser drew, first trace and replay", () => {
+  const { tracePath, CrestPaths } = loadCrestsModule();
+  const all = [];
+  for (const spec of Object.values(CrestPaths)) all.push(...spec.d);
+  assert.ok(all.length >= 8, "crest-paths.js carries the traced marks");
+  for (const d of [...all, ...TRAPS]) {
+    const want = recorder();
+    oldTracePath(want, F, d, () => {});
+    for (let pass = 0; pass < 2; pass++) {
+      const got = recorder();
+      tracePath(got, F, d);
+      assert.deepEqual(got.calls, want.calls, `pass ${pass} of ${JSON.stringify(d.slice(0, 30))}`);
+    }
+  }
+});
+
+test("a second trace of the same path parses nothing", () => {
+  const { tracePath, counter, CrestPaths } = loadCrestsModule();
+  const d = Object.values(CrestPaths)[0].d[0];
+  tracePath(recorder(), F, d);
+  assert.ok(counter.parseFloat > 0, "the first trace parses");
+  const after = counter.parseFloat;
+  for (let i = 0; i < 6; i++) tracePath(recorder(), F, d);
+  assert.equal(counter.parseFloat - after, 0, "six more traces (a halo + outline + fill) call no parseFloat");
 });

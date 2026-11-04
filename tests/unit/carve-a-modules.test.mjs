@@ -91,9 +91,10 @@ test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk 
   assert.ok(neutral.every((c) => Math.abs(c - 1) < 1e-9), JSON.stringify(neutral));
   // CSS hue-rotate can go out of gamut; the grade path must not hand the post a negative channel.
   const spun = GradeTint.hue([1, 0, 0], 90);
-  assert.ok(spun.every((c) => c >= 0), "hue clamps out-of-gamut channels: " + JSON.stringify(spun));
+  assert.ok(spun.every((c) => c >= 0 && c <= 1), "hue clamps out-of-gamut channels to 0..1: " + JSON.stringify(spun));
   assert.ok(spun[1] > spun[0] && spun[1] > spun[2], "90° on red leans toward green");
   const sat = GradeTint.sat([1, 0, 0], 0);
+  assert.ok(sat.every((c) => c >= 0 && c <= 1));
   assert.ok(sat[0] > 0 && sat[1] > 0 && sat[2] > 0);
   // Paint presets are frozen shared bases; carPaint copies into one scratch per call.
   for (const k of ["PAINT_WET_NIGHT", "PAINT_WET_DAY", "PAINT_DRY_NIGHT", "PAINT_DRY_DAY"]) {
@@ -110,6 +111,10 @@ test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk 
   assert.equal(night.emissive, 0.20, "night wet writes over the previous day scratch");
   assert.equal(night.roughness, 0.16);
   assert.equal(GradeTint.PAINT_DRY_DAY.roughness, 0.22, "preset untouched after carPaint");
+  // Tuner knobs above 1 must not push specular/clearcoat/emissive past the lit range.
+  const hot = GradeTint.carPaint(GradeTint.PAINT_DRY_DAY, { carGloss: 1, carMetal: 1, carSpecular: 2, carClearcoat: 2, carGlow: 2 });
+  assert.ok(hot.specular <= 1 && hot.clearcoat <= 1 && hot.emissive <= 1,
+    `carPaint upper-clamps lit knobs: spec=${hot.specular} cc=${hot.clearcoat} em=${hot.emissive}`);
   const removed = [];
   // The module reads the GLOBAL localStorage (setting ctx.localStorage did nothing): record its removeItem.
   const LightTuneEdit = load("../../js/race/light-tune-edit.js", "LightTuneEdit",

@@ -34,6 +34,7 @@ import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs"
 import { changedPaths } from "../lib/changed-files.mjs";
 import { specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind } from "./change-kind.mjs";
+import { FAT_UI_SPEC } from "./fat-shard.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
 import * as espree from "espree";
@@ -75,13 +76,23 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
  *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
 export const LANES = 24;
 
-/** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
- *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
- *  queued every ready PR while the high ones idled. Rotating the start spreads
- *  legs evenly; a run's own legs still land in distinct lanes. */
+/** First lane of a run's legs: a golden-ratio (Weyl) step of GITHUB_RUN_NUMBER
+ *  over LANES. With every run starting at lane 0, a 9-leg run only ever fed
+ *  lanes 0–8, so the low lanes queued every ready PR while the high ones idled.
+ *  The first fix, `n % LANES`, spread the starts but shifted adjacent runs by ONE
+ *  lane, and adjacent run numbers are the runs that overlap in time: two 12-leg
+ *  runs shared 11 lanes and queued behind each other while 11 others idled
+ *  (docs/notes/PERF-HUNT-P8-2026-11-03.md: run 41606130214 queued 12 legs
+ *  ~53 min in total, ~10 min of its 22-min wall). Stepping by LANES·φ⁻¹
+ *  (~14.8 lanes) puts consecutive starts far apart and still visits every
+ *  lane; a run's own legs stay in distinct lanes.
+ *  Two adjacent 12-leg runs share 11 lanes before, ≤ 3 after (pinned in
+ *  tests/unit/select-specs.test.mjs). */
+const GOLDEN = (Math.sqrt(5) - 1) / 2;
 export function laneBase(env = process.env) {
   const n = Number(env.GITHUB_RUN_NUMBER);
-  return Number.isInteger(n) && n > 0 ? n % LANES : 0;
+  if (!(Number.isInteger(n) && n > 0)) return 0;
+  return Math.floor(((n * GOLDEN) % 1) * LANES) % LANES;
 }
 
 // These specs already have their own jobs with runner-measured timeout
@@ -870,8 +881,10 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
     // — run-playwright's mega peel dropped --shard and ran the whole file on
     // the one shard megaShardPlan picked. partitionMegaSweepArgs no longer
     // peels a lone spec + --shard (PR #1113), and the config's
-    // `fullyParallel: true` shards by test.
-    const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
+    // `fullyParallel: true` shards by test. The leg still carries --shard=i/n;
+    // run-playwright.mjs turns it into a DURATION-balanced --test-list piece
+    // (tools/ci/fat-shard.mjs, P8 #4548), so `sec` below is an even share.
+    const fatUi = FAT_UI_SPEC.test(s.file);
     if (fatUi) {
       // ONE WORKER PER PIECE, AT LEAST TWO PIECES (2026-10-15). The two-worker
       // leg put two Chromiums on a 2-vCPU llvmpipe runner: Pages 38695272346
@@ -978,7 +991,7 @@ export const TRACKED = [
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|fat-shard\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
