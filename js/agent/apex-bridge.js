@@ -72,17 +72,26 @@ const ApexBridge = (function () {
     const secs = Math.max(1, Math.min(60, Number(args && args.seconds) || 5));
     return new Promise((resolve) => {
       const dts = [];
-      let last = null, longTasks = 0, obs = null;
+      let last = null, longTasks = 0, obs = null, done = false;
+      // A locked phone never fires rAF: settle with {error:"hidden"} instead of stalling the poll chain.
+      const guard = setTimeout(() => {
+        if (done) return;
+        done = true;
+        if (obs) try { obs.disconnect(); } catch (_) { /* gone */ }
+        resolve({ error: "hidden" });
+      }, secs * 1000 + 5000);
       try {
         obs = new PerformanceObserver((l) => { longTasks += l.getEntries().length; });
         obs.observe({ type: "longtask", buffered: false });
       } catch (_) { obs = null; }
       const t0 = performance.now();
       const tick = (t) => {
+        if (done) return;
         if (last != null) dts.push(t - last);
         last = t;
         if (t - t0 < secs * 1000) requestAnimationFrame(tick);
         else {
+          done = true; clearTimeout(guard);
           if (obs) try { obs.disconnect(); } catch (_) { /* gone */ }
           const s = dts.slice().sort((a, b) => a - b);
           const mean = s.reduce((a, b) => a + b, 0) / (s.length || 1);
@@ -196,7 +205,11 @@ const ApexBridge = (function () {
   function snap(args) {
     const w = Math.max(64, Math.min(640, Number(args && args.w) || 320));
     return new Promise((resolve, reject) => {
+      let done = false;
+      const guard = setTimeout(() => { if (!done) { done = true; resolve({ error: "hidden" }); } }, 2000);
       requestAnimationFrame(() => {
+        if (done) return;
+        done = true; clearTimeout(guard);
         try {
           const soft = document.getElementById("game-soft");
           const src = soft && !soft.hidden && soft.width ? soft : document.getElementById("game");

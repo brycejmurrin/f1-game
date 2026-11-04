@@ -407,10 +407,12 @@ const ReplayBuf = (function () {
       try { const ok = await PhotoStudio.contactSheet(times, seek, cancelled); if (cancelled()) return false; say("Contact sheet PNG download requested."); return ok; }
       catch (e) { say(sheetCancelled ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
       finally {
-        if (owns()) {
-          seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
-        }
-        if (generation === sheetGeneration) { sheetBusy = false; paintDock(); }
+        try {
+          if (owns()) {
+            seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
+          }
+        } catch (e) { Log.warn("ui", "Contact sheet restore failed", e); }
+        finally { if (generation === sheetGeneration) { sheetBusy = false; paintDock(); } }
       }
     }
 

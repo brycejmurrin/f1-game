@@ -16,8 +16,14 @@ function manifestAt(root) {
   return require(path.join(root, "tools/manifest.cjs"));
 }
 
+function isGarageModule(file) {
+  return file === "js/garage" || file.startsWith("js/garage/");
+}
+
 // Membership only. The manifest file also lists UI, career and renderer modules;
 // hashing those bytes turns the tip red on any unrelated addition (#2718).
+// Garage bay modules stay on TRACK_VM for the track-build VM but do not move
+// circuit scenery; their bodies are omitted so garage-only PRs stay green (#4525).
 function sceneryManifestMaterial(manifest) {
   return JSON.stringify(manifest.TRACK_VM);
 }
@@ -29,7 +35,7 @@ function scenerySourceDigest(root) {
     "tools/shot/gen-scenery-locations.cjs",
     "tools/shot/scenery-source-hash.cjs",
     "tools/lib/track-build-vm.cjs", "tools/lib/pack-assets.cjs",
-    ...manifest.TRACK_VM.filter(file => file !== "@circuits"),
+    ...manifest.TRACK_VM.filter(file => file !== "@circuits" && !isGarageModule(file)),
     ...filesUnder(root, "assets/pack", file => file.endsWith(".bin") || file.endsWith("manifest.json")),
   ];
   for (const dir of ["js/circuits", "js/circuits/scenery", "tests/data/landmarks"]) {
@@ -41,4 +47,4 @@ function scenerySourceDigest(root) {
   return hash.digest("hex");
 }
 
-module.exports = { scenerySourceDigest, sceneryManifestMaterial, MANIFEST_SLICE };
+module.exports = { scenerySourceDigest, sceneryManifestMaterial, MANIFEST_SLICE, isGarageModule };

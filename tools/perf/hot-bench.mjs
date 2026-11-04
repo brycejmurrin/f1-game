@@ -28,6 +28,9 @@ export const BASELINE_PATH = path.join(HERE, "baselines", "hot-bench.json");
 export const TRACK = "monza";
 export const WINDOWS = 3;
 export const WARM_STEPS = 80;
+// Warm passes before the timed windows. One pass left the first window ~1.5-2x slow (JIT tier-up of the
+// physState path, #4729 probe: 4.3 then 2.1 ms); three settle it, so the spread guard sees a stall, not a warm-up.
+export const WARM_PASSES = 3;
 export const SPREAD_RATIO = 4;
 export const GENEROUS_RATIO = 6;
 export const STRICT_RATIO = 1.75;
@@ -103,7 +106,7 @@ export async function measureHot() {
     const benches = {};
     for (const [name, spec] of Object.entries(BENCHES)) {
       const fn = benchFn(g, name);
-      windowMs(fn, spec.iters);
+      for (let w = 0; w < WARM_PASSES; w++) windowMs(fn, spec.iters);
       const samples = [];
       for (let w = 0; w < WINDOWS; w++) samples.push(windowMs(fn, spec.iters));
       benches[name] = summariseWindows(samples, spec.iters);

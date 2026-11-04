@@ -125,7 +125,8 @@ name: Land
 # (https://docs.github.com/en/actions/concepts/security/github_token), so a merge made with it starts no pages.yml
 # train. `LAND_TOKEN` (fine-grained PAT or GitHub App token: contents, pull requests and workflows write on this
 # repository) arms when set; the fallback to `GITHUB_TOKEN` still lands the PR but warns, and the 6-hourly Pages cron
-# (or a manual dispatch) ships it.
+# (or a manual dispatch) ships it. Without the workflows permission, arm refuses a PR that touches
+# `.github/workflows/` ("without `workflow` scope", #4667); Bryce added it on 2026-11-04 (#4726).
 
 on:
   # Both privileged triggers run the deploy branch's file. No job checks out the PR: land-gate checks out the deploy
@@ -190,7 +191,10 @@ concurrency:
     || (github.event.action == 'edited' && !github.event.changes.body)))
     && format('land-noise-{0}', github.run_id)
     || format('land-{0}', github.event.pull_request.number || ((github.event_name == 'schedule' || github.event.inputs.stale == 'true') && 'stale-sweep') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+  # TIP SWEEP DEDUPE (#4666): `CI` and `Deploy to GitHub Pages` both finish on the deploy branch for one tip, and a merge
+  # burst moves the tip every few minutes; an in-flight sweep for an older tip is cancelled by the newer one (resolve
+  # also drops a run whose head_sha is no longer the tip), so one tip move costs one sweep, not a queue of them.
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng') }}
 
 permissions: {}
 
@@ -257,7 +261,11 @@ jobs:
             if [ -n "$IN_HEAD" ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$IN_PR" --jq .head.sha)" != "$IN_HEAD" ]; then attempt=0; fi
             echo "dispatched re-gate of #$IN_PR (attempt $attempt of $RETRY_MAX on ${IN_HEAD:0:12})"
           elif [ "$RUN_BRANCH" = "$DEPLOY_BRANCH" ] && [ "$RUN_REPO" = "$GITHUB_REPOSITORY" ]; then
-            if [ "$RUN_CONCLUSION" = success ]; then
+            tipnow=$(gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha 2>/dev/null || true)
+            if [ -n "$tipnow" ] && [ -n "$RUN_SHA" ] && [ "$tipnow" != "$RUN_SHA" ]; then
+              # A later merge superseded this run's tip (#4666): its sweep is the newer run's job, so spend no API calls.
+              echo "::notice::tip sweep for ${RUN_SHA:0:12} skipped: the deploy tip is now ${tipnow:0:12}"
+            elif [ "$RUN_CONCLUSION" = success ]; then
               # The train (or the tip's own suite) finished: the tip moved, so every open `land` PR is re-gated.
               train=true
               mapfile -t numbers < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label land --limit 50 --json number --jq '.[].number')

@@ -4406,7 +4406,7 @@ function quitToMenu() {
   // with everything else rather than borrowing another module's lifetime.
   // Spotter pack is not RadioVoice.current — hiding #announce never pack.stop()s
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
-  radioVoice.halt();
+  radioVoice.halt(); radioVoice.flushDecoded();   // decoded PCM goes with the race (#4676)
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
@@ -5494,8 +5494,8 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
     if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsCommitT's floor: below it no bag is filled
-      const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO));   // pooled
-      if (c.sbsT > AiDrive.sbsCommitT(sb) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase(sb));   // COMMIT OR YIELD: tuck in behind
+      const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO)), sbl = AiDrive.sbsLimits(sb);   // pooled; one concede feeds commitT and ease
+      if (c.sbsT > sbl.commitT && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * sbl.ease);   // COMMIT OR YIELD: tuck in behind
     }
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
@@ -6021,11 +6021,11 @@ function updateCarLateral(c, dt, ranked, S) {
       // (grip taper, kerb, contact give, off-track fade) still applies.
       // These inputs stay fixed through the heading and lateral-authority calculations.
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
-      const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
-      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
+      const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // yaw and lateral from one q/prefix (X-mode costs the AI its wings only in .lat)
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
-      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // X-mode costs the AI its wings too
+      gripScale = ls.lat;   // X-mode costs the AI its wings too
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * gripScale, 1), -1, 1);
       c.steerSm = steer;
     }
@@ -7976,7 +7976,7 @@ function render(dt) {
     // On the jacks (PitLane.stopAnim): the body rises with the wheels, which
     // drawPlayerWheels lifts by the same number off _groundMat.
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
-    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
+    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   carFx.marks(c, _groundMat, dt, state);   // AI lock-up marks persist: laid BEFORE the frustum cull (#4669); blob caster now, sun / lamp caster next frame
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8092,7 +8092,7 @@ function render(dt) {
             -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
             dt * Particles.sprayRate(str));
         }
-        carFx.emit(c, _groundMat, dt, state);   // plank sparks + an AI lock-up's marks (js/fx/car-fx.js)
+        carFx.emit(c, _groundMat, dt, state);   // plank sparks (js/fx/car-fx.js); the AI lock-up marks are laid above the frustum cull
       }
     }
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {

@@ -853,8 +853,11 @@ const HudLayout = (function () {
       _clearing = 0;
     }
   }
-  function clearReadoutsWork(W = window.innerWidth, H = window.innerHeight) {
+  function clearReadoutsWork(W = window.innerWidth, H = window.innerHeight, precise = false) {
     resetClearance();
+    // Fast path batches the --hud-clear-* writes after every read (no forced layout per block); the
+    // corrected slot stands in for the painted box and one batched read verifies it afterwards.
+    const pending = [];
     const rows = ELEMENTS.filter((e) => CLEAR_READOUTS.indexOf(e[0]) >= 0);
     const box = (el) => {
       if (!el || el.hidden || !el.getBoundingClientRect) return null;
@@ -979,6 +982,9 @@ const HudLayout = (function () {
         // No correction was needed: retain this measured obstacle without
         // writing zero offsets and forcing another painted-box read.
         blocks.push(r);
+      } else if (best && !precise) {
+        pending.push([el, best, r]);
+        blocks.push(best);
       } else if (best) {
         el.style.setProperty("--hud-clear-x", (best.left - r.left).toFixed(2) + "px");
         el.style.setProperty("--hud-clear-y", (best.top - r.top).toFixed(2) + "px");
@@ -987,6 +993,19 @@ const HudLayout = (function () {
         const painted = box(el);
         if (painted) blocks.push(painted);
       } else blocks.push(r);
+    }
+    if (!pending.length) return;
+    for (const [el, best, r] of pending) {
+      el.style.setProperty("--hud-clear-x", (best.left - r.left).toFixed(2) + "px");
+      el.style.setProperty("--hud-clear-y", (best.top - r.top).toFixed(2) + "px");
+    }
+    // One batched read. A painted box that misses the slot (zoom, scale) redoes the pass the exact way.
+    for (const [el, best] of pending) {
+      const painted = box(el);
+      if (painted && (Math.abs(painted.left - best.left) > 1 || Math.abs(painted.top - best.top) > 1)) {
+        clearReadoutsWork(W, H, true);
+        return;
+      }
     }
   }
 

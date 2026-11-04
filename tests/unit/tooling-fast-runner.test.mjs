@@ -1000,3 +1000,12 @@ test("changedVsDeploy lists untracked files beside the tracked diff", () => {
     assert.deepEqual(changedVsDeploy("base", dir).sort(), ["a.js", "fresh/new.test.mjs"]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("a changelog fragment in the diff runs gen:check, so a prefix-less one fails the floor (#4718)", () => {
+  const all = ["tests/unit/docs-integrity.test.mjs"];
+  for (const changed of [["docs/changelog.d/" + "x.md"], ["docs/changelog.d/" + "x.md", "tools/ci/test-bg.mjs"]]) {
+    const r = selectToolingFastChanged(changed, { allFiles: all, pinIndex: new Map() });
+    assert.equal(r.genCheck, true, changed.join());
+  }
+  assert.notEqual(selectToolingFastChanged(["docs/changelog.d/" + "README.md"], { allFiles: all, pinIndex: new Map() }).genCheck, true);
+});

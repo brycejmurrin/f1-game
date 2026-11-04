@@ -120,12 +120,23 @@
       "spec": "tests/specs/track-designer.spec.js",
       "since": "2026-11-03",
       "owner": "brycejmurrin",
-      "why": "Passed only on retry. PR #4612 (AI-only diff, no designer code) run 41620767417 attempt 1, shard oversize-track-designer-2of2: the 844x390 variant's File-menu <summary> read inactive after a 20 s toBeFocused wait. It was the shard's first test, run while the service worker took control (4.4 s navigate). The 390x844 variant passed in the same job; attempt 2 passed. Exempts only this assertion message at 844x390.",
+      "why": "Passed only on retry. PR #4612 (AI-only diff, no designer code) run 41620767417 attempt 1, shard oversize-track-designer-2of2: the 844x390 variant's File-menu <summary> read inactive after a 20 s toBeFocused wait. It was the shard's first test, run while the service worker took control (4.4 s navigate). The 390x844 variant passed in the same job; attempt 2 passed. Exempts only this assertion message at 844x390. Second signature (#4725): PR #4590 run 41613789933 attempt 1 job 125843505860 failed with TimeoutError: page.waitForEvent: Timeout 60000ms exceeded while waiting for event \"filechooser\" (first test on a cold worker, service-worker controllerchange mid-test); attempt 2 passed. #4591 failed the focus assertion on runs 41613843749 (jobs 125846359387, 125887133382) and at 6d6f3fb8 (job 126150256270). Root cause: see the issue linked from #4725.",
       "title": "invalid native file import keeps its status readable and focus in place at 844x390",
       "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41620767417/job/125870188283",
-      "signature": "^expect\\(locator\\)\\.toBeFocused\\(\\) failed",
+      "signature": "^(expect\\(locator\\)\\.toBeFocused\\(\\) failed|TimeoutError: page\\.waitForEvent: Timeout \\d+ms exceeded while waiting for event \"filechooser\")",
       "expires": "2026-11-17",
       "review": "By 2026-11-17, remove this row once the exact test passes without retry on three PR runs, or fix the cold-start focus race in the spec. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/race-cycle-memory.spec.js",
+      "since": "2026-11-04",
+      "owner": "brycejmurrin",
+      "why": "Passed only on retry, three sightings in 48 h: PR #4558 run 41663530098 (selected-specs shard, 8550146a; the census after the first race saw no three renderer, no track hooks and no Three counters, and the page stayed on the title menu) and PR #4639 on 13c01c86 (oversize-race-cycle-memory; census empty twice, the retry passed). The same heads passed first try in fresh runs and base gfx 41661995347 was green, so it is a cold-boot census miss on llvmpipe, not a leak. Exempts only the 'race census must observe the requested renderer' message; heap-slope and leak assertions stay blocking.",
+      "title": "racing circuit after circuit keeps at most one world in memory",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41663530098",
+      "signature": "^race census must observe the requested renderer and usable counters",
+      "expires": "2026-11-18",
+      "review": "By 2026-11-18, make the first race census wait for the renderer and counters (or fail with a boot diagnosis); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link."
     }
   ]
 }

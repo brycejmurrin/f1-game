@@ -1549,9 +1549,9 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.match(brick.source, /generated:.*#1,0/);
 
     const { encodePNG, decodePNG } = await import("../../tools/gen/assets.mjs");
-    const readMobile = async () => {
+    const readMobile = async (extra = {}) => {
       const uploads = [], requests = [];
-      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer,
+      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer, ...extra,
         async fetch(url) {
           // The base content-addresses pack URLs (`?h=<md5>`); key the file by its path.
           const bare = url.split("?")[0];
@@ -1572,6 +1572,12 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.deepEqual(lowControl.uploads[0].brick,
       [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
     const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
+    // #4702: GRAPHICS: HIGH on a phone lifts the pack to the high tier; MEDIUM stays low.
+    const onHigh = await readMobile({ GfxQuality: { current: () => "high" } });
+    assert.equal(onHigh.state.tier, "high");
+    assert.equal(onHigh.uploads[0].size, 8);
+    const onMedium = await readMobile({ GfxQuality: { current: () => "medium" } });
+    assert.equal(onMedium.state.tier, "low");
 
     // Retain another layer's provenance plus unrelated records during a patch.
     const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };
