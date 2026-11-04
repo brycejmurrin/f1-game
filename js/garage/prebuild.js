@@ -56,11 +56,8 @@ const GaragePrebuild = (function () {
   "use strict";
 
   const POLL_MS = 1000;      // the title's idle check: a few property reads
-  // The title prebuild is one 1.0-1.5 s task at 4x CPU (Car3D.build + the framing
-  // hull). Started at the first idle after the title wired, it sat exactly where
-  // the first tap lands: a RACE tap waited 1.2-3.5 s (B-H8 phone-profile A/B,
-  // 2026-10-21). It waits for this much REAL quiet on a visible title: no
-  // pointer, key, wheel or visibility change. Input never starts it.
+  // The title prebuild is one 1.0-1.5 s task at 4x CPU; at the first idle it sat where the first
+  // tap lands (B-H8, 2026-10-21). It waits for this much REAL quiet on a visible title.
   const QUIET_MS = 3000;
   const GIVE_UP_MS = 30000;  // a hidden frame withheld this long (a TLX compile) is logged as pending
 
@@ -197,10 +194,8 @@ const GaragePrebuild = (function () {
         quietMs: quietMs(), sheetOpen: sheetOpenNow(),
       };
     }
-    // Two slices before a sync car/room build so a just-opened Settings sheet
-    // can paint and trip sheetOpen before we spend 1+ s on Car3D.build.
-    // Skipped when MenuSheetGate is absent (unit harness keeps the old
-    // one-slice-between-steps flush counts).
+    // Two slices before a sync build so a just-opened Settings sheet trips sheetOpen first
+    // (skipped without MenuSheetGate: the unit harness's flush counts).
     async function yieldBeforeHeavy(current, want) {
       if (typeof MenuSheetGate === "undefined" || !MenuSheetGate.open) return !!current();
       await d.menuSlice();
@@ -275,11 +270,8 @@ const GaragePrebuild = (function () {
         t = now(); gate.garageWarm = 2;
         while (!gate.garageReady && current() && now() - t < GIVE_UP_MS) {
           if (want === "title" && sheetOpenNow()) { gate.garageWarm = 0; return finish(rec, "superseded"); }
-          // render() owes exactly these frames. Once they are spent and no
-          // program warm is in flight, waiting out GIVE_UP_MS cannot paint
-          // one: the present that started the warm returned without drawing
-          // (measured 30027 ms of this wait on software GL / three WebGL2,
-          // while memState().warm.total was 1.5 s). The visible tap draws.
+          // Frames spent and no program warm in flight: waiting out GIVE_UP_MS paints
+          // nothing (measured 30027 ms on software GL). The visible tap draws.
           if (gate.garageWarm <= 0 && !(G.gfx.warming && G.gfx.warming())) break;
           await d.menuSlice();
         }
@@ -298,13 +290,15 @@ const GaragePrebuild = (function () {
     if (typeof MenuSheetGate !== "undefined" && MenuSheetGate.watch) {
       unwatch = MenuSheetGate.watch(gate, { noisy }) || unwatch;
     }
-    // Away from the menu (a race, the results) the 1 s poll does no work: no
-    // DOM reads, no sheet query. It stamps the quiet clock once on leaving and
-    // once on coming back, so the title's first seconds still count as noisy.
-    let away = false;
+    // Away from the menu the poll reads no DOM; it stamps the quiet clock on leaving and on return.
+    let away = false, pitHeld = false;
     function tick() {
       timer = setTimeout(tick, POLL_MS);
-      if (G.state !== "menu") { if (!away) { away = true; noisy(); } return; }
+      if (G.state !== "menu") {
+        if (!away) { away = true; noisy(); }
+        if (pitHeld && !G.setupPreviewOn) release();   // a pit visit's bay, after DONE (#4964)
+        return;
+      }
       if (away) { away = false; noisy(); }
       if (surface() !== "title" || sheetOpenNow()) noisy();
       if (running || sheetOpenNow()) return;
@@ -321,7 +315,7 @@ const GaragePrebuild = (function () {
     function stop() { clearTimeout(timer); timer = 0; try { unwatch(); } catch (_) { /* once */ } unwatch = () => {}; }
     // THE MEASURE: tap (markOpen, in openGarage) to the first garage frame that
     // DREW, plus the time spent inside the frame calls on the way.
-    function markOpen(from) { open = { from, visit: ++visits, at: now(), work: 0, calls: 0, prebuilt: ready() }; }
+    function markOpen(from) { if (from === "pit") pitHeld = true; open = { from, visit: ++visits, at: now(), work: 0, calls: 0, prebuilt: ready() }; }
     function timed(fn) {
       return function (dt, hold) {
         const t = now(), ok = fn(dt, hold);
@@ -354,7 +348,7 @@ const GaragePrebuild = (function () {
     // garage is on screen (the drive-out studio, a pit visit).
     function release() {
       if (!cam.release || !cam.release()) return false;
-      prepped = null;
+      prepped = null; pitHeld = false;
       gate.garageReady = false; gate.garageKey = ""; gate.garageWarm = 0;
       Log.info("game", "garage released for the race");
       return true;

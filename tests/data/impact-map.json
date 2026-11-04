@@ -8730,6 +8730,9 @@
       "sequenceLook": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "sequenceMood": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "setSetupAero": [
         "tests/unit/garage-aero-no-camera.test.mjs",
         "tests/unit/garage-arrival.test.mjs"

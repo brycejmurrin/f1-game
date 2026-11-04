@@ -990,7 +990,9 @@ function endGarageRes() {
 // canvas, the sheet, the camera strip, or CSS zoom actually changes.
 const _covPr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
 const _covCr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
-let _covKey = "", _covX = 0, _covY = 0, _covPanel = null, _covCanvas = null, _covCam = null;
+const _covKey = [];
+function _covSt(i, v) { if (Object.is(_covKey[i], v)) return 0; _covKey[i] = v; return 1; }
+let _covX = 0, _covY = 0, _covPanel = null, _covCanvas = null, _covCam = null;
 function _stampRect(out, r) {
   out.left = r.left; out.top = r.top; out.width = r.width; out.height = r.height;
   out.right = r.right; out.bottom = r.bottom;
@@ -1003,6 +1005,12 @@ let _bayAt = 0, _bayAcc = 0, _bayBusy = true;
 // voice for a car driven IN, never a pushed car, the RACE! drive-out, or a preview over a live race's engine graph.
 let _seqMoodWas = null, _seqBars = false, _seqSound = false, _seqSoundAt = 0;
 const _seqCue = { id: null, t: 0 };   // the ctx.cue record, reused every frame
+// Idempotent; also runs before garageCtx() (#4965).
+function sequenceMood(want) {
+  if (typeof GarageScene === "undefined" || !GarageScene.mood) return;
+  if (want && GarageScene.mood() !== want) { if (_seqMoodWas === null) _seqMoodWas = GarageScene.mood(); GarageScene.mood(want); }
+  else if (!want && _seqMoodWas !== null) { GarageScene.mood(_seqMoodWas); _seqMoodWas = null; }
+}
 function sequenceLook(p) {
   const on = !!(p && p.active), want = on && p.mood;
   if (!on) { exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; }
@@ -1010,10 +1018,7 @@ function sequenceLook(p) {
   if (sound && !_seqSound && !_outEngine) { driveOutEngine(true); _seqSound = _outEngine; _seqSoundAt = 0; }
   else if (!sound && _seqSound) { _seqSound = false; driveOutEngine(false); }
   if (sound && _seqSound) { const now = performance.now(); driveOutSound(p, _seqSoundAt ? (now - _seqSoundAt) / 1000 : 0); _seqSoundAt = now; }
-  if (typeof GarageScene !== "undefined" && GarageScene.mood) {
-    if (want && GarageScene.mood() !== want) { if (_seqMoodWas === null) _seqMoodWas = GarageScene.mood(); GarageScene.mood(want); }
-    else if (!want && _seqMoodWas !== null) { GarageScene.mood(_seqMoodWas); _seqMoodWas = null; }
-  }
+  sequenceMood(want);
   const bars = on && !!p.bars;
   if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
 }
@@ -1065,6 +1070,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
       arrival: arrivalCfg, moment,
     });
   }
+  sequenceMood(arriving && arriving.active && arriving.mood);
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
@@ -1123,12 +1129,11 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const camOn = !!(cam && !cam.hidden && cam.offsetParent !== null);
     const zP = window.CssZoom ? CssZoom.of(panelEl) : 1;
     const zC = window.CssZoom ? CssZoom.of(canvasEl) : 1;
-    const key = canvasEl.clientWidth + "x" + canvasEl.clientHeight
-      + "|" + panelEl.clientWidth + "x" + panelEl.clientHeight
-      + "|" + (camOn ? cam.clientWidth + "x" + cam.clientHeight : "0")
-      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0)
-      + "|" + document.documentElement.getAttribute("data-look-garage-side");
-    if (key !== _covKey || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
+    // Scalars, not a per-frame key string (#4974).
+    const moved = _covSt(0, canvasEl.clientWidth) | _covSt(1, canvasEl.clientHeight) | _covSt(2, panelEl.clientWidth)
+      | _covSt(3, panelEl.clientHeight) | _covSt(4, camOn ? cam.clientWidth : -1) | _covSt(5, camOn ? cam.clientHeight : -1)
+      | _covSt(6, zP) | _covSt(7, zC) | _covSt(8, !!home.active) | _covSt(9, document.documentElement.getAttribute("data-look-garage-side"));
+    if (moved || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
       _covPanel = panelEl; _covCanvas = canvasEl; _covCam = cam;
       const pr = _stampRect(_covPr, (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect());
       const cr = _stampRect(_covCr, canvasEl.getBoundingClientRect());
@@ -1136,7 +1141,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
         ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top
         : canvasEl.clientHeight;
       const cover = panelCover(pr, cr, canvasEl.clientWidth, canvasEl.clientHeight, camTop);
-      _covX = cover.x; _covY = cover.y; _covKey = key;
+      _covX = cover.x; _covY = cover.y;
     }
     if (home.active) homePane = GarageExperience.freePane(_covPr, _covCr);
     panelFrac = _covX; panelFracY = _covY;

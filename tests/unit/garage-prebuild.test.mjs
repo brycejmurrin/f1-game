@@ -1101,3 +1101,21 @@ test('night pit frontage receives lighting without a whole-mesh emissive overrid
   const h=exteriorHarness();await h.ext.request(h.selection('a','rain','night'));h.ext.draw();
   assert.equal(h.draws[2].opts.emissive,0);h.ext.release();
 });
+
+test("a mid-race pit visit's bay is released once DONE closes it, not held to the next race (#4964)", () => {
+  const timers = [];
+  const h = page({ timers });
+  h.G.state = "race";
+  h.pre.start();
+  timers.shift()();
+  assert.equal(h.cam.released, 0, "a race with no pit visit releases nothing");
+  h.pre.markOpen("pit"); h.G.setupPreviewOn = true;   // WORK ON CAR: the bay is on screen
+  timers.shift()();
+  assert.equal(h.cam.released, 0, "never under an open garage (the drive-out included)");
+  h.G.setupPreviewOn = false;                         // DONE → closePitWork
+  timers.shift()();
+  assert.equal(h.cam.released, 1, "the next race tick frees the bay");
+  assert.ok(h.logs.includes("game: garage released for the race"));
+  for (let i = 0; i < 5; i++) timers.shift()();
+  assert.equal(h.cam.released, 1, "released once, not every tick");
+});

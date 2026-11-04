@@ -1148,7 +1148,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,
     els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
-    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false, garageCtx: () => ({ sceneNow: 0 }),
+    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, sequenceMood: noop, reducedMotion: () => false, garageCtx: () => ({ sceneNow: 0 }),
     pinGarageRes: noop, endGarageRes: noop, setupCam: { endGarageRes: noop }, studioShown: noop,
     window: { addEventListener: noop }, requestAnimationFrame: noop,
     previewFrames: [], worldFrames: [],
@@ -1658,6 +1658,8 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   assert.equal(c.exteriorSequence, false, 'the next sequence can latch its new selection');
   assert.equal(c.exteriorVisible, false);
   assert.equal(cur, 'shipped', 'a stop (null) restores too');
+  const frame = cam.slice(cam.indexOf('function renderSetupPreview('));
+  assert.ok(frame.indexOf('sequenceMood(') < frame.indexOf('garageCtx()'), 'the mood lands before garageCtx(), not a frame late (#4965)');
   assert.equal(saved, 0, 'nothing is written to the player\'s LIGHTING');
   // ENGINE SOUND ON ARRIVAL: on while a driven car arrives, fed each frame, off after.
   look({ active: true, sound: true, engine: true }); look({ active: true, sound: true, engine: true });
