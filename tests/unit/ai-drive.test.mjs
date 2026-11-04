@@ -1128,6 +1128,13 @@ test("startCalm: full while launching, fades out by calmUntil, never for a car t
   assert.equal(A.attackOK({ ...zone, attackQ: 1, calm: 1 }), true, "a prime one is still on");
 });
 
+test("mistakeChance: composure only matters under pressure (AI-only, signed)", () => {
+  const cool = { consistency: 0.75, composure: 1 }, rattled = { consistency: 0.75, composure: -1 }, mid = { consistency: 0.75 };
+  assert.equal(A.mistakeChance(cool, 0), A.mistakeChance(rattled, 0), "unpressured: no effect");
+  assert.ok(A.mistakeChance(cool, 1) < A.mistakeChance(mid, 1));
+  assert.ok(A.mistakeChance(mid, 1) < A.mistakeChance(rattled, 1));
+});
+
 test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
   // Hard / default errMul=1 keeps the 0.004 base (Slice 4 lift is em>1 only).

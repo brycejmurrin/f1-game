@@ -189,6 +189,7 @@ export const GROUPS = [
   ["archive", "One-shot probes kept for provenance; each cited only by its dated note (tools/archive/README.md)."],
   ["gen", "Author-time generation: the generated doc blocks, the shell, and the asset bakes."],
   ["docs", "Agent-facing generated pages: the coverage table, the hook index and the static impact map."],
+  ["map", "The project map: the manifest as a module graph (calls, façade reads, load order, tests, owners) and its explorer page."],
   ["shot", "Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile."],
   ["perf", "The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and the A/B delta against a git ref."],
   ["capture", "Shared Playwright probe helpers and garage/menu capture gates reused by shot tools."],

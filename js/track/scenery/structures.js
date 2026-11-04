@@ -133,7 +133,8 @@ const SceneryStructures = (function () {
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
         // `alt` (opt-in, metres): every other slab stands `alt` thicker, so slope-overlapped
         // neighbours never share a side plane (z-fight, coplanar-audit; TrackGeom.MIN_SEP).
-        const t = alt && (n++ & 1) ? a + alt : a;
+        const aa = alt === undefined ? TrackGeom.MIN_SEP : alt;   // default: alternate slabs never share a side plane
+        const t = aa && (n++ & 1) ? a + aa : a;
         ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
@@ -174,6 +175,7 @@ const SceneryStructures = (function () {
       // sharing one key instead of paying for a second family.
       const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`
         + (st === "leaning" ? `|${side}` : "");
+      let fi = 0;
       along(s0, s1, 5, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 0.5)) {
@@ -198,6 +200,9 @@ const SceneryStructures = (function () {
             rec.cyl([0, 0, 0], 0.13, 1, postCol, 5);
           },
           { kind: "fence", k, side });
+        // Every other panel stands MIN_SEP to the side: two slabs end to end on a
+        // gentle curve or slope otherwise share one side plane (coplanar-audit).
+        if (fi++ & 1) place.o = vadd(place.o, p.r, TrackGeom.MIN_SEP * 2.5);
         const span = Object.assign({ s: [1, 1, spacing] }, place);
         ctx.instance(meshKey, span,
           (rec) => {

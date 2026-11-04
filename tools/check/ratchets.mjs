@@ -103,6 +103,12 @@ export const TREE_METRICS = {
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;
   },
   twinDebt: async () => (await (await import("../ci/twinned-specs.mjs")).twinDebt()).length,
+  // Download-byte budgets (tools/check/byte-budget.mjs): gzip, what players fetch, beside the raw script cap.
+  eagerGzip: async () => (await import("./byte-budget.mjs")).eagerGzip(),
+  eagerCssGzip: async () => (await import("./byte-budget.mjs")).eagerCssGzip(),
+  lazyCircuitGzipMax: async () => (await import("./byte-budget.mjs")).lazyCircuitGzipMax().n,
+  lazyAudioGzip: async () => (await import("./byte-budget.mjs")).lazyAudioGzip(),
+  raceEntryBytes: async () => { const b = await import("./byte-budget.mjs"); return b.raceEntryBytes(b.goldenFiles()); },
   assertPins: async () => pinCount("assertPins"),
   assertPinsAll: async () => pinCount("assertPinsAll"),
   rawGameReads: async () => pinCount("rawGameReads"),

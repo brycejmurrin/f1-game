@@ -34,7 +34,7 @@
 //   node tools/track/coplanar-audit.cjs <trackId> [--why]
 //   node tools/track/coplanar-audit.cjs --all [--json] [--gate]
 //   node tools/track/coplanar-audit.cjs --all --json --both   # default + overhead, one build each
-//   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal  --flat  --overhead
+//   flags: --gap <m>  --area <m2>  --fight <m>  --horizontal  --flat  --overhead  --no-adjacent-bins
 //
 // --flat: horizontal faces ONLY (|n.y| >= 0.5) — the population --horizontal
 // adds over the default mode. Ratcheted per circuit by tools/track/ground-audit.cjs
@@ -336,14 +336,15 @@ function analyse(track, prims, opt) {
   // neighbouring d-buckets too so a pair straddling a bucket edge is still seen.
   const bucket = new Map();
   const q = (v) => Math.round(v * 100) / 100;
-  // Opt-in (--adjacent-bins): ON exposes six real pairs (singapore, madrid, baku,
-  // brands_hatch, dijon, mosport: +1 spot each) that need emitter fixes, #4677.
+  // Default ON (--no-adjacent-bins turns it off; #4677, #4724): the six pairs it
+  // exposed (singapore, madrid, baku, brands_hatch, dijon, mosport) are fixed at
+  // their emitters.
   // A normal within NBIN_EDGE of a 0.01 bin edge is also filed under the
   // neighbouring bin: 0.0049 and 0.0051 round apart yet are the same facing
   // (dot >= SAME_FACING decides). Duplicates are removed by `seen` below.
   const qs = (v) => {
     const r = q(v), f = (v - r) * 100;   // f in [-0.5, 0.5]
-    if (!opt.adjacentBins) return [r];
+    if (opt.adjacentBins === false) return [r];
     if (f > 0.5 - NBIN_EDGE) return [r, q(r + 0.01)];
     if (f < -0.5 + NBIN_EDGE) return [r, q(r - 0.01)];
     return [r];
@@ -481,7 +482,7 @@ function optsFrom(argv, overhead) {
     horizontal: argv.includes("--horizontal") || argv.includes("--flat"),
     flat: argv.includes("--flat"),
     overhead: overhead || argv.includes("--overhead"),
-    adjacentBins: argv.includes("--adjacent-bins"),
+    adjacentBins: !argv.includes("--no-adjacent-bins"),
   };
   if (opt.overhead) {
     if (!argv.includes("--gap")) opt.gap = OVERHEAD_GAP;

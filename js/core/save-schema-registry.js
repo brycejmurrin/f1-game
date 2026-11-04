@@ -62,7 +62,8 @@ const SaveSchemaRegistry = (function () {
     "crewLook": entry("js/garage/scene-crew.js", "raw", 1, "rawScalar"),
     "crewVisit": entry("js/garage/arrival.js", "raw", 1, "rawScalar"),
     "career": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "json", 1, "json"),
-    "career.freeMoney": entry("js/career/career.js", "json", 1, "bool"),
+    "career.freeMoney": entry("js/career/career.js", "json", 1, "bool"), // legacy key: read once, copied to freeMoney, then cleared
+    "freeMoney": entry("js/career/career.js", "json", 1, "bool"),
     "careerSlot": entry("js/career/career.js", "json", 1, "careerSlot"),
     "circuitMastery": entry("js/race/race-insights.js", "json", 1, "json"),
     "customTeam": entry("js/career/custom-team.js", "json", 1, "json"),
