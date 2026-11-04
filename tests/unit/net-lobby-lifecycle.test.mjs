@@ -2779,3 +2779,17 @@ test("Escape follows the visible BACK on a sub-step and CLOSE on the choice; BAC
     assert.equal(h.elements.get("vs-code-join").hidden, false);
   } finally { h.lobby.cancel(); }
 });
+
+test("a guest that un-readied inside one round trip of START still takes GO at the host's revision (#4815)", async () => {
+  const { h, s } = await connectedGuest();
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    h.lobby.setReady(true); h.lobby.setReady(false);
+    s.deliver("go", { revision: 0 });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(starts, 1, "ready at the host's revision, un-ready in flight: GO starts, not a silent refusal");
+    s.deliver("settings", { ...initialGuestSettings(), laps: 7, revision: 1 });
+    s.deliver("go", { revision: 0 });
+    assert.equal(starts, 1, "a stale revision is still refused");
+  } finally { h.lobby.cancel(); }
+});

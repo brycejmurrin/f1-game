@@ -690,7 +690,7 @@ const NetLobby = (function () {
       }, readyTimes));
       made.onEvent(NetPlay.EV.GO, (d) => {
         if (role !== "guest") return;
-        if (!settingsAccepted || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
+        if (!settingsAccepted || settingsNeedsReady || (d && d.revision != null && d.revision !== settingsRevision)) {   // un-ready in flight at START (#4815): host saw us ready at this revision
           say("Review the host’s race settings and press READY before starting.", true); return;
         }
         beginRace();
