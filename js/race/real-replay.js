@@ -365,9 +365,12 @@ const RealReplay = (function () {
 
     function owns(c) { return !!run && run.cars.has(c); }
 
+    function runningOrder() { return [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog); }
+
     function setFollow(c, snap = true) {
       if (!run || !c) return;
       run.follow = c;
+      run.followRank = runningOrder().indexOf(c);   // where it ran, for follow(±1) after it retires
       if (G.followCar) G.followCar(c);
       if (snap && bc) bc.refresh(bcState);   // paused follow changes must update the tower and remove a self-following inset before the camera
       if (snap && G.snapGameCam) G.snapGameCam();
@@ -376,11 +379,16 @@ const RealReplay = (function () {
     /** follow(+1 / -1): the next car up or down the running order; follow("VER"): by code. */
     function follow(want) {
       if (!run) return null;
-      const running = [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog);
+      const running = runningOrder();
       if (!running.length) return null;
       let c = null;
       if (typeof want === "string") c = running.find((x) => run.cars.get(x).d && run.cars.get(x).d.code === want) || null;
-      else { const i = running.indexOf(run.follow); c = running[((i < 0 ? 0 : i + (want | 0)) % running.length + running.length) % running.length]; }
+      else {
+        const i = running.indexOf(run.follow), d = want | 0;
+        // A retired follow car left `running`: the car behind it has moved up into its slot, so +1 is that slot and -1 the one ahead.
+        const at = i >= 0 ? i + d : (run.followRank >= 0 ? run.followRank + (d > 0 ? d - 1 : d) : 0);
+        c = running[(at % running.length + running.length) % running.length];
+      }
       if (c) setFollow(c);
       return c ? c.code : null;
     }
