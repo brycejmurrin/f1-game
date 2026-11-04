@@ -31,8 +31,18 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
   // GPUDevice; the WebGL2 fallback has none, so there the check would pass vacuously and is skipped.
   if (gpuDevice) {
     testInfo.annotations.push({ type: "gpu-churn", description: `per window bindGroups ${windows.map((w) => w.bindGroups).join(",")} buffers ${windows.map((w) => w.buffers).join(",")}` });
-    const gpuChurn = windows.filter((w) => w.bindGroups > 0 || w.buffers > 0);
-    expect(gpuChurn.map((w) => ({ window: w.window, bindGroups: w.bindGroups, buffers: w.buffers, built: w.gpuBuilt.slice(0, 6) })),
-      "idle windows that created bind groups or buffers after warm-up").toEqual([]);
+    // A geometry's FIRST draw makes its vertex/index buffer inside three's updateForRender (measured on lavapipe:
+    // one 90480 B index buffer in window 3, same frame in two runs). That is a mesh coming into view, not churn, so
+    // it is reported (annotation) and not failed; a size that recurs in a second window IS churn (released and
+    // rebuilt). Everything else, and every bind group, must be 0.
+    const firstUse = (b) => b.kind === "createBuffer" && /create(Index)?Attribute/.test(b.from || "") && /updateForRender/.test(b.from || "");
+    const other = windows.map((w) => ({ window: w.window, bindGroups: w.bindGroups, built: w.gpuBuilt.filter((b) => !firstUse(b)).slice(0, 6) }))
+      .filter((w) => w.bindGroups > 0 || w.built.length > 0);
+    expect(other, "idle windows that created bind groups or non-first-draw buffers after warm-up").toEqual([]);
+    const seen = new Map();
+    for (const w of windows) for (const b of w.gpuBuilt.filter(firstUse)) { const k = String(b.size); seen.set(k, (seen.get(k) || new Set()).add(w.window)); }
+    testInfo.annotations.push({ type: "first-draw-buffers", description: [...seen].map(([size, ws]) => `${size}B@w${[...ws].join(",")}`).join(" ") || "none" });
+    expect([...seen].filter(([, ws]) => ws.size > 1).map(([size, ws]) => ({ size, windows: [...ws] })),
+      "a first-draw buffer size that recurs across idle windows is a geometry released and rebuilt").toEqual([]);
   }
 });
