@@ -1122,7 +1122,10 @@ const TrackBuildProps = (function () {
     // top, jitter and driving limit stay those of `sz` — so two boxes placed
     // on one spot do not share the 0.8 m-sunk underside plane: the retail
     // block + skirt pair was 794 flat-coplanar pairs up to 63 m2.
-    const place = (k, side, dist, sz, col, deeper) => {
+    // `flush` keeps the slot's lateral nudge but not its lift: a body whose top
+    // another box covers (the marshal post under its board) has no top plane to
+    // separate, and the lift raised the board past the survey's 0.6 m float line.
+    const place = (k, side, dist, sz, col, deeper, flush) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1143,7 +1146,7 @@ const TrackBuildProps = (function () {
       }
       const gy = terrainYAt(cx, cz);
       const dz = deeper || 0, hh = (sz[1] + dz) / 2;
-      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + hh - dz - 0.8 + jitter, cz];   // + jitter: consecutive same-height tops never share a plane (flat coplanar-audit)
+      const c = [cx, (gy !== null ? gy : groundYAt(k, dist)) + hh - dz - 0.8 + (flush ? 0 : jitter), cz];   // + jitter: consecutive same-height tops never share a plane (flat coplanar-audit)
       if (addBox(out, c, dz ? [sz[0], sz[1] + dz, sz[2]] : sz, col, [r, u, t]) === false) return;   // on-track: dropped, no phantom barrier
       const top = [c[0] + u[0] * hh, c[1] + u[1] * hh, c[2] + u[2] * hh];
       note("prop", c, sz, { k, side });
@@ -1566,7 +1569,7 @@ const TrackBuildProps = (function () {
     if (!def.street) {
       every(270, (k) => {
         const side = hash(HK(k) * 7) < 0.5 ? -1 : 1;
-        const post = place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08]);
+        const post = place(k, side, 25, [0.55, 1.3, 0.55], [0.95, 0.55, 0.08], 0, true);   // flush: the board caps it
         placeSeq++;   // the board's old place() slot: keeps every later prop's SEP_SLOTS phase
         // The signal board sits ON its post. Placed as its own box it took
         // place()'s 0.8 m sink and its 0.75 m height ended 5 cm under the
