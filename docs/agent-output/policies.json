@@ -506,6 +506,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/archive-sweep.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per archivable session id with its PR and merged/closed reason; the final count line; exit 2 usage, 3 GitHub error."
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -615,6 +620,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
+    },
+    "tools/ci/fat-shard.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-piece plan vs the count split, one line per piece; an unlistable spec keeps the count shard"
     },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
@@ -1317,6 +1327,11 @@
       "preserve": "@c2"
     },
     "tools/garage/author-departure.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/garage/author-entrance.py": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"

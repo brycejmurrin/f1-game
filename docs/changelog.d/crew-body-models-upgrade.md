@@ -1,0 +1,1 @@
+Improved: pit crew silhouettes (helmet/visor, fire-suit panels, gloves, boots, knee pads), stocky/lean body variants, role kits (gunner/jack/lolli/carrier), team-colour light board and in-race tyre overlays.

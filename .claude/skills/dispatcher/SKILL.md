@@ -18,3 +18,7 @@ comment with the returned session id. The exact rules, line formats and the save
   on), `dispatch:merge-pause` stops arming; `priority` on an issue or PR launches or lands it first.
 - Bryce's setup, once: the "Apex worker" scheduled task with an API trigger and the saved prompt from
   `dispatch.mjs`'s header; the `LAND_TOKEN` secret (skill `steward` `references/vendors.md`).
+- The dispatcher's one state store is its task list (TaskCreate / TaskUpdate, one task per stream); no `roster.md`.
+  Workers report by one-line `send_message` (`tools/ci/worker-prompt.md` Coordination); read those before the Board.
+- Session sweep: `node tools/ci/archive-sweep.mjs --sessions <list_sessions JSON file>` prints the sessions whose PR
+  merged or closed in one call; archive each with `archive_session`. Do not page `list_sessions` repeatedly.

@@ -173,6 +173,15 @@ test("the lightning's saved base follows the fade, so a strike restores to the l
   atmo.tick(atmo.WX_BLEND_S / 2);
   assert.deepEqual(host(G._ltBase.ambientSky), host(G.frame.ambientSky), "_ltBase.ambientSky is the blended value");
   assert.equal(G._ltBase.exposure, G.frame.exposure != null ? G.frame.exposure : 1.0);
+  // The re-base writes in place: no new object or arrays per frame of the fade
+  // (docs/notes/PERF-HUNT-P1-2026-11-03.md row 1).
+  const lb = G._ltBase, sky = lb.ambientSky, gnd = lb.ambientGround;
+  atmo.tick(atmo.WX_BLEND_S / 4);
+  assert.equal(G._ltBase, lb, "same _ltBase object across fade frames");
+  assert.equal(G._ltBase.ambientSky, sky, "ambientSky array reused");
+  assert.equal(G._ltBase.ambientGround, gnd, "ambientGround array reused");
+  assert.notEqual(G._ltBase.ambientSky, G.frame.ambientSky, "the base never aliases the live frame");
+  assert.deepEqual(host(G._ltBase.ambientSky), host(G.frame.ambientSky), "still the blended value");
 });
 
 test("the weather arc asks for the fade and game.js ticks it", () => {

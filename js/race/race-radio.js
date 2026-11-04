@@ -361,11 +361,11 @@ var RaceRadio = (function () {
           break;
         }
         case "mistake": {
-          // Nearby rival only — a midfield lock-up the player cannot use is noise.
+          // The car AHEAD only — a midfield lock-up the player cannot use is noise,
+          // and every eng.rivalErr line says "{name} AHEAD" (the recorded pack has
+          // no behind-car phrasing), so the car behind erring stays silent here.
           if (f.pitting || f.caution !== 0) break;
-          const near = e.car === f.ahead || e.car === f.behind;
-          const gap = e.car === f.ahead ? f.gapA : e.car === f.behind ? f.gapB : null;
-          if (!near || gap == null || gap > 3.5) break;
+          if (e.car !== f.ahead || f.gapA == null || f.gapA > 3.5) break;
           offer({ id: "rivalErr", ch: "eng", tier: 2, chat: 2, cd: 45,
             cdKey: "rivalErr:" + S(e.car), key: "eng.rivalErr",
             vars: { name: S(e.car) }, ttl: 6 });
@@ -673,11 +673,13 @@ var RaceRadio = (function () {
         }
       }
       const text = f.ahead && f.gapA != null && f.behind && f.gapB != null
-        ? lines.pick("eng.status", { pos: f.pos, gapA: gapT(f.gapA), gapB: gapT(f.gapB) })
+        ? lines.pick("eng.status", { pos: f.pos, gapA: gapT(f.gapA), gapB: gapT(f.gapB) }, true)   // peek, as speak()
         : f.ahead && f.gapA != null ? "P" + f.pos + ". " + gapT(f.gapA) + " TO " + S(f.ahead)
         : f.behind && f.gapB != null ? "P" + f.pos + ". " + gapT(f.gapB) + " TO " + S(f.behind) + " BEHIND"
         : "P" + f.pos;
-      return G.announce(text, durFor(text, "race"), "race") ? text : "";
+      if (!G.announce(text, durFor(text, "race"), "race")) return "";
+      lines.commit();   // only a status line the driver actually got counts as heard
+      return text;
     }
 
     /** A replay highlight as commentary (js/race/real-replay.js fire): h = {kind,
