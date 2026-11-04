@@ -100,7 +100,7 @@ function installWrap() {
   if (!r || r.__passCensus) return !!r;
   const rows = [];
   const orig = r.render.bind(r);
-  r.__passCensus = { rows, on: false };
+  r.__passCensus = { rows, on: false, seen: 0 };
   // three's `info.render.drawCalls` / `.triangles` accumulate across the passes of ONE frame and reset when the
   // next frame starts (info.autoReset), so a pass's own count is the delta around its render() call; a value
   // that went DOWN means a reset happened inside the call, and the after-value is then the pass's count.
@@ -122,6 +122,7 @@ function installWrap() {
     };
   }
   r.render = function (scene, camera) {
+    r.__passCensus.seen++;   // every top-level render() call, measured or not: the readiness signal on software WebGPU
     const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
     { const t = r.getRenderTarget && r.getRenderTarget(); curKey = t ? ((t.texture && t.texture.name) || t.name || "rt") + " " + t.width + "x" + t.height : "canvas"; }
     const out = orig(scene, camera);
@@ -169,10 +170,12 @@ async function main() {
     // three itself reports frames advancing, else the window records nothing.
     if (WEBGPU) {
       const advanced = await page.waitForFunction(() => {
-        const w = window.__passWait || (window.__passWait = { f0: window.renderer.info.render.frame });
-        return window.renderer.info.render.frame >= w.f0 + 5;
-      }, null, { timeout: WAIT_MS * 4, polling: 250 }).then(() => true, () => false);
-      if (!advanced) console.error("webgpu: renderer.info.render.frame did not advance 5 frames within " + (WAIT_MS * 4 / 1000) + "s");
+        const pc = window.renderer.__passCensus;
+        if (!pc) return false;
+        if (pc.seen0 == null) pc.seen0 = pc.seen;
+        return pc.seen >= pc.seen0 + 5;
+      }, null, { timeout: 180000, polling: 500 }).then(() => true, () => false);
+      if (!advanced) console.error("webgpu: renderer.render() was not called 5 times within 180s of the wrap");
     }
     const rows = await page.evaluate(async ({ n, by }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
@@ -215,7 +218,7 @@ async function main() {
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, byObject: byObj, errors }, null, 2)); }
     if (WEBGPU && backend.api !== "webgpu") { console.error("--webgpu asked for the WebGPU backend but three fell back to " + backend.api); process.exitCode = 1; }
     if (!table.length) {
-      const diag = await page.evaluate(() => { const r = window.renderer; return { frame: r && r.info.render.frame, calls: r && r.info.render.calls, state: (() => { try { return window.__apex.info(); } catch (e) { return String(e); } })(), wrapped: !!(r && r.__passCensus), recorded: r && r.__passCensus ? r.__passCensus.rows.length : null, rafHz: null }; }).catch((e) => ({ error: String(e) }));
+      const diag = await page.evaluate(() => { const r = window.renderer; return { frame: r && r.info.render.frame, calls: r && r.info.render.calls, seen: r && r.__passCensus ? r.__passCensus.seen : null, state: (() => { try { return window.__apex.info(); } catch (e) { return String(e); } })(), wrapped: !!(r && r.__passCensus), recorded: r && r.__passCensus ? r.__passCensus.rows.length : null, rafHz: null }; }).catch((e) => ({ error: String(e) }));
       console.error("no render() calls recorded; diag " + JSON.stringify(diag).slice(0, 1500));
       process.exitCode = 1;
     }
