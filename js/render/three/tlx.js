@@ -1535,7 +1535,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
-      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirSub = false, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
@@ -2194,13 +2194,19 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
-      function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
+      // apex26.tlxMirrorSub=0 pins the lite mirror back to whole-chunk culling (tlx-chunked cullMirror, PR #4886).
+      let _mirSubOn = (function () { try { return localStorage.getItem("apex26.tlxMirrorSub") !== "0"; } catch (_) { return true; } })();
+      function _drawChunked(rec, order, vp, eye, cd, fog, slot, sub) {
         if (!chunkedSys) return 0;
-        const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
         const mat = rec.mat;
-        if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
+        const merge = _chunkMerge && !!chunkedSys.mergeVisible
             && !(mat && (mat.transparent || mat.depthWrite === false))
-            && !(rec.al < 1)) {
+            && !(rec.al < 1);
+        // Sub-range entries draw only through mergeVisible: a mesh with a model matrix (world-space AABBs) or a
+        // material off the merge path keeps the whole-chunk cull.
+        const n = merge && sub && !rec.m && chunkedSys.cullMirror ? chunkedSys.cullMirror(rec.chunked, vp, eye, cd, fog)
+          : chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
+        if (merge && n > 0) {
           const g = chunkedSys.mergeVisible(rec.chunked, n, slot);
           if (g) { acquireMesh(g, rec.m, rec.mat, rec).renderOrder = order; return n; }
         }
@@ -4500,10 +4506,17 @@ const TLX = (function () {
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
           if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
-          // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
-          // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
-          // mechanism I asserted and could NOT substantiate.
-          a.array = null;
+          // A ZERO-LENGTH VIEW OF THE SAME CLASS, NOT null (#4900). Pipelines
+          // recompute backend.getRenderCacheKey() on every needsRenderUpdate()
+          // (a new material or render context, not only a new RenderObject), and
+          // getVertexBufferLayout / _getVertexFormat read array.BYTES_PER_ELEMENT
+          // and array.constructor of EVERY attribute with no null guard (r187):
+          // a nulled car caster threw in present ~37 s into a race and reloaded
+          // the tab (PR #4880 census). Gpu-census 26's zero-byte buffer does not
+          // apply: that was an INDEX array (never freed here) and never-uploaded
+          // chunks; `uploaded()` above means createAttribute never runs again
+          // for this attribute (its backend data goes only with geometry.dispose).
+          a.array = new a.array.constructor(0);
         };
         const atts = g.attributes;
         for (const k in atts) drop(atts[k]);
@@ -4540,19 +4553,11 @@ const TLX = (function () {
         // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
         // evidence from a real handset.
         if (isMobile) return;
-        // AND KNOW WHAT IT COSTS ON DESKTOP. Freeing an array disarms the
-        // two intermediate rungs of the paint-failure ladder below (dropTo ->
-        // unlitMat -> rawUnlitMat): dropTo reassigns pm.material, a new
-        // (geometry, material) pair is a new RenderObject, and building its
-        // pipeline runs _getVertexFormat, which is `e.array.constructor` with
-        // NO null guard in the shipped vendor build (three.webgpu.min.js,
-        // r185). Both rungs therefore throw and the ladder lands on
-        // refuseTab() — which reloads onto GLX only for an explicit pin or a boot
-        // already on three WebGL2 (a WebGPU AUTO boot reloads onto three WebGL2),
-        // so the player still gets a game, just never the unlit TLX degradation
-        // those rungs exist for.
-        // Verified by reading the vendored bytes, not reproduced at runtime.
-        // Do not add rungs above refuseTab() expecting them to run here.
+        // A freed attribute keeps a zero-length view of its class (#4900), so a
+        // new (geometry, material) pair — the paint ladder's dropTo -> unlitMat
+        // -> rawUnlitMat rungs included — still types its vertex layout from
+        // array.constructor / BYTES_PER_ELEMENT. A NEW attribute name on a freed
+        // geometry is a different matter: only uploaded attributes are freed.
         if (now - _mirrorSweepAt < 2000) return;
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;
@@ -5873,6 +5878,7 @@ const TLX = (function () {
           lit.updateFrame(frame, true);   // true: the forward lamp-shadow slot is off in the mirror (tsl-lit)
           if (fx) fx.updateFrame(frame);
           _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
+          _mirSub = _mirSubOn && !!frame.mirrorLite;   // the phone rungs only: the full rung's 280 m picture is unchanged
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
           _instStamp++;
@@ -5889,7 +5895,7 @@ const TLX = (function () {
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
-              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
+              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1, _mirSub); continue; }
               if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
@@ -6886,6 +6892,13 @@ const TLX = (function () {
               try { if (_roadSplitOn) localStorage.removeItem("apex26.tlxRoadSplit"); else localStorage.setItem("apex26.tlxRoadSplit", "0"); } catch (_) { /* no storage: session only */ }
             }
             return _roadSplitOn;
+          },
+          mirrorSub(on) {   // persists like roadSplit (apex26.tlxMirrorSub): the lite mirror's sub-range cull, PR #4886
+            if (on !== undefined) {
+              _mirSubOn = !!on;
+              try { if (_mirSubOn) localStorage.removeItem("apex26.tlxMirrorSub"); else localStorage.setItem("apex26.tlxMirrorSub", "0"); } catch (_) { /* no storage: session only */ }
+            }
+            return _mirSubOn;
           },
           // Where the retained CPU bytes actually ARE, per attribute NAME and
           // per geometry kind. Deduped on the underlying ArrayBuffer, because a
