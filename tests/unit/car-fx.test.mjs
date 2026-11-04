@@ -3,7 +3,7 @@
  * (scrape embers, one-frame flares for a far rival's brake glow, the lingering
  * rain plume), in a VM; plus source guards on the two render sites that read
  * per-car state into the picture (car-draw's front-wheel angle, game.js's
- * emit call).
+ * emit call). Ranked FX hunt: docs/notes/HUNT-FX-2026-11-03.md (#1 haze sustain).
  *
  *   - PLANK SPARKS come from body-attitude's c.baScrape, gated on the car's
  *     speed as a FRACTION of its envelope (vStd: PACE scales ground speed),
@@ -364,6 +364,19 @@ test("haze: one anchor — a new car takes it only once the old plume has faded,
   assert.ok(sw > 5, `A keeps the plume while it fades (switch at frame ${sw})`);
   assert.ok(trace[sw - 1][1] < 0.02, "the switch waits for the fade");
   assert.ok(trace[59][1] > 0.3, `then B's plume eases in: ${trace[59][1]}`);
+});
+
+test("haze: a nearer on-power rival does not fade the held plume while the anchor stays on throttle", () => {
+  const { fx } = load();
+  const haze = fx.haze, me = onPower(1000), a = onPower(1030), b = onPower(1015);
+  run(haze, [me, a], me, true, 0.6);
+  assert.equal(haze.state().anchor, a);
+  const str0 = haze.state().str;
+  assert.ok(str0 > 0.3, `settled on A: ${str0}`);
+  // B appears closer ahead; A is still on power — want becomes B, but A must keep the plume.
+  for (let i = 0; i < 10; i++) haze.pick([me, a, b], me, true, LAP, DT);
+  assert.equal(haze.state().anchor, a, "no jump while A's plume is live");
+  assert.ok(haze.state().str > str0 * 0.9, `sustained under power, not a forced fade: ${haze.state().str} vs ${str0}`);
 });
 
 test("haze: the on-power gate is a share of the car's envelope (vStd), like the other emitters", () => {
