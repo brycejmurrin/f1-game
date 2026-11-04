@@ -778,6 +778,7 @@ interface GameCtx {
   readonly onPeerQuali: (d: unknown) => void;
   readonly onPeerQualiLive: (d: unknown) => void;
   readonly openQualiForNet: (done: () => void) => void;
+  readonly leaveQualiSheet: () => void;
   readonly refreshQualiGate: () => void;
   /** A view of raceGrid: true for "quali" | "rev10". */
   raceQuali: boolean;

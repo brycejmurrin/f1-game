@@ -687,11 +687,17 @@ const NetLobby = (function () {
         renderRoom();
       }, readyTimes));
       made.onEvent(NetPlay.EV.GO, (d) => {
-        if (role !== "guest") return;
+        if (role !== "guest" || friendQualifying) return;   // still on the sheet: a repeat GO must not re-enter quali
         if (!settingsAccepted || settingsNeedsReady || (d && d.revision != null && (d.revision !== settingsRevision || !selfReady))) {
           say("Review the host’s race settings and press READY before starting.", true); return;
         }
         beginRace();
+      });
+      // Host backed out of the quali sheet: put this guest back in the room, un-READY.
+      made.onEvent(QCANCEL, () => {
+        if (role !== "guest" || !friendQualifying) return;
+        if (G.leaveQualiSheet) G.leaveQualiSheet(); else abortQuali();
+        setReady(false);
       });
       // A guest that left the quali sheet never reaches finishStart on its own; the host's qgo is its GO.
       made.onEvent(QGO, () => {
@@ -795,6 +801,7 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = NetPlay.EVENT_WINDOW_MS;   // per connection, per event
     const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
+    const QCANCEL = "qcancel"; // host→guest "I left the quali sheet, back to the room" (additive: old clients ignore the type)
     const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
@@ -2092,6 +2099,7 @@ const NetLobby = (function () {
     function abortQuali() {
       friendQualifying = false;
       if (role === "guest") { qualiAborted = true; broadcast(QABORT, null); }   // host waits on every rival
+      else if (role === "host") { broadcast(QCANCEL, null); _ready.clear(); selfReady = false; }   // guests return to the room; nobody is READY any more
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;

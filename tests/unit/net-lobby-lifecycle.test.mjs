@@ -2297,6 +2297,42 @@ test("a guest's BACK from the quali sheet tells the host", async () => {
   } finally { h.lobby.cancel(); }
 });
 
+test("the host's BACK from the quali sheet sends qcancel and clears READY", async () => {
+  const ctx = closableHarness();
+  const { h, made } = ctx;
+  h.G.raceQuali = true;
+  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  h.lobby.open();
+  await h.lobby.host();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  try {
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    h.lobby.setReady(true);
+    made[0].deliver("ready", { ready: true, revision: 0 });
+    h.lobby.startFromRoom();
+    assert.equal(h.lobby.qualifying(), true);
+    h.lobby.abortQuali();
+    assert.ok(made[0].sent.some((m) => m.t === "qcancel"), "each guest is told");
+    assert.equal(h.lobby.roomState().selfReady, false);
+    assert.equal(h.lobby.qualifying(), false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest on the quali sheet returns to the room un-READY on qcancel, and a repeat GO does not re-enter quali", async () => {
+  const { h, made } = await guestInQuali();
+  let left = 0;
+  h.G.leaveQualiSheet = () => { left++; h.lobby.abortQuali(); };
+  try {
+    made[0].deliver("go", {});
+    assert.equal(left, 0, "GO on the sheet is ignored");
+    made[0].deliver("qcancel", {});
+    assert.equal(left, 1);
+    assert.equal(h.lobby.qualifying(), false);
+    assert.equal(h.lobby.roomState().selfReady, false);
+  } finally { h.lobby.cancel(); }
+});
+
 test("a guest that backed out of quali joins the race when the host sends qgo (additive; old clients ignore it)", async () => {
   const { h, made } = await guestInQuali();
   let started = 0, netStarts = 0;
