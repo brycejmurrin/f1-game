@@ -7214,7 +7214,7 @@ function render(dt) {
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
+  if (state === "results" && !resultsCam.live() && !raceEndHome.fin) return; // ResultsCam owns orbit; the RACE END garage draws (#4956)
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
@@ -8997,9 +8997,11 @@ function carSpecKey() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   try { return JSON.stringify([getTeamParts(team.id), SetupTune.get(team.id)]); } catch (e) { return null; }
 }
-function raceEndHome(done) {   // RACE END (#4745): the car comes home between the podium and the results; SKIP / tap finishes it
-  return setupCam.startRaceEnd(() => { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; garageReturn = "select"; done(); }, () => { garageReturn = "results"; openSetup(); });
+function raceEndHome(done) {   // RACE END (#4745): the car comes home before the results; SKIP/DONE/BACK end on the sheet
+  const fin = () => { raceEndHome.fin = null; setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; garageReturn = "select"; done(); };
+  return setupCam.startRaceEnd(fin, () => { garageReturn = "results"; raceEndHome.fin = fin; openSetup(); $("cs-done").textContent = "SEE RESULTS"; });
 }
+function leaveRaceEnd() { const f = raceEndHome.fin; if (garageReturn !== "results" || !f) return false; if (!setupCam.skipRaceEnd()) f(); return true; }   // #4956
 function openPitWork() {
   if (!pits || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
@@ -9038,15 +9040,11 @@ function leaveGarage() {
     else release();
   }
 }
-/* BACK — the door DONE cannot be, because DONE goes FORWARD. From the circuit
-   picker, DONE means "I have chosen a car, now set the race up" and lands on
-   race settings; there was no way at all to change your mind and return to the
-   picker, and no control on the screen that meant "back". So Escape could not
-   be pointed at DONE either (see data-esc-close on #carsetup in index.html) —
-   a back key that walks you further into a flow is worse than none.
-   Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
+/* BACK — the door DONE cannot be, because DONE goes FORWARD (from the picker it lands on race settings), so
+   Escape points here (data-esc-close on #carsetup). Selections are kept as DONE keeps them: nothing is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
+  if (leaveRaceEnd()) return;
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
@@ -9061,17 +9059,13 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
+  if (leaveRaceEnd()) return;
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
-  // Back to the waiting room, and tell the other player what you are driving —
-  // a room that only synced on START would have two people spend a minute each
-  // choosing a car neither can see.
+  // Back to the lobby, telling the other player your car (a START-only sync hid it).
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
-  // Reached from the circuit picker's START, so DONE goes FORWARD to the race
-  // settings, not back to a screen whose question is already answered. Race
-  // settings' own BACK still returns to #select, so the circuit stays two taps
-  // away if you change your mind.
+  // From the picker's START, DONE goes FORWARD to race settings (whose BACK returns to #select).
   else if (garageReturn === "select") raceSettings.openRaceSettings("select");
   else {
     const finish = () => { buildSelect(); els.overlay.hidden = false; loadingScreen.stop(); }   // no vt: snapshot after hiding #carsetup is a black hold

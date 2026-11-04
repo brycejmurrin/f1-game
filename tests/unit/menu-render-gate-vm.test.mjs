@@ -26,6 +26,7 @@
  *   - drop `&& !warmQueuedHere`                             → "owed warm frames draw hidden"
  *   - move `if (!track) return;` above the gate             → "no-track: hidden"
  *   - move the results freeze below the garage preview      → "results freeze precedes the preview"
+ *   - drop `&& !raceEndHome.fin` from the results freeze          → "results freeze precedes the preview"
  *   - drop `!loadingScreen.active() ||` / `MenuTeardown.cover` → "the flyby shows on the loading screen only"
  *
  * Run: node --test tests/unit/menu-render-gate-vm.test.mjs   (~20 s)
@@ -174,7 +175,7 @@ const GATE_SRC = (() => {
 function gate(s = {}) {
   const c = {
     exit: "early", previews: 0, stops: 0,
-    headlessMode: false, raceRestarting: false, state: "menu", setupPreviewOn: false, track: null,
+    headlessMode: false, raceRestarting: false, state: "menu", setupPreviewOn: false, track: null, raceEndHome: { fin: null },
     _studio: null, _softEl: null, _carWarm: { busy: false },
     _menuGate: { warm: 0, garageWarm: 0, garageReady: false },
     canvas: { style: { visibility: "" } },
@@ -193,6 +194,7 @@ function gate(s = {}) {
     studioShown() {}, setupCam: { endGarageRes() {} }, Log: { info() {} },
   };
   for (const k of ["state", "track", "setupPreviewOn", "_studio"]) if (k in s) c[k] = s[k];
+  if (s.raceEndFin) c.raceEndHome.fin = s.raceEndFin;
   if (s.warm) c._menuGate.warm = s.warm;
   if (s.warmQueued) c.gfx.warmQueued = () => true;
   vm.createContext(c);
@@ -237,6 +239,8 @@ test("gate: the results freeze precedes the garage preview; a live results camer
   assert.deepEqual([frozen.exit, frozen.previews], ["early", 0], "results: neither the garage nor the world redraws");
   assert.equal(gate({ state: "results", track: WORLD }).exit, "early");
   assert.equal(gate({ state: "results", track: WORLD, live: true }).exit, "world", "ResultsCam.live() keeps the chequered/orbit/highlights drawing");
+  const home = gate({ state: "results", track: WORLD, setupPreviewOn: true, previewOk: true, raceEndFin: () => {} });
+  assert.deepEqual([home.exit, home.previews], ["early", 1], "the RACE END show draws the garage over the results freeze (#4956)");
   assert.equal(gate({ state: "menu", track: WORLD, setupPreviewOn: true, previewOk: true }).previews, 1, "outside results the garage preview draws");
 });
 

@@ -1,0 +1,1 @@
+Fixed: on a phone the car now drives home after the podium and the results sheet follows; SKIP TO RESULTS, SEE RESULTS (DONE) and BACK during that show go to the results instead of the main menu (#4956).
