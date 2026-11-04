@@ -1332,6 +1332,7 @@ const TrackBuildProps = (function () {
     if (def.street) {
       const WH = 1.1, WT = 0.4, STEP = 2;
       const barrierOffset = def.barrierGap != null ? def.barrierGap : 0.35;
+      let panelN = 0;   // every other panel stands MIN_SEP to the side: end-to-end panels never share a side plane
       const panel = (kA, kB, col, side) => {
         const rA = [track.rx[kA], track.ry[kA], track.rz[kA]];
         const rB = [track.rx[kB], track.ry[kB], track.rz[kB]];
@@ -1342,8 +1343,9 @@ const TrackBuildProps = (function () {
         const len = Math.hypot(bx - ax, by - ay, bz - az) + 0.05;
         const f = norm([bx - ax, by - ay, bz - az]);
         const rr = norm(cross(f, upOf(track, kA)));
+        const lat = (panelN++ & 1) * TrackGeom.MIN_SEP;
         instance(`street-barrier|${col.join(",")}`,
-          { o: [cx, cy + WH / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
+          { o: [cx + rr[0] * lat, cy + WH / 2, cz + rr[2] * lat], r: rr, u: [0, 1, 0], t: f, s: [1, 1, len] },
           (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];

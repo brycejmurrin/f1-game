@@ -63,15 +63,19 @@ const noop = () => {};
 // DOM stubs
 // ---------------------------------------------------------------------------
 
-function makeClassList(el) {
+function makeClassList(el, onWrite) {
   const set = new Set();
+  // `onWrite` (domProbe only) fires when the token set CHANGES; the className
+  // accessor stays quiet while the classList is the writer, so one toggle counts once.
+  const sync = (before) => { el._inCl = true; el.className = [...set].join(" "); el._inCl = false; if (onWrite && (set.size !== before.size || [...set].some((x) => !before.has(x)))) onWrite(); };
   return {
-    add: (...c) => { c.forEach((x) => set.add(x)); el.className = [...set].join(" "); },
-    remove: (...c) => { c.forEach((x) => set.delete(x)); el.className = [...set].join(" "); },
+    add: (...c) => { const b = new Set(set); c.forEach((x) => set.add(x)); sync(b); },
+    remove: (...c) => { const b = new Set(set); c.forEach((x) => set.delete(x)); sync(b); },
     toggle: (c, force) => {
+      const b = new Set(set);
       const on = force === undefined ? !set.has(c) : !!force;
       if (on) set.add(c); else set.delete(c);
-      el.className = [...set].join(" ");
+      sync(b);
       return on;
     },
     contains: (c) => set.has(c),
@@ -84,17 +88,17 @@ function makeClassList(el) {
   };
 }
 
-function makeStyle() {
+function makeStyle(onWrite) {
   const decl = {};
   return new Proxy(decl, {
     get(t, k) {
-      if (k === "setProperty") return (n, v) => { t[n] = String(v); };
+      if (k === "setProperty") return (n, v) => { v = String(v); if (onWrite && t[n] !== v) onWrite(); t[n] = v; };
       if (k === "getPropertyValue") return (n) => (t[n] !== undefined ? t[n] : "");
-      if (k === "removeProperty") return (n) => { delete t[n]; };
+      if (k === "removeProperty") return (n) => { if (onWrite && n in t) onWrite(); delete t[n]; };
       if (k === "cssText") return "";
       return t[k] !== undefined ? t[k] : "";
     },
-    set(t, k, v) { t[k] = v; return true; },
+    set(t, k, v) { if (onWrite && t[k] !== v) onWrite(); t[k] = v; return true; },
   });
 }
 
@@ -135,11 +139,47 @@ function makeListeners() {
   };
 }
 
-function createDom(sandbox, runScriptFile) {
+// ---------------------------------------------------------------------------
+// DOM probe (opt-in: createGame({ domProbe: true }), handle.domProbe)
+// ---------------------------------------------------------------------------
+// Counts what the stubs used to swallow: DOM WRITES per element and kind
+// (text / attr / class / style / hidden / tree) and FORCED LAYOUTS. A write
+// sets `dirty`; a frame boundary (probe.frame()) or any layout read clears it;
+// a layout read while dirty is `forced++`, filed under the reader's name. This
+// is the model of tests/unit/hud-relative-geo-sample.test.mjs, lifted into the
+// harness. Style/attr/class/hidden writes count only when the value CHANGES (a
+// browser skips the restyle for an identical value); a text write always counts.
+function makeDomProbe() {
+  const p = { dirty: false, writes: 0, reads: 0, forced: 0, forcedBy: {}, byEl: {}, byKind: {} };
+  const key = (el) => (el.id ? "#" + el.id : el.tagName.toLowerCase());
+  p.write = (el, kind) => {
+    p.writes++; p.dirty = true;
+    p.byKind[kind] = (p.byKind[kind] || 0) + 1;
+    const e = p.byEl[key(el)] || (p.byEl[key(el)] = { total: 0 });
+    e.total++; e[kind] = (e[kind] || 0) + 1;
+  };
+  p.read = (el, name) => {
+    p.reads++;
+    if (!p.dirty) return;
+    p.forced++; p.dirty = false;
+    const k = key(el) + "." + name;
+    p.forcedBy[k] = (p.forcedBy[k] || 0) + 1;
+  };
+  p.frame = () => { p.dirty = false; };   // a rendered frame flushes style+layout
+  p.reset = () => { p.dirty = false; p.writes = p.reads = p.forced = 0; p.forcedBy = {}; p.byEl = {}; p.byKind = {}; };
+  p.snapshot = () => ({ writes: p.writes, reads: p.reads, forced: p.forced, forcedBy: { ...p.forcedBy },
+    byKind: { ...p.byKind }, byEl: JSON.parse(JSON.stringify(p.byEl)) });
+  return p;
+}
+const LAYOUT_PROPS = ["offsetWidth", "offsetHeight", "offsetTop", "offsetLeft", "clientWidth", "clientHeight",
+  "clientLeft", "clientTop", "scrollTop", "scrollLeft", "scrollHeight", "scrollWidth"];
+
+function createDom(sandbox, runScriptFile, probe) {
   const byId = new Map();
   const rect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
 
   function makeElement(tag, id) {
+    const W = (el, kind) => { if (probe) probe.write(el, kind); };
     tag = String(tag || "div").toLowerCase();
     const ls = makeListeners();
     const el = {
@@ -157,7 +197,7 @@ function createDom(sandbox, runScriptFile) {
       width: tag === "canvas" ? 1280 : 300, height: tag === "canvas" ? 720 : 150,
       naturalWidth: 0, naturalHeight: 0, complete: false, readyState: 0, duration: 0, volume: 1,
       currentTime: 0, paused: true, muted: false, loop: false, files: [],
-      style: makeStyle(), isConnected: true,
+      style: makeStyle(probe ? () => probe.write(el, "style") : null), isConnected: true,
     };
     // A text/markup write REPLACES the children, as in a real DOM: kept, every UI
     // rebuild accumulated nodes and a heap census read ~6 MB per garage cycle of
@@ -165,9 +205,20 @@ function createDom(sandbox, runScriptFile) {
     for (const k of ["textContent", "innerHTML", "innerText"]) {
       let v = "";
       Object.defineProperty(el, k, { configurable: true, enumerable: true, get: () => v,
-        set: (x) => { v = String(x == null ? "" : x); el.children.length = 0; el.childNodes.length = 0; } });
+        set: (x) => { v = String(x == null ? "" : x); el.children.length = 0; el.childNodes.length = 0; W(el, "text"); } });
     }
-    el.classList = makeClassList(el);
+    if (probe) {
+      for (const k of LAYOUT_PROPS) {
+        let v = el[k];
+        Object.defineProperty(el, k, { configurable: true, enumerable: true, get: () => { probe.read(el, k); return v; }, set: (x) => { v = x; } });
+      }
+      for (const k of ["hidden", "className"]) {
+        let v = el[k];
+        Object.defineProperty(el, k, { configurable: true, enumerable: true, get: () => v,
+          set: (x) => { if (v !== x && !(k === "className" && el._inCl)) W(el, k === "hidden" ? "hidden" : "class"); v = x; } });
+      }
+    }
+    el.classList = makeClassList(el, probe ? () => W(el, "class") : null);
     el.addEventListener = (t, fn) => ls.add(t, fn);
     el.removeEventListener = (t, fn) => ls.remove(t, fn);
     el.dispatchEvent = (ev) => { if (ev && !ev.target) ev.target = el; ls.fire(el, ev); const h = el["on" + (ev && ev.type)]; if (typeof h === "function") h.call(el, ev); return true; };
@@ -180,7 +231,7 @@ function createDom(sandbox, runScriptFile) {
     el.contains = (n) => n === el;
     el.appendChild = (c) => {
       if (c && c.nodeType === 1) { el.children.push(c); c.parentNode = c.parentElement = el; }
-      el.childNodes.push(c);
+      el.childNodes.push(c); W(el, "tree");
       if (c && c.tagName === "SCRIPT" && c.src) runScriptFile(c);
       return c;
     };
@@ -189,19 +240,20 @@ function createDom(sandbox, runScriptFile) {
     el.insertBefore = (c) => el.appendChild(c);
     el.insertAdjacentElement = (_, c) => el.appendChild(c);
     el.insertAdjacentHTML = noop; el.insertAdjacentText = noop;
-    el.removeChild = (c) => { const i = el.children.indexOf(c); if (i >= 0) el.children.splice(i, 1); const j = el.childNodes.indexOf(c); if (j >= 0) el.childNodes.splice(j, 1); return c; };
+    el.removeChild = (c) => { W(el, "tree"); const i = el.children.indexOf(c); if (i >= 0) el.children.splice(i, 1); const j = el.childNodes.indexOf(c); if (j >= 0) el.childNodes.splice(j, 1); return c; };
     el.replaceChildren = (...cs) => { el.children.length = 0; el.childNodes.length = 0; el.append(...cs); };
     el.replaceChild = (n, o) => { el.removeChild(o); return el.appendChild(n); };
     el.replaceWith = noop; el.remove = () => { if (el.parentNode) el.parentNode.removeChild(el); };
     el.cloneNode = () => makeElement(tag);
-    el.setAttribute = (k, v) => { el.attributes[k] = String(v); if (k === "id") el.id = v; };
+    el.setAttribute = (k, v) => { v = String(v); if (el.attributes[k] !== v) W(el, "attr"); el.attributes[k] = v; if (k === "id") el.id = v; };
     el.getAttribute = (k) => (k in el.attributes ? el.attributes[k] : null);
     el.hasAttribute = (k) => k in el.attributes;
-    el.removeAttribute = (k) => { delete el.attributes[k]; };
-    el.toggleAttribute = (k, f) => { const on = f === undefined ? !(k in el.attributes) : !!f; if (on) el.attributes[k] = ""; else delete el.attributes[k]; return on; };
+    el.removeAttribute = (k) => { if (k in el.attributes) W(el, "attr"); delete el.attributes[k]; };
+    el.toggleAttribute = (k, f) => { const on = f === undefined ? !(k in el.attributes) : !!f; if (on !== (k in el.attributes)) W(el, "attr"); if (on) el.attributes[k] = ""; else delete el.attributes[k]; return on; };
     el.focus = noop; el.blur = noop; el.click = () => el.dispatchEvent({ type: "click" }); el.select = noop;
     el.scrollIntoView = noop; el.scrollTo = noop; el.scrollBy = noop;
-    el.getBoundingClientRect = rect; el.getClientRects = () => [];
+    el.getBoundingClientRect = () => { if (probe) probe.read(el, "getBoundingClientRect"); return rect(); };
+    el.getClientRects = () => { if (probe) probe.read(el, "getClientRects"); return []; };
     el.requestFullscreen = () => Promise.reject(new Error("fullscreen unavailable"));
     el.requestPointerLock = noop; el.setPointerCapture = noop; el.releasePointerCapture = noop;
     el.hasPointerCapture = () => false;
@@ -414,8 +466,34 @@ function makeGlx(record) {
 // The context
 // ---------------------------------------------------------------------------
 
+// Environment presets (createGame({ preset })): the VM is a 1280x720 mouse page
+// by default, so no gate ever ran the touch paths. "phone844" is Bryce's iPhone
+// in landscape: 844x390 CSS px, DPR 3, 5 touch points, iPhone UA, and the
+// (pointer: coarse) / (hover: none) media queries true, which is what makes
+// platform-session drop body.desktop and the HUD take its phone branches.
+const PRESETS = {
+  phone844: (sb) => {
+    const w = 844, h = 390;
+    Object.assign(sb, { innerWidth: w, innerHeight: h, outerWidth: w, outerHeight: h, devicePixelRatio: 3 });
+    Object.assign(sb.navigator, {
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Mobile/15E148 Safari/604.1 apex-game-vm",   // the token stays: startRaceBody keys the no-frame-pump path on it
+      platform: "iPhone", maxTouchPoints: 5, hardwareConcurrency: 6,
+    });
+    Object.assign(sb.screen, { width: w, height: h, availWidth: w, availHeight: h });
+    Object.assign(sb.visualViewport, { width: w, height: h });
+    const coarse = /\(\s*(pointer\s*:\s*coarse|hover\s*:\s*none|any-pointer\s*:\s*coarse)\s*\)/;
+    sb.matchMedia = (q) => ({ matches: coarse.test(String(q)), media: q, onchange: null, addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop });
+    sb.ontouchstart = null;
+  },
+};
+function applyPreset(sb, name) {
+  if (!PRESETS[name]) throw new Error(`game-vm: unknown preset "${name}" (want ${Object.keys(PRESETS).join("|")})`);
+  PRESETS[name](sb);
+}
+
 function buildSandbox(opts) {
   const vmSearch = opts && opts.search != null ? opts.search : "?seed=1";
+  const probe = opts && opts.domProbe ? makeDomProbe() : null;
   const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0 };
   const timers = makeTimers();
   const rafQueue = [];
@@ -538,6 +616,12 @@ function buildSandbox(opts) {
   `, ctx, { filename: "game-vm:prelude" });
 
   // <script src> injection: strip the ?v= and run the file in this context.
+  if (opts.preset != null) applyPreset(sandbox, opts.preset);
+  if (probe) {
+    // a style READ off a dirty tree is the forced style/layout of the browser
+    sandbox.getComputedStyle = (el) => new Proxy({ getPropertyValue: () => { probe.read(el, "getComputedStyle"); return ""; } },
+      { get: (t, k) => { if (k in t) return t[k]; if (typeof k !== "symbol") probe.read(el, "getComputedStyle"); return ""; } });
+  }
   const dom = createDom(sandbox, (el) => {
     const rel = String(el.src).replace(/\?.*$/, "").replace(/^\.\//, "");
     setImmediate(() => {
@@ -551,11 +635,11 @@ function buildSandbox(opts) {
         if (typeof el.onerror === "function") el.onerror({ type: "error", error: e });
       }
     });
-  });
+  }, probe);
   sandbox.document = dom.document;
   sandbox.GLX = makeGlx(record);
 
-  return { ctx, sandbox, record, timers, rafQueue, dom };
+  return { ctx, sandbox, record, timers, rafQueue, dom, probe };
 }
 
 const SEATS = Object.freeze({
@@ -647,6 +731,9 @@ async function settle(pred, maxTurns) {
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
  *           — OPT-IN, and never on a parity twin
+ *   preset  "phone844" — Bryce's iPhone, landscape: 844x390, DPR 3, 5 touch points, coarse pointer
+ *   domProbe true — handle.domProbe counts DOM writes per element/kind and forced layouts
+ *           (makeDomProbe: write sets dirty; probe.frame() or any layout read clears it)
  *   seat    "pin" (default: McLaren, empty parts sheet) | "shipped" (no garage
  *           seed — the GarageDefaults car a fresh browser boots)
  *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly(),
@@ -854,6 +941,7 @@ async function createGame(opts) {
       pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },
       resourceSnapshot,
       close,
+      domProbe: world.probe,
     };
     if (opts.track) await handle.race(opts.track, opts.tod, opts.wx);
     return handle;

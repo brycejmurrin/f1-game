@@ -215,7 +215,11 @@ function analyse(env, track, prims, opt) {
 
   // ---- flat coplanar ---------------------------------------------------------
   const flat = opt.coplanar === false ? null
-    : coplanar.analyse(track, prims, Object.assign({}, coplanar.DEFAULTS, { horizontal: true, flat: true }));
+    : coplanar.analyse(track, prims, Object.assign({}, coplanar.DEFAULTS, { horizontal: true, flat: true,
+        // The flat baseline was measured on the 0.01 bins. Adjacent bins (the coplanar-audit
+        // default since #4724) expose five more real flat spots (silverstone, monza,
+        // interlagos, miami, brands_hatch); they are a follow-up, not a regression.
+        adjacentBins: false }));
 
   return {
     props: props.length,

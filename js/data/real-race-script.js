@@ -423,7 +423,11 @@ const DataRealRaceScript = (function () {
       if (n >= 1 && n <= totalLaps && isFinite(t) && t < starts[n]) { starts[n] = t; any = true; }
     }
     if (!any) return null;
-    for (let n = 2; n <= totalLaps; n++) if (!isFinite(starts[n])) starts[n] = starts[n - 1];   // a lap nobody timed inherits the previous start
+    // A lap nobody timed starts where the next timed lap does (zero width), so rain never slides onto the lap AFTER the gap;
+    // an untimed lap 1 opens the window (-Infinity) so rain before lap 2 can still be filed under it.
+    const firstUntimed = !isFinite(starts[1]);
+    for (let n = totalLaps - 1; n >= 1; n--) if (!isFinite(starts[n])) starts[n] = starts[n + 1];
+    if (firstUntimed) starts[1] = -Infinity;
     const out = new Array(totalLaps + 1).fill(false);
     for (const w of arr(weatherRows)) {
       if (!(num(w && w.rainfall) > 0)) continue;
