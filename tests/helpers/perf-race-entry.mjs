@@ -58,9 +58,23 @@ export function raceOnlyStages(diff, raceFloorMs = 50, practiceCeilMs = 5) {
   return diff.rows.filter((r) => (r.raceMs ?? 0) >= raceFloorMs && (r.practiceMs ?? 0) <= practiceCeilMs).map((r) => r.n);
 }
 
-/** SwiftShader long-task baseline (#4777): tools/perf/baselines/race-entry-swiftshader.json. */
-export function loadBaseline() {
-  return JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "perf", "baselines", "race-entry-swiftshader.json"), "utf8"));
+/** GL lane the run is on: CI sets APEX_GL (llvmpipe); unset means SwiftShader. */
+export function glLane(env = process.env) {
+  return String(env.APEX_GL || "swiftshader").toLowerCase();
+}
+
+/** Long-task baseline for one GL lane (#4777): tools/perf/baselines/race-entry-swiftshader.json. A lane
+ *  with no entry (or null numbers) records only. */
+export function loadBaseline(lane = glLane()) {
+  const f = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "perf", "baselines", "race-entry-swiftshader.json"), "utf8"));
+  const l = (f.lanes && f.lanes[lane]) || {};
+  return {
+    lane,
+    ratio: f.ratio,
+    baseline: l.baseline || { blockMs: null, maxBlockMs: null, longTaskCount: null },
+    runs: l.runs || {},
+    loafScriptAllow: f.loafScriptAllow,
+  };
 }
 
 /** Pure check: measured long-task numbers vs baseline x ratio. Returns failure strings ([] = pass; null baseline = record-only). */

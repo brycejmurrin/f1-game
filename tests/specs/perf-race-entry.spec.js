@@ -123,7 +123,7 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
     expect(practiceMarks, "practice's rolling start closes it via lowerWaitPlate, not afterPresent").not.toContain("handoff:lower");
 
     // Long tasks / long animation frames at race entry (#4777): hard, not STRICT-only.
-    const base = loadBaseline();
+    const base = loadBaseline();   // lane from APEX_GL
     test.info().annotations.push({
       type: "perf-race-entry-blocking",
       description: `blockMs=${race.snap.blockMs} maxBlockMs=${race.snap.maxBlockMs} longTasks=${race.snap.longTasks.length} loaf=${race.snap.loaf.length} supported=${race.snap.supported} loafSupported=${race.snap.loafSupported}`,

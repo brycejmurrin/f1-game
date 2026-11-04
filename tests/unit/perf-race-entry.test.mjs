@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatStageTable, markdownStageTable, markdownDiffTable, raceOnlyStages, loadBaseline, longTaskFailures, loafUnlisted } from "../helpers/perf-race-entry.mjs";
+import { formatStageTable, markdownStageTable, markdownDiffTable, raceOnlyStages, glLane, loadBaseline, longTaskFailures, loafUnlisted } from "../helpers/perf-race-entry.mjs";
 
 test("formatStageTable orders stages by duration", () => {
   const s = formatStageTable({
@@ -27,7 +27,7 @@ test("markdownDiffTable and raceOnlyStages summarise race vs practice", () => {
 });
 
 test("longTaskFailures gates blockMs / maxBlockMs / count at baseline x ratio; null baseline records only (#4777)", () => {
-  const base = loadBaseline();
+  const base = loadBaseline("swiftshader");
   assert.ok(base.baseline.blockMs > 0 && base.ratio >= 1.3, "baseline set from measured runs");
   const at = (k, m) => ({ blockMs: base.baseline.blockMs, maxBlockMs: base.baseline.maxBlockMs, longTasks: new Array(base.baseline.longTaskCount).fill(0), ...m });
   assert.deepEqual([...longTaskFailures(at(), base)], []);
@@ -40,4 +40,13 @@ test("longTaskFailures gates blockMs / maxBlockMs / count at baseline x ratio; n
 test("loafUnlisted names scripts outside the allow-list; empty URLs are ignored", () => {
   const snap = { loaf: [{ scripts: [{ url: "https://x/js/track/tracks.js?v=1" }, { url: "" }, { url: "https://x/js/new/thing.js" }] }] };
   assert.deepEqual([...loafUnlisted(snap, loadBaseline().loafScriptAllow)], ["https://x/js/new/thing.js"]);
+});
+
+test("baseline is per GL lane: llvmpipe records only, an unknown lane records only (#4777)", () => {
+  assert.equal(glLane({}), "swiftshader");
+  assert.equal(glLane({ APEX_GL: "llvmpipe" }), "llvmpipe");
+  const huge = { blockMs: 1e12, maxBlockMs: 1e12, longTasks: new Array(64).fill(0) };
+  assert.deepEqual([...longTaskFailures(huge, loadBaseline("llvmpipe"))], []);
+  assert.deepEqual([...longTaskFailures(huge, loadBaseline("somegl"))], []);
+  assert.equal(longTaskFailures(huge, loadBaseline("swiftshader")).length, 3);
 });
