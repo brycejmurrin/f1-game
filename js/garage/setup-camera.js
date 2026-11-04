@@ -500,6 +500,23 @@ function startHome(from) {
   arrival.start({ home: p });
   return true;
 }
+// PIT OUT (the stop's release): the drive-out show plays in the paused bay, then done() runs once (closePitWork).
+// Tuner off, reduced motion and the harness hand back at once, as before. Bay-local, the race is paused: no
+// control exists to move (docs/PHYSICS.md). SKIP / Esc finishes the show; so does a second DONE (skipPitOut).
+const PIT_OUT_SPEED = 1.6;
+let pitOut = null;
+function firePitOut() { const p = pitOut; pitOut = null; if (p) p.done(); }
+function startPitOut(done) {
+  pitOut = { done };
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  const auto = typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation();
+  if (!cfg.enabled || reducedMotion() || auto) { firePitOut(); return false; }
+  endHome(); arrival.start({ out: true, rate: PIT_OUT_SPEED });
+  return true;
+}
+const pitOutActive = () => !!pitOut;
+function skipPitOut() { if (!pitOut) return false; arrival.finish(); firePitOut(); return true; }
+function cancelPitOut() { pitOut = null; }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
@@ -1078,6 +1095,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  if (pitOut && !driveOut && !preview && !home.active && !(arriving && arriving.active)) firePitOut();   // the release ended or was skipped
   // ENTRY/EXIT CAMERA OPTIONS (lazy): replace/clamp the arrival eye so the default
   // never clips through a culled wall. Override layer — does not edit arrival.js.
   if (arriving && arriving.active && typeof GarageCameraOptions !== "undefined") {
@@ -1591,7 +1609,7 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { pitOut = null; arrival.cancel(); sequenceLook(null); }, startPitOut, pitOutActive, skipPitOut, noteResult, startHome,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,

@@ -9181,7 +9181,7 @@ function leaveGarage() {
    Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
@@ -9195,7 +9195,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
-  if (garageReturn === "pit") { closePitWork(); return; }
+  if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each

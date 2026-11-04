@@ -769,12 +769,14 @@ const GarageArrival = (function () {
       chrome(false);
       $("cs-done").focus({ preventScroll: true });
     }
-    /** start() = the pit-stop arrival (WORK ON CAR); start({ home: { result, pos } })
+    /** start() = the pit-stop arrival (WORK ON CAR); start({ out: true, rate }) = the pit-stop release (the drive-out, quicker);
+     *  start({ home: { result, pos } })
      *  = AFTER THE RACE, the car brought home as the race ended (RESULTS). */
     function start(opts) {
       const home = opts && opts.home;
-      dir = home ? "home" : "in"; posed = poseFor(dir);
+      dir = home ? "home" : opts && opts.out ? "out" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
+      if (opts && opts.rate > 0) config.speed = Math.min(4, config.speed * opts.rate);   // PIT OUT: a stop's release is short
       // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
       config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
@@ -783,6 +785,7 @@ const GarageArrival = (function () {
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
+      skip.textContent = dir === "out" ? "SKIP TO RACE" : "SKIP TO WORK";
       label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
       chrome(true); skip.focus({ preventScroll: true });
     }
