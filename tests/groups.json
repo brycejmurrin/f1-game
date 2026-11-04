@@ -1142,6 +1142,8 @@
     "tests/unit/tools-w13a-helmet-sheet.test.mjs",
     "tests/unit/tools-w13a-probe-page.test.mjs",
     "tests/unit/tools-w13a-quick-validate.test.mjs",
+    "// Chrome trace → counts (layouts/s, invalidation call sites, GC/s, long tasks, self time): synthetic fixture, no browser (RESEARCH-B-PERF-TESTING-2026-11-04).",
+    "tests/unit/trace-census.test.mjs",
     "tests/unit/track-accuracy-validator.test.mjs",
     "// Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.",
     "tests/unit/track-build-grids.test.mjs",

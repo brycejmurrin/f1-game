@@ -2351,6 +2351,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/perf/trace-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-second layout / style / paint rows, the GC and long-task line, the trace-overhead line, the invalidation-site rows and the self-time rows; --json writes the same census as JSON."
+    },
     "tools/perf/devicefarm-host.mjs": {
       "action": "keep-native",
       "presentation": "native",
