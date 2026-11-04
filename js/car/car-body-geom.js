@@ -1941,7 +1941,7 @@ const CarBodyGeom = (function () {
       // shallow facet, and its chords twisted off the loft: each 60 cm station quad is two planar
       // triangles split on the q0-q2 diagonal, which the reversed left ring runs the other way.
       // So every decal cell is cut on the skin's own facet edges and diagonal, and each vertex is
-      // lifted off the skin triangles it lies on (mitred where it sits on a crease), so a quad
+      // lifted off the skin triangles it lies on (least squares where it sits on a crease), so a quad
       // shared by two layers stays parallel to the skin and the layers stay `lift` apart.
       // Each triangle is [x, y, z, f] x 3, wound outward for `side` (+1 right, -1 left).
       flankTris(z0, z1, f0, f1, lift, side) {
@@ -1977,9 +1977,15 @@ const CarBodyGeom = (function () {
             const n = normal(tri(kk, ii, ss, tt));
             if (!ns.some(m => dot(m, n) > 1 - 1e-9)) ns.push(n);
           }
+          // Least squares m.n = lift over every incident plane (Tikhonov-pulled to the mean normal):
+          // a sharp crease would over-lift a mitre past the 3 mm seal.
           const sum = ns.reduce((m, n) => [m[0] + n[0], m[1] + n[1], m[2] + n[2]], [0, 0, 0]), l = Math.hypot(...sum) || 1;
-          const N = sum.map(v => v / l), k2 = lift / Math.max(0.5, Math.min(...ns.map(n => dot(N, n))));
-          return [side * (p[0] + N[0] * k2), p[1] + N[1] * k2, p[2] + N[2] * k2];
+          const N = sum.map(v => v / l), lam = 1e-3;
+          const M3 = [0, 1, 2].map(r => [0, 1, 2].map(c => ns.reduce((acc, n) => acc + n[r] * n[c], 0) + (r === c ? lam : 0)));
+          const rhs = [0, 1, 2].map(r => lift * (sum[r] + lam * N[r]));
+          const det3 = (m) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+          const D = det3(M3), off = [0, 1, 2].map(c => det3(M3.map((row, r) => row.map((v, j) => j === c ? rhs[r] : v))) / D);
+          return [side * (p[0] + off[0]), p[1] + off[1], p[2] + off[2]];
         };
         const lo = Math.max(0, f0), hi = Math.min(1, f1);
         if (hi - lo < 1e-6) return [];

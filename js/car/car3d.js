@@ -1233,7 +1233,7 @@ const Car3D = (function () {
       const drlBar = anchors.noseAt(styledTipZ - 0.05);
       addBox(out, 0, drlBar.top + 0.005, drlBar.z, noseTrimW(anchors.noseAt(drlBar.z + 0.010), 0.13), 0.010, 0.020, drlC, SURFACES.glass);
     }
-    if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, teamStyle.noseCurve ? 0.10 : 0.035, accentC, SURFACES.paint, 0.012, !!teamStyle.noseCurve, 0.0024));   // its own layer over the 1.6 mm board where they overlap; under the 3 mm seal (#3959)
+    if (!ckpt) zone("sidepods", () => addPodFlankSpan(0.425, -0.025, 0.88, teamStyle.noseCurve ? 0.10 : 0.035, accentC, SURFACES.paint, 0.012, !!teamStyle.noseCurve, 0.0019));   // its own layer, 0.3 mm over the 1.6 mm board where they overlap; under the 3 mm seal (#3959)
 
     const stripeC = _ckAcc(liv.stripe) || null;   // monocoque crest runs z 0.05..1.05 — right under the eye
     const stripeTipZ = styledTipZ - 0.04;
