@@ -57,7 +57,11 @@ const WGXChunked = (function () {
       if (data.trk && data.trk.length >= vCount * 3) {
         const b = core.interleave(data);
         const pulled = core.expandPull(b.vert, b.attr, b.idx);
-        const lut = core.makeRoadLUT(data.pos, data.trk, data.mat);
+        let lut = null;
+        try { lut = core.makeRoadLUT(data.pos, data.trk, data.mat); } catch (e) {
+          core.allocFail("createChunkedMesh", e);
+          return _chunkUploadFallback(data, b.indexFormat);
+        }
         const buckets = new Map();
         const pv = pulled.vert, VF = core.VERTEX_FLOATS;
         // Float view for the centroid reads (position is still float32 at word
