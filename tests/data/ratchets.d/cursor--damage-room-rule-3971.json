@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": 2,
+      "gMembers": 1
+    }
+  },
+  "tree": {
+    "assertPins": 1
+  }
+}

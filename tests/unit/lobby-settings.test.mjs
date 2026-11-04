@@ -145,3 +145,14 @@ test("a custom LIST index without a circuit body is refused (legacy host)", () =
     track: customIdx, laps: 3, weather: "dry", tod: "day", quali: false, difficulty: "normal",
   }), null, "guest must not accept a custom index alone — it cannot build it");
 });
+
+test("damage is a roomOnly rule row and a boolean on the wire (#3971)", () => {
+  const { guest } = peers({});
+  const row = guest.S.RULES.find((r) => r[0] === "damage");
+  assert.deepEqual([...row], ["damage", "raceDamage", "damageHandling"]);
+  const base = { track: 0, laps: 3, weather: "dry", tod: "day", quali: false, difficulty: "normal" };
+  assert.equal(guest.S.normaliseSettings({ ...base, damage: true }).damage, true);
+  assert.equal(guest.S.normaliseSettings({ ...base, damage: false }).damage, false);
+  assert.equal("damage" in guest.S.normaliseSettings(base), false, "an older host omits it");
+  for (const bad of ["on", 1, {}]) assert.equal(guest.S.normaliseSettings({ ...base, damage: bad }), null);
+});
