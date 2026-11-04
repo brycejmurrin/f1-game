@@ -423,7 +423,6 @@ const FlybySeq = (function () {
       case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
-      // The PIT EXIT line (track.pit.sOut); a circuit with no pit complex falls back to the line.
       case "pitexit": return wrapS(track, (track.pit && isFinite(track.pit.sOut) ? track.pit.sOut : 0) + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
     }
@@ -805,11 +804,7 @@ const FlybySeq = (function () {
        grid        up the aisle between the columns, ending among the front
                    rows with the start gantry ahead */
   const DEFAULT = [
-    // ---- the car leaves the pits: RACE START, garage -> track (#4745 slice C) ---
-    // The bay show ends at the garage door; this is the lane beyond it. Low behind
-    // the pit-exit line, the player's car rolls out of the lane (roll: "pitexit",
-    // rollHero) and the camera settles on the exit as it goes. Broadcast-only:
-    // the hero is the menu model, restored on the next shot, and no physics runs.
+    // RACE START (#4745 C): the player's menu car rolls out of the pit lane (rollHero), broadcast-only.
     {
       id: "pit-exit", dur: 0.07, ease: "out", roll: "pitexit",
       eye: [{ at: "pitexit", off: -34, x: 0, y: 1.5 }, { at: "pitexit", off: -20, x: 0, y: 1.3 }],
@@ -983,9 +978,7 @@ const FlybySeq = (function () {
     return _hero;
   }
 
-  /** THE PIT-EXIT ROLL: the player's menu car drives the exit road from 30 m
-   *  before the exit line to 28 m past it at the pit-lane limit, along the lane
-   *  centre. Broadcast-only, like driveHero; restoreHero() puts it back. */
+  /** Menu model along the pit-exit road, -30..+28 m of the line; restoreHero() undoes it. */
   function rollHero(track, t, cars) {
     if (cars !== undefined) setHeroCars(cars);
     if (!_hero || !track || !track.pit || !isFinite(track.pit.sOut) || typeof TrackLine === "undefined" || typeof Tracks === "undefined") return null;
