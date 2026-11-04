@@ -10,6 +10,12 @@ career bundle is kicked at boot), so its bytes now count on the race-entry path 
 evaluates it. The race-entry golden list gains the file. Fragment delta:
 `ratchets.d/cursor--lazy-coach-export-backup-a1.json`.
 
+Update after the merge with the tip (d351064a): the fragment's raceEntryBytes delta is
+**+40410**, not +36780. The career-backup move itself is the 36780 B above; the other
++3630 B is a catch-up of ceilings that PRs already merged into the deploy branch left
+behind (measured on the merge ref: 2115408 B vs ceiling 2114000 with the first fragment).
+No file in this PR grew by that amount.
+
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
