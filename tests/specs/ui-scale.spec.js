@@ -1637,6 +1637,56 @@ test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
     expect(rows[rows.length - 1].w - rows[0].w, "WIDTH 20 -> 100 grows the cluster").toBeGreaterThan(300);
     expect(rows[rows.length - 1].hero - rows[0].hero, "WIDTH 20 -> 100 grows the hero").toBeGreaterThan(300);
   });
+
+  test("Bryce's export: WIDTH stays on screen at every density, side and LEFT/RIGHT, at 844x390 and 932x430", async ({ page }) => {
+    // #4862 reopen (iPhone, live ab0bc009): his normal density fell back to the column-centring margin and ran off
+    // the screen at WIDTH 50, and LEFT/RIGHT 8% RIGHT translated the pinned edge past the screen. Density is forced
+    // both ways; SIDE and X sweep his two real values (8 on the phone, -2 in the export).
+    await page.goto("/");
+    await page.waitForFunction(() => typeof SettingsExport !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    const applied = await page.evaluate(async () => {
+      const file = await (await fetch("/tests/data/settings-defaults-export.json")).json();
+      return SettingsExport.applySettings(file);
+    });
+    expect(applied.ok, "Bryce's export applies").toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => typeof TitleLayout !== "undefined" && document.body.dataset.shape === "wide",
+      null, { polling: 100, timeout: BOOT_MS });
+    for (const viewport of [{ width: 844, height: 390 }, { width: 932, height: 430 }]) {
+      await page.setViewportSize(viewport);
+      await page.waitForFunction(w => innerWidth === w && document.body.dataset.shape === "wide", viewport.width,
+        { polling: 100, timeout: BOOT_MS });
+      for (const density of ["compact", "normal"]) for (const side of ["auto", "swap"]) for (const x of [8, -2]) {
+        const label = `${viewport.width}x${viewport.height} ${density} ${side} X ${x}`;
+        const rows = await page.evaluate(({ density, side, x }) => {
+          document.body.dataset.density = density;
+          const saved = TitleLayout.current("wide");
+          const out = [];
+          for (const width of [20, 30, 50, 70, 85, 100]) {
+            TitleLayout.apply({ ...saved, side, btns: { ...saved.btns, x, width } });
+            const o = document.getElementById("overlay"), cs = getComputedStyle(o), ob = o.getBoundingClientRect();
+            const b = document.getElementById("menu-buttons").getBoundingClientRect();
+            out.push({ width, left: b.left, right: b.right, w: b.width,
+              inL: ob.left + parseFloat(cs.paddingLeft), inR: ob.right - parseFloat(cs.paddingRight) });
+          }
+          return out;
+        }, { density, side, x });
+        const first = rows[0], last = rows[rows.length - 1];
+        for (const [i, row] of rows.entries()) {
+          expect(row.left, `${label}: WIDTH ${row.width} left inside the overlay`).toBeGreaterThanOrEqual(row.inL - 1);
+          expect(row.right, `${label}: WIDTH ${row.width} right inside the overlay`).toBeLessThanOrEqual(row.inR + 1);
+          if (i) expect(row.w, `${label}: WIDTH ${row.width} never narrows`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
+          // The outer edge holds until the cluster fills the overlay (then X has no room left and clamps).
+          if (row.w < row.inR - row.inL - 1) {
+            const edge = side === "swap" ? row.left - first.left : row.right - first.right;
+            expect(Math.abs(edge), `${label}: outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
+          }
+        }
+        expect(last.w - first.w, `${label}: WIDTH 20 -> 100 grows the cluster`).toBeGreaterThan(300);
+        expect(rows[2].w - rows[0].w, `${label}: WIDTH 20 -> 50 grows the cluster`).toBeGreaterThan(80);
+      }
+    }
+  });
 });
 
 test.describe("Factory Home on touch", () => {

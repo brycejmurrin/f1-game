@@ -56,27 +56,36 @@ Each is Bryce's export at 844×390 touch, in both engines:
 - **iOS text autosizing** ([WebKit bug 272351](https://bugs.webkit.org/show_bug.cgi?id=272351): `zoom` on wide blocks).
   `css/tokens.css` already pins `text-size-adjust: 100%`.
 
-## 4. The likely cause: a stale build on the phone
+## 4. The cause: the WIDTH rule was density-compact only (stale-build theory refuted)
 
-The build before #4865 (e2432a0c) reproduces the report in both engines. From WIDTH 20 to 50 the **right edge moves
-759.8 → 797.6 → 819.3 px** while the width grows, so the whole cluster slides. Above 50 it pins. Bryce's saved
-WIDTH is 20, so his first drags fall exactly in that band. The live build (and this tip) pins the right edge from 20
-up.
+An earlier draft of this section blamed a stale build on the phone. Bryce's screenshots on live ab0bc009 (posted on
+#4862 at 21:46Z) refute it: on the current build the width stays about 719 of 2000 screenshot px at AUTO and 20, only
+the position moves, and at 50 the cluster runs off the right edge. His settings: SIZE 97%, LEFT/RIGHT 8% RIGHT, GRID,
+SIDE AUTO, a Pro Max-class viewport.
 
-A phone can keep the old build after a deploy:
-- The service worker serves the shell network-first, but only on a navigation (`sw.js`, the `req.mode ===
-  "navigate"` branch).
-- A home-screen app resumed from the background does not navigate. It keeps the page it booted.
-- `js/ui/update-check.js` then shows `UPDATE READY · RELOAD`, which reloads only when tapped.
+Three causes, each reproduced off-device in Chromium and WebKit:
+1. #4865's landscape rule (`css/menu-destinations.css`) matched only `body[data-density="compact"]`. At density
+   `normal` WIDTH fell back to `css/responsive.css`'s column-centring margin, which runs off the screen from WIDTH 50
+   (932×430, density forced to normal: right edge 2186 of 2000 screenshot px).
+2. A positive LEFT/RIGHT `translate` carried the pinned right edge past the screen (compact, 932×430, X 8: right edge
+   1003 of 932 px at every WIDTH).
+3. `max-width: calc(100 * var(--vwz) - var(--gap))` ignored the safe areas, so from WIDTH ~85 the cluster ran under the
+   notch.
 
-The same day, #4871 (the POS plate) was exactly this. The code was correct, and a full relaunch fixed it on his iPhone.
+The fix (PR #4906): the placement rule matches every wide shape and density; the cap is the overlay's content box
+(`max-width: 100%`, safe areas already excluded); in landscape with WIDTH set, LEFT/RIGHT is a margin clamped into the
+overlay and the translate keeps only Y. Probe on the fix, Chromium and WebKit 26.6 (identical boxes), Bryce's export, 844×390 and 932×430, compact and
+normal, SIDE auto and swap, X 8 and −2: the box stays inside the overlay at WIDTH 20..100, the outer edge holds until
+the cluster fills the overlay, and the width grows 262 → 828 px (844) and 262 → 916 px (932).
 
-Next step: a PHONE TEST on #4862. Fully close the app, reopen it, and check that Settings shows build 25140 or later.
-Then drag WIDTH from 20 to 50. If the cluster still slides on 25140+, that is evidence of a device-only cause, and the
-next step is a layout read through the phone bridge.
+Still unexplained: the equal AUTO and 20% widths on the device. AUTO is not a WIDTH (no `data-title-btnw`), so it
+keeps the factory layout and its LEFT/RIGHT translate: at X 8 that layout still overruns the right edge (844×390:
+right edge 903 of 836 px, both engines), a separate follow-up. Measure the device after deploy with the phone bridge's new read-only `layout` command
+(`.claude/skills/phone-bridge/references/commands.md`).
 
-Not measured: a real iPhone.
-- BrowserStack Automate refused the session ("Automate testing time expired", Free plan, 2026-11-04 13:30 PST).
-- The phone bridge (`js/agent/apex-bridge.js`) has no DOM-layout read, so it cannot report the cluster's box.
+Not measured: a real iPhone (BrowserStack Automate refused the session, "Automate testing time expired", Free plan,
+2026-11-04 13:30 PST).
 
-New pin: `tests/specs/ui-scale.spec.js`, "the real WIDTH slider, with Bryce's whole export and SETTINGS open…".
+Pins: `tests/specs/ui-scale.spec.js`, "the real WIDTH slider, with Bryce's whole export and SETTINGS open…" and
+"Bryce's export: WIDTH stays on screen at every density, side and LEFT/RIGHT…"; `tests/unit/title-menu-even.test.mjs`
+and `tests/unit/apex-bridge.test.mjs` (`layout`).
