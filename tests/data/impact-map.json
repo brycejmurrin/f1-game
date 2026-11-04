@@ -5093,7 +5093,8 @@
     },
     "js/circuits/scenery/spa.js": {
       "*": [
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/circuits/scenery/suzuka.js": {
