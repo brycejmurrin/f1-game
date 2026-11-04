@@ -489,4 +489,19 @@ test('crew body export matches its Blender source; every part closed outward, so
   const boot = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'boot', c1, c2);
   let minY = Infinity; for (let i = 1; i < boot.pos.length; i += 3) minY = Math.min(minY, boot.pos[i]);
   assert.ok(Math.abs(minY + 0.08) < 1e-9, 'the sole sits 0.08 m under the foot target, as the planted-boot tests assume');
+  // Body variants scale radii; role kits only add paint panels — joint lengths stay put.
+  assert.deepEqual(Object.keys(B.VARIANTS).sort(), ['lean', 'stock', 'stocky']);
+  assert.deepEqual(Object.keys(B.ROLES).sort(), ['carrier', 'gunner', 'jack', 'lolli']);
+  const stock = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'torso', c1, c2);
+  const stocky = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'torso', c1, c2, null, { variant: 'stocky' });
+  const lean = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'torso', c1, c2, null, { variant: 'lean' });
+  const maxX = (d) => Math.max(...d.pos.filter((_, i) => i % 3 === 0));
+  assert.ok(maxX(stocky) > maxX(stock) && maxX(lean) < maxX(stock), 'stocky wider than stock, lean narrower');
+  const role = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'torso', c1, c2, null, { role: 'jack' });
+  const plain = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'torso', c1, c2);
+  assert.equal(role.idx.length, plain.idx.length, 'a role kit does not add triangles');
+  assert.ok(B.resolve('torso', 'stock', 'jack').panels.length > B.PARTS.torso.panels.length, 'jack kit appends chest panels');
+  const stockyBoot = B.build({ pos: [], nrm: [], col: [], mat: [], idx: [] }, 'boot', c1, c2, null, { variant: 'stocky' });
+  let soleY = Infinity; for (let i = 1; i < stockyBoot.pos.length; i += 3) soleY = Math.min(soleY, stockyBoot.pos[i]);
+  assert.ok(Math.abs(soleY + 0.08) < 1e-9, 'stocky boots still plant at −0.08');
 });

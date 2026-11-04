@@ -761,6 +761,10 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const old = { __tlxFrame: 7, dispose() { disposed++; } };
   const decalCache = new Map([["current", current], ["old", old]]);
   const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  // _decalDrop keeps the texture -> glow index in step (#4556); lifted, not re-implemented.
+  const decalByTex = new Map();
+  const dropAt = fx.indexOf("    function _decalDrop(k, v) {");
+  const _decalDrop = eval("(" + fx.slice(dropAt, fx.indexOf("\n    }\n", dropAt) + 6).trim() + ")");
   eval(evict);
   assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
   assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");
@@ -788,7 +792,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const game = code("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);
   assert.match(game, /armed\s*&&\s*!skipClaim\b/);
-  assert.match(game, /const p = backendPreference\(\);\s*backendTried = p === "webgpu" \|\| p === "three"/,
+  assert.match(game, /const p = backendPreference\(\);\s*if \(\(p === "webgpu" \|\| p === "three"\) && reloadOnceIntoGlx\(true\)\)/,
     "claim-fail recovery must include the unset default THREE attempt");
   // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
   // blocked, removing the probe + reloading replays the claim-and-die boot
@@ -4763,7 +4767,7 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
   // Stepped since perf hunt 4 F3.3: awaited, then the stale check, then debris.
   // render() draws nothing while it runs (_carWarm.busy), so no frame builds the cars it has not reached.
-  assert.match(sr, /_carWarm\.busy = true;\s*\n\s*try \{ await RaceEntryProfile\.spanAsync\("warmCarAssets", \(\) => warmCarAssetsAsync\([^\n]*\)\); \} finally \{ _carWarm\.busy = false; \}\s*\n\s*if \(stale\(\)\) return false;\s*\n\s*RaceEntryProfile\.span\("debrisPrime"/,
+  assert.match(sr, /_carWarm\.busy = true;[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*try \{ await RaceEntryProfile\.spanAsync\("warmCarAssets", \(\) => warmCarAssetsAsync\([^\n]*\)\); \} finally \{ if \(_carWarm\.tok === warmTok\) _carWarm\.busy = false; \}\s*\n\s*if \(stale\(\)\) return false;\s*\n\s*RaceEntryProfile\.span\("debrisPrime"/,
     "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -6825,7 +6829,8 @@ const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
 const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
-const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const reloadHelper = span(game, "function reloadOnceIntoGlx", "\nlet gfx = null;", "claim-fail reload helper");
+const fallback = `(async function () { ${timeoutHelpers} ${reloadHelper} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);

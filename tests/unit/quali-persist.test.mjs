@@ -601,3 +601,20 @@ test("the quali sheet prints pole with three decimals, like its gaps", () => {
   assert.equal(table.children[0].children[3].textContent, "1:21.163");
   assert.equal(table.children[1].children[3].textContent, "+0.004");
 });
+
+// #4343: the |curvature| cache keyed on track.def.id alone, so two id-less tracks
+// with the same sample count shared one cache and the second lap was the first's.
+test("id-less tracks with the same sample count do not share the curvature cache (#4343)", () => {
+  const { q, ctx } = loadQuali();
+  ctx.Tracks.curvature = (t) => t.k;
+  const c = car("p1", "VER", "Verstappen", "rb", true);
+  const straight = { n: 80, total: 4000, k: 0 };
+  const twisty = { n: 80, total: 4000, k: 0.02 };
+  const tS = q.carLap(c, straight, 1);
+  const tT = q.carLap(c, twisty, 1);
+  assert.ok(tT > tS * 1.05, `the twisty track is slower: ${tT} vs ${tS}`);
+  assert.equal(q.carLap(c, straight, 1), tS, "and the first track still reads its own cache");
+  // Tracks with ids still key on the id (unchanged path).
+  const a = { n: 80, total: 4000, k: 0, def: { id: "x" } };
+  assert.equal(q.carLap(c, a, 1), tS);
+});

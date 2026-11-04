@@ -101,6 +101,8 @@ const OVERHEAD_AREA = 0.25;
 const MAX_DIM = 220;
 const MAX_FACES = 64;        // per primitive — cones/spheres must not dominate
 const PLANAR_TOL = 0.020;    // reject non-planar vertex fans (m)
+const SWEEP_ABOVE = 500;     // bucket size above which pairs come from an x sweep, not all-pairs
+const NBIN_EDGE = 0.1;       // fraction of a 0.01 normal bin that also files under the neighbour
 const SPOT = 40;             // spot clustering cell (m), same as clip-audit
 
 // Depth-buffer resolution. 24-bit non-reversed; cockpit/hood near plane is the
@@ -334,46 +336,70 @@ function analyse(track, prims, opt) {
   // neighbouring d-buckets too so a pair straddling a bucket edge is still seen.
   const bucket = new Map();
   const q = (v) => Math.round(v * 100) / 100;
+  // Opt-in (--adjacent-bins): ON exposes six real pairs (singapore, madrid, baku,
+  // brands_hatch, dijon, mosport: +1 spot each) that need emitter fixes, #4677.
+  // A normal within NBIN_EDGE of a 0.01 bin edge is also filed under the
+  // neighbouring bin: 0.0049 and 0.0051 round apart yet are the same facing
+  // (dot >= SAME_FACING decides). Duplicates are removed by `seen` below.
+  const qs = (v) => {
+    const r = q(v), f = (v - r) * 100;   // f in [-0.5, 0.5]
+    if (!opt.adjacentBins) return [r];
+    if (f > 0.5 - NBIN_EDGE) return [r, q(r + 0.01)];
+    if (f < -0.5 + NBIN_EDGE) return [r, q(r - 0.01)];
+    return [r];
+  };
   for (const f of faces) {
     const db = Math.round(f.d / opt.gap);
-    for (const off of [-1, 0, 1]) {
-      const key = `${q(f.n[0])},${q(f.n[1])},${q(f.n[2])}|${db + off}`;
-      let arr = bucket.get(key);
-      if (!arr) bucket.set(key, (arr = []));
-      arr.push(f);
+    for (const nx of qs(f.n[0])) for (const ny of qs(f.n[1])) for (const nz of qs(f.n[2])) {
+      for (const off of [-1, 0, 1]) {
+        const key = `${nx},${ny},${nz}|${db + off}`;
+        let arr = bucket.get(key);
+        if (!arr) bucket.set(key, (arr = []));
+        arr.push(f);
+      }
     }
   }
   stats.buckets = bucket.size;
 
   const hits = [];
   const seen = new Set();
+  const consider = (a, b) => {
+    if (a.pi === b.pi) return;                       // same primitive
+    const dot = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
+    if (dot < SAME_FACING) { stats.antiParallel++; return; }
+    if (!opt.horizontal && !opt.overhead && Math.abs(a.n[1]) >= 0.5) return;   // vertical only
+    // flat: the HORIZONTAL faces alone — what --horizontal adds over the
+    // default mode, without re-counting the vertical pairs the default
+    // baseline already ratchets. tools/track/ground-audit.cjs gates it.
+    if (opt.flat && Math.abs(a.n[1]) < 0.5) return;
+    const gap = planeGap(a, b);
+    if (gap > opt.gap) return;
+    const area = overlapArea(a, b);
+    if (area < opt.area) { stats.tooSmall++; return; }
+    const fd = fightDist(gap);
+    if (fd > opt.fight) { stats.notFighting++; return; }
+    const cx = (Math.max(a.mn[0], b.mn[0]) + Math.min(a.mx[0], b.mx[0])) / 2;
+    const cz = (Math.max(a.mn[2], b.mn[2]) + Math.min(a.mx[2], b.mx[2])) / 2;
+    if (!near(cx, cz)) { stats.tooFar++; return; }
+    const key = a.pi < b.pi ? `${a.pi}:${b.pi}` : `${b.pi}:${a.pi}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push({ a: prims[a.pi], b: prims[b.pi], gap, area, fight: fd, x: cx, z: cz });
+  };
+  // No bucket is ever skipped. A small bucket is compared all-pairs; a big one
+  // (a dense grandstand, 501 identical primitives) sweeps on the x extent so
+  // only faces whose boxes can meet are paired. The old `> 500 -> continue`
+  // dropped such buckets silently and the gate read zero.
   for (const [, arr] of bucket) {
-    if (arr.length < 2 || arr.length > 500) continue;
-    for (let i = 0; i < arr.length; i++) {
-      for (let j = i + 1; j < arr.length; j++) {
-        const a = arr[i], b = arr[j];
-        if (a.pi === b.pi) continue;                       // same primitive
-        const dot = a.n[0] * b.n[0] + a.n[1] * b.n[1] + a.n[2] * b.n[2];
-        if (dot < SAME_FACING) { stats.antiParallel++; continue; }
-        if (!opt.horizontal && !opt.overhead && Math.abs(a.n[1]) >= 0.5) continue;   // vertical only
-        // flat: the HORIZONTAL faces alone — what --horizontal adds over the
-        // default mode, without re-counting the vertical pairs the default
-        // baseline already ratchets. tools/track/ground-audit.cjs gates it.
-        if (opt.flat && Math.abs(a.n[1]) < 0.5) continue;
-        const gap = planeGap(a, b);
-        if (gap > opt.gap) continue;
-        const area = overlapArea(a, b);
-        if (area < opt.area) { stats.tooSmall++; continue; }
-        const fd = fightDist(gap);
-        if (fd > opt.fight) { stats.notFighting++; continue; }
-        const cx = (Math.max(a.mn[0], b.mn[0]) + Math.min(a.mx[0], b.mx[0])) / 2;
-        const cz = (Math.max(a.mn[2], b.mn[2]) + Math.min(a.mx[2], b.mx[2])) / 2;
-        if (!near(cx, cz)) { stats.tooFar++; continue; }
-        const key = a.pi < b.pi ? `${a.pi}:${b.pi}` : `${b.pi}:${a.pi}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        hits.push({ a: prims[a.pi], b: prims[b.pi], gap, area, fight: fd, x: cx, z: cz });
-      }
+    if (arr.length < 2) continue;
+    if (arr.length <= SWEEP_ABOVE) {
+      for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) consider(arr[i], arr[j]);
+      continue;
+    }
+    const srt = arr.slice().sort((p, r) => p.mn[0] - r.mn[0]);
+    for (let i = 0; i < srt.length; i++) {
+      const lim = srt[i].mx[0] + opt.gap;
+      for (let j = i + 1; j < srt.length && srt[j].mn[0] <= lim; j++) consider(srt[i], srt[j]);
     }
   }
 
@@ -455,6 +481,7 @@ function optsFrom(argv, overhead) {
     horizontal: argv.includes("--horizontal") || argv.includes("--flat"),
     flat: argv.includes("--flat"),
     overhead: overhead || argv.includes("--overhead"),
+    adjacentBins: argv.includes("--adjacent-bins"),
   };
   if (opt.overhead) {
     if (!argv.includes("--gap")) opt.gap = OVERHEAD_GAP;

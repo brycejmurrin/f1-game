@@ -53,3 +53,34 @@ test("ci-cancel-on-close.yml joins ci.yml's PR concurrency group exactly", async
   for (const st of ["queued", "in_progress", "pending", "waiting", "requested"])
     assert.match(wf, new RegExp(`\\b${st}\\b`), `straggler sweep covers live status ${st}`);
 });
+
+// B3 (2026-11-03): Dispatch also fires on `pull_request: closed`; the straggler sweep cancelled that very cycle.
+test("ci-cancel-on-close.yml never cancels the Dispatch run its own close started", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const wf = fs.readFileSync(path.join(root, ".github/workflows/ci-cancel-on-close.yml"), "utf8");
+  const dispatch = fs.readFileSync(path.join(root, ".github/workflows/dispatch.yml"), "utf8");
+  assert.match(dispatch, /pull_request:\s*\n\s*types: \[[^\]]*\bclosed\b/, "dispatch.yml still fires on a PR close (else this pin is moot)");
+  assert.match(wf, /select\(\.path \| startswith\("\.github\/workflows\/dispatch\.yml"\) \| not\)/);
+});
+
+// B3: `gh pr list` returns the 30 newest by default; a client-side --jq filter over that page misses older PRs.
+test("workflows that count open PRs client-side pass --limit (or filter server-side)", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".github", "workflows");
+  const bad = [];
+  let seen = 0;
+  for (const f of fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
+    fs.readFileSync(path.join(dir, f), "utf8").split("\n").forEach((line, i) => {
+      if (!/\bgh pr list\b/.test(line) || !/--jq\b/.test(line)) return;
+      seen++;
+      if (!/--limit\b|-L\s|--head\b|--search\b/.test(line)) bad.push(`${f}:${i + 1}`);
+    });
+  }
+  assert.ok(seen >= 2, `expected the ratchets-fold and knowledge-gc counts, saw ${seen}`);
+  assert.deepEqual(bad, [], `gh pr list --jq with no --limit/--head/--search:\n${bad.join("\n")}`);
+});

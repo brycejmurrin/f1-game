@@ -653,7 +653,7 @@ function onIncidentLineCross(c, cross, newS) {
     // finish stamp is still authoritative and must reach the other peer; null
     // time/best keep the invalid lap out of timing comparisons.
     if (c.local && netPlay.active()) {
-      netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, fin: raceT, invalid: true });
+      netPlay.reportLap({ lap: c.lap, time: null, best: null, code: c.code, fin: c.finishT, invalid: true });
     }
     if (c.isPlayer && !raceRadio.callsResult()) announce("FINISH!", 2, "race");
   }
@@ -1923,7 +1923,7 @@ const trackBuildOpts = (night, gridSlots) => ({ night, gfx, chunkRibbons: PerfGo
 function dropTrackWorld() {
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0; _menuFly = null;
   shadowPass.reset(); freeTrackMeshes(track);
-  track = null; builtTrackId = null;
+  track = null; builtTrackId = null; if (gfx && gfx.flushTexPool) gfx.flushTexPool();   // retired atlases go with the world (TLX)
   if (typeof LampBake !== "undefined") LampBake.reset();
 }
 // THE BUILD IN STEPS (Tracks.buildPaced): loadTrack at ~8 ms per frame, so the garage
@@ -2178,7 +2178,7 @@ let _menuFly = null;
 // (SwiftShader) and linked NOTHING — a held card for nothing
 // (23 links, all in the menu and the flyby).
 let _warmKey = "";
-const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
+const _carWarm = { busy: false, tok: 0 };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
 // ONE WARM PER WORLD PER SESSION (`_warmed`; "|lit" is a dark world's second one).
 // Its programs stay built, and a repeat links nothing yet holds TLX's presents for
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
@@ -2627,10 +2627,10 @@ async function startRaceBody() {
   // Meshes HERE, not on the first countdown frame — stepped (≤ 1 heavy piece per task, apex26.carWarmSlice; 0 = one sync task).
   // game-vm pumps no timers: an endless slice there never yields (like yieldMain above).
   // A frame drawn between steps built the not-yet-warmed cars itself (census 502/503: GLX ~1 s tasks, steps <= 199 ms).
-  _carWarm.busy = true;
+  const warmTok = ++_carWarm.tok; _carWarm.busy = true;   // a superseded start's finally must not clear a newer warm's flag (#4585)
   // deferRear: the cars behind the player hand their atlas upload and caster to the lights (car-draw.js
   // drainDeferredCarWarm, one piece a countdown frame below); headless has no frames to drain them in.
-  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { _carWarm.busy = false; }
+  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8, { deferRear: !headlessMode })); } finally { if (_carWarm.tok === warmTok) _carWarm.busy = false; }
   if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
@@ -4406,7 +4406,7 @@ function quitToMenu() {
   // with everything else rather than borrowing another module's lifetime.
   // Spotter pack is not RadioVoice.current — hiding #announce never pack.stop()s
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
-  radioVoice.halt();
+  radioVoice.halt(); radioVoice.flushDecoded();   // decoded PCM goes with the race (#4676)
   GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
@@ -5494,8 +5494,8 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
     if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsCommitT's floor: below it no bag is filled
-      const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO));   // pooled
-      if (c.sbsT > AiDrive.sbsCommitT(sb) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase(sb));   // COMMIT OR YIELD: tuck in behind
+      const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO)), sbl = AiDrive.sbsLimits(sb);   // pooled; one concede feeds commitT and ease
+      if (c.sbsT > sbl.commitT && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * sbl.ease);   // COMMIT OR YIELD: tuck in behind
     }
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
@@ -6021,11 +6021,11 @@ function updateCarLateral(c, dt, ranked, S) {
       // (grip taper, kerb, contact give, off-track fade) still applies.
       // These inputs stay fixed through the heading and lateral-authority calculations.
       const steeringGrip = S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);
-      const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
-      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.yawScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX) / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
+      const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX), ls = AiDrive.lateralScales(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // yaw and lateral from one q/prefix (X-mode costs the AI its wings only in .lat)
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * ls.yaw / vAbs);   // no wings in the yaw budget (AiDrive.yawScale)
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
-      gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, steeringGrip, driveTune.PACE, VMAX, aeroDfMult(c));   // X-mode costs the AI its wings too
+      gripScale = ls.lat;   // X-mode costs the AI its wings too
       steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * gripScale, 1), -1, 1);
       c.steerSm = steer;
     }
@@ -7642,13 +7642,10 @@ function render(dt) {
   const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
   // Radial draw-distance cull for chunked scenery, in two halves every backend's
   // chunk loop applies together (Frustum.radialCulled, js/render/shared/frustum.js).
-  // frame.cullDist, the HARD radius. Free/debug camera and cinematic: mobile caps
-  // at 700 m (a pushed-out photo-mode far plane frames a whole ~5 M-vert city and
-  // jetsam-kills the tab; the cinematic runs seconds after the build's transient
-  // peak), desktop keeps the full vista. Feature-shedding tier 3+ caps at the far
-  // plane (scenery vertex/draw load is the one big cost class the resolution
-  // scale and shed passes don't touch). Otherwise the sphere that contains the
-  // frustum (far-plane corners sit farther than farPlane) — look-identical.
+  // frame.cullDist, the HARD radius: Frustum.sceneryCullDist owns the policy
+  // (free cam / cinematic, tier 3+ far-plane cap, the phone 800 m cap at every
+  // tier). Tier 3+ caps because scenery vertex/draw load is the one big cost
+  // class the resolution scale and shed passes don't touch.
   // frame.cullFog, the FOG WALL: [density, height falloff] as the SHADER renders
   // them (frame.fogDensity * FOG DENSITY — off the raw base, FOG DENSITY 0 still
   // culled scenery at 250 m with no fog drawn). A chunk goes once even its
@@ -7663,7 +7660,7 @@ function render(dt) {
   _cullFog[0] = (dbgCam || cine) ? 0 : (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   _cullFog[1] = LT.fogHeight != null ? LT.fogHeight : (frame.fogHeight || 0);   // uFogHeight's own fallback
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : (PerfGov.tier() >= 3 ? farPlane : _farCull);
+  frame.cullDist = Frustum.sceneryCullDist({ free: !!(dbgCam || cine), mobile: !!gfx.isMobile, tier: PerfGov.tier(), farPlane, farCull: _farCull, renderDistMul: LT.renderDistMul });
   // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
   // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
   // different lenses for months with nothing able to see it, because every hook
@@ -7979,7 +7976,7 @@ function render(dt) {
     // On the jacks (PitLane.stopAnim): the body rises with the wheels, which
     // drawPlayerWheels lifts by the same number off _groundMat.
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
-    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
+    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   carFx.marks(c, _groundMat, dt, state);   // AI lock-up marks persist: laid BEFORE the frustum cull (#4669); blob caster now, sun / lamp caster next frame
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8095,7 +8092,7 @@ function render(dt) {
             -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
             dt * Particles.sprayRate(str));
         }
-        carFx.emit(c, _groundMat, dt, state);   // plank sparks + an AI lock-up's marks (js/fx/car-fx.js)
+        carFx.emit(c, _groundMat, dt, state);   // plank sparks (js/fx/car-fx.js); the AI lock-up marks are laid above the frustum cull
       }
     }
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {
@@ -8751,7 +8748,7 @@ const { openTimeTrial, consumeGhostHash, openCareer, openCareerSlots, refreshCar
   },
 });
 if (typeof MenuQuitTail !== "undefined" && MenuQuitTail.wire) {
-  MenuQuitTail.wire({ mirrorPass, stormFx, flybyPanel, quali, qualiNet, netLobby, Particles, Droplets, GameAudio, SeasonCal, CustomTracks, IncidentSim, DebrisWorld, closeLightTuner, closeCamTuner, exitPhotoMode, consumeGhostHash, ensureNet, refreshCareerButton, setFlow, tyres, $, get soundOn() { return soundOn; }, set session(v) { session = v; }, get session() { return session; }, practiceMode, raceTyreWear, get season() { return season; }, set season(v) { season = v; } });
+  MenuQuitTail.wire({ mirrorPass, stormFx, flybyPanel, quali, get qualiNet() { return qualiNet; }, get netLobby() { return netLobby; }, Particles, Droplets, GameAudio, SeasonCal, CustomTracks, IncidentSim, DebrisWorld, closeLightTuner, closeCamTuner, exitPhotoMode, consumeGhostHash, ensureNet, refreshCareerButton, setFlow, get tyres() { return tyres; }, $, get soundOn() { return soundOn; }, set session(v) { session = v; }, get session() { return session; }, get raceTyreWear() { return raceTyreWear; }, get season() { return season; }, set season(v) { season = v; } });
 }
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
@@ -9157,6 +9154,7 @@ function closePitWork() {
   if (!netPlay.active()) holdRaceWake();   // a hidden tab under the garage may have released the screen lock; RETURN TO RACE holds it again
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
+  syncRotateBlocker(false);   // setPaused's exit re-check: a pad/keyboard DONE while the phone is upright must not race on behind the rotate blocker (#4551 B7 row 9)
 }
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
@@ -9356,7 +9354,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; startRace().then(() => { raceRestarting = false; if (state === "race") frozen = false; }, () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; raceRestarting = true; const rq = startRace(); rq.then(() => rq.outcome.then((r) => { if (r.kind === "canceled" && r.reason === "superseded") return; raceRestarting = false; if (state === "race") frozen = false; }), () => { raceRestarting = false; }); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it on a committed start, and a start cancelled for changed settings (or failed) ends on the title via quitToMenu — the old race is not handed back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 

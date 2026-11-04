@@ -50,6 +50,18 @@ test("a lap time splices from number clips, the way the broadcast reads one", ()
   assert.deepEqual(J(VoicePack.norm("1.4 seconds")), ["1.4", "seconds"], "a gap is not a lap time");
 });
 
+test("a sub-minute lap time splices from number clips the pack has (#4329)", () => {
+  assert.deepEqual(J(VoicePack.norm(say("PERSONAL BEST, 45.2"))), ["personal", "best", { p: 0.05 }, "45", "point", "2"]);
+  assert.deepEqual(J(VoicePack.norm("10.0")), ["10", "point", "0"]);
+  assert.deepEqual(J(VoicePack.norm("9.9 seconds")), ["9.9", "seconds"], "a gap under 10 s keeps its own clip");
+  const george = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/voice/george.json"), "utf8")).clips;
+  const has = (k) => Object.prototype.hasOwnProperty.call(george, k);
+  for (const t of [10.04, 45.2, 59.94]) {
+    const line = say("PERSONAL BEST, " + RadioLines.timeText(t));
+    assert.ok(VoicePack.compose(line, has), "the recorded pack speaks " + line);
+  }
+});
+
 test("norm keeps a gap a word, and turns sentence punctuation into pauses", () => {
   assert.deepEqual(J(VoicePack.norm(say("1.4s TO NORRIS. YOU'RE IN RANGE"))),
     ["1.4", "seconds", "to", "norris", { p: 0.1 }, "you're", "in", "range"]);
@@ -1129,6 +1141,26 @@ test("the decoded clip cache is bounded by SECONDS per voice, oldest out first (
   const desk = await run(false);
   assert.equal(desk.d.cacheS, 90);
   assert.equal(desk.d.cache.george.clips, 22, "desktop: the larger budget, still under the 80-clip count bound");
+});
+
+test("one decoded-PCM budget across voice packs, flushed on quit (#4676)", async () => {
+  const clips = {};
+  for (let i = 0; i < 40; i++) clips["w" + i] = [i * 4, 4, 4];
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    GLX: { isMobile: true },
+    GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => Promise.resolve({ duration: 4 }),
+      radioVoice: (parts, at) => ({ end: at, stop() {} }) },
+    fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ binary: integrity(160), clips }), arrayBuffer: () => Promise.resolve(new ArrayBuffer(160)) }),
+  });
+  const P = sb.VoicePack.create({});
+  const ids = ["george", "fable", "bella", "emma"];
+  for (const id of ids) assert.equal(await P.load(id), true);
+  for (let i = 0; i < 12; i++) for (const id of ids) { P.speak(id, "w" + i, { channel: "radio" }); await new Promise((r) => setImmediate(r)); }
+  const total = () => Object.values(J(P.debug().cache)).reduce((a, c) => a + c.secs, 0);
+  assert.ok(total() > 0 && total() <= 24, `four voices hold ${total()} s`);
+  P.flushDecoded();
+  assert.equal(total(), 0, "quit-to-menu flush empties every voice");
+  assert.equal(await P.load("george"), true, "the .bin survives the flush");
 });
 
 // THE PIT GARAGE STOPS THE RADIO. openPitWork freezes the race behind

@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment } from "../../tools/check/ratchets.mjs";
+import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment, numArg } from "../../tools/check/ratchets.mjs";
 
 // ONE TREE WALK PER METRIC PER PROCESS (pass-3 T1 / audit4 E1, 2026-10-26). This
 // file called measure() three times in full, the TREE_METRICS loop once more, and
@@ -462,4 +462,69 @@ test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts t
   if (dirty) { t.skip("css/ differs from HEAD in this checkout"); return; }
   const { AT_REF } = await import("../../tools/check/tree-counts.mjs");
   for (const [metric, fn] of Object.entries(AT_REF)) assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric);
+});
+
+// B3 (2026-11-03): `Number(v) || 40` turned an explicit `--auto-raise=0` / `--max-raise=0` into a 40-line allowance.
+test("numArg: an explicit 0 stays 0; missing or junk falls back", () => {
+  assert.equal(numArg("--auto-raise=0", 40), 0);
+  assert.equal(numArg("--max-raise=0", 40), 0);
+  assert.equal(numArg("--min-fragments=0", 1), 0);
+  assert.equal(numArg("--max-raise=12", 40), 12);
+  assert.equal(numArg("--auto-raise", 40), 40);
+  assert.equal(numArg("--auto-raise=", 40), 40);
+  assert.equal(numArg("--auto-raise=abc", 40), 40);
+  assert.equal(numArg("--auto-raise=-3", 40), 40);
+});
+
+/* PERF P8 (#4548): measure() took 18-27 s, two thirds of it espree parsing every
+ * tests/ + tools/ file for waitNoPolling and vmSrcLoads. Both now parse only a
+ * source that can hold a site, and relativize() reuses measure()'s pin counts.
+ * Structural guards (parse counts and pure predicates), never a wall clock. The
+ * values themselves are cross-checked against the full parse in
+ * wait-polling.test.mjs and vm-filename-lint.test.mjs VF6. */
+test("#4548: the vmSrcLoads prefilter parses a source only when it can hold a vm load", async () => {
+  const { mayHoldVmLoad, PIN_METRICS, pinParseStats } = await import("../../tools/check/ratchets.mjs");
+  for (const src of ["vm.runInContext(code, ctx)", "vm.runInNewContext(s)", "vm .runInThisContext(s)",
+    "new vm.Script(src)", "(vm).Script", "vm?.runInContext(s)", "vm /* c */ . // c\n Script", "vm[Script]", "v\\u006d.Script"]) {
+    assert.ok(mayHoldVmLoad(src), src);
+  }
+  for (const src of ["const x = 1;", "vm.createContext({})", "evm.runInContext(s)", "JavaScript; vm"]) {
+    assert.equal(mayHoldVmLoad(src), false, src);
+  }
+  const before = pinParseStats.vmSrcLoads;
+  assert.equal(await PIN_METRICS.vmSrcLoads.count("export const a = 1;\n", "x.test.mjs"), 0);
+  assert.equal(pinParseStats.vmSrcLoads, before, "a source with no vm load is not parsed");
+  assert.equal(await PIN_METRICS.vmSrcLoads.count("vm.runInContext(fs.readFileSync(f), ctx);\n", "x.test.mjs"), 1);
+  assert.equal(pinParseStats.vmSrcLoads, before + 1);
+});
+
+test("#4548: waitNoPolling parses only sources that name waitForFunction", async () => {
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { count, stats } = await import("../../tools/check/wait-polling-lint.mjs");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ratchet-wp-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "tests", "a.js"), "export const a = 1;\n");
+    fs.writeFileSync(path.join(dir, "tests", "b.js"), "export const b = 2;\n");
+    fs.writeFileSync(path.join(dir, "tests", "c.js"), "await page.waitForFunction(() => window.x, null, { timeout: 5 });\n");
+    assert.equal(count(dir), 1);
+    assert.equal(stats.parsed, 1, "two of the three sources cannot hold a site and are not parsed");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("#4548: relativize() judges a pin row on measure()'s count, not a second walk", async () => {
+  const { pinVerdict } = await import("../../tools/check/ratchets.mjs");
+  const data = { files: {}, tree: { vmSrcLoads: 10 } };
+  const v = await pinVerdict("vmSrcLoads", { env: { APEX_RATCHET_ABSOLUTE: "1" }, data, value: 13 });
+  assert.equal(v.value, 13);
+  assert.equal(v.over, 3);
+  // relativize() hands each pin row's measured value through. The row says 13
+  // against a data ceiling of 600: 587 of slack, LOOSE, so the row stays loose. A
+  // re-count of the real tree (~594) would read 6 of slack, mark the row's
+  // looseness "inherited" and clamp its slack.
+  const [row] = await relativize([{ file: "(tree)", metric: "vmSrcLoads", value: 13, ceiling: 100, over: 0, slack: 87, slackMax: 60, tree: true }],
+    { env: { APEX_RATCHET_ABSOLUTE: "1" }, data: { files: {}, tree: { vmSrcLoads: 600 } } });
+  assert.equal(row.slack, 87);
+  assert.equal(row.inherited, undefined);
 });

@@ -295,3 +295,20 @@ test("test-honesty finds no unexplained skips (the silent-skip ratchet)", () => 
   // while testing nothing (docs/PERF-FINDINGS.md).
   assert.deepEqual(v.detail, [], "unexplained skip/fixme/empty-body sites — annotate or fix them");
 });
+
+test("verify-change --json names the failing tooling-fast files and the log path (#4678)", (t) => {
+  const env = driverEnv(t);
+  const stubDir = env.PATH.split(path.delimiter)[0];
+  fs.writeFileSync(path.join(stubDir, "node"), `#!${process.execPath}
+const tool = process.argv[2];
+if (tool === "tools/ci/bump-cache.mjs") console.log(JSON.stringify({consistent: true}));
+else if (tool === "tools/ci/tooling-fast.mjs") { console.log("PASS  1/2 fixture-a"); console.log("FAIL  2/2 fixture-b duration=1ms exit=1"); process.exit(1); }
+else process.exit(90);
+`, { mode: 0o755 });
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", "js/ui/hud.js"], { env });
+  const out = JSON.parse(r.out);
+  const ph = out.phases.find((p) => p.name === "tooling-fast");
+  assert.equal(out.verdict, "fail", r.out);
+  assert.deepEqual(ph.failing, ["fixture-b"]);
+  assert.equal(ph.log, "artifacts/logs/tooling-fast-suite.log");
+});

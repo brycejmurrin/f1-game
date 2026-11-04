@@ -64,20 +64,16 @@ function paintLive(cv, team, liv, ctx) {
     // below still paint; GarageScene.ctxKey repaints once the circuit is resident.
     let P = null;
     try { P = track && track.points; } catch (e) { P = null; }
-    if (P && P.length > 3) {
-      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
-      for (let i = 0; i < P.length; i++) { x0 = Math.min(x0, P[i][0]); x1 = Math.max(x1, P[i][0]); z0 = Math.min(z0, P[i][2]); z1 = Math.max(z2z(P[i]), z1); }
-      const pad = 22, top = R.y + 40, bh = R.h - 40 - 46, bw = R.w - pad * 2;
-      const sc = Math.min(bw / Math.max(1e-3, x1 - x0), bh / Math.max(1e-3, z1 - z0));
-      const ox = R.x + pad + (bw - (x1 - x0) * sc) / 2, oz = top + (bh - (z1 - z0) * sc) / 2;
+    const M = P && P.length > 3 ? mapProj(P) : null;
+    if (M) {
       // North up: -z is away from the driver at s = 0, so z runs DOWN the screen.
       ctx2.strokeStyle = "#232a33"; ctx2.lineWidth = 9; ctx2.lineJoin = "round";
       ctx2.beginPath();
-      for (let i = 0; i <= P.length; i++) { const q = P[i % P.length], px = ox + (q[0] - x0) * sc, pz = oz + (z2z(q) - z0) * sc; if (i) ctx2.lineTo(px, pz); else ctx2.moveTo(px, pz); }
+      for (let i = 0, n = M.px.length; i <= n; i++) { const j = i % n; if (i) ctx2.lineTo(M.px[j], M.pz[j]); else ctx2.moveTo(M.px[j], M.pz[j]); }
       ctx2.stroke();
       ctx2.strokeStyle = css(c2); ctx2.lineWidth = 3.5; ctx2.stroke();
       ctx2.fillStyle = "#f2f3f5"; ctx2.beginPath();
-      ctx2.arc(ox + (P[0][0] - x0) * sc, oz + (z2z(P[0]) - z0) * sc, 4.5, 0, Math.PI * 2); ctx2.fill();
+      ctx2.arc(M.px[0], M.pz[0], 4.5, 0, Math.PI * 2); ctx2.fill();
     }
     // Footer: the round and what happened last time out.
     ctx2.fillStyle = "#11151b"; ctx2.fillRect(R.x, R.y + R.h - 40, R.w, 40);
@@ -182,6 +178,23 @@ function paintLive(cv, team, liv, ctx) {
   return cv;
 }
 const z2z = (q) => q[2];
+// The timing-screen map's bounds scan and projection depend only on the track's
+// points (L_MAP is fixed), not the colours: a colour-drag repaint reuses them.
+// Keyed on the points array and its length; the strokes still redraw every paint.
+let mapMemo = null;
+function mapProj(P) {
+  if (mapMemo && mapMemo.P === P && mapMemo.n === P.length) return mapMemo;
+  const R = L_MAP, n = P.length;
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (let i = 0; i < n; i++) { x0 = Math.min(x0, P[i][0]); x1 = Math.max(x1, P[i][0]); z0 = Math.min(z0, P[i][2]); z1 = Math.max(z2z(P[i]), z1); }
+  const pad = 22, top = R.y + 40, bh = R.h - 40 - 46, bw = R.w - pad * 2;
+  const sc = Math.min(bw / Math.max(1e-3, x1 - x0), bh / Math.max(1e-3, z1 - z0));
+  const ox = R.x + pad + (bw - (x1 - x0) * sc) / 2, oz = top + (bh - (z1 - z0) * sc) / 2;
+  const px = new Float64Array(n), pz = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const q = P[i]; px[i] = ox + (q[0] - x0) * sc; pz[i] = oz + (z2z(q) - z0) * sc; }
+  mapMemo = { P, n, px, pz };
+  return mapMemo;
+}
 // Two of the six engineer screens carry LIVE traces: a scrolling pair of
 // channels that move with time, so the bank reads as monitors rather than a
 // poster of monitors. Painted into L_TRACE and laid over the dress quad.

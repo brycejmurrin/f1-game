@@ -1825,3 +1825,23 @@ test("HUD plan and actual Strategy share one caution field scan and preserve vis
   assert.deepEqual(reads.plan, legacyPlan);
   assert.equal(view(), expected, "visible rows and ARIA stay equal");
 });
+
+// B5 #4549: think() spends the once-a-race rival call (_rivalStop) when it ARMS a cover/undercut stop. A red flag's
+// clearArm before the car boxed wiped that stop, but kept the call spent: the car could never answer a rival again.
+test("a red flag that clears an unserved cover stop hands the rival call back; a served one keeps it spent", () => {
+  const { pits, car } = commitSession();
+  const c = car(0);
+  c.human = false; c.local = false;
+  c.pitArmed = true; c.pitState = "none"; c.pitWhy = "cover"; c._rivalStop = true;
+  pits.clearArm(c);
+  assert.equal(c._rivalStop, false, "armed, not boxed: the stop never happened");
+  c.pitArmed = false; c.pitState = "box"; c.pitFitted = false; c.pitWhy = "undercut"; c._rivalStop = true; c.pitStops = 1;
+  pits.clearArm(c);
+  assert.equal(c._rivalStop, false, "in the box, set not fitted: not counted either");
+  c.pitArmed = false; c.pitState = "none"; c.pitFitted = true; c.pitWhy = "cover"; c._rivalStop = true;
+  pits.clearArm(c);
+  assert.equal(c._rivalStop, true, "a cover stop already served stays spent");
+  c.pitArmed = true; c.pitState = "none"; c.pitWhy = "plan"; c._rivalStop = true;
+  pits.clearArm(c);
+  assert.equal(c._rivalStop, true, "a plan stop never spent the rival call");
+});

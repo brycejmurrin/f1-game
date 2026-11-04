@@ -61,7 +61,7 @@ import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, untrackedPaths } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
@@ -125,6 +125,47 @@ export function loadTimings(files = [TIMINGS_FILE, LOCAL_TIMINGS_FILE]) {
     try { Object.assign(out, JSON.parse(fs.readFileSync(f, "utf8")).ms || {}); } catch (_) { /* absent or unreadable: no hint */ }
   }
   return out;
+}
+
+/* WHAT `--record` MAY WRITE (perf P8 row 7, #4548). The committed table drifted
+ * three ways: entries recorded on a contended box (bash-guard-hardening 194.5 s,
+ * 9 s alone), ~140 keys for files the floor no longer runs, and 76 of 737 floor
+ * files never measured. Two rules, both pure and tested (tooling-fast-record.test.mjs):
+ *
+ * 1. REFUSE ON A BUSY BOX, do not average. A duration taken under someone
+ *    else's load is not this file's cost, and keeping the per-file MIN of old and
+ *    new would only ratchet toward whichever run was quietest while hiding that a
+ *    file really got slower. So the whole run records nothing when the 1-min
+ *    loadavg per CPU, minus this run's own workers, is above
+ *    RECORD_MAX_EXTERNAL_LOAD at the start or at the end of the suite. At the
+ *    start nothing of ours runs yet; at the end the loadavg includes our `jobs`
+ *    test processes, which are subtracted (an approximation: a 1-min average
+ *    lags, so a refusal can be conservative, never permissive). The local table
+ *    still learns (it is only this box's hint); only the committed one refuses.
+ * 2. PRUNE. Recording keeps only keys that are tooling-fast floor files
+ *    (TOOLING_FAST_FILES); a deleted or moved file's entry goes. */
+export const RECORD_MAX_EXTERNAL_LOAD = 0.5;
+
+/** Why `--record` must not write this run, or null. `load` values are os.loadavg()[0]. */
+export function recordRefusal({ startLoad, endLoad, cpus, jobs = 1, max = RECORD_MAX_EXTERNAL_LOAD } = {}) {
+  const n = Math.max(1, Number(cpus) || 1);
+  const checks = [["start", Number(startLoad), 0], ["end", Number(endLoad), Math.max(0, Number(jobs) || 0)]];
+  for (const [when, load, own] of checks) {
+    if (!Number.isFinite(load)) return `loadavg at ${when} unknown`;
+    const external = Math.max(0, load - own) / n;
+    if (external > max) {
+      return `loadavg at ${when} ${load.toFixed(2)} on ${n} CPU(s)` + (own ? ` (minus this run's ${own} worker(s))` : "") +
+        ` = ${external.toFixed(2)} per CPU from other work, above ${max}`;
+    }
+  }
+  return null;
+}
+
+/** The committed table after a recorded run: previous ∪ measured, then only keys in `keep`. PURE. */
+export function recordedTimings(prev = {}, measured = {}, keep = TOOLING_FAST_FILES) {
+  const allowed = new Set(keep);
+  return Object.fromEntries(Object.entries({ ...prev, ...measured })
+    .filter(([f]) => allowed.has(f)).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 /** Longest recorded duration first; unmeasured files ahead of all of them, in
@@ -344,6 +385,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const startTree = source?.tree || (fullSuite ? workTreeId(ROOT) : null);
 
   const suiteStart = Date.now();
+  // Read before any child starts: --record's start-of-run load check (recordRefusal).
+  const recordStartLoad = opts.record ? (opts.loadavg || (() => os.loadavg()[0]))() : null;
   const startedAt = new Date(suiteStart).toISOString();
   emit(`suite start at=${startedAt} files=${files.length} concurrency=${jobs} ${loadavgLine()}`);
   const unmeasured = files.filter((f) => typeof timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f] !== "number").length;
@@ -526,10 +569,11 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // local table (a timed-out or failed file's duration says nothing about its
   // normal cost). --record also rewrites the committed table CI reads.
   const measured = Object.fromEntries(results.filter((r) => r.ok).map((r) => [r.file, Math.round(r.durationMs / 10) * 10]));
-  const merge = (file, note) => {
+  const merge = (file, note, keep = null) => {
     let prev = {};
     try { prev = JSON.parse(fs.readFileSync(file, "utf8")).ms || {}; } catch (_) { /* first run */ }
-    const ms = Object.fromEntries(Object.entries({ ...prev, ...measured }).sort(([a], [b]) => a.localeCompare(b)));
+    const ms = keep ? recordedTimings(prev, measured, keep)
+      : Object.fromEntries(Object.entries({ ...prev, ...measured }).sort(([a], [b]) => a.localeCompare(b)));
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({ _doc: note, jobs, ms }, null, 2) + "\n");
   };
@@ -538,8 +582,16 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     catch (_) { /* a hint cache; never fail a run over it */ }
   }
   if (opts.record) {
-    merge(TIMINGS_FILE, "Per-file tooling-fast durations (ms) for longest-first scheduling (tools/ci/tooling-fast.mjs). " +
-      "Rewritten by `node tools/ci/tooling-fast.mjs --jobs=3 --record`; order hints only — a missing or stale entry never fails anything.");
+    const loadNow = opts.loadavg || (() => os.loadavg()[0]);
+    const refusal = recordRefusal({ startLoad: recordStartLoad, endLoad: loadNow(), cpus: opts.cpus ?? os.cpus().length, jobs });
+    if (refusal) {
+      console.log(`[tooling-fast] --record: NOT written — ${refusal}. Durations under other work are not a file's cost; re-run --record on a quiet box.`);
+    } else {
+      merge(opts.timingsPath || TIMINGS_FILE, "Per-file tooling-fast durations (ms) for longest-first scheduling (tools/ci/tooling-fast.mjs). " +
+        "Rewritten by `node tools/ci/tooling-fast.mjs --jobs=3 --record` on a quiet box (recordRefusal); order hints only — a missing or stale entry never fails anything.",
+        TOOLING_FAST_FILES);
+      console.log(`[tooling-fast] --record: wrote ${path.relative(ROOT, opts.timingsPath || TIMINGS_FILE)}`);
+    }
   }
   return { ok, passed, failed, results, logPath, notStarted };
 }
@@ -653,14 +705,19 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
   return out;
 }
 
-/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH), plus untracked files: the edit loop
+ *  verifies BEFORE `git add`, and `git diff` never lists a new file (B3 — a new unit file went unselected). */
+export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+  let tracked;
   try {
     const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
-    return changedPaths([base], { cwd: root });
+    tracked = changedPaths([base], { cwd: root });
   } catch (_) {
-    try { return changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { return []; }
+    try { tracked = changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { tracked = []; }
   }
+  let untracked = [];
+  try { untracked = untrackedPaths({ cwd: root }); } catch (_) { /* no git: the tracked list stands */ }
+  return [...new Set([...tracked, ...untracked])];
 }
 
 /**
@@ -964,8 +1021,17 @@ function helpersNaming(rel, root = ROOT) {
   }).map((n) => `tests/helpers/${n}`);
 }
 
-/** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
+/** A changelog fragment (not the README): `gen-changelog --check` inside `gen:check` is its only validator (#4718). */
+const CHANGELOG_FRAGMENT = /^docs\/changelog\.d\/(?!README\.md$)[^/]+\.md$/;
+
+/** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. A fragment in the diff adds `genCheck`. */
 export function selectToolingFastChanged(changed, opts = {}) {
+  const r = selectChangedCore(changed, opts);
+  if (!r.genCheck && changed.some((f) => CHANGELOG_FRAGMENT.test(String(f).replace(/\\/g, "/")))) r.genCheck = true;
+  return r;
+}
+
+function selectChangedCore(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
   const pool = (opts.topicalFiles || (opts.allFiles ? [] : topicalPool())).filter((f) => !tfSet.has(f));
@@ -1005,7 +1071,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
       return { files: seedFiles, reason: "generated-only", genCheck: true, generated: genOnly,
         shards: shardsCoveringFiles(seedFiles, allFiles), changed: changed.length };
     }
-    const sub = selectToolingFastChanged(authored, { ...opts, noGeneratedSplit: true });
+    const sub = selectChangedCore(authored, { ...opts, noGeneratedSplit: true });
     const files = [...allFiles, ...pool].filter((f) => seeds.has(f) || sub.files.includes(f));
     return { ...sub, files, genCheck: true, generated: genOnly, changed: changed.length,
       shards: shardsCoveringFiles(files, allFiles) };

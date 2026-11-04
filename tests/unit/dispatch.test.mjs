@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
   DIGEST_MARKER, ANTHROPIC_VERSION, readState, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
-  addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS,
+  addressOf, closingIssues, recentAdoption, ciRunningClean, isDispatchComment, PROVENANCE_LABELS,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-11-03T12:00:00Z");
@@ -379,4 +379,31 @@ test("config: loadConfig merges the file over the defaults; dispatch.json carrie
     assert.equal(gone in file, false, gone);
     assert.equal(gone in DEFAULT_CONFIG, false, gone);
   }
+});
+
+test("rule 2: a CONTINUE launch is skipped for 10 min after an `adopts PR #n` comment (one launch lock per PR)", () => {
+  const adopts = (h) => ({ author: "github-actions[bot]", body: "adopts PR #30 — claude:session_X (posted by the dispatcher)", created_at: ago(h) });
+  assert.equal(recentAdoption([adopts(0.1)], 30, NOW, 10) !== null, true);
+  assert.equal(recentAdoption([adopts(0.5)], 30, NOW, 10), null);
+  assert.equal(recentAdoption([adopts(0.1)], 3, NOW, 10), null, "another PR number never locks");
+  const quiet = planDispatch(state({ prs: [pr(30, { updated_at: ago(5), labels: ["needs-owner"], comments: [adopts(0.1)] })] }), cfg(), NOW);
+  assert.deepEqual(quiet.launches, []);
+  assert.deepEqual(skips(quiet), ["PR #30: adopted 6m ago (launch lock: adopts comment under 10 min)"]);
+  const old = planDispatch(state({ prs: [pr(30, { updated_at: ago(5), labels: ["needs-owner"], comments: [adopts(0.5)] })] }), cfg(), NOW);
+  assert.deepEqual(old.launches.map((l) => l.address), ["CONTINUE PR 30"]);
+});
+
+test("rule 2: a CONTINUE launch is skipped while head CI is running with 0 failed jobs and no conflict", () => {
+  const run = (id, name, status, conclusion = null) => ({ id, name, status, conclusion });
+  assert.equal(ciRunningClean(pr(31, { checks: [run(1, "a", "completed", "success"), run(2, "b", "in_progress")] })), true);
+  assert.equal(ciRunningClean(pr(31, { checks: [run(1, "a", "completed", "failure"), run(2, "b", "in_progress")] })), false, "a failed job is work");
+  assert.equal(ciRunningClean(pr(31, { checks: [run(1, "a", "completed", "failure"), run(3, "a", "in_progress")] })), true, "the newest run of a name decides");
+  assert.equal(ciRunningClean(pr(31, { mergeable_state: "dirty", checks: [run(2, "b", "in_progress")] })), false, "a conflict is work");
+  assert.equal(ciRunningClean(pr(31, { checks: [run(1, "a", "completed", "success")] })), false, "all done and green: not running");
+  assert.equal(ciRunningClean(pr(31, {})), false, "no checks read: launch as before");
+  const p = planDispatch(state({ prs: [pr(31, { updated_at: ago(5), labels: ["needs-owner"], checks: [run(2, "b", "queued")] })] }), cfg(), NOW);
+  assert.deepEqual(p.launches, []);
+  assert.deepEqual(skips(p), ["PR #31: head CI is running with 0 failed jobs and no conflict: nothing for a CONTINUE worker to do"]);
+  const red = planDispatch(state({ prs: [pr(31, { updated_at: ago(5), labels: ["needs-owner"], checks: [run(1, "a", "completed", "failure")] })] }), cfg(), NOW);
+  assert.deepEqual(red.launches.map((l) => l.address), ["CONTINUE PR 31"]);
 });

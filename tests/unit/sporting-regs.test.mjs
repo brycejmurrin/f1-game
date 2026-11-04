@@ -306,6 +306,36 @@ test("reset() forgets the order, so a re-grid cannot read as a pass", () => {
   assert.equal(w.tick(f.p, f.all, 4, DT), null, "the first tick after a reset only primes");
 });
 
+test("two lappers trading 'closest' do not restart the hold (#4345)", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(40);
+  const second = { id: "lap2", code: "HAM", pitState: "none", speed: 60, prog: f.p.prog - 50 + L };
+  f.all.push(second);
+  const evs = [];
+  // Swap which lapper is closest every half second for 9 s; both stay in the window.
+  for (let t = 0, k = 0; t < 9 - 1e-9; t += DT, k++) {
+    const near = Math.floor(t / 0.5) % 2 === 0;
+    f.lapper.prog = f.p.prog - (near ? 40 : 50) + L;
+    second.prog = f.p.prog - (near ? 50 : 40) + L;
+    const e = w.tick(f.p, f.all, f.ctx, DT);
+    if (e) evs.push(e);
+  }
+  assert.ok(evs.find((e) => e.type === "warn"), "warned: " + JSON.stringify(evs));
+  const pen = evs.find((e) => e.type === "penalty");
+  assert.ok(pen, "the 8 s penalty latches: " + JSON.stringify(evs));
+  assert.equal(pen.code, "VER", "charged for the lapper the clock ran for");
+});
+
+test("a genuinely new lapper still restarts the hold (#2163)", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(40);
+  blueRun(w, f, 3);
+  f.lapper.prog = f.p.prog + 10;                    // first lapper gone past
+  const fresh = { id: "lap2", code: "HAM", pitState: "none", speed: 60, prog: f.p.prog - 40 + L };
+  f.all.push(fresh);
+  w.tick(f.p, f.all, f.ctx, DT);
+  assert.ok(w.info().hold <= DT + 1e-9, "a new lapper starts its own clock: " + w.info().hold);
+  assert.equal(w.info().code, "HAM");
+});
+
 // ── 3. CHAMPIONSHIP-ORDER GRID ──────────────────────────────────────────────
 
 test("champOrder: scorers by the standings comparator, the pointless behind in pace order", () => {
@@ -318,6 +348,32 @@ test("champOrder: scorers by the standings comparator, the pointless behind in p
   assert.equal(out.map((c) => c.driverId).join(","), "d,a,b,c");
   assert.equal(R.champOrder(cars, cmp, () => 0), null, "round 1: nobody has scored, the caller's default stands");
   assert.equal(cars.map((c) => c.driverId).join(","), "a,b,c,d", "the input is not reordered");
+});
+
+test("champOrder: a duplicated zero-point driverId compares equal and keeps input order (#4341)", () => {
+  const cars = [
+    { driverId: "s", tier: 0, n: 0 },
+    { driverId: "x", tier: 1, n: 1 }, { driverId: "x", tier: 1, n: 2 }, { driverId: "w", tier: 1, n: 3 },
+  ];
+  const pts = { s: 5 };
+  const out = R.champOrder(cars, (a, b) => (a < b ? -1 : a > b ? 1 : 0), (id) => pts[id] || 0);
+  assert.equal(out.map((c) => c.driverId + c.n).join(","), "s0,w3,x1,x2", "duplicates keep input order behind the unique id");
+  const rev = R.champOrder([cars[0], cars[2], cars[1], cars[3]], () => 0, (id) => (id === "s" ? 5 : 0));
+  assert.equal(rev.map((c) => c.n).join(","), "0,3,2,1", "reversed input: the duplicates stay reversed (stable, comparator returns 0)");
+});
+
+test("champOrder: the zero-point comparator honours the sort contract (cmp(a,a) = 0, antisymmetric) (#4341)", () => {
+  // filter() keeps the Array species, so a subclass sees the comparator champOrder hands sort().
+  const seen = [];
+  class Spy extends Array { sort(cmp) { seen.push(cmp); return super.sort(cmp); } }
+  const a = { driverId: "x", tier: 1 }, b = { driverId: "x", tier: 1 }, c = { driverId: "y", tier: 1 };
+  const cars = Spy.from([{ driverId: "s", tier: 0 }, a, b, c]);
+  R.champOrder(cars, () => 0, (id) => (id === "s" ? 5 : 0));
+  const rest = seen[seen.length - 1];
+  assert.equal(typeof rest, "function");
+  assert.equal(rest(a, b), 0, "equal ids compare equal");
+  assert.equal(rest(b, a), 0);
+  assert.equal(Math.sign(rest(a, c)), -Math.sign(rest(c, a)), "antisymmetric");
 });
 
 test("a place gained under a caution and still owed at the FINISH is charged at once, and the passed car cannot clear it", () => {

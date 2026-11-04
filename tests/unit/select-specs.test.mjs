@@ -24,6 +24,8 @@ import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
+import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
+import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
@@ -1830,7 +1832,8 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
   const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
   assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
-  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
+  const b = laneBase({ GITHUB_RUN_NUMBER: "12633" });
+  assert.ok(Number.isInteger(b) && b >= 0 && b < LANES, `run-number start is a lane: ${b}`);
   const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
     "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
   const base = LANES - 1;
@@ -1907,7 +1910,127 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   const pinned = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/career/career-ui.js"] });
   assert.equal(pinned.changed, 1);
   assert.ok(SOURCE_AFFECTED.some(([re, spec]) => re.test("js/career/career-ui.js") && spec === pinned.floor), pinned.floor);
-  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/captions.js"] });
   assert.equal(routed.floor, null);
+  assert.equal(routed.floorShards, undefined);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
+});
+
+test("lanes: adjacent runs start far apart, so concurrent runs do not queue behind each other (P8 #4548)", async () => {
+  const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  // Run numbers that start minutes apart are the ones whose legs overlap in
+  // time. With `n % LANES` two 12-leg runs N and N+1 shared 11 of 12 lanes
+  // (the ci.yml `selected-lane-<n>` group queues the second) while 11 lanes idled.
+  const legs = (n, k) => new Set(Array.from({ length: k }, (_, i) => (laneBase({ GITHUB_RUN_NUMBER: String(n) }) + i) % LANES));
+  let worst = 0, total = 0, runs = 0;
+  for (let n = 24000; n < 24480; n++) {
+    const a = legs(n, 12), b = legs(n + 1, 12);
+    const shared = [...a].filter((l) => b.has(l)).length;
+    worst = Math.max(worst, shared); total += shared; runs++;
+  }
+  assert.ok(worst <= 3, `two adjacent 12-leg runs share at most 3 lanes, worst ${worst}`);
+  assert.ok(total / runs <= 3, `mean shared lanes ${(total / runs).toFixed(2)}`);
+  // Every lane is still a start, so no lane band starves or hogs.
+  const starts = new Set(Array.from({ length: 480 }, (_, i) => laneBase({ GITHUB_RUN_NUMBER: String(24000 + i) })));
+  assert.equal(starts.size, LANES, "every lane is a start");
+});
+
+// DURATION-BALANCED FAT PIECES (P8 #4548 row 6). The count shard split each fat
+// spec into equal TEST COUNTS: hud-layout quarters ran 6.1/8.6/11.8/6.3 min at
+// 14 tests each (run 41606130214). tools/ci/fat-shard.mjs LPT-packs the titles
+// by measured seconds and run-playwright.mjs runs each piece as a --test-list.
+const FAT_SPECS = ["career", "career-season", "career-hub", "hud-layout"].map((f) => `tests/specs/${f}.spec.js`);
+const spread = (secs) => Math.max(...secs) / Math.min(...secs);
+const fatPieces = (f) => shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY, new Set())
+  .filter((j) => j.specs === f).length;
+
+test("fat-shard: every fat spec's pieces cover its full title list exactly once, balanced to <= 1.2 by the committed table", () => {
+  const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+  const worstCount = [];
+  for (const f of FAT_SPECS) {
+    const titles = specTitles(f);
+    assert.ok(titles && titles.length, `${f}: the stub lister read its titles`);
+    // declaredTests() may undercount a loop it cannot size (hud-layout: 54 of
+    // the 56 a CI run reports); the lister runs the loops, so never fewer.
+    assert.ok(titles.length >= declaredTests(f), `${f}: ${titles.length} listed titles under the static count ${declaredTests(f)}`);
+    assert.equal(unlistable(titles), null, `${f}: every title round-trips a --test-list line`);
+    const n = fatPieces(f);
+    assert.ok(n >= 2, `${f} runs as pieces`);
+    const plan = fatShardPlan(f, n, db, FAT_UI_SEC_PER_TEST, titles);
+    assert.ok(plan, `${f}: a plan for ${n} pieces`);
+    const union = plan.pieces.flatMap((p) => p.titles);
+    assert.equal(new Set(union).size, union.length, `${f}: no title in two pieces`);
+    assert.deepEqual([...union].sort(), [...titles].sort(), `${f}: the pieces are exactly the spec's titles`);
+    assert.ok(plan.pieces.every((p) => p.titles.length > 0), `${f}: no empty piece`);
+    const secs = plan.pieces.map((p) => p.sec);
+    assert.ok(spread(secs) <= 1.2, `${f}: planned piece seconds ${secs.map(Math.round).join("/")} spread ${spread(secs).toFixed(2)} > 1.2`);
+    worstCount.push(spread(pieceSecsOf(plan.costs, countSplitPieces(titles.length, n))));
+  }
+  // The check discriminates: Playwright's count shard of the same table is over it.
+  assert.ok(Math.max(...worstCount) > 1.2, `count split spreads ${worstCount.map((x) => x.toFixed(2))}: the balance check would not have caught it`);
+});
+const pieceSecsOf = (costs, pieces) => pieces.map((idx) => idx.reduce((t, k) => t + costs[k], 0));
+
+test("fat-shard: unknown titles are priced at the spec's rate, never dropped", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const db = { specs: { [f]: { t: { "a": [["d", "llvmpipe", 10]], "b": [["d", "llvmpipe", 30]] } } } };
+  assert.deepEqual(titleCosts(f, ["a", "b", "new"], db, 45), [10, 30, 20]);
+  assert.deepEqual(titleCosts(f, ["x", "y"], EMPTY, 45), [45, 45], "no table at all: the fallback rate");
+  // A synthetic 2x skew the count shard keeps and LPT removes.
+  const costs = [60, 60, 60, 60, 20, 20, 20, 20];
+  assert.equal(spread(pieceSecsOf(costs, countSplitPieces(costs.length, 2))), 3);
+  assert.ok(spread(lptPieces(costs, 2).map((p) => p.sec)) <= 1.2);
+});
+
+test("fat-shard: the n rewritten legs select every test exactly once, even one the lister missed", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const listed = ["v › one", "v › two", "v › three", "solo", "w › four", "w › five", "w › six"];
+  const real = [...listed, "w › added later"];   // a test the stub could not see
+  const db = { specs: { [f]: { t: Object.fromEntries(listed.map((t, i) => [t, [["d", "llvmpipe", 10 + 7 * i]]])) } } };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-"));
+  const n = 3;
+  const hits = new Map(real.map((t) => [t, 0]));
+  for (let i = 1; i <= n; i++) {
+    const r = fatShardArgs([f, "--retries=0", `--shard=${i}/${n}`], { db, fallbackSec: 45, outDir, titlesOf: () => listed });
+    assert.ok(!r.args.some((a) => a.startsWith("--shard")), "the count shard is replaced");
+    const flag = r.args.find((a) => a.startsWith("--test-list"));
+    assert.ok(flag && r.args.includes(f) && r.args.includes("--retries=0"), `leg ${i}: ${r.args.join(" ")}`);
+    const [name, file] = flag.split("=");
+    assert.equal(name, i === n ? "--test-list-invert" : "--test-list");
+    const lines = fs.readFileSync(file, "utf8").trim().split("\n");
+    assert.ok(lines.every((l) => l.startsWith(`${f} › `)), "lines name the file then the title path");
+    const named = new Set(lines.map((l) => l.slice(`${f} › `.length)));
+    for (const t of real) if (named.has(t) !== (name === "--test-list-invert")) hits.set(t, hits.get(t) + 1);
+  }
+  fs.rmSync(outDir, { recursive: true, force: true });
+  assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], "every test runs on exactly one leg");
+  // Left alone: no shard, a non-fat spec, a grep, a list it cannot write.
+  const keep = (args, titlesOf = () => listed) => fatShardArgs(args, { db, fallbackSec: 45, outDir, titlesOf }).args;
+  assert.deepEqual(keep([f]), [f]);
+  assert.deepEqual(keep(["tests/specs/smoke.spec.js", "--shard=1/2"]), ["tests/specs/smoke.spec.js", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--grep=x", "--shard=1/2"]), [f, "--grep=x", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--shard=1/2"], () => null), [f, "--shard=1/2"], "unlistable spec: Playwright's count shard");
+  assert.deepEqual(keep([f, "--shard=1/2"], () => ["a", "a › b"]), [f, "--shard=1/2"], "a prefix title could claim two tests");
+  // The Playwright the lists are written for still reads them.
+  const program = path.join(ROOT, "node_modules/playwright/lib/program.js");
+  if (fs.existsSync(program)) {
+    const src = fs.readFileSync(program, "utf8");
+    assert.match(src, /--test-list <file>/);
+    assert.match(src, /--test-list-invert <file>/);
+  }
+});
+
+test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names its CI shard pieces", () => {
+  // hud-layout asserts the DOM hud.js keeps but names it only in comments, so no import reaches it: before the pin
+  // the floor was null and a cold agent picked hud-audit "by name".
+  assert.deepEqual(specsAffectedBySource(["js/ui/hud.js"]), ["tests/specs/hud-layout.spec.js"]);
+  const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  assert.equal(r.floor, "tests/specs/hud-layout.spec.js");
+  assert.equal(r.floorReason, undefined);
+  // ~34 min whole: the floor carries the native --shard pieces CI runs, so it is never run whole by mistake.
+  assert.ok(r.floorShards && r.floorShards.pieces.length >= 2, JSON.stringify(r.floorShards));
+  assert.deepEqual(r.floorShards.pieces, r.shards.filter((x) => x.specs === r.floor && x.shard).map((x) => x.shard));
+  assert.match(r.floorShards.hint, /--shard pieces/);
+  // The pin is narrow: a sibling HUD module stays routed-only.
+  assert.deepEqual(specsAffectedBySource(["js/ui/hud-tyres.js"]), []);
 });

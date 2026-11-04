@@ -506,6 +506,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/archive-sweep.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per archivable session id with its PR and merged/closed reason; the final count line; exit 2 usage, 3 GitHub error."
+    },
     "tools/ci/assert-audit.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -615,6 +620,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
+    },
+    "tools/ci/fat-shard.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-piece plan vs the count split, one line per piece; an unlistable spec keeps the count shard"
     },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
@@ -1306,12 +1316,22 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/garage/author-camera.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/garage/author-crew-motion.py": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"
     },
     "tools/garage/author-departure.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/garage/author-entrance.py": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c2"
@@ -2226,6 +2246,11 @@
       "presentation": "shared-levels",
       "preserve": "Per-server ERROR rows and the TOTAL line"
     },
+    "tools/mcp/mcp-modern.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library module, no CLI output"
+    },
     "tools/mcp/mcp-preflight.sh": {
       "action": "keep-native",
       "presentation": "native",
@@ -2561,6 +2586,16 @@
       "presentation": "native",
       "preserve": "@c5"
     },
+    "tools/shot/garage-video-checks.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/shot/garage-video.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
     "tools/shot/gen-scenery-locations.cjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2720,6 +2755,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Gate versus update behavior, baseline identity and changed-file receipt."
+    },
+    "tools/track/circuit-info.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One JSON row per circuit (built lap metres, turns, detector corner count) and exit 2 on an unknown id."
     },
     "tools/track/clip-audit.cjs": {
       "action": "targeted-summary",

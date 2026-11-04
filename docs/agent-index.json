@@ -1482,6 +1482,7 @@
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/career-ui-lazy.test.mjs",
+        "tests/unit/css-pulse-shadow-layer.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/damage.test.mjs",
         "tests/unit/debris-opts.test.mjs",
@@ -1496,12 +1497,15 @@
         "tests/unit/hud-gap-decimals.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-lane-collapse-backstop.test.mjs",
         "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-pack-followup.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/hud-relative-geo-sample.test.mjs",
         "tests/unit/hud-relative.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/hud-status-stack.test.mjs",
@@ -1591,6 +1595,7 @@
         "tests/unit/build-steps.test.mjs",
         "tests/unit/build-worker.test.mjs",
         "tests/unit/car-front-wing-width.test.mjs",
+        "tests/unit/coplanar-buckets.test.mjs",
         "tests/unit/coplanar-faces.test.mjs",
         "tests/unit/debris-hazard-hint.test.mjs",
         "tests/unit/driving-line-opts.test.mjs",
@@ -3162,6 +3167,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/data/garage-camera-options.js",
+      "global": "GarageCameraOptions",
+      "roster": "LAZY_RACE"
+    },
+    {
       "path": "js/data/garage-defaults.js",
       "global": "GarageDefaults",
       "roster": "tag"
@@ -3174,6 +3184,11 @@
     {
       "path": "js/data/garage-entrance-motion.js",
       "global": "GarageEntranceMotionData",
+      "roster": "LAZY_RACE"
+    },
+    {
+      "path": "js/data/garage-entry-camera.js",
+      "global": "GarageEntryCameraData",
       "roster": "LAZY_RACE"
     },
     {

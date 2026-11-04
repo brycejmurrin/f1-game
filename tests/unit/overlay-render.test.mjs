@@ -126,6 +126,20 @@ test("reduced motion turns the sector flash into a static outline, with no anima
   assert.equal(motionOk, true, "the animation only runs when motion is allowed");
 });
 
+// Ranked findings: docs/notes/HUNT-OVERLAY-2026-11-03.md (#2 phone side, #3 row pitch).
+test("phone layout mirrors tower/sectors for ?side=right; row height matches the 34px paint step (HUNT-OVERLAY)", () => {
+  const html = source("overlay.html");
+  const phone = /@media \(max-width: 700px\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(phone, "a phone breakpoint");
+  const body = phone[1];
+  assert.equal(body.includes('body[data-side="right"] .ov-tower { left: auto; right: 12px; }'), true,
+    "phone ?side=right puts the tower on the right");
+  assert.equal(body.includes('body[data-side="right"] .ov-sectors { right: auto; left: 12px; }'), true,
+    "phone ?side=right puts sectors on the left");
+  assert.equal(/\.ov-row \{[^}]*height:\s*34px/.test(html), true,
+    "row CSS height matches OverlayRender's translate step of 34px");
+});
+
 test("captions-only demo boots only its own overlay, even when the game TV HUD is available", () => {
   const dom = makeDom();
   const { root } = overlayRoot(dom);

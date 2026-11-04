@@ -186,13 +186,21 @@ if (batches.length) {
 
 // ── phase 1: fast, inline ────────────────────────────────────────────────────
 const phases = [];
+const failingFiles = (text) => [...new Set([...text.matchAll(/^FAIL\s+\d+\/\d+\s+(\S+)/gm)].map((m) => m[1]))];
 const run = (name, cmd, args, env = null) => {
   const t0 = Date.now();
   say(`phase1 START ${name}: ${cmd} ${args.join(" ")} at=${new Date(t0).toISOString()} ${loadavgLine()}`);
   const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", ...(env ? { env: { ...process.env, ...env } } : {}) });
   const ok = r.status === 0;
   const dur = Date.now() - t0;
-  phases.push({ name, ok, exit: r.status, durationMs: dur });
+  const phase = { name, ok, exit: r.status, durationMs: dur };
+  if (!ok) {
+    // #4678: name what failed, not just exit 1. tooling-fast prints `FAIL  n/N <file> ...` per failing file.
+    const failing = failingFiles((r.stdout || "") + (r.stderr || ""));
+    if (failing.length) phase.failing = failing;
+    if (args[0] === "tools/ci/tooling-fast.mjs") phase.log = "artifacts/logs/tooling-fast-suite.log";
+  }
+  phases.push(phase);
   say(`phase1 ${ok ? "PASS" : "FAIL"} ${name} duration=${(dur / 1000).toFixed(1)}s exit=${r.status} ${loadavgLine()}`);
   if (!ok) say((r.stdout || "").slice(-2000) + (r.stderr || "").slice(-2000));
   return ok;
@@ -249,6 +257,7 @@ const finish = (verdict, extra = {}) => {
   if (JSON_OUT) console.log(JSON.stringify(out, null, 2));
   else {
     say(`verdict: ${verdict} ${loadavgLine()}`);
+    for (const p of phases.filter((x) => !x.ok && !x.advisory && x.failing)) say(`failed ${p.name}: ${p.failing.join(" ")}${p.log ? ` (log: ${p.log})` : ""}`);
     if (out.notRun.length) say(`not run: ${out.notRun.join(", ")}`);
     if (plan.sweepsBeforeDeployPush) say("deploy-push reminder: js/track|circuits|tools changed — run test:sweeps on the union first (.claude/skills/check-changes/references/deploy.md)");
     if (live?.runs.length) say(`ci: ${live.runs.length} ci.yml run(s) LIVE on ${live.branch} (${live.runs.map((r) => r.sha).join(", ")}) — a push now cancels them, and a cancelled job hides its failures; wait for the verdict or batch the next push`);

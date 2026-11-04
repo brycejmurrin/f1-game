@@ -1549,9 +1549,9 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.match(brick.source, /generated:.*#1,0/);
 
     const { encodePNG, decodePNG } = await import("../../tools/gen/assets.mjs");
-    const readMobile = async () => {
+    const readMobile = async (extra = {}) => {
       const uploads = [], requests = [];
-      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer,
+      const assets = assetLoader({ Blob, DecompressionStream, Uint8Array, Float32Array, DataView, ArrayBuffer, ...extra,
         async fetch(url) {
           // The base content-addresses pack URLs (`?h=<md5>`); key the file by its path.
           const bare = url.split("?")[0];
@@ -1572,6 +1572,12 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", async () => {
     assert.deepEqual(lowControl.uploads[0].brick,
       [...decodePNG(fs.readFileSync(path.join(dir, man.materials.low.albedo))).rgba.subarray(2 * 4 * 4 * 4, 3 * 4 * 4 * 4)]);
     const oldLow = fs.readFileSync(path.join(dir, man.materials.low.albedo));
+    // #4702: GRAPHICS: HIGH on a phone lifts the pack to the high tier; MEDIUM stays low.
+    const onHigh = await readMobile({ GfxQuality: { current: () => "high" } });
+    assert.equal(onHigh.state.tier, "high");
+    assert.equal(onHigh.uploads[0].size, 8);
+    const onMedium = await readMobile({ GfxQuality: { current: () => "medium" } });
+    assert.equal(onMedium.state.tier, "low");
 
     // Retain another layer's provenance plus unrelated records during a patch.
     const other = { mat: 1, id: "concrete", scale: 1.25, source: "procedural:keep", licence: "CC0", author: "Fixture" };
@@ -1726,7 +1732,7 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
     `baseColorFactor lost: ${[...mesh.col].slice(0, 3)}`);
 });
 
-test("webbake writes a ZIP that real unzip accepts", () => {
+test("webbake writes a ZIP that real unzip accepts", (ctx) => {
   // The browser baker hands its output back as a single archive, written by a
   // ~40-line STORE-method ZIP encoder with no library behind it. A wrong CRC or
   // a bad central-directory offset produces a file that *looks* fine and fails
@@ -1756,7 +1762,7 @@ test("webbake writes a ZIP that real unzip accepts", () => {
     return blob.arrayBuffer().then((ab) => {
       fs.writeFileSync(zipPath, Buffer.from(ab));
       const t = cp.spawnSync("unzip", ["-t", zipPath], { encoding: "utf8" });
-      if (t.error && t.error.code === "ENOENT") return;          // no unzip on this box
+      if (t.error && t.error.code === "ENOENT") return ctx.skip("no unzip on this box");   // B3: a bare return read as a pass
       assert.equal(t.status, 0, `unzip -t rejected the archive:\n${t.stdout}${t.stderr}`);
       const got = cp.spawnSync("unzip", ["-p", zipPath, "manifest.json"], { encoding: "utf8" });
       assert.equal(got.status, 0, "could not extract manifest.json");
@@ -2506,4 +2512,15 @@ test("pack models/ has no orphan bins outside the manifest index",
   const keyed = new Set(Object.values(manifest.models || {}).map((rec) => path.basename(rec.file)));
   const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
   assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
+});
+
+test("diffRoleIndex treats a null manifest or role index as empty, never throws (#4356)", () => {
+  const idx = { models: { a: { role: "placed" }, b: { role: "bogus" } } };
+  const noLive = diffRoleIndex(idx, null);
+  assert.deepEqual(noLive.indexOnly, ["a", "b"]);
+  assert.deepEqual(noLive.liveOnly, []);
+  assert.deepEqual(noLive.badRole, ["b:bogus"]);
+  const noIndex = diffRoleIndex(null, { models: { c: {} } });
+  assert.deepEqual(noIndex, { indexOnly: [], liveOnly: ["c"], badRole: [] });
+  assert.deepEqual(diffRoleIndex(undefined, undefined), { indexOnly: [], liveOnly: [], badRole: [] });
 });

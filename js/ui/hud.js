@@ -531,7 +531,7 @@ function hlKey() {
 // container whose tree stays clean — so this is a structural fix, not a
 // measured win, and the honest claim is that it removes a per-tick flush whose
 // cost depends on a tree this box does not reproduce.
-let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
+let _cssRootKey = "", _cssScale = 1, _cssMult = 1, _cssLimDrop = 15;
 function syncComputedRootVars() {
   // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
   // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
@@ -541,7 +541,7 @@ function syncComputedRootVars() {
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
   // which has no getComputedStyle — the same guard the reads below carried.
-  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; return; }
+  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; _cssLimDrop = 15; return; }
   // ONE CSSStyleDeclaration for both: the flush happens on first access, so two
   // getComputedStyle calls were two chances to pay for it.
   const cs = getComputedStyle(document.documentElement);
@@ -550,6 +550,7 @@ function syncComputedRootVars() {
   // token reads back as a literal string and coerces to NaN — so --hud-btn-mult
   // is resolved from its own factor rather than parsed out of the calc.
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
+  _cssLimDrop = parseFloat(cs.getPropertyValue("--limits-drop")) || 15;   // the chip offset css/hud.css hangs #hud-limits at
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 // LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
@@ -1202,8 +1203,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     // measured — it is `hidden` until the player takes a strike — so its top is
     // reconstructed from the column it hangs in: #pausebtn's bottom edge plus the
     // same 4 px of air css/hud.css puts between them, then the sector box, then
-    // the 15 px offset. CHIP_H is its one line plus padding at --fs-micro.
-    const CHIP_H = 26, CHIP_DROP = 15;
+    // the --limits-drop offset. CHIP_H is its one line plus padding at --fs-micro.
+    const CHIP_H = 26, CHIP_DROP = _cssLimDrop;
     const pauseR = els.pausebtn ? els.pausebtn.getBoundingClientRect() : null;
     const colTop = scR && scR.height ? scR.top : (pauseR && pauseR.height ? pauseR.bottom + 4 : 0);
     const limBot = colTop + (secH + CHIP_DROP + CHIP_H) * chromeZ;
@@ -1826,6 +1827,7 @@ function updateHud(force, dtMs) {
     invalidateFit(); _minimap.invalidate();
     force = true;   // repaint/refit immediately, even inside the 10 Hz throttle
   }
+  if ((force || !(hudT - dtMs > 0)) && typeof HudRelative !== "undefined" && HudRelative.sampleGeo) HudRelative.sampleGeo();   // tick frame, before any write: REL's 1 Hz net reads clean layout (#4586)
   syncHudCamClasses();
   const skinRev = G.store ? G.store.rev : 0;
   if (player.team && (player.team.id !== _teamSkin || skinRev !== _teamSkinRev)) {

@@ -275,7 +275,7 @@
   font-size: var(--fs-2); font-weight: 700; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.cs-stat-val.up { color: #4df; }
+.cs-stat-val.up { color: var(--upgrade); }
 .cs-stat-val.down { color: var(--spark); }
 
 /* ---------- body: category pane + option pane ---------- */
@@ -593,7 +593,7 @@
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
 /* Upgraded = a cyan underline; the label keeps the white ink every other tab
    uses, so the strip reads as one row instead of red + cyan (design pass 2b). */
-.cs-tab.upgraded { box-shadow: inset 0 -3px 0 #4df; }
+.cs-tab.upgraded { box-shadow: inset 0 -3px 0 var(--upgrade); }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
 .cs-tab.active { background: var(--plate-on); border-color: var(--red); }
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
@@ -637,7 +637,7 @@
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-2);
   padding: 1px 5px; border-radius: var(--r-xs);
 }
-.cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
+.cs-delta.up { background: color-mix(in srgb, var(--upgrade) 16%, transparent); color: var(--upgrade); }
 .cs-delta.down { background: color-mix(in oklab, var(--spark) 16%, transparent); color: var(--spark); }
 .cs-opt-desc { font-size: var(--fs-2); color: var(--dim); line-height: 1.35; margin-top: 6px; }
 .cs-opt-cost {
@@ -897,7 +897,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   .cs-liv-edit:hover { background: color-mix(in srgb, var(--edit-fill) 24%, transparent); color: #fff; }
 }
 .cs-liv-edit:active { background: color-mix(in srgb, var(--edit-fill) 32%, transparent); color: #fff; }
-.cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }
+.cs-liv-custom .cs-opt-tag { background: color-mix(in srgb, var(--upgrade) 18%, transparent); color: var(--upgrade); }
 
 /* ---------- inline livery creator ---------- */
 .cs-liv-editor { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.7); padding: 2px; }
@@ -1352,13 +1352,25 @@ body:not(.desktop) #cs-photo {
    them without a class the shell had to repeat five times */
 #cs-cam-panel > div { display: flex; align-items: center; gap: 8px; }
 .cs-pan-lbl {
-  flex: 0 0 40px;
+  flex: 0 0 48px;
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
-  color: rgba(255,255,255,0.45); text-align: right;
+  color: var(--muted); text-align: right;
 }
-.cs-pan-grp, #cs-view, #cs-wing-views {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+.cs-pan-grp, #cs-view, #cs-wing-views, #cs-bay-views {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap);
   min-width: 0;
+}
+/* BAY chips (GarageCameraOptions): readable on desktop and landscape phone */
+#cs-bay-views .cs-view-btn {
+  min-height: var(--tap);
+  padding: 0 var(--pad);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+}
+@media (orientation: landscape) and (max-height: 420px) {
+  #cs-bay-views .cs-view-btn { min-height: var(--tap); padding: 0 var(--gap); }
+  .cs-pan-lbl { flex-basis: 36px; }
 }
 /* A narrow LANDSCAPE screen: the sheet's 410px floor takes most of the width
    and the sliver beside it cannot hold a row of chips, so the controls would be

@@ -5922,6 +5922,7 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      flushTexPool() {},            // TLX-only retired-texture pool; nothing to flush here
       // texCensus: GLX-only. Declared ABSENT rather than left off, because
       // game.js installs a backend by descriptor-copy onto GLX and an absent
       // NAME would keep GLX's own function — which would then run against a

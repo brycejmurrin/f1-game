@@ -428,7 +428,7 @@ function buildSandbox(opts) {
   // Each game VM has isolated storage and its own origin lock manager. Model
   // async acquisition and lifetime ownership; browser cross-tab tests use real locks.
   const vmLocks = new Set();
-  const sandbox = {
+  let sandbox = {
     console: con,
     performance,
     setTimeout: timers.setTimeout, clearTimeout: timers.clearTimeout,
@@ -481,10 +481,22 @@ function buildSandbox(opts) {
   sandbox.addEventListener = (t, fn) => winLs.add(t, fn);
   sandbox.removeEventListener = (t, fn) => winLs.remove(t, fn);
   sandbox.dispatchEvent = (ev) => { winLs.fire(sandbox, ev); const h = sandbox["on" + (ev && ev.type)]; if (typeof h === "function") h.call(sandbox, ev); return true; };
+  // AN ORDINARY GLOBAL, NOT A CONTEXTIFIED ONE. vm.createContext(obj) answers every global
+  // read through an interceptor, and runFile's `const` → `var` makes every module a global:
+  // a global read cost ~100× a lexical one (perf hunt P2, #4533 / PR #4555 §2;
+  // 5e7 reads 4815 vs 42 ms), so the sim ran ~4× slower than in Chromium. DONT_CONTEXTIFY
+  // (Node ≥ 22.8) hands back the new realm's own global object: the same properties are
+  // copied onto it, `sandbox` is re-pointed so every closure here sees it, and reads and
+  // writes from outside (ctx.X = stub) behave as before.
+  if (vm.constants && vm.constants.DONT_CONTEXTIFY !== undefined) {
+    const real = vm.createContext(vm.constants.DONT_CONTEXTIFY);
+    Object.defineProperties(real, Object.getOwnPropertyDescriptors(sandbox));
+    sandbox = real;
+  }
   sandbox.window = sandbox; sandbox.self = sandbox; sandbox.globalThis = sandbox;
   sandbox.parent = sandbox; sandbox.top = sandbox; sandbox.frames = sandbox;
 
-  const ctx = vm.createContext(sandbox);
+  const ctx = vm.isContext(sandbox) ? sandbox : vm.createContext(sandbox);
 
   // Realm-native constructors (Event subclasses, Image, observers) so
   // `instanceof` and `new` inside the game see this context's own intrinsics.
@@ -605,6 +617,8 @@ function runFile(ctx, relPath, record) {
   // Absolute filename: Node's V8 coverage (NODE_V8_COVERAGE / --experimental-test-coverage)
   // silently drops scripts whose name is not an absolute path, so a relative
   // name made every twin report 0 % for the game sources it ran.
+  // node:vm reads of var/function globals are ~100x slower than lexical ones, so V8 profiles taken here mis-rank sim work:
+  // docs/notes/PERF-HUNT-P2-2026-11-03.md §2 (JSC is the real target).
   const body = src.replace(/^const\b/gm, "var");
   const filename = path.join(ROOT, relPath);
   const r = runScriptCached(body, ctx, { filename, root: ROOT });

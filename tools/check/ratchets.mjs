@@ -196,10 +196,26 @@ export const PIN_METRICS = {
     count: (t) => (t.match(RAW_GAME) || []).length },
   vmSrcLoads: { dirs: ["tests/unit", "tests/helpers"], exempt: [], skipDir: "fixtures",
     count: async (t, rel) => {
+      if (!mayHoldVmLoad(t)) return 0;
+      pinParseStats.vmSrcLoads++;
       const { lintSource } = await import("./vm-filename-lint.mjs");
       return lintSource(t, rel).sites.filter((s) => s.kind === "missing" && s.src).length;
     } },
 };
+
+/* vmSrcLoads PREFILTER (perf P8, #4548). Parsing every tests/unit + tests/helpers
+ * file with espree cost 4.0 s of the 18 s measure(), and a file that does not parse
+ * counts 0 anyway. A site is a call or `new` whose callee is the identifier `vm`
+ * member-accessed by runInContext / runInNewContext / runInThisContext / Script
+ * (vm-filename-lint findVmCalls), so its text is `vm`, then only whitespace,
+ * comments, parens, `.`, `?.` or `[`, then the name. A source with no such run
+ * counts 0 without the parse; `\u` keeps any source that could spell either
+ * identifier with an escape. An over-approximation: it may parse a file that has
+ * no site, never skip one that has. */
+const VM_LOAD_HINT = /\bvm\b(?:[\s().?[]|\/\*[\s\S]*?\*\/|\/\/[^\n]*)*(?:runIn(?:New|This)?Context|Script)\b/;
+export const mayHoldVmLoad = (t) => t.includes("\\u") || VM_LOAD_HINT.test(t);
+/** Sources the vmSrcLoads counter handed to the parser (ratchets.test.mjs guards the prefilter). */
+export const pinParseStats = { vmSrcLoads: 0 };
 export const pinPatterns = { ASSERT_PIN, RAW_GAME };
 
 const pinFile = (m, rel) => /\.(mjs|cjs|js)$/.test(rel) && !m.exempt.includes(rel)
@@ -281,11 +297,13 @@ export function ratchetMode(env = process.env) {
 }
 
 /** One pin row judged by ratchetMode: {metric, value, ceiling, over, base?, inherited, ok, mode, why}. */
-export async function pinVerdict(name, { env = process.env, data = load() } = {}) {
+export async function pinVerdict(name, { env = process.env, data = load(), value: measured } = {}) {
   const raw = data.tree?.[name];
   if (raw === undefined) throw new Error(`tests/data/ratchets.json has no tree.${name}`);
   const { ceiling, slackMax } = entry(raw, `tree ${name}`);
-  const value = await pinCount(name);
+  // `value`: relativize() passes the count measure() just took on the same tree,
+  // so the whole pin walk (4.5 s with vmSrcLoads' parse) is not run twice (#4548).
+  const value = measured ?? await pinCount(name);
   const mode = ratchetMode(env);
   const row = { metric: name, value, ceiling, slackMax, over: Math.max(0, value - ceiling), slack: ceiling - value, mode: mode.mode, why: mode.why, inherited: false };
   if (mode.mode === "absolute") return { ...row, ok: row.over === 0, looseOk: row.slack <= slackMax };
@@ -588,7 +606,7 @@ export async function relativize(rows, { env = process.env, data = load() } = {}
   const out = [];
   for (const r of rows) {
     if (!r.tree || !Object.hasOwn(PIN_METRICS, r.metric)) { out.push(r); continue; }
-    const v = await pinVerdict(r.metric, { env, data });
+    const v = await pinVerdict(r.metric, { env, data, value: r.value });
     const row = { ...r, mode: v.mode, base: v.base };
     if (v.ok && r.over > 0) Object.assign(row, { over: 0, inherited: `over by ${r.over}, as the base ${v.base.ref.slice(0, 8)} already was (${v.base.over})` });
     else if (!v.ok && v.base) row.grew = `+${r.over - v.base.over} past the base ${v.base.ref.slice(0, 8)} (${v.base.value} at ceiling ${v.base.ceiling})`;
@@ -897,6 +915,14 @@ export async function seedTreeMetric(metric, { slack, dryRun = false } = {}) {
   return value;
 }
 
+/** `--flag=N` → N; a missing or non-numeric N is `dflt`. An explicit 0 stays 0 (B3: `|| dflt` turned
+ *  `--auto-raise=0` / `--max-raise=0` into a 40-line allowance). */
+export function numArg(flag, dflt) {
+  const v = String(flag).split("=")[1];
+  const n = v === undefined || v.trim() === "" ? NaN : Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : dflt;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   // --help answers from the header without measuring the tree (audit4 cli-help: it took 10 s).
@@ -928,7 +954,7 @@ async function main() {
     const ref = argv[baseAt + 1];
     if (!ref || ref.startsWith("-")) { console.error("ratchets: --base needs a ref"); process.exitCode = 2; return; }
     const mr = argv.find((a) => a.startsWith("--max-raise="));
-    process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40, advisory: argv.includes("--advisory") });
+    process.exitCode = compareToBase(ref, { maxRaise: mr ? numArg(mr, 40) : 40, advisory: argv.includes("--advisory") });
     return;
   }
   if (argv.includes("--update") || argv.includes("--preview") || argv.includes("--lower-only")) {
@@ -956,7 +982,7 @@ async function main() {
   }
   if (argv.includes("--fold")) {
     const minArg = argv.find((a) => a.startsWith("--min-fragments="));
-    const n = minArg ? await foldIfDue(Number(minArg.split("=")[1]) || 1) : await fold();
+    const n = minArg ? await foldIfDue(numArg(minArg, 1)) : await fold();
     if (minArg && !n) { console.log(`ratchets --fold: fewer than ${minArg.split("=")[1]} fragment(s), nothing folded`); return; }
     console.log(`ratchets --fold: ${n} fragment(s) summed into tests/data/ratchets.json and deleted; every effective ceiling unchanged`);
     return;
@@ -965,7 +991,7 @@ async function main() {
   if (auto) {
     // No `=N`: the hook's absorb, a flat 20 (the Ratchet-Reason trailer was dropped 2026-11-03).
     // An explicit `--auto-raise=N` keeps N, including the historical 40.
-    const maxRaise = auto.includes("=") ? (Number(auto.split("=")[1]) || 40) : 20;
+    const maxRaise = auto.includes("=") ? numArg(auto, 40) : 20;
     const r = await autoRaise({ maxRaise });
     for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);

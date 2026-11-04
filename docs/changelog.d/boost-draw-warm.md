@@ -1,0 +1,1 @@
+Fixed: the small hitch left on the first BOOST press (iPhone, three.js WebGPU) — the pre-race warm-up now draws the cockpit ERS bar, overtake lamp and ERS strip once in their boost state, not only compiles them

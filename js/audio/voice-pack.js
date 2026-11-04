@@ -45,9 +45,10 @@ var VoicePack = (() => {
   const PAUSE = Object.freeze({ ".": 0.1, "!": 0.1, "?": 0.1, ",": 0.05, ";": 0.08, ":": 0.08 });
   const MAX_WORDS = 12;          // longest key the greedy matcher tries
   const CACHE_MAX = 80;          // decoded clips kept (second bound)
-  // DECODED SECONDS kept per voice (perf-memory M-5): 80 clips had no size cap,
-  // and an announcer clip averages ~2 s (up to 6.5 s), so a voice could pin
-  // ~160 s ≈ 30 MB of PCM. Evicted clips re-decode from the kept .bin.
+  // DECODED SECONDS kept in TOTAL across every voice pack (perf-memory M-5, #4676):
+  // 80 clips had no size cap, and an announcer clip averages ~2 s (up to 6.5 s), so
+  // a voice could pin ~160 s ≈ 30 MB of PCM; a budget per voice multiplied by the
+  // packs held. The oldest clip of ANY voice goes first; it re-decodes from the kept .bin.
   // ~190 KB per decoded second: 24 s ≈ 4.6 MB on a phone, 90 s ≈ 17 MB desktop.
   const CACHE_S = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 24 : 90;
   // A composed line may run this far past the card's budget — never more than
@@ -60,7 +61,9 @@ var VoicePack = (() => {
    *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word.
    *  A lap time is read the way the broadcast reads one — "1:32.4" is "1 32
    *  point 4", "1:05.3" is "1 oh 5 point 3" — so it splices from number clips
-   *  instead of needing a clip per time. */
+   *  instead of needing a clip per time. A sub-minute lap ("45.2", timeText's
+   *  form under 60 s) is "45 point 2": the packs record gaps only up to "9.9"
+   *  (gapText rounds 10 s and up to whole seconds), so 10.0-59.9 never has a clip. */
   function norm(text) {
     const out = [];
     const s = String(text == null ? "" : text).toLowerCase()
@@ -76,7 +79,11 @@ var VoicePack = (() => {
         if (t[2][0] === "0") out.push("oh");
         out.push(String(+t[2]));
         if (t[3] != null) out.push("point", t[3]);
-      } else out.push(w);
+        continue;
+      }
+      const d = /^([1-5]\d)\.(\d)$/.exec(w);
+      if (d) out.push(String(+d[1]), "point", d[2]);
+      else out.push(w);
     }
     while (out.length && typeof out[out.length - 1] !== "string") out.pop();
     return out;
@@ -155,6 +162,7 @@ var VoicePack = (() => {
   function create(G, opts) {
     codecs();   // start the probe now: it settles long before the first pack is asked for
     const base = (opts && opts.base) || "assets/voice/";
+    let tick = 0;        // LRU clock shared by every voice's clips
     const voices = {};   // id -> { state, man, bin, cache: Map, gen, failedAt }
     const wanted = new Set(); // latest keep/ensure intent, including queued tiers
     // The transmissions playing, ONE PER CHANNEL: the engineer preempting the
@@ -169,7 +177,7 @@ var VoicePack = (() => {
     const deferred = new Set();
 
     function voice(id) {
-      return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map(), secs: 0 });
+      return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map(), stamp: new Map(), secs: 0 });
     }
     /** Gate announcer fetches off the race-load path. Opening flushes the queue. */
     function raceLoadGate(on) {
@@ -304,21 +312,39 @@ var VoicePack = (() => {
       // Decoded buffers belong to the AudioContext that made them; a rebuilt
       // context (GameAudio.rebuildCtx) starts the cache again.
       const gen = GameAudio.ctxGen ? GameAudio.ctxGen() : 0;
-      if (v.gen !== gen) { v.cache.clear(); v.secs = 0; v.gen = gen; }
+      if (v.gen !== gen) { v.cache.clear(); v.stamp.clear(); v.secs = 0; v.gen = gen; }
       const hit = v.cache.get(k);
-      if (hit) { v.cache.delete(k); v.cache.set(k, hit); return hit; }   // LRU touch
+      if (hit) { v.cache.delete(k); v.cache.set(k, hit); v.stamp.set(k, ++tick); return hit; }   // LRU touch
       const [off, len] = v.man.clips[k];
       const p = GameAudio.decodeClip(v.bin.slice(off, off + len));
       v.cache.set(k, p);
+      v.stamp.set(k, ++tick);
       v.secs += clipS(v, k);
-      p.catch(() => { if (v.cache.get(k) === p) { v.cache.delete(k); v.secs -= clipS(v, k); } });
-      // Oldest first, never the clip just added: a line already holds its
-      // promises, so an eviction only means the next use decodes again.
-      while (v.cache.size > 1 && (v.cache.size > CACHE_MAX || v.secs > CACHE_S)) {
+      p.catch(() => { if (v.cache.get(k) === p) { v.cache.delete(k); v.stamp.delete(k); v.secs -= clipS(v, k); } });
+      // Oldest first across all voices, never the clip just added: a line already
+      // holds its promises, so an eviction only means the next use decodes again.
+      while (v.cache.size > CACHE_MAX) {   // the count bound is per voice
         const old = v.cache.keys().next().value;
-        v.cache.delete(old); v.secs -= clipS(v, old);
+        if (old === k) break;
+        v.cache.delete(old); v.stamp.delete(old); v.secs -= clipS(v, old);
+      }
+      for (;;) {
+        let total = 0, oldV = null, oldK = null, oldT = Infinity;
+        for (const w of Object.values(voices)) {
+          total += w.secs;
+          const first = w.cache.keys().next();
+          if (first.done) continue;
+          const t = w.stamp.get(first.value);
+          if (t < oldT) { oldT = t; oldV = w; oldK = first.value; }
+        }
+        if (!oldV || total <= CACHE_S || (oldV === v && oldK === k)) break;
+        oldV.cache.delete(oldK); oldV.stamp.delete(oldK); oldV.secs -= clipS(oldV, oldK);
       }
       return p;
+    }
+    /** Drop every decoded clip (quit to menu); the .bin stays, clips re-decode on demand. */
+    function flushDecoded() {
+      for (const w of Object.values(voices)) { w.cache.clear(); w.stamp.clear(); w.secs = 0; }
     }
 
     /** Cut the transmission on `channel`, or every channel when none is named. */
@@ -410,7 +436,7 @@ var VoicePack = (() => {
     }
 
     return {
-      ensure, ensureStaged, raceLoadGate, ready, plan, speak, stop, remaining, releaseExcept,
+      ensure, ensureStaged, raceLoadGate, ready, plan, speak, stop, remaining, releaseExcept, flushDecoded,
       load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,

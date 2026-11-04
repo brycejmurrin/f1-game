@@ -170,10 +170,20 @@ function migrateSlots() {
     next[f]++;
   }
 }
-const unsupportedSlot = (f, i) => {
+// A slot whose stored value this build cannot open: "newer" (a newer build's
+// save) or "damaged" (valid JSON migrateCareer rejects: an array, a scalar, an
+// invalid version marker). Either is OCCUPIED: it must never read as an empty
+// slot that New Career overwrites, nor lose the careerSlot pointer (B1 #4535).
+const blockedSlot = (f, i) => {
   const raw = store.get(slotKey(f, i), null);
-  return !!(raw && Number(raw.v) > GameStore.CAREER_V);
+  if (raw == null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) return "damaged";
+  const v = typeof SaveMigrate !== "undefined" && SaveMigrate.careerVersion ? SaveMigrate.careerVersion(raw.v) : Number(raw.v);
+  if (v == null || Number.isNaN(v)) return "damaged";
+  return v > GameStore.CAREER_V ? "newer" : null;
 };
+const unsupportedSlot = (f, i) => blockedSlot(f, i) != null;
+const blockedReason = (f, i) => (blockedSlot(f, i) === "damaged" ? "damaged" : "newer-version");
 // #3559: only trust a string captured raw — null means cache-only (quota write-back failed).
 const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); const pr = protectedRaw.get(key); if (typeof pr === "string" && store.raw && store.raw(key) === pr) c = JSON.parse(pr); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
 
@@ -214,11 +224,15 @@ function load(options) {
   pointerHeld = false;
   const wanted = [slotFlavour, slotIdx];
   career = readSlot(slotFlavour, slotIdx);
+  // The pointed slot holds a save this build cannot open (a stale cached shell
+  // meeting a newer save): play a fallback in memory but keep the pointer, or
+  // the build that CAN open it boots into the fallback career for good.
+  const keepPointer = !career && unsupportedSlot(slotFlavour, slotIdx);
   if (!career)
     outer: for (const f of FLAVOURS)
       for (let i = 0; i < SLOTS; i++) {
         const c = readSlot(f, i);
-        if (c) { slotFlavour = f; slotIdx = i; career = c; holdPointer(wanted) || setLive({ migration: true }); break outer; }
+        if (c) { slotFlavour = f; slotIdx = i; career = c; keepPointer || holdPointer(wanted) || setLive({ migration: true }); break outer; }
       }
   calendarProtection = null;
   adoptCalendar(career);
@@ -263,7 +277,7 @@ function save(options) {
   if (!ownership.ok) { lastSave = ownership; return career; }
   if (calendarProtection) { lastSave = { ok: false, durable: false, reason: "calendar-unavailable" }; return career; }
   if (unsupportedSlot(slotFlavour, slotIdx)) {
-    lastSave = { ok: false, durable: false, reason: "newer-version" };
+    lastSave = { ok: false, durable: false, reason: blockedReason(slotFlavour, slotIdx) };
     return career;
   }
   if (career) {
@@ -303,7 +317,11 @@ function clear() {
 }
 
 function slotInfo(c, f, i) {
-  if (unsupportedSlot(f, i)) return { flavour: f, i, used: true, unsupported: true,
+  const blocked = blockedSlot(f, i);
+  if (blocked === "damaged") return { flavour: f, i, used: true, unsupported: true, damaged: true,
+    live: false, teamName: "DAMAGED SAVE", code: "", name: "Unreadable save",
+    year: "Kept on device", round: 0, rounds: 0, money: 0, seasons: 0, wins: 0, titles: 0 };
+  if (blocked) return { flavour: f, i, used: true, unsupported: true,
     live: false, teamName: "UPDATE REQUIRED", code: "", name: "Newer save",
     year: "Newer build", round: 0, rounds: 0, money: 0, seasons: 0, wins: 0, titles: 0 };
   if (!c) return { flavour: f, i, used: false };
@@ -342,7 +360,7 @@ function useSlot(flavour, i) {
   const f = flavourIn(flavour);
   const n = slotIn(i);
   if (unsupportedSlot(f, n)) {
-    lastSave = { ok: false, durable: false, reason: "newer-version" };
+    lastSave = { ok: false, durable: false, reason: blockedReason(f, n) };
     return null;
   }
   if (career && (f !== slotFlavour || n !== slotIdx)) save();
@@ -1246,7 +1264,11 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const team = teamOf(career.team);
   const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
   const pts = scored(player) ? (table[pos - 1] || 0) : 0;
-  const prize = prizeFor(pos);
+  // A DNF earns no position prize, as it earns no points (#4535 decision 1): a
+  // retired car lands at the foot of `order`, so prizeFor(pos) paid the tail rate
+  // for a race not finished. A DNF classified past 90 % distance still scores and
+  // is still paid. The salary is a contract, not a result: it still pays.
+  const prize = scored(player) ? prizeFor(pos) : 0;
   // AN OWNER IS NOT ON THE PAYROLL. The guide (career-ui "how the money works")
   // and docs/CAREER.md: a driver is paid a salary, an owner by sponsors. MY TEAM
   // still paid the start() deal's salary + points bonus every round, under a
@@ -1268,7 +1290,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   });
   // ...and owns BOTH cars, so both earn prize money ("two cars in the points is
   // two payments"): the hired team-mate's finish was paid to nobody.
-  const matePrize = owner && mate ? prizeFor(matePos) : 0;
+  const matePrize = owner && mate && scored(mate) ? prizeFor(matePos) : 0;   // same rule as `prize`
 
   // MY TEAM's wage bill comes off the balance, never off the fitted cap, so
   // hiring well costs upgrades rather than legality. Wages can exceed a round's

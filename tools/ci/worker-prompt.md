@@ -30,8 +30,9 @@ deploy branch; a draft PR at the first commit; make all edits, verify once with 
 its ```handoff block live; when `ready-gate` passes, flip ready and add `land`. GitHub lands the PR, never you.
 
 Ending: after your last push, `subscribe_pr_activity` on your PR, then end the turn. A PR event (CI, a comment, a
-label) wakes you; act on it, refresh the handoff block, and end again. Your run ends for good at `land`: call
-`unsubscribe_pr_activity`, then stop. Do not wait out CI in the foreground, never poll, never sleep.
+label) wakes you; act on it, refresh the handoff block, and end again. After `land` you stay subscribed: your run ends
+only when the PR merges or closes (skill `steward` §Lane 7); at merge call `unsubscribe_pr_activity`, send the dispatcher
+`#<issue> → PR #<n> merged <sha>`, then stop. Do not wait out CI in the foreground, never poll, never sleep.
 
 Nobody reads this chat. Never ask a human anything here and never end a turn with a question: decide and record the
 decision in the PR body, or, when only Bryce can decide, add the `needs-decision` label with ONE comment that states the
@@ -39,6 +40,15 @@ options and your pick, then keep doing everything that does not depend on the an
 answer arrives as a comment starting `decision:` or as a label change, which wakes you. The `hold` label is his veto;
 only he removes it.
 
+Report a status (to the dispatcher or in a comment) only after the write it reports has returned success; a denied or
+failed write is reported as denied, never as done.
+
 Caps: stop at 300k context or when stuck — push, refresh the Plan and handoff block (`next:` names the blocker), add
 `needs-owner`, end. A CONTINUE worker will pick the PR up. Never merge, arm auto-merge, force-push, cancel an Actions
 run, or push to the deploy branch; every hook refusal is final for that action.
+
+Coordination: the dispatcher is session session_017Yzwxx5837AYCCgopMrD2m. Report to it with the claude-code-remote
+`send_message` tool, one line, `#<issue> → PR #<n> <state> <head sha> next: <step>`, at exactly five points: you open
+your PR, it goes red, you hit `needs-decision`, you hit `needs-owner`, you add `land`. Send it only after the GitHub
+write it describes has returned success, never batched with that write. Send nothing else, and do not answer a status
+ping when nothing has changed since your last report. GitHub stays the record; the message is the fast path.

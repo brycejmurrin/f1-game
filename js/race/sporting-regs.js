@@ -198,7 +198,12 @@ const SportingRegs = (function () {
     if (!scored.length) return null;
     const rest = list.filter((c) => !((ptsOf(c.driverId) || 0) > 0));
     scored.sort((a, b) => cmp(a.driverId, b.driverId));
-    rest.sort((a, b) => ((a.tier || 0) - (b.tier || 0)) || (String(a.driverId) < String(b.driverId) ? -1 : 1));
+    // A consistent comparator: equal ids compare 0 (the sort is stable, so a
+    // duplicated id keeps its input order) instead of 1 both ways (#4341).
+    rest.sort((a, b) => {
+      const ia = String(a.driverId), ib = String(b.driverId);
+      return ((a.tier || 0) - (b.tier || 0)) || (ia < ib ? -1 : ia > ib ? 1 : 0);
+    });
     return scored.concat(rest);
   }
 
@@ -242,17 +247,23 @@ const SportingRegs = (function () {
   function blueFlagCar(p, field, o) {
     if (!p || !o || !(o.total > 0) || !(o.vRef > 0)) return null;
     if (p.finished || p.retired || inPit(p)) return null;
-    const L = o.total, floor = o.vRef * BLUE_VFLOOR;
     let best = null, bestD = Infinity;
     for (const c of field || []) {
-      if (!c || c === p || c.retired || c.finished || inPit(c)) continue;
-      const up = (c.prog || 0) - (p.prog || 0);
-      if (!(up > L * 0.5)) continue;
-      const back = (((p.prog || 0) - (c.prog || 0)) % L + L) % L;
-      if (!(back > 0) || back >= bestD) continue;
-      if (back / Math.max(c.speed || 0, floor) <= BLUE_GAP_S) { best = c; bestD = back; }
+      const back = blueBack(p, c, o);
+      if (back < bestD) { best = c; bestD = back; }
     }
     return best;
+  }
+  /** Road distance car `c` sits behind `p` when it qualifies as a blue-flag
+   *  lapper (a lap up, inside the time window), else Infinity. */
+  function blueBack(p, c, o) {
+    if (!c || c === p || c.retired || c.finished || inPit(c)) return Infinity;
+    const L = o.total;
+    const up = (c.prog || 0) - (p.prog || 0);
+    if (!(up > L * 0.5)) return Infinity;
+    const back = (((p.prog || 0) - (c.prog || 0)) % L + L) % L;
+    if (!(back > 0)) return Infinity;
+    return back / Math.max(c.speed || 0, o.vRef * BLUE_VFLOOR) <= BLUE_GAP_S ? back : Infinity;
   }
 
   /** One watcher per race, for the local player. tick() returns an event or
@@ -273,8 +284,13 @@ const SportingRegs = (function () {
         reset();
         return null;
       }
-      const lapper = blueFlagCar(p, field, ctx);
+      let lapper = blueFlagCar(p, field, ctx);
       if (!lapper) { reset(); return null; }
+      // Two lappers trading "closest" must not restart the hold (#4345): while
+      // the car the clock runs for is still a blue-flag lapper, keep its clock.
+      // Only a genuinely new lapper restarts it (#2163).
+      if (who !== lapper && who && field && field.indexOf(who) >= 0
+          && blueBack(p, who, ctx) < Infinity) lapper = who;
       if (who !== lapper) { hold = 0; warned = false; who = lapper; }
       code = lapper.code || null;
       hold += dt > 0 ? dt : 0;

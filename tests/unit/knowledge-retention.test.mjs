@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ROOT, DAYS, SIZE_CAP, SIZE_ALLOW, UNCITED_ALLOW, INDEX, REFUSED_PREFIX, KIND_REQUIRED_FROM,
-  scan, header, renderIndex, demoteArchiveLinks, liveDocNoArchive, tracked,
+  scan, header, renderNotesList, demoteArchiveLinks, liveDocNoArchive, tracked,
 } from "../../tools/docs/knowledge-gc.mjs";
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -67,9 +67,18 @@ test("the allow-lists only shrink: an entry that is cited, pinned, under the cap
   assert.deepEqual(dup(JSON.parse(read(SIZE_ALLOW))), []);
 });
 
-test(`${INDEX} is what knowledge-gc.mjs --index generates (the notes block is not hand-edited)`, () => {
-  const cur = read(INDEX);
-  assert.equal(renderIndex(cur, r.notes), cur, `run: node tools/docs/knowledge-gc.mjs --index`);
+test(`${INDEX} commits no generated notes table: it is printed by --index (#4664)`, () => {
+  assert.doesNotMatch(read(INDEX), /gen:notes/, "the notes table must not be committed: every note PR would re-sync");
+  assert.ok(read(INDEX).includes("knowledge-gc.mjs --index"), "the index says how to list the notes");
+});
+
+test(`the --index notes table is merge-stable and lists every live note: rows sorted by name, no count line (#4608)`, () => {
+  const out = renderNotesList(r.notes);
+  const names = [...out.matchAll(/^\| \[([^\]]+)\]\(notes\//gm)].map((m) => m[1]);
+  assert.equal(names.length, r.notes.length);
+  assert.ok(names.length > 10);
+  assert.deepEqual(names, [...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  assert.doesNotMatch(out, /\d+ live notes/);
 });
 
 // ---------------------------------------------------------------------------
