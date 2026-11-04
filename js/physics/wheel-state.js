@@ -81,6 +81,41 @@ const WheelState = (function () {
   let _enabled = false;
   let _resolved = false;
 
+  // BRAKE THERMAL (#1577, default OFF, needs the wheel state ON): per-axle disc
+  // temperature. Heat = braking power per kg (decel x speed); cooling grows with
+  // airflow (speed). Past T_FADE0 the pad loses bite: the brake force the pedal
+  // asked for is only partly delivered (up to FADE_MAX lost at T_FADE1), handed
+  // back to c.speed through the same shortfall path a lock-up uses. Driver-only
+  // state (the player's own pedal and speed); nothing here reads track curvature.
+  const T_AMB = 100, T_FADE0 = 650, T_FADE1 = 950, FADE_MAX = 0.35;
+  const HEAT_K = 0.07, COOL_0 = 0.03, COOL_V = 0.0012, T_MAX = 1200;
+  let _thermal = false, _thermalResolved = false;
+  function thermalEnabled() {
+    if (!_thermalResolved) {
+      _thermalResolved = true;
+      try { if (typeof localStorage !== "undefined" && localStorage.getItem("apex26.brakeThermal") === "1") _thermal = true; } catch (_) { /* blocked storage */ }
+    }
+    return _thermal;
+  }
+  /** `persist` false = this session only (__apex.setPhysics({brakeThermal})). */
+  function setThermal(v, persist = true) {
+    _thermalResolved = true;
+    _thermal = !!v;
+    if (persist) { try { if (typeof localStorage !== "undefined") localStorage.setItem("apex26.brakeThermal", _thermal ? "1" : "0"); } catch (_) { /* blocked storage */ } }
+    return _thermal;
+  }
+  /** Fraction of brake force kept at disc temperature T (1 below T_FADE0). */
+  function fadeOf(T) {
+    const x = clamp((T - T_FADE0) / (T_FADE1 - T_FADE0), 0, 1);
+    return 1 - FADE_MAX * x * x * (3 - 2 * x);
+  }
+  /** One disc, one tick: heat from brake power (W/kg, ≥ 0), cool with airflow. */
+  function discStep(T, powerWkg, speed, dt) {
+    const t = Number.isFinite(T) ? T : T_AMB;
+    const cool = (COOL_0 + COOL_V * Math.max(speed, 0)) * (t - T_AMB);
+    return clamp(t + (HEAT_K * powerWkg - cool) * dt, T_AMB, T_MAX);
+  }
+
   function resolveEnabled() {
     if (_resolved) return _enabled;
     _resolved = true;
@@ -276,6 +311,17 @@ const WheelState = (function () {
     const dt = opts.dt;
     sync(c, dt);
     const vx = c.speed || 0;
+    let thermalKeep = 1;
+    if (thermalEnabled()) {
+      // Heat on the brake demand THIS tick (before the ABS clamp: a clamped disc still drags).
+      const pF = opts.braking && opts.aReqF < 0 ? -opts.aReqF * Math.max(vx, 0) : 0;
+      const pR = opts.braking && opts.aReqR < 0 ? -opts.aReqR * Math.max(vx, 0) : 0;
+      c.brakeTF = discStep(c.brakeTF, pF, vx, dt);
+      c.brakeTR = discStep(c.brakeTR, pR, vx, dt);
+      const fF = fadeOf(c.brakeTF), fR = fadeOf(c.brakeTR), wF = Math.abs(opts.aReqF || 0), wR = Math.abs(opts.aReqR || 0);
+      c.brakeFade = opts.braking && wF + wR > 1e-6 ? (fF * wF + fR * wR) / (wF + wR) : Math.min(fF, fR);
+      if (opts.braking) thermalKeep = c.brakeFade;
+    }
     let aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
     if (assistLevel() !== "off") {
       const A = ASSIST[_level];
@@ -321,6 +367,7 @@ const WheelState = (function () {
 
     const want = Math.abs(aReqF) + Math.abs(aReqR);
     _results.shortfall = want > 1e-6 ? clamp(1 - (_fOut.ach + _rOut.ach) / want, 0, 1) : 0;
+    if (thermalKeep < 1) _results.shortfall = 1 - (1 - _results.shortfall) * thermalKeep;   // faded pads deliver only part of the pedal's ask
     _results.latScaleF = clamp(_fOut.latScale != null ? _fOut.latScale : 1, 0.05, 1);
     _results.latScaleR = clamp(_rOut.latScale != null ? _rOut.latScale : 1, 0.05, 1);
     _results.fxF = _fOut.fx || 0;
@@ -332,5 +379,6 @@ const WheelState = (function () {
   // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
     enabled, setEnabled, axleStep, stepPlayer, assistLevel, setAssistLevel, mode, setMode,
+    thermalEnabled, setThermal, fadeOf, discStep,
   });
 })();
