@@ -1188,3 +1188,24 @@ test("deferred QUIT completes when the corrected-time opportunity expires, retai
     assert.ok(G.raceT >= p.finishT + p.penalty);
   } finally { g.close(); }
 });
+
+test("RETURN TO RACE with the phone upright keeps the race paused behind the rotate blocker (#4551 B7 row 9)", async () => {
+  // closePitWork wrote paused=false itself and skipped setPaused's exit re-check (syncRotateBlocker),
+  // so a pad/keyboard DONE in portrait ran the field on behind the z-9000 blocker.
+  const flag = { portrait: false };
+  const noop = () => {};
+  const onSandbox = (sandbox) => {
+    sandbox.matchMedia = (q) => ({ get matches() { return flag.portrait && /orientation: portrait/.test(q); }, media: q, onchange: null,
+      addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop });
+  };
+  const g = await createGame({ storage: { trackId: "bahrain" }, onSandbox });
+  try {
+    const h = await pitGarage(g);
+    assert.equal(h.garage.hidden, false, "precondition: the garage is up");
+    flag.portrait = true;                           // the phone turns upright under WORK ON CAR
+    h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE (closePitWork)
+    await h.tick();
+    assert.equal(h.garage.hidden, true, "the garage closed");
+    assert.equal(g.G.paused, true, "the race must not run on behind the rotate blocker");
+  } finally { g.close(); }
+});

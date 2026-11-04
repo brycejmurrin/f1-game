@@ -9154,6 +9154,7 @@ function closePitWork() {
   if (!netPlay.active()) holdRaceWake();   // a hidden tab under the garage may have released the screen lock; RETURN TO RACE holds it again
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (wxArc.viewRainfall() > 0.01) GameAudio.startRain(); }
+  syncRotateBlocker(false);   // setPaused's exit re-check: a pad/keyboard DONE while the phone is upright must not race on behind the rotate blocker (#4551 B7 row 9)
 }
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
