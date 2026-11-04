@@ -850,9 +850,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* in-race chrome, but still a thumb target — on the ladder like the rest.
      --tap-hud (css/hud.css): it follows HUD SIZE with the timing tower beside
      it, and never shrinks below --tap. */
-  width: var(--tap-hud); height: var(--tap-btn, var(--tap-hud));
+  width: var(--tap-hud); height: var(--tap-hud);
   font-size: max(var(--touch-label-floor), calc(100% * var(--hud-btn-z)));
-  border-radius: var(--r-md);
+  border-radius: 50%; /* a true circle, same height as the CAM button beside it */
   padding: 0;
   /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
      --plate is a pale wash, and these two sit on the sky, so they vanished.
@@ -864,9 +864,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 /* A thumb finds a circle faster than the small rounded square. The hit
    box stays --tap-hud (width and height are pinned). A fine pointer keeps
    the square so PAUSE still matches the CAM pill beside it. */
-@media (pointer: coarse) {
-  #pausebtn { border-radius: 50%; }
-}
 /* ABOVE 150 % BUTTON SIZE, PAUSE keeps growing with the docks (up to 200 %) — DOWN only, into its own column:
    its width and CAM stay on the --tap-hud band (css/hud.css, capped at 150 %), so the top row never gets wider
    (round 3 grew both and CAM landed on the tower's BEST box at 640x360, hud-mock 2026-10-14). The right column,

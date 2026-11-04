@@ -115,7 +115,8 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   // eye stays on --tap itself.
   // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
   // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
-  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn grows DOWN past 150 %, floored at the band");
+  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-hud)", "#pausebtn is a true circle: same height as CAM (#4526)");
+  assert.equal(decl(ov, "#pausebtn", "border-radius"), "50%", "#pausebtn is round");
   assert.equal(decl(ov, "#pausebtn", "width"), "var(--tap-hud)", "#pausebtn never widens: the top row keeps its width (640x360 BEST × CAM)");
   assert.equal(decl(ov, "#btn-cam", "height"), "var(--tap-hud)", "#btn-cam keeps the --tap-hud band height");
   assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--tap-hud) + 4px + var(--sar))", "CAM stays where it was: PAUSE does not widen");
