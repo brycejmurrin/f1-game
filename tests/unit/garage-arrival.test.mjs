@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
 import { fnSource } from '../helpers/fn-source.mjs';
+import { gameSource } from '../helpers/game-source.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
@@ -2035,7 +2036,7 @@ test('PIT OUT: start({out}) plays the drive-out at PIT OUT\'s own (quicker) base
   arrival.start(); assert.equal(arrival.state.direction, 'in'); assert.equal($('cs-arrival-skip').textContent, 'SKIP TO WORK');
 });
 test('PIT OUT wiring: DONE/BACK in a pit stop route through startPitOut, which fires done once', () => {
-  const g = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const g = gameSource();
   assert.equal((g.match(/setupCam\.startPitOut\(closePitWork\)/g) || []).length, 2, 'cs-done and garageBack');
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   assert.match(cam, /firePitOut\(\); return false;/, 'tuner off / reduced motion / automation hand back at once');
