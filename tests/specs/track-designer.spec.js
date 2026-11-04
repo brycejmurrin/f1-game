@@ -216,6 +216,22 @@ async function bootClean(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
   await page.evaluate(() => window.__apex.headless(true));
+  await settleServiceWorker(page);
+}
+
+/** A cold worker claims the page mid-test (controllerchange) and steals focus / stalls the file chooser (#4728).
+ *  Settle that first; a blocked or absent worker resolves at once, a slow install is bounded, never widened. */
+async function settleServiceWorker(page) {
+  await page.evaluate(async () => {
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    const t = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (sw.controller) return;
+    const reg = await Promise.race([sw.ready, t(3000)]);
+    if (!reg || sw.controller) return;
+    await Promise.race([new Promise((r) => sw.addEventListener("controllerchange", r, { once: true })), t(20000)]);
+  });
+  await page.waitForTimeout(250);
 }
 
 async function openDesigner(page) {
