@@ -13,6 +13,7 @@
  * world coordinates:
  *
  *   { at: "start"|"pole"|"grid"|"corner", n, off, x, y }   along the lap
+ *   { at: "pitexit", off, x, y }                           the pit-exit line (track.pit.sOut)
  *   { at: "centre", bear, distR, yR }                      the whole circuit
  *   { at: "landmark", rank, bear, distK, yK }              this circuit's own
  *
@@ -422,6 +423,8 @@ const FlybySeq = (function () {
       case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
+      // The PIT EXIT line (track.pit.sOut); a circuit with no pit complex falls back to the line.
+      case "pitexit": return wrapS(track, (track.pit && isFinite(track.pit.sOut) ? track.pit.sOut : 0) + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
     }
   }
@@ -802,16 +805,27 @@ const FlybySeq = (function () {
        grid        up the aisle between the columns, ending among the front
                    rows with the start gantry ahead */
   const DEFAULT = [
+    // ---- the car leaves the pits: RACE START, garage -> track (#4745 slice C) ---
+    // The bay show ends at the garage door; this is the lane beyond it. Low behind
+    // the pit-exit line, the player's car rolls out of the lane (roll: "pitexit",
+    // rollHero) and the camera settles on the exit as it goes. Broadcast-only:
+    // the hero is the menu model, restored on the next shot, and no physics runs.
+    {
+      id: "pit-exit", dur: 0.07, ease: "out", roll: "pitexit",
+      eye: [{ at: "pitexit", off: -34, x: 0, y: 1.5 }, { at: "pitexit", off: -20, x: 0, y: 1.3 }],
+      look: [{ at: "pitexit", off: 6, x: 0, y: 0.8 }, { at: "pitexit", off: 26, x: 0, y: 0.8 }],
+      fov: [44, 38],
+    },
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.09, ease: "inOut", sway: 0.35,
+      id: "wide", dur: 0.07, ease: "inOut", sway: 0.35,
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.08, ease: "inOut", sway: 0.25,
+      id: "wide2", dur: 0.06, ease: "inOut", sway: 0.25,
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -819,14 +833,14 @@ const FlybySeq = (function () {
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.09, ease: "inOut",
+      id: "landmark1", dur: 0.08, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
             { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
       look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
       fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.08, ease: "inOut",
+      id: "landmark2", dur: 0.07, ease: "inOut",
       eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
             { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
@@ -866,7 +880,7 @@ const FlybySeq = (function () {
     // The road draws without slope-scaled depth bias (PR #248), so the grid can
     // be filmed from ahead of pole.
     {
-      id: "grid-walk", dur: 0.08, ease: "inOut",
+      id: "grid-walk", dur: 0.07, ease: "inOut",
       // THE GRID WALK: head height, a slow dolly up the aisle between the
       // staggered rows (the pole anchor is the centreline) — the TV walk before
       // the formation lap. Numbered slots: a grid too small to fill them (time
@@ -966,6 +980,23 @@ const FlybySeq = (function () {
     _hero.px = _hero.rPrevPx = _heroSmp.p[0] + _heroSmp.r[0] * x;
     _hero.pz = _hero.rPrevPz = _heroSmp.p[2] + _heroSmp.r[2] * x;
     _hero.speed = v > 0 ? v : apexV;
+    return _hero;
+  }
+
+  /** THE PIT-EXIT ROLL: the player's menu car drives the exit road from 30 m
+   *  before the exit line to 28 m past it at the pit-lane limit, along the lane
+   *  centre. Broadcast-only, like driveHero; restoreHero() puts it back. */
+  function rollHero(track, t, cars) {
+    if (cars !== undefined) setHeroCars(cars);
+    if (!_hero || !track || !track.pit || !isFinite(track.pit.sOut) || typeof TrackLine === "undefined" || typeof Tracks === "undefined") return null;
+    const s = wrapS(track, track.pit.sOut - 30 + 58 * Math.max(0, Math.min(1, t)));
+    const lane = Tracks.pitLaneAt ? Tracks.pitLaneAt(track, s) : null;
+    const x = lane && isFinite(lane.centre) ? lane.centre : 0;
+    Tracks.sample(track, s, _heroSmp);
+    _hero.s = _hero.rPrevS = s; _hero.x = _hero.rPrevX = _hero.xVis = x;
+    _hero.px = _hero.rPrevPx = _heroSmp.p[0] + _heroSmp.r[0] * x;
+    _hero.pz = _hero.rPrevPz = _heroSmp.p[2] + _heroSmp.r[2] * x;
+    _hero.speed = 22;
     return _hero;
   }
 
@@ -1090,6 +1121,7 @@ const FlybySeq = (function () {
     const k = shotCorner(shot);
     _out.corner = _airCorner = typeof k === "number" && k > 0 ? k : 0;
     if (_out.corner) driveHero(track, cornerS(track, _out.corner), t, dur / total * _flyS);
+    else if (shot.roll === "pitexit" && track.pit) rollHero(track, t);
     else restoreHero();
     const reduced = reducedMotion();
     const sway = swayAt(shot, t, reduced);
@@ -2030,7 +2062,7 @@ const FlybySeq = (function () {
     landmarks, bounds, lmBase, landmarkFallback, planShot,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn,
     poseFromWorld, shotFromView, select, setSession, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
-    boundaries, presentation, swayAt, setHeroCars, driveHero, gridProgress,
+    boundaries, presentation, swayAt, setHeroCars, driveHero, rollHero, gridProgress,
     DEFAULT, GRID_SHOTS,
     FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };

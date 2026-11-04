@@ -104,4 +104,15 @@ Options for the missing beat (design-heavy; framing and length are Bryce's call,
 3. **Continuous run**: stream the track scene into the bay show so the car drives door → lane → box in one take.
    Highest cost (scene must be built before the show; collides with the build-while-animating design).
 
-Status: awaiting Bryce's pick (`needs-decision`); nothing shipped for this moment yet. Not run: browser evidence.
+Decision: Bryce picked **option 2** (`decision: 2`, PR #4908, 2026-11-04 ~22:01Z).
+
+Shipped (option 2):
+- `FlybySeq.DEFAULT` opens on a new `pit-exit` shot (7 % of the flyby, ~2 s at the usual length; the other opening
+  shots gave up 7 % between them). New anchor `{ at: "pitexit", off, x, y }` = `track.pit.sOut` (the line when a
+  circuit has no pit complex). Registered in `AT_KINDS` (flyby-seq, flyby-panel, bake-flyby) and the panel's POSE_FIELDS.
+- `rollHero` (shot flag `roll: "pitexit"`) drives the player's MENU model along the pit-lane centre from 30 m before
+  the exit line to 28 m past it at 22 m/s; the next shot's `restoreHero()` puts it back on its grid box. Broadcast-only:
+  the menu field is scenery, no player physics runs and no control exists (`docs/PHYSICS.md`).
+- The flyby is skipped with the existing tap/skip; `shotAt(0)` is now `pit-exit` (test updated).
+- Not run: browser evidence (camera framing is an eyes-on call for Bryce; the eye is 34→20 m behind the exit line at
+  1.5→1.3 m, fov 44→38, look 6→26 m past it). Tune the numbers in the shot, not the code.
