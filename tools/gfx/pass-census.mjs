@@ -165,6 +165,15 @@ async function main() {
       for (let i = 0; i < 5; i++) await new Promise(r => requestAnimationFrame(r));
     }, { park: PARK, tunes: TUNES });
     await page.evaluate(installWrap);
+    // Software WebGPU compiles pipelines lazily, so frames can lag the rAF count far behind. Measure only once
+    // three itself reports frames advancing, else the window records nothing.
+    if (WEBGPU) {
+      const advanced = await page.waitForFunction(() => {
+        const w = window.__passWait || (window.__passWait = { f0: window.renderer.info.render.frame });
+        return window.renderer.info.render.frame >= w.f0 + 5;
+      }, null, { timeout: WAIT_MS * 4, polling: 250 }).then(() => true, () => false);
+      if (!advanced) console.error("webgpu: renderer.info.render.frame did not advance 5 frames within " + (WAIT_MS * 4 / 1000) + "s");
+    }
     const rows = await page.evaluate(async ({ n, by }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       const r = window.renderer, pc = r.__passCensus;
@@ -205,7 +214,11 @@ async function main() {
     console.log("= pass-census " + JSON.stringify(summary));
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, byObject: byObj, errors }, null, 2)); }
     if (WEBGPU && backend.api !== "webgpu") { console.error("--webgpu asked for the WebGPU backend but three fell back to " + backend.api); process.exitCode = 1; }
-    if (!table.length) { console.error("no render() calls recorded"); process.exitCode = 1; }
+    if (!table.length) {
+      const diag = await page.evaluate(() => { const r = window.renderer; return { frame: r && r.info.render.frame, calls: r && r.info.render.calls, state: (() => { try { return window.__apex.info(); } catch (e) { return String(e); } })(), wrapped: !!(r && r.__passCensus), recorded: r && r.__passCensus ? r.__passCensus.rows.length : null, rafHz: null }; }).catch((e) => ({ error: String(e) }));
+      console.error("no render() calls recorded; diag " + JSON.stringify(diag).slice(0, 1500));
+      process.exitCode = 1;
+    }
   } finally {
     await browser.close().catch(() => {});
     await srv.close?.();
