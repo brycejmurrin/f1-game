@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam });
+    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, raceEndHome });
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -8996,6 +8996,9 @@ let pitWorkSpec = null;
 function carSpecKey() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   try { return JSON.stringify([getTeamParts(team.id), SetupTune.get(team.id)]); } catch (e) { return null; }
+}
+function raceEndHome(done) {   // RACE END (#4745): the car comes home between the podium and the results; SKIP / tap finishes it
+  return setupCam.startRaceEnd(() => { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; garageReturn = "select"; done(); }, () => { garageReturn = "results"; openSetup(); });
 }
 function openPitWork() {
   if (!pits || !pits.canWork(player)) return;
