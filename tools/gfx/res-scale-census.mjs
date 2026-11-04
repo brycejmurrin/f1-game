@@ -40,6 +40,7 @@ export function parseArgs(argv) {
 /** The settle gate (#4783): every step reaches its size within 2 presented frames and the texture count returns to the start. */
 export function verdict(sm) {
   const fails = [];
+  if (sm.aborted) fails.push("sweep aborted (page navigated/crashed mid-step)");
   if (sm.warmTimedOut || sm.framesOk === false) fails.push("never presenting (warm " + (sm.warmTimedOut ? "timed out" : "done") + ", frames " + (sm.framesOk === false ? "stalled" : "ok") + ")");
   if (!sm.fixedTargets && sm.unsettledSteps) fails.push(`${sm.unsettledSteps} step(s) never reached the scaled post-target size`);
   if (!sm.fixedTargets && sm.maxSettleFrames > 2) fails.push(`settle took ${sm.maxSettleFrames} presented frames (> 2)`);
@@ -68,6 +69,11 @@ async function main() {
     await ctx.route("https://api.openf1.org/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
     const page = await ctx.newPage();
     page.on("pageerror", (e) => errors.push(String(e).slice(0, 300)));
+    // A step that reloads or crashes the page is a finding (#4783), not noise: say when and what the page logged.
+    let stepNow = "boot";
+    page.on("framenavigated", (f) => { if (f === page.mainFrame()) console.error(`res-scale-census: main frame navigated during ${stepNow}: ${f.url()}`); });
+    page.on("crash", () => console.error(`res-scale-census: page crashed during ${stepNow}`));
+    page.on("console", (m) => { if (stepNow !== "boot" && /error|warn|lost|reload|sentinel|strike/i.test(m.type() + " " + m.text())) console.error(`  [page ${m.type()} @${stepNow}] ${m.text().slice(0, 300)}`); });
     await page.goto(srv.url + (srv.url.includes("?") ? "&" : "?") + "three-devtools=1", { waitUntil: "load" });
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
@@ -110,7 +116,9 @@ async function main() {
     base.scaleBase = base.fixed ? base.targets : [base.canvas ? base.canvas[0] : base.targets[0], base.canvas ? base.canvas[1] : base.targets[1]];
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
     let prev = base;
+    try {
     for (const s of o.scales) {
+      stepNow = "scale " + s;
       const ms = await page.evaluate((v) => { const t0 = performance.now(); window.__apex.renderScale(v); return +(performance.now() - t0).toFixed(2); }, s);
       // Settle in presented frames and count how many the post target needs to follow (issue gate: <= 2).
       const want = [Math.max(1, Math.round(prev.scaleBase[0] * s)), Math.max(1, Math.round(prev.scaleBase[1] * s))];
@@ -124,11 +132,12 @@ async function main() {
       rows.push({ step: "scale", scale: s, callMs: ms, ...r, want, settledAfter, dResizes: r.rtResizes - prev.rtResizes });
       prev = r;
     }
-    const total = prev.rtResizes - base.rtResizes;
+    } catch (e) { stepNow = "aborted"; rows.push({ step: "aborted", error: String(e).slice(0, 300), lastRow: rows[rows.length - 1] }); console.error("res-scale-census aborted at " + (rows[rows.length - 2] ? "scale " + rows[rows.length - 2].scale : "start") + ": " + e); process.exitCode = 1; }
+    const total = (prev.rtResizes || 0) - (base.rtResizes || 0);
     const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
       maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length,
       maxSettleFrames: Math.max(0, ...rows.map((r) => r.settledAfter || 0)), unsettledSteps: rows.filter((r) => r.step === "scale" && r.settledAfter == null).length,
-      warmTimedOut, framesOk, texturesStart: rows[0].textures, texturesEnd: prev.textures, fixedTargets: base.fixed };
+      warmTimedOut, framesOk, texturesStart: rows[0].textures, texturesEnd: prev.textures, aborted: rows.some((r) => r.step === "aborted"), fixedTargets: base.fixed };
     summary.verdict = verdict(summary);
     for (const r of rows) console.log(JSON.stringify(r));
     console.log(JSON.stringify({ summary }));
