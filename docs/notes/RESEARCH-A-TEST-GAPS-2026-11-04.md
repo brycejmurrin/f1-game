@@ -55,22 +55,33 @@ pin-only (636 asserts); `gfx-backend-canary` alone has 715 (#1682 owns this). 69
 across 22 specs (ratchet 75): ui-button-touch 10, menu-survey 10, gamepad 6, season 6.
 
 **Node function coverage (what the unit groups execute).** Merged V8 coverage over `tooling-fast` + `game-vm` +
-`state-unit` (≈1 100 processes; partial at the time of writing, the final merge is attached to the PR). Browser
-specs cover more, so a zero here is "no node test reaches it", which is the cheap-to-fix kind. Largest never-run
-functions, by bytes:
+`state-unit` (3 374 processes, 609 `js/` files seen; merge script `covmerge.mjs` in the PR log, output
+`cov-final.json`). Browser specs cover more, so a zero here is "no node test reaches it", which is the
+cheap-to-fix kind. `js/game.js` reaches 68 % (633/937 functions; `redFlagRestart` IS run by the red-flag vm
+tests) and `js/career/career.js` 79 % (423/533), so the headline gaps are narrower than the hunters' greps
+suggested. Largest never-run functions, by bytes, excluding circuit scenery (browser foundation specs own those):
 
 | File | fn hit | Never executed by a node test (line, bytes) |
 |---|---|---|
-| `js/game.js` | 481/879 (55 %) | `redFlagRestart@1619` (6.4 k), `raceIntro@4018` (5.1 k), `scheduleFlybyTrack@2223` (4.1 k) |
-| `js/career/career.js` | 34/210 (16 %) | `rollover@1720` (9.2 k), `settleRound@1251` (5.1 k), `start@406` (4.1 k) |
-| `js/net/lobby.js` | 28/130 (22 %) | `onConnected@560` (13 k), `codeHost@1692` (11.7 k), `newTransport@227` (6.6 k) |
-| `js/agent/apex.js` | 59/388 (15 %) | `diag@2384` (7 k), `reset@2071` (5.9 k) — the agent surface itself |
-| `js/garage/setup-sheet.js` | 3/42 (7 %) | `buildLiveryCreator@1134` (27 k), `buildSetup@575` (15 k) |
-| `js/garage/scene.js` | 43/127 (34 %) | `buildProps@200` (10 k), `buildShell@38` (6.5 k) |
-| `js/ui/select-screen.js` | 21/72 (29 %) | `buildSelect@840` (11 k), `openTrackDetail@1417` (10 k) |
-| `js/perf/metrics-overlay.js` | 39/150 (26 %) | `snapshot@190` (10.8 k), `paintOverlay@563` (7 k) |
-| `js/track/core/mesh.js` | 76/110 (69 %) | `buildTerrainSteps@919` (14 k), `buildRoad@685` (13 k), `buildKerbs@345` (9.7 k) |
-| `js/render/three/tlx.js` | 12/24 | `create@205` (432 k: the whole backend is browser-only, as designed) |
+| `js/net/lobby.js` | 101/292 (35 %) | `onConnected@560` (13 k), `codeHost@1692` (11.7 k), `newTransport@227` (6.6 k) |
+| `js/net/netplay.js` | 50/99 (51 %) | `create@163` (71 k, the whole module body), `clampWire@62` (1.3 k, row 11) |
+| `js/net/transport.js` | 18/31 (58 %) | `rtc@151` (25.7 k, the WebRTC path; `loopback@43` is what tests use) |
+| `js/input/phone-pad-page.js` | 2/6 (33 %) | `pad@78` (32.7 k, the controller page) |
+| `js/audio/engine.js` | 181/540 (34 %) | `radioMediaClip@1586` (7.3 k), `radioVoice@1487` (4.7 k), `playIndex@803` (4.7 k) |
+| `js/input/input.js` | 240/509 (47 %) | `onKey@991` (9.3 k), `reset@2396` (2.3 k: the blur/hidden release path, row 1), `debugStateNow@2492` |
+| `js/ui/settings-export.js` | 52/151 (34 %) | `create@978` (20.9 k, the LOAD/SAVE UI), `garageValue@688` (4.1 k), `applySettings@561` (2.6 k) |
+| `js/ui/results-sheet.js` | 86/130 (66 %) | `buildResults@250` (21 k), `buildTTResults@570` (12 k), `buildStandings@794` (4.2 k) |
+| `js/career/career-ui.js` | 94/201 (47 %) | `buildSetupPanesNow@801` (8.9 k), `buildOffers@1402` (7 k) |
+| `js/career/career.js` | 423/533 (79 %) | `rollover@1720` (9.2 k), `acceptOffer@1659` (2.2 k), `offerPreview@1635` (2.1 k) |
+| `js/game.js` | 633/937 (68 %) | `raceIntroFromSheet@3984` (2.6 k), `introWarm@3919` (2 k), `introPrepare@3806` (1.6 k) |
+| `js/perf/metrics-overlay.js` | 67/163 (41 %) | `snapshot@190` (10.8 k), `paintOverlay@563` (7.1 k) |
+| `js/track/core/mesh.js` | 77/110 (70 %) | `buildTerrainSteps@919` (14 k), `buildRoad@685` (13 k), `buildKerbs@345` (9.7 k) |
+| `js/agent/apex.js` | 194/458 (42 %) | `diag@2385` (7 k), `reset@2071` (5.9 k), `obs@1722` (4.6 k) — the agent surface itself |
+| `js/render/three/tlx.js` | 20/35 | `create@205` (432 k: the whole backend is browser-only, as designed) |
+
+The season rollover (`career.js:1720`), the lobby's connected-peer path and the real WebRTC transport are the
+three biggest behaviours no node test executes; each has a browser spec in `test:modes` / `test:net`, which is
+why they only run on a routed PR.
 
 Hunter coverage gaps with no test reference at all (grep of `tests/`): `js/race/jump-start-penalty.js:64`
 `reactWindowOpen` and a rolling start against `tickReaction`; `js/race/reliability.js:117` `Reliability.plan`;
