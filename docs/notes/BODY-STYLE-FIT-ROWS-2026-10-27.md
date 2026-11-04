@@ -134,3 +134,19 @@ elsewhere                     88 WORSE / 51 NEW: OPEN engineCover (3735 -> 4022 
 Reverted. A uniform lift fixes the coplanar band but moves every decal rim off the weld distance the OPEN metric reads
 (and the z 0.38 strip needs the first segment on a pod station, which changes the board's UV). The fix needs the board,
 band, ERS strips and livery quads re-meshed together, not a vertex offset. #3959 stays open; this PR is `Refs`.
+
+## Row 3 landed: one flank re-mesh, `flankTris` (2026-11-04)
+Cause, in full: (1) podFlank's 2-4 mm x slide lies IN a shallow facet; (2) the loft draws each station quad (60 cm
+between z 0.22 and -0.38 on the sparse sculpt) as two planar triangles split on q0-q2, and the reversed LEFT ring runs
+that diagonal the other way (why the rows were nearly all x < 0), while the decal quads split on their own diagonal, so a
+decal chord crossed the skin's crease at 0 mm. A fourth try (start the band at the 0.22 cut) moved the fight to
+engineCover~livery (41 NEW / 27 WORSE). Then:
+- `bodyAnchors().flankTris(z0, z1, f0, f1, lift, side)` (`js/car/car-body-geom.js`) cuts each decal cell on the skin's
+  facet edges AND its per-side diagonal and lifts each vertex off the skin triangles under it (mitred on a crease).
+  car3d `addPodFlankSpan` and car-mesh `podDecal` both use it, so the layers stay parallel.
+- Layers, all under the 3 mm ATTACH seal so rims stay SEALED: flank spans 1.6 mm, sidepod accent 2.4 mm (on wedge
+  and anteater it overlaps the board's top), livery 4 mm.
+Measured, six-body `--baseline` (written on 24c8812e): PASS, 0 NEW / 0 WORSE, 3842 -> 3732 pre-existing fails, no
+ZFIGHT engineCover~sidepods row left on any of the 66 body builds; factory builds are inside the same baseline.
+Steps that were dropped: a 2.0 mm board + 2.4 mm accent (alpine wedge engineCover~livery WORSE 13 -> 23 cm2, mitre),
+and a 2.6-3.0 mm accent (OPEN livery NEW: a mitred rim at 3.03 mm).
