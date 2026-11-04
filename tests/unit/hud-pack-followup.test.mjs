@@ -53,9 +53,10 @@ const fullFit = (t) => { t.HL.fit(); t.HL.clearReadouts(); };
 test("an unchanged full fit runs clearReadouts at most twice once rAF and timers flush", () => {
   const t = load();
   fullFit(t);
-  assert.equal(t.reads(), 2, "fit's packPhone + fitHud's tail");
+  // Coalesce (#4636): fit's packPhone only notes; fitHud's tail flushes one body.
+  assert.equal(t.reads(), 1, "fitHud's tail flushes the fit coalesce");
   t.flushFrame(); t.flushFrame(); t.flushTimers();
-  assert.ok(t.reads() <= 2, `follow-ups re-ran clearReadouts with nothing changed (${t.reads()} passes, was 4)`);
+  assert.ok(t.reads() <= 1, `follow-ups re-ran clearReadouts with nothing changed (${t.reads()} passes, was 4)`);
 });
 
 test("a readout that unhides between the fit and the follow-up still gets the re-pack", () => {
@@ -63,24 +64,25 @@ test("a readout that unhides between the fit and the follow-up still gets the re
   fullFit(t);
   t.strat.hidden = false;   // HudStrategy paints on the first race tick, after fitHud
   t.flushFrame(); t.flushFrame();
-  assert.equal(t.reads(), 3, "the double-rAF follow-up packs the unhidden STRATEGY");
+  assert.equal(t.reads(), 2, "the double-rAF follow-up packs the unhidden STRATEGY");
   t.flushTimers();
-  assert.equal(t.reads(), 3, "the 120 ms pack is redundant once the rAF pack saw the final state");
+  assert.equal(t.reads(), 2, "the 120 ms pack is redundant once the rAF pack saw the final state");
 });
 
 test("text that grows after the rAF follow-up still gets the 120 ms pack", () => {
   const t = load();
   fullFit(t);
   t.flushFrame(); t.flushFrame();
-  assert.equal(t.reads(), 2);
+  assert.equal(t.reads(), 1);
   t.rel.textContent = "P3 +0.4 / P4 -1.2 / P5 -2.9";   // RELATIVE gains rows on the 10 Hz tick
   t.flushTimers();
-  assert.equal(t.reads(), 3, "the 120 ms follow-up re-packs the grown RELATIVE");
+  assert.equal(t.reads(), 2, "the 120 ms follow-up re-packs the grown RELATIVE");
 });
 
 test("a fit with no clearReadouts after it keeps the double-rAF pack", () => {
   const t = load();
   t.HL.fit();   // MOVE & SIZE path: no fitHud tail
   t.flushFrame(); t.flushFrame(); t.flushTimers();
-  assert.equal(t.reads(), 2, "fit + the rAF follow-up; the 120 ms pack sees nothing new");
+  // Coalesce defers fit's clear; rAF flushes once; 120 ms sees nothing new.
+  assert.equal(t.reads(), 1, "rAF follow-up flushes the fit coalesce; 120 ms skips");
 });
