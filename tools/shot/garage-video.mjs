@@ -231,17 +231,21 @@ async function applyTuner(page, { style, angle, tune }) {
 }
 
 async function playAndSample(page, dir, expectedSec, settleMs) {
-  const btn = dir === "out" ? "ga-preview-out" : dir === "home" ? "ga-preview-home" : "ga-preview-in";
-  await page.evaluate((id) => {
+  // The tuner edits and previews one MOMENT at a time: pick its tab, then PREVIEW.
+  const moment = dir === "out" ? "start" : dir === "home" ? "home" : "pitIn";
+  await page.evaluate((m) => {
+    const tab = document.getElementById("ga-moment-" + m);
+    if (!tab) throw new Error("missing #ga-moment-" + m);
+    tab.click();
     const tools = document.querySelector("#garrival .ew-tools");
     if (tools && !tools.open) {
       const sum = tools.querySelector(":scope > summary");
       if (sum) sum.click();
     }
-    const el = document.getElementById(id);
-    if (!el) throw new Error("missing #" + id);
+    const el = document.getElementById("ga-preview");
+    if (!el) throw new Error("missing #ga-preview");
     el.click();
-  }, btn);
+  }, moment);
   await sleep(settleMs);
   const t0 = Date.now();
   const samples = [];
@@ -258,7 +262,7 @@ async function playAndSample(page, dir, expectedSec, settleMs) {
       try {
         const raw = localStorage.getItem("apex26.garageArrival");
         const saved = raw ? JSON.parse(raw) : null;
-        const cfg = GarageArrival.settings(saved);
+        const cfg = GarageArrival.settingsFor(saved, GarageArrival.momentOf(d === "out" ? "start" : d));
         const speed = Number.isFinite(cfg.speed) && cfg.speed > 0 ? cfg.speed : 1;
         const t = Math.min(GarageArrival.duration(cfg, d), elapsedSec * speed);
         const p = GarageArrival.poseFor(d)(t, cfg, false);

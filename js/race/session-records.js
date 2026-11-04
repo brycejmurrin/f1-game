@@ -25,7 +25,8 @@ var SessionRecords = (function () {
         car: c && [c.team.id, c.tierV, c.mods, c.aeroLoad, c.ersDeploy, c.ersRegen, c.tread, c.brakeBias, c.rollBalance],
         tune: PHYS.map(k => G[k]), controls: G.recordControls(), weather: G.weatherArc ? G.weatherArc.from : G.raceWeather,
         weatherPlan: G.weatherArc ? [G.weatherArc.from, G.weatherArc.to, G.weatherArc.dur] : null,
-        tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay };
+        tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay,
+        ...(G.raceDamage ? { damage: true } : null) };   // only when ON: every existing ghost key stays valid (#3971)
     }
     function current() { return Ghost.contextKey(config()); }
     // Only the hidden GP wear preference differed in these historical TT keys.

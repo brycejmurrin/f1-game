@@ -1353,6 +1353,7 @@ const SceneryNature = (function () {
     };
     // Low clipped hedge / continuous treeline.
     const HEDGE_W = 2.4;
+    const hedgeSlabs = new Map();   // 3 m cells of placed hedge slab anchors [x, z, y]
     const hedge = (s0, s1, side, gap, h, col) => {
       // A hedge is a solid 2.4 m-wide body, but it is not a barrier — it must
       // not move the driving limit. Index the geometry only. This was the
@@ -1384,6 +1385,19 @@ const SceneryNature = (function () {
           ctx.noteSuppressed("hedge", `hedge SUPPRESSED at k=${k} side=${side}: gap=${gap}`);
           return;
         }
+        // A slab whose footprint sits on another hedge slab's (rows of different calls crossing on
+        // a bend, a run doubling back) is the same hedge twice: its top shares the other's plane
+        // (flat coplanar-audit). Skip it — nothing visible is lost.
+        const cx = Math.floor(p.c[0] / 3), cz = Math.floor(p.c[2] / 3);
+        let dup = false;
+        for (let ix = cx - 1; ix <= cx + 1 && !dup; ix++) for (let iz = cz - 1; iz <= cz + 1 && !dup; iz++) {
+          const q = hedgeSlabs.get(ix + "|" + iz);
+          if (q) for (const o of q) if (Math.hypot(o[0] - p.c[0], o[1] - p.c[2]) < 3.2 && Math.abs(o[2] - p.c[1]) < 1.5) { dup = true; break; }
+        }
+        if (dup) return;
+        const hk = cx + "|" + cz;
+        if (!hedgeSlabs.has(hk)) hedgeSlabs.set(hk, []);
+        hedgeSlabs.get(hk).push([p.c[0], p.c[2], p.c[1]]);
         const base = col || [0.18, 0.36, 0.16], hb = [p.r, p.u, p.t];
         const hj = h * (0.9 + hash(k * 5.1 + side) * 0.2);
         const hl = (hn++ & 1) ? TrackGeom.MIN_SEP : 0;   // alternate slabs stand MIN_SEP aside (coplanar-audit)

@@ -5941,6 +5941,9 @@
       "enforceNearPlane": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
+      "forMoment": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
       "inJamb": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
@@ -7776,7 +7779,8 @@
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
-        "tests/unit/weather-blend.test.mjs"
+        "tests/unit/weather-blend.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "tickBody": [
         "tests/unit/audio-tune.test.mjs",
@@ -7929,8 +7933,7 @@
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/trace-census.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs",
-        "tests/unit/vm-filename-lint.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/vm-filename-lint.test.mjs"
       ]
     },
     "js/garage/arrival.js": {
@@ -7999,6 +8002,12 @@
       "rigU": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "saved": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "select": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -8006,6 +8015,9 @@
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
+      ],
+      "settingsFor": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "shotsFor": [
         "tests/unit/garage-arrival.test.mjs"
@@ -8640,6 +8652,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-scene-fallbacks.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
@@ -15265,7 +15278,8 @@
     },
     "js/render/shared/frustum.js": {
       "aabbDist2": [
-        "tests/unit/lamp-chunks.test.mjs"
+        "tests/unit/lamp-chunks.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "aabbInFrustum": [
         "tests/unit/frustum-buckets.test.mjs",
@@ -16482,20 +16496,16 @@
     },
     "js/render/webgpu/wgx-chunked.js": {
       "createChunkedMesh": [
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/rendergeom-staging.test.mjs",
         "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "drawChunked": [
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "freeChunkedMesh": [
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/rendergeom-staging.test.mjs"
       ],
       "init": [
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/rendergeom-staging.test.mjs",
         "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
@@ -16559,6 +16569,9 @@
       ]
     },
     "js/render/webgpu/wgx.js": {
+      "_allocFail": [
+        "tests/unit/webgpu-lifecycle.test.mjs"
+      ],
       "_capEncode": [
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],

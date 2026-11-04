@@ -881,7 +881,7 @@ const NetLobby = (function () {
         // and the guest's own car could DNF under a level nobody picked.
         tyres: G.raceTyreWear, reliab: G.raceReliability,
         // DIRTY AIR and AI PACE change every AI car's grip and vmax: same argument.
-        dirtyAir: G.raceDirtyAir, aiPace: G.aiPace,
+        dirtyAir: G.raceDirtyAir, aiPace: G.aiPace, damage: !!G.raceDamage,   // DAMAGE: HANDLING is a race rule too (#3971)
         // The SIM seed and race counter every reproducible draw hashes on:
         // reliability DNFs (armReliability), the weather arc, the AI
         // restart/skill rolls and the AI qualifying times that set the grid.
@@ -977,7 +977,7 @@ const NetLobby = (function () {
       if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
       if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
       if (own(next, "dirtyAir")) roomOnly("dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
-      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; });
+      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; }); if (own(next, "damage")) roomOnly("damageHandling", () => { G.raceDamage = next.damage; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();
