@@ -252,6 +252,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
