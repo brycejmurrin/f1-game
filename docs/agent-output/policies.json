@@ -61,6 +61,11 @@
       "presentation": "native",
       "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes."
     },
+    "tools/agent/send.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The vendor CLI's own stdout (the session reply) and exit status; stderr tail on failure. No inference of delivery or ACK beyond what the CLI returns."
+    },
     "tools/archive/ci/measure-guard-commit.mjs": {
       "action": "keep-native",
       "presentation": "native",
