@@ -37,7 +37,7 @@ const WheelState = (function () {
   function assistLevel() {
     if (!_levelResolved) {
       _levelResolved = true;
-      try { const r = typeof localStorage !== "undefined" && localStorage.getItem("apex26.wheelAssist"); if (r === "medium" || r === "full") _level = r; } catch (_) { /* blocked storage */ }
+      try { const r = localStorage.getItem("apex26.wheelAssist"); if (r === "medium" || r === "full") _level = r; } catch (_) { /* blocked storage */ }
     }
     return _level;
   }
@@ -45,7 +45,7 @@ const WheelState = (function () {
   function setAssistLevel(v, persist = true) {
     _levelResolved = true;
     _level = (v === "medium" || v === "full") ? v : "off";
-    if (persist) { try { if (typeof localStorage !== "undefined") localStorage.setItem("apex26.wheelAssist", _level); } catch (_) { /* blocked storage */ } }
+    if (persist) { try { localStorage.setItem("apex26.wheelAssist", _level); } catch (_) { /* blocked storage */ } }
     return _level;
   }
   /** The settings row's one value: "off" (classic model) | "on" (wheel state) | "medium" | "full" (wheel state + ABS/TC). */
@@ -100,11 +100,9 @@ const WheelState = (function () {
     if (_resolved) return _enabled;
     _resolved = true;
     try {
-      if (typeof localStorage !== "undefined") {
-        const raw = localStorage.getItem("apex26.wheelState");
-        if (raw === "1" || raw === "on" || raw === "true") _enabled = true;
-        else if (raw === "0" || raw === "off" || raw === "false") _enabled = false;
-      }
+      const raw = localStorage.getItem("apex26.wheelState");
+      if (raw === "1" || raw === "on" || raw === "true") _enabled = true;
+      else if (raw === "0" || raw === "off" || raw === "false") _enabled = false;
     } catch (_) { /* private mode: stay at default OFF */ }
     return _enabled;
   }
@@ -117,13 +115,7 @@ const WheelState = (function () {
     _resolved = true;
     _enabled = !!v;
     if (!persist) return;
-    // Writer for apex26.wheelState (store-registry ratchet). Persistence is
-    // best-effort; private mode keeps the in-memory flag for the session.
-    try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("apex26.wheelState", _enabled ? "1" : "0");
-      }
-    } catch (_) { /* private mode / blocked storage */ }
+    try { localStorage.setItem("apex26.wheelState", _enabled ? "1" : "0"); } catch (_) { /* private mode / blocked storage */ }
   }
 
   /** Sync rim speeds to body speed when missing or non-finite (jump/reset stand-in). */
@@ -257,23 +249,11 @@ const WheelState = (function () {
   const _rIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5 };
   const _results = { latScaleF: 1, latScaleR: 1, fxF: 0, fxR: 0, shortfall: 0 };
 
-  /**
-   * PlayerForces hook. Mutates rim speeds, kappa, wheelLock, wheelSpin on `c`.
-   * Returns lateral grip scales for the Fy path and `shortfall` ∈ [0, 1]: the
-   * fraction of the longitudinal demand the tyres did NOT deliver this tick
-   * (0 while every axle is torque-limited). No-op contract when !enabled().
-   *
-   * opts: { dt, braking, thrOn, aReqF, aReqR (accel, +drive / −brake),
-   *         muLongF, muLongR (accel capacity), slipF, slipR, csFront, csRear,
-   *         muLatF, muLatR }
-   */
+  /** PlayerForces hook: mutates rim speeds, kappa, wheelLock, wheelSpin on `c`; returns lateral grip scales and `shortfall` ∈ [0, 1] (the demand the tyres did not deliver). opts: Vehicle.wheel. */
   function stepPlayer(c, opts) {
     if (!enabled() || !c || !opts) {
-      _results.latScaleF = 1;
-      _results.latScaleR = 1;
-      _results.fxF = 0;
-      _results.fxR = 0;
-      _results.shortfall = 0;
+      _results.latScaleF = _results.latScaleR = 1;
+      _results.fxF = _results.fxR = _results.shortfall = 0;
       return _results;
     }
     const dt = opts.dt;
