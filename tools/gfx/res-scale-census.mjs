@@ -61,6 +61,9 @@ async function main() {
         localStorage.setItem("apex26.gfxBackend", "three");
         localStorage.setItem("apex26.tlxForceGL", webgpu ? "0" : "1");
         localStorage.setItem("apex26.tyreWear", JSON.stringify("off"));
+        // Slow-CI cap raise, as pass-census sets it: lavapipe's pipeline warm outlasts the default boot step, and the
+        // resulting present failure reloads the page (run 41880521034).
+        if (webgpu) localStorage.setItem("apex26.gfxBootStepMs", "45000");
         for (const k of Object.keys(ls)) localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, ls[k]);
       } catch (_) { /* no storage: defaults */ }
     }, { ls: o.ls, webgpu: o.webgpu });
@@ -83,6 +86,7 @@ async function main() {
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
     await page.waitForFunction((id) => { try { const i = window.__apex.info(); return i.track === id && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, o.track, { polling: 100, timeout: 240000 });
+    if (o.webgpu) await page.evaluate(() => { window.__apex.go(); });   // pass-census parity: start the race
     await waitFrames(page, 8, 400000);
     stepNow = "pre-sweep";
     // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
