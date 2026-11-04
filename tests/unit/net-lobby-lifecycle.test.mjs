@@ -2793,3 +2793,28 @@ test("a guest that un-readied inside one round trip of START still takes GO at t
     assert.equal(starts, 1, "a stale revision is still refused");
   } finally { h.lobby.cancel(); }
 });
+
+// ── DAMAGE: HANDLING is a room rule (#3971) ───────────────────────────────────
+test("the host publishes DAMAGE: HANDLING; a guest applies it in memory and keeps its own saved choice", async () => {
+  assert.match(SOURCE, /damage: !!G\.raceDamage,/);
+  const { h, s } = await connectedGuest();
+  try {
+    const stored = new Map([["damageHandling", false]]);
+    h.G.store = {
+      get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+      set: (k, v) => { stored.set(k, v); },
+      rawDel: (k) => stored.delete(k),
+    };
+    let on = false;
+    Object.defineProperty(h.G, "raceDamage", { get: () => on, set: (v) => { on = v; h.G.store.set("damageHandling", v); }, configurable: true });
+    s.deliver("settings", { laps: 5, damage: true });
+    assert.equal(h.G.raceDamage, true, "the host's rule applies");
+    assert.equal(stored.get("damageHandling"), false, "the guest's saved choice is put back");
+    for (const bad of [{ damage: "on" }, { damage: 1 }]) {
+      s.deliver("settings", Object.assign({ laps: 9 }, bad));
+      assert.equal(h.G.raceLaps, 5, `${JSON.stringify(bad)} must reject the payload whole`);
+    }
+    s.deliver("settings", { laps: 6 });   // an older host omits it: ours stays
+    assert.equal(h.G.raceDamage, true);
+  } finally { h.lobby.cancel(); }
+});

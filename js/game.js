@@ -2704,7 +2704,7 @@ function entrySettings() {
   if (season && !_seasonEntryIds.has(season)) _seasonEntryIds.set(season, ++_nextSeasonEntryId);
   return JSON.stringify([trackIdx, flow, session, raceWeather, raceTimeOfDay, raceLaps,
     teamIdx, driverIdx, difficulty, raceGrid, champGrid, duelSetting(), duelLegend, raceTyreWear,
-    raceReliability, raceDirtyAir, raceAeroMode, simSeed(),   // not raceIndex: the body bumps it, and a repeat start would read as a new request
+    raceReliability, raceDirtyAir, DamageHandling.isEnabled(), raceAeroMode, simSeed(),   // not raceIndex: the body bumps it, and a repeat start would read as a new request
     wxArc.changeable, wxArc.plan && [wxArc.plan.to, wxArc.plan.dur],
     netPlay.active(), raceSettings && raceSettings.netRoom,
     season ? _seasonEntryIds.get(season) : null, season && season.round,
@@ -3089,6 +3089,9 @@ const G = {
     raceReliability = v; store.set("reliability", v);
   },
   armReliability: (field) => armReliability(field || cars),
+  // DAMAGE: HANDLING (#1578): the opt-in; a VS FRIEND room rule (#3971, LobbySettings RULES).
+  get raceDamage() { return DamageHandling.isEnabled(); },
+  set raceDamage(v) { DamageHandling.setEnabled(v === true); store.set("damageHandling", v === true); },
   // TYRE WEAR: the race setting and the live model (js/physics/tyre-model.js).
   get raceTyreWear() { return raceTyreWear; },
   set raceTyreWear(v) {
