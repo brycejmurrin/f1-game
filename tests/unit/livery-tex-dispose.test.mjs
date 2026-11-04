@@ -153,3 +153,17 @@ test("repeated SAVE & FIT edits do not stack undisposed hi-res atlases", () => {
   const hiLive = end.list.filter((x) => x.id.includes(":hi@"));
   assert.equal(hiLive.length, 1);
 });
+
+test("the superseded-atlas sweep runs once per store write, not per frame (#4979)", () => {
+  const r = rig();
+  let calls = 0; const g = r.G.getLiveryId;
+  r.G.getLiveryId = (id) => { calls++; return g(id); };
+  const t = team("ferrari");
+  r.carDraw.getCarDecalTexture(t, 1, true);
+  const base = calls;
+  for (let i = 0; i < 100; i++) r.carDraw.getCarDecalTexture(t, 1, true);
+  assert.ok(calls - base <= 1, `getLiveryId calls over 100 idle frames: ${calls - base}`);
+  r.setLiv("custom_1");
+  r.carDraw.getCarDecalTexture(t, 1, true);
+  assert.ok(!names(r.sample("after").list).some((id) => id.endsWith("@default")), "a new fitted id still sweeps the old atlas");
+});

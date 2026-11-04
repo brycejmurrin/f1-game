@@ -7631,6 +7631,7 @@
         "tests/unit/race-step-snap.test.mjs"
       ],
       "retireCar": [
+        "tests/unit/field-lod.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/rank-sort-alloc-vm.test.mjs"
       ],

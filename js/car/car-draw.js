@@ -527,9 +527,12 @@ const CarDraw = (function () {
     // fitted id's atlas stays live (#3609). Drop every non-draft atlas for this
     // team whose key is not under the CURRENT fitted id. Skip while a draft is
     // live for the team so CANCEL still restores the saved 2048.
+    const _sweptRev = new Map();   // team id -> store rev last swept (the fitted id only changes on a store write)
     function dropSupersededFittedAtlases(team) {
       const d = G.livDraftOverride;
-      if (d && d.teamId === team.id) return;
+      if (d && d.teamId === team.id) { _sweptRev.delete(team.id); return; }
+      if (_sweptRev.get(team.id) === G.store.rev) return;
+      _sweptRev.set(team.id, G.store.rev);
       const keep = team.id + ":" + G.getLiveryId(team.id) + ":";
       const teamColon = team.id + ":";
       const draftPrefix = teamColon + DRAFT_TAG;

@@ -94,8 +94,15 @@ const FieldLod = (function () {
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
-  function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
-  function castsShadow(dist2) { return !on || dist2 < sq(T.SHADOW_CAST_M); }
+  const _nearOf = new WeakMap();   // car -> {flame, cast, flaps} sticky verdicts (not a car field: see _farOf)
+  function near(k, m, d2, car) {
+    if (!car) return d2 < sq(m);
+    let o = _nearOf.get(car); if (!o) _nearOf.set(car, o = {});
+    return (o[k] = !crossed(d2, m, o[k] === false, k in o));
+  }
+  function flame(dist2, car) { return !on || near("flame", T.FLAME_M, dist2, car); }
+  function castsShadow(dist2, car) { return !on || near("cast", T.SHADOW_CAST_M, dist2, car); }
+  function flapsNear(dist2, car) { return near("flaps", flapsM(), dist2, car); }
   function mirrorCap() { return on ? T.MIRROR_CARS : Infinity; }
   // Keep the `cap` smallest of dist2s[0..n): writes keep[i] = 1/0 and returns
   // how many are kept. `force` (an index, or -1) is always kept first — the
@@ -131,6 +138,6 @@ const FieldLod = (function () {
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
-  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
+  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flapsNear, flame, castsShadow, mirrorCap, nearest, parts };
 })();
 Object.freeze(FieldLod);
