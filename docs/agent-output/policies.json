@@ -2246,6 +2246,11 @@
       "presentation": "shared-levels",
       "preserve": "Per-server ERROR rows and the TOTAL line"
     },
+    "tools/mcp/mcp-modern.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library module, no CLI output"
+    },
     "tools/mcp/mcp-preflight.sh": {
       "action": "keep-native",
       "presentation": "native",

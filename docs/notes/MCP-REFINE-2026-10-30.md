@@ -100,7 +100,7 @@ than full"; the token cost was elsewhere:
 
 ## Proposals (not done here)
 
-- **P1 — dual-stack protocol 2026-07-28** for apex-tools, apex-lsp and js-debugger, plus the gateway's
+- **P1 — dual-stack protocol 2026-07-28** (DONE in #4261: `tools/mcp/mcp-modern.mjs`; a request with `_meta["io.modelcontextprotocol/protocolVersion"]` gets `resultType`, list/read `ttlMs`/`cacheScope`, `server/discover` works, an unknown version gets -32022; legacy replies are unchanged and `initialize` still answers; `tools/list` order was already the static catalog order; tasks extension not adopted) for apex-tools, apex-lsp and js-debugger, plus the gateway's
   passthrough: `server/discover`, `resultType`, `ttlMs`/`cacheScope`, and keep answering `initialize`. Its
   payoff is Claude Code MCP tasks in place of `apex_job_start` + `apex_job_status` polling. The client already
   backgrounds long calls, so it is not urgent.
