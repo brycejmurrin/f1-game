@@ -9,7 +9,7 @@
   "invalidatorSites": [
     "(no stack)",
     "hud.js:hText", "hud.js:hStyle", "hud.js:hData", "hud.js:hToggle", "hud.js:updateHud",
-    "live-region.js:write", "live-region.js:(anonymous)",
+    "live-region.js:write", "live-region.js:(anon)",
     "hud-damage.js:paint", "hud-layout.js:screenBounds", "hud-radio-lane.js:laneRect",
     "announce-banner.js:showAnnounce", "announce-banner.js:tick"
   ],
