@@ -787,10 +787,8 @@ function trackTile(t, i, opts) {
   row.dataset.trackIdx = String(i);
   row.dataset.kind = t.custom ? "custom" : t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
   row.setAttribute("aria-label", t.name);
-  // The country is the tooltip: five USA tiles and three Italian ones need
-  // it, and the strip has no room for a second line of text under each flag.
-  // Season calendar tiles are read-only and packed: a native `title` pops
-  // over the neighbour's name (Baku over Mexico). data-tip paints above.
+  // Country is the tooltip (no room for a second line). Read-only season tiles use
+  // data-tip, not `title`, which pops over the neighbour's name.
   const tip = t.name + (t.country ? " · " + t.country : "");
   if (opts && opts.readOnly) row.dataset.tip = tip;
   else row.title = tip;
@@ -910,6 +908,7 @@ function buildSelect(opts) {
       const row = trackTile(t, i, { readOnly: true, active: !seasonComplete && r === rnd });
       if (r < rnd || seasonComplete) row.dataset.done = "1";
       if (!seasonComplete && r === rnd) row.setAttribute("aria-current", "step");
+      row.onclick = () => { for (const o of els.selTracks.children) o.toggleAttribute("data-tip-open", o === row && !o.hasAttribute("data-tip-open")); };
       const rn = document.createElement("span");
       rn.className = "sur-rnd";
       rn.textContent = "R" + (r + 1);
