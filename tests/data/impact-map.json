@@ -8418,6 +8418,9 @@
       "hoseReel": [
         "tests/unit/garage-mesh.test.mjs"
       ],
+      "monitorGantry": [
+        "tests/unit/garage-live-glow.test.mjs"
+      ],
       "noseTrolley": [
         "tests/unit/garage-mesh.test.mjs"
       ],
@@ -8467,6 +8470,7 @@
     },
     "js/garage/scene-live.js": {
       "paintLive": [
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ],
       "*": [
@@ -8493,6 +8497,7 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -17006,6 +17011,7 @@
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -17070,6 +17076,7 @@
     "js/track/core/pit.js": {
       "build": [
         "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
@@ -17082,6 +17089,7 @@
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-live-glow.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",

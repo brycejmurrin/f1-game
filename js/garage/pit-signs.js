@@ -34,7 +34,10 @@ const PitSigns = (function () {
     for (let i = 0; i < boxes.length && i < S.cells; i++) {
       const box = boxes[i], cell = cellRect(i), x = cell.x / div, y = cell.y / div;
       const col = box.col || [0.6, 0.6, 0.65], col2 = box.col2 || [0.9, 0.9, 0.9];
-      const ink = LiveryTex.inkOn([col]);
+      // Lift the ink toward white so night glow:0.5 still reads as a lit fascia
+      // (the glow gate needs luma; a mid-grey code looked painted flat on the lintel).
+      const ink0 = LiveryTex.inkOn([col]);
+      const ink = [Math.min(1, ink0[0] * 1.08 + 0.06), Math.min(1, ink0[1] * 1.08 + 0.06), Math.min(1, ink0[2] * 1.08 + 0.06)];
       ctx.save();
       ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
       // The crest: a square cell-high box at the left, on the lintel's colour.
