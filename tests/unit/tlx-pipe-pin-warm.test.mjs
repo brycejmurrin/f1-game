@@ -30,7 +30,7 @@ const tslice = (from, to) => {
 const PIN_SRC = tslice("      const PIPE_PIN_CAP = ", "      const PRUNE_EVERY_MS = ");
 const makePin = (renderer) => new Function("renderer", `"use strict";
   ${PIN_SRC}
-  return { pinPipelines, pinned: () => _pinnedPipes.size, cap: PIPE_PIN_CAP };`)(renderer);
+  return { pinPipelines, unpinStalePipes, pinned: () => _pinnedPipes.size, cap: PIPE_PIN_CAP };`)(renderer);
 
 async function rig(t) {
   const fg = makeFakeGL(320, 180);
@@ -122,4 +122,78 @@ test("tlx.js wiring: prunePool arms the pin at the first present and sweeps befo
   const sweep = prune.indexOf("if (pin) pin();", cadence), drop = prune.indexOf("dropWrapper(m);");
   assert.ok(arm > 0 && arm < cadence, "armed before the 5 s cadence gate, so the first present wraps three's pipeline factory");
   assert.ok(sweep > cadence && sweep < drop, "each sweep pins what was built since, before any wrapper is dropped");
+});
+
+// #4971: pins were never released, so a long session's circuits filled PIPE_PIN_CAP and pinPipe went silent: a
+// later circuit's pipelines were pruned after 20 s idle and rebuilt on race entry. A track free (flushTexPool) now
+// unpins every pipeline no RenderObject asked for during the world being freed.
+test("a track free releases the pins of a circuit two worlds back, and keeps any pipeline the last world asked for (#4971)", async (t) => {
+  const h = await rig(t);
+  const pin = makePin(h.renderer);
+  pin.pinPipelines();   // armed: _getRenderPipeline pins and stamps the world epoch
+  const keys = () => new Set(h.caches().keys());
+  const added = (before) => [...keys()].filter((k) => !before.has(k));
+  let k0 = keys();
+  const a = h.frame();   // circuit A's mesh
+  const [keyA] = added(k0);
+  assert.ok(keyA !== undefined, "A built a pipeline");
+  h.drop(a.mesh);
+  assert.ok(keys().has(keyA), "pinned: A's pipeline outlives its last wrapper");
+  assert.equal(pin.unpinStalePipes(), 0, "free A: nothing stale yet (A asked for it)");
+  // Circuit B draws another material: a second pipeline; A's is not asked for.
+  k0 = keys();
+  const matB = new THREE.MeshNormalNodeMaterial();   // other programs: a second pipeline
+  const mb = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), matB); mb.frustumCulled = false; mb.updateMatrixWorld();
+  h.scene.add(mb); h.renderer.render(h.scene, h.camera); h.drop(mb);
+  const [keyB] = added(k0);
+  assert.ok(keyB !== undefined && keys().has(keyB), "B built and kept its own pipeline");
+  const before = pin.pinned();
+  assert.ok(pin.unpinStalePipes() >= 1, "free B: A's pin goes");
+  assert.ok(pin.pinned() < before);
+  assert.equal(keys().has(keyA), false, "three released A's pipeline at usedTimes 0 (Pipelines._releasePipeline)");
+  assert.ok(keys().has(keyB), "B's pipeline (the world just freed) stays cached");
+  assert.ok(h.frame().links > 0, "a later race on A builds it again (as an unpinned first race would)");
+});
+
+test("pins stay bounded over a long session: 8 circuits of 70 pipelines (#4971)", () => {
+  const caches = new Map();
+  const P = { caches, _releasePipeline: (p) => caches.delete(p.cacheKey), _releaseProgram() {} };
+  P._getRenderPipeline = (key) => caches.get(key);
+  const pin = makePin({ _pipelines: P });
+  pin.pinPipelines();
+  const peak = { before: 0, after: 0 };
+  let total = 0;
+  for (let c = 0; c < 8; c++) {
+    for (let i = 0; i < 70; i++) {   // each circuit's RenderObjects ask for its own pipelines; their wrappers die
+      const key = "c" + c + "p" + i;
+      caches.set(key, { cacheKey: key, usedTimes: 0, vertexProgram: { usedTimes: 0 }, fragmentProgram: { usedTimes: 0 } });
+      P._getRenderPipeline(key);
+    }
+    total += 70;
+    peak.after = Math.max(peak.after, pin.pinned());
+    peak.before = Math.max(peak.before, Math.min(total, pin.cap));   // never unpinned: the old Set
+    pin.unpinStalePipes();   // dropTrackWorld -> flushTexPool
+  }
+  assert.equal(peak.before, 512, "before: the session reaches PIPE_PIN_CAP and stops pinning");
+  assert.equal(peak.after, 140, "after: at most the last two circuits' pipelines stay pinned");
+  assert.equal(caches.size, 70, "the unpinned pipelines left three's cache; only the circuit just freed remains");
+});
+
+test("at PIPE_PIN_CAP pinPipe warns once instead of going silent (#4971)", () => {
+  const warned = [];
+  const saved = globalThis.Log;
+  globalThis.Log = { warn: (...a) => warned.push(a) };
+  try {
+    const caches = new Map();
+    for (let i = 0; i < 600; i++) caches.set("r" + i, { cacheKey: "r" + i, usedTimes: 1, vertexProgram: { usedTimes: 1 }, fragmentProgram: { usedTimes: 1 } });
+    const pin = makePin({ _pipelines: { caches } });
+    pin.pinPipelines(); pin.pinPipelines();
+    assert.equal(warned.length, 1);
+  } finally { globalThis.Log = saved; }
+});
+
+test("wiring: flushTexPool (game.js dropTrackWorld's TLX hook) unpins, never over a warm in flight", () => {
+  const flush = tslice("      function flushTexPool() {", "      let envCubeCam");
+  assert.ok(flush.includes("if (typeof unpinStalePipes === \"function\") unpinStalePipes();"));
+  assert.ok(PIN_SRC.includes("if (typeof _warmPending !== \"undefined\" && _warmPending) return 0;"), "unpinStalePipes waits out a warm");
 });

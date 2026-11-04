@@ -304,23 +304,14 @@ const ShadowPass = (function () {
         // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
         // sliders, a time-of-day flip) would otherwise leave the map STALE until the
         // next cell crossing — shadows look dead while dragging, then all jump at once.
-        // PRODUCER/CONSUMER GATE. glsl-lit.js's sampleShadow opens with
-        // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
-        // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march
-        // is the only other reader and it is gated on uStr > 0.0, which is 0 below
-        // the same key. The consumer side of that was already taken; the PRODUCER
-        // was not, so the frame still paid a 2048² depth clear, the full terrain and
-        // road ribbons cast unchunked (44,826 verts on vegas), and shadowEnd's 512²
-        // PCSS blocker downsample — for a texture with zero readers, once per 20 m
-        // snap cell, i.e. 300+ times a lap.
-        //
-        // The predicate is NOT new: it is the identical expression already used
-        // below to gate the props cast and again at the car sun pass. Hoisted here
-        // so all three agree. When it closes, the snap cache is INVALIDATED rather
-        // than left alone — otherwise weather clearing mid-race would re-open the
-        // gate onto a stale map and hold it until the next cell crossing.
+        // PRODUCER/CONSUMER GATE. sampleShadow returns 1.0 at uShadowStr <= 0 or below the key, so then only the
+        // god-ray march reads this map (uStr: sun brightness > 0.35 and SUN GOD-RAYS, not SHADOW DARKNESS, #4972).
+        // Unread, the 2048² clear, the unchunked ribbon casts and the 512² PCSS downsample ran per 20 m cell.
+        // The key/moon predicate is the props cast's and the car sun pass's. Closing INVALIDATES the snap cache,
+        // so a gate re-opening (weather clearing, the slider leaving 0) never lands on a stale map.
         const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-        const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+        const _shadowsRead = (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) &&
+          (!(LT.shadowStr <= 0) || (!(LT.grMul <= 0) && _shKeyG > 0.35 && !!frame.sunDir && frame.sunDir[1] > 0));
         if (!_shadowsRead) {
           _shadowSnapX = _shadowSnapZ = _shadowBox = null;
           _shadowSunX = _shadowSunY = _shadowSunZ = null;

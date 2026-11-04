@@ -5573,6 +5573,7 @@
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/shadow-pass-darkness.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
@@ -12758,6 +12759,7 @@
       ],
       "tick": [
         "tests/unit/director.test.mjs",
+        "tests/unit/mirror-pass.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -12769,8 +12771,7 @@
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "*": [
-        "tests/specs/hud-mirror.spec.js",
-        "tests/unit/mirror-pass.test.mjs"
+        "tests/specs/hud-mirror.spec.js"
       ]
     },
     "js/race/car-fields.js": {
@@ -15481,6 +15482,7 @@
         "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/shadow-pass-darkness.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "flushBlobs": [
@@ -15507,6 +15509,7 @@
       "sunPass": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/field-lod.test.mjs",
+        "tests/unit/shadow-pass-darkness.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "*": [
@@ -15888,6 +15891,9 @@
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "_promoteQueuedWarm": [
+        "tests/unit/tlx-warm-queue.test.mjs"
+      ],
       "_resolveWarmWhere": [
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
@@ -16034,6 +16040,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "flushTexPool": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
       "freeInstancedBatch": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -16223,20 +16232,26 @@
       ],
       "startMirrorWarm": [
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-warm-queue.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-lite-lab.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-warm-queue.test.mjs"
       ],
       "startRigWarm": [
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/tlx-warm-queue.test.mjs"
       ],
       "sweepGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "unpinStalePipes": [
+        "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
       "updateInstances": [
         "tests/unit/gfx-backend-canary.test.mjs",

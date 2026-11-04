@@ -316,6 +316,12 @@ const TLX = (function () {
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
       let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+      let _warmQueued = null;   // #4958: the where of a warm() that arrived while one was in flight
+      function _promoteQueuedWarm() {
+        if (_warmPending || !_warmQueued) return false;
+        _warmWhere = _warmQueued; _warmQueued = null; _warmRequested = true; _warmAttempts = 0;
+        return true;
+      }
       // Set by onDeviceLost: abort in-flight compileAsync so warming() cannot
       // stick true forever (race-start handoff waited on !warming via afterPresent,
       // and render() returned early while warming — HUD surveys hung).
@@ -1118,6 +1124,7 @@ const TLX = (function () {
         _warmRequested = false;
         _warmPending = null;
         _warmDone = true;
+        _warmQueued = null;
         if (typeof _pinnedPipes !== "undefined") _pinnedPipes.clear();   // A·W50: the lost device's pipelines go with it (typeof: sandboxed bodies)
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
@@ -3210,6 +3217,7 @@ const TLX = (function () {
       // does not run beside them (iPhone tab budget ~300 MB).
       function flushTexPool() {
         while (_texPool.length) disposePooled(_texPool.shift().t);
+        if (typeof unpinStalePipes === "function") unpinStalePipes();   // #4971: game.js dropTrackWorld's TLX hook
       }
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
@@ -4111,23 +4119,51 @@ const TLX = (function () {
       // once: 3 of the 4 left), so each render pipeline takes one extra use as three creates it, and the sweep (each
       // warm's end, each prune) pins any built before. Capped, and cleared on device loss with the rest.
       const PIPE_PIN_CAP = 512;
-      const _pinnedPipes = new Set();
+      // #4971: pipeline -> the world epoch that last ASKED for it (_getRenderPipeline: a RenderObject wanted it; a
+      // cache sweep only adds, never refreshes). A track free (flushTexPool) unpins every pin no request touched
+      // during the world being freed, so pins span at most the last two circuits instead of the whole session; at
+      // the cap pinPipe warns once instead of going silent.
+      const _pinnedPipes = new Map();
       let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
-      function pinPipe(p) {
-        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+      let _pinEpoch = 0, _pinCapWarned = false;
+      function pinPipe(p, asked) {
+        if (!p || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
+        if (_pinnedPipes.has(p)) { if (asked) _pinnedPipes.set(p, _pinEpoch); return; }
+        if (_pinnedPipes.size >= PIPE_PIN_CAP) {
+          if (!_pinCapWarned) { _pinCapWarned = true; try { Log.warn("gfx", "TLX pipeline pin cap reached", PIPE_PIN_CAP); } catch (_) { /* logging is optional */ } }
+          return;
+        }
         p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
-        _pinnedPipes.add(p);
+        _pinnedPipes.set(p, _pinEpoch);
       }
       function pinPipelines() {
         const P = renderer && renderer._pipelines, caches = P && P.caches;
         if (!caches || typeof caches.values !== "function") return _pinnedPipes.size;
         if (_pinArmed !== P && typeof P._getRenderPipeline === "function") {
           const get = P._getRenderPipeline;
-          P._getRenderPipeline = function () { const p = get.apply(this, arguments); pinPipe(p); return p; };
+          P._getRenderPipeline = function () { const p = get.apply(this, arguments); pinPipe(p, true); return p; };
           _pinArmed = P;
         }
-        for (const p of caches.values()) pinPipe(p);
+        for (const p of caches.values()) pinPipe(p, false);
         return _pinnedPipes.size;
+      }
+      // Drop the extra use pinPipe took; at 0 release exactly as three's Pipelines.delete does. Returns the unpin count.
+      function unpinStalePipes() {
+        const P = renderer && renderer._pipelines;
+        if (!P || typeof P._releasePipeline !== "function" || typeof P._releaseProgram !== "function") return 0;
+        if (typeof _warmPending !== "undefined" && _warmPending) return 0;   // never under a compile in flight (typeof: sandboxed bodies)
+        const epoch = _pinEpoch++;
+        let n = 0;
+        for (const [p, at] of _pinnedPipes) {
+          if (at >= epoch) continue;
+          _pinnedPipes.delete(p); n++;
+          if (P.caches.get(p.cacheKey) !== p) continue;   // already gone from three's cache: nothing of ours to drop
+          if (--p.usedTimes === 0) P._releasePipeline(p);
+          if (--p.vertexProgram.usedTimes === 0) P._releaseProgram(p.vertexProgram);
+          if (--p.fragmentProgram.usedTimes === 0) P._releaseProgram(p.fragmentProgram);
+        }
+        _pinCapWarned = false;
+        return n;
       }
       const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
       function prunePool(now) {
@@ -6095,9 +6131,14 @@ const TLX = (function () {
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
         // opts.where: "menu" | "loading" | "race" (auto when omitted — see _resolveWarmWhere).
+        // #4958: a request while a program/mirror/rig warm is in flight is QUEUED, never dropped (game.js counts it
+        // warmed: a dark circuit's "|lit" warm lost here compiled its lamp-baked programs on the first race frames).
+        // The where is resolved now; present() promotes it once _warmPending clears (_promoteQueuedWarm).
         warm(opts) {
           if (_deviceLost) return;
-          if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
+          const where = _resolveWarmWhere(opts);
+          if (_warmPending) { _warmQueued = where; return; }
+          _warmWhere = where; _warmRequested = true; _warmAttempts = 0;
         },
         warming() { return !_deviceLost && !!_warmPending; },
         // The in-flight program/rig/mirror compile. A track free during it only
@@ -6105,7 +6146,7 @@ const TLX = (function () {
         // warming() is true, so the caster's render object outlives the circuit.
         // Callers await this, then cancelWarmRetry(), then free.
         warmSettled() { return _warmPending || Promise.resolve(); },
-        cancelWarmRetry() { _warmRequested = false; },
+        cancelWarmRetry() { _warmRequested = false; _warmQueued = null; },
         warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
@@ -6646,6 +6687,7 @@ const TLX = (function () {
           // source line in tlx-rig-warm.test.mjs.
           if (_lite) liteOpts(opts);   // B8 lab: before the warm, so it compiles the lite pass set
           if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
+          _promoteQueuedWarm();   // #4958: a warm() that met one in flight runs now, ahead of a queued mirror/rig job
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
@@ -7160,7 +7202,7 @@ const TLX = (function () {
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice(), pinned: _pinnedPipes.size };   // A·W50
+                       pending: !!_warmPending, queued: _warmQueued, done: _warmDone, history: _warmHistory.slice(), pinned: _pinnedPipes.size };   // A·W50
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the
