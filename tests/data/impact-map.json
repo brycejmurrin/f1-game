@@ -4263,6 +4263,9 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
+      "prizeFor": [
+        "tests/unit/career-settle.test.mjs"
+      ],
       "renewHire": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -6861,6 +6864,9 @@
         "tests/unit/track-editor-geometry.test.mjs"
       ],
       "dubinsWords": [
+        "tests/unit/track-editor-geometry.test.mjs"
+      ],
+      "enforceSpacing": [
         "tests/unit/track-editor-geometry.test.mjs"
       ],
       "menger": [
@@ -9671,14 +9677,16 @@
         "tests/unit/all-lights-fill.test.mjs"
       ],
       "rankStats": [
-        "tests/unit/frame-lights-rank-cache.test.mjs"
+        "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs"
       ],
       "release": [
         "tests/unit/frame-lights-release.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
       "resetRankStats": [
-        "tests/unit/frame-lights-rank-cache.test.mjs"
+        "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs"
       ],
       "setFrameLights": [
         "tests/unit/all-lights-fill.test.mjs",
@@ -9686,6 +9694,7 @@
         "tests/unit/frame-lights-rank-cache.test.mjs",
         "tests/unit/frame-lights-shed.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/mirror-lights.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
       ],
@@ -9694,6 +9703,7 @@
       ],
       "viewLights": [
         "tests/unit/frame-lights-rank-cache.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/mirror-lights.test.mjs"
       ],
       "*": [
@@ -9723,6 +9733,7 @@
         "tests/unit/light-presets-knob-range.test.mjs",
         "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-sun-scratch.test.mjs",
@@ -9787,6 +9798,7 @@
         "tests/unit/ci-ship-filter-geometry.test.mjs",
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -9867,6 +9879,7 @@
       "buildTrackLights": [
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs"
@@ -13353,7 +13366,8 @@
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
-        "tests/unit/quali-pace-parity-vm.test.mjs"
+        "tests/unit/quali-pace-parity-vm.test.mjs",
+        "tests/unit/quali-persist.test.mjs"
       ],
       "clear": [
         "tests/unit/career-backup.test.mjs",
@@ -15155,6 +15169,7 @@
         "tests/unit/lamp-density.test.mjs",
         "tests/unit/lamp-fixture-anchor.test.mjs",
         "tests/unit/lamp-shadow-pick.test.mjs",
+        "tests/unit/lighting-hunt-gaps.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",

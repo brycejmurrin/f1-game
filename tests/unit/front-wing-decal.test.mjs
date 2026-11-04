@@ -70,8 +70,7 @@ test("every front-endplate decal vertex sits on the plate, at every plate profil
   for (const tid of ["ferrari", "mclaren", "mercedes", "redbull"]) {
     const team = M.Teams.LIST.find((t) => t.id === tid);
     for (const aero of RECIPES) {
-      let parts;
-      try { parts = M.Parts.getVisualTiers(aero ? { aero } : {}, team); } catch (_) { continue; }
+      const parts = M.Parts.getVisualTiers(aero ? { aero } : {}, team);   // a throw fails the test (B3: it used to `continue`)
       const aeroV = parts._visual && parts._visual.aero;
       const aLvl = aeroV && aeroV.lvl != null ? aeroV.lvl : 2;
       seen.add(String(aeroV && aeroV.plate));

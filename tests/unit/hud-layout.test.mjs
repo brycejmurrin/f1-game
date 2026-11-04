@@ -1656,3 +1656,99 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
   assert.equal(D.H.applyPreset("corners", "other"), true, "desktop keeps CORNERS");
   assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
 });
+
+// #4586 row 2 — packPhone during fit defers its clear; the fitHud / invalidateFit
+// clearReadouts that follows flushes that coalesce in one body (public API stays
+// sync). RO only notes WH while suppressed. Tip follow-up skip: after a clear
+// with an unchanged packSig, rAF/120 ms packs do not run another body.
+test("fit pack follow-up coalesces clearReadouts to one body run", () => {
+  const CLEAR_SEL = ".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror";
+  let bodyRuns = 0;
+  const raf = [], timers = [];
+  const blank = {
+    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
+    setAttribute() {}, removeAttribute() {}, hasAttribute: () => false,
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }),
+  };
+  const viewport = { innerWidth: 844, innerHeight: 390 };
+  const ctx = {
+    console,
+    window: viewport,
+    requestAnimationFrame(cb) { raf.push(cb); return raf.length; },
+    setTimeout(cb, ms) { timers.push({ cb, ms }); return timers.length; },
+    document: {
+      readyState: "complete",
+      body: { classList: { contains: () => false }, className: "", getAttribute: () => null },
+      documentElement: { style: { cssText: "" } },
+      getElementById: () => null,
+      addEventListener() {},
+      querySelector: () => blank,
+      querySelectorAll: (sel) => {
+        if (sel === CLEAR_SEL) bodyRuns++;
+        return [];
+      },
+    },
+    GameStore: { store: { get: (k, d) => d, set() {} } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+  ctx.HudLayout.fit();
+  assert.equal(bodyRuns, 0, "packPhone during fit only notes a deferred clear");
+  // fitHud / invalidateFit tail — flushes the coalesce (one body).
+  ctx.HudLayout.clearReadouts();
+  assert.equal(bodyRuns, 1, "public clearReadouts flushes the fit coalesce");
+  ctx.HudLayout.clearReadouts();
+  assert.equal(bodyRuns, 2, "further public clearReadouts stay sync");
+  const wave1 = raf.splice(0);
+  for (const cb of wave1) cb();
+  const wave2 = raf.splice(0);
+  for (const cb of wave2) cb();
+  assert.equal(bodyRuns, 2, "unchanged packSig skips the double-rAF pack body");
+  assert.equal(timers.length, 1, "120 ms follow-up armed");
+  assert.equal(timers[0].ms, 120);
+  timers[0].cb();
+  assert.equal(bodyRuns, 2, "unchanged packSig skips the 120 ms pack body");
+  ctx.HudLayout.clearReadouts();
+  assert.equal(bodyRuns, 3, "standalone clearReadouts still runs immediately");
+});
+
+test("fit without a tail clear still flushes coalesce on the rAF follow-up", () => {
+  const CLEAR_SEL = ".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror";
+  let bodyRuns = 0;
+  const raf = [], timers = [];
+  const blank = {
+    style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
+    setAttribute() {}, removeAttribute() {}, hasAttribute: () => false,
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }),
+  };
+  const viewport = { innerWidth: 844, innerHeight: 390 };
+  const ctx = {
+    console,
+    window: viewport,
+    requestAnimationFrame(cb) { raf.push(cb); return raf.length; },
+    setTimeout(cb, ms) { timers.push({ cb, ms }); return timers.length; },
+    document: {
+      readyState: "complete",
+      body: { classList: { contains: () => false }, className: "", getAttribute: () => null },
+      documentElement: { style: { cssText: "" } },
+      getElementById: () => null,
+      addEventListener() {},
+      querySelector: () => blank,
+      querySelectorAll: (sel) => {
+        if (sel === CLEAR_SEL) bodyRuns++;
+        return [];
+      },
+    },
+    GameStore: { store: { get: (k, d) => d, set() {} } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+  ctx.HudLayout.fit();
+  assert.equal(bodyRuns, 0, "fit defers the pack clear");
+  for (const cb of raf.splice(0)) cb();
+  for (const cb of raf.splice(0)) cb();
+  assert.equal(bodyRuns, 1, "rAF follow-up flushes the open coalesce");
+  assert.equal(timers.length, 1, "120 ms follow-up armed");
+  timers[0].cb();
+  assert.equal(bodyRuns, 1, "120 ms pack skips once the rAF clear advanced clearSeq");
+});
