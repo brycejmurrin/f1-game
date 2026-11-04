@@ -116,7 +116,7 @@ function RaceSettingsPure() {
 // A RaceSettings instance of its own on a mini DOM, so rs-go can be pressed
 // without starting a race: startRace/raceIntro are counters. What is asserted is
 // the store and G, which is what the next open reads.
-function sheet(o = {}) {
+function sheet(o = {}, deps = {}) {
   const dom = makeDom();
   const ctx = vm.createContext({ document: dom.document, Log: { info() {}, warn() {} }, queueMicrotask });
   vm.runInContext(readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8").replace(/^const RaceSettings\b/m, "var RaceSettings"), ctx);
@@ -140,6 +140,7 @@ function sheet(o = {}) {
     DrivingLine: { mode: () => "off" }, SeasonCal: { formatLaps: (n) => n, quali: () => false, qualiNext: () => false },
     qualiResults: () => null, openQuali() {}, enableTilt() {}, getSteerMode: () => "buttons", buildStandings() {},
     raceIntro: (go) => go(),
+    ...deps,
   });
   rs.wireButtons();
   const at = (id) => { G.trackIdx = LIST.findIndex((t) => t.id === id); rs.openRaceSettings("select"); return G.raceLaps; };
@@ -655,4 +656,50 @@ test("tile -> SETTINGS -> weather/time chips -> RACE! builds the world once; onl
     assert.equal(syncBuilds, 0, "and no synchronous rebuild either: the intro reuses the joined world");
     assert.equal(G.track.def.id, "spa");
   } finally { h.close(); }
+});
+
+// ── the race-settings flyby (#1682 step 3: were gfx-backend-canary source pins) ──
+// Opening RACE SETTINGS schedules the chosen circuit's flyby with the sheet
+// already shown; a TIME OF DAY pick re-schedules it; RACE! hands the sheet to
+// the loading screen (raceIntro), a throw there still starts the race, and the
+// QUALIFYING route goes sheet to sheet without it.
+test("RACE SETTINGS schedules the flyby on open and on a time pick; RACE! goes through the loading screen, QUALIFYING does not", () => {
+  const flyby = [], intros = [], rows = {};
+  let qualis = 0, introThrows = false;
+  const h = sheet({
+    state: "menu",
+    scheduleFlybyTrack(settle) { flyby.push({ settle, shown: h.G.$("race-settings").hidden === false }); },
+  }, {
+    SettingRow: { paint() {}, disable() {}, wire(id, o) { rows[id] = o; } },
+    openQuali() { qualis++; },
+    raceIntro(go, sheetEl, btn) { intros.push({ go, sheetEl, btn }); if (introThrows) throw new Error("intro"); },
+  });
+  h.at("spa");
+  assert.equal(flyby.length, 1, "opening race settings schedules one flyby");
+  assert.deepEqual(flyby[0], { settle: undefined, shown: true }, "the 120 ms schedule (no settle), with the sheet already shown");
+  assert.ok(rows["rs-time"], "the TIME OF DAY row is wired");
+  rows["rs-time"].write("night");
+  assert.equal(h.G.raceTimeOfDay, "night");
+  assert.equal(flyby.length, 2, "a time-of-day pick re-schedules the flyby");
+  rows["rs-diff"].write("easy");
+  assert.equal(flyby.length, 2, "a row the world does not read schedules nothing");
+
+  h.start();
+  assert.equal(intros.length, 1, "RACE! goes through the loading screen");
+  assert.equal(h.starts(), 0, "which owns the start");
+  assert.equal(intros[0].sheetEl, h.G.$("race-settings"), "handed the sheet");
+  assert.equal(intros[0].btn, h.G.$("rs-go"), "and the RACE! button");
+  intros[0].go();
+  assert.equal(h.starts(), 1, "its go is startRace");
+
+  introThrows = true;
+  h.at("spa"); h.start();
+  assert.equal(h.starts(), 2, "a throw in the loading screen still starts the race");
+  assert.equal(h.G.$("race-settings").hidden, true, "with the sheet dismissed");
+
+  introThrows = false; h.G.raceQuali = true;
+  const before = intros.length;
+  h.at("spa"); h.start();
+  assert.equal(qualis, 1, "QUALIFYING opens its own sheet");
+  assert.equal(intros.length, before, "without the loading screen");
 });
