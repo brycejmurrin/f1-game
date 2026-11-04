@@ -3188,6 +3188,11 @@
       ]
     },
     {
+      "path": "tools/mcp/mcp-modern.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/mcp/mcp-preflight.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
