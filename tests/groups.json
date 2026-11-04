@@ -129,6 +129,7 @@
     "tests/unit/browser-workers.test.mjs",
     "tests/unit/build-client-drop.test.mjs",
     "tests/unit/build-gallery.test.mjs",
+    "tests/unit/byte-budget.test.mjs",
     "tests/unit/cam-avoid.test.mjs",
     "tests/unit/cam-comfort.test.mjs",
     "// Camera tuner reads stored track/team once per Store revision (CPU-HUNT C6). VM, < 0.1 s.",

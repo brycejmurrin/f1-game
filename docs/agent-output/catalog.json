@@ -442,6 +442,12 @@
       ]
     },
     {
+      "path": "tools/check/byte-budget.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/check/check-gctx.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",

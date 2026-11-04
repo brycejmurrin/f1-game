@@ -296,6 +296,11 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/check/byte-budget.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/check-gctx.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",

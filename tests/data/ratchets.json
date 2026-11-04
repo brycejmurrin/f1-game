@@ -63,9 +63,29 @@
       "ceiling": 73,
       "slack": 5
     },
+    "eagerCssGzip": {
+      "ceiling": 388000,
+      "slack": 3506
+    },
+    "eagerGzip": {
+      "ceiling": 2917000,
+      "slack": 28625
+    },
     "implicitAsserts": {
       "ceiling": 39,
       "slack": 0
+    },
+    "lazyAudioGzip": {
+      "ceiling": 216000,
+      "slack": 1204
+    },
+    "lazyCircuitGzipMax": {
+      "ceiling": 35500,
+      "slack": 396
+    },
+    "raceEntryBytes": {
+      "ceiling": 2075000,
+      "slack": 19685
     },
     "rawColor": {
       "ceiling": 322,
