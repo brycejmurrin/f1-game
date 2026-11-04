@@ -1,8 +1,0 @@
-{
-  "tree": {
-    "assertPins": 2,
-    "assertPinsAll": 3,
-    "eagerCssGzip": 11,
-    "raceEntryBytes": 305
-  }
-}

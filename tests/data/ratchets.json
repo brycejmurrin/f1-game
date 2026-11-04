@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2353,
-      "lines": 2616
+      "codeLines": 2365,
+      "lines": 2626
     },
     "js/agent/agentview.js": {
-      "lines": 2321
+      "lines": 2322
     },
     "js/agent/apex.js": {
-      "codeLines": 1687,
-      "lines": 2518
+      "codeLines": 1686,
+      "lines": 2516
     },
     "js/car/car3d.js": {
-      "lines": 2903
+      "lines": 2910
     },
     "js/game.js": {
-      "codeLines": 5419,
-      "gMembers": 299,
-      "lines": 9450,
+      "codeLines": 5404,
+      "gMembers": 297,
+      "lines": 9611,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2356
+      "lines": 2326
     },
     "js/render/glx/glx.js": {
-      "lines": 2898
+      "lines": 2893
     },
     "js/track/tracks.js": {
       "lines": 869
     },
     "js/ui/hud.js": {
-      "codeLines": 1441,
-      "lines": 2350
+      "codeLines": 1439,
+      "lines": 2347
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -44,11 +44,11 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8189,
+      "ceiling": 8196,
       "slack": 200
     },
     "assertPinsAll": {
-      "ceiling": 10268,
+      "ceiling": 10278,
       "slack": 200
     },
     "bareCatches": {
@@ -64,11 +64,11 @@
       "slack": 5
     },
     "eagerCssGzip": {
-      "ceiling": 385531,
+      "ceiling": 388000,
       "slack": 3506
     },
     "eagerGzip": {
-      "ceiling": 2895863,
+      "ceiling": 2917000,
       "slack": 28625
     },
     "implicitAsserts": {
@@ -76,32 +76,32 @@
       "slack": 0
     },
     "lazyAudioGzip": {
-      "ceiling": 214995,
+      "ceiling": 216000,
       "slack": 1204
     },
     "lazyCircuitGzipMax": {
-      "ceiling": 35104,
+      "ceiling": 35500,
       "slack": 396
     },
     "raceEntryBytes": {
-      "ceiling": 2062733,
+      "ceiling": 2075000,
       "slack": 19685
     },
     "rawColor": {
-      "ceiling": 316,
+      "ceiling": 322,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 175,
+      "ceiling": 178,
       "slack": 0
     },
-    "rawGameReads": 297,
+    "rawGameReads": 299,
     "rawSpacing": {
       "ceiling": 305,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2255,
+      "ceiling": 2256,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -113,7 +113,7 @@
       "slack": 0
     },
     "vmSrcLoads": 594,
-    "waitForTimeout": 74,
+    "waitForTimeout": 75,
     "waitNoPolling": {
       "ceiling": 41,
       "slack": 39
