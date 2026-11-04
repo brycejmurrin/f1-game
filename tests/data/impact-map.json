@@ -7834,6 +7834,7 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/scenery-cull-phone.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -15099,6 +15100,9 @@
       ],
       "radialCulled": [
         "tests/unit/frustum-buckets.test.mjs"
+      ],
+      "sceneryCullDist": [
+        "tests/unit/scenery-cull-phone.test.mjs"
       ],
       "*": [
         "tests/unit/build-worker.test.mjs",

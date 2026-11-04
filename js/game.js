@@ -7642,13 +7642,10 @@ function render(dt) {
   const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
   // Radial draw-distance cull for chunked scenery, in two halves every backend's
   // chunk loop applies together (Frustum.radialCulled, js/render/shared/frustum.js).
-  // frame.cullDist, the HARD radius. Free/debug camera and cinematic: mobile caps
-  // at 700 m (a pushed-out photo-mode far plane frames a whole ~5 M-vert city and
-  // jetsam-kills the tab; the cinematic runs seconds after the build's transient
-  // peak), desktop keeps the full vista. Feature-shedding tier 3+ caps at the far
-  // plane (scenery vertex/draw load is the one big cost class the resolution
-  // scale and shed passes don't touch). Otherwise the sphere that contains the
-  // frustum (far-plane corners sit farther than farPlane) — look-identical.
+  // frame.cullDist, the HARD radius: Frustum.sceneryCullDist owns the policy
+  // (free cam / cinematic, tier 3+ far-plane cap, the phone 800 m cap at every
+  // tier). Tier 3+ caps because scenery vertex/draw load is the one big cost
+  // class the resolution scale and shed passes don't touch.
   // frame.cullFog, the FOG WALL: [density, height falloff] as the SHADER renders
   // them (frame.fogDensity * FOG DENSITY — off the raw base, FOG DENSITY 0 still
   // culled scenery at 250 m with no fog drawn). A chunk goes once even its
@@ -7663,7 +7660,7 @@ function render(dt) {
   _cullFog[0] = (dbgCam || cine) ? 0 : (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   _cullFog[1] = LT.fogHeight != null ? LT.fogHeight : (frame.fogHeight || 0);   // uFogHeight's own fallback
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : (PerfGov.tier() >= 3 ? farPlane : _farCull);
+  frame.cullDist = Frustum.sceneryCullDist({ free: !!(dbgCam || cine), mobile: !!gfx.isMobile, tier: PerfGov.tier(), farPlane, farCull: _farCull, renderDistMul: LT.renderDistMul });
   // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
   // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
   // different lenses for months with nothing able to see it, because every hook

@@ -622,7 +622,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampVolBase` | BEAMS (CLEAR) | 0 … 0.7 | 0.05 | — | ✓ | game.js |
 | `lampVolHaze` | BEAMS (HAZE) | 0 … 1.5 | 0.65 | — | ✓ | game.js |
 | `lampVolCap` | BEAM CEILING | 0 … 1.5 | 0.7 | — | ✓ | game.js |
-| `renderDistMul` | RENDER DISTANCE | 0.3 … 2.05 | 1 | — |   | game.js×2 |
+| `renderDistMul` | RENDER DISTANCE | 0.3 … 2.05 | 1 | — |   | game.js×3, frustum.js×2 |
 
 ## ROAD & REFLECTIONS  (12)
 
