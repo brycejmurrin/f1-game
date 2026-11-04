@@ -475,6 +475,7 @@
     "tests/unit/garage-crew.test.mjs",
     "// GarageDepartureWheels.samplePose: authored path for every angle (Night Shift high), not only CUT.",
     "tests/unit/garage-departure-wheels.test.mjs",
+    "tests/unit/garage-editor-4909.test.mjs",
     "tests/unit/garage-entrance-motion.test.mjs",
     "tests/unit/garage-finish-remap.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",

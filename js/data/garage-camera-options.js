@@ -447,6 +447,20 @@ const GarageCameraOptions = (function () {
 
   // ---- UI (injected: index.html is shrink-only) ----
   let _bound = false, _paint = null;
+  /** COPY TO ALL MOMENTS: every moment takes `from`'s BAY CAMERA and STAY INSIDE. */
+  function copyMoment(store, from) {
+    const cur = read(store), v = forMoment(cur, MOMENT_IDS.includes(from) ? from : "start"), ms = {};
+    for (const m of MOMENT_IDS) ms[m] = { shot: v.shot, stayInside: v.stayInside };
+    return write(store, Object.assign({}, cur, { moments: ms }));
+  }
+  /** RESET: moment `m` drops its own pick and follows the shared ENTRY / EXIT one again. */
+  function resetMoment(store, m) {
+    const cur = read(store), ms = Object.assign({}, cur.moments || {});
+    delete ms[m];
+    const next = Object.assign({}, cur, { moments: ms });
+    if (!Object.keys(ms).length) delete next.moments;
+    return write(store, next);
+  }
   function bindUi($, store, hooks) {
     if (_bound || typeof document === "undefined" || !$) return false;
     const onChange = hooks && typeof hooks.onChange === "function" ? hooks.onChange : null;
@@ -595,7 +609,7 @@ const GarageCameraOptions = (function () {
   return Object.freeze({
     STORE_KEY, BAY, VIEW_PRESETS, SHOT_IDS, SHOT_LABEL, STYLE_IDS, STYLE_SHOT, ANGLE_FRAME, DEFAULT,
     NEAR_PLANE,
-    MOMENT_IDS, forMoment, refreshUi: () => { if (_paint) _paint(); },
+    MOMENT_IDS, forMoment, copyMoment, resetMoment, refreshUi: () => { if (_paint) _paint(); },
     settings, read, write, clampEye, clearJamb, outsideBay, inJamb, maxDistInside,
     samplePath, applyArrival, viewPreset, bindUi, pathTable, enforceNearPlane,
   });

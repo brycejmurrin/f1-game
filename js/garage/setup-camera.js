@@ -131,8 +131,11 @@ const reducedMotion = () => {
   if (mv === "reduce") return true;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 };
+const camOptions = (fn, m) => { if (typeof GarageCameraOptions !== "undefined" && GarageCameraOptions[fn]) { GarageCameraOptions[fn](G.store, m); GarageCameraOptions.refreshUi(); } };
 const arrivalUi = GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview, changed: () => refreshPreview(),
-  momentChanged: () => { if (typeof GarageCameraOptions !== "undefined" && GarageCameraOptions.refreshUi) GarageCameraOptions.refreshUi(); } });
+  // A tab switch while EDIT holds a preview frame moves the preview to that moment: the rows now edit it (#4909).
+  momentChanged: (m) => { previewMoment(m); if (typeof GarageCameraOptions !== "undefined" && GarageCameraOptions.refreshUi) GarageCameraOptions.refreshUi(); },
+  copied: (m) => camOptions("copyMoment", m), reset: (m) => camOptions("resetMoment", m) });
 const arrival = GarageArrival.create($, reducedMotion, arrivalUi);
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
@@ -364,6 +367,14 @@ function refreshPreview() {
   if (!preview) return;
   preview.cfg = previewCfg(preview.moment);
   preview.t = Math.min(preview.t, previewLen(preview));
+  previewSync();
+}
+/** EDIT's held frame follows the moment tab: the new moment, its own settings, the time clamped to its length. */
+function previewMoment(m) {
+  if (!preview || !preview.editing || !m || preview.moment === m) return;
+  Object.assign(preview, { moment: m, dir: GarageArrival.MOMENT_DIR[m], cfg: previewCfg(m), marked: null, motion: null });
+  preview.t = Math.min(preview.t, previewLen(preview));
+  if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.resetTravel) GarageDepartureWheels.resetTravel(preview);
   previewSync();
 }
 // `which` is a moment (GarageArrival MOMENTS) or the shipped direction ("in" pit in, "out" race start, "home").

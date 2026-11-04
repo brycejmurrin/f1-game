@@ -264,7 +264,8 @@ const GarageArrival = (function () {
     return out;
   }
   /** opts.preview(moment, btn) starts one playback of the picked moment (null stops one; both return whether
-   *  they acted; setup-camera.js startArrivalPreview); opts.changed() follows every saved edit. */
+   *  they acted; setup-camera.js startArrivalPreview); opts.changed() follows every saved edit;
+   *  opts.momentChanged(m) a tab switch; opts.copied(from) / opts.reset(m) COPY TO ALL MOMENTS / RESET. */
   /* THE ANGLE MAP: the bay in plan under GARAGE ANGLE (walls, door, lane, car, the five CAMS with cones), the
    * used eyes lit and numbered by shot. Pure SVG; x maps to 10..110, z (-6.4 .. 6.4) to 8..92. */
   function angleMap(angle, shots, dir = "in") {
@@ -284,8 +285,8 @@ const GarageArrival = (function () {
       + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`;
     // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
     if (rigData(angle)) {
-      const pts = [];
-      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, dir === "out" ? "out" : "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
+      const pts = [], d = dir === "out" || dir === "home" ? dir : "in";
+      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, d, i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
       const a = pts[0].split(" "), b = pts[16].split(" ");
       return room + `<polyline points="${pts.join(" ")}" fill="none" stroke="#e10600" stroke-width="2" stroke-dasharray="4 3"/>`
         + `<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>`
@@ -432,6 +433,18 @@ const GarageArrival = (function () {
       const none = Array.from(el.options).find((o) => o.value === "none") || null;
       for (const id of ids) el.add(option(id, GarageCrewChoreo.label(id)), none);
     }
+    /* A saved value no option offers (PIT OUT's 1.6× base speed, a STYLE's 4° zoom) gets one option of its
+     * own, marked data-off-list and replaced on the next refresh: a <select> set to a missing value shows blank. */
+    function offList(el, want) {
+      if (!el.options || !el.add || typeof document === "undefined") return;
+      const opts = Array.from(el.options);
+      for (const o of opts) if (o.dataset && o.dataset.offList !== undefined && o.value !== want) o.remove();
+      if (Array.from(el.options).some((o) => o.value === want)) return;
+      const o = option(want, want + (el.id === "ga-speed" || el.id === "ga-carspeed" ? "×" : el.id === "ga-zoom" ? "°" : ""));
+      o.dataset.offList = "";
+      const after = Array.from(el.options).find((x) => Number(x.value) > Number(want));
+      el.add(o, after || null);
+    }
     function refresh() {
       const value = read();
       for (const m of MOMENTS) { const b = tabs[m]; if (b && b.setAttribute) b.setAttribute("aria-pressed", String(m === moment)); }
@@ -444,8 +457,10 @@ const GarageArrival = (function () {
       for (const key of Object.keys(fields)) {
         const el = fields[key];
         if (!el) continue;
-        if (CHECK.includes(key)) el.checked = value[key];
-        else el.value = key === "hold" && value.hold === null ? "auto" : String(value[key]);
+        if (CHECK.includes(key)) { el.checked = value[key]; continue; }
+        const want = key === "hold" && value.hold === null ? "auto" : String(value[key]);
+        offList(el, want);
+        el.value = want;
       }
       shotEls.forEach((el, i) => { if (el) el.value = value.shots[i]; });
       const style = styleOf(value);
@@ -462,10 +477,11 @@ const GarageArrival = (function () {
         map = $("ga-angle-map");
       }
       if (map) {
-        const dir = MOMENT_DIR[moment] === "out" ? "out" : "in";
+        const dir = MOMENT_DIR[moment];
         map.innerHTML = angleMap(value.angle, value.shots, dir);
         const used = shotsFor(value, dir);
-        if (map.setAttribute) map.setAttribute("aria-label", RIGS[value.angle] ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
+        // The label names what the map draws: a rig whose samples have not landed draws (and plays) CUT.
+        if (map.setAttribute) map.setAttribute("aria-label", rigData(value.angle) ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
           : value.angle === "cut" ? "Two camera cut: left of the bay, then right"
           : new Set(used).size === 1 ? "One camera, " + CAM_NAMES[used[0]] + ", looking out of the door"
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
@@ -498,15 +514,23 @@ const GarageArrival = (function () {
     }
     const copyAll = $("ga-copy-all");
     if (copyAll) copyAll.onclick = () => {
-      const value = read(), ms = {};
-      for (const m of MOMENTS) ms[m] = settings(value);
-      store1(ms); refresh(); if (changed) changed();
+      // The look, not the switch: each moment keeps its own PLAY ANIMATIONS (RACE END its PLAY AFTER A RACE too).
+      const value = read(), ms = {}, from = moment;
+      for (const m of MOMENTS) {
+        const own = settingsFor(raw(), m);
+        ms[m] = Object.assign(settings(value), { enabled: own.enabled, afterRace: own.afterRace });
+      }
+      store1(ms);
+      if (opts.copied) opts.copied(from);
+      refresh(); if (changed) changed();
     };
     shotEls.forEach((el, i) => { if (el) el.onchange = () => { const value = read(); value.shots[i] = el.value; save(value); }; });
     $("ga-reset").onclick = () => {
       const ms = momentsNow();
       ms[moment] = settings(MOMENT_BASE[moment] || {});
-      store1(ms); refresh(); if (changed) changed();
+      store1(ms);
+      if (opts.reset) opts.reset(moment);   // the moment's BAY CAMERA / STAY INSIDE (GarageCameraOptions) too
+      refresh(); if (changed) changed();
     };
     // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
     // it takes the settings page's place while open and gives it back on DONE.
