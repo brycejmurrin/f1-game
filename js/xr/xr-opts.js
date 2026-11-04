@@ -190,6 +190,13 @@ const XROpts = (function () {
       hostParent.appendChild(wrap);
     }
     _host = wrap;
+    // The one re-probe after the first visit: entering HUD & CAMERA asks the
+    // headset again (boots read apex26.xrCaps instead, #4324 bfcache).
+    if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) {
+      SettingsNav.onEnter((id) => {
+        if (id === "display" && typeof XrBoot !== "undefined" && XrBoot.recheck) XrBoot.recheck();
+      });
+    }
   }
 
   if (typeof document !== "undefined") {

@@ -61,7 +61,7 @@ import { randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
-import { changedPaths } from "../lib/changed-files.mjs";
+import { changedPaths, untrackedPaths } from "../lib/changed-files.mjs";
 import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { verificationIdentity, beginVerification, finishVerification, verificationMarker } from "./verification-receipt.mjs";
@@ -705,14 +705,19 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
   return out;
 }
 
-/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH), plus untracked files: the edit loop
+ *  verifies BEFORE `git add`, and `git diff` never lists a new file (B3 — a new unit file went unselected). */
+export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+  let tracked;
   try {
     const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
-    return changedPaths([base], { cwd: root });
+    tracked = changedPaths([base], { cwd: root });
   } catch (_) {
-    try { return changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { return []; }
+    try { tracked = changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { tracked = []; }
   }
+  let untracked = [];
+  try { untracked = untrackedPaths({ cwd: root }); } catch (_) { /* no git: the tracked list stands */ }
+  return [...new Set([...tracked, ...untracked])];
 }
 
 /**

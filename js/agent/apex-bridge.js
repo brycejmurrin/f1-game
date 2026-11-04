@@ -310,7 +310,7 @@ const ApexBridge = (function () {
     if (r.status === 304) return 0;
     if (r.status === 401) { stop("token rejected"); setToken(""); return -1; }
     if (!r.ok) { run.backoff = Date.now() + BACKOFF_MS; say("poll " + r.status + ", backing off"); return -1; }
-    run.etag = r.headers.get("etag") || null;
+    const etag = r.headers.get("etag") || null;
     const page = await r.json();
     // Advance the window to the newest comment on this page, so the next poll reads PAST it: a fixed `since` served
     // page 1 (100 comments) forever and re-parsed the whole thread. The newest CREATED time is the safe bound — every
@@ -328,9 +328,10 @@ const ApexBridge = (function () {
       paintBadge();
       await post(Object.assign({ re: c.id, cmd: c.msg && c.msg.cmd }, res));
     }
-    // Only after every command is served: a throwing post() leaves the window where it was, so the next poll re-reads
-    // the unserved commands (`seen` drops the ones already handled) instead of skipping past them.
-    if (_run === run) run.since = newest;
+    // Only after every command is served: a throwing post() leaves the window AND the etag where they were, so the next
+    // poll re-reads the unserved commands (`seen` drops the ones already handled) instead of skipping past them. An
+    // etag saved before the batch made that re-read a 304, stranding them until a new comment (B5 #4549).
+    if (_run === run) { run.since = newest; run.etag = etag; }
     return cmds.length;
   }
 

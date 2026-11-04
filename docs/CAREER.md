@@ -629,6 +629,13 @@ the same way, or fast-forwarding a season would quietly hand every car a finish.
 for a race completed without incident, and paying the bonus for a DNF would make
 the one round you did not race the cheapest one to bank.
 
+**A retirement earns no prize money.** Position prize follows points: `settleRound()`
+pays `prizeFor(pos)` only to a car `scored()` counts (a finisher, or a DNF classified
+past 90 % distance), and the MY TEAM team-mate's `matePrize` follows the same rule.
+A retired car sits at the foot of the order, so it used to bank the tail rate for a
+race it did not finish. The driver's salary is a contract term, not a result, and
+still pays on a DNF (#4535 decision 1).
+
 ### The player can switch it off
 
 RELIABILITY is a race setting (`#rs-reliab`) alongside DIFFICULTY, persisted the

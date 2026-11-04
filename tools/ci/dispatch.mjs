@@ -194,6 +194,18 @@ export function foreignActivity(p, now, hours = 2) {
   return "";
 }
 const RED = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
+/** The newest `adopts PR #<n>` comment younger than `minutes` (a launch lock: two launchers adopted #4597 7 s apart), or null. Pure. */
+export const recentAdoption = (comments, number, now, minutes = 10) => (comments || [])
+  .filter((c) => new RegExp(`^adopts PR #${number}\\b`, "m").test(String(c.body || "")) && (now - t(c.created_at)) / 6e4 < minutes)
+  .sort((a, b) => t(b.created_at) - t(a.created_at))[0] || null;
+/** Is the head CI still running with nothing failed and no conflict, so a CONTINUE worker has nothing to do? Pure. */
+export function ciRunningClean(p) {
+  if (p.mergeable_state === "dirty" || !(p.checks || []).length) return false;
+  const newest = new Map();
+  for (const c of p.checks) { const o = newest.get(c.name); if (!o || (c.id || 0) > (o.id || 0)) newest.set(c.name, c); }
+  const runs = [...newest.values()];
+  return runs.some((c) => c.status !== "completed") && !runs.some((c) => c.status === "completed" && RED.has(c.conclusion));
+}
 /** Has the head of a `land` PR a failed check (the newest run of each check name), a failed `gate` COMMIT STATUS
  *  (land.yml posts `gate` as a status, not a check run), a `gate` pending longer than `staleH` hours (not while
  *  `mergePaused`: land.yml parks it on purpose) or a conflict? null when it only waits. Pure. */
@@ -315,6 +327,9 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     const needs = unmergedPrerequisites(p, prs);
     if (needs.length) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but waits for ${needs.map((n) => `#${n}`).join(", ")} to merge (launch after it lands)`); continue; }
     if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
+    const adopted = recentAdoption(p.comments, p.number, now, config.adoptLockMinutes ?? 10);
+    if (adopted) { skip(`PR #${p.number}`, `adopted ${Math.round((now - t(adopted.created_at)) / 6e4)}m ago (launch lock: adopts comment under ${config.adoptLockMinutes ?? 10} min)`); continue; }
+    if (ciRunningClean(p)) { skip(`PR #${p.number}`, "head CI is running with 0 failed jobs and no conflict: nothing for a CONTINUE worker to do"); continue; }
     if (!asked) label(p.number, ["needs-owner"]);
     launch("continue", p.number, `[Worker] CONTINUE PR #${p.number} ${p.title || ""}`.slice(0, 120), p.number);
   }
@@ -404,7 +419,8 @@ export function readState({ api = githubApi, config, now = Date.now() } = {}) {
     // The foreign-activity probe reads commits only for PRs a takeover could target (stale or asked for).
     if (has(p, "needs-owner") || hoursAgo(p.updated_at, now) >= config.staleHours.default)
       out.commits = getAll(api, `pulls/${p.number}/commits`, { pick: (j) => (Array.isArray(j) ? j : []) }).slice(-30).map((c) => ({ author: c.author?.login || c.commit?.author?.name || "", at: c.commit?.committer?.date || c.commit?.author?.date }));
-    if (has(p, "land")) {   // rule 2 needs to know whether a landing PR only waits (land.yml) or is red/conflicting
+    const maybeTakeover = has(p, "needs-owner") || hoursAgo(p.updated_at, now) >= config.staleHours.default;
+    if (has(p, "land") || maybeTakeover) {   // rule 2 and the CONTINUE no-op skip need to know whether a landing PR only waits (land.yml) or is red/conflicting
       out.mergeable_state = get(api, `pulls/${p.number}`)?.mergeable_state ?? null;
       out.checks = getAll(api, `commits/${p.head.sha}/check-runs`, { pick: (j) => j?.check_runs })
         .map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion }));
