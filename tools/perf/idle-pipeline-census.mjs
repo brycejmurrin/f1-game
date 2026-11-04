@@ -34,7 +34,7 @@ export function hookPipelines() {
   };
   // The twin counters (#4783): bind groups and buffers minted on the GPUDevice itself, with the label of the
   // first few so a culprit is named. WebGL2 has no device: both stay 0 and `gpuDevice` says so.
-  P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false;
+  P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false; P.gpuLogOn = false;   // the log opens after warm-up: warm-up alone fills any cap
   const dev = be.device;
   if (dev && typeof dev.createBindGroup === "function" && typeof dev.createBuffer === "function") {
     P.gpuDevice = true;
@@ -42,7 +42,7 @@ export function hookPipelines() {
       const orig = dev[name];
       dev[name] = function (desc) {
         P[key]++;
-        try { if (P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size }); } catch (_) { /* naming is best-effort */ }
+        try { if (P.gpuLogOn && P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size }); } catch (_) { /* naming is best-effort */ }
         return orig.apply(this, arguments);
       };
     };
@@ -84,7 +84,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   await page.waitForFunction(raceGate, null, { polling: 500, timeout: 300000 });
   await gas(true);
   await frames(page, WARM_FRAMES);
-  const warm = await page.evaluate(() => window.__bpp.count);
+  const warm = await page.evaluate(() => { window.__bpp.gpuLogOn = true; return window.__bpp.count; });
   const windows = [];
   for (let i = 1; i <= WINDOWS; i++) {
     const snap = () => page.evaluate(() => ({ p: window.__bpp.count, bg: window.__bpp.bindGroups, b: window.__bpp.buffers, g: window.__bpp.gpuLog.length }));
