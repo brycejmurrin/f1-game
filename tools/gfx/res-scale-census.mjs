@@ -37,6 +37,15 @@ export function parseArgs(argv) {
   return o;
 }
 
+/** The settle gate (#4783): every step reaches its size within 2 presented frames and the texture count returns to the start. */
+export function verdict(sm) {
+  const fails = [];
+  if (!sm.fixedTargets && sm.unsettledSteps) fails.push(`${sm.unsettledSteps} step(s) never reached the scaled post-target size`);
+  if (!sm.fixedTargets && sm.maxSettleFrames > 2) fails.push(`settle took ${sm.maxSettleFrames} presented frames (> 2)`);
+  if (sm.texturesEnd !== sm.texturesStart) fails.push(`textures ${sm.texturesStart} -> ${sm.texturesEnd} after the sweep`);
+  return fails.length ? "FAIL: " + fails.join("; ") : "ok";
+}
+
 async function main() {
   const o = parseArgs(process.argv.slice(2));
   const srv = await startStaticServer(ROOT);
@@ -67,25 +76,44 @@ async function main() {
       const t = window.GLX && window.GLX.__tlx;
       const ps = t && t.postState ? t.postState() : null;
       const inf = t && t.renderer && t.renderer.info && t.renderer.info.memory;
-      return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null };
+      const cv = t && t.renderer && t.renderer.domElement;
+      return { rtResizes: ps ? ps.rtResizes : null, targets: ps ? ps.targets : null, textures: inf ? inf.textures : null,
+        frame: t && t.renderer && t.renderer.info ? t.renderer.info.render.frame : null,   // three's PRESENTED frame count (rAF ticks run far ahead on lavapipe)
+        warming: !!(t && t.warming && t.warming()), canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
     });
+    // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
+    // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
+    const presented = (n) => page.waitForFunction((k) => { const t = window.GLX && window.GLX.__tlx; if (!t || t.warming()) return false; const w = window.__resWait || (window.__resWait = { f0: null }); const f = t.renderer.info.render.frame; if (w.f0 == null) w.f0 = f; if (f >= w.f0 + k) { w.f0 = null; return true; } return false; }, n, { polling: 200, timeout: 400000 });
     const api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
+    if (o.webgpu) await presented(5);   // sweep only once present() is running
     const base = await read();
+    base.scaleBase = base.fixed ? base.targets : [base.canvas ? base.canvas[0] : base.targets[0], base.canvas ? base.canvas[1] : base.targets[1]];
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
     let prev = base;
     for (const s of o.scales) {
       const ms = await page.evaluate((v) => { const t0 = performance.now(); window.__apex.renderScale(v); return +(performance.now() - t0).toFixed(2); }, s);
-      await waitFrames(page, o.settle, 400000);
-      const r = await read();
-      rows.push({ step: "scale", scale: s, callMs: ms, ...r, dResizes: r.rtResizes - prev.rtResizes });
+      // Settle in presented frames and count how many the post target needs to follow (issue gate: <= 2).
+      const want = [Math.max(1, Math.round(prev.scaleBase[0] * s)), Math.max(1, Math.round(prev.scaleBase[1] * s))];
+      let r = null, settledAfter = null;
+      for (let k = 0; k <= Math.max(o.settle, 8) && settledAfter == null; k++) {
+        await presented(1);
+        r = await read();
+        if (r.targets && r.targets[0] === want[0] && r.targets[1] === want[1]) settledAfter = k + 1;
+      }
+      r = { ...r, scaleBase: prev.scaleBase };
+      rows.push({ step: "scale", scale: s, callMs: ms, ...r, want, settledAfter, dResizes: r.rtResizes - prev.rtResizes });
       prev = r;
     }
     const total = prev.rtResizes - base.rtResizes;
     const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
-      maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length };
+      maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length,
+      maxSettleFrames: Math.max(0, ...rows.map((r) => r.settledAfter || 0)), unsettledSteps: rows.filter((r) => r.step === "scale" && r.settledAfter == null).length,
+      texturesStart: rows[0].textures, texturesEnd: prev.textures, fixedTargets: base.fixed };
+    summary.verdict = verdict(summary);
     for (const r of rows) console.log(JSON.stringify(r));
     console.log(JSON.stringify({ summary }));
+    if (o.webgpu && summary.verdict !== "ok") { console.error("res-scale-census " + summary.verdict); process.exitCode = 1; }
     if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify({ rows, summary }, null, 2)); }
   } finally {
     await browser.close().catch(() => {});

@@ -32,6 +32,17 @@ yet told apart. Live textures: 27 at start, 28 at 0.9, 29 from 0.8 on, and still
 check "textures after 1 to 0.6 to 1 equal the start" would fail (29 vs 27) on this data: two textures appear during the
 sweep and stay.
 
+### Render-scale follow-up (#4783, static analysis)
+
+The flat `rtResizes` is most likely the probe, not the renderer. `tlx.js` `resize()` returns early while `_warmPending`
+holds present() (`if (_warmPending) { cssSizeCache.markDirty(); return; }`), so a `renderScale()` step issued during the
+long lavapipe pipeline warm is dropped, and `waitFrames` counted rAF ticks, which run far ahead of presented frames
+there. `tlxFixedTargets` is default OFF, so the by-design explanation does not apply. `res-scale-census` now waits for
+`!warming()` and for three's `info.render.frame` to advance, records the canvas size, the warm flag and the presented
+frames each step needs to reach the scaled post-target size, and `--webgpu` exits 1 on a settle over 2 frames or a texture
+count that does not return to the start. Confirm on the next `perf-census-webgpu` run; if the targets still do not follow
+once presenting, the renderer is at fault and that run's rows say where.
+
 ## Not done yet (#4783)
 
 - gpu-mem-census `--webgpu`: its allocation counters wrap WebGL calls. Needs a WebGPU `createTexture`/`createBuffer` wrapper (overlaps #4710).
