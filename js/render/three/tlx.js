@@ -7159,9 +7159,9 @@ const TLX = (function () {
   // Dispose a three renderer WITHOUT losing the WebGL2 context it rendered to.
   // r186 WebGLBackend.dispose() ends with WEBGL_lose_context.loseContext(), and
   // on the forceWebGL path that context is #game's own (bootRenderer hands it
-  // to three): the GLX fallback that _fail() boots next calls
-  // getContext("webgl2") on the same canvas and gets the SAME object back,
-  // dead or about to die. Lost before GLX.init → link fails → claim-fail
+  // to three): a same-load GLX fallback would call
+  // getContext("webgl2") on the same canvas and get the SAME object back,
+  // dead or about to die (today a claimed refusal reloads into GLX instead, #4817). Lost before GLX.init → link fails → claim-fail
   // reload; lost after → GLX's webglcontextlost handler latches
   // apex26.envProbeOff / perChunkOff for good and counts a reload strike.
   // Neutering the extension lookup keeps the rest of the dispose (three frees
