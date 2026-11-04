@@ -409,7 +409,7 @@ test('every circuit exposes authored turn locations usable by named shot plans',
 // garage-only PRs do not false-fail this suite (#4525). Update together with a catalog
 // regen when non-garage scenery inputs change. Catalog.sourceDigest uses the same
 // garage-immune contract via tools/shot/scenery-source-hash.cjs.
-const SCENERY_CATALOG_DIGEST = "ad2b597066f885ccfaedc77004e1b73b97591c43a6cb1a15b664dd91214c81c4";
+const SCENERY_CATALOG_DIGEST = "46fe435d0e3499f16892118aab7094f45ef8f4e0b48665df1c8c1b3346a06c36";
 test('named scenery catalog accounts for every registered hero and targets emitted geometry', async () => {
  const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
  const { createRequire } = await import('node:module');

@@ -4500,10 +4500,17 @@ const TLX = (function () {
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
           if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
-          // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
-          // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
-          // mechanism I asserted and could NOT substantiate.
-          a.array = null;
+          // A ZERO-LENGTH VIEW OF THE SAME CLASS, NOT null (#4900). Pipelines
+          // recompute backend.getRenderCacheKey() on every needsRenderUpdate()
+          // (a new material or render context, not only a new RenderObject), and
+          // getVertexBufferLayout / _getVertexFormat read array.BYTES_PER_ELEMENT
+          // and array.constructor of EVERY attribute with no null guard (r187):
+          // a nulled car caster threw in present ~37 s into a race and reloaded
+          // the tab (PR #4880 census). Gpu-census 26's zero-byte buffer does not
+          // apply: that was an INDEX array (never freed here) and never-uploaded
+          // chunks; `uploaded()` above means createAttribute never runs again
+          // for this attribute (its backend data goes only with geometry.dispose).
+          a.array = new a.array.constructor(0);
         };
         const atts = g.attributes;
         for (const k in atts) drop(atts[k]);
@@ -4540,19 +4547,11 @@ const TLX = (function () {
         // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
         // evidence from a real handset.
         if (isMobile) return;
-        // AND KNOW WHAT IT COSTS ON DESKTOP. Freeing an array disarms the
-        // two intermediate rungs of the paint-failure ladder below (dropTo ->
-        // unlitMat -> rawUnlitMat): dropTo reassigns pm.material, a new
-        // (geometry, material) pair is a new RenderObject, and building its
-        // pipeline runs _getVertexFormat, which is `e.array.constructor` with
-        // NO null guard in the shipped vendor build (three.webgpu.min.js,
-        // r185). Both rungs therefore throw and the ladder lands on
-        // refuseTab() — which reloads onto GLX only for an explicit pin or a boot
-        // already on three WebGL2 (a WebGPU AUTO boot reloads onto three WebGL2),
-        // so the player still gets a game, just never the unlit TLX degradation
-        // those rungs exist for.
-        // Verified by reading the vendored bytes, not reproduced at runtime.
-        // Do not add rungs above refuseTab() expecting them to run here.
+        // A freed attribute keeps a zero-length view of its class (#4900), so a
+        // new (geometry, material) pair — the paint ladder's dropTo -> unlitMat
+        // -> rawUnlitMat rungs included — still types its vertex layout from
+        // array.constructor / BYTES_PER_ELEMENT. A NEW attribute name on a freed
+        // geometry is a different matter: only uploaded attributes are freed.
         if (now - _mirrorSweepAt < 2000) return;
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;

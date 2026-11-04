@@ -731,7 +731,9 @@
         billboard(K(sl(0.85)), side, 26, 20, 12, col1);
         billboard(K(sl(0.87)), side, 26, 18, 11, col2);
         billboard(K(sl(0.89)), side, 26, 16, 10, [col1[2], col1[0], col1[1]]); // rotated hue
-        place(K(sl(0.86)), side, 16, [10, 1.4, 10], col1);
+        // 0.865 (was 0.86): at 0.86 this plinth stood 0.9 m inside a front-row city neonTower on
+        // both sides; #4883's place() slot lift took it to 1.07 m, a severe clip-audit spot.
+        place(K(sl(0.865)), side, 16, [10, 1.4, 10], col1);
         place(K(sl(0.88)), side, 20, [12, 1.0, 8], col2);
       }
 
