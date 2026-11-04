@@ -68,3 +68,13 @@ Run 9 (31e8443e, tier held): `governor held {"tier":0,...}`, NO tier move logged
 the reload budget ran out (`The graphics renderer cannot draw on this device`). Governor refuted. Run 10 names the
 culprit instead of guessing: it wraps the WebGPU backend's `createRenderPipeline` and logs every pipeline built for a
 geometry with a null attribute array (object path, `__tlxKind`, freed flag, null attributes, material, seconds).
+
+Run 10 (5bcf6b8f): same failure ~37 s after the hold, and NO `nullattr` line. Reading the vendored r187 bundle
+explains it: the throw is not in `createRenderPipeline`. `Pipelines.getForRender` recomputes
+`backend.getRenderCacheKey(renderObject)` whenever `needsRenderUpdate()` is true (any material or render-context state
+change), and that calls `getVertexBufferLayoutCacheKey` -> `getVertexBufferLayout`, which reads
+`attribute.array.BYTES_PER_ELEMENT` for EVERY attribute of `renderObject.getAttributes()`. So any geometry whose
+arrays were set to `null` (tlx.js `releaseGeoMirrors`, tlx-chunked.js `releaseMirrors`) throws on its first state
+change after the free, even with all its GPU buffers uploaded. Run 11 wraps `getRenderCacheKey`, catches the throw and
+dumps the render object (object path, material, `vertexColors`, every attribute with its array type or NULL, index,
+`__tlxKind`), and logs the page's full stack instead of 300 characters.

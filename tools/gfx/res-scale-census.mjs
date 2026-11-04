@@ -81,7 +81,7 @@ async function main() {
     page.on("framenavigated", (f) => { if (f === page.mainFrame()) console.error(`res-scale-census: main frame navigated during ${stepNow}: ${f.url()}`); });
     page.on("crash", () => console.error(`res-scale-census: page crashed during ${stepNow}`));
     let logged = 0;
-    page.on("console", (m) => { if (logged < 80 && /error|warn|lost|reload|sentinel|strike|crash|context/i.test(m.type() + " " + m.text())) { logged++; console.error(`  [page ${m.type()} @${stepNow}] ${m.text().slice(0, 300)}`); } });
+    page.on("console", (m) => { if (logged < 80 && /error|warn|lost|reload|sentinel|strike|crash|context/i.test(m.type() + " " + m.text())) { logged++; console.error(`  [page ${m.type()} @${stepNow}] ${m.text().slice(0, /\n\s+at /.test(m.text()) || /res-scale-census/.test(m.text()) ? 2000 : 300)}`); } });
     page.on("close", () => console.error(`res-scale-census: page closed during ${stepNow}`));
     page.on("framedetached", (f) => console.error(`res-scale-census: frame detached during ${stepNow}: ${f.url()}`));
     page.on("requestfailed", (r) => console.error(`  [requestfailed @${stepNow}] ${r.url().slice(0, 120)} ${r.failure() && r.failure().errorText}`));
@@ -102,28 +102,38 @@ async function main() {
         const A = window.__apex, h = A.govHold(true);
         let last = h.tier;
         setInterval(() => { const t = A.govHold().tier; if (t !== last) { console.warn("res-scale-census tier " + last + " -> " + t); last = t; } }, 250);
-        // Run 9 (31e8443e): tier held at 0, no move, same failure ~35 s on. Name the culprit: every pipeline three builds
-        // for a geometry with a nulled attribute array (the getVertexBufferLayout throw) is logged with its object, kind,
-        // material and the seconds since this hook. Pipelines built for healthy geometry are counted only.
+        // Run 9 (31e8443e): tier held at 0, no move, same failure ~35 s on. Run 10 (5bcf6b8f) wrapped createRenderPipeline
+        // and logged nothing: the vendored r187 throws EARLIER, in getRenderCacheKey -> getVertexBufferLayoutCacheKey,
+        // which reads `attribute.array.BYTES_PER_ELEMENT` for every attribute whenever needsRenderUpdate() is true (any
+        // material or render-context state change), not only for a new pipeline. Wrap that, catch the throw and dump.
         const be = window.GLX.__tlx.renderer.backend, t0 = performance.now();
-        if (be && typeof be.createRenderPipeline === "function" && !be.__resPipeWrap) {
+        const desc = (a) => !a ? "?" : (a.name || "") + (a.isInstancedBufferAttribute ? "[inst]" : "") + (a.isInterleavedBufferAttribute ? "[ilv]" : "")
+          + (a.array == null ? "=NULL" : ":" + (a.array.constructor && a.array.constructor.name));
+        h.pipeWrap = !!(be && typeof be.getRenderCacheKey === "function");
+        if (h.pipeWrap && !be.__resPipeWrap) {
           be.__resPipeWrap = true; window.__resPipes = 0;
-          const orig = be.createRenderPipeline.bind(be);
+          const orig = be.getRenderCacheKey.bind(be);
           let warned = 0;
-          be.createRenderPipeline = function (ro) {
+          be.getRenderCacheKey = function (ro) {
             window.__resPipes++;
-            try {
-              const g = ro && ro.geometry, at = g && g.attributes ? g.attributes : {};
-              const nul = Object.keys(at).filter((k) => at[k] && at[k].array == null);
-              if (nul.length && warned++ < 12) {
-                const o = ro.object || {}, m = ro.material || {};
-                const path = []; for (let p = o; p && path.length < 4; p = p.parent) path.push(p.name || p.type);
-                console.warn("res-scale-census nullattr pipeline t=" + ((performance.now() - t0) / 1000).toFixed(1) + "s kind=" + g.__tlxKind
-                  + " freed=" + !!g.__tlxFreed + " null=[" + nul.join(",") + "] has=[" + Object.keys(at).join(",") + "] obj=" + path.join("<")
-                  + " mat=" + (m.name || m.type) + " pipes=" + window.__resPipes);
-              }
-            } catch (_) { /* diagnostics only */ }
-            return orig.apply(this, arguments);
+            let attrs = null;
+            try { attrs = typeof ro.getAttributes === "function" ? ro.getAttributes() : null; } catch (_) { /* diagnostics only */ }
+            const bad = attrs ? attrs.filter((a) => !a || a.array == null) : [];
+            const say = (why) => {
+              if (warned++ >= 12) return;
+              try {
+                const o = ro.object || {}, m = ro.material || {}, g = ro.geometry || {};
+                const path = []; for (let p = o; p && path.length < 5; p = p.parent) path.push((p.name || "") + "/" + p.type);
+                const ga = g.attributes || {};
+                console.warn("res-scale-census " + why + " t=" + ((performance.now() - t0) / 1000).toFixed(1) + "s kind=" + g.__tlxKind
+                  + " freed=" + !!g.__tlxFreed + " obj=" + path.join("<") + " mat=" + (m.name || "") + "/" + m.type
+                  + " vcol=" + !!m.vertexColors + " ro=[" + (attrs ? attrs.map(desc).join(",") : "n/a")
+                  + "] geo=[" + Object.keys(ga).map((k) => k + (ga[k] && ga[k].array == null ? "=NULL" : "")).join(",")
+                  + "] idx=" + (g.index ? (g.index.array == null ? "NULL" : "ok") : "none") + " pipes=" + window.__resPipes);
+              } catch (_) { /* diagnostics only */ }
+            };
+            if (bad.length) say("nullattr cachekey");
+            try { return orig.apply(this, arguments); } catch (err) { say("cachekey threw (" + String(err && err.message).slice(0, 80) + ")"); throw err; }
           };
         }
         return h;
