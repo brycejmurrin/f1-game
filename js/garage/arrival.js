@@ -99,20 +99,12 @@ const GarageArrival = (function () {
     if (config.fastest && !out) parts.push("FASTEST LAP");
     return parts.join(" · ");
   }
-  /* STYLE: a whole look in one tap, above the rows (phone UX: 33 rows is a lot
-   * to scroll). Each is a partial settings object laid over the saved one, so
-   * crews, timing and AFTER THE RACE stay the player's; RESET is the shipped look.
-   * BROADCAST: the TV pit-lane coverage — three locked-off cameras, broadcast
-   * light, captions. CINEMA: the Blender crane (no CAMERA MOVE on top: a push
-   * carried the lens into a crew member and the car past the frame edge,
-   * 2026-10-30 844x390 capture), slow-mo at the door, GOLDEN HOUR under bars (the
-   * showroom mood blacked the room out while the car was still in the lane),
-   * no captions. DOCUMENTARY: a heavy handheld
-   * drifting through three cameras under the garage's own light. SHOWCASE: the
-   * Blender orbit circling the car while the SPOTLIGHT cue dims the room and
-   * sweeps a follow-spot onto it, a launch reveal (the garage's own light: the
-   * showroom mood under the cue's dim played black, 2026-11-02 844x390 capture). NIGHT SHIFT: a light handheld on the high corner, drifting,
-   * under the overnight-service mood, the way a 24-hour race's garage looks. */
+  /* STYLE: a whole look in one tap, laid over the saved settings (crews, timing and AFTER THE RACE stay the
+   * player's; RESET is the shipped look). BROADCAST: three locked-off TV cameras, captions. CINEMA: the Blender
+   * crane with no CAMERA MOVE (a push carried the lens into the crew, 2026-10-30), slow-mo at the door, GOLDEN
+   * HOUR under bars. DOCUMENTARY: heavy handheld over three cameras. SHOWCASE: the orbit under the SPOTLIGHT cue
+   * in the garage's own light (the showroom mood played black, 2026-11-02). NIGHT SHIFT: light handheld on the
+   * high corner under the overnight-service mood. */
   const STYLES = Object.freeze({
     broadcast: Object.freeze({ label: "BROADCAST", look: { angle: "director", move: "still", sway: 0, zoom: 0, fov: 54, light: "broadcast", cue: "lightsup", captions: true, bars: false, slowmo: 0 } }),
     cinema: Object.freeze({ label: "CINEMA", look: { angle: "crane", move: "still", sway: 0.5, zoom: 6, fov: 48, light: "goldenhour", cue: "none", captions: false, bars: true, slowmo: 0.5 } }),
@@ -271,16 +263,10 @@ const GarageArrival = (function () {
     if (Object.keys(moments).length) out.moments = moments;
     return out;
   }
-  /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
-   *  and return whether it started; preview(null) stops one and returns whether
-   *  one was playing (js/garage/setup-camera.js startArrivalPreview).
-   *  opts.changed(): after every saved edit, so a running preview re-poses. */
-  /* THE ANGLE MAP: a plan of the bay under GARAGE ANGLE — walls, the door, the
-   * pit lane, the parked car and the five eyes (CAMS) with a cone toward the
-   * door — the ones the arrival uses lit and, when it cuts, numbered by shot, so
-   * the preset is a picture rather than a word. Pure: the inner SVG for an angle
-   * (and CUSTOM's shots). Bay x maps to 10..110, z (back -6.4 .. door 6.4) to
-   * 8..92, the lane below the door. */
+  /** opts.preview(moment, btn) starts one playback of the picked moment (null stops one; both return whether
+   *  they acted; setup-camera.js startArrivalPreview); opts.changed() follows every saved edit. */
+  /* THE ANGLE MAP: the bay in plan under GARAGE ANGLE (walls, door, lane, car, the five CAMS with cones), the
+   * used eyes lit and numbered by shot. Pure SVG; x maps to 10..110, z (-6.4 .. 6.4) to 8..92. */
   function angleMap(angle, shots, dir = "in") {
     const X = (x) => (60 + x * 100 / 10.8).toFixed(1), Z = (z) => (50 + z * 84 / 12.8).toFixed(1);
     const used = shotsFor({ angle, shots: Array.isArray(shots) ? shots : DEFAULT.shots }, dir);
@@ -751,14 +737,9 @@ const GarageArrival = (function () {
     const span = K[i] - K[i - 1], k = span > 1e-6 ? Math.max(0, Math.min(1, (t - K[i - 1]) / span)) : 1;
     return (A[i - 1] + (A[i] - A[i - 1]) * k) / A[A.length - 1];
   }
-  /* CREW-AWARE RIGS: a rig's path is authored once, but a Blender crew clip
-   * (crew-choreo.js; the RESULT crews crowd the car at x ~ ±3) can stand on it:
-   * 844x390 captures put a cheering head in the ORBIT lens. Within CREW_R metres
-   * (horizontally) of a member, a body up to 1.8 m, the eye RISES over their head
-   * (up to 1.3 m, eased), and from CREW_RAMP in it eases up to head height first.
-   * Smooth in d (a square-root lift dropped 0.4 m in a frame at its edge),
-   * so a member walking under the lens never snaps it (a sideways push flipped
-   * when one crossed it: a 1.5 m jump). The fixed CAMS are proven >= 0.8 m clear. */
+  /* CREW-AWARE RIGS: a Blender crew can stand on a rig's path (a cheering head in the ORBIT lens, 844x390).
+   * Within CREW_R m of a member the eye RISES over their head (up to 1.3 m, eased from CREW_RAMP), smooth in d so
+   * a member walking under the lens never snaps it. The fixed CAMS are proven >= 0.8 m clear. */
   const CREW_R = 1.2, CREW_RAMP = 2.4;
   let _crewOut = null;
   function clearOfCrew(eye, crew, t, side) {
@@ -783,16 +764,10 @@ const GarageArrival = (function () {
   const pose = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "in");
   /** AFTER THE RACE: config.result (RESULTS key) and an optional config.pos. */
   const poseHome = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "home");
-  /* THE DRIVE-OUT: the arrival in reverse, opening every RACE! while the circuit
-   * builds (js/game.js studioOpen). The shutter opens first (DOOR_S), the car sits
-   * a beat, then rolls out nose first, sweeps across the doorway into the lane
-   * and goes on down it at the PIT LIMITER — the speed it turned in at, no
-   * launch — so it is seen leaving (~1.4 s in the doorway's view, 2026-10-14)
-   * before the garage's front wall hides it. No circuit is needed — this is the
-   * setup screen's own room — so it plays the moment START is pressed.
-   * Reduce-motion Start Race plays it too, AT THE TUNER'S PACE: the 4x short cut
-   * (~1.9 s) read as a glitch, not a leave (2026-10-09), and the card, the flyby
-   * and the announcer always follow it (js/ui/loading-screen.js run). */
+  /* THE DRIVE-OUT: the arrival in reverse, opening every RACE! while the circuit builds (js/game.js studioOpen):
+   * shutter, a beat, then out nose first and down the lane at the PIT LIMITER, seen leaving (~1.4 s in the
+   * doorway's view) before the front wall hides it. Reduce motion plays it AT THE TUNER'S PACE (the 4x cut read
+   * as a glitch, 2026-10-09); the card, flyby and announcer follow (js/ui/loading-screen.js run). */
   const OUT_HOLD = 1.1, OUT_RUN = 5.0, OUT_ACCEL = 1.2, OUT_EXIT_M = 8.5;
   const OUT_V = OUT_PATH / (OUT_RUN - OUT_ACCEL / 2), OUT_EXIT = OUT_EXIT_M / OUT_V;
   const OUT_SETTLE = DOOR_S + OUT_HOLD + OUT_RUN + OUT_EXIT;   // gone behind the wall: the car holds from here
@@ -880,14 +855,9 @@ const GarageArrival = (function () {
     }
     function step(dt) {
       if (state && state.active) {
-        // WALL clock, not only the render dt (capped at 0.1 s per frame): on a
-        // GPU drawing a frame every 2 s that cap played the arrival — and kept
-        // the setup sheet inert — at a twentieth of real time (#3511), the
-        // drive-out's slow-motion bug (setup-camera.js stepDriveOut) again.
-        // One gap longer than the whole arrival is a suspended or hidden tab,
-        // not a frame of the show (bound after Merlin's #3546): it keeps the
-        // 0.1 s bound, so a background tab still cannot swallow the arrival;
-        // a shorter one credits at most MAX_GAP_S.
+        // WALL clock, not only the capped render dt: a GPU at one frame per 2 s played the arrival at 1/20 speed
+        // (#3511). A gap longer than the whole show is a hidden tab and keeps the 0.1 s bound; a shorter one credits
+        // at most MAX_GAP_S.
         const now = clock(), gap = last ? now - last : 0;
         last = now;
         const capped = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));

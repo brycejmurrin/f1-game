@@ -103,12 +103,9 @@ function glareScale(tune) {
 // compares positions): the PRESENCE of the strip fields, finShape's outline, coverVents, spineHeight, spineSide
 // (service panels) and spineLogo's WRAP (flank trim), plus the part shapes.
 const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide", "spineLogo", "bodyStyle", "aeroShape", "floorShape", "engineShape", "suspensionShape", "brakesShape", "tyresShape", "ersShape", "gearboxShape", "fuelShape", "exhaustShape", "cockpitShape", "wheelsShape"];
-// The turntable silhouette's cache key. The hull depends on POSITIONS ONLY, so it is the
-// preview key WITHOUT the livery id (partsVisualKey ends "|L:<id>"; the catalog option ids
-// before it never hold "|L:") plus the geometry-gating fields: it survives the per-value
-// colour-drag busts livePreviewDraft issues, and a livery PICK whose fields match reuses it.
-// Keyed on the id, every first visit to a livery re-walked ~19k points in framingHull:
-// ~260 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21). Pure: tests/unit/setup-preview-hull.test.mjs.
+// The turntable silhouette's cache key: the preview key WITHOUT the livery id ("|L:<id>") plus the geometry
+// fields, since the hull depends on positions only. It survives colour-drag busts and matching livery picks
+// (keyed on the id, each first visit re-walked ~19k points: ~260 ms at CPU x4). Pure: setup-preview-hull.test.mjs.
 function hullKeyOf(teamId, partsKey, seat, liv) {
   const at = partsKey.indexOf("|L:");
   return teamId + ":" + (at < 0 ? partsKey : partsKey.slice(0, at)) + ":" + seat + "|"
@@ -509,13 +506,9 @@ const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 // Was 3.35 (~12%), then 3.15 after honest WGX off-axis projection. 3.10 is a
 // hair closer on desktop after the view-matrix fix landed (1440x900 ~8.40 m).
 const SP_FIT_HALF_W = 3.10;
-// How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
-// zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
-// shot, whereas the auto fit reaching it means the fit diverged. js/garage/scene.js
-// notes a camera at 15 m "is outside the bay on at least one axis nearly
-// always"; 9.6 keeps the swing inside the side walls (±5.4) at the default
-// elevation with headroom over the 8.35 m default framing (was 11 — still
-// clipped the culled near wall on narrow viewports with the panel open).
+// How far the AUTOMATIC turntable may back off: under the MANUAL SP_DIST_MAX (reaching it means the fit
+// diverged). 9.6 keeps the swing inside the ±5.4 side walls at the default elevation (11 still clipped the
+// culled near wall on narrow viewports with the panel open).
 const SP_FIT_DIST_MAX = 9.6;
 // Manual zoom still reaches SP_DIST_MAX, but the default / auto path never does:
 // GarageCameraOptions.maxDistInside (when loaded) further caps the live eye.
@@ -882,13 +875,9 @@ function releaseExterior() {
   if (exterior) exterior.release();
   exteriorRequested = null; exteriorHeld = null; exteriorSequence = false; exteriorVisible = false; exteriorLight = null; exteriorAnchor = null;
 }
-// The ROOM's view of the game beyond the car (GarageScene.draw's ctx): the
-// circuit the next race runs at — the career's calendar, the free-play season's,
-// else the picker's — its weather and hour, and the career's tally for the wall.
-// `asSetup`: the ctx the SETUP garage will draw with, even while the title's
-// Home session borrows the room (GaragePrebuild keys and builds the room on it).
-// One reused ctx object per frame — GarageScene.draw / live / ctxKey read it
-// synchronously, so a fresh {} (+ results.filter) every orbit frame was GC only.
+// The ROOM's view beyond the car (GarageScene.draw's ctx): the next race's circuit (career, season, else the
+// picker), weather, hour and the career tally. `asSetup`: the SETUP garage's ctx even while Home borrows the
+// room. One reused object per frame (read synchronously; a fresh {} per orbit frame was GC only).
 const _garageCtx = {
   track: null, weather: null, tod: null, night: false, wins: 0, last: null,
   sponsor: null, career: false, round: 0, spin: false, achievements: null,
@@ -1145,10 +1134,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // is capped (SP_FIT_DIST_MAX): past it the wings crop at broadside rather than the eye leaving the 5.4 m bay
   // (900x820, half-width panel); 1440x900, 1280x800 and 844x390 are unchanged to 2 dp. panelFracY is not a term:
   // height never binds, and fitting against the vertical half-angle measured wrong (a 10.31 m floor).
-  // Stay-inside default: after the auto-fit (SP_FIT_DIST_MAX), also cap the live
-  // distance so the eye cannot sit past the bay's side wall. Manual free/dev
-  // shots keep SP_DIST_MAX. spFitD's statement shape is pinned by
-  // setup-preview-hull.test.mjs — keep it a pure Math.min(SP_FIT_DIST_MAX, …).
+  // Stay-inside: also cap the live distance at the bay's side wall (manual free/dev shots keep SP_DIST_MAX).
+  // spFitD's statement shape is pinned by setup-preview-hull.test.mjs: a pure Math.min(SP_FIT_DIST_MAX, …).
   const stayInside = typeof GarageCameraOptions === "undefined" || GarageCameraOptions.read(G.store).stayInside;
   // typeof-guard: the Home-photo VM extract in garage-panel-side.test.mjs runs this
   // framing slice without the module's let bindings (setupPreviewFree is free there).
@@ -1178,12 +1165,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   eye[2] = setupPreviewOrbit[2] + setupPreviewPan[2] + Math.cos(setupPreviewAz) * spDist * spCe;
   const lens = setupPreviewLens;
   M4.perspectiveTo(_spProj, (lens && lens.fov || homeFov) * Math.PI / 180, gfx.aspect, 0.1, 800);
-  // An on-axis camera centers the car behind the panel, half-cropped. Shift the
-  // frustum (off-axis / "lens shift") so the car renders centered in the VISIBLE
-  // region instead — sideways when the panel is docked to an edge, downwards
-  // when it sits across the top. col2 row0 shifts NDC.x, col2 row1 shifts NDC.y;
-  // in both cases a positive value moves the image the OTHER way, which is why
-  // the car ends up at -frac, the centre of the gap the panel is not covering.
+  // Lens shift: centre the car in the VISIBLE region (beside or below the panel), not behind it. col2 row0/row1
+  // shift NDC.x / NDC.y the OTHER way, so the car lands at -frac, the centre of the uncovered gap.
   _spProj[8] = panelFrac;
   _spProj[9] = panelFracY;
   if (homeFit) { _spProj[8] = homeFit.shiftX; _spProj[9] = homeFit.shiftY; }
