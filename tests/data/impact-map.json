@@ -6829,6 +6829,9 @@
       ]
     },
     "js/editor/scenery-preview.js": {
+      "draw": [
+        "tests/unit/designer-canvas.test.mjs"
+      ],
       "plan": [
         "tests/unit/designer-canvas.test.mjs",
         "tests/unit/designer-props.test.mjs",
@@ -7834,6 +7837,7 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/scenery-cull-phone.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -13186,6 +13190,9 @@
       "choices": [
         "tests/unit/pit-pick-memo.test.mjs"
       ],
+      "clearArm": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
       "committing": [
         "tests/unit/pit-lane.test.mjs"
       ],
@@ -15099,6 +15106,9 @@
       ],
       "radialCulled": [
         "tests/unit/frustum-buckets.test.mjs"
+      ],
+      "sceneryCullDist": [
+        "tests/unit/scenery-cull-phone.test.mjs"
       ],
       "*": [
         "tests/unit/build-worker.test.mjs",
@@ -19461,9 +19471,6 @@
       ],
       "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
-      ],
-      "*": [
-        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/xr/xr-boot.js": {
@@ -19517,6 +19524,9 @@
         "tests/unit/xr-cull-union.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
+      "recheck": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
       "restorePinnedBackend": [
         "tests/unit/xr-backend-pin.test.mjs"
       ],
@@ -19564,8 +19574,7 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/xr/xr-plan.js": {

@@ -16,6 +16,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { createHash } from "node:crypto";
 
 /** The canvas module on the engine VM, a recording context and manual timers. */
 function boot(hooksExtra = {}, pts = null, wrapShape = null) {
@@ -538,4 +539,117 @@ test("batch() coalesces setter repaints into one render (#4476)", () => {
   h.rec.fills.length = 0; h.rec.strokes.length = 0;
   h.cv.batch(() => {});
   assert.equal(count(), 0, "a batch that changed nothing paints nothing");
+});
+
+// ── P6 perf (#4546): work the canvas repeats at pointer rate ────────────────
+/** A 2D stub that logs every call (with arguments) and every property write. */
+function recorder2d() {
+  const log = [];
+  const g = new Proxy({}, {
+    get: (t, k) => (k in t ? t[k] : (...args) => { log.push([k, ...args]); }),
+    set: (t, k, v) => { log.push(["=" + String(k), v]); t[k] = v; return true; },
+  });
+  return { g, log };
+}
+
+test("scenery draw: ground flecks are seeded once per scene; the call log is byte-identical (P6)", () => {
+  const b = boot(), d = design(), tr = b.ctx.TrackValidate.check(d).tr, P = b.ctx.DesignerSceneryPreview;
+  const scene = P.plan({ ...d, theme: "lakeside" }, tr);
+  const sceneBytes = JSON.stringify(scene);
+  const original = b.ctx.Hash32;
+  let calls = 0;
+  b.ctx.Hash32 = Object.assign({}, original, { unit: (...args) => { calls++; return original.unit(...args); } });
+  const per = [], logs = [];
+  try {
+    for (let i = 0; i < 3; i++) {
+      const before = calls, r = recorder2d();
+      const view = { scale: 0.4 + i * 0.1, cx: 10 * i, cz: -5 * i, w: 640, h: 400 };
+      P.draw(r.g, scene, view, "ground"); P.draw(r.g, scene, view, "items");
+      per.push(calls - before); logs.push(r.log);
+    }
+  } finally { b.ctx.Hash32 = original; }
+  // Before: 360 seeded calls on every ground draw (1080 over three).
+  assert.deepEqual(per, [360, 0, 0], "flecks are seeded on the first draw only: " + per);
+  assert.equal(JSON.stringify(scene), sceneBytes, "the cache does not add bytes to the planned scene");
+  const digest = createHash("sha256").update(JSON.stringify(logs)).digest("hex");
+  assert.equal(digest, "4a0377d8b1bd8dddb8f46656efe53206aa48cc7b73e77c65914f9219e6ad65b4", "draw output matches the pre-cache renderer call for call");
+});
+
+test("a drag reads the canvas box once per gesture; the next gesture re-reads it (P6)", () => {
+  const h = boot();
+  let reads = 0;
+  const read0 = h.canvas.getBoundingClientRect;
+  h.canvas.getBoundingClientRect = () => { reads++; return read0(); };
+  const at = { clientX: 20, clientY: 20 };      // empty space: a pan
+  h.fire("pointerdown", at, 1, { pointerType: "mouse" });
+  const v0 = h.cv.view();
+  for (let i = 1; i <= 10; i++) h.fire("pointermove", h.off(at, i * 3, i * 2), 1, { pointerType: "mouse" });
+  h.fire("pointerup", h.off(at, 30, 20), 1, { pointerType: "mouse" });
+  // Before: one read per event (12); now the pointerdown's read serves the gesture.
+  assert.ok(reads <= 1, "box reads over a 10-move drag: " + reads);
+  const v1 = h.cv.view();
+  assert.ok(Math.abs((v0.cx - v1.cx) * v1.scale - 30) < 1e-9 && Math.abs((v0.cz - v1.cz) * v1.scale - 20) < 1e-9, "the pan follows the pointer exactly");
+  // The box moved between gestures (layout shift): the next pointerdown sees it.
+  h.canvas._rect = Object.assign({}, h.canvas._rect, { left: 100, top: 50 });
+  const target = h.scr(h.pts[5]);
+  h.fire("pointerdown", h.off(target, 100, 50), 2, { pointerType: "mouse" });
+  h.fire("pointerup", h.off(target, 100, 50), 2, { pointerType: "mouse" });
+  assert.deepEqual(h.ev.picks.slice(-1), [5], "a fresh gesture hit-tests against the new box");
+  // Hover without a gesture still reads the live box.
+  const r0 = reads;
+  h.fire("pointermove", { clientX: 5, clientY: 5 }, 9, { pointerType: "mouse" });
+  assert.equal(reads, r0 + 1);
+});
+
+test("a scroll mid-gesture drops the cached canvas box (P6)", () => {
+  const h = boot(), win = new Map();
+  h.ctx.addEventListener = (t, fn) => win.set(t, fn);
+  h.ctx.removeEventListener = (t, fn) => { if (win.get(t) === fn) win.delete(t); };
+  const canvas = h.dom.document.createElement("canvas");
+  canvas._rect = Object.assign({}, h.canvas._rect);
+  canvas.getContext = h.canvas.getContext;
+  const cv = h.DC.create(canvas, {});
+  cv.setPoints(h.pts);
+  assert.equal(typeof win.get("scroll"), "function", "the canvas listens for scrolls");
+  let reads = 0;
+  const read0 = canvas.getBoundingClientRect;
+  canvas.getBoundingClientRect = () => { reads++; return read0(); };
+  const fire = (type, at) => h.dom.dispatch(canvas, Object.assign({ type, pointerId: 1, pointerType: "mouse" }, at));
+  fire("pointerdown", { clientX: 20, clientY: 20 });
+  fire("pointermove", { clientX: 25, clientY: 20 });
+  assert.equal(reads, 1);
+  win.get("scroll")();
+  fire("pointermove", { clientX: 30, clientY: 20 });
+  fire("pointermove", { clientX: 35, clientY: 20 });
+  assert.equal(reads, 2, "the first move after a scroll re-reads the box, then it is cached again");
+  fire("pointerup", { clientX: 35, clientY: 20 });
+  cv.destroy();
+  assert.equal(win.has("scroll"), false, "destroy removes the scroll listener");
+});
+
+test("setScenery skips the stringify when theme/look/props/seed references are unchanged (P6)", () => {
+  const h = boot(), d = design({ pts: h.pts, look: { trees: "many" }, props: [{ kind: "marshal", s: 0.2, side: 1, gap: 25 }] });
+  h.cv.setBuilt(h.ctx.TrackValidate.check(d).tr);
+  const P = h.ctx.DesignerSceneryPreview, plan0 = P.plan;
+  let plans = 0;
+  h.ctx.DesignerSceneryPreview = Object.assign({}, P, { plan: (...a) => { plans++; return plan0(...a); } });
+  const J = h.ctx.JSON;
+  let stringifies = 0;
+  h.ctx.JSON = { parse: J.parse, stringify: (...a) => { stringifies++; return J.stringify(...a); } };
+  try {
+    h.cv.setScenery(d, true);
+    assert.equal(plans, 1);
+    const s0 = stringifies;
+    for (let i = 0; i < 5; i++) h.cv.setScenery(d, true);
+    h.cv.setScenery({ ...d }, true);                         // a shallow copy keeps every reference
+    // Before: one stringify per call (6).
+    assert.equal(stringifies - s0, 0, "unchanged references never stringify");
+    assert.equal(plans, 1, "and never replan");
+    h.cv.setScenery({ ...d, props: d.props.slice() }, true);  // a new array, same content
+    assert.equal(plans, 1, "a value-equal replacement still does not replan");
+    h.cv.setScenery({ ...d, props: [{ ...d.props[0], gap: 50 }] }, true);
+    assert.equal(plans, 2, "an edited prop list replans");
+    h.cv.setScenery({ ...d, props: [{ ...d.props[0], gap: 50 }], seed: 9 }, true);
+    assert.equal(plans, 3, "a new seed replans");
+  } finally { h.ctx.JSON = J; h.ctx.DesignerSceneryPreview = P; }
 });

@@ -25,6 +25,12 @@ to the deploy branch and leaves your own branch behind without the sync merge â€
 so what shipped and what your branch says shipped disagree. `--push` avoids the
 dance entirely when you already intend to publish.
 
+## STOPPED mid-merge
+
+When `sync-pr` prints STOPPED, `HEAD` is left on `sync-pr-<branch>` with the merge in progress. Resolve the files
+there, commit, then push `git push origin HEAD:<branch>`. Do not re-merge by hand on your own branch. Run it in
+the background (`run_in_background: true`, `timeout: 7200000`, log in `artifacts/logs/`) and Monitor the log.
+
 ## Hand-written conflicts (prose, a help sheet, a ratchet's FORM)
 
 `sync-pr` runs `merge --abort`, prints `real conflicts â€¦ resolve by hand` (a

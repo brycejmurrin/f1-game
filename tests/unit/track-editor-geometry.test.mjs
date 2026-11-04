@@ -492,3 +492,18 @@ test("validate: 201 control points read 'Too many points', not the ±10 km 'boun
   assert.equal(v.ok, false);
   assert.ok(V.check(design({ pts: [[0, 0], [20000, 0], [0, 20000], [-9000, 0], [0, -9000], [900, 900], [-900, 900], [900, -900]] })).issues.some((i) => i.code === "bounds"), "a real off-map point still says bounds");
 });
+
+test("check() evaluates the pure TrackPit.window once per verdict (P6 #4546)", () => {
+  const { V, ctx } = bootEditor();
+  const d = design();
+  const plainVerdict = (v) => JSON.parse(JSON.stringify({ ok: v.ok, issues: v.issues, stats: v.stats }));
+  const ref = plainVerdict(V.check(d));
+  const pit = ctx.TrackPit, args = [];
+  ctx.TrackPit = Object.assign({}, pit, { window: (...a) => { args.push(a); return pit.window(...a); } });
+  let v;
+  try { v = V.check(d); } finally { ctx.TrackPit = pit; }
+  // Before: the pit-reach gate and the stats each called it (2).
+  assert.equal(args.length, 1, "TrackPit.window calls per check: " + args.length);
+  assert.deepEqual(plainVerdict(v), ref, "the verdict is unchanged");
+  assert.ok(Number.isFinite(v.stats.pitEntryM) && Number.isFinite(v.stats.pitExitM), "the shared window still feeds the stats");
+});

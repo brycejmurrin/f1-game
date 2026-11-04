@@ -1702,6 +1702,11 @@ var PitLane = (function () {
       // happened — keeping it spent the plan's next stop (think() reads
       // lapsAt[pitStops]) and left the car one stop short of its strategy.
       if (c.pitState === "box" && !c.pitFitted) c.pitStops = Math.max(0, (c.pitStops | 0) - 1);
+      // A cover/undercut call think() armed but the flag cleared before the set
+      // went on (armed = not yet boxed; box entry drops the arm) was never made:
+      // hand the once-a-race rival call back, or the car kept _rivalStop for a
+      // stop it never took and could not answer a rival again (B5 #4549).
+      if ((c.pitArmed || (c.pitState === "box" && !c.pitFitted)) && (c.pitWhy === "cover" || c.pitWhy === "undercut")) c._rivalStop = false;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0;
       c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0;
       c.pitFitted = false;
