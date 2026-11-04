@@ -35,6 +35,7 @@ const EnergyPlan = (function () {
   let current = NEUTRAL.slice();
   // Per car: the sector the plan last acted on, so it fires once per entry.
   const seen = new WeakMap();
+  const secE0 = new WeakMap();   // per car: battery at the start of its current sector (#1629)
 
   /** A clean 3-entry plan, or null when `p` is not one. */
   function clean(p) {
@@ -129,8 +130,9 @@ const EnergyPlan = (function () {
   }
   /** game.js, player car at a sector change: learn the sector just left (forward, race only) and stamp the new start. */
   function sectorExit(c, fwd, tt) {
-    if (fwd && !tt && c._secE0 != null) learn(c._secIdx, c.energy - c._secE0, !!c.boostOn);
-    c._secE0 = c.energy;
+    const e0 = secE0.get(c);   // a WeakMap, not a car field: cars sit at V8's fast-property cap
+    if (fwd && !tt && e0 != null) learn(c._secIdx, c.energy - e0, !!c.boostOn);
+    secE0.set(c, c.energy);
   }
   /** The __apex.ersForecast payload for car `c` (null-safe); `o` = {override, reset}. */
   function report(c, o) {
