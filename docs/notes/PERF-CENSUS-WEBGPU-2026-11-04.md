@@ -54,3 +54,12 @@ it, TLX on a headless software adapter soft-blits every present (`_softBlit` in 
 cap, `go()`, grid position. If run 8 reaches the sweep, the `present failed — null BYTES_PER_ELEMENT` reload belongs to
 the soft-blit present on lavapipe WebGPU and is filed as its own bug; if not, the next variables are the 960x540
 viewport and the setInput-driven wait.
+
+Run 8 (a45f687f, wgxCapture=0): IDENTICAL `present failed — null BYTES_PER_ELEMENT` + `"color" not found` + reload,
+~40 s into the race (the two pass-census legs in the same job passed, ~20 s each). Soft-blit refuted. New candidate,
+static: a time-triggered rebuild. `sweepCarShadowMirrors` (tlx.js, every 2 s, NOT opt-in, no mobile gate) nulls the
+uploaded CPU arrays of drawn car-shadow geometry; any later NEW pipeline for that geometry reads `attribute.array` in
+three's `getVertexBufferLayout` and throws, and the paint ladder's unlit rung then asks for `color`. A governor tier
+shed on slow lavapipe would build such pipelines; pass-census ends before one. Run 9 holds the tier (`govHold(true)`,
+which a scale sweep needs anyway) and logs tier moves. If run 9 reaches the sweep, the shed-after-free is a player-facing
+desktop WebGPU bug to file (refuseTab reload mid-race).

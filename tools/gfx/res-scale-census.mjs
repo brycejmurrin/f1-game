@@ -93,6 +93,19 @@ async function main() {
     // pass-census parity: start the race and leave the grid (jump to 10%). Run 41882017262: on the grid, WebGPU present
     // failed (null vertex attribute, "color" not found) and the page reloaded; pass-census never sits on the grid.
     if (o.webgpu) await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
+    // Hold the governor's tier: a scale sweep needs the same feature ladder at every step, and run 8 (a45f687f, with
+    // wgxCapture parity) still failed ~40 s into the race. pass-census finishes in ~20 s, so a tier shed by the governor
+    // on slow lavapipe is the remaining candidate: it rebuilds pipelines for car-shadow geometry whose CPU arrays
+    // sweepCarShadowMirrors already freed (three reads attribute.array in getVertexBufferLayout). Tier moves are logged.
+    if (o.webgpu) {
+      const g = await page.evaluate(() => {
+        const A = window.__apex, h = A.govHold(true);
+        let last = h.tier;
+        setInterval(() => { const t = A.govHold().tier; if (t !== last) { console.warn("res-scale-census tier " + last + " -> " + t); last = t; } }, 250);
+        return h;
+      });
+      console.error("res-scale-census: governor held " + JSON.stringify(g));
+    }
     await waitFrames(page, 8, 400000);
     stepNow = "pre-sweep";
     // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
