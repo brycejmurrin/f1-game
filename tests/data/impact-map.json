@@ -7886,6 +7886,7 @@
         "tests/unit/mobile-sync-web.test.mjs",
         "tests/unit/offline-precache-nav.test.mjs",
         "tests/unit/pause-opts.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",

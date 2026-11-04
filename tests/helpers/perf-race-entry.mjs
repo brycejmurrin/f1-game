@@ -70,7 +70,7 @@ export function longTaskFailures(snap, base) {
   const r = base.ratio;
   if (snap.blockMs > b.blockMs * r) out.push(`blockMs ${snap.blockMs} > ${b.blockMs} x ${r}`);
   if (snap.maxBlockMs > b.maxBlockMs * r) out.push(`maxBlockMs ${snap.maxBlockMs} > ${b.maxBlockMs} x ${r}`);
-  if (snap.longTasks.length > b.longTaskCount) out.push(`long-task count ${snap.longTasks.length} > ${b.longTaskCount}`);
+  if (snap.longTasks.length > b.longTaskCount * r) out.push(`long-task count ${snap.longTasks.length} > ${b.longTaskCount} x ${r}`);
   return out;
 }
 

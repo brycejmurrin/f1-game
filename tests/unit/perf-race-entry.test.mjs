@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatStageTable, markdownStageTable, markdownDiffTable, raceOnlyStages } from "../helpers/perf-race-entry.mjs";
+import { formatStageTable, markdownStageTable, markdownDiffTable, raceOnlyStages, loadBaseline, longTaskFailures, loafUnlisted } from "../helpers/perf-race-entry.mjs";
 
 test("formatStageTable orders stages by duration", () => {
   const s = formatStageTable({
@@ -24,4 +24,20 @@ test("markdownDiffTable and raceOnlyStages summarise race vs practice", () => {
   };
   assert.match(markdownDiffTable(diff), /\| flyby \| 20000 \| 700 \| 19300 \|/);
   assert.deepEqual(raceOnlyStages(diff), ["warmCarAssets"]);
+});
+
+test("longTaskFailures gates blockMs / maxBlockMs / count at baseline x ratio; null baseline records only (#4777)", () => {
+  const base = loadBaseline();
+  assert.ok(base.baseline.blockMs > 0 && base.ratio >= 1.3, "baseline set from measured runs");
+  const at = (k, m) => ({ blockMs: base.baseline.blockMs, maxBlockMs: base.baseline.maxBlockMs, longTasks: new Array(base.baseline.longTaskCount).fill(0), ...m });
+  assert.deepEqual([...longTaskFailures(at(), base)], []);
+  assert.equal(longTaskFailures(at(0, { blockMs: base.baseline.blockMs * base.ratio + 1 }), base).length, 1);
+  assert.equal(longTaskFailures(at(0, { maxBlockMs: base.baseline.maxBlockMs * base.ratio + 1 }), base).length, 1);
+  assert.equal(longTaskFailures(at(0, { longTasks: new Array(Math.floor(base.baseline.longTaskCount * base.ratio) + 1).fill(0) }), base).length, 1);
+  assert.deepEqual([...longTaskFailures(at(0, { blockMs: 1e12 }), { ratio: 1.3, baseline: { blockMs: null } })], []);
+});
+
+test("loafUnlisted names scripts outside the allow-list; empty URLs are ignored", () => {
+  const snap = { loaf: [{ scripts: [{ url: "https://x/js/game.js?v=1" }, { url: "" }, { url: "https://x/js/new/thing.js" }] }] };
+  assert.deepEqual([...loafUnlisted(snap, loadBaseline().loafScriptAllow)], ["https://x/js/new/thing.js"]);
 });

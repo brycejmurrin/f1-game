@@ -1,16 +1,18 @@
 {
   "scenario": "perf-race-entry SwiftShader (CI), bahrain, 1440x900, menu START RACE (full intro)",
+  "note": "Baseline = max of the observed runs; ratio headroom applies to all three numbers. CI runner load makes software-GL block times swing up to ~75% run to run, so this catches large regressions only.",
   "ratio": 1.3,
   "measured": "2026-11-04",
   "runs": {
-    "blockMs": [113333, 97023],
-    "maxBlockMs": [30684, 40719],
-    "longTaskCount": [38, 31]
+    "blockMs": [113333, 97023, 133258, 170215],
+    "maxBlockMs": [30684, 40719, 70915, 72541],
+    "longTaskCount": [38, 31, 37, 37]
   },
-  "baseline": { "blockMs": null, "maxBlockMs": null, "longTaskCount": null },
+  "baseline": { "blockMs": 170215, "maxBlockMs": 72541, "longTaskCount": 38 },
   "loafScriptAllow": [
     "tracks.js", "game.js", "car-draw.js", "three.webgpu",
     "assets.js", "build-client.js", "race-settings.js", "setting-deps.js",
-    "scroll-fade.js", "aria-state.js", "xr-boot.js", "audio/engine.js", "audio/soundtrack.js"
+    "scroll-fade.js", "aria-state.js", "xr-boot.js", "audio/engine.js", "audio/soundtrack.js",
+    "garage/prebuild.js"
   ]
 }
