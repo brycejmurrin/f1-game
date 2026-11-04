@@ -63,3 +63,8 @@ three's `getVertexBufferLayout` and throws, and the paint ladder's unlit rung th
 shed on slow lavapipe would build such pipelines; pass-census ends before one. Run 9 holds the tier (`govHold(true)`,
 which a scale sweep needs anyway) and logs tier moves. If run 9 reaches the sweep, the shed-after-free is a player-facing
 desktop WebGPU bug to file (refuseTab reload mid-race).
+
+Run 9 (31e8443e, tier held): `governor held {"tier":0,...}`, NO tier move logged, same failure ~35 s later, and this time
+the reload budget ran out (`The graphics renderer cannot draw on this device`). Governor refuted. Run 10 names the
+culprit instead of guessing: it wraps the WebGPU backend's `createRenderPipeline` and logs every pipeline built for a
+geometry with a null attribute array (object path, `__tlxKind`, freed flag, null attributes, material, seconds).

@@ -102,6 +102,30 @@ async function main() {
         const A = window.__apex, h = A.govHold(true);
         let last = h.tier;
         setInterval(() => { const t = A.govHold().tier; if (t !== last) { console.warn("res-scale-census tier " + last + " -> " + t); last = t; } }, 250);
+        // Run 9 (31e8443e): tier held at 0, no move, same failure ~35 s on. Name the culprit: every pipeline three builds
+        // for a geometry with a nulled attribute array (the getVertexBufferLayout throw) is logged with its object, kind,
+        // material and the seconds since this hook. Pipelines built for healthy geometry are counted only.
+        const be = window.GLX.__tlx.renderer.backend, t0 = performance.now();
+        if (be && typeof be.createRenderPipeline === "function" && !be.__resPipeWrap) {
+          be.__resPipeWrap = true; window.__resPipes = 0;
+          const orig = be.createRenderPipeline.bind(be);
+          let warned = 0;
+          be.createRenderPipeline = function (ro) {
+            window.__resPipes++;
+            try {
+              const g = ro && ro.geometry, at = g && g.attributes ? g.attributes : {};
+              const nul = Object.keys(at).filter((k) => at[k] && at[k].array == null);
+              if (nul.length && warned++ < 12) {
+                const o = ro.object || {}, m = ro.material || {};
+                const path = []; for (let p = o; p && path.length < 4; p = p.parent) path.push(p.name || p.type);
+                console.warn("res-scale-census nullattr pipeline t=" + ((performance.now() - t0) / 1000).toFixed(1) + "s kind=" + g.__tlxKind
+                  + " freed=" + !!g.__tlxFreed + " null=[" + nul.join(",") + "] has=[" + Object.keys(at).join(",") + "] obj=" + path.join("<")
+                  + " mat=" + (m.name || m.type) + " pipes=" + window.__resPipes);
+              }
+            } catch (_) { /* diagnostics only */ }
+            return orig.apply(this, arguments);
+          };
+        }
         return h;
       });
       console.error("res-scale-census: governor held " + JSON.stringify(g));
