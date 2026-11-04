@@ -429,3 +429,18 @@ test("wrapperGrowth flags a GPU class that grew and ignores a flat pair", async 
   assert.match(bad.issues[0], /GPURenderBundle 100 → 181 \(\+81\)/);
   assert.equal(wrapperGrowth([row(6, 1, 1)], 6).ok, false);
 });
+
+// #4778: `system / Context` closure scopes are gated at +5 % between post-warm cycles.
+test("wrapperGrowth gates system / Context scopes at +5 % and countSnapshotClass counts by name", async () => {
+  const { wrapperGrowth, countSnapshotClass } = await import("../helpers/race-cycle-memory.mjs");
+  const row = (cycle, contexts) => ({ cycle, wrappers: {}, dom: null, contexts });
+  assert.equal(wrapperGrowth([row(5, 10000), row(6, 10400)], 6).ok, true);
+  assert.equal(wrapperGrowth([row(5, 10000), row(6, 9000)], 6).ok, true);
+  const bad = wrapperGrowth([row(5, 10000), row(6, 10700)], 6);
+  assert.equal(bad.ok, false);
+  assert.deepEqual(bad.issues.map((i) => i.startsWith("system / Context 10000 → 10700")), [true]);
+  assert.equal(wrapperGrowth([row(5, null), row(6, 10700)], 6).ok, true, "an unavailable count is not a gate");
+  const snap = { snapshot: { meta: { node_fields: ["type", "name", "id"] } }, strings: ["", "system / Context", "x"],
+    nodes: [3, 1, 1, 3, 2, 2, 3, 1, 3] };
+  assert.equal(countSnapshotClass(snap, "system / Context"), 2);
+});

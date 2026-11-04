@@ -4821,83 +4821,20 @@ test("GLX chunked road draws honor depth bias and back faces, then restore state
   assert.equal(h.count("polygonOffset"), 0, "ordinary scenery needs no depth bias");
 });
 
-test("the flyby plays on the pre-race loading screen only; the picker pre-builds it hidden once the pick settles", () => {
-  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const raceSettings = read("js/race/race-settings.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const menus = read("js/ui/select-screen.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
-    "the boot builds no world for the title");
-  assert.match(raceSettings, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
-    "opening race settings schedules the flyby of the chosen circuit (120 ms)");
-  // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
-  // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
-  assert.match(raceSettings, /wire\("rs-time", \(\) => G\.raceTimeOfDay, \(v\) => \{ G\.raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
-    "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
-  assert.match(menus, /scheduleFlybyTrack\(true\)/,
-    "a circuit tile pre-builds after the settle delay, never on the tap itself");
-  // 400 ms, not the old 1.5 s: the idle gate (menuIdle) is what keeps the build
-  // off a tapping player; the settle only holds back the scenery fetch, and at
-  // 1.5 s it made a RACE! tap within ~5 s of the picker meet the build card.
-  assert.match(game, /settle \? 400 : 120/);
-  // Under a menu that draws nothing the canvas is hidden — so neither a finished
-  // race's last frame nor the garage's car sits behind the title. Since
-  // 2026-09-16 RACE SETTINGS is no longer an exception: the warmed world is
-  // spent on the LOADING SCREEN's cinematic instead, between RACE! and the grid,
-  // so the settings rows are read against black rather than a moving world.
-  // The gate runs before every early return, and a freshly built world still
-  // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\) \|\| \(typeof MenuTeardown !== "undefined" && MenuTeardown\.cover && MenuTeardown\.cover\(\)\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/);
-  assert.match(raceSettings, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\); \} catch \(e\) \{[^}]*startRace\(\); \}/,
-    "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
-  assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
-    "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
-  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
-  assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
-    "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
-  // endRace's OWN call: over all of game.js the match began at startRaceBody's
-  // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
-  assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
-    "endRace clears the 2D rain overlay the way quitToMenu already did");
-  // ResultsCam.live() + heldWarm: order pins below use the full render body.
-  const renderBody = fnSource(game, "function render(dt)");
-  for (const boundary of ["const menuBlank", "if (setupPreviewOn && !heldWarm)", "if (!track) return;"]) {
-    assert.ok(renderBody.includes(boundary), "render contains the boundary: " + boundary);
-  }
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
-    "the visibility gate precedes the garage-preview return");
-  const resultsGate = renderBody.search(/if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/);
-  assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
-    "results freeze precedes the garage-preview return");
-  assert.match(renderBody, /!resultsCam\.live\(\)/,
-    "ResultsCam.live() keeps redrawing chequered/orbit/highlights");
-  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
-    "the visibility gate precedes the no-track return");
-  assert.match(game, /const builtWorldFits = \(def\) => builtTrackId === def\.id && builtTrackNight === sessionDarkFor\(def\)/,
-    "loadTrack's memo still makes a repeat build free");
-});
-
-test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
-  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
-  assert.match(human, /c\.wake = wakeOf\(tg, tc\._snapX - c\.x\)/, "the player's tow uses the AI's window and fade");
-  assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
-  assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
-  // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
-  const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
-  // The car-draw frame step advances private visual phases. The numeric
-  // multi-view/traction-isolation checks live in mirror-pass-carbuild.test.mjs.
-  const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const phases = fnSource(cd, "function advanceWheelPhases(dt)");
-  assert.match(phases, /CarWheels\.phaseStep\(c\.speed, dt, R, c\.wheelLock \|\| 0\)[\s\S]*phase\.front = CarWheels\.wrapPhase/,
-    "frame step uses CarWheels.phaseStep (v/R·dt); fronts freeze via (1−lock)");
-  assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
-  // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
-  assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
-  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
-  const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
-});
+// The flyby / menu render() gate and the driving-feel groups are behaviour now
+// (#1682 step 3), each assertion mutation-checked:
+//   tests/unit/menu-render-gate-vm.test.mjs — title builds no world, the 400/120 ms
+//     settle, menuBlank under the picker / sheets / build card, owed and queued warm
+//     frames, results freeze before the garage preview, ResultsCam.live, endRace's
+//     rain overlay, clearMenuScreens' disarm order, the loadTrack memo;
+//   tests/unit/race-settings-vm.test.mjs — open and TIME OF DAY schedule the flyby,
+//     RACE! through raceIntro (and its throw), QUALIFYING without it;
+//   tests/unit/select-screen-fixes.test.mjs — a tile schedules the settled pre-build;
+//   tests/unit/driving-feel-vm.test.mjs — the player's tow window, fade, gain and
+//     driver-state gate, every car's lift after-fire and flame;
+//   tests/unit/player-forces.test.mjs — no lock-up rolling backwards;
+//   tests/unit/lockup-smoke-vm / mirror-pass-carbuild — the bias-scaled lock, the
+//     front phase freeze; tests/unit/audio-tune.test.mjs — the wind drops in a tow.
 
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/lighting/knobs.js");

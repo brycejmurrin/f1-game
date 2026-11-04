@@ -501,7 +501,6 @@
       ],
       "finish": [
         "tests/unit/crowd-ctx-rebuild.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "init": [
@@ -513,7 +512,6 @@
         "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -664,7 +662,6 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs"
@@ -2651,9 +2648,6 @@
       ]
     },
     "js/car/car-draw.js": {
-      "advanceWheelPhases": [
-        "tests/unit/gfx-backend-canary.test.mjs"
-      ],
       "beginDecals": [
         "tests/unit/car-draw-decal-budget.test.mjs",
         "tests/unit/car-draw-decal-sweep.test.mjs"
@@ -5942,6 +5936,9 @@
       "enforceNearPlane": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
+      "forMoment": [
+        "tests/unit/garage-camera-options.test.mjs"
+      ],
       "inJamb": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
@@ -7380,8 +7377,8 @@
         "tests/specs/wake-lock.spec.js",
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs",
+        "tests/unit/menu-render-gate-vm.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
@@ -7480,7 +7477,8 @@
         "tests/specs/touch-pedals.spec.js",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/ghost.test.mjs"
+        "tests/unit/ghost.test.mjs",
+        "tests/unit/menu-render-gate-vm.test.mjs"
       ],
       "loadTrackStepped": [
         "tests/unit/flyby-intro.test.mjs",
@@ -7617,6 +7615,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/menu-render-gate-vm.test.mjs",
         "tests/unit/mirror-pass-carbuild.test.mjs",
         "tests/unit/repo-size.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -7641,6 +7640,7 @@
       ],
       "scheduleFlybyTrack": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/menu-render-gate-vm.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "seatsFor": [
@@ -7736,7 +7736,8 @@
       "studioShown": [
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/menu-render-gate-vm.test.mjs"
       ],
       "studioSkip": [
         "tests/unit/flyby-intro.test.mjs",
@@ -7833,6 +7834,9 @@
         "tests/specs/understeer-cue.spec.js",
         "tests/unit/race-step-snap.test.mjs",
         "tests/unit/sim-bytecode-budget.test.mjs"
+      ],
+      "wakeOf": [
+        "tests/unit/driving-feel-vm.test.mjs"
       ],
       "wireId": [
         "tests/unit/car-fields-vm.test.mjs",
@@ -8000,6 +8004,12 @@
       "rigU": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "saved": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "select": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
       "settings": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -8007,6 +8017,9 @@
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs"
+      ],
+      "settingsFor": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "shotsFor": [
         "tests/unit/garage-arrival.test.mjs"
@@ -8581,8 +8594,7 @@
         "tests/unit/garage-light-cues.test.mjs",
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/garage-personality.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/garage-personality.test.mjs"
       ],
       "mood": [
         "tests/unit/garage-light-cues.test.mjs",
@@ -8641,6 +8653,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "*": [
+        "tests/unit/garage-scene-fallbacks.test.mjs",
         "tests/unit/test-groups.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs"
       ]
@@ -12388,7 +12401,6 @@
     },
     "js/physics/player-forces.js": {
       "create": [
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/vehicle-tick-alloc.test.mjs"
@@ -13938,7 +13950,6 @@
       "create": [
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/race-setup-sheets.test.mjs",
@@ -19067,7 +19078,6 @@
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/ctx-lost-retry-reload.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/select-preview-defer.test.mjs",
@@ -19124,7 +19134,6 @@
       ],
       "fill": [
         "tests/specs/photo-studio.spec.js",
-        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
       "optionDisabled": [
