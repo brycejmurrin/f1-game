@@ -325,6 +325,7 @@ interface PitSession {
   choices(c: CarState): Array<{ id: string; code: string }>;
   selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;
+  redFlagFit(c: CarState): boolean;
 }
 /** The session-bound half of TyreModel — TyreModel.create(G)'s return. */
 interface TyreSession {
