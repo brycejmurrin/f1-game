@@ -2838,6 +2838,7 @@
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
@@ -11029,6 +11030,9 @@
       "hookCounts": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
+      "passStats": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
       "phaseStats": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
@@ -11329,7 +11333,8 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {
@@ -15153,6 +15158,7 @@
       ],
       "*": [
         "tests/unit/agent-indexes.test.mjs",
+        "tests/unit/assets-unfilter-cap.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/import-models.test.mjs",
@@ -17479,7 +17485,9 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
+        "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
@@ -18582,6 +18590,9 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/ui/look-avail.js": {
