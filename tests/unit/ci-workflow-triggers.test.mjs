@@ -36,7 +36,7 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach pages.yml");
   // Every PR push runs the fast tier (2026-11-03: no run-ci opt-in); heavy
   // jobs still wait for `ready_for_review`, which must therefore be a trigger type.
-  const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
+  const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast'))))";
   assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review\]/,
     "a draft push runs on its own; `labeled` and `edited` (the run-ci opt-in) are gone");
   assert.doesNotMatch(ciWorkflow, /draft-ci-skipped:/, "no opt-out notice job: a draft push runs the fast tier");
@@ -47,6 +47,12 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.ok(smokeJob.includes(fastTier), "smoke must sit out the deploy branch's fast tier with the shared expression");
   assert.ok(shipFilter.includes(fastTier), "the ship filter step sits out the fast tier with the same expression");
   assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
+  // THE READY-TIER SWITCH (#4836): `fast` makes a ready PR run the draft tier; the raw draft flag is read only
+  // by ci-verdict's name (a ready run must still report the required `CI`) and REQUIRE_SUCCESS's ready branch.
+  const rawDraft = ciWorkflow.split("\n").filter((l) => !/^\s*#/.test(l) && /github\.event\.pull_request\.draft(?! \|\| vars\.READY_TIER == 'fast')/.test(l));
+  assert.equal(rawDraft.length, 2, "only ci-verdict's name and REQUIRE_SUCCESS read the raw draft flag:\n" + rawDraft.join("\n"));
+  assert.ok(rawDraft.some((l) => /name: .*'CI \(draft fast tier\)' \|\| 'CI'/.test(l)), "ci-verdict's name keys on the real draft flag");
+  assert.ok(rawDraft.some((l) => /REQUIRE_SUCCESS: .*vars\.READY_TIER == 'fast' && 'guards-a,guards-b,guards-c,guards-d,guards,select' \|\|/.test(l)), "a fast-tier ready run still requires the guards and select");
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
   // node-suites left the draft fast tier on 2026-10-16 (decision D1): its own
   // draft skip is pinned in ci-gate-selection; the fast-tier jobs carry no draft gate at all.

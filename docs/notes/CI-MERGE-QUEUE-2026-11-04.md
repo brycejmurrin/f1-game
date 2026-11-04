@@ -1,6 +1,6 @@
 # Merge queue for the deploy branch: blocked by repo ownership (#4836)
 
-Re-measure-by: 2026-12-04
+Kind: measurement · Re-measure-by: 2026-12-04
 
 ## The blocker
 
@@ -41,10 +41,28 @@ gated: the tree-reuse skip fired 0 times, as #4836 says.
   https://docs.github.com/en/repositories/creating-and-managing-repositories/transferring-a-repository), which
   strands the installed iPhone PWA and its localStorage saves, unless a custom domain keeps the origin.
 - **No queue, no ready tier.** `ready_for_review` starts no new tier; `gate` reads the draft run already green on the
-  same head, and the train stays the full gate after merge. Same ~42 % saving, but a red that only the full tier
+  same head, and the train stays the full gate after merge. Up to the same ~42 % if the ready run starts nothing;
+  the switch as built still runs the draft tier on ready (§What landed), so less. A red that only the full tier
   (node-suites, smoke, sweeps, staged-boot) catches lands on the deploy branch first and is fixed forward; 8 of 35
   trains failed in the window.
 - **Keep today's tiers.** No saving; nothing changes.
 
-Only Bryce can choose (an org transfer, or giving up the pre-merge full tier); the choice is recorded on the PR as a
-`needs-decision` comment. No workflow changes until he answers.
+## What landed: route 2 behind a switch
+
+The dispatcher relayed Bryce's pick of route 2 at 2026-11-04 02:28 PST. ci.yml now reads the repo variable
+`READY_TIER`:
+
+- **Unset or `full` (the default):** nothing changes.
+- **`fast`:** every draft test in ci.yml also matches a ready PR. The ready run is then the draft tier:
+  - node-suites, smoke, staged-boot, sweeps, renderer-macos and xr are skipped;
+  - the selected legs get the 5-min budget with no overflow;
+  - the ready-only required jobs drop out of `REQUIRE_SUCCESS`.
+
+  It still reports `CI`, so `gate` and the ruleset do not change.
+
+Flipping the variable is Bryce's own click in Settings → Secrets and variables → Actions → Variables; an agent never
+sets it. Once it is `fast`, the expected saving is the full tier's excess over a draft run: about 22 job-min per
+ready run (72 vs 50), plus the minutes of cancelled and failed full runs. That is roughly 3,000–5,000 of the 11,340
+full-tier job-min per 21 h. The ready run's guards still reuse the draft run when the base has not moved
+(`reuse-draft-fast.sh`), which pushes the saving towards the upper end. Re-measure with the same method a week after
+the flip.
