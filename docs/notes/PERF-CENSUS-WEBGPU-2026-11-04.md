@@ -78,3 +78,10 @@ arrays were set to `null` (tlx.js `releaseGeoMirrors`, tlx-chunked.js `releaseMi
 change after the free, even with all its GPU buffers uploaded. Run 11 wraps `getRenderCacheKey`, catches the throw and
 dumps the render object (object path, material, `vertexColors`, every attribute with its array type or NULL, index,
 `__tlxKind`), and logs the page's full stack instead of 300 characters.
+
+Run 11 (3cd202d3) named it: `nullattr cachekey t=36.7s kind=carSh freed=true obj=/Mesh<Object3D<Scene
+mat=MeshBasicNodeMaterial geo=[position,normal,color,mat,trk all NULL]`, then the `MeshBasicMaterial vertexColors` ladder
+rung threw the same way. Runs 1-10 never reached a scale step because a car-shadow mesh whose CPU mirrors the 2 s sweep
+had freed threw on its next render-state change, and the reload loop followed. That is a player-facing desktop WebGPU
+bug, filed as #4900 and fixed by #4904 (f6aebe48). This branch is synced past it; the next `perf-census-webgpu` run is
+the first that can reach the render-scale sweep and judge the settle gate.
