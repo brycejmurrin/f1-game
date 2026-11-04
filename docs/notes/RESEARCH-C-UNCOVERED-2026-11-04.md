@@ -165,4 +165,21 @@ arithmetic, `--budget-min` with no value (NaN); `SeasonCal.save` + `retryFailed`
 
 ## Issues filed
 
-PLACEHOLDER-ISSUES
+All `ready` plus an `area:*` except row 9 (`needs-decision`); PR #4821 carries this note.
+
+| Row | Issue |
+|---|---|
+| 1 | #4823 career: RETRY SAVE after a full-storage failure leaves every later career save silently refused as "conflict" |
+| 2 | #4832 ci: node-plan skips `test:vm-page-b` when a diff edits an ADAPTED spec in partition A plus a change that routes partition B |
+| 3 | #4825 career: `rollover()` mutates the whole career and ignores a refused save |
+| 4 | #4833 physics: a side rub with a net-owned VS FRIEND rival writes speed and contactT onto the remote car |
+| 5 | #4826 ai: the side-rub yielder can be a parked retired car |
+| 6, 11 | #4827 ci: select-specs drops the SOURCE_AFFECTED pins on a css-only diff, and TRACKED misses four files it imports |
+| 7 | #4828 tests: mini-dom `matches()` is true for any descendant, and `removeEventListener` of an unknown fn removes the last live listener |
+| 8 | #4829 tests: the seeded fuzz harness never generates an own `__proto__` key |
+| 9 | #4834 race: a red flag neither repairs damage nor changes tyres (B5.14.4) — `needs-decision`, pick (a) |
+| 10 | #4830 audio: an output-device change mid-race rebuilds the AudioContext from a timer, outside any gesture |
+| 12 | #4831 audio: `RadioVoice.unlock()` resumes a context that SOUND OFF suspended |
+
+Not filed: row 13 (`setup-presets` cleanTune, latent: nothing breaks at HEAD) and row 14 (`retireCar` in the pit strip,
+PLAUSIBLE: the VM on Monaco comes first). The `SeasonCal.save` + `retryFailed` twin of row 1 is named in #4823.
