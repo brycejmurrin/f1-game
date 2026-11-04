@@ -48,3 +48,9 @@ once presenting, the renderer is at fault and that run's rows say where.
 - gpu-mem-census `--webgpu`: its allocation counters wrap WebGL calls. Needs a WebGPU `createTexture`/`createBuffer` wrapper (overlaps #4710).
 - writeBuffer bytes per group, idle `createBindGroup`/`createBuffer`, shadow-target colour attachments (issue items 2 to 4).
 - The gates themselves: need the determinism question above answered first.
+
+Run 8 (bisect, one variable): res-scale-census now sets `sessionStorage apex26.wgxCapture=0` as pass-census does. Without
+it, TLX on a headless software adapter soft-blits every present (`_softBlit` in tlx.js). Ruled out before this: boot-step
+cap, `go()`, grid position. If run 8 reaches the sweep, the `present failed — null BYTES_PER_ELEMENT` reload belongs to
+the soft-blit present on lavapipe WebGPU and is filed as its own bug; if not, the next variables are the 960x540
+viewport and the setInput-driven wait.

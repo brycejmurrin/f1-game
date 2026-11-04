@@ -64,6 +64,10 @@ async function main() {
         // Slow-CI cap raise, as pass-census sets it: lavapipe's pipeline warm outlasts the default boot step, and the
         // resulting present failure reloads the page (run 41880521034).
         if (webgpu) localStorage.setItem("apex26.gfxBootStepMs", "45000");
+        // SCREENSHOTS = NATIVE, as pass-census sets it: without it a headless software adapter takes tlx.js's soft-blit
+        // present (GPU readback every frame). Run 7 (d287a735) still hit `present failed — null BYTES_PER_ELEMENT`
+        // with boot cap, go() and grid parity; this is the last storage difference between the two censuses (#4783).
+        if (webgpu) sessionStorage.setItem("apex26.wgxCapture", "0");
         for (const k of Object.keys(ls)) localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, ls[k]);
       } catch (_) { /* no storage: defaults */ }
     }, { ls: o.ls, webgpu: o.webgpu });
