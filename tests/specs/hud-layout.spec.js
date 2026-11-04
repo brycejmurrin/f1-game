@@ -1563,11 +1563,10 @@ test.describe("track-limits chip", () => {
   });
 });
 
-// THE POS LIGHT CELL (design pass 2a): a light plate with dark ink. HIGH CONTRAST
+// THE POS CELL (#4526): a dark plate with white ink (it was a light cell in design pass 2a). HIGH CONTRAST
 // (the shipped default, and Bryce's own export) once repainted the plate with
 // `:root[data-ui-contrast="high"] :is(.hud-box, #announce)`, whose :is() took
-// #announce's id specificity and beat the light-cell rule, leaving dark ink on
-// a dark plate (#4300). This file pins contrast "off" for geometry, so the
+// #announce's id specificity and beat the cell's own rule (#4300); the ink must still clear the plate it paints on. This file pins contrast "off" for geometry, so the
 // probe flips it live and reads the computed ink against the computed plate.
 test.describe("POS cell ink follows its plate", () => {
   test.setTimeout(300_000);
