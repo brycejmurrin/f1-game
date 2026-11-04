@@ -583,9 +583,17 @@ const ScreenLooks = (function () {
 
   // Deferred scripts run while readyState is "interactive"; only a document
   // that is already COMPLETE builds now (same rule as js/ui/pause-opts.js).
+  // #4747: the knob rows build on the first Settings enter or at idle, never in
+  // the DCL task; apply() above stays eager so data-look-* is set from eval.
+  // A document that is already COMPLETE (tests, late loads) still builds now.
+  function armBuild() {
+    if (typeof SettingsNav !== "undefined" && SettingsNav.onEnter) SettingsNav.onEnter(() => build());
+    const idle = typeof requestIdleCallback === "function" ? (fn) => requestIdleCallback(fn, { timeout: 4000 }) : (fn) => setTimeout(fn, 1500);
+    idle(() => build());
+  }
   if (doc) {
     if (doc.readyState === "complete") build();
-    else doc.addEventListener("DOMContentLoaded", build, { once: true });
+    else doc.addEventListener("DOMContentLoaded", armBuild, { once: true });
   }
 
   return {

@@ -710,10 +710,8 @@ const api = {
   // The manual sector ERS plan (#1580, js/race/energy-plan.js): ["manual"|"deploy"|"save"] × 3.
   // ersPlan() reads it; ersPlan([...]) sets it for this session (not persisted) and returns
   // {plan, ok} — ok false keeps the old plan. MANUAL ×3 is the neutral, shipped plan.
-  ersPlan(p) {
-    const ok = p === undefined ? true : EnergyPlan.setPlan(p);
-    return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() };
-  },
+  ersPlan(p) { const ok = p === undefined ? true : EnergyPlan.setPlan(p); return { plan: EnergyPlan.plan(), ok, neutral: EnergyPlan.isNeutral() }; },
+  ersForecast(o) { return EnergyPlan.report(G.player, o); },   // ERS energy forecast (#1629): battery per sector exit + confidence; {override:[dE ×3], reset}
   setPhysics(o) {
     o = o || {};
     // Reject a poisoned patch atomically; existing finite floors remain compatible.
@@ -1495,7 +1493,9 @@ const api = {
     if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: null };
     const st = gfx.gpuTimer(on);
     const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
-    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
+    // byPass: per-pass ms ({main,mirror,env,shadow,post}) only with ?gpuTimer=1 on TLX with a real timestamp-query; else null.
+    const byPass = gfx.gpuByPass ? gfx.gpuByPass() : null, adapter = gfx.gpuAdapter ? gfx.gpuAdapter() : null;
+    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null, byPass, adapter };
   },
   // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; default ON on localhost/file: (not under webdriver), OFF on the deployed site; ?inspector=0|1 overrides.
   // inspector(true|false) toggles, inspector() reads { on, supported, reason, loading }. GPU timings need WebGPU

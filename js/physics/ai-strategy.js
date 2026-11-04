@@ -10,7 +10,7 @@ const AiStrategy = (function () {
   let traitsOf = function (_c) {
     return {
       craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
-      aggression: 0, optimism: 0,
+      aggression: 0, optimism: 0, composure: 0,
     };
   };
   function bindTraits(fn) { traitsOf = fn; }

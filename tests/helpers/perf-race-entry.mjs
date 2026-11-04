@@ -57,3 +57,45 @@ export function raceOnlyStages(diff, raceFloorMs = 50, practiceCeilMs = 5) {
   if (!diff?.rows) return [];
   return diff.rows.filter((r) => (r.raceMs ?? 0) >= raceFloorMs && (r.practiceMs ?? 0) <= practiceCeilMs).map((r) => r.n);
 }
+
+/** GL lane the run is on: CI sets APEX_GL (llvmpipe); unset means SwiftShader. */
+export function glLane(env = process.env) {
+  return String(env.APEX_GL || "swiftshader").toLowerCase();
+}
+
+/** Long-task baseline for one GL lane (#4777): tools/perf/baselines/race-entry-swiftshader.json. A lane
+ *  with no entry (or null numbers) records only. */
+export function loadBaseline(lane = glLane()) {
+  const f = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "perf", "baselines", "race-entry-swiftshader.json"), "utf8"));
+  const l = (f.lanes && f.lanes[lane]) || {};
+  return {
+    lane,
+    ratio: f.ratio,
+    baseline: l.baseline || { blockMs: null, maxBlockMs: null, longTaskCount: null },
+    runs: l.runs || {},
+    loafScriptAllow: f.loafScriptAllow,
+    loafMinScriptMs: f.loafMinScriptMs || 0,
+  };
+}
+
+/** Pure check: measured long-task numbers vs baseline x ratio. Returns failure strings ([] = pass; null baseline = record-only). */
+export function longTaskFailures(snap, base) {
+  const b = base.baseline, out = [];
+  if (b.blockMs == null) return out;
+  const r = base.ratio;
+  if (snap.blockMs > b.blockMs * r) out.push(`blockMs ${snap.blockMs} > ${b.blockMs} x ${r}`);
+  if (snap.maxBlockMs > b.maxBlockMs * r) out.push(`maxBlockMs ${snap.maxBlockMs} > ${b.maxBlockMs} x ${r}`);
+  if (snap.longTasks.length > b.longTaskCount * r) out.push(`long-task count ${snap.longTasks.length} > ${b.longTaskCount} x ${r}`);
+  return out;
+}
+
+/** Attributed LoAF script URLs that match no allow-list entry (substring). Only scripts that ran >= minMs
+ *  in a frame count: incidental UI scripts (loading-screen, race-entry-profile, ...) come and go with timing
+ *  and never exceed ~50 ms, while every heavy one measured is >= 370 ms (#4777). */
+export function loafUnlisted(snap, allow, minMs = 0) {
+  const seen = new Set();
+  for (const f of snap.loaf || []) for (const s of f.scripts) {
+    if (s.url && !(s.ms < minMs) && !allow.some((a) => s.url.includes(a))) seen.add(s.url);
+  }
+  return [...seen].sort();
+}

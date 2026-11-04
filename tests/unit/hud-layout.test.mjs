@@ -1116,7 +1116,7 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
   // No cockpit-cam in HELMET: mode-switch.js keys the LCD hide on COCKPIT alone.
   const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   assert.match(ms, /"cockpit-cam", camId === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/);
-  assert.match(ms, /toggleAttribute\("data-helmet-cam", camId === "helmet"\)/, "the visor frame stays");
+  assert.match(ms, /toggleAttribute\("data-helmet-cam", camId === "helmet" && !\(G\.dbgCam && G\.dbgCam\.startLights\)\)/, "the visor frame stays");
 });
 
 test("every edited widget retains geometry through clearance and high-scale packing", () => {

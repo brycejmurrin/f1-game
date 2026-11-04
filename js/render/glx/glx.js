@@ -892,7 +892,7 @@ const GLXBackend = (function () {
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uWind", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uWind", "uWindDetail", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark", "uPuddles",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
@@ -1802,7 +1802,7 @@ const GLXBackend = (function () {
       const wd = (T && T.windDir != null ? T.windDir : 35) * (Math.PI / 180);
       _windScr[0] = Math.cos(wd); _windScr[1] = Math.sin(wd);
       _windScr[2] = T && T.windSpeed != null ? T.windSpeed : 1.0;
-      uf3(litU.uWind, _litUf, "wind", _windScr);
+      uf3(litU.uWind, _litUf, "wind", _windScr); uf1(litU.uWindDetail, _litUf, "windDetail", T && T.windDetail != null ? T.windDetail : 1.0);
     }
     // BAKED MATERIALS knob. Ships at 1.0 (mirrors TUNE_DEFS matTexMix def);
     // __apex.matTex(0) is the A/B off-switch back to pure procedural. A missing
@@ -2737,7 +2737,7 @@ const GLXBackend = (function () {
       layers: Array.from(matTexScales).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
       scales: Array.from(matTexScales),
     }),
-    freeTexture,
+    freeTexture, flushTexPool() {},   // flushTexPool: TLX-only pool, no-op here
     texCensus,                    // resident texture bytes — see the ledger above
     drawDecal,
     chunkedTrackCoords: true,

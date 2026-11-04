@@ -135,10 +135,12 @@ test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming 
   const fs = await import("node:fs");
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   const body = wf.split("\n  ci-verdict:\n")[1];
-  const m = /REQUIRE_SUCCESS: \$\{\{ \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\) && '([^']+)' \|\| '' \}\}/.exec(body);
+  // READY_TIER=fast (#4836): a ready PR running the draft tier still requires the guards and select.
+  const m = /REQUIRE_SUCCESS: \$\{\{ github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft && \(vars\.READY_TIER == 'fast' && '([^']+)' \|\| '([^']+)'\) \|\| '' \}\}/.exec(body);
   assert.ok(m, "REQUIRE_SUCCESS must be set only when the run is a non-draft pull_request");
+  assert.match(m[2], /\bsmoke\b/, "the full ready tier requires smoke");
   const needs = body.split("needs:")[1].split("if:")[0];
-  for (const j of m[1].split(",")) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
+  for (const j of [...m[1].split(","), ...m[2].split(",")]) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
   assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
 });
 

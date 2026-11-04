@@ -159,7 +159,10 @@ function migrateSlots() {
   for (const item of found) {
     const c = item.value;
     if (typeof CareerPlanning !== "undefined" && CareerPlanning.protect(c, Tracks.LIST || [])) continue;
-    if (c && Number(c.v) > GameStore.CAREER_V) continue;
+    if (c && typeof c === "object") {
+      const cv = typeof SaveMigrate !== "undefined" && SaveMigrate.careerVersion ? SaveMigrate.careerVersion(c.v) : Number(c.v);
+      if (cv == null || Number.isNaN(cv) || cv > GameStore.CAREER_V) continue; // leave the legacy key untouched
+    }
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
@@ -975,9 +978,18 @@ function budgetUpgradeCost() {
 }
 
 const GRANT = 5000;
+// Stored OUTSIDE the career prefix: a `career*` key is refused without the
+// writer lock and mirrored like a save. "career.freeMoney" is the legacy key,
+// read once as a fallback.
 function freeMoney(on) {
-  if (on !== undefined) store.set("career.freeMoney", !!on);
-  return !!store.get("career.freeMoney", false);
+  if (on !== undefined) store.set("freeMoney", !!on);
+  const v = store.get("freeMoney", null);
+  if (v != null) return !!v;
+  const old = store.get("career.freeMoney", null);
+  if (old == null) return false;
+  store.set("freeMoney", !!old); // one-time copy; the clear is best-effort (refused without the writer lock)
+  store.set("career.freeMoney", null);
+  return !!old;
 }
 // Hand yourself credits. Returns the new balance, or null with no career loaded.
 function grant(n) {

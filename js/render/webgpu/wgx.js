@@ -122,8 +122,8 @@ const WGX = (function () {
   })();
   const _CH = _Chunks || {};   // sizes below fall back to 0 when absent; create() refuses first
 
-  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 672
-  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 168
+  const FRAME_BYTES = _CH.FRAME_UNIFORM_BYTES | 0;      // 688
+  const FRAME_FLOATS = FRAME_BYTES / 4;                 // 172
   const LIGHT_STRIDE = _CH.LIGHT_STRIDE_BYTES | 0;      // 64
   const MAX_LIGHTS = _CH.MAX_LIGHTS | 0;                // 48
   const LIGHT_BYTES = LIGHT_STRIDE * MAX_LIGHTS;        // 3072
@@ -3347,6 +3347,12 @@ const WGX = (function () {
         }
       }
       d[140] = _absShadowIdx;
+      {   // wind (floats 168..171, off 672): FOLIAGE sway — GLX uWind + uWindDetail
+        const wd = (T && T.windDir != null ? T.windDir : 35) * (Math.PI / 180);
+        d[168] = Math.cos(wd); d[169] = Math.sin(wd);
+        d[170] = T && T.windSpeed != null ? T.windSpeed : 1.0;
+        d[171] = T && T.windDetail != null ? T.windDetail : 1.0;
+      }
       d[141] = (T && T.puddles != null) ? T.puddles : 1.0;   // params10.y: PUDDLES knob (GLX uPuddles, TLX U.puddles)
       // pitLane (floats 144..147, off 576): the PAINTED pit lane — entry s,
       // window length, pit side, lap length. Mirrors GLX's uPitLane. A null
@@ -5922,6 +5928,7 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      flushTexPool() {},            // TLX-only retired-texture pool; nothing to flush here
       // texCensus: GLX-only. Declared ABSENT rather than left off, because
       // game.js installs a backend by descriptor-copy onto GLX and an absent
       // NAME would keep GLX's own function — which would then run against a

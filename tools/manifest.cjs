@@ -113,7 +113,8 @@ const circuitFiles = CIRCUITS.map((id) => `${CIRCUITS_DIR}/${id}.js`);
 const CIRCUIT_META = "js/track/circuit-meta.js";
 const LAZY_CIRCUIT = circuitFiles;
 // The bespoke scenery closure for each circuit, split out of its def file.
-// ~27 KB each; all 40 (52 today) were 1,083 KB of the boot script wall for a session that
+// ~43 KB raw each on average (2,226 KB over 52; monaco, the worst, is 108 KB raw / 35 KB gzip, capped by the
+// lazyCircuitGzipMax ratchet); all 40 (52 today) were 1,083 KB of the boot script wall for a session that
 // builds ONE circuit. No <script> tag — game.js fetches the one it is about to
 // build (RACE_SCENERY / sceneryUrl), and js/track/tracks.js resolves through
 // window.TrackScenery[def.id]. The Node build harnesses load the whole dir.
@@ -1406,6 +1407,7 @@ const LAZY_NET = [
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
+  "js/net/overlay-net.js",      // OverlayNet: the stream overlay over the same wire (STREAM OVERLAY in SETTINGS; overlay.html#ov=CODE)
 ];
 
 // WORKER SCRIPTS: no <script> tag and never injected into the page — each is
