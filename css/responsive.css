@@ -254,7 +254,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-title-btnw] #menu-buttons {
   --_tl-bw: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
   width: var(--_tl-bw);
-  max-width: none; min-width: 0;
+  max-width: none; min-width: 16.5rem;   /* floor: the doors fit their labels (#4816) */
   /* CENTRED ON ITS COLUMN even when wider than it (portrait: the shipped width is
      already ~94 % of the screen, so every WIDTH step overran the column and a
      centred grid item pins to the start edge). A start-aligned item with a
@@ -263,6 +263,11 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   margin-inline: calc((100% - var(--_tl-bw)) / 2);
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
+/* #4816: at the low end of WIDTH the hero's CAREER door and the DAILY row no longer share one flex row (CAREER
+   shrank to a 24 px sliver); the row wraps instead, so CAREER keeps a readable basis and DAILY drops beneath it. */
+:root[data-title-btnw] #menu-hero { flex-wrap: wrap; }
+:root[data-title-btnw] #menu-hero > #mb-career { flex: 1 1 8.5rem; min-width: max(44px, 8.5rem); }
+:root[data-title-btnw] #menu-hero > #menu-retention { flex: 1 1 8.5rem; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
    (css/components.css): 100% is one per line, 0px is one equal row. */
 :root[data-title-btns="stack"] #menu-buttons > :is(#menu-primary, #menu-explore, #menu-secondary) { --balance-basis: 100%; --balance-min: 100%; }

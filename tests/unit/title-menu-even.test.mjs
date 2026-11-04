@@ -545,3 +545,17 @@ test("Daily history populates the Saves and Data blueprint, keeps classes separa
   data = { days: [] }; api["refresh"]();
   assert.equal(history.querySelector("li").textContent, "No saved Daily laps yet. Complete a valid Daily lap to start your history.");
 });
+
+test("title WIDTH never collapses the hero or the doors (#4816)", () => {
+  const css = readCssSource("css/responsive.css");
+  // Floor: the explicit-width grid cannot shrink below the width where every door still fits its label
+  // (live sweep 20..140 at 844x390 and 390x844: CAREER >= 44 px, no scrollWidth > clientWidth).
+  const m = css.match(/:root\[data-title-btnw\] #menu-buttons \{([^}]*)\}/);
+  assert.ok(m, "btnw #menu-buttons rule exists");
+  const floor = /min-width:\s*([\d.]+)rem/.exec(m[1]);
+  assert.ok(floor && Number(floor[1]) >= 16, "#menu-buttons carries a rem floor under data-title-btnw");
+  assert.doesNotMatch(m[1], /min-width:\s*0\b/, "no zero minimum under data-title-btnw");
+  // The hero row wraps and CAREER keeps a readable basis instead of a 24 px sliver.
+  assert.match(css, /:root\[data-title-btnw\] #menu-hero \{ flex-wrap: wrap; \}/);
+  assert.match(css, /:root\[data-title-btnw\] #menu-hero > #mb-career \{[^}]*min-width: max\(44px,/);
+});
