@@ -10967,6 +10967,9 @@
       "hookCounts": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
+      "passStats": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
       "phaseStats": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
