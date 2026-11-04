@@ -789,26 +789,11 @@ test("TLX decal programs share a material map reference, not the first car's tex
 });
 
 test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", () => {
-  const game = code("js/game.js");
-  assert.match(game, /apex26\.gfxClaimFail/);
-  assert.match(game, /armed\s*&&\s*!skipClaim\b/);
-  assert.match(game, /const p = backendPreference\(\);\s*if \(\(p === "webgpu" \|\| p === "three"\) && reloadOnceIntoGlx\(true\)\)/,
-    "claim-fail recovery must include the unset default THREE attempt");
-  // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
-  // blocked, removing the probe + reloading replays the claim-and-die boot
-  // forever (the probe was the only other escape). And it must reload at most
-  // ONCE — a latch already set when the boot started means the previous
-  // reload's GLX.init failed too, and reloading again loops forever
-  // (measured 236 reloads/64 s under a Vulkan-only browser config).
-  const latch = game.search(/if\s*\(\s*!_claimSkipped\s*\)/);
-  assert.ok(latch > 0, "the reload is gated on the latch not already being set");
-  const latchBody = game.slice(latch, latch + 400);
-  assert.match(latchBody, /setItem\(\s*"apex26\.gfxClaimFail"\s*,\s*"1"\s*\)/);
-  assert.match(latchBody, /skipped\s*=\s*sessionStorage\.getItem\(\s*"apex26\.gfxClaimFail"\s*\)\s*===\s*"1"/, "the skip is read back before the reload");
-  const refused = game.search(/if\s*\(\s*!_claimSkipped\s*\)/);
-  assert.ok(refused > 0);
-  assert.match(game.slice(refused, refused + 3000), /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/, "a refused create disarms the probe");
-  assert.doesNotMatch(game, /create\(\)\s*refused[\s\S]{0,250}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  // The claim-fail ladder itself (the unset-default THREE reload, the latch
+  // written and READ BACK before reloading, at most one reload, `armed &&
+  // !skipClaim`, a refused create disarming the probe without writing webgl2)
+  // is BEHAVIOUR now: tests/unit/game-boot-claim-fail.test.mjs boots js/game.js
+  // in the VM (tests/helpers/game-boot-vm.mjs, #4878) — not repeated here as source text.
   // A STORED PICK MUST NOT OUTLIVE ITS FILES. With DEFERRED = {} after the
   // 2026-09-03 spike-out, BACKEND_FILES.three is undefined; the boot armed the
   // probe and then threw inside loadBackendScripts on `files.map`. It was caught
@@ -2637,6 +2622,16 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
   assert.equal(ls.getItem("apex26.gfxWgxFail"), null);
   timers.forEach((fn) => fn());
   assert.equal(reloaded(), 1);
+});
+
+test("SETTINGS shows why this boot bound WebGL2 (apex26.gfxFallbackWhy), hidden when unset (#4824)", () => {
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "three" }, ss: { "apex26.gfxFallbackWhy": "boot canary: three never presented a frame last load" } });
+  assert.ok(a.byId["pm-gfx-why"], "why line injected");
+  assert.match(a.byId["pm-gfx-why"].textContent, /^WebGL2 this boot: boot canary: three never presented/);
+  assert.equal(a.byId["pm-gfx-why"].hidden, false);
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "three" } });
+  assert.equal(b.byId["pm-gfx-why"].textContent, "");
+  assert.equal(b.byId["pm-gfx-why"].hidden, true);
 });
 
 test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () => {
