@@ -17,11 +17,16 @@ const GarageCrewMotion = (function () {
   }
   // Replay the authored planted gait over arbitrary travel, in 1.35 m cycles.
   // Positive distance retreats along local -z; negative distance walks forward.
+  // The authored root travels 1.35 * smoothstep(u) over the clip, so the clip
+  // time for travel fraction v is the inverse smoothstep (16-step bisection).
   function walking(distance, out) {
-    const v=((distance/1.35)%1+1)%1;
-    let lo=0,hi=1;
-    for(let i=0;i<16;i++){const u=(lo+hi)/2;if(u*u*(3-2*u)<v)lo=u;else hi=u;}
-    return sample((lo+hi)/2,out);
+    const v = ((distance / 1.35) % 1 + 1) % 1;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 16; i++) {
+      const u = (lo + hi) / 2;
+      if (u * u * (3 - 2 * u) < v) lo = u; else hi = u;
+    }
+    return sample((lo + hi) / 2, out);
   }
   // The parts are GarageCrewDraw.body's lofts (tools/gen/blender/crew-body.py), in
   // the frames part() places: the fore carries the glove and fist past the wrist.
@@ -33,11 +38,12 @@ const GarageCrewMotion = (function () {
   }
   function free(rig, gfx) {
     if (!rig) return 0;
-    const names = Object.keys(rig.mesh); for (const name of names) gfx.freeMesh(rig.mesh[name]);
+    const names = Object.keys(rig.mesh);
+    for (const name of names) gfx.freeMesh(rig.mesh[name]);
     return names.length;
   }
-  // Two-bone IK in the figure's YZ plane. Feet remain at Blender's authored
-  // ground targets while knees bend; the same solver keeps arm lengths fixed.
+  // Two-bone IK in the figure's YZ plane: the elbow that keeps both arm
+  // segments at length a and b while the hand reaches (ty, tz).
   function joint(y, z, ty, tz, a, b, bend, out) {
     const dy = ty - y, dz = tz - z, raw = Math.hypot(dy, dz), d = Math.max(.001, Math.min(a + b - .0001, raw));
     const uy = raw > .001 ? dy / raw : -1, uz = raw > .001 ? dz / raw : 0;
@@ -46,21 +52,31 @@ const GarageCrewMotion = (function () {
     return out;
   }
   // Three-dimensional knee solve keeps an ankle planted as the torso turns.
-  function leg(x,y,z,tx,ty,tz,out) {
-    const dx=tx-x,dy=ty-y,dz=tz-z,raw=Math.hypot(dx,dy,dz),d=Math.max(.001,Math.min(THIGH+SHIN-.0001,raw));
-    const ux=dx/raw,uy=dy/raw,uz=dz/raw,along=(THIGH*THIGH-SHIN*SHIN+d*d)/(2*d),h=Math.sqrt(Math.max(0,THIGH*THIGH-along*along)),n=Math.sqrt(1-uz*uz);
-    out[0]=x+ux*along-uz*ux*h/n;out[1]=y+uy*along-uz*uy*h/n;out[2]=z+uz*along+n*h;return out;
+  function leg(x, y, z, tx, ty, tz, out) {
+    const dx = tx - x, dy = ty - y, dz = tz - z, raw = Math.hypot(dx, dy, dz), d = Math.max(.001, Math.min(THIGH + SHIN - .0001, raw));
+    const ux = dx / raw, uy = dy / raw, uz = dz / raw;
+    const along = (THIGH * THIGH - SHIN * SHIN + d * d) / (2 * d), h = Math.sqrt(Math.max(0, THIGH * THIGH - along * along)), n = Math.sqrt(1 - uz * uz);
+    out[0] = x + ux * along - uz * ux * h / n;
+    out[1] = y + uy * along - uz * uy * h / n;
+    out[2] = z + uz * along + n * h;
+    return out;
   }
-  function part(rig, gfx, name, x, y, z, dy, dz, length, opts, dx=0, footYaw=null) {
-    const m=rig.m,cy=rig.cy,sy=rig.sy,d=Math.hypot(dx,dy,dz),nx=dx/d,ny=dy/d,nz=dz/d;
-    const h=Math.hypot(dx,dy),xx=h>.00001?Math.abs(dy)/h:1,xy=h>.00001?-(dy<0?-1:1)*dx/h:0,zx=xy*nz,zy=-xx*nz,zz=xx*ny-xy*nx;
-    m[0]=cy*xx;m[1]=xy;m[2]=-sy*xx;m[3]=0;
-    m[4]=(cy*dx+sy*dz)/length;m[5]=dy/length;m[6]=(-sy*dx+cy*dz)/length;m[7]=0;
-    m[8]=cy*zx+sy*zz;m[9]=zy;m[10]=-sy*zx+cy*zz;m[11]=0;
-    m[12]=rig.x+cy*x+sy*z;m[13]=y;m[14]=rig.z-sy*x+cy*z;m[15]=1;
-    if(footYaw!==null) { const c=Math.cos(footYaw),s=Math.sin(footYaw);m[0]=c;m[1]=0;m[2]=-s;m[4]=0;m[5]=1;m[6]=0;m[8]=s;m[9]=0;m[10]=c; }
+  // One rigid part from joint (x, y, z) along (dx, dy, dz), scaled to `length`,
+  // in the rig's yaw frame. A footYaw replaces the rotation (a turning boot).
+  function part(rig, gfx, name, x, y, z, dy, dz, length, opts, dx = 0, footYaw = null) {
+    const m = rig.m, cy = rig.cy, sy = rig.sy, d = Math.hypot(dx, dy, dz), nx = dx / d, ny = dy / d, nz = dz / d;
+    const h = Math.hypot(dx, dy), xx = h > .00001 ? Math.abs(dy) / h : 1, xy = h > .00001 ? -(dy < 0 ? -1 : 1) * dx / h : 0;
+    const zx = xy * nz, zy = -xx * nz, zz = xx * ny - xy * nx;
+    m[0] = cy * xx; m[1] = xy; m[2] = -sy * xx; m[3] = 0;
+    m[4] = (cy * dx + sy * dz) / length; m[5] = dy / length; m[6] = (-sy * dx + cy * dz) / length; m[7] = 0;
+    m[8] = cy * zx + sy * zz; m[9] = zy; m[10] = -sy * zx + cy * zz; m[11] = 0;
+    m[12] = rig.x + cy * x + sy * z; m[13] = y; m[14] = rig.z - sy * x + cy * z; m[15] = 1;
+    if (footYaw !== null) {
+      const c = Math.cos(footYaw), s = Math.sin(footYaw);
+      m[0] = c; m[1] = 0; m[2] = -s; m[4] = 0; m[5] = 1; m[6] = 0; m[8] = s; m[9] = 0; m[10] = c;
+    }
     // rig.parent (GarageCrewChoreo.draw): the in-race stop places the crew in the car's grounded basis.
-    gfx.draw(rig.mesh[name],rig.parent?GarageCrewDraw.mul(rig.pm,rig.parent,m):m,opts);
+    gfx.draw(rig.mesh[name], rig.parent ? GarageCrewDraw.mul(rig.pm, rig.parent, m) : m, opts);
   }
   function draw(rig, gfx, x, z, yaw, pose, side, opts) {
     rig.x = x; rig.z = z; rig.cy = Math.cos(yaw); rig.sy = Math.sin(yaw);

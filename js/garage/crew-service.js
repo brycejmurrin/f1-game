@@ -14,7 +14,12 @@ const GarageCrewService = (function () {
   const EXIT_HALF = 1.55;              // car half-width + margin — the exit corridor
   const CLEAR_BY = 4.5;                // every actor is outside EXIT_HALF by this serviceTime
   const WHEELS = [[1, 1.7, .79], [-1, 1.7, .79], [1, -1.6, .76], [-1, -1.6, .76]];
-  function actors() { return Array.from({ length: 7 }, () => ({ x:0, z:0, yaw:0, door:1, seconds:0, calm:true, crouch:0, lean:0, hipLean:0, handY:.85, reach:.03, walkDistance:0, feet:null, footYaw:null, stance:new Float32Array(6), stanceYaw:new Float32Array(2) })); }
+  // The jack operator parks against the wall at (JACK_WALL_X, JACK_WALL_Z) facing the car.
+  const JACK_WALL_X = 4.05, JACK_WALL_Z = 1.35;
+  function actors() {
+    return Array.from({ length: 7 }, () => ({ x: 0, z: 0, yaw: 0, door: 1, seconds: 0, calm: true, crouch: 0, lean: 0, hipLean: 0,
+      handY: .85, reach: .03, walkDistance: 0, feet: null, footYaw: null, stance: new Float32Array(6), stanceYaw: new Float32Array(2) }));
+  }
   // Push anyone still in the exit corridor out to the wall before roll-out.
   function clearExit(out) {
     for (let i = 0; i < out.length; i++) {
@@ -22,63 +27,75 @@ const GarageCrewService = (function () {
       if (Math.abs(a.x) < EXIT_HALF) a.x = (a.x < 0 ? -1 : 1) * Math.max(2.8, EXIT_HALF + 0.4);
     }
     const j = out[4];
-    j.x = 4.05; j.z = 1.35; j.yaw = -Math.PI / 2; j.pump = 0; j.walkDistance = 4.05;
+    j.x = JACK_WALL_X; j.z = JACK_WALL_Z; j.yaw = -Math.PI / 2; j.pump = 0; j.walkDistance = JACK_WALL_X;
     j.feet = null; j.footYaw = null;
     const cable = out[5];
     cable.x = 3; cable.connected = 0; cable.walkDistance = 0; cable.crouch = 0; cable.lean = 0;
     cable.handY = 0.94; cable.reach = 0.34;
   }
+  // Actors 0-3: a blanket handler per wheel. Each half-stride is .675 m: both
+  // feet plant before lowering or lifting.
+  function layoutHandlers(t, leaving, out) {
+    const approach = phase(t, leaving ? 0 : .3, leaving ? 1.1 : 1.9);
+    const slide = phase(t, leaving ? 1.1 : 2.7, leaving ? 1.9 : 3.5);
+    const lower = leaving ? 1 - phase(t, 1.9, 2.6) : phase(t, 1.9, 2.7);
+    // Leave retreat finishes earlier so the corridor is empty well before roll-out.
+    const retreat = phase(t, leaving ? 2.2 : 4, leaving ? 4.2 : 5.8);
+    for (let i = 0; i < 4; i++) {
+      const [side, z, wx] = WHEELS[i], a = out[i];
+      // On leave, approach less deep so handlers stay clear of the exit half-width
+      // except for the brief cover grasp, then retreat hard.
+      const distance = leaving ? 1.15 * approach - .575 * slide - .575 * retreat : .675 * approach + .675 * slide - 1.35 * retreat;
+      a.x = side * (2.8 - distance); a.z = z; a.yaw = -side * Math.PI / 2; a.walkDistance = -distance;
+      const grasp = leaving ? phase(t, .7, 1.1) : 1 - phase(t, 3.5, 3.9);
+      a.crouch = .16 * lower * grasp; a.lean = .16 * lower * grasp; a.hipLean = 0;
+      a.handY = .85 + (.88 - .51 * lower + .35 - .85) * grasp;
+      a.reach = .03 + (1.45 - wx - .215 - .03) * grasp;
+      a.coverY = .88 - .51 * lower; a.coverAttached = leaving ? t >= 1.1 : t < 3.5;
+      a.coverX = side * wx; a.coverZ = z; a.coverReach = 1.45 - wx;
+    }
+  }
+  // Actor 4: the front-jack operator.
+  function layoutJack(t, leaving, j) {
+    j.crouch = .08; j.lean = .14; j.hipLean = .14; j.handY = .92; j.reach = .52;
+    if (leaving) {
+      // Sidestep to the wall BEFORE the turn so planted feet stay fixed in world space during 1.2–1.8.
+      const side = phase(t, 0, 1.2), back = phase(t, 0, 1.2), turn = phase(t, 1.2, 1.8);
+      j.x = JACK_WALL_X * side; j.z = JACK_WALL_Z * back; j.yaw = -Math.PI + Math.PI / 2 * turn;
+      j.walkDistance = side > 0 && turn <= 0 ? JACK_WALL_X * side : (turn > 0 ? 0 : JACK_WALL_Z * back);
+      j.pump = 0; turning(j, turn, -Math.PI, -Math.PI / 2);
+    } else {
+      const travel = phase(t, .3, 2), turn = phase(t, 2, 2.7), insert = phase(t, 2.7, 3.8);
+      j.x = JACK_WALL_X * (1 - travel); j.z = JACK_WALL_Z * (1 - insert); j.yaw = -Math.PI / 2 - Math.PI / 2 * turn;
+      j.walkDistance = insert > 0 ? -JACK_WALL_Z * insert : -JACK_WALL_X * travel;
+      turning(j, turn, -Math.PI / 2, -Math.PI);
+      j.pump = t > 4 && t < 5.2 ? Math.sin(Math.PI * (t - 4) / 1.2) ** 2 : 0;
+    }
+  }
+  // Actor 5: the side service umbilical. Walk in after parking; unplug and retreat before roll-out.
+  function layoutCable(t, leaving, cable) {
+    const travel = leaving ? 1 - phase(t, 0, 1.8) : phase(t, .5, 2.4);
+    const connect = leaving ? 1 - phase(t, 0, .6) : phase(t, 2.4, 3.2);
+    cable.x = 3 - 1.35 * travel; cable.z = -.3; cable.yaw = -Math.PI / 2;
+    cable.walkDistance = -1.35 * travel; cable.crouch = .16 * connect; cable.lean = .17 * connect; cable.hipLean = 0;
+    cable.handY = .94 - .16 * connect; cable.reach = .34 + .24 * connect;
+    cable.connected = connect;
+  }
+  // Actor 6: an engineer at the existing monitor bank, clear of all tyre-handler routes.
+  function layoutEngineer(pose, engineer) {
+    const typing = pose.calm ? 0 : .012 * Math.sin((pose.seconds || 0) * 7);
+    engineer.x = -4.38; engineer.z = .6; engineer.yaw = -Math.PI / 2; engineer.walkDistance = 0;
+    engineer.crouch = .1; engineer.lean = .18; engineer.hipLean = 0; engineer.handY = .95 + typing; engineer.reach = .46;
+  }
   // Writes into preallocated actors. Equipment crosses the lane only while
   // the car is parked; every actor and prop is back at the sides before roll-out.
   function layout(pose, out = actors()) {
     const t = Number.isFinite(pose.serviceTime) ? pose.serviceTime : 0, leaving = pose.direction === "out";
-    // Each half-stride is .675 m: both feet plant before lowering or lifting.
-    const approach=phase(t,leaving?0:.3,leaving?1.1:1.9);
-    const slide=phase(t,leaving?1.1:2.7,leaving?1.9:3.5);
-    const lower=leaving?1-phase(t,1.9,2.6):phase(t,1.9,2.7);
-    // Leave retreat finishes earlier so the corridor is empty well before roll-out.
-    const retreat=phase(t,leaving?2.2:4,leaving?4.2:5.8);
-    for(let i=0;i<4;i++) {
-      const [side,z,wx]=WHEELS[i],a=out[i];
-      // On leave, approach less deep so handlers stay clear of the exit half-width
-      // except for the brief cover grasp, then retreat hard.
-      const distance=leaving?1.15*approach-.575*slide-.575*retreat:.675*approach+.675*slide-1.35*retreat;
-      a.x=side*(2.8-distance);a.z=z;a.yaw=-side*Math.PI/2;a.walkDistance=-distance;
-      const grasp=leaving?phase(t,.7,1.1):1-phase(t,3.5,3.9);
-      a.crouch=.16*lower*grasp;a.lean=.16*lower*grasp;a.hipLean=0;
-      a.handY=.85+(.88-.51*lower+.35-.85)*grasp;
-      a.reach=.03+(1.45-wx-.215-.03)*grasp;
-      a.coverY=.88-.51*lower;a.coverAttached=leaving?t>=1.1:t<3.5;
-      a.coverX=side*wx;a.coverZ=z;a.coverReach=1.45-wx;
-      a.seconds=pose.seconds;a.calm=pose.calm;
-    }
-    const j=out[4]; j.crouch=.08; j.lean=.14; j.hipLean=.14; j.handY=.92; j.reach=.52;
-    if (leaving) {
-      // Sidestep to the wall BEFORE the turn so planted feet stay fixed in world
-      // space during 1.2–1.8 (old path kept x=0 on the centerline for that whole turn).
-      const side=phase(t,0,1.2), back=phase(t,0,1.2), turn=phase(t,1.2,1.8);
-      j.x=4.05*side; j.z=1.35*back; j.yaw=-Math.PI+Math.PI/2*turn;
-      j.walkDistance=side>0 && turn<=0 ? 4.05*side : (turn>0 ? 0 : 1.35*back);
-      j.pump=0; turning(j,turn,-Math.PI,-Math.PI/2);
-    } else {
-      const travel=phase(t,.3,2), turn=phase(t,2,2.7), insert=phase(t,2.7,3.8);
-      j.x=4.05*(1-travel); j.z=1.35*(1-insert); j.yaw=-Math.PI/2-Math.PI/2*turn; j.walkDistance=insert>0 ? -1.35*insert : -4.05*travel;
-      turning(j,turn,-Math.PI/2,-Math.PI);
-      j.pump=t>4 && t<5.2 ? Math.sin(Math.PI*(t-4)/1.2)**2 : 0;
-    }
-    j.seconds=pose.seconds; j.calm=pose.calm;
-    // Side service umbilical: walk in after parking; unplug and retreat before roll-out.
-    const cable=out[5], travel=leaving?1-phase(t,0,1.8):phase(t,.5,2.4);
-    const connect=leaving?1-phase(t,0,.6):phase(t,2.4,3.2);
-    cable.x=3-1.35*travel;cable.z=-.3;cable.yaw=-Math.PI/2;
-    cable.walkDistance=-1.35*travel;cable.crouch=.16*connect;cable.lean=.17*connect;cable.hipLean=0;
-    cable.handY=.94-.16*connect;cable.reach=.34+.24*connect;
-    cable.seconds=pose.seconds;cable.calm=pose.calm;cable.connected=connect;
-    // Work at the existing monitor bank, clear of all tyre-handler routes.
-    const engineer=out[6], typing=pose.calm?0:.012*Math.sin((pose.seconds||0)*7);
-    engineer.x=-4.38;engineer.z=.6;engineer.yaw=-Math.PI/2;engineer.walkDistance=0;
-    engineer.crouch=.1;engineer.lean=.18;engineer.hipLean=0;engineer.handY=.95+typing;engineer.reach=.46;
-    engineer.seconds=pose.seconds;engineer.calm=pose.calm;
+    layoutHandlers(t, leaving, out);
+    layoutJack(t, leaving, out[4]);
+    layoutCable(t, leaving, out[5]);
+    layoutEngineer(pose, out[6]);
+    for (let i = 0; i < 7; i++) { out[i].seconds = pose.seconds; out[i].calm = pose.calm; }
     // Hard gate: once the leave clear window opens (or the car is already moving),
     // nobody remains in the exit corridor.
     const moving = Math.abs(pose.z || 0) + Math.abs(pose.x || 0) > 0.03;
@@ -97,7 +114,7 @@ const GarageCrewService = (function () {
       const ax=Math.cos(start)*x+Math.sin(start)*.03,az=-Math.sin(start)*x+Math.cos(start)*.03;
       const bx=Math.cos(end)*x+Math.sin(end)*.03,bz=-Math.sin(end)*x+Math.cos(end)*.03;
       const wx=ax+(bx-ax)*e,wz=az+(bz-az)*e;
-      // Planted sole sits on FLOOR_Y; the swing foot lifts clear of the floor.
+      // A planted foot target sits at FOOT_PLANT (sole on the floor); the swing foot lifts clear.
       actor.stance[i*3]=c*wx-s*wz;actor.stance[i*3+1]=FOOT_PLANT+.065*Math.sin(Math.PI*t)**2;actor.stance[i*3+2]=s*wx+c*wz;
       actor.stanceYaw[i]=start+(end-start)*e;
     }
@@ -180,6 +197,10 @@ const GarageCrewService = (function () {
     const e=people[6];GarageCrewMotion.draw(body,gfx,e.x,e.z,e.yaw,e,6,opts);
     gfx.draw(rig.station,place(m,0,0,0,0),opts);
   }
-  function free(rig,gfx) { if(!rig)return 0;for(const mesh of [rig.base,rig.handle,rig.cover,rig.plug,rig.cable,rig.station])gfx.freeMesh(mesh);return 6; }
+  function free(rig, gfx) {
+    if (!rig) return 0;
+    for (const mesh of [rig.base, rig.handle, rig.cover, rig.plug, rig.cable, rig.station]) gfx.freeMesh(mesh);
+    return 6;
+  }
   return Object.freeze({ create,draw,free,layout,FLOOR_Y,FOOT_PLANT,EXIT_HALF,CLEAR_BY });
 })();

@@ -16,7 +16,6 @@ const GarageCrewChoreo = (function () {
   const acc = GarageCrewDraw.acc;
   const place = GarageCrewDraw.place;
   const mul = GarageCrewDraw.mul;
-  const CHANNELS = ["x", "z", "yaw", "walk", "crouch", "lean", "handY", "reach", "wave", "hold"];
   const IDS = { in: [], out: [], pit: [] };
   for (const id of Object.keys(CLIPS)) IDS[CLIPS[id].dir].push(id);
   // THE PER-VISIT ROTATION ("mix"): the shipped crews and the Blender variants,
@@ -94,9 +93,12 @@ const GarageCrewChoreo = (function () {
     for (const k of ["gun", "tablet", "base", "saddle", "span"]) gfx.freeMesh(p[k]);
     return 5;
   }
-  function put(p, gfx, mesh, x, y, z, yaw, parent, opts) {
-    const m = place(p.m, x, y, z, yaw);
+  // A member-local matrix m, under the crew's parent basis when there is one.
+  function drawProp(p, gfx, mesh, m, parent, opts) {
     gfx.draw(mesh, parent ? mul(p.w, parent, m) : m, opts);
+  }
+  function put(p, gfx, mesh, x, y, z, yaw, parent, opts) {
+    drawProp(p, gfx, mesh, place(p.m, x, y, z, yaw), parent, opts);
   }
   // A unit +y tube stretched from a to b (member-local points turned by yaw).
   function spanTo(p, gfx, ox, oz, yaw, ax, ay, az, bx, by, bz, parent, opts) {
@@ -108,7 +110,7 @@ const GarageCrewChoreo = (function () {
     m[0] = ux; m[1] = 0; m[2] = uz; m[3] = 0; m[4] = dx; m[5] = dy; m[6] = dz; m[7] = 0;
     m[8] = (-uz * dy) / d; m[9] = (uz * dx - ux * dz) / d; m[10] = (ux * dy) / d; m[11] = 0;
     m[12] = x0; m[13] = ay; m[14] = z0; m[15] = 1;
-    gfx.draw(p.span, parent ? mul(p.w, parent, m) : m, opts);
+    drawProp(p, gfx, p.span, m, parent, opts);
   }
   /** Draw clip `id` at clip time t: bodies on GarageCrewMotion rig `body`,
    *  props on `props`. `parent` (a 4x4, or null for bay metres) places the
@@ -122,15 +124,15 @@ const GarageCrewChoreo = (function () {
       GarageCrewMotion.draw(body, gfx, a.x, a.z, a.yaw, a, i, opts);
       if (!props || a.hold < 0.5) continue;
       const c = Math.cos(a.yaw), s = Math.sin(a.yaw), hx = a.x + s * a.reach, hz = a.z + c * a.reach;
-      if (a.prop === "gun") put(props, gfx, props.gun, hx, a.handY, hz, a.yaw, parent, opts);
+      if (a.prop === "gun" || a.prop === "tablet") put(props, gfx, props[a.prop], hx, a.handY, hz, a.yaw, parent, opts);
       else if (a.prop === "jack") {
         put(props, gfx, props.base, a.x, 0, a.z, a.yaw, parent, opts);
         put(props, gfx, props.saddle, a.x + s * 1.34, 0.21 + lift, a.z + c * 1.34, a.yaw, parent, opts);
         spanTo(props, gfx, a.x, a.z, a.yaw, 0, a.handY, a.reach, 0, 0.14, 1.12, parent, opts);
-      } else if (a.prop === "tablet") put(props, gfx, props.tablet, hx, a.handY, hz, a.yaw, parent, opts);
+      }
     }
     body.parent = null;
     return n;
   }
-  return Object.freeze({ CLIPS, IDS, MIX, pick, known, has, extra, label, value, actors, sample, createProps, freeProps, draw, mul });
+  return Object.freeze({ CLIPS, IDS, MIX, pick, known, has, extra, label, value, actors, sample, createProps, freeProps, draw });
 })();
