@@ -11593,6 +11593,9 @@
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs"
       ],
+      "lateralScales": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "launchDone": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11732,6 +11735,9 @@
       "sbsEase": [
         "tests/unit/ai-drive.test.mjs",
         "tests/unit/ai-pass-complete.test.mjs"
+      ],
+      "sbsLimits": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "sepClamp": [
         "tests/unit/ai-drive.test.mjs"
