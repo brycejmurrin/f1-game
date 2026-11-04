@@ -204,6 +204,7 @@ const AppearanceStudio = (function () {
     for (const { id, b } of ui.pages) b.setAttribute("aria-pressed", String(previewPage === id));
     for (const { id, b } of ui.shapes) b.setAttribute("aria-pressed", String(previewShape === id));
     ui.previewWrap.dataset.shape = previewShape;
+    if (ui.orient) { const split = shapes().split; for (const { id, b } of ui.orient) b.setAttribute("aria-pressed", String(id === split)); }
     ui.undo.disabled = !undoStack.length; ui.delete.disabled = !selectedProfile; ui.load.disabled = !selectedProfile;
     ui.scopeGlobal.setAttribute("aria-pressed", String(scope === "global")); ui.scopeScreen.setAttribute("aria-pressed", String(scope === "screen"));
     ui.scopeNote.textContent = scope === "global" ? "Presets, profile application and reset apply across menus, HUD and scene. Presets preserve accessibility and units; profiles and reset include them." : "Presets, profile application and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
@@ -262,6 +263,47 @@ const AppearanceStudio = (function () {
     setScene("photo"); sceneChanged(true);
     ui.photoNote.textContent = row.title + " chosen as your menu background.";
   }
+  // PER-ORIENTATION (#4529): live keys hold the CURRENT shape's values (owners
+  // read their own key); apex26.appearanceShapes {v:1, split, live, park} parks
+  // the other shape's SHAPE_KEYS. A body[data-shape] flip swaps them. Nothing
+  // parked = shared, so older saves migrate as they are. titleLayout is per shape itself.
+  const SHAPES_KEY = "appearanceShapes";
+  const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis",
+    "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups"]);
+  const liveShape = () => (typeof document !== "undefined" && document.body && document.body.getAttribute && document.body.getAttribute("data-shape") === "tall" ? "tall" : "wide");
+  const pickShape = (v) => { const out = {}; for (const k of SHAPE_KEYS) out[k] = v[k]; return out; };
+  function normalizeShapes(raw) {
+    const ok = isObject(raw) && raw.v === 1;
+    return { split: !ok || raw.split !== false, live: ok && (raw.live === "wide" || raw.live === "tall") ? raw.live : null,
+      park: ok && isObject(raw.park) ? pickShape(normalizeSnapshot(Object.assign(pickShape(snapshot()), raw.park))) : null };
+  }
+  const shapes = () => normalizeShapes(store.get(SHAPES_KEY, null));
+  let seenShape = null;
+  const writeShapes = (st) => store.set(SHAPES_KEY, { v: 1, split: st.split, live: st.live, park: st.park });
+  function syncShape() {
+    const st = shapes(), now = liveShape(), was = st.live || seenShape;
+    seenShape = now;
+    // Unstored: the first shape seen owns the live keys; boot writes nothing.
+    if (!st.split || !was || was === now) return false;
+    const cur = snapshot(), outgoing = pickShape(cur), incoming = st.park;
+    writeShapes({ split: true, live: now, park: outgoing });
+    if (!incoming || JSON.stringify(incoming) === JSON.stringify(outgoing)) return false;
+    applySnapshot(Object.assign(cur, incoming), { history: false });
+    return true;
+  }
+  // SHARED drops the parked copy: the current values become both shapes'.
+  function setShapeSplit(on) {
+    writeShapes({ split: !!on, live: liveShape(), park: null });
+    render(); say(on ? "Portrait and landscape now keep separate appearance values on this device." : "Portrait and landscape now share this appearance.");
+    return true;
+  }
+  function watchShape() {
+    try {
+      syncShape();
+      if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body)
+        new MutationObserver(() => syncShape()).observe(document.body, { attributes: true, attributeFilter: ["data-shape"] });
+    } catch (e) { Log.warn("ui", "Appearance orientation: " + e.message); }
+  }
   function initUI() {
     if (ui || typeof document === "undefined") return;
     const panel = document.getElementById("pm-panel-appearance"); if (!panel) return;
@@ -289,6 +331,10 @@ const AppearanceStudio = (function () {
     if (typeof TitleLayout !== "undefined" && TitleLayout.build) TitleLayout.build();
     const editMenu = adopt(menu, "pm-tl-edit"); if (editMenu) editMenu.textContent = "EDIT MAIN MENU";
     menu.appendChild(node("p", "as-note", "From Home, move and size buttons, title and artwork. Landscape and portrait save separately."));
+    const orient = node("div", "as-row"), orientSeg = node("div", "as-segment"); orientSeg.id = "as-orientation"; orientSeg.setAttribute("role", "group"); orientSeg.setAttribute("aria-label", "Portrait and landscape");
+    ui.orient = [[true, "SEPARATE"], [false, "SHARED"]].map(([id, name]) => { const b = button(name, () => setShapeSplit(id)); orientSeg.appendChild(b); return { id, b }; });
+    orient.append(node("span", "as-label", "Portrait & landscape"), orientSeg); menu.appendChild(orient);
+    menu.appendChild(node("p", "as-note", "SEPARATE: sizes, HUD and screen looks keep one value per orientation. Colours and text are shared."));
     const titleScreen = adopt(menu, "pm-titlescreen"); if (titleScreen) titleScreen.dataset.studioHome = "title";
     adopt(menu, "pm-appearance-menu");
     jump(menu, "REDUCE MOTION is in ACCESSIBILITY", "a11y", "pm-motion-sel");
@@ -344,6 +390,7 @@ const AppearanceStudio = (function () {
     render();
     if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
       { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
+      { id: "appearance-orientation", label: "Portrait & landscape", page: "appearance", target: "as-orientation", aliases: "orientation rotate portrait landscape separate shared per device" },
       { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system colour color" },
       { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
       { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
@@ -356,10 +403,11 @@ const AppearanceStudio = (function () {
   }
   // Same readyState rule as SettingsExport.mount: deferred scripts run at
   // "interactive", after DOMContentLoaded would already have missed a late listen.
+  watchShape();
   if (typeof document !== "undefined") {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
     else initUI();
   }
-  return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
-    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
+  return Object.freeze({ PROFILE_KEY, SHAPES_KEY, SHAPE_KEYS, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
+    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, shapes, normalizeShapes, syncShape, setShapeSplit, attach, setPreviewFrame, notify: say, initUI });
 })();

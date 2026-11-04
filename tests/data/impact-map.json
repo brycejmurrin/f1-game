@@ -17592,6 +17592,9 @@
       "loadProfile": [
         "tests/unit/appearance-studio.test.mjs"
       ],
+      "normalizeShapes": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
       "normalizeSnapshot": [
         "tests/unit/appearance-studio.test.mjs"
       ],
@@ -17618,6 +17621,9 @@
       ],
       "setScene": [
         "tests/unit/appearance-studio.test.mjs"
+      ],
+      "setShapeSplit": [
+        "tests/unit/appearance-shapes.test.mjs"
       ],
       "snapshot": [
         "tests/unit/appearance-studio.test.mjs"
