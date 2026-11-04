@@ -146,8 +146,8 @@ test("shell + sheet + toggles: the opt-in readouts are wired without class token
     assert.match(els, new RegExp(`\\["${k}", "[A-Z]+", "off"\\]`), k + " is opt-in");
     assert.match(css, new RegExp(`body\\[data-hud-hide~="${k}"\\]`));
   }
-  assert.match(css, /body\.hud-prof-minimal :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
-  assert.match(css, /body\.hud-bcam :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
+  assert.match(css, /body:is\([^)]*\.hud-prof-minimal[^)]*\) :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
+  assert.match(css, /body:is\([^)]*\.hud-bcam[^)]*\) :is\(#hud-rel, #hud-strat, #hud-inputs\)/);
   for (const g of ["HudRelative.tick", "HudStrategy.tick", "HudInputs.frame"]) assert.ok(hud.includes(g), g + " is called by GameHud");
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
 });
