@@ -92,8 +92,10 @@ test("a forced LAYOUT name hides; AUTO and MAP/GAPS are untouched", () => {
 test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  for (const sel of ["#hud-sectors", "#hud-box-best", "#hud-energy", "#hud-ot", "#hud-aero", "#hud-bb"])
+  for (const sel of ["#hud-sectors", "#hud-box-best", "#hud-energy", "#hud-ot"])
     assert.match(css, new RegExp("body\\.hud-prof-minimal " + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  // AERO and BRAKE BIAS hide through the one plain-display rule shared with the other hide reasons.
+  assert.match(css, /body:is\([^)]*\.hud-prof-minimal[^)]*\) :is\(#hud-aero, #hud-bb\)[^{]*\{ display: none; \}/);
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
   // to the other side rather than to a viewport-wide number.
   assert.match(hud, /mmR && mmR\.width \? Math\.max\(0, mmR\.left - 10 \* mz\) : null/);
