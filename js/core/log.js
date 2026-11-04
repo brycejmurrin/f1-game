@@ -2,6 +2,10 @@
 const Log = (function () {
   "use strict";
 
+  // The default resource-timing buffer is 250 entries; a boot fetches 431+ scripts, so later ones vanish from
+  // performance.getEntriesByType("resource"). log.js loads first, so raise it before anything fetches.
+  try { if (typeof performance !== "undefined" && performance.setResourceTimingBufferSize) performance.setResourceTimingBufferSize(2000); } catch (_) { /* absent in non-browser hosts */ }
+
   const LEVELS = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
   const NAMES = ["silent", "error", "warn", "info", "debug", "trace"];
   const CONSOLE_FN = [null, "error", "warn", "info", "log", "debug"];

@@ -3139,6 +3139,12 @@ hitch does not vanish from diagnostics because the next second was smooth.
 every few seconds" — read `p99` against `p50`, not the fps, because an average
 that a 60 Hz panel pins at 16.7 ms cannot show a spike at all. A `p99` several
 times `p50` with a healthy `p50` IS the periodic-hitch signature.
+
+**Invalid in a traced or profiled run.** `CpuProfiler::StartProfiling` / `Tracing.start` costs 600+ ms on the main
+thread; if it starts after `go()` it lands in `open.maxMs` and `frameTimes.maxMs` as a fake worst frame. `profile.mjs
+--mode trace` therefore arms tracing before the race and resets `perf()` after 60 frames; any other spec that starts a
+trace/profile mid-race must do the same or ignore `open`/`frameTimes`. Likewise `__tlx.memState().calls` is
+`renderer.info.render.frameCalls` (render() passes in the last frame), not the lifetime `render.calls`.
 ```js
 __apex.renderScale();      // full governor snapshot
 __apex.renderScale(0.6);   // pin 60% 3D scale
