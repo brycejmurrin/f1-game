@@ -7,7 +7,7 @@
   "files": {
     "css/hud.css": {
       "codeLines": 2353,
-      "lines": 2615
+      "lines": 2616
     },
     "js/agent/agentview.js": {
       "lines": 2321
@@ -64,7 +64,7 @@
       "slack": 5
     },
     "eagerCssGzip": {
-      "ceiling": 385453,
+      "ceiling": 385531,
       "slack": 3506
     },
     "eagerGzip": {
