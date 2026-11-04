@@ -1,11 +1,17 @@
 {
-  "//": "Baseline for tests/specs/perf-trace-census.spec.js (#4776). Seeded from research lane B's two 26-29 s monza traces (Layout 25.9-28.8/s); the first CI run's census.json replaces the provisional gcPer1000Frames. Headroom is x1.25; never widen it. A new invalidator site is added here in the PR that introduces it (key = file:function, stable across edits).",
+  "//": "Baseline for tests/specs/perf-trace-census.spec.js (#4776). Measured on CI (llvmpipe, monza, 844x390, 20 s window after an 8 s warm-up) in two runs, run ids 41799368957 and the retry: Layout/s 25.05 and 24.78 (limit = max x 1.25 headroom, rounded up); scavenges per 1000 frames 65 and 35.7 (max 65 recorded; the spread is large, hence the headroom). The invalidator list is the union of the sites seen in both runs, keyed file:function (stable across edits); a new site is added here in the PR that introduces it. Long tasks: 1 of 67 ms in run one, 0 in run two; tasks after the first 1000 ms of the window must be 0 (issue #4776). Never widen headroom to pass.",
   "track": "monza",
   "warmMs": 8000,
-  "skipMs": 0,
+  "skipMs": 1000,
   "headroom": 1.25,
-  "layout": { "perS": 28.8 },
-  "gcPer1000Frames": null,
-  "invalidatorSites": ["hud.js:hText", "hud.js:hStyle"],
+  "layout": { "perS": 25.1 },
+  "gcPer1000Frames": 65,
+  "invalidatorSites": [
+    "(no stack)",
+    "hud.js:hText", "hud.js:hStyle", "hud.js:hData", "hud.js:hToggle", "hud.js:updateHud",
+    "live-region.js:write", "live-region.js:(anonymous)",
+    "hud-damage.js:paint", "hud-layout.js:screenBounds", "hud-radio-lane.js:laneRect",
+    "announce-banner.js:showAnnounce", "announce-banner.js:tick"
+  ],
   "longTasks": 0
 }
