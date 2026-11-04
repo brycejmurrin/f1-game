@@ -86,7 +86,9 @@ async function main() {
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
     await page.waitForFunction((id) => { try { const i = window.__apex.info(); return i.track === id && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, o.track, { polling: 100, timeout: 240000 });
-    if (o.webgpu) await page.evaluate(() => { window.__apex.go(); });   // pass-census parity: start the race
+    // pass-census parity: start the race and leave the grid (jump to 10%). Run 41882017262: on the grid, WebGPU present
+    // failed (null vertex attribute, "color" not found) and the page reloaded; pass-census never sits on the grid.
+    if (o.webgpu) await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
     await waitFrames(page, 8, 400000);
     stepNow = "pre-sweep";
     // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
