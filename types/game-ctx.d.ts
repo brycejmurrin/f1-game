@@ -325,6 +325,7 @@ interface PitSession {
   choices(c: CarState): Array<{ id: string; code: string }>;
   selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;
+  redFlagFit(c: CarState): boolean;
 }
 /** The session-bound half of TyreModel — TyreModel.create(G)'s return. */
 interface TyreSession {
@@ -412,6 +413,8 @@ interface GameCtx {
 
   // ── Tyres: the race setting and the live wear model ───────────────────────
   raceTyreWear: TyreLevel;
+  /** DAMAGE: HANDLING opt-in (#1578); a VS FRIEND room rule (#3971). */
+  raceDamage: boolean;
   /** Dirty-air wake model: off / classic (default) / cfd. */
   raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
@@ -778,6 +781,7 @@ interface GameCtx {
   readonly onPeerQuali: (d: unknown) => void;
   readonly onPeerQualiLive: (d: unknown) => void;
   readonly openQualiForNet: (done: () => void) => void;
+  readonly leaveQualiSheet: () => void;
   readonly refreshQualiGate: () => void;
   /** A view of raceGrid: true for "quali" | "rev10". */
   raceQuali: boolean;

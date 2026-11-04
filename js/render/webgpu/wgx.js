@@ -2930,13 +2930,15 @@ const WGX = (function () {
     function _createMesh(data) {
       const b = _interleave(data);
       const pulled = b.hasTrk ? _expandPull(b.vert, b.attr, b.idx) : null;
-      const lut = b.hasTrk ? _makeRoadLUT(data.pos, data.trk, data.mat) : null;
-      if (lut) _rememberRoadLut(lut);
+      // The LUT bind group allocates too: build it inside the guarded try so an
+      // OOM here degrades to the inert mesh like every other allocation.
+      let lut = null;
       let vbuf = null, ibuf = null, sbuf = null, attrBG = null;
       // Hoisted out of the piece branch so the catch can see it: an OOM on
       // piece k must still destroy pieces 0..k-1.
       let pieces = null;
       try {
+        if (b.hasTrk) { lut = _makeRoadLUT(data.pos, data.trk, data.mat); _rememberRoadLut(lut); }
         if (pulled) {
           // 4095 = 1365 tris. Large non-indexed draws still saw vertex_index=0
           // on this adapter; car-sized pieces do not.

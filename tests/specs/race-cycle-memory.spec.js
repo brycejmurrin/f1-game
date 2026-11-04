@@ -30,7 +30,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
-  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, wrapperGrowth,
+  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth,
 } from "../helpers/race-cycle-memory.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -131,7 +131,7 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
       if (id === CIRCUITS[CIRCUITS.length - 1]) {
         menuByCycle.set(cycle, { heapMB: menu.heapMB, audioMB: menu.audioMB });
-        wrapperSeries.push({ cycle, wrappers: await gpuWrapperCounts(cdp), dom: await domLeakCounters(cdp) });
+        wrapperSeries.push({ cycle, wrappers: await gpuWrapperCounts(cdp), contexts: await contextScopeCount(cdp), dom: await domLeakCounters(cdp) });
         log({ cycle, at: "wrappers", ...wrapperSeries[wrapperSeries.length - 1] });
         // A first pair over the hard bound may be one odd reading (dip or step): race CONFIRM_CYCLES more and let
         // the robust slope decide below. A clean pair costs nothing extra.

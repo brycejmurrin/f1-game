@@ -1984,10 +1984,30 @@ body[data-ga-bars]::after { bottom: 0; }
    wider panel can never take the car below what it already keeps: on a narrow
    screen the reserve binds first and 150% simply changes nothing. */
 :root[data-look-garage-pw] #carsetup {
-  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, calc(420px * var(--look-garage-pw, 1)), clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
 }
 :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
-  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, calc(420px * var(--look-garage-pw, 1)), clamp(410px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+}
+
+/* PANEL WIDTH BELOW 100 (#4529 part 2): the added `calc(420px * pw)` term lets
+   the cap shrink under the 410px floor (the rail then stacks, like portrait).
+   At or above 100 it is never the smaller term, so those widths are unchanged.
+   PORTRAIT ignores --cs-sheet-w (the sheet is full width there), so it gets its
+   own rule: a fraction of the screen, centred; above 100 it stays full width. */
+@media (orientation: portrait) {
+  :root[data-look-garage-pw] #carsetup #cs-inner {
+    width: min(100%, calc(100% * var(--look-garage-pw, 1)));
+    justify-self: center;
+  }
+}
+/* PANEL HEIGHT (#4529 part 2): a fraction of the sheet's own track, top-aligned
+   in portrait (the dock) and bottom-aligned in landscape, so the car shows in
+   the freed strip. renderSetupPreview reads the panel's live rect, so the car
+   follows. The body scrolls inside the shorter sheet. */
+:root[data-look-garage-ph] #carsetup #cs-inner {
+  height: calc(100% * var(--look-garage-ph, 1));
+  min-height: 0;
 }
 
 /* PANEL SIDE: LEFT. The dock is `place-items` alone, so mirroring it is one

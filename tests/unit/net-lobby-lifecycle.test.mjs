@@ -2356,6 +2356,42 @@ test("a guest's BACK from the quali sheet tells the host", async () => {
   } finally { h.lobby.cancel(); }
 });
 
+test("the host's BACK from the quali sheet sends qcancel and clears READY", async () => {
+  const ctx = closableHarness();
+  const { h, made } = ctx;
+  h.G.raceQuali = true;
+  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  h.lobby.open();
+  await h.lobby.host();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  try {
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    h.lobby.setReady(true);
+    made[0].deliver("ready", { ready: true, revision: 0 });
+    h.lobby.startFromRoom();
+    assert.equal(h.lobby.qualifying(), true);
+    h.lobby.abortQuali();
+    assert.ok(made[0].sent.some((m) => m.t === "qcancel"), "each guest is told");
+    assert.equal(h.lobby.roomState().selfReady, false);
+    assert.equal(h.lobby.qualifying(), false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest on the quali sheet returns to the room un-READY on qcancel, and a repeat GO does not re-enter quali", async () => {
+  const { h, made } = await guestInQuali();
+  let left = 0;
+  h.G.leaveQualiSheet = () => { left++; h.lobby.abortQuali(); };
+  try {
+    made[0].deliver("go", {});
+    assert.equal(left, 0, "GO on the sheet is ignored");
+    made[0].deliver("qcancel", {});
+    assert.equal(left, 1);
+    assert.equal(h.lobby.qualifying(), false);
+    assert.equal(h.lobby.roomState().selfReady, false);
+  } finally { h.lobby.cancel(); }
+});
+
 test("a guest that backed out of quali joins the race when the host sends qgo (additive; old clients ignore it)", async () => {
   const { h, made } = await guestInQuali();
   let started = 0, netStarts = 0;
@@ -2791,5 +2827,30 @@ test("a guest that un-readied inside one round trip of START still takes GO at t
     s.deliver("settings", { ...initialGuestSettings(), laps: 7, revision: 1 });
     s.deliver("go", { revision: 0 });
     assert.equal(starts, 1, "a stale revision is still refused");
+  } finally { h.lobby.cancel(); }
+});
+
+// ── DAMAGE: HANDLING is a room rule (#3971) ───────────────────────────────────
+test("the host publishes DAMAGE: HANDLING; a guest applies it in memory and keeps its own saved choice", async () => {
+  assert.match(SOURCE, /damage: !!G\.raceDamage,/);
+  const { h, s } = await connectedGuest();
+  try {
+    const stored = new Map([["damageHandling", false]]);
+    h.G.store = {
+      get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+      set: (k, v) => { stored.set(k, v); },
+      rawDel: (k) => stored.delete(k),
+    };
+    let on = false;
+    Object.defineProperty(h.G, "raceDamage", { get: () => on, set: (v) => { on = v; h.G.store.set("damageHandling", v); }, configurable: true });
+    s.deliver("settings", { laps: 5, damage: true });
+    assert.equal(h.G.raceDamage, true, "the host's rule applies");
+    assert.equal(stored.get("damageHandling"), false, "the guest's saved choice is put back");
+    for (const bad of [{ damage: "on" }, { damage: 1 }]) {
+      s.deliver("settings", Object.assign({ laps: 9 }, bad));
+      assert.equal(h.G.raceLaps, 5, `${JSON.stringify(bad)} must reject the payload whole`);
+    }
+    s.deliver("settings", { laps: 6 });   // an older host omits it: ours stays
+    assert.equal(h.G.raceDamage, true);
   } finally { h.lobby.cancel(); }
 });

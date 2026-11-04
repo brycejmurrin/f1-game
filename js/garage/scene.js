@@ -24,6 +24,11 @@ const AMB_SKY = [0.200, 0.215, 0.250], AMB_GROUND = [0.130, 0.125, 0.118];
 // js/garage/scene-prims.js (GaragePrims); the pit equipment in scene-equipment.js
 // (GarageEquipment); the live atlas in scene-live.js (GarageLive).
 const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css, pushMat, tile } = GaragePrims;
+// Livery fallbacks, hoisted: rgb(c, dflt) hands back dflt itself, so an inline
+// literal allocated one array per call (several run every garage frame). Frozen,
+// never mutated by a reader (tests/unit/garage-scene-fallbacks.test.mjs).
+const FB_C1 = Object.freeze([0.30, 0.32, 0.36]), FB_C1_ROOM = Object.freeze([0.4, 0.45, 0.55]);
+const FB_ACC = Object.freeze([0.55, 0.57, 0.62]), FB_ACC_ALT = Object.freeze([0.6, 0.62, 0.66]);
 
 // ── the bay shell ──────────────────────────────────────────────────────────
 // A CLOSED six-sided room whose every face is wound to be seen from INSIDE.
@@ -36,8 +41,8 @@ const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cy
 // plane exactly when that face is edge-on and covers zero pixels.
 let shellMesh = null;
 function buildShell(out, liv, L) {
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
+  const c1 = rgb(liv && liv.c1, FB_C1);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), FB_ACC);
   const dado = scale(c1, 0.45), stripe = scale(c2, 0.8);
   // Wall colour by ABSOLUTE height. The walls are three stacked grids whose
   // seams ARE the band edges, so a vertex row exists at each by construction:
@@ -189,7 +194,7 @@ function toolChest(out, x, z, c1) {
 // purpose: twelve of these ride every circuit's static buffer, and
 // tests/unit/pit-complex pins a bay's vertex count.
 function buildPropsLite(g, liv) {
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c1 = rgb(liv && liv.c1, FB_C1);
   tyreStack(g.nx, -4.55, 5.30, 0); tyreStack(g.px, 4.55, 4.6, 2);
   toolChest(g.nx, -4.92, 3.6, c1); toolChest(g.px, 4.92, -1.5, c1);
   tyreStack(g.door, -4.3, Z_DOOR + 0.55, 1); tyreStack(g.door, 4.3, Z_DOOR + 0.55, 0);
@@ -200,7 +205,7 @@ function buildPropsLite(g, liv) {
   cyl(g.mid, 1.55, 0.12, 4.55, 0.03, 0.85, STEEL, 6);
 }
 function buildProps(g, liv) {
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c1 = rgb(liv && liv.c1, FB_C1);
   const stack = tyreStack;
   const toolbox = (out, x, z) => GarageEquipment.toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
@@ -431,7 +436,7 @@ function buildLed(g, liv) {
   // door-wall quad once. The frame is therefore built at the WALL, stopping
   // short of the crest's own z.
   {
-    const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+    const c1 = rgb(liv && liv.c1, FB_C1);
     const zf = Z_BACK + 0.015;                 // behind the dress plane at +0.03
     const X = 1.60, Y0 = 1.24, Y1 = 3.56, T = 0.06;
     const FRAME = scale(c1, 1.15), WELL = [0.03, 0.032, 0.038];
@@ -464,7 +469,7 @@ function buildLed(g, liv) {
   // Team-colour dado uplights: cans grazing up the side walls. These are what
   // make the bay read as THIS team's garage before you notice any logo. Three
   // per side now — one pair at z 0 left the walls past |z| 3 on spill only.
-  const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
+  const c1 = rgb(liv && liv.c1, FB_C1_ROOM);
   for (let s = -1; s <= 1; s += 2) {
     const w = s < 0 ? g.nx : g.px;          // mounted on THAT wall, culled with it
     for (let i = -1; i <= 1; i++) {
@@ -499,7 +504,7 @@ const LED_OPTS = { emissive: 0.62, roughness: 1.0, specular: 0, noAlphaWrite: tr
 const _rig = [];
 let _rigK0 = NaN, _rigK1 = NaN, _rigK2 = NaN, _rigMood = "";
 function lights(liv) {
-  const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]);
+  const c1 = rgb(liv && liv.c1, FB_C1_ROOM);
   // Numeric key — avoid c1.join(",") string alloc every live() frame.
   if (_rig.length && c1[0] === _rigK0 && c1[1] === _rigK1 && c1[2] === _rigK2 && _rigMood === moodId) return _rig;
   _rig.length = 0;
@@ -565,7 +570,7 @@ function live(liv, now, ctx) {
   // absent or 1 on every other frame), so the team's colour floods the bay at
   // the moment it opens. Written in place: the rig is rebuilt only on a new c1.
   {
-    const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]), m = Math.max(c1[0], c1[1], c1[2]) || 1;
+    const c1 = rgb(liv && liv.c1, FB_C1_ROOM), m = Math.max(c1[0], c1[1], c1[2]) || 1;
     const d = ctx && Number.isFinite(ctx.door) ? Math.max(0, Math.min(1, ctx.door)) : 1;
     const sw = ctx && Number.isFinite(ctx.swell) ? ctx.swell : 1;   // GARAGE ENTER & LEAVE's DOOR GLOW
     const ue = (3.0 / m) * E * MD.up * (1 + 2.2 * sw * Math.sin(d * Math.PI));
@@ -604,7 +609,7 @@ function live(liv, now, ctx) {
   const lit = ctx && ctx.cue && hasCue(ctx.cue.id) ? cueRig(rig, ctx.cue) : rig;
   const u = (now - pulseAt) / 2200;
   if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return litRig(lit);
-  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), FB_ACC_ALT);
   const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
   const z = Z_BACK + (Z_DOOR - Z_BACK) * u;
   const chase = _chase;
@@ -940,7 +945,7 @@ function buildPitLane(out, liv, night) {
   // makes an open door look open.
   const ASPHALT = [0.20, 0.205, 0.215], LINE = [0.88, 0.89, 0.91];
   const WALL = [0.30, 0.31, 0.34], WALL_TOP = [0.46, 0.47, 0.50];
-  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c1 = rgb(liv && liv.c1, FB_C1);
   // Extended lane for the departure follow shot, also seen from REAR through
   // a 5.4 x 4.8 m aperture. As ONE `tile()` (two triangles, one flat colour)
   // ten spot lights have nothing to fall on and the lane reads as a painted
@@ -1042,7 +1047,7 @@ function buildBayFloor(out, liv, lk) {
   const LF = lk ? GarageDress.lookFloorCols(lk, liv) : null;
   const SLAB = LF ? LF.SLAB : [0.088, 0.090, 0.098], IN = LF ? LF.IN : [0.115, 0.118, 0.126];
   const PAINT = LF ? LF.PAINT : [0.66, 0.67, 0.70], WALK = LF ? LF.WALK : [0.70, 0.60, 0.12];
-  const band = LF ? LF.band : scale(rgb(liv && liv.c1, [0.3, 0.32, 0.36]), 0.7);
+  const band = LF ? LF.band : scale(rgb(liv && liv.c1, FB_C1), 0.7);
   const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
   // ASPHALT, not CONCRETE, on a HORIZONTAL surface — and this is not a naming
   // preference. matWallLike() in js/render/glx/shaders/glsl-lit.js returns true for
@@ -1053,7 +1058,7 @@ function buildBayFloor(out, liv, lk) {
   // world xz, and carries the most restrained relief in the table — which is
   // what a squeegeed resin bay floor actually looks like.
   const C = MAT.ASPHALT;
-  const key = LF ? LF.key : rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62]);
+  const key = LF ? LF.key : rgb(liv && (liv.accent || liv.stripe || liv.c2), FB_ACC);
   tile(out, L, R, B, B + 0.8, band, 0, C);                 // team band, deep end
   tile(out, L, R, B + 0.8, BOX_ZB - W, SLAB, 0, C);
   tile(out, L, -BOX_HW - W, BOX_ZB, BOX_ZF, SLAB, 0, C);
