@@ -1,0 +1,1 @@
+New: the GARAGE ENTER & LEAVE tuner sets up each of the four moments on its own — RACE START, PIT IN, PIT OUT and RACE END each keep their own camera, crew, lighting, timing, bay camera and on/off switch; pick a moment at the top, PREVIEW plays it (#4745).

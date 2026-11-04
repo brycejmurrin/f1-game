@@ -2812,3 +2812,15 @@ test("audioIdle ON: a resume inside the fade window never unplugs anything", asy
   assert.equal(on.CrowdAudio.inspect().bedGain.unplugs, 0, "the crowd bed stays plugged in");
   assert.ok(on.unplugs() >= u0);
 });
+
+// The wind drops in a tow: the car ahead punches the hole the rush comes from.
+// 35 % at a full tow, linear in between (#1682 step 3: was a canary source pin).
+test("the airflow drops 35 % in a full tow, linear in between", async () => {
+  const A = await sampleEngine();
+  const wind = (speed01, tow) => { A.setEngine(0.8, 0, false, speed01, 6, { tow }); return A.windLevel(); };
+  const open = wind(0.9, 0), half = wind(0.9, 0.5), full = wind(0.9, 1);
+  assert.ok(open > 0, "precondition: the wind layer is audible at speed");
+  assert.ok(Math.abs(full / open - 0.65) < 1e-6, `a full tow keeps 65 % of the rush (${full} / ${open})`);
+  assert.ok(Math.abs(half / open - 0.825) < 1e-6, `half a tow keeps 82.5 % (${half} / ${open})`);
+  assert.equal(wind(0.9, 3), full, "the tow is clamped to 1");
+});

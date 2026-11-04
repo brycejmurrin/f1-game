@@ -1008,6 +1008,16 @@ so in the rain the field cornered on wets and braked on slicks, and a player on
 full wets out-braked it by the whole ratio (~27 % at full wet) while the
 corner-speed model showed no such gap. Dry pace is untouched by construction.
 
+### Brake temperature and fade (opt-in, #1577)
+
+Rides on the wheel state, default OFF (`WheelState.setThermal(true)` or `apex26.brakeThermal = "1"`;
+session-only `__apex.setPhysics({brakeThermal})`). Each axle's disc heats with the player's own
+brake power (demand x speed), cools with airflow, and past ~650 C the pads lose bite, up to 35% at
+950 C; the lost share goes back into `c.speed` through the lock-up shortfall path. Driver-only: it
+reads the pedal and speed, never track curvature. Six back-to-back 83 m/s stops: 152.2 m cold,
+156.0 m on the sixth (`player-dynamics-vm.test.mjs`). Telemetry: `physState().brakeTemp {f,r}` and
+`brakeFade`. `c.brakeHeat` stays the visual-only glow.
+
 ### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
 
 `js/physics/wheel-state.js` gives the player's axles a rim speed (`vwF`/`vwR`)

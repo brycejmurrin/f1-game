@@ -190,8 +190,7 @@ test("bindUi shortens the DIRECTOR · THREE CAMERAS angle option", () => {
   const nodes = {
     "ga-rows": { insertBefore() {}, firstChild: null },
     "ga-angle": angle,
-    "ga-entry-shot": null,
-    "ga-exit-shot": null,
+    "ga-bay-shot": null,
     "ga-stay-inside": null,
     "ga-cam-options": null,
     "cs-cam-panel": null,
@@ -219,4 +218,19 @@ test("bindUi shortens the DIRECTOR · THREE CAMERAS angle option", () => {
   assert.equal(ok, true);
   const director = opts.find((o) => o.value === "director");
   assert.equal(director.textContent, "DIRECTOR · 3 CAMS");
+});
+
+test("per moment: each of the four keeps its own bay camera; an untouched one uses ENTRY or EXIT", () => {
+  const base = { entryShot: "cockpit", exitShot: "orbit", stayInside: true };
+  assert.deepEqual(["start", "pitIn", "pitOut", "home"].map((m) => GCO.forMoment(base, m).shot), ["orbit", "cockpit", "orbit", "cockpit"]);
+  const v = Object.assign({}, base, { moments: { pitOut: { shot: "lowFront" }, home: { shot: "facade", stayInside: false }, bogus: { shot: "x" } } });
+  const s = GCO.settings(v);
+  assert.deepEqual(Object.keys(s.moments).sort(), ["home", "pitOut"], "unknown moments and shots drop");
+  assert.equal(GCO.forMoment(v, "pitOut").shot, "lowFront");
+  assert.equal(GCO.forMoment(v, "home").stayInside, false);
+  assert.equal(GCO.forMoment(v, "start").shot, "orbit", "RACE START still the shared EXIT");
+  // applyArrival reads the moment: PIT OUT's own shot tags the pose
+  const pose = { eye: [0, 1.5, 0], aim: [0, 0.6, 3], fov: 54, x: 0, z: 0, yaw: 0, direction: "out", sequence: "out" };
+  GCO.applyArrival(pose, v, { dir: "out", u: 0.3, moment: "pitOut" });
+  assert.equal(pose.cameraOption, "lowFront");
 });

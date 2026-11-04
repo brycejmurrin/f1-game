@@ -226,3 +226,17 @@ test("track detail names its map and elevation canvases for the selected circuit
   assert.equal(h.dom.byId("track-detail-canvas").getAttribute("aria-label"), "Spa circuit layout diagram");
   assert.equal(h.dom.byId("track-detail-elev").getAttribute("aria-label"), "Spa elevation profile");
 });
+
+// A circuit tile pre-builds the world hidden once the pick SETTLES: the call
+// passes settle=true (scheduleFlybyTrack's 400 ms), never the 120 ms tap path
+// (#1682 step 3: was a gfx-backend-canary source pin).
+test("a circuit tile tap schedules the hidden pre-build with the settle delay, never the immediate one", () => {
+  const calls = [];
+  const h = boot({}, { scheduleFlybyTrack: (settle) => calls.push(settle) });
+  assert.ok(calls.length >= 1 && calls.every((s) => s === true), `buildSelect pre-builds the current tile, settled (${calls})`);
+  calls.length = 0;
+  const other = h.tiles().find((r) => r.dataset.trackIdx !== String(h.G.trackIdx));
+  other.onclick();
+  assert.equal(String(h.G.trackIdx), other.dataset.trackIdx, "the tap picks the circuit");
+  assert.deepEqual(calls, [true], "and schedules one settled pre-build");
+});
