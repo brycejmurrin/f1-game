@@ -1741,8 +1741,8 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
     const deps = { K, clamp, damp, aiT: mid,
       AiDrive: { ...A,
-        yawScale(...args) { calls.yaw++; return A.yawScale(...args); },
-        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },
+        lateralScales(...args) { calls.yaw++; calls.lateral++; return A.lateralScales(...args); },   // normal controller: yaw + lateral from one call
+        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },   // recovery modes
       gripMult() { calls.weather++; return weatherGrip; },
       tyres: { gripMul() { calls.tyre++; return tyreGrip; } },
       // X-mode's downforce cost reaches the AI's lateral envelope (verify-physics #11), never the yaw budget.
@@ -1904,4 +1904,21 @@ test("houseStyle: a partial stats record stays finite (a missing stat reads neut
   const full = Object.assign({}, A.houseStyle(null, 2, { speed: 90, accel: 85, cornering: 85, braking: 85 }));
   const part = Object.assign({}, A.houseStyle(null, 2, { speed: 90 }));
   assert.deepEqual(part, full, "the missing three read as 85");
+});
+
+test("lateralScales / sbsLimits are bit-identical to the single-purpose functions (#4668)", () => {
+  const A = load();
+  const out = { yaw: 0, lat: 0 };
+  for (const speed of [0, 3, 40, 71.9, 90, -20]) for (const load of [0, 0.5, 0.9]) for (const grip of [0, 0.4, 1.1])
+    for (const aero of [0, 0.6, 1]) {
+      A.lateralScales(speed, load, grip, 0.98, 72, aero, out);
+      assert.ok(Object.is(out.yaw, A.yawScale(speed, load, grip, 0.98, 72)));
+      assert.ok(Object.is(out.lat, A.lateralScale(speed, load, grip, 0.98, 72, aero)));
+    }
+  const lim = { commitT: 0, ease: 0 };
+  for (const ctx of [null, { street: true }]) {
+    A.sbsLimits(ctx, lim);
+    assert.equal(lim.commitT, A.sbsCommitT(ctx));
+    assert.equal(lim.ease, A.sbsEase(ctx));
+  }
 });
