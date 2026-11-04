@@ -68,7 +68,7 @@
    Readouts clear their measured rectangles independently of HUD scale. */
 :root {
   --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
-  --tap-hud: calc(var(--tap) * var(--hud-btn-z));
+  --tap-hud: calc(44px * var(--hud-btn-z)); /* HUD-only base: no --ui-scale in the chain (#4819) */
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
    and PAUSE paint 44px on a phone. Restating it on body:not(.desktop) was tried

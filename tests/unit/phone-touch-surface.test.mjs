@@ -132,7 +132,7 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
     "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
-  assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
+  assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(44px * var(--hud-btn-z))");
   const topZoom = decl(hudCss, ":root", "--hud-btn-z");
   assert.equal(topZoom, "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5)",
     "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
@@ -802,4 +802,19 @@ test("dock touch labels keep an 11 CSS-px painted floor under --hud-z-dock", () 
   assert.match(String(hold), /^max\(72px/);
   assert.doesNotMatch(String(tap), /touch-label-floor/);
   assert.doesNotMatch(String(hold), /touch-label-floor/);
+});
+
+// #4819 — UI SIZE (--ui-scale) and BUTTON HEIGHT looks must not drop a tap token below its floor.
+test("--tap-hud never reaches --ui-scale; [data-look-*-btn] --tap/--chip-h carry a --tap-min floor", () => {
+  const hudSrc = read("css/hud.css");
+  const m = /--tap-hud:\s*([^;]+);/.exec(hudSrc);
+  assert.ok(m, "hud.css declares --tap-hud");
+  assert.doesNotMatch(m[1], /--ui-scale|var\(--tap\)/, "--tap-hud has a HUD-only base, no --ui-scale in the chain");
+  const ov = read("css/overlays.css");
+  const lines = ov.split("\n").filter((l) => /:root\[data-look-[a-z]+-btn/.test(l));
+  assert.ok(lines.length >= 6, "all six BUTTON HEIGHT rules found");
+  for (const l of lines) {
+    assert.match(l, /--tap:\s*max\(var\(--tap-min\),/, `--tap floored: ${l.trim().slice(0, 60)}`);
+    assert.match(l, /--chip-h:\s*max\(var\(--tap-min\),/, `--chip-h floored: ${l.trim().slice(0, 60)}`);
+  }
 });
