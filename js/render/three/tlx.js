@@ -1535,7 +1535,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
-      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirSub = false, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
@@ -2194,13 +2194,19 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
-      function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
+      // apex26.tlxMirrorSub=0 pins the lite mirror back to whole-chunk culling (tlx-chunked cullMirror, PR #4886).
+      let _mirSubOn = (function () { try { return localStorage.getItem("apex26.tlxMirrorSub") !== "0"; } catch (_) { return true; } })();
+      function _drawChunked(rec, order, vp, eye, cd, fog, slot, sub) {
         if (!chunkedSys) return 0;
-        const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
         const mat = rec.mat;
-        if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
+        const merge = _chunkMerge && !!chunkedSys.mergeVisible
             && !(mat && (mat.transparent || mat.depthWrite === false))
-            && !(rec.al < 1)) {
+            && !(rec.al < 1);
+        // Sub-range entries draw only through mergeVisible: a mesh with a model matrix (world-space AABBs) or a
+        // material off the merge path keeps the whole-chunk cull.
+        const n = merge && sub && !rec.m && chunkedSys.cullMirror ? chunkedSys.cullMirror(rec.chunked, vp, eye, cd, fog)
+          : chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
+        if (merge && n > 0) {
           const g = chunkedSys.mergeVisible(rec.chunked, n, slot);
           if (g) { acquireMesh(g, rec.m, rec.mat, rec).renderOrder = order; return n; }
         }
@@ -5872,6 +5878,7 @@ const TLX = (function () {
           lit.updateFrame(frame, true);   // true: the forward lamp-shadow slot is off in the mirror (tsl-lit)
           if (fx) fx.updateFrame(frame);
           _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
+          _mirSub = _mirSubOn && !!frame.mirrorLite;   // the phone rungs only: the full rung's 280 m picture is unchanged
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
           _instStamp++;
@@ -5888,7 +5895,7 @@ const TLX = (function () {
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
-              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
+              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1, _mirSub); continue; }
               if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
@@ -6885,6 +6892,13 @@ const TLX = (function () {
               try { if (_roadSplitOn) localStorage.removeItem("apex26.tlxRoadSplit"); else localStorage.setItem("apex26.tlxRoadSplit", "0"); } catch (_) { /* no storage: session only */ }
             }
             return _roadSplitOn;
+          },
+          mirrorSub(on) {   // persists like roadSplit (apex26.tlxMirrorSub): the lite mirror's sub-range cull, PR #4886
+            if (on !== undefined) {
+              _mirSubOn = !!on;
+              try { if (_mirSubOn) localStorage.removeItem("apex26.tlxMirrorSub"); else localStorage.setItem("apex26.tlxMirrorSub", "0"); } catch (_) { /* no storage: session only */ }
+            }
+            return _mirSubOn;
           },
           // Where the retained CPU bytes actually ARE, per attribute NAME and
           // per geometry kind. Deduped on the underlying ArrayBuffer, because a
