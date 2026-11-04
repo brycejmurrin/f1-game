@@ -51,12 +51,8 @@ const CarWheels = (function () {
     _tintMemo.set(liv, t);
     return t;
   }
-  // ONE WHEEL RECIPE (#4907) for every split-wheel path — the garage showroom and its arrival / drive-out
-  // (createGarage), the race player and field (CarDraw), the cockpit preview — from the APPEARANCE tiers
-  // (Car3D.appearanceParts already applied) and the livery. Precedence matches Car3D.build's own wheels:
-  // livery tint, then the WHEELS option's rim, then the BRAKES option's; a brakes option with `cal: null`
-  // draws no caliper. `key` names every input that is not the option ids, so a cache keyed on
-  // tyre:brake:wheel ids + key rebuilds on any wheel-visible livery edit.
+  // ONE WHEEL RECIPE (#4907) for every split-wheel path (garage, arrival, race, cockpit) from the appearance
+  // tiers + livery, in Car3D.build's precedence; `key` = option ids + every livery wheel field.
   function spec(tiers, liv) {
     const T = tiers || {}, v = T._visual || {}, t = v.tyres || null, b = v.brakes || null, w = v.wheels || null, tint = tints(liv);
     const C = typeof Car3D !== "undefined" ? Car3D : null;
@@ -76,8 +72,7 @@ const CarWheels = (function () {
       meshes = null; key = "";
     }
     function prepare(next, liv, tiers) {
-      // The livery's part-style picks (wheelsShape / tyresShape / brakesShape) re-dress the fitted parts here
-      // exactly as Car3D.build does for the body (#4907: the showroom and arrival wheels showed the FITTED parts).
+      // The livery's *Shape picks re-dress the fitted parts, as Car3D.build does (#4907).
       const T = liv && typeof Car3D !== "undefined" && Car3D.appearanceParts ? Car3D.appearanceParts(tiers || {}, liv) : tiers || {};
       const s = spec(T, liv), want = next + s.key;
       if (meshes && key === want) return;
