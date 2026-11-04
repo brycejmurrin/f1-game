@@ -130,6 +130,14 @@ test("a caller that passes no dt is charged one nominal frame per call", () => {
   assert.equal(count(skids), 2, "ten nominal frames = the old five-frame cadence");
 });
 
+test("a paused frame (dt 0) charges nothing, so a held slide lays no extra marks", () => {
+  const skids = make();
+  skids.stamp(IDENT, true, 1 / 60);
+  const n = count(skids);
+  for (let i = 0; i < 30; i++) skids.stamp(IDENT, true, 0);
+  assert.equal(count(skids), n, "paused frames lay no marks");
+});
+
 // OTHER CARS' MARKS (2026-10-02): an AI lock-up stamps through stampFor() on its
 // OWN cadence object (js/fx/car-fx.js keeps one per car), so two locking rivals
 // and the player each lay at 5/60 s instead of sharing — and draining — one

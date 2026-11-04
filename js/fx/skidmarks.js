@@ -67,7 +67,7 @@ const SkidMarks = (function () {
     // One car's cadence: true when a stamp is due. `timer.t` is its countdown.
     function due(timer, laying, dt) {
       if (!laying) { timer.t = 0; return false; }
-      timer.t -= dt > 0 ? dt : 1 / 60;   // no dt (an old caller) charges one nominal frame
+      timer.t -= dt === undefined ? 1 / 60 : Math.max(0, +dt || 0);   // no dt (an old caller) charges one nominal frame; a paused dt of 0 charges nothing
       if (timer.t > 0) return false;
       // Carry the remainder, so a 30 Hz frame (33 ms) does not round the 83 ms
       // period up to 100 ms — but never more than one period of debt, so a
