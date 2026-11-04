@@ -92,6 +92,9 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
    widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
+5. Once `land` is on, do not touch the PR's labels (except `hold`) or its body. A label other than `land`/`hold` gets its
+   own `land-noise-*` group in `land.yml` and cancels nothing, but a `land`/`hold` flip or a body edit re-runs `gate`
+   and cancels the one running. Refresh the Hand-off block BEFORE adding `land` (#4727).
 
 ## After land
 
