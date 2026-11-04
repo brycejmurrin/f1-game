@@ -440,3 +440,12 @@ test("a silent gyro falls back after 1.5s only while its permission attempt stil
     assert.equal(messages.includes("no motion sensor — switched to buttons"), change === "none");
   }
 });
+
+test("a screen rotation releases a held HUD pedal (no pointerup arrives) — #4767", () => {
+  const h = boot();
+  h.pedal.fire("pointerdown", { pointerId: 11 });
+  assert.equal(h.Input.throttle(), true, "pedal held");
+  (h.listeners.orientationchange || []).forEach((f) => f({}));
+  assert.equal(h.Input.throttle(), false, "rotation drops the held pedal");
+  assert.equal(h.Input.throttleLevel(), 0);
+});

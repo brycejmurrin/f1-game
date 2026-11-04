@@ -601,6 +601,7 @@ async function precacheAssetLists() {
     "js/input/phone-pad-codec.js",
     "js/input/phone-pad-page.js",
     "js/input/phone-pad.js",
+    "js/net/overlay-net.js",
     // LAZY_EDITOR — the track designer behind the TRACK DESIGNER door
     "js/editor/shape.js",
     "js/editor/stamps.js",

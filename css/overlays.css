@@ -1172,12 +1172,12 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
 
 /* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
    (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
-:root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
-:root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
-:root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
-:root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
-:root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
-:root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+:root[data-look-datahub-btn] #datahub { --tap: max(var(--tap-min), calc(var(--tap-0) * var(--look-datahub-btn, 1))); --chip-h: max(var(--tap-min), calc(var(--chip-h-0) * var(--look-datahub-btn, 1))); }
+:root[data-look-select-btn] #select { --tap: max(var(--tap-min), calc(var(--tap-0) * var(--look-select-btn, 1))); --chip-h: max(var(--tap-min), calc(var(--chip-h-0) * var(--look-select-btn, 1))); }
+:root[data-look-race-btn] #race-settings { --tap: max(var(--tap-min), calc(var(--tap-0) * var(--look-race-btn, 1))); --chip-h: max(var(--tap-min), calc(var(--chip-h-0) * var(--look-race-btn, 1))); }
+:root[data-look-career-btn] #career { --tap: max(var(--tap-min), calc(var(--tap-0) * var(--look-career-btn, 1))); --chip-h: max(var(--tap-min), calc(var(--chip-h-0) * var(--look-career-btn, 1))); }
+:root[data-look-garage-btn] #carsetup { --tap: max(var(--tap-min), calc(var(--tap-0) * var(--look-garage-btn, 1))); --chip-h: max(var(--tap-min), calc(var(--chip-h-0) * var(--look-garage-btn, 1))); }
+:root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: max(var(--tap-min), calc(var(--tap-0) * var(--look-popups-btn, 1))); --chip-h: max(var(--tap-min), calc(var(--chip-h-0) * var(--look-popups-btn, 1))); }
 
 /* CORNERS — the radius tokens every card and button reads. */
 :root[data-look-pause-corners="sharp"] #pausemenu,

@@ -445,11 +445,9 @@ const CASES = [
   { what: "blue flag", id: "#hud", ink: [hud, '#hud-flag[data-flag="blue"]', "color"], plate: [hud, '#hud-flag[data-flag="blue"]', "background"] },
   { what: "red flag", id: "#hud", ink: [hud, "#hud-flag.flag-red", "color"], plate: [hud, "#hud-flag.flag-red", "background"] },
   { what: "broadcast tower (inherited ink)", id: "#hud", ink: [tokens, SCOPE_SEL, "color"], plate: [hud, "body.hud-prof-broadcast .hud-top", "background"] },
-  // The timing strip's light POS cell (design pass 2a). HIGH CONTRAST's solid plate outranked its background and
-  // left dark ink on a dark plate (Bryce's iPhone, 2026-10-30), so HC names the cell's own restatement.
+  // The timing strip's POS cell: dark like the rest of the strip, white ink (#4526); a pass recolours the text only.
   { what: "timing strip POS cell", id: "#hud", ink: [hud, "body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos)", "color"],
-    plate: [hud, "body:not(.hud-prof-broadcast) #hud-box-pos", "background"],
-    hc: [hud, ':root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *)', "background"] },
+    plate: [hud, "body:not(.hud-prof-broadcast) #hud-box-pos", "background"], hc: HC_PLATE },
   { what: "metrics panel", id: "#game-metrics", ink: [hud, "#game-metrics", "color"], plate: [hud, "#game-metrics", "background"] },
   { what: "metrics bar buttons", id: "#game-metrics", ink: [hud, "#game-metrics-bar > button", "color"], plate: [hud, "#game-metrics", "background"] },
   // NON-TEXT (1.4.11, 3:1): the parts of a chip that carry its state.

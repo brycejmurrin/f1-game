@@ -73,7 +73,10 @@ The full tiers run on the PR: every draft push gets the fast tier plus the
 diff; a wide diff still fans out, because `select-specs` never drops a routed
 spec (its `Structural guards` A–D run the full `tooling-fast`, the check
 `ready-gate` reads), the full tier runs once the PR is ready, and
-`land.yml`'s `gate` check judges the merge result. A worker ends its turn at
+`land.yml`'s `gate` check judges the merge result. With the repo variable
+`READY_TIER=fast` (Bryce's switch, #4836; unset = full) a ready PR runs the
+draft tier as well, and the Pages train is the only full gate, after merge
+(ci.yml §THE READY-TIER SWITCH). A worker ends its turn at
 `land` (skill `steward` §Land).
 
 ## 4. The gate is a ladder, and the rungs are not the same size

@@ -27,7 +27,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { pick, stripSpecOwner } from "./pick-tests.mjs";
+import { pick, stripSpecOwner, selectionReceipt } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
@@ -1495,9 +1495,12 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // names still report). Never a pull_request paths filter: those leave
   // required checks pending.
   const candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
+  // A path no pick-tests rule claims, riding with a routed edit, must not hide behind that edit's groups
+  // (issue #4768: a vendor bump + one UI file ran only the UI groups). Same fail-safe as TRACKED.
+  const unclaimed = lightDiff ? [] : selectionReceipt(changed, scripts).unclaimed;
   const reason = !changed.length ? "none"
     : lightDiff ? (kind === "css" ? "css" : "docs")
-    : tracked.length ? "infra"
+    : tracked.length || (unclaimed.length && (g.size || candidates.length)) ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
     : (imported.includes(f) || ownFoundations.includes(f) || sourceAffected.includes(f) || impactAffected.includes(f)) ? 2 : 3;
@@ -1511,7 +1514,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // `circuits` is set only when EVERY changed path is circuit-scoped: it is
   // what lets a per-circuit loop skip the other 51 circuits, so a diff that
   // also touches the engine must leave it empty (the whole fleet runs).
-  const r = { reason, changed: changed.length, tracked, groups: browserGroups,
+  const r = { reason, changed: changed.length, tracked, unclaimed, groups: browserGroups,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
@@ -1554,10 +1557,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}${r.floorShards ? ` — ${r.floorShards.hint}` : ""}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
-  if (r.reason === "infra") console.error(
-    `SELECTION NARROWER THAN THE CHANGE: this diff touches ${r.tracked.length} tracked/infra path(s) ` +
-    `(${r.tracked.slice(0, 4).join(", ")}${r.tracked.length > 4 ? ", …" : ""}) — a change there can affect ` +
-    `any spec; the edited/imported specs below still run, and the fixed GATES own the rest.`);
+  if (r.reason === "infra") {
+    const paths = [...r.tracked, ...r.unclaimed];
+    console.error(
+      `SELECTION NARROWER THAN THE CHANGE: this diff touches ${paths.length} tracked/unrouted path(s) ` +
+      `(${paths.slice(0, 4).join(", ")}${paths.length > 4 ? ", …" : ""}) — a change there can affect ` +
+      `any spec; the edited/imported specs below still run, and the fixed GATES own the rest.`);
+  }
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
   if (r.racing?.length) console.error(

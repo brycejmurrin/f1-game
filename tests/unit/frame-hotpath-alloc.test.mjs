@@ -142,12 +142,14 @@ test("GLX setPolyOffset caches bias and draw() passes depthBias without a litera
 });
 
 
-test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", () => {
+test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", async () => {
   // Synthetic pack loop mirroring cullInstances' inner cell walk. Measures
   // retained heap after forced GC over N cell iterations — for…of mints an
-  // iterator per cell; indexed for does not. Skip when gc() is unavailable
-  // (plain `node --test`); CI/tooling-fast may not expose it.
-  if (typeof globalThis.gc !== "function") return;
+  // iterator per cell; indexed for does not. gc() is obtained by
+  // enabling --expose-gc at runtime, as frame-lights-shed does.
+  const v8 = await import("node:v8");
+  v8.setFlagsFromString("--expose-gc");
+  const gc = vm.runInNewContext("gc");
   const cells = 4000;
   const idx = new Array(32);
   for (let i = 0; i < 32; i++) idx[i] = i;
@@ -173,10 +175,10 @@ test("iterator GC microbench: indexed cull packs with less young-gen pressure th
     return n;
   };
   const measure = (fn) => {
-    globalThis.gc(); globalThis.gc();
+    gc(); gc();
     const h0 = process.memoryUsage().heapUsed;
     for (let c = 0; c < cells; c++) fn();
-    globalThis.gc(); globalThis.gc();
+    gc(); gc();
     return process.memoryUsage().heapUsed - h0;
   };
   // Warm both paths so JIT noise is shared.

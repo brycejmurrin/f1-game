@@ -306,6 +306,59 @@ $("pm-phonepad").onclick = () => {
     recoveryOwner = phonePad;
   });
 };
+// STREAM OVERLAY (js/net/overlay-net.js): mints a room whose viewer is overlay.html#ov=CODE, passive, no netplay seat.
+// The hub feeds OverlayPublisher through its attachNet seam, so frames flow only while a viewer is connected.
+// Built here, not in index.html: the shell is at its node ratchet and these rows are SETTINGS-only.
+let overlayHost = null, overlayGeneration = 0;
+{
+  const anchor = $("pm-phonepad-box");
+  const btn = document.createElement("button"), help = document.createElement("p"), box = document.createElement("div");
+  const status = document.createElement("p"), link = document.createElement("input"), copy = document.createElement("button");
+  btn.id = "pm-overlay"; btn.type = "button"; btn.textContent = "STREAM OVERLAY: OFF"; btn.setAttribute("aria-describedby", "pm-overlay-help");
+  help.id = "pm-overlay-help"; help.className = "adv-help";
+  help.textContent = "Shows a link for an OBS Browser Source (or any browser) that draws the live timing tower and captions. Needs internet; takes no multiplayer seat.";
+  box.id = "pm-overlay-box"; box.hidden = true;
+  status.className = "adv-help"; status.setAttribute("role", "status");
+  link.id = "pm-overlay-link"; link.type = "text"; link.readOnly = true; link.hidden = true; link.setAttribute("aria-label", "Overlay link");
+  copy.type = "button"; copy.textContent = "COPY LINK"; copy.hidden = true;
+  if (typeof box.append === "function") box.append(status, link, copy);
+  if (typeof anchor.after === "function") anchor.after(btn, help, box);   // the VM harness DOM has no after()
+  const off = () => { btn.textContent = "STREAM OVERLAY: OFF"; box.hidden = true; link.hidden = copy.hidden = true; link.value = ""; };
+  copy.onclick = () => {
+    link.select();
+    const done = () => { copy.textContent = "COPIED"; setTimeout(() => { copy.textContent = "COPY LINK"; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link.value).then(done, () => {});
+    else if (document.execCommand && document.execCommand("copy")) done();
+  };
+  btn.onclick = () => {
+    if (overlayHost || btn.dataset.loading) {
+      overlayGeneration++; delete btn.dataset.loading;
+      if (overlayHost) overlayHost.cancel();
+      overlayHost = null;
+      const pub = typeof OverlayPublisher !== "undefined" && OverlayPublisher.current();
+      if (pub) pub.detachNet();
+      off();
+      return;
+    }
+    btn.textContent = "STREAM OVERLAY: ON"; btn.dataset.loading = "1"; box.hidden = false; status.textContent = "Loading…";
+    const generation = ++overlayGeneration;
+    ensureNet().then((ok) => {
+      if (generation !== overlayGeneration) return;
+      delete btn.dataset.loading;
+      const pub = typeof OverlayPublisher !== "undefined" && OverlayPublisher.current();
+      if (!ok || !pub || typeof OverlayNet === "undefined") { off(); box.hidden = false; status.textContent = "Could not load the overlay stack — check the connection."; return; }
+      pub.attachNet((update) => {
+        overlayHost = OverlayNet.host({
+          say: (t) => { status.textContent = t; },
+          link: (url) => { link.value = url || ""; link.hidden = copy.hidden = !url; },
+          peers: (n) => { status.textContent = n ? n + " overlay" + (n > 1 ? "s" : "") + " connected" : "Waiting for the overlay…"; update(); },
+          failed: () => { overlayHost = null; pub.detachNet(); off(); box.hidden = false; },
+        });
+        return overlayHost.hub;
+      });
+    });
+  };
+}
 }
 
 function wireLifecycle() {

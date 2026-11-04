@@ -54,7 +54,7 @@ const CarFields = (function () {
     ["body attitude springs (js/physics/body-attitude.js seed())",
       ["_ba", "baPitch", "baRoll", "baHeave", "baScrape"]],
     ["render side: LOD tier, wheel spin, wheel visibility",
-      ["_lodTier", "wheelSpin", "wheelSpinF", "_whlVis"]],
+      ["_lodTier", "wheelSpin", "_whlVis"]],
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
       ["vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
         "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity",
@@ -188,7 +188,6 @@ const CarFields = (function () {
     if (!("baScrape" in c)) c.baScrape = undefined;
     if (!("_lodTier" in c)) c._lodTier = undefined;
     if (!("wheelSpin" in c)) c.wheelSpin = undefined;
-    if (!("wheelSpinF" in c)) c.wheelSpinF = undefined;
     if (!("_whlVis" in c)) c._whlVis = undefined;
     if (!("vertLoad" in c)) c.vertLoad = undefined;
     if (!("axFrac" in c)) c.axFrac = undefined;

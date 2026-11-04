@@ -636,7 +636,7 @@ const SceneryPits = (function () {
         // Bay local +Z is the door end; it must point at the TRACK. addMesh
         // yaws about Y only, which a pit straight can afford.
         const rotY = Math.atan2(-sd * f.r[0], -sd * f.r[2]);
-        const c = atF(f, sd * (h + garage + B.depth / 2), 0.02, k);
+        const c = atF(f, sd * (h + garage + B.depth / 2) + ((i & 1) ? sd * TrackGeom.MIN_SEP : 0), 0.02, k);   // odd bays MIN_SEP outward: end-to-end bay walls never share a plane
         if (mesh) {
           if (TrackGeom.addMesh(out, mesh, { x: c[0], y: c[1], z: c[2], rotY })) bays++;
         }
@@ -690,9 +690,9 @@ const SceneryPits = (function () {
         // camera above the pit row (40 circuits, up-facing, 0 mm).
         const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.38) / 2 + lift, k);
         rawBox(out, cb, [0.3, B.h + 0.38, segAt(kap, sd * (h + garage + B.depth + 0.2))], SHELL, bs);
-        const ch = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 1.7 + lift, k);
+        const ch = atF(f, sd * (h + garage + B.depth / 2 + 0.6) + bump, B.h + 0.4 + 1.7 + lift, k);
         rawBox(out, ch, [B.depth - 1.0, 3.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], GLASS, bs);
-        const ct = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 3.4 + 0.2 + lift, k);
+        const ct = atF(f, sd * (h + garage + B.depth / 2 + 0.6) + bump, B.h + 0.4 + 3.4 + 0.2 + lift, k);
         rawBox(out, ct, [B.depth - 0.4, 0.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], ROOF, bs);
         if (i === 0 || i === count - 1) {
           const ce = atF(f, sd * (h + garage + B.depth / 2), (B.h + 0.38) / 2, k);   // 2 cm under the roof line

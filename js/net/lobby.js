@@ -275,7 +275,9 @@ const NetLobby = (function () {
           // roomState().peers and would wait forever for a lap the gone host
           // can no longer relay (2p never saw it — no relayed roster).
           _peers.clear(); _ready.clear(); selfReady = false; clashClear();
-          if (racing) {
+          if (startBuilding) {
+            // finishStart is mid-build: restoring the guest's own rules now would rewrite them under startRace. Its empty-room arm cleans up and announces.
+          } else if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else if (wasHostEvict && role === "host") {
             // The host removed the last guest — not a natural leave. Stay in the
@@ -1360,6 +1362,7 @@ const NetLobby = (function () {
     const { reportQuali, reportQualiLive } = NetPlay.qualiReporters(
       (type, data) => broadcast(type, data), () => !!session);
 
+    let startBuilding = false;   // true while finishStart awaits G.startRace
     async function finishStart() {
       if (!session) {   // all connections closed: q-go already closed the sheet, a silent return was a blank screen (H3-8)
         const wasGuest = role === "guest";
@@ -1387,14 +1390,22 @@ const NetLobby = (function () {
         // car objects that makeCars() then replaced, so owns() never matched
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
-        const outcome = await G.startRace();
+        startBuilding = true;
+        let outcome;
+        try { outcome = await G.startRace(); } finally { startBuilding = false; }
         if (!current()) return; // cancel/re-entry owns a different room, including failure cleanup
         // Every failed exit ends the lobby's hold on qualifying: left true,
         // Quali.persistOrder skipped saving for the rest of the page session.
         // startRaceBody also resolves `false` (save conflict, build failed, context lost, state changed): the
         // same exit, or netPlay.start/hostStart would run over the menu and strand a netStart.
         if (outcome === false || (outcome && outcome.kind === "canceled")) { cancel(); return; }
-        if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
+        if (!sessions.size) {
+          const wasGuest = role === "guest";
+          friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null;
+          cancel(); if (G.quitToMenu) G.quitToMenu();
+          if (G.announce) G.announce(wasGuest ? "THE HOST LEFT — BACK TO MENU" : "EVERYONE LEFT — BACK TO MENU", 4, "info");
+          return;
+        }
         if (role === "host") broadcast(QGO, null);   // guests that backed out of quali are waiting for this
       } catch (e) {
         if (!current()) return;

@@ -402,3 +402,14 @@ test("migrateCareer coerces hostile numeric leaves when the version marker is va
   assert.equal(out.budgetLvl, 0);
   assert.equal(out.facility, 0);
 });
+
+test("year and money are clamped, never wrapped or left negative (#4773)", () => {
+  const SM = load();
+  const m = (o) => SM.migrateCareer({ v: 2, flavour: "driver", team: "haas", ...o });
+  assert.equal(m({ year: 3e9 }).year, 9999, "huge year clamps to 9999");
+  assert.equal(m({ year: -5 }).year, 2026, "negative year clamps to the first season");
+  assert.equal(m({ year: 2030, year0: 99999 }).year0, 2030, "year0 never exceeds year");
+  assert.equal(m({ year: 2030, year0: -3 }).year0, 2026);
+  assert.equal(m({ money: -500 }).money, 0, "an imported negative balance floors at 0");
+  assert.equal(m({ money: 500 }).money, 500);
+});

@@ -292,3 +292,30 @@ test("logo uploads cannot outlive CLEAR, a newer upload or foreign replacement",
   b.saved.customLogo = "foreign"; foreign({ foreign: true, key: "customLogo" }); imageD.onload();
   assert.equal(b.saved.customLogo, "foreign");
 });
+
+// B1 follow-up (#4756): SAVE ignored setIdentityValue()'s `false` (blocked career,
+// foreign-tab write) and closed with the success sound; the edit was lost silently.
+test("a refused MY TEAM write keeps the dialog open and says so", () => {
+  const els = new Map();
+  const mk = () => ({ value: "", hidden: true, textContent: "", onclick: null, dataset: {},
+    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    addEventListener() {}, setAttribute() {}, removeAttribute() {}, style: {}, click() {} });
+  const $ = (id) => { if (!els.has(id)) els.set(id, mk()); return els.get(id); };
+  const customize = { hidden: false };
+  const sounds = [];
+  const { ct, ctx, saved } = boot(undefined, { $, getEls: () => ({ customize }), getSoundOn: () => true, GameAudio: { uiTick() {}, uiSelect() { sounds.push("select"); } },
+    hexToRgb: () => [1, 2, 3], rgbToHex: () => "#010203" });
+  vm.runInContext("var Career = { inCareer: () => true, data: () => ({ flavour: 'myteam' }), setIdentityValue: () => false }", ctx);
+  try { ct.init(); } catch (e) { assert.fail("init: " + e.stack); }
+  $("cz-save").onclick();
+  assert.equal(customize.hidden, false, "the dialog stays open");
+  assert.equal(sounds.length, 0, "no success sound for a lost edit");
+  assert.equal($("cz-note").hidden, false);
+  assert.match($("cz-note").textContent, /not kept/);
+  assert.equal("customTeam" in saved, false, "nothing leaked into the plain store");
+  // An accepted write still closes.
+  vm.runInContext("Career.setIdentityValue = () => true", ctx);
+  $("cz-save").onclick();
+  assert.equal(customize.hidden, true);
+  assert.deepEqual(sounds, ["select"]);
+});
