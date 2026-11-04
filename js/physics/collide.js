@@ -615,9 +615,8 @@ const Collide = (() => {
           if (a.human || b.human) { if (!nA) a.contactT = 0.22; if (!nB) b.contactT = 0.22; }
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
           // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
-          // The local car always yields to a net-owned one; sideYieldsA decides only when both can move.
-          const yA = nA === nB ? AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn)) : nB;
-          if (yA) { if (last && !nA) a.speed = scrub(a.speed, rubScrub); if (!nA) a.contactT = 0.22; }
+          // A static body (retired wreck, net-owned rival: inv-mass 0) can never yield — its scrub is moot — so the mover yields (#4826). A net-owned car's speed and flag are never written (#4833).
+          if (!iA ? false : !iB ? true : AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last && !nA) a.speed = scrub(a.speed, rubScrub); if (!nA) a.contactT = 0.22; }
           else { if (last && !nB) b.speed = scrub(b.speed, rubScrub); if (!nB) b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars

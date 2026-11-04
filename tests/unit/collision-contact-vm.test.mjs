@@ -724,6 +724,30 @@ test("a three-car pileup notifies every distinct unordered pair once per solver 
   run(2); run(3); run(22);   // two-car control, all-pairs and arc-bucket paths
 });
 
+// #4826: a retired car is static (sepShares), so it can never be the side-rub yielder:
+// a mover beside the wreck pays the scrub and goes compliant, whichever is ahead on the arc.
+test("a mover rubbing a parked retirement yields to it, in both arc orderings", () => {
+  const run = (moverProg) => {
+    const ctx = vm.createContext({ Math, Number, Object, WeakMap,
+      Log: { info() {}, enabled: () => false }, Tracks: { wallAt: () => 100 },
+      IncidentSim: { owns: () => false, notifyCar() {} }, DebrisWorld: { active: () => false, carImpact() {} } });
+    for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+      vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
+    const mover = { id: "mover", prog: moverProg, s: moverProg, speed: 50, x: 0, human: false };
+    const wreck = { id: "wreck", prog: 100, s: 100, speed: 0, x: 1.8, human: false, retired: true };
+    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+      wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
+    vm.runInContext("Collide", ctx).create(G, () => {}).resolveCollisions([mover, wreck], 1 / 60);
+    return { mover, wreck };
+  };
+  for (const prog of [103, 97]) {
+    const { mover, wreck } = run(prog);
+    assert.ok(mover.speed < 50, "mover ahead/behind " + prog + ": speed drops, got " + mover.speed);
+    assert.equal(mover.contactT, 0.22, "mover goes compliant");
+    assert.equal(wreck.speed, 0, "the wreck stays put");
+  }
+});
+
 // #2565, live-verified 2026-10-16: an AI car hitting a PARKED human sheds almost
 // all its closing speed in one tick while the human gains only the capped punt.
 // That is deliberate (the AI behind pays its whole share, the human is never
