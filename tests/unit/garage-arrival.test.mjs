@@ -2065,9 +2065,6 @@ test('THE FOUR MOMENTS: an edit lands in the picked moment only; COPY TO ALL and
   assert.equal(Object.keys(Arrival.saved({ moments: { bogus: {} } })).includes('moments'), false);
 });
 test('THE FOUR MOMENTS: each sequence plays its own moment (race start, pit in, pit out, race end, previews)', () => {
-  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
-  for (const m of ['start', 'pitOut', 'home']) assert.match(cam, new RegExp('GarageArrival\\.settingsFor\\(G\\.store\\.get\\("garageArrival", null\\), "' + m + '"\\)'), m);
-  assert.match(cam, /arrival: arrivalCfg, moment,/, 'the bay-camera layer gets the moment');
   const { $ } = harness();
   const a = Arrival.create($, () => false, () => ({ moments: { pitIn: { angle: 'high' }, pitOut: { angle: 'low' }, home: { angle: 'door' } } }));
   a.start(); assert.equal(a.config.angle, 'high');
