@@ -12,7 +12,7 @@ const AiDrive = (function () {
   // aggression / optimism are signed style traits (−1..+1), default neutral.
   const _traits = {
     craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
-    aggression: 0, optimism: 0,
+    aggression: 0, optimism: 0, composure: 0,
   };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
@@ -22,6 +22,7 @@ const AiDrive = (function () {
     _traits.consistency = c.consistency != null ? c.consistency : 0.75;
     _traits.aggression = c.aggression != null ? c.aggression : 0;
     _traits.optimism = c.optimism != null ? c.optimism : 0;
+    _traits.composure = c.composure != null ? c.composure : 0;
     return _traits;
   }
 
@@ -1256,7 +1257,10 @@ const AiDrive = (function () {
     const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
     const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
     const optMul = 1 + 0.25 * opt * press;
-    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
+    // Composure (AI-only, zero-mean): a cool head blunts how much pressure
+    // inflates the error rate; a rattled one amplifies it. Unpressured: no effect.
+    const comp = clamp(t && t.composure != null ? t.composure : 0, -1, 1);
+    return base * (1 + 2 * press * (1 - 0.5 * comp)) * (1.3 - cons) * em * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
