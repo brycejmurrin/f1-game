@@ -66,7 +66,9 @@ const CockpitFinishes = (function () {
     host.insertBefore(group, preview && preview.parentNode === host ? preview : null);
   }
   if (typeof document !== "undefined") {
-    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    // #4798: the rows wire at first Settings enter / tap / idle, not in the DCL task.
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI);
+    else if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
     else initUI();
   }
   return { CHOICES, get, set, onChange, view, stamp };
