@@ -57,3 +57,17 @@ Design, mechanism-first:
 
 Not decided (needs Bryce's eyes): the exact speed-up and whether the crew-clearing beat is worth its seconds. Default
 shipped is 1.6× and the tuner's own camera; one comment will carry options if CI evidence shows it reads long.
+
+## Slice A2 — every moment configured on its own (Bryce, 2026-11-04 chat: "I want each configurable separately fully and ui fixed")
+
+The GARAGE ENTER & LEAVE tuner had three preview buttons over ONE settings object: the angle, shots, crew,
+lighting, timing and the bay camera were shared, and `shotsFor` read PIT STOP and AFTER RACE as the same "in".
+Now:
+- Store: `garageArrival` keeps its flat fields as the shared base (old saves play unchanged) plus
+  `moments.{start,pitIn,pitOut,home}`, each that moment's full settings once edited (`GarageArrival.settingsFor`,
+  `saved`). PIT OUT's base speed is 1.6× (`MOMENT_BASE`), replacing the hard-coded rate.
+- Every player: race start reads `start`, WORK ON CAR `pitIn`, the release `pitOut`, the way home `home`; a
+  preview plays its moment; the bay-camera layer (`garageCamera.moments`, `GarageCameraOptions.forMoment`) too.
+- UI: four MOMENT tabs head the tuner (the workspace's always-visible row), every row edits the picked moment,
+  rows that mean nothing there hide (`ROW_MOMENTS`), one PREVIEW plays it, COPY TO ALL MOMENTS and a per-moment
+  RESET sit in the tools fold. Each moment has its own PLAY ANIMATIONS switch (RACE END's absorbs PLAY AFTER A RACE).

@@ -149,14 +149,16 @@ const reducedMotion = () => {
   if (mv === "reduce") return true;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 };
-const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview, changed: () => refreshPreview() }));
+const arrivalUi = GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview, changed: () => refreshPreview(),
+  momentChanged: () => { if (typeof GarageCameraOptions !== "undefined" && GarageCameraOptions.refreshUi) GarageCameraOptions.refreshUi(); } });
+const arrival = GarageArrival.create($, reducedMotion, arrivalUi);
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
 // the circuit builds. Its pose stays "active" until stopDriveOut(), so the camera
 // never falls back to the turntable framing on the held last frame.
 let driveOut = null;
 function startDriveOut() {
-  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  const cfg = GarageArrival.settingsFor(G.store.get("garageArrival", null), "start");
   endHome();
   driveOutEngine(false);   // repeated launch releases its previous audio graph
   if (typeof clearSetupGestures === "function") clearSetupGestures();
@@ -267,7 +269,7 @@ function driveOutSound(pose, gap) {
 // Safari draws no <datalist> ticks on a range, hence the drawn ones.
 const FRAME_S = 1 / 24;
 let preview = null;
-const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
+const previewCfg = (m) => Object.assign(GarageArrival.settingsFor(G.store.get("garageArrival", null), m), { enabled: true });
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
 function previewPose(p) {
   const t = Math.min(p.t, previewLen(p));
@@ -392,16 +394,17 @@ function previewEdit(on) {
 /** bindSettings' `changed`: a setting edited mid-preview re-poses the held frame. */
 function refreshPreview() {
   if (!preview) return;
-  preview.cfg = previewCfg();
+  preview.cfg = previewCfg(preview.moment);
   preview.t = Math.min(preview.t, previewLen(preview));
   previewSync();
 }
-function startArrivalPreview(dir, btn) {
-  if (!dir) return stopPreview();
-  const d = dir === "out" || dir === "home" ? dir : "in";
-  // From EDIT, PREVIEW IN / OUT switch the running preview's direction.
+// `which` is a moment (GarageArrival MOMENTS) or the shipped direction ("in" pit in, "out" race start, "home").
+function startArrivalPreview(which, btn) {
+  if (!which) return stopPreview();
+  const m = GarageArrival.momentOf(which), d = GarageArrival.MOMENT_DIR[m];
+  // From EDIT, PREVIEW switches the running preview to the picked moment.
   if (preview && preview.editing) {
-    Object.assign(preview, { dir: d, t: 0, btn: btn || preview.btn });
+    Object.assign(preview, { moment: m, dir: d, cfg: previewCfg(m), t: 0, btn: btn || preview.btn });
     previewEdit(false); previewPause(false);
     return true;
   }
@@ -409,7 +412,7 @@ function startArrivalPreview(dir, btn) {
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   transport();
-  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
+  preview = { t: 0, cfg: previewCfg(m), moment: m, dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
@@ -493,7 +496,7 @@ function startHome(from) {
   const p = pendingHome;
   if (!p || from === "pit" || from === "vsfriend") return false;
   pendingHome = null;
-  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  const cfg = GarageArrival.settingsFor(G.store.get("garageArrival", null), "home");
   if (!cfg.enabled || !cfg.afterRace || performance.now() - p.at > 30 * 60e3) return false;
   if (typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation()) return false;
   endHome();
@@ -501,17 +504,16 @@ function startHome(from) {
   return true;
 }
 // PIT OUT (the stop's release): the drive-out show plays in the paused bay, then done() runs once (closePitWork).
-// Tuner off, reduced motion and the harness hand back at once, as before. Bay-local, the race is paused: no
+// PIT OUT off, reduced motion and the harness hand back at once, as before. Bay-local, the race is paused: no
 // control exists to move (docs/PHYSICS.md). SKIP / Esc finishes the show; so does a second DONE (skipPitOut).
-const PIT_OUT_SPEED = 1.6;
 let pitOut = null;
 function firePitOut() { const p = pitOut; pitOut = null; if (p) p.done(); }
 function startPitOut(done) {
   pitOut = { done };
-  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  const cfg = GarageArrival.settingsFor(G.store.get("garageArrival", null), "pitOut");
   const auto = typeof LoadingScreen !== "undefined" && LoadingScreen.isAutomation && LoadingScreen.isAutomation();
   if (!cfg.enabled || reducedMotion() || auto) { firePitOut(); return false; }
-  endHome(); arrival.start({ out: true, rate: PIT_OUT_SPEED });
+  endHome(); arrival.start({ out: true });
   return true;
 }
 const pitOutActive = () => !!pitOut;
@@ -1101,15 +1103,15 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (arriving && arriving.active && typeof GarageCameraOptions !== "undefined") {
     const camOpts = GarageCameraOptions.read(G.store);
     const dir = driveOut ? "out" : (preview ? preview.dir : (arriving.sequence || arriving.direction || "in"));
-    const arrivalCfg = driveOut ? driveOut.cfg
-      : (preview ? preview.cfg : GarageArrival.settings(G.store.get("garageArrival", null)));
+    const moment = driveOut ? "start" : preview ? preview.moment : arrival.moment;
+    const arrivalCfg = driveOut ? driveOut.cfg : (preview ? preview.cfg : arrival.config);
     const end = preview ? previewLen(preview)
       : (driveOut ? GarageArrival.duration(driveOut.cfg, "out") : GarageArrival.duration(arrivalCfg, dir === "home" ? "home" : dir));
     const t = driveOut ? driveOut.t : (preview ? preview.t : (arriving.seconds || 0));
     GarageCameraOptions.applyArrival(arriving, camOpts, {
       dir: dir === "home" ? "in" : dir,
       u: end > 0 ? t / end : 0,
-      arrival: arrivalCfg,
+      arrival: arrivalCfg, moment,
     });
   }
   const context = garageCtx(), sceneTime = context.sceneNow;

@@ -1511,6 +1511,9 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
 #ga-styles > .tune-label { flex: 0 0 100%; }
 #ga-styles > button { flex: 1 1 auto; min-height: 44px; min-width: max-content; margin: 0; }   /* wraps a row rather than clip DOCUMENTARY */
 #ga-styles > button[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: -4px; }
+/* THE MOMENT TABS (#4745): the picked moment reads as selected wherever the tabs sit (#ga-moments, or the
+   workspace's always-visible sequence row); every row below edits it. */
+:is(#ga-moments, #garrival [data-editor-sequences]) > button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
 /* ENTRY / EXIT CAMERA OPTIONS (injected by the garage camera-options binder) */
 #ga-cam-options { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); margin: 0 0 var(--gap); padding: calc(var(--gap) / 2) 0; border-top: 1px solid var(--card-line); border-bottom: 1px solid var(--card-line); }

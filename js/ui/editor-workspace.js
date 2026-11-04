@@ -20,10 +20,11 @@ const EditorWorkspace = (function () {
     if (rows) {
       const sequences = make("div", null, "balanced-row");
       sequences.dataset.editorSequences = "";
-      sequences.setAttribute("role", "group"); sequences.setAttribute("aria-label", "Preview sequence");
+      sequences.setAttribute("role", "group"); sequences.setAttribute("aria-label", options.sequencesLabel || "Preview sequence");
       for (const [id, text] of options.sequences || []) {
-        const button = doc.getElementById(id);
+        const button = doc.getElementById(id), from = button && button.parentNode;
         if (button) { button.textContent = text; sequences.append(button); }
+        if (from && from !== rows && from.parentNode && !from.children.length) from.remove();   // the domain's own (now empty) group
       }
       if (sequences.children.length) sheet.insertBefore(sequences, rows);
       const help = make("details", null, "ew-tools");
@@ -156,8 +157,10 @@ const EditorWorkspace = (function () {
       previews: id === "camtune" ? "ct-previews" : null,
       entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
       rows: id === "garrival" ? "ga-rows" : null, first: "ga-angle", reset: "ga-reset",
-      defaultPreview: id === "garrival" ? "ga-preview-out" : null, previewSession: id === "garrival" ? "ga-transport" : null,
-      sequences: [["ga-preview-in", "Pit stop"], ["ga-preview-out", "Race start"], ["ga-preview-home", "Return"]],
+      defaultPreview: id === "garrival" ? "ga-preview" : null, previewSession: id === "garrival" ? "ga-transport" : null,
+      // The four MOMENT tabs (GarageArrival buildRows): pick which one every row edits; Preview plays it.
+      sequencesLabel: id === "garrival" ? "Moment to edit" : null,
+      sequences: [["ga-moment-start", "Race start"], ["ga-moment-pitIn", "Pit in"], ["ga-moment-pitOut", "Pit out"], ["ga-moment-home", "Race end"]],
       launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
     }));
   }

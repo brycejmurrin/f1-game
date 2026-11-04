@@ -240,6 +240,37 @@ const GarageArrival = (function () {
       homeCue: v.homeCue === "auto" || v.homeCue === "none" || cueIds().includes(v.homeCue) ? v.homeCue : DEFAULT.homeCue,
       race: RACES.includes(v.race) ? v.race : DEFAULT.race };
   }
+  /* THE FOUR MOMENTS (#4745), each configured on its own: RACE START (the
+   * drive-out every RACE! opens on), PIT IN (WORK ON CAR brings the car in),
+   * PIT OUT (the stop's release, back to the race) and RACE END (the car brought
+   * home). The saved value keeps its flat fields as the shared base an untouched
+   * moment inherits (a pre-moments save keeps playing as it did); `moments[id]`
+   * is that moment's own full settings once edited. PIT OUT's base is quicker: a
+   * stop's release should not outlast the stop. */
+  const MOMENTS = Object.freeze(["start", "pitIn", "pitOut", "home"]);
+  const MOMENT_DIR = Object.freeze({ start: "out", pitIn: "in", pitOut: "out", home: "home" });
+  const MOMENT_LABEL = Object.freeze({ start: "RACE START", pitIn: "PIT IN", pitOut: "PIT OUT", home: "RACE END" });
+  const MOMENT_BASE = Object.freeze({ pitOut: Object.freeze({ speed: 1.6 }) });
+  /** The moment a preview direction or moment id names ("in" | "out" | "home" read as the shipped three). */
+  const momentOf = (x) => MOMENTS.includes(x) ? x : x === "out" ? "start" : x === "home" ? "home" : "pitIn";
+  /** One moment's settings: the shared base, the moment's base, then its own edits. RACE END also
+   *  honours the legacy PLAY AFTER A RACE switch (afterRace false = that moment off). */
+  function settingsFor(value, moment) {
+    const v = value && typeof value === "object" ? value : {}, m = momentOf(moment);
+    const own = v.moments && typeof v.moments === "object" && v.moments[m] && typeof v.moments[m] === "object" ? v.moments[m] : null;
+    const base = Object.assign({}, v);
+    delete base.moments;
+    const out = settings(Object.assign(base, MOMENT_BASE[m], own));
+    if (m === "home" && !out.afterRace) out.enabled = false;
+    return out;
+  }
+  /** The value to store: the base fields plus each edited moment's normalized settings. */
+  function saved(value) {
+    const v = value && typeof value === "object" ? value : {}, out = settings(v), moments = {};
+    if (v.moments && typeof v.moments === "object") for (const m of MOMENTS) if (v.moments[m] && typeof v.moments[m] === "object") moments[m] = settings(v.moments[m]);
+    if (Object.keys(moments).length) out.moments = moments;
+    return out;
+  }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
    *  one was playing (js/garage/setup-camera.js startArrivalPreview).
@@ -250,9 +281,9 @@ const GarageArrival = (function () {
    * the preset is a picture rather than a word. Pure: the inner SVG for an angle
    * (and CUSTOM's shots). Bay x maps to 10..110, z (back -6.4 .. door 6.4) to
    * 8..92, the lane below the door. */
-  function angleMap(angle, shots) {
+  function angleMap(angle, shots, dir = "in") {
     const X = (x) => (60 + x * 100 / 10.8).toFixed(1), Z = (z) => (50 + z * 84 / 12.8).toFixed(1);
-    const used = shotsFor({ angle, shots: Array.isArray(shots) ? shots : DEFAULT.shots }, "in");
+    const used = shotsFor({ angle, shots: Array.isArray(shots) ? shots : DEFAULT.shots }, dir);
     const cuts = new Set(used).size > 1;
     const eye = (id) => {
       const e = CAMS[id], lit = used.includes(id), x = X(e[0]), z = Z(e[2]);
@@ -268,7 +299,7 @@ const GarageArrival = (function () {
     // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
     if (rigData(angle)) {
       const pts = [];
-      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
+      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, dir === "out" ? "out" : "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
       const a = pts[0].split(" "), b = pts[16].split(" ");
       return room + `<polyline points="${pts.join(" ")}" fill="none" stroke="#e10600" stroke-width="2" stroke-dasharray="4 3"/>`
         + `<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>`
@@ -361,20 +392,42 @@ const GarageArrival = (function () {
       }
       first.parentNode.insertBefore(bar, first);
     }
-    // PREVIEW AFTER RACE joins PREVIEW PIT STOP / RACE START wherever they are
-    // (EditorWorkspace moves the foot's actions into its tools fold).
-    const out = $("ga-preview-out");
-    if (out && out.parentNode) {
-      const b = make("button", "", "PREVIEW AFTER RACE"), kids = Array.from(out.parentNode.children);
-      b.id = "ga-preview-home"; b.type = "button";
-      out.parentNode.insertBefore(b, kids[kids.indexOf(out) + 1] || null);
+    // THE MOMENT TABS head the rows: every row below edits the picked moment
+    // (EditorWorkspace lifts them into its always-visible sequence row).
+    const rows = $("ga-rows");
+    if (rows) {
+      const tabs = make("div", "balanced-row ga-moments");
+      tabs.id = "ga-moments"; tabs.setAttribute("role", "group"); tabs.setAttribute("aria-label", "Moment to edit");
+      for (const m of MOMENTS) {
+        const b = make("button", "", MOMENT_LABEL[m]);
+        b.type = "button"; b.id = "ga-moment-" + m; b.setAttribute("aria-pressed", "false");
+        tabs.appendChild(b);
+      }
+      rows.insertBefore(tabs, rows.firstChild || null);
+    }
+    // COPY TO ALL joins RESET in the foot (EditorWorkspace moves the foot's actions into its tools fold).
+    const reset = $("ga-reset");
+    if (reset && reset.parentNode) {
+      const b = make("button", "", "COPY TO ALL MOMENTS"), kids = Array.from(reset.parentNode.children);
+      b.id = "ga-copy-all"; b.type = "button";
+      reset.parentNode.insertBefore(b, kids[kids.indexOf(reset) + 1] || null);
     }
   }
+  /* Rows that only mean something for some moments (the crew that meets or sees
+   * the car off, AFTER THE RACE's by-result picks); every other row is every
+   * moment's. PLAY AFTER A RACE folds into RACE END's PLAY ANIMATIONS. */
+  // Keyed by setting (bindSettings' fields: ENTER CREW is enterCrew's row, and so on).
+  const ROW_MOMENTS = Object.freeze({ enterCrew: ["pitIn"], leaveCrew: ["start", "pitOut"],
+    light: ["start", "pitIn", "pitOut"], cue: ["start", "pitIn", "pitOut"], afterRace: [],
+    homeCrew: ["home"], homeLight: ["home"], homeCue: ["home"], result: ["home"], race: ["home"] });
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
     const changed = typeof opts.changed === "function" ? opts.changed : null;   // a running preview re-poses
-    const read = () => settings(store.get("garageArrival", null));
+    const raw = () => store.get("garageArrival", null);
+    let moment = "start";
+    const read = () => settingsFor(raw(), moment);
     buildRows($);
+    const tabs = { start: $("ga-moment-start"), pitIn: $("ga-moment-pitIn"), pitOut: $("ga-moment-pitOut"), home: $("ga-moment-home") };
     const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
       carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
@@ -397,6 +450,13 @@ const GarageArrival = (function () {
     }
     function refresh() {
       const value = read();
+      for (const m of MOMENTS) { const b = tabs[m]; if (b && b.setAttribute) b.setAttribute("aria-pressed", String(m === moment)); }
+      const root = $("garrival");
+      if (root && root.setAttribute) root.setAttribute("data-moment", moment);
+      for (const key of Object.keys(ROW_MOMENTS)) {
+        const el = fields[key], row = el && el.closest ? el.closest(".set-row") : null;
+        if (row) row.hidden = !ROW_MOMENTS[key].includes(moment);
+      }
       for (const key of Object.keys(fields)) {
         const el = fields[key];
         if (!el) continue;
@@ -418,23 +478,54 @@ const GarageArrival = (function () {
         map = $("ga-angle-map");
       }
       if (map) {
-        map.innerHTML = angleMap(value.angle, value.shots);
-        const used = shotsFor(value, "in");
+        const dir = MOMENT_DIR[moment] === "out" ? "out" : "in";
+        map.innerHTML = angleMap(value.angle, value.shots, dir);
+        const used = shotsFor(value, dir);
         if (map.setAttribute) map.setAttribute("aria-label", RIGS[value.angle] ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
           : value.angle === "cut" ? "Two camera cut: left of the bay, then right"
           : new Set(used).size === 1 ? "One camera, " + CAM_NAMES[used[0]] + ", looking out of the door"
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
       }
     }
-    const save = (value) => { store.set("garageArrival", settings(value)); refresh(); if (changed) changed(); };
+    // An edit lands in the picked moment only; the other three keep theirs.
+    const store1 = (moments) => {
+      const v = raw(), base = Object.assign({}, v && typeof v === "object" ? v : {});
+      base.moments = moments;
+      store.set("garageArrival", saved(base));
+    };
+    const momentsNow = () => { const v = raw(); return Object.assign({}, v && v.moments && typeof v.moments === "object" ? v.moments : {}); };
+    const save = (value) => {
+      const ms = momentsNow();
+      ms[moment] = settings(value);
+      store1(ms); refresh(); if (changed) changed();
+    };
     for (const key of Object.keys(fields)) if (fields[key]) fields[key].onchange = () => {
       const el = fields[key], value = read();
       value[key] = CHECK.includes(key) ? el.checked : NUM.includes(key) ? Number(el.value)
         : key === "hold" ? (el.value === "auto" ? null : Number(el.value)) : el.value;
+      if (key === "enabled" && moment === "home") value.afterRace = el.checked;   // one switch per moment
       save(value);
     };
+    for (const m of MOMENTS) if (tabs[m]) tabs[m].onclick = () => { select(m); };
+    function select(m) {
+      const next = momentOf(m);
+      if (next === moment) return;
+      moment = next; refresh();
+      if (opts.momentChanged) opts.momentChanged(moment);
+    }
+    const copyAll = $("ga-copy-all");
+    if (copyAll) copyAll.onclick = () => {
+      const value = read(), ms = {};
+      for (const m of MOMENTS) ms[m] = settings(value);
+      store1(ms); refresh(); if (changed) changed();
+    };
     shotEls.forEach((el, i) => { if (el) el.onchange = () => { const value = read(); value.shots[i] = el.value; save(value); }; });
-    $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); if (changed) changed(); };
+    // RESET: the picked moment back to the shipped look (the others keep theirs).
+    $("ga-reset").onclick = () => {
+      const ms = momentsNow();
+      ms[moment] = settings(MOMENT_BASE[moment] || {});
+      store1(ms); refresh(); if (changed) changed();
+    };
     // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
     // it takes the settings page's place while open and gives it back on DONE.
     const page = (on) => {
@@ -448,9 +539,9 @@ const GarageArrival = (function () {
       if (typeof document !== "undefined" && document.body) document.body.classList.add("lt-open");
       if (done && done.focus) done.focus();
     };
-    for (const [b, dir] of [[$("ga-preview-in"), "in"], [$("ga-preview-out"), "out"], [$("ga-preview-home"), "home"]]) {
-      if (b) b.onclick = () => { if (preview) preview(dir, b); };
-    }
+    // PREVIEW plays the picked moment, with its own settings.
+    const play = $("ga-preview");
+    if (play) play.onclick = () => { if (preview) preview(moment, play); };
     if (panel && done) done.onclick = () => {
       if (preview && preview(null)) return;   // DONE (or Escape) mid-playback stops it, back to the panel
       panel.hidden = true; page(true);
@@ -460,6 +551,9 @@ const GarageArrival = (function () {
       if (openBtn && openBtn.focus) { if (typeof setTimeout === "function") setTimeout(() => openBtn.focus(), 0); else openBtn.focus(); }
     };
     refresh();
+    read.select = select;
+    read.moment = () => moment;
+    read.raw = raw;
     return read;
   }
   /* ONE PATH, BOTH WAYS. The drive-out leaves the box along it (straight out of
@@ -754,7 +848,7 @@ const GarageArrival = (function () {
   const MAX_GAP_S = 2.5;
   function wallNow() { try { return performance.now() / 1000; } catch (_) { return 0; } }
   function create($, reducedMotion, readSettings = () => DEFAULT, clock = wallNow) {
-    let state = null, time = 0, config = DEFAULT, last = 0, dir = "in", posed = pose;
+    let state = null, time = 0, config = DEFAULT, last = 0, dir = "in", posed = pose, moment = "pitIn";
     const root = $("carsetup"), panel = $("cs-inner"), controls = $("cs-stack");
     const overlay = $("cs-arrival"), skip = $("cs-arrival-skip"), label = $("cs-arrival-label");
     function chrome(on) {
@@ -769,14 +863,14 @@ const GarageArrival = (function () {
       chrome(false);
       $("cs-done").focus({ preventScroll: true });
     }
-    /** start() = the pit-stop arrival (WORK ON CAR); start({ out: true, rate }) = the pit-stop release (the drive-out, quicker);
+    /** start() = the pit-stop arrival (WORK ON CAR, moment PIT IN); start({ out: true }) = the stop's release (PIT OUT);
      *  start({ home: { result, pos } })
      *  = AFTER THE RACE, the car brought home as the race ended (RESULTS). */
     function start(opts) {
       const home = opts && opts.home;
-      dir = home ? "home" : opts && opts.out ? "out" : "in"; posed = poseFor(dir);
-      config = settings(readSettings());
-      if (opts && opts.rate > 0) config.speed = Math.min(4, config.speed * opts.rate);   // PIT OUT: a stop's release is short
+      moment = home ? "home" : opts && opts.out ? "pitOut" : "pitIn";
+      dir = MOMENT_DIR[moment]; posed = poseFor(dir);
+      config = settingsFor(readSettings.raw ? readSettings.raw() : readSettings(), moment);
       // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
       config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos,
@@ -811,7 +905,7 @@ const GarageArrival = (function () {
     }
     function cancel() { state = null; time = 0; chrome(false); }
     skip.onclick = finish;
-    return { start, step, cancel, finish, get state() { return state; } };
+    return { start, step, cancel, finish, get state() { return state; }, get config() { return config; }, get moment() { return moment; } };
   }
   /* SLOW-MO AT THE DOOR: SLOW_S seconds of show time around the car crossing the
    * door plane play at config.slowmo of PLAYBACK SPEED (0 = off). Coming in, the
@@ -853,6 +947,6 @@ const GarageArrival = (function () {
     if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
     return m === "auto" && !!wet;
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
+  return Object.freeze({ create, settingsFor, saved, MOMENTS, MOMENT_DIR, MOMENT_LABEL, momentOf, ROW_MOMENTS, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
     CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();
