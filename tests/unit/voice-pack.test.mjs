@@ -50,6 +50,18 @@ test("a lap time splices from number clips, the way the broadcast reads one", ()
   assert.deepEqual(J(VoicePack.norm("1.4 seconds")), ["1.4", "seconds"], "a gap is not a lap time");
 });
 
+test("a sub-minute lap time splices from number clips the pack has (#4329)", () => {
+  assert.deepEqual(J(VoicePack.norm(say("PERSONAL BEST, 45.2"))), ["personal", "best", { p: 0.05 }, "45", "point", "2"]);
+  assert.deepEqual(J(VoicePack.norm("10.0")), ["10", "point", "0"]);
+  assert.deepEqual(J(VoicePack.norm("9.9 seconds")), ["9.9", "seconds"], "a gap under 10 s keeps its own clip");
+  const george = JSON.parse(fs.readFileSync(path.join(ROOT, "assets/voice/george.json"), "utf8")).clips;
+  const has = (k) => Object.prototype.hasOwnProperty.call(george, k);
+  for (const t of [10.04, 45.2, 59.94]) {
+    const line = say("PERSONAL BEST, " + RadioLines.timeText(t));
+    assert.ok(VoicePack.compose(line, has), "the recorded pack speaks " + line);
+  }
+});
+
 test("norm keeps a gap a word, and turns sentence punctuation into pauses", () => {
   assert.deepEqual(J(VoicePack.norm(say("1.4s TO NORRIS. YOU'RE IN RANGE"))),
     ["1.4", "seconds", "to", "norris", { p: 0.1 }, "you're", "in", "range"]);

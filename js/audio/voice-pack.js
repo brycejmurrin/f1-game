@@ -60,7 +60,9 @@ var VoicePack = (() => {
    *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word.
    *  A lap time is read the way the broadcast reads one — "1:32.4" is "1 32
    *  point 4", "1:05.3" is "1 oh 5 point 3" — so it splices from number clips
-   *  instead of needing a clip per time. */
+   *  instead of needing a clip per time. A sub-minute lap ("45.2", timeText's
+   *  form under 60 s) is "45 point 2": the packs record gaps only up to "9.9"
+   *  (gapText rounds 10 s and up to whole seconds), so 10.0-59.9 never has a clip. */
   function norm(text) {
     const out = [];
     const s = String(text == null ? "" : text).toLowerCase()
@@ -76,7 +78,11 @@ var VoicePack = (() => {
         if (t[2][0] === "0") out.push("oh");
         out.push(String(+t[2]));
         if (t[3] != null) out.push("point", t[3]);
-      } else out.push(w);
+        continue;
+      }
+      const d = /^([1-5]\d)\.(\d)$/.exec(w);
+      if (d) out.push(String(+d[1]), "point", d[2]);
+      else out.push(w);
     }
     while (out.length && typeof out[out.length - 1] !== "string") out.pop();
     return out;
