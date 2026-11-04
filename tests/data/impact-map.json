@@ -13360,7 +13360,8 @@
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
-        "tests/unit/quali-pace-parity-vm.test.mjs"
+        "tests/unit/quali-pace-parity-vm.test.mjs",
+        "tests/unit/quali-persist.test.mjs"
       ],
       "clear": [
         "tests/unit/career-backup.test.mjs",

@@ -131,11 +131,13 @@ test("paceRef caches per cars identity and track.n", () => {
   const r3 = env.api.paceRef();
   assert.notEqual(r1, r3);
   assert.equal(r3.cars, cars2);
+  env.setTrack({ n: 8 });
+  assert.equal(env.api.paceRef(), r3, "same cars, same track length: cached");
+  // #4342: the same cars array on a longer track used to keep the short buffer.
   env.setTrack({ n: 12 });
-  env.setCars(cars2);
-  // cars identity unchanged → still returns cached (original length 8)
-  assert.equal(env.api.paceRef(), r3);
-  assert.equal(env.api.paceRef().length, 8);
-  env.setCars([]);
-  assert.equal(env.api.paceRef().length, 12);
+  const r4 = env.api.paceRef();
+  assert.notEqual(r4, r3, "a new track length rebuilds even with the same cars array");
+  assert.equal(r4.length, 12);
+  assert.equal(r4.cars, cars2);
+  assert.equal(env.api.paceRef(), r4);
 });
