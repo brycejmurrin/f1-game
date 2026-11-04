@@ -792,7 +792,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const game = code("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);
   assert.match(game, /armed\s*&&\s*!skipClaim\b/);
-  assert.match(game, /const p = backendPreference\(\);\s*backendTried = p === "webgpu" \|\| p === "three"/,
+  assert.match(game, /const p = backendPreference\(\);\s*if \(\(p === "webgpu" \|\| p === "three"\) && reloadOnceIntoGlx\(true\)\)/,
     "claim-fail recovery must include the unset default THREE attempt");
   // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
   // blocked, removing the probe + reloading replays the claim-and-die boot
@@ -6829,7 +6829,8 @@ const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
 const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
-const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const reloadHelper = span(game, "function reloadOnceIntoGlx", "\nlet gfx = null;", "claim-fail reload helper");
+const fallback = `(async function () { ${timeoutHelpers} ${reloadHelper} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
