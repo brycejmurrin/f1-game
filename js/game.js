@@ -7976,7 +7976,7 @@ function render(dt) {
     // On the jacks (PitLane.stopAnim): the body rises with the wheels, which
     // drawPlayerWheels lifts by the same number off _groundMat.
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
-    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
+    if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   carFx.marks(c, _groundMat, dt, state);   // AI lock-up marks persist: laid BEFORE the frustum cull (#4669); blob caster now, sun / lamp caster next frame
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8092,7 +8092,7 @@ function render(dt) {
             -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
             dt * Particles.sprayRate(str));
         }
-        carFx.emit(c, _groundMat, dt, state);   // plank sparks + an AI lock-up's marks (js/fx/car-fx.js)
+        carFx.emit(c, _groundMat, dt, state);   // plank sparks (js/fx/car-fx.js); the AI lock-up marks are laid above the frustum cull
       }
     }
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {

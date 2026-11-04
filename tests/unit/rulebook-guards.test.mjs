@@ -116,3 +116,12 @@ test("the scan covers the surfaces it claims (a moved tree must not turn this in
 test("AGENTS.md stays under Codex's native 32 KiB cap", () => {
   assert.ok(Buffer.byteLength(text.get("AGENTS.md"), "utf8") < 32 * 1024, "AGENTS.md is over 32 KiB");
 });
+
+// #4288: a `test-bg --wait --timeout <n>` instruction runs as a background Bash task whose own default
+// timeout (30 min) would kill the 45-min waiter; any file giving that instruction must name `2700000`.
+test("every `test-bg --wait --timeout <n>` instruction names the Bash call timeout 2700000", () => {
+  for (const f of ["docs/TESTING.md", ".claude/skills/check-changes/references/triage.md"]) {
+    const t = fs.readFileSync(path.join(ROOT, f), "utf8");
+    if (/test-bg\.mjs --wait --timeout\s+\d+/.test(t)) assert.match(t, /2700000/, `${f} gives the waiter with no Bash timeout`);
+  }
+});

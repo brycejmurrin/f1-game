@@ -9,7 +9,9 @@ loaded runs and passed solo in 8.1 s / 69 s / 25.6 s — zero code delta.
 ## Step 0 — "it timed out at 45 min": which timeout? (read-only, seconds)
 
 `test-bg.mjs --wait --timeout 45` exiting **124** is the WAITER giving up, not a
-test result: the group is left alive. Read the log, not the exit code:
+test result: the group is left alive. Run the waiter as a background Bash call with
+`timeout: 2700000`: at the 30-min default the harness kills it first, which shows as no
+exit code and no `= run …` verdict line (not 124). Read the log, not the exit code:
 
 ```sh
 cat /proc/loadavg                                   # >= 3 = the box was/is busy (rule 8)
