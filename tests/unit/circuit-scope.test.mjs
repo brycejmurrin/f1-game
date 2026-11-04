@@ -101,3 +101,13 @@ test("ci.yml: the sweeps job scopes a circuit-only pull request and hands the id
   const { CIRCUITS } = require("../../tools/manifest.cjs");
   assert.ok(CIRCUITS.includes("monza") && CIRCUITS.length > 40);
 });
+
+// B3 (2026-11-03): an APEX_CIRCUITS naming no circuit made `--all` print "All 0 tracks OK" and exit 0.
+test("verify-track / float-audit --all fail when APEX_CIRCUITS selects no circuit", () => {
+  for (const tool of ["tools/track/verify-track.cjs", "tools/track/float-audit.cjs"]) {
+    const r = spawnSync(process.execPath, [tool, "--all", "--quiet"],
+      { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_CIRCUITS: "no-such-circuit" }, timeout: 120000 });
+    assert.equal(r.status, 1, `${tool} exit ${r.status}\n${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /selected no circuit/, tool);
+  }
+});

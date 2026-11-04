@@ -59,9 +59,10 @@ jobs:
           # Every live status the List-runs API accepts; pending/waiting/requested
           # runs hold a concurrency slot too (#2266 taught queue-depth the same).
           # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository
+          # Dispatch also fires on `pull_request: closed`: that run is this close's own relabel/Board cycle (B3).
           for st in queued in_progress pending waiting requested; do
             gh api -X GET "repos/$REPO/actions/runs" -f branch="$BRANCH" -f event=pull_request -f status="$st" -f per_page=100 \
-              --jq '.workflow_runs[] | "\(.id) \(.name)"' | while read -r id name; do
+              --jq '.workflow_runs[] | select(.path | startswith(".github/workflows/dispatch.yml") | not) | "\(.id) \(.name)"' | while read -r id name; do
               [ "$id" = "$SELF" ] && continue
               echo "cancel $id ($name)"
               gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null || echo "  (already finishing)"

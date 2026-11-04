@@ -53,6 +53,11 @@ if (args[0] === "--all") {
     console.error("FAIL: could not load track ids:", e.message);
     process.exit(1);
   }
+  if (!uniqueIds.length) {
+    // B3: an APEX_CIRCUITS that names no circuit (a typo, a retired id) left zero ids and printed "All 0 tracks OK".
+    console.error(`FAIL: --all selected no circuit (APEX_CIRCUITS=${process.env.APEX_CIRCUITS || ""})`);
+    process.exit(1);
+  }
 
   let failures = 0;
   for (const id of uniqueIds) {

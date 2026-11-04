@@ -42,6 +42,10 @@ test("no window.X guard reads a top-level lexical global that is never on window
     for (const m of f.code.matchAll(/\b(?:window|globalThis|self)\s*\.\s*([A-Za-z_$][\w$]*)\s*=(?!=)/g)) onWindow.add(m[1]);
     for (const m of f.code.matchAll(/\b(?:window|globalThis|self)\s*\[\s*["']([A-Za-z_$][\w$]*)["']\s*\]\s*=(?!=)/g)) onWindow.add(m[1]);
   }
+  // Floors (B3): a walk that finds little or a declaration regex that stops matching would leave `bad` empty.
+  assert.ok(files.length > 100, `walked only ${files.length} js files`);
+  assert.ok(lexical.size > 50, `found only ${lexical.size} top-level lexical declarations`);
+  assert.ok(onWindow.size > 0, "found no window.X = assignment at all");
   const bad = [];
   for (const f of files) {
     f.code.split("\n").forEach((line, i) => {

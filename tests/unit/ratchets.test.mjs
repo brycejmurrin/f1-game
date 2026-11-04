@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment } from "../../tools/check/ratchets.mjs";
+import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment, numArg } from "../../tools/check/ratchets.mjs";
 
 // ONE TREE WALK PER METRIC PER PROCESS (pass-3 T1 / audit4 E1, 2026-10-26). This
 // file called measure() three times in full, the TREE_METRICS loop once more, and
@@ -462,6 +462,18 @@ test("#4257: AT_REF counts css/ at a git ref the same way the live scan counts t
   if (dirty) { t.skip("css/ differs from HEAD in this checkout"); return; }
   const { AT_REF } = await import("../../tools/check/tree-counts.mjs");
   for (const [metric, fn] of Object.entries(AT_REF)) assert.equal(fn("HEAD"), await TREE_METRICS[metric](), metric);
+});
+
+// B3 (2026-11-03): `Number(v) || 40` turned an explicit `--auto-raise=0` / `--max-raise=0` into a 40-line allowance.
+test("numArg: an explicit 0 stays 0; missing or junk falls back", () => {
+  assert.equal(numArg("--auto-raise=0", 40), 0);
+  assert.equal(numArg("--max-raise=0", 40), 0);
+  assert.equal(numArg("--min-fragments=0", 1), 0);
+  assert.equal(numArg("--max-raise=12", 40), 12);
+  assert.equal(numArg("--auto-raise", 40), 40);
+  assert.equal(numArg("--auto-raise=", 40), 40);
+  assert.equal(numArg("--auto-raise=abc", 40), 40);
+  assert.equal(numArg("--auto-raise=-3", 40), 40);
 });
 
 /* PERF P8 (#4548): measure() took 18-27 s, two thirds of it espree parsing every
