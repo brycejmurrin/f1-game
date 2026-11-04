@@ -438,7 +438,7 @@ test("wrapperGrowth gates system / Context scopes at +5 % and countSnapshotClass
   assert.equal(wrapperGrowth([row(5, 10000), row(6, 9000)], 6).ok, true);
   const bad = wrapperGrowth([row(5, 10000), row(6, 10700)], 6);
   assert.equal(bad.ok, false);
-  assert.match(bad.issues[0], /system \/ Context 10000 → 10700/);
+  assert.deepEqual(bad.issues.map((i) => i.startsWith("system / Context 10000 → 10700")), [true]);
   assert.equal(wrapperGrowth([row(5, null), row(6, 10700)], 6).ok, true, "an unavailable count is not a gate");
   const snap = { snapshot: { meta: { node_fields: ["type", "name", "id"] } }, strings: ["", "system / Context", "x"],
     nodes: [3, 1, 1, 3, 2, 2, 3, 1, 3] };
