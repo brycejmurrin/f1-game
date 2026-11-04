@@ -4140,6 +4140,23 @@ test("an out-of-memory createMesh degrades to an inert mesh and escalates instea
   assert.equal(reloads, 1);
 });
 
+test("an out-of-memory road-LUT bind group on a hasTrk createMesh degrades inert instead of throwing", async () => {
+  const storage = new Map();
+  const h = makeGpuHarness({ storage, onReload() {} });
+  const gfx = await h.create();
+  // trk present => the LUT bind group is the FIRST allocation, outside the old try.
+  h.failNextBindGroup(1, "out of memory");
+  let mesh;
+  assert.doesNotThrow(() => {
+    mesh = gfx.createMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+      col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2], trk: [0, 0, 5, 1, 0, 5, 2, 0, 5], mat: [16, 16, 16] });
+  }, "an OOM must not escape into tick()");
+  h.clearFailures();
+  assert.equal(mesh.count, 0, "inert mesh");
+  assert.equal(mesh.vbuf, null);
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /^createMesh alloc: out of memory/);
+});
+
 test("an out-of-memory createChunkedMesh escalates and falls back to a plain mesh", async () => {
   const storage = new Map();
   const h = makeGpuHarness({ storage, onReload() {} });
