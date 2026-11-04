@@ -794,55 +794,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // !skipClaim`, a refused create disarming the probe without writing webgl2)
   // is BEHAVIOUR now: tests/unit/game-boot-claim-fail.test.mjs boots js/game.js
   // in the VM (tests/helpers/game-boot-vm.mjs, #4878) — not repeated here as source text.
-  // A STORED PICK MUST NOT OUTLIVE ITS FILES. With DEFERRED = {} after the
-  // 2026-09-03 spike-out, BACKEND_FILES.three is undefined; the boot armed the
-  // probe and then threw inside loadBackendScripts on `files.map`. It was caught
-  // and GLX rendered, and the next boot's revert cleared the pick — so it
-  // self-healed and no test saw it. The gate below is what stops the throw and
-  // the "never presented a frame" warning about a backend that was never
-  // fetched. Nothing here executes the boot block, so this is a source pin.
-  const bootSrc = code("js/render/renderer-boot.js");
-  assert.match(bootSrc, /const group = pref === "three" \? BACKEND_FILES\.three/,
-    "the opt-in must resolve its DEFERRED group before arming anything");
-  assert.match(bootSrc, /optIn = [^;]*group && group\.length/,
-    "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
-
-  const wgx = code("js/render/webgpu/wgx.js");
-  const lossCallback = wgx.match(/device\.lost\.then\(function\s*\(info\)\s*\{\s*if\s*\(info && info\.reason === "destroyed"\) return;/);
-  assert.ok(lossCallback, "device.lost registers its recovery callback");
-  // Extract the callback itself: capture cleanup may grow the body without
-  // changing the visible-loss ladder, so a character budget is not its contract.
-  const lossBody = fnBody(wgx.slice(lossCallback.index).replace(
-    /^device\.lost\.then\(function\s*\(info\)/, "function deviceLoss(info)"), "deviceLoss");
-  assert.match(lossBody, /if\s*\(!hidden\)\s*\{[^]*?_wgxEscalate\("device lost \("[^;]*,\s*true\);\s*return;/,
-    "visible device.lost climbs the ladder through forced _wgxEscalate");
-  assert.match(fnBody(wgx, "_wgxEscalate"), /_lost\s*=\s*true;\s*_rejectCapture\([^;]*;\s*_healReset\(\)/,
-    "loss escalation rejects queued capture before recovery bookkeeping");
-  assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
-  assert.doesNotMatch(lossBody, /setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
-  assert.match(wgx, /\bWGX_LITE\b/);
-  assert.match(wgx, /\bIS_WEBKIT\b/);
-  assert.match(wgx, /WGX_LITE\s*&&\s*format\s*===\s*"rgba16float"\s*\)\s*format\s*=\s*"bgra8unorm"/);
-  assert.match(wgx, /_sceneProbeOn\s*=\s*!_outProbeOff\s*&&\s*!WGX_LITE\b/);
-  // The loss ladder (full → lite → minimal → GLX, persisted in
-  // apex26.gfxWgxLevel), the JS strike cap in begin()/present(), the
-  // HEAL_SESSIONS step-down, the minimal rung's no-post/no-sky path and the
-  // apex26.gfxBound label are all driven on the mock device by
-  // tests/unit/webgpu-lifecycle.test.mjs ("device.lost climbs the ladder",
-  // "…climbs to minimal", "minimal rung: no post targets…", "a JS throw in
-  // begin() strikes out…", "clean sessions heal the ladder") — not repeated
-  // here as source text.
-  assert.match(wgx, /_allocFail\(\s*"createMesh"/, "lazy mesh creation on the render path degrades to inert, not a throw");
-  // createChunkedMesh moved to wgx-chunked.js (GLX-seam peel); it still routes
-  // through core.allocFail so a failed upload stays inert, not a throw.
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
-  // allocDrawSlot() returns -1 when the draw ring is full: a chunk must drop
-  // its draw, not index the ring at -1 (RangeError mid-frame). The night
-  // flush drops the open run; per-chunk breaks out of the chunk loop.
-  // One assertPinsAll site covers both full-ring exits (ratchet at tip ceiling).
-  assert.match(code("js/render/webgpu/wgx-chunked.js"),
-    /if \(s < 0\) return -1;[\s\S]*if \(s2 < 0\) \{ run\.active = false; return; \}/);
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(cslot < 0\) break;/);
+  // The rest of this group is BEHAVIOUR too (#1682 step 2; mutation evidence in
+  // each file's header and the PR body), not repeated here as source text:
+  //  - a stored pick whose DEFERRED group is gone or empty binds GLX without
+  //    arming the probe or fetching: game-boot-claim-fail.test.mjs ("files are gone")
+  //  - the WGX loss ladder — a visible device.lost forced through _wgxEscalate,
+  //    a queued capture rejected, the last rung surrendering through the
+  //    apex26.gfxClaimFail latch and never a webgl2 pick, WGX_LITE on WebKit,
+  //    the rgba16float swapchain downgrade, no scene probe on the lite stack,
+  //    an out-of-memory createMesh / createChunkedMesh degrading inert and
+  //    escalating, and a full draw ring dropping chunked draws instead of
+  //    using slot -1: webgpu-lifecycle.test.mjs (the "#1682 step 2" block, the
+  //    capture-mode device.lost tests, the Safari UA tests and the ladder tests).
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
   const a = bootPicker({
