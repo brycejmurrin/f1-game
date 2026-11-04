@@ -73,15 +73,23 @@ async function main() {
     let stepNow = "boot";
     page.on("framenavigated", (f) => { if (f === page.mainFrame()) console.error(`res-scale-census: main frame navigated during ${stepNow}: ${f.url()}`); });
     page.on("crash", () => console.error(`res-scale-census: page crashed during ${stepNow}`));
-    page.on("console", (m) => { if (stepNow !== "boot" && /error|warn|lost|reload|sentinel|strike/i.test(m.type() + " " + m.text())) console.error(`  [page ${m.type()} @${stepNow}] ${m.text().slice(0, 300)}`); });
+    let logged = 0;
+    page.on("console", (m) => { if (logged < 80 && /error|warn|lost|reload|sentinel|strike|crash|context/i.test(m.type() + " " + m.text())) { logged++; console.error(`  [page ${m.type()} @${stepNow}] ${m.text().slice(0, 300)}`); } });
+    page.on("close", () => console.error(`res-scale-census: page closed during ${stepNow}`));
+    page.on("framedetached", (f) => console.error(`res-scale-census: frame detached during ${stepNow}: ${f.url()}`));
+    page.on("requestfailed", (r) => console.error(`  [requestfailed @${stepNow}] ${r.url().slice(0, 120)} ${r.failure() && r.failure().errorText}`));
+    browser.on("disconnected", () => console.error(`res-scale-census: browser disconnected during ${stepNow}`));
     await page.goto(srv.url + (srv.url.includes("?") ? "&" : "?") + "three-devtools=1", { waitUntil: "load" });
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
     await page.waitForFunction((id) => { try { const i = window.__apex.info(); return i.track === id && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, o.track, { polling: 100, timeout: 240000 });
     await waitFrames(page, 8, 400000);
+    stepNow = "pre-sweep";
     // Presented frames, not rAF ticks: on lavapipe a pipeline warm holds present() and applyResize() (tlx.js
     // `if (_warmPending) return`), so a renderScale() step issued then is dropped until the warm ends (#4783).
     // A frame is one top-level render (no render target); three's info.render.frame is not trusted to advance.
+    let base = null, prev = null, api = "?", warmTimedOut = false, framesOk = true;
+    try {
     await page.evaluate(() => {
       const r = window.GLX.__tlx.renderer;
       if (r.__resWrap) return;
@@ -107,16 +115,15 @@ async function main() {
         frame: window.__resFrames, warming: !!(window.GLX.warming && window.GLX.warming()),
         canvas: cv ? [cv.width, cv.height] : null, fixed: !!(ps && ps.fixed) };
     });
-    const api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
+    api = await page.evaluate(() => { const b = window.GLX && window.GLX.__tlx && window.GLX.__tlx.renderer && window.GLX.__tlx.renderer.backend; return b && b.isWebGPUBackend ? "webgpu" : "webgl2"; });
     if (o.webgpu && api !== "webgpu") throw new Error("--webgpu asked for the WebGPU backend but three fell back to " + api);
-    const warmTimedOut = !(await warmed());
-    const framesOk = await presented(5);   // sweep only once present() is running
+    warmTimedOut = !(await warmed());
+    framesOk = await presented(5);   // sweep only once present() is running
     if (!framesOk) console.error("res-scale-census: no top-level render in 240s (warming=" + (await read()).warming + ")");
-    const base = await read();
+    base = await read();
     base.scaleBase = base.fixed ? base.targets : [base.canvas ? base.canvas[0] : base.targets[0], base.canvas ? base.canvas[1] : base.targets[1]];
     rows.push({ step: "start", scale: 1, ...base, dResizes: 0 });
-    let prev = base;
-    try {
+    prev = base;
     for (const s of o.scales) {
       stepNow = "scale " + s;
       const ms = await page.evaluate((v) => { const t0 = performance.now(); window.__apex.renderScale(v); return +(performance.now() - t0).toFixed(2); }, s);
@@ -133,6 +140,8 @@ async function main() {
       prev = r;
     }
     } catch (e) { stepNow = "aborted"; rows.push({ step: "aborted", error: String(e).slice(0, 300), lastRow: rows[rows.length - 1] }); console.error("res-scale-census aborted at " + (rows[rows.length - 2] ? "scale " + rows[rows.length - 2].scale : "start") + ": " + e); process.exitCode = 1; }
+    if (!base) base = prev = { rtResizes: 0, textures: null, targets: [0, 0], fixed: false };
+    if (!rows.length) rows.push({ step: "start", ...base });
     const total = (prev.rtResizes || 0) - (base.rtResizes || 0);
     const summary = { track: o.track, backend: api, steps: o.scales.length, totalRtResizes: total, perStep: +(total / Math.max(1, o.scales.length)).toFixed(2),
       maxTextures: Math.max(...rows.map((r) => r.textures || 0)), pageErrors: errors.length,
