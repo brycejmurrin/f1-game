@@ -224,7 +224,16 @@ const PhonePadPage = (function () {
       const releasePointer = (e) => { for (const up of pointerReleases) up(e); };
       document.addEventListener("pointerup", releasePointer, true);
       document.addEventListener("pointercancel", releasePointer, true);
-      if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); window.addEventListener("blur", releaseAll); }
+      if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("pointerup", releasePointer, true);
+        window.addEventListener("pointercancel", releasePointer, true);
+        window.addEventListener("blur", releaseAll);
+        // Portrait↔landscape often delivers only orientationchange (the #rotate
+        // cover flips). Without a release net, GAS/BRAKE/LOOK/steer stay latched
+        // and a reused pointer id is ignored (Lane 12 / HUNT-INPUT). Same net as
+        // InputHoldButtons.secondaryTap.
+        window.addEventListener("orientationchange", releaseAll);
+      }
       document.addEventListener("touchend", allUp, true);
       document.addEventListener("touchcancel", allUp, true);
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });

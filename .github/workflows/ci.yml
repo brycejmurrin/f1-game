@@ -1815,7 +1815,7 @@ jobs:
   # yes. A step-level skip inside the macOS job — the sweeps pattern — would
   # still pay for the macOS checkout and npm ci on every push.
   renderer-macos:
-    name: Renderer specs on a real GPU (macos-latest, Metal)
+    name: Renderer specs on a real GPU (macos-latest, Metal) ${{ matrix.shard }}/2
     needs: select
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
     # comment forbids it, because the selector owns the path decision.
@@ -1833,6 +1833,15 @@ jobs:
     # 11-33 s; the census measured a ~4 s boot on this image's Metal adapter.
     # Re-time on the first green run and replace this number and the header's.
     timeout-minutes: 30
+    # TWO legs, each ONE worker on its own Metal runner (perf hunt P8, #4548):
+    # the one-leg job ran 17 min 19 s on pages run 41599337245 while every
+    # other dependency of the aggregate had finished ~7 min earlier, so a
+    # renderer release waited on this job alone. A second runner is a second
+    # GPU, so the one-worker rule below (no two Chromiums on one GPU) holds.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1889,7 +1898,7 @@ jobs:
         env:
           APEX_WORKERS: 1
           APEX_FAIL_ON_FLAKY: 1
-        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
+        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000 --shard=${{ matrix.shard }}/2
       # ALWAYS, not failure(): a spec that fails its first attempt and passes
       # the retry leaves the job green and its report — the attached frames
       # image-grade "shadows" compares, the retry's diag — unretrievable. Run
@@ -1899,7 +1908,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-artifacts-renderer-macos
+          name: playwright-artifacts-renderer-macos-${{ matrix.shard }}
           path: |
             census-macos.json
             artifacts/test-results-*/
@@ -1971,18 +1980,28 @@ jobs:
           TWINS: ${{ needs.select.outputs.twins }}
           ADAPTED: ${{ needs.select.outputs.adapted }}
           APEX_CIRCUITS: ${{ needs.select.outputs.twin_circuits }}
+        # The two runs are independent processes, so they run AT ONCE (perf
+        # hunt P8, #4548): one after the other they took 10 min 45 s on pages
+        # run 41599337245. Each keeps its own output prefix and exit status.
+        shell: bash
         run: |
-          set -eu
+          set -euo pipefail
+          pids=()
           if [ -n "$TWINS" ]; then
             echo "hand twins: $TWINS"
             # shellcheck disable=SC2086 # a space-separated file list
-            node --test --test-timeout=900000 $TWINS
+            ( node --test --test-timeout=900000 $TWINS 2>&1 | sed -u 's/^/[twins] /' ) &
+            pids+=($!)
           fi
           if [ -n "$ADAPTED" ]; then
             echo "adapted specs under APEX_VM_PAGE=1: $ADAPTED"
             # shellcheck disable=SC2086
-            APEX_VM_PAGE=1 node --test --test-timeout=900000 $ADAPTED
+            ( APEX_VM_PAGE=1 node --test --test-timeout=900000 $ADAPTED 2>&1 | sed -u 's/^/[adapted] /' ) &
+            pids+=($!)
           fi
+          rc=0
+          for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+          exit "$rc"
 
   # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
   # runs the plan as a matrix. It used to be one job that ran on branch pushes

@@ -1531,6 +1531,28 @@ test("transport instances own independent cancellation scopes and late bodies ca
   assert.equal(sibling.cancelAll(), 0);
 });
 
+// P7 (#4547, docs/notes/PERF-HUNT-P7-2026-11-03.md row 1): a ttl <= 0 request (LIVE AUTO, every 30 s) never serves the cached
+// copy as fresh, so a refresh that succeeds must not read it from localStorage at
+// all; the copy is read only when the network fails and the stale fallback is due.
+test("P7 a ttl-0 refresh reads the cached copy only on the failure path", async () => {
+  const url = "https://api.openf1.org/v1/weather?session_key=7";
+  const key = "apex26.api." + url;
+  let up = true;
+  const h = routeHarness({ "/weather?": () => (up ? { status: 200, body: [{ rainfall: 0 }] } : "offline") });
+  h.store.set(key, JSON.stringify({ t: h.now() - 60e3, data: [{ rainfall: 7 }] }));
+  await h.api.request("https://api.openf1.org/v1/drivers?session_key=7", 0);   // runs the 5-min sweep (it reads every key)
+  const ls = h.context.localStorage, getItem = ls.getItem;
+  let reads = 0;
+  ls.getItem = (k) => { if (k === key) reads++; return getItem(k); };
+  assert.equal((await h.api.request(url, 0))[0].rainfall, 0, "the network answer wins");
+  assert.equal(reads, 0, "a successful ttl-0 refresh never reads the disk copy");
+  up = false;
+  assert.equal((await h.api.request(url, 0))[0].rainfall, 0, "offline: the copy the last success wrote");
+  assert.equal(reads, 1, "the failure path reads the fallback once");
+  assert.equal((await h.api.request(url, 60e3))[0].rainfall, 0, "a ttl > 0 request still serves its fresh hit");
+  assert.equal(reads, 2);
+});
+
 // P7 row 2 (#4562): fastestLap used one
 // /laps?driver_number=N request per driver; a session-wide body now serves all.
 test("P7 fastestLap for two drivers costs one session-wide laps request", async () => {
