@@ -3730,7 +3730,8 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/legends-team.test.mjs",
-        "tests/unit/legends.test.mjs"
+        "tests/unit/legends.test.mjs",
+        "tests/unit/parts-ladder.test.mjs"
       ],
       "getFactorySetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3743,6 +3744,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
       "getMods": [
@@ -3999,7 +4001,8 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "*": [
-        "tests/unit/career-readslot-quota.test.mjs"
+        "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/parts-ladder.test.mjs"
       ]
     },
     "js/career/career-ui-boot.js": {
@@ -4136,6 +4139,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/share-card-data.test.mjs",
@@ -4164,6 +4168,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/share-card-data.test.mjs",
@@ -4342,7 +4347,6 @@
       ],
       "round": [
         "tests/unit/career-settle.test.mjs",
-        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
@@ -4431,6 +4435,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/share-card-data.test.mjs",
@@ -5535,6 +5540,7 @@
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -5870,6 +5876,7 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/legends.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -6276,6 +6283,7 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/overlay-render.test.mjs",
+        "tests/unit/parts-ladder.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-radio.test.mjs",
