@@ -5673,6 +5673,7 @@
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "resolve": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "validateKey": [
