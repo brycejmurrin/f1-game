@@ -32,6 +32,23 @@ export function hookPipelines() {
     } catch (_) { /* naming is best-effort */ }
     return o.apply(this, arguments);
   };
+  // The twin counters (#4783): bind groups and buffers minted on the GPUDevice itself, with the label of the
+  // first few so a culprit is named. WebGL2 has no device: both stay 0 and `gpuDevice` says so.
+  P.bindGroups = 0; P.buffers = 0; P.gpuLog = []; P.gpuDevice = false;
+  const dev = be.device;
+  if (dev && typeof dev.createBindGroup === "function" && typeof dev.createBuffer === "function") {
+    P.gpuDevice = true;
+    const wrap = (name, key) => {
+      const orig = dev[name];
+      dev[name] = function (desc) {
+        P[key]++;
+        try { if (P.gpuLog.length < 200) P.gpuLog.push({ at: P.frames, kind: name, label: String((desc && desc.label) || "(none)").slice(0, 80), size: desc && desc.size }); } catch (_) { /* naming is best-effort */ }
+        return orig.apply(this, arguments);
+      };
+    };
+    wrap("createBindGroup", "bindGroups");
+    wrap("createBuffer", "buffers");
+  }
   let api = null; try { api = T.backendState().api; } catch (_) { /* older TLX */ }
   return "ok " + (api || (be.isWebGPUBackend ? "webgpu" : "webgl2"));
 }
@@ -70,13 +87,16 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   const warm = await page.evaluate(() => window.__bpp.count);
   const windows = [];
   for (let i = 1; i <= WINDOWS; i++) {
-    const c0 = await page.evaluate(() => window.__bpp.count);
+    const snap = () => page.evaluate(() => ({ p: window.__bpp.count, bg: window.__bpp.bindGroups, b: window.__bpp.buffers, g: window.__bpp.gpuLog.length }));
+    const c0 = await snap();
     await frames(page, WINDOW_FRAMES);
-    const c1 = await page.evaluate(() => window.__bpp.count);
-    windows.push({ window: i, pipelines: c1 - c0, built: await page.evaluate(([a, b]) => window.__bpp.log.slice(a, b), [c0, c1]) });
+    const c1 = await snap();
+    windows.push({ window: i, pipelines: c1.p - c0.p, built: await page.evaluate(([a, b]) => window.__bpp.log.slice(a, b), [c0.p, c1.p]),
+      bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
   }
   await gas(false);
-  const out = { hook, forceGL, warm, windows };
+  const gpuDevice = await page.evaluate(() => window.__bpp.gpuDevice);
+  const out = { hook, forceGL, warm, gpuDevice, windows };
   mkdirSync("artifacts/perf", { recursive: true });
   writeFileSync(`artifacts/perf/idle-pipeline-churn-${forceGL ? "gl" : "gpu"}.json`, JSON.stringify(out, null, 1));
   return out;

@@ -18,7 +18,7 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGPU: steady driving builds no render pipelines after warm-up", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  const { hook, warm, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
+  const { hook, warm, gpuDevice, windows } = await measureIdleWindows(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
@@ -27,4 +27,12 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
   const churn = windows.filter((w) => w.pipelines > 0);
   expect(churn.map((w) => ({ window: w.window, pipelines: w.pipelines, built: w.built.slice(0, 6) })),
     "idle windows that minted render pipelines (#3713: a pipeline released and built again while nothing changed)").toEqual([]);
+  // The twin (#4783): idle createBindGroup / createBuffer == 0 after warm, culprit labels logged. Only on a real
+  // GPUDevice; the WebGL2 fallback has none, so there the check would pass vacuously and is skipped.
+  if (gpuDevice) {
+    testInfo.annotations.push({ type: "gpu-churn", description: `per window bindGroups ${windows.map((w) => w.bindGroups).join(",")} buffers ${windows.map((w) => w.buffers).join(",")}` });
+    const gpuChurn = windows.filter((w) => w.bindGroups > 0 || w.buffers > 0);
+    expect(gpuChurn.map((w) => ({ window: w.window, bindGroups: w.bindGroups, buffers: w.buffers, built: w.gpuBuilt.slice(0, 6) })),
+      "idle windows that created bind groups or buffers after warm-up").toEqual([]);
+  }
 });
