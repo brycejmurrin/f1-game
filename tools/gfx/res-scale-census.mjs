@@ -44,7 +44,7 @@ async function main() {
   const rows = [], errors = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
-    await ctx.addInitScript((ls, webgpu) => {
+    await ctx.addInitScript(({ ls, webgpu }) => {
       window.__TEST_MODE = true;
       try {
         localStorage.setItem("apex26.gfxBackend", "three");
@@ -52,7 +52,7 @@ async function main() {
         localStorage.setItem("apex26.tyreWear", JSON.stringify("off"));
         for (const k of Object.keys(ls)) localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, ls[k]);
       } catch (_) { /* no storage: defaults */ }
-    }, o.ls, o.webgpu);
+    }, { ls: o.ls, webgpu: o.webgpu });
     await ctx.addInitScript(censusInitScript);
     await ctx.route("https://api.jolpi.ca/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
     await ctx.route("https://api.openf1.org/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
