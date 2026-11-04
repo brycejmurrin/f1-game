@@ -3414,6 +3414,7 @@ const G = {
   onPeerQuali: (...a) => qualiNet.onPeerQuali(...a),
   onPeerQualiLive: (...a) => qualiNet.onPeerQualiLive(...a),
   openQualiForNet: (...a) => qualiNet.openQualiForNet(...a),
+  leaveQualiSheet: () => { qualiSheet.close(); quali.clear(); session = "race"; qualiNet.resetOnBackWithAbort(); },
   refreshQualiGate: (...a) => qualiNet.refreshQualiGate(...a),
   // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
   // older peer's boolean meaningful: it only moves the rule across the
