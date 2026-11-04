@@ -132,7 +132,7 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
       expect(longTaskFailures(race.snap, base), "race-entry long tasks vs tools/perf/baselines/race-entry-swiftshader.json").toEqual([]);
     }
     if (race.snap.loafSupported) {
-      expect(loafUnlisted(race.snap, base.loafScriptAllow), "LoAF scripts outside the allow-list (a new one is a reviewed diff)").toEqual([]);
+      expect(loafUnlisted(race.snap, base.loafScriptAllow, base.loafMinScriptMs), "LoAF scripts outside the allow-list (a new one is a reviewed diff)").toEqual([]);
     }
 
     if (STRICT) {

@@ -74,6 +74,7 @@ export function loadBaseline(lane = glLane()) {
     baseline: l.baseline || { blockMs: null, maxBlockMs: null, longTaskCount: null },
     runs: l.runs || {},
     loafScriptAllow: f.loafScriptAllow,
+    loafMinScriptMs: f.loafMinScriptMs || 0,
   };
 }
 
@@ -88,9 +89,13 @@ export function longTaskFailures(snap, base) {
   return out;
 }
 
-/** Attributed LoAF script URLs that match no allow-list entry (substring). */
-export function loafUnlisted(snap, allow) {
+/** Attributed LoAF script URLs that match no allow-list entry (substring). Only scripts that ran >= minMs
+ *  in a frame count: incidental UI scripts (loading-screen, race-entry-profile, ...) come and go with timing
+ *  and never exceed ~50 ms, while every heavy one measured is >= 370 ms (#4777). */
+export function loafUnlisted(snap, allow, minMs = 0) {
   const seen = new Set();
-  for (const f of snap.loaf || []) for (const s of f.scripts) if (s.url && !allow.some((a) => s.url.includes(a))) seen.add(s.url);
+  for (const f of snap.loaf || []) for (const s of f.scripts) {
+    if (s.url && !(s.ms < minMs) && !allow.some((a) => s.url.includes(a))) seen.add(s.url);
+  }
   return [...seen].sort();
 }

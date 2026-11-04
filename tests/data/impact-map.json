@@ -2837,6 +2837,7 @@
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
@@ -11267,7 +11268,8 @@
       ],
       "*": [
         "tests/unit/flyby-intro.test.mjs",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/perf/render-rate.js": {
@@ -18509,6 +18511,9 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-race-entry.test.mjs"
       ]
     },
     "js/ui/look-avail.js": {

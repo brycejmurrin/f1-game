@@ -50,3 +50,16 @@ test("baseline is per GL lane: llvmpipe records only, an unknown lane records on
   assert.deepEqual([...longTaskFailures(huge, loadBaseline("somegl"))], []);
   assert.equal(longTaskFailures(huge, loadBaseline("swiftshader")).length, 3);
 });
+
+test("loafUnlisted ignores incidental scripts below the minimum duration but flags heavy unlisted ones (#4777)", () => {
+  const base = loadBaseline("swiftshader");
+  assert.equal(base.loafMinScriptMs, 100);
+  const snap = { loaf: [{ scripts: [
+    { url: "https://x/js/ui/loading-screen.js?v=dev", ms: 5.5 },
+    { url: "https://x/js/perf/race-entry-profile.js?v=dev", ms: 48.9 },
+    { url: "https://x/js/new/heavy.js?v=dev", ms: 250 },
+    { url: "https://x/js/car/car-draw.js?v=dev", ms: 2000 },
+  ] }] };
+  assert.deepEqual([...loafUnlisted(snap, base.loafScriptAllow, base.loafMinScriptMs)], ["https://x/js/new/heavy.js?v=dev"]);
+  assert.equal(loafUnlisted(snap, base.loafScriptAllow, 0).length, 3);
+});
