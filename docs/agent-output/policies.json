@@ -2451,6 +2451,11 @@
       "presentation": "native",
       "preserve": "@c8"
     },
+    "tools/perf/trace-census.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
     "tools/perf/vm-alloc-census.mjs": {
       "action": "keep-native",
       "presentation": "native",

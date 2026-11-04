@@ -1269,6 +1269,7 @@
         "test:perf-idle-churn",
         "test:perf-race-entry",
         "test:perf-session",
+        "test:perf-trace-census",
         "test:phone-recorder",
         "test:physics-core",
         "test:render",
@@ -3467,6 +3468,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/perf/trace-census.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/perf/vm-alloc-census.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -4631,6 +4637,10 @@
     {
       "name": "test:perf-session",
       "command": "node tools/ci/run-playwright.mjs tests/specs/perf-session-budgets.spec.js"
+    },
+    {
+      "name": "test:perf-trace-census",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/perf-trace-census.spec.js"
     },
     {
       "name": "test:phone-recorder",

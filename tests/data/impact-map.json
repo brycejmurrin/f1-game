@@ -18323,7 +18323,8 @@
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/tooling-fast-runner.test.mjs"
+        "tests/unit/tooling-fast-runner.test.mjs",
+        "tests/unit/trace-census.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {

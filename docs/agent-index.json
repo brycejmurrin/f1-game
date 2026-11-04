@@ -1382,6 +1382,15 @@
       "twinned": false
     },
     {
+      "id": "perf-trace-census",
+      "script": "test:perf-trace-census",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-trace-census.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "phone-recorder",
       "script": "test:phone-recorder",
       "kind": "browser",
