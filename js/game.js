@@ -6542,7 +6542,7 @@ function retireCar(c, reason) {
   // smears the car across the track from wherever it was a step ago.
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
   c.rPrevHead = c.head; c.rPrevYawVis = 0;
-  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0; c.skidIntensity = 0;   // a stale slip keeps the screech loop on
+  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0; c.skidIntensity = 0; c.exhaustPop = 0; c.brakeHeat = 0; c.wasOnThrottle = false;   // a stale slip keeps the screech loop on
   c.gear = 1; c.rpm = IDLE_RPM;
   c.boostOn = false; c.deploying = false; OvertakeMode.reset(c); pits.clearArm(c);   // PitLane.update skips a retirement, so a car dead in the lane / box kept its crew, jacks and lifted body until the flag
   // The broadcast call. Every retirement is announced, not only the player's:
@@ -7868,7 +7868,7 @@ function render(dt) {
       }
       if (_out) continue;
     }
-    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2));   // visible cars only; rivals cast into the maps within 50 m
+    if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2, c));   // visible cars only; rivals cast into the maps within 50 m
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the same yawVis as the body
     // (heading vs road tangent) so the nose rotates when the car does. Pitch,
@@ -8029,7 +8029,7 @@ function render(dt) {
       const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
       const aSt = teamDecalState(c.team, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
       drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero, null,
-        !c.isPlayer && fdx * fdx + fdy * fdy + fdz * fdz >= FieldLod.flapsM() ** 2);
+        !c.isPlayer && !FieldLod.flapsNear(fdx * fdx + fdy * fdy + fdz * fdz, c));
     }
     // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
     // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,
@@ -8090,7 +8090,7 @@ function render(dt) {
     }
     // The player's ERS strip and every car's throttle-lift after-fire (rivals
     // within 60 m, FieldLod): js/car/car-draw.js drawExhaustFx.
-    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2));
+    carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2, c));
   }
   CarMesh.flushTailGlows();   // the night tail glows queued above, one run (TLX instances it; hunt 2 F3)
   // Flush all accumulated car decals in one decal-program block — not

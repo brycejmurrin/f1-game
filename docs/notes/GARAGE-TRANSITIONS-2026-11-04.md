@@ -85,3 +85,34 @@ Now:
   in already-resident files (boot budget).
 - Not run: browser evidence (CI shard). Open for Bryce: whether the show should also open the garage MENU after it
   (today it hands straight to the results; GARAGE stays reachable from MENU).
+
+## Slice C — race start, garage → track (#4745 moment 1)
+
+Inventory (read from the tree at 1f3a0e9b):
+- `game.js studioOpen` plays `setupCam.startDriveOut` (`GarageArrival.poseOut`, tuner moment `start`) while the circuit
+  builds. `studioDone` holds the empty-lane shot until the build is done, then cuts to the opening flyby
+  (`FlybySeq.DEFAULT`: wide, landmarks, turns, then the `grid*` shots that end among the front rows).
+- The bay is bay-local (metres, car at origin) and never touches `player`/physics; the flyby is broadcast-only, so
+  the physics contract holds by construction. Nothing between the bay door and the first flyby shot shows the pit lane
+  or the car reaching its grid box: that is the gap.
+
+Options for the missing beat (design-heavy; framing and length are Bryce's call, no browser available to an agent):
+1. **Leave as is** (bay show → flyby → grid). Zero risk, no new code.
+2. **Pit-exit flyby shot** (recommended): one extra data-only shot at the head of `FlybySeq.DEFAULT` anchored at the pit
+   exit (`at: "start"`/`"slot"`), the player's model rolling pit exit → grid box on the existing menu-field mover, ~2 s,
+   tap-skippable with the flyby. Lazy, no boot-path code.
+3. **Continuous run**: stream the track scene into the bay show so the car drives door → lane → box in one take.
+   Highest cost (scene must be built before the show; collides with the build-while-animating design).
+
+Decision: Bryce picked **option 2** (`decision: 2`, PR #4908, 2026-11-04 ~22:01Z).
+
+Shipped (option 2):
+- `FlybySeq.DEFAULT` opens on a new `pit-exit` shot (7 % of the flyby, ~2 s at the usual length; the other opening
+  shots gave up 7 % between them). New anchor `{ at: "pitexit", off, x, y }` = `track.pit.sOut` (the line when a
+  circuit has no pit complex). Registered in `AT_KINDS` (flyby-seq, flyby-panel, bake-flyby) and the panel's POSE_FIELDS.
+- `rollHero` (shot flag `roll: "pitexit"`) drives the player's MENU model along the pit-lane centre from 30 m before
+  the exit line to 28 m past it at 22 m/s; the next shot's `restoreHero()` puts it back on its grid box. Broadcast-only:
+  the menu field is scenery, no player physics runs and no control exists (`docs/PHYSICS.md`).
+- The flyby is skipped with the existing tap/skip; `shotAt(0)` is now `pit-exit` (test updated).
+- Not run: browser evidence (camera framing is an eyes-on call for Bryce; the eye is 34→20 m behind the exit line at
+  1.5→1.3 m, fov 44→38, look 6→26 m past it). Tune the numbers in the shot, not the code.

@@ -1,5 +1,28 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-04 — PR #4764 (cursor/lazy-coach-export-backup-a1): career-backup moves to LAZY_CAREER_UI (#4748)
+
+`(tree) raceEntryBytes` 2075000 → **2111780** (+36780). Deliberate raise past the 40-line
+absorb. This is accounting, not growth: `js/career/career-backup.js` (1069 lines) left the
+eager base roster for the LAZY_CAREER_UI bundle, which a race entry already loads (the
+career bundle is kicked at boot), so its bytes now count on the race-entry path while
+`eagerGzip` falls by 6000 (the same PR lowers that ceiling). The title screen no longer
+evaluates it. The race-entry golden list gains the file. Fragment delta:
+`ratchets.d/cursor--lazy-coach-export-backup-a1.json`.
+
+Update after the merge with the tip (d351064a): the fragment's raceEntryBytes delta is
+**+40410**, not +36780. The career-backup move itself is the 36780 B above; the other
++3630 B is a catch-up of ceilings that PRs already merged into the deploy branch left
+behind (measured on the merge ref: 2115408 B vs ceiling 2114000 with the first fragment).
+No file in this PR grew by that amount.
+
+Update after the tip sync that also moved WatchTransport into LAZY_RACE_SESSION
+(4d953007 / merge into this PR): raceEntryBytes fragment delta **+54163** (measured
+2129163 on the merge tree; tip's watch-transport race-entry bytes are the catch-up
+above the prior +40410). eagerGzip fragment delta **−15640** (gzip-9 of
+career-backup.js) so the LOOSE slack from the deeper eager cut clears; never raise
+an eager ceiling. assertPinsAll fragment +1 covers career-ui-lazy.test.mjs pins on the merge tree. After the 2026-11-05 tip sync (behind cleared for land MB=2), eagerGzip fragment deepened to **−15666** (26 B tip slack catch-up; never raise).
+
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
