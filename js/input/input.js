@@ -333,7 +333,8 @@ const Input = (function () {
      (A phone controller's roll and a detached sensor keep the immediate zero.) */
   let calibPending = false;
   function calibrate() {
-    if (gyroAttached && !localTiltFresh() && !remoteSteers()) { calibPending = true; return; }
+    // A phone on TOUCH STRIP sends a stick and no roll: tiltRaw is the lean from before the switch (#5026).
+    if ((gyroAttached && !localTiltFresh() && !remoteSteers()) || (remStick && remoteActive())) { calibPending = true; return; }
     calibPending = false;
     tiltZero = tiltRaw;
     oePrev = tiltRaw; oeDPrev = 0; oeInit = true;
@@ -366,6 +367,8 @@ const Input = (function () {
   function remoteDrivingBlocked() {
     return !!axisCaptureCb || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen());
   }
+  // Label from the OWNER, not the payload shape: a phone on TOUCH STRIP sends a stick too (#5026).
+  function remoteSourceKind() { return remStick && remoteOwner !== "phone" ? "controller" : "phone"; }
   function remoteSample(s) {
     if (!s) return false;
     const owner = typeof s.source === "string" ? s.source.slice(0, 32) : "remote";
@@ -396,6 +399,7 @@ const Input = (function () {
       lastOrientMs = n;
       tiltSmoothed = oneEuro(tiltRaw, odt);
       tiltSeen = tiltRemote = true;
+      if (calibPending) calibrate();
     }
     remThr = clamp(+s.thr || 0, 0, 1);
     remBrk = clamp(+s.brk || 0, 0, 1);
@@ -403,7 +407,7 @@ const Input = (function () {
     remoteMs = n;
     if (!remoteDrivingBlocked() && (remThr > REMOTE_PEDAL_ON || remBrk > REMOTE_PEDAL_ON || remHeld ||
       (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
-      noteInputSource(remStick ? "controller" : "phone");
+      noteInputSource(remoteSourceKind());
     }
     return true;
   }
@@ -436,7 +440,7 @@ const Input = (function () {
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
-    if (!menuEdge) noteInputSource(remStick ? "controller" : "phone");
+    if (!menuEdge) noteInputSource(remoteSourceKind());
     fn();
     return true;
   }
@@ -1832,10 +1836,10 @@ const Input = (function () {
     // #overlay (gate:false) so the pad can walk the doors — that must not
     // mute the on-screen GAS / drag wheel on a freshly loaded page (steering
     // latch + touch-pedals specs). Do not clear the finger — the hold should
-    // still be there when the menu closes. Keyboard, tilt and the pad are
-    // unchanged.
+    // still be there when the menu closes. Tilt is gated the same way (#5026); the
+    // keyboard is gated in onKey and the pad zeroes itself above.
     if (steerMode === "buttons") return navBlocksTouch() ? 0 : buttonSteering();
-    if (tiltActive()) return analogShape(tiltSteering(), "tilt");
+    if (tiltActive()) return navBlocksTouch() ? 0 : analogShape(tiltSteering(), "tilt");
     return navBlocksTouch() ? 0 : analogShape(touchSteering(), "touch");
   }
 
@@ -2175,8 +2179,8 @@ const Input = (function () {
     // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
     _viewLong = 0;
     // An orientationchange can arrive with no pointerup/pointercancel for a held HUD button;
-    // release them like blur does (true also drops a THROTTLE=LATCH) so RESUME never inherits GAS.
-    holdReleaseAll(true);
+    // release them like blur does, dropping a THROTTLE=LATCH too (no keepLatch), so RESUME never inherits GAS (#5019).
+    holdReleaseAll();
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
@@ -2306,11 +2310,11 @@ const Input = (function () {
     wireHold("btn-steer-left", function (v) {
       if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
       btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
-    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1 });
+    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1, handoff: "btn-steer-right" });
     wireHold("btn-steer-right", function (v) {
       if (v && !btnSteerRight) btnSteerRightSeq = ++btnSteerSeq;
       btnSteerRight = v; if (!v) btnSteerRightVal = 0;
-    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1 });
+    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1, handoff: "btn-steer-left" });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
@@ -2371,6 +2375,8 @@ const Input = (function () {
       if (!still) { _padLostAt = nowMs(); _padNextProbeMs = 0; } else { _padLostAt = 0; _padNextProbeMs = 0; }
       padConnected = still; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
+      // A TOGGLE armed on the pad that left must not re-arm from the one still connected (#5028).
+      padThrottleToggle = padLookBackToggle = false;
       padSteerAnalog = false; padLookBack = false;
       lookStickX = 0; lookStickY = 0;
       padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;

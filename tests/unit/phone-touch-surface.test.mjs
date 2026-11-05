@@ -433,10 +433,10 @@ test("pedals are squircles, portrait left-hand swaps columns, the race hides the
     "the right arrow is the outer one; the left arrow keeps the inboard slot");
   const tablet = rulesFor(ov, ":root").find((r) => r.decls.get("--btn") === "var(--touch-tablet-btn)"
     && r.context.some((c) => /min-width:\s*744px/.test(c)));
-  assert.ok(tablet, "a portrait tablet grows the fixed ladder; phones stay on 76px");
+  assert.ok(tablet, "a portrait tablet grows the fixed ladder; phones scale 76px by BUTTON SIZE (#5061)");
   const clear = ruleFor(ov, "body.steer-buttons .hud-bottom", "bottom",
-    { context: /min-width:\s*744px/ });
-  assert.ok(clear, "the cluster clearance grows with the tablet pedals");
+    { context: /orientation:\s*portrait/ });
+  assert.ok(clear, "the cluster clearance grows with the tablet pedals and the scaled phone ladder (one portrait rule)");
   assert.match(clear.decls.get("bottom"), /var\(--btn\)/);
   assert.match(clear.decls.get("bottom"), /\/ var\(--hud-z\)/);
   const plate = rulesFor(ov, /#grp-steer/).find((r) => r.decls.has("background")
@@ -818,4 +818,19 @@ test("--tap-hud never reaches --ui-scale; [data-look-*-btn] --tap/--chip-h carry
     assert.match(l, /--tap:\s*max\(var\(--tap-min\),/, `--tap floored: ${l.trim().slice(0, 60)}`);
     assert.match(l, /--chip-h:\s*max\(var\(--tap-min\),/, `--chip-h floored: ${l.trim().slice(0, 60)}`);
   }
+});
+
+test("BUTTON SIZE reaches a portrait phone race: the ladder itself scales, capped to fit 390px (#5061)", () => {
+  const rules = rulesFor(css("css/touch-controls.css"), /^:root$/)
+    .filter((r) => r.context.some((c) => /orientation: portrait/.test(c) && /max-width: 743px/.test(c)));
+  assert.equal(rules.length, 1, "one portrait-phone :root rule scales the ladder");
+  const CAP = 1.35;
+  for (const [p, base] of [["--btn", 76], ["--steer", 84]])
+    assert.equal(rules[0].decls.get(p), `calc(${base}px * clamp(0.58, var(--hud-btn-scale, 1), ${CAP}))`, `${p} consumes BUTTON SIZE in portrait`);
+  const cap = CAP;
+  assert.ok(16 + 2 * 84 * cap + 12 + 76 * cap + 16 <= 390, "two arrows and the GAS column fit a 390px-wide phone at the cap");
+  const clear = rulesFor(css("css/touch-controls.css"), /^body\.steer-buttons \.hud-bottom$/)
+    .find((r) => r.context.at(-1) === "@media (orientation: portrait)");
+  assert.ok(clear, "the portrait .hud-bottom clearance rule");
+  assert.equal(clear.decls.get("bottom"), "calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z))", "the readout clearance grows with the scaled GAS button");
 });

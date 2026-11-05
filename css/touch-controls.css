@@ -20,9 +20,9 @@
    home indicator. The controls that actually need to grow live in `.dock`,
    which is a static flex child with no anchors of its own; that gets `zoom`
    further down, which scales its --tap/--hold AND its hard-coded button labels
-   in one declaration. This ladder is what the portrait/desktop fallback uses,
-   and portrait racing is blocked outright (#rotate-device), so it is rarely on
-   screen during a race at all. */
+   in one declaration. This ladder is what the portrait/desktop fallback uses:
+   a portrait phone races on it after RACE IN PORTRAIT on the rotate gate, and
+   BUTTON SIZE scales it there (the portrait block below the ladder). */
 :root {
   --btn: 76px;                                        /* action button diameter */
   /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
@@ -333,8 +333,8 @@ body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab));
    landscape failure. It was read that way once, and the whole diagnosis it
    produced was wrong; the real landscape budget is the sum in the buttons-mode
    block at the bottom of this file. In portrait 428px fits with 239px to spare
-   on the shortest screen the suite tests, and racing in portrait is blocked
-   outright (#rotate-device) besides. */
+   on the shortest screen the suite tests (at BUTTON SIZE 100%; the portrait
+   cap of 1.35 keeps it inside 844px). */
 /* POSITION ONLY, NEVER A FILL. `body.steer-buttons #btn-throttle` is (1,1,1)
    and `#btn-throttle:active` is (1,1,0), so a background restated here beats
    the pressed colour and the pedal stops lighting up under the thumb — in
@@ -351,12 +351,24 @@ body.steer-buttons #btn-aero     { left: auto; right: calc(16px + var(--sar)); b
 body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 
 /* In PORTRAIT button mode the steering arrows are bottom-left; the HUD bottom
-   stays clear of the right-side GAS button (bottom+16 + 84 px tall). */
+   stays clear of the right-side GAS button (16 + --btn + 20; 112px at 76). */
 @media (orientation: portrait) {
   /* DIVIDED BY --hud-z: .hud-bottom rides `zoom: var(--hud-z)` (css/hud.css), so
      a bare inset here was multiplied by HUD SIZE — 21px of home indicator
      counted as 42 at 200%. Same compensation as every anchor in the zoom list. */
-  body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab) / var(--hud-z)); }
+  body.steer-buttons .hud-bottom { bottom: calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z)); }
+}
+/* BUTTON SIZE IN A PORTRAIT RACE (RACE IN PORTRAIT on the rotate gate, #5061).
+   The dock zoom that reads --hud-btn-scale lives in the landscape block, so a
+   portrait phone painted the fixed 76px ladder at every setting. Scale the
+   ladder itself. 1.35 is the width cap: two arrows (16 + 2 x 84s + 12) and the
+   GAS column (76s + 16) side by side fit a 390px-wide phone; 0.58 keeps a 44px
+   tap. Tablets (>= 744px) keep their own ladder below. */
+@media (orientation: portrait) and (max-width: 743px) {
+  :root {
+    --btn: calc(76px * clamp(0.58, var(--hud-btn-scale, 1), 1.35));
+    --steer: calc(84px * clamp(0.58, var(--hud-btn-scale, 1), 1.35));
+  }
 }
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
@@ -791,15 +803,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    (max-width 743px). A tablet is wide enough to race, and the 76px phone
    ladder looks lost on an 820px slab. 96px still leaves the five-high
    buttons column under half the 1180px height. The cluster's clearance
-   was a literal 112 (16 + 76 + 20); it has to grow with --btn or GAS
-   meets the readout. The safe-area term stays divided by --hud-z. */
+   grows with --btn through the portrait .hud-bottom rule above. */
 @media (orientation: portrait) and (min-width: 744px) {
   :root {
     --btn: var(--touch-tablet-btn);
     --steer: var(--touch-tablet-steer);
-  }
-  body.steer-buttons .hud-bottom {
-    bottom: calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z));
   }
   .touchbtn { font-size: max(16px, var(--touch-label-floor)); }
   .steerbtn { font-size: 32px; }
