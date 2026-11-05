@@ -681,12 +681,13 @@ const Collide = (() => {
           const fx = firstPairFx(a, b);
           if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
-          if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+          const sim = fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired;
+          if (sim && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           // Incident sim (R3/C3 + C1): a hard closing contact queues a
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
+          if (sim) incidentSim.notifyCar(a, b, relV);
         }
       }
     }

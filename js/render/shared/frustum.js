@@ -102,12 +102,9 @@ const Frustum = (function () {
     return p;
   }
 
-  // Shader motion the rest-pose box does not contain, in world metres.
-  // FLAG cloth (glsl-lit.js) is at most 0.13 m along the normal. FOLIAGE sway
-  // at the WIND knob's max of 3 is bend 1.25 * amp 0.96 = 1.2 m downwind, plus
-  // 0.15 m of flutter per unit of instance scale (js/lighting/knobs.js). 2 m
-  // covers that through scale ~5. The box is then clamped to the origin sphere,
-  // so a cell never grows past the sphere the three backends used to share.
+  // Shader motion (metres) the rest-pose box lacks: FLAG cloth <= 0.13 m; FOLIAGE
+  // sway at WIND 3 is 1.2 m plus 0.15 m flutter per instance scale (knobs.js), so 2 m
+  // covers scale ~5. Clamped to the origin sphere, so no cell outgrows it.
   const MOTION_PAD = 2;
 
   // Bucket instanced-batch instances into cellSize XZ cells. The cell KEY and
@@ -173,6 +170,6 @@ const Frustum = (function () {
 
   // FOG_CULL_FD stays local — radialCulled is the shared API; the constant is
   // an implementation detail of the fog-wall radius (dens > 0 → r = 3 / dens).
-  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, sceneryCullDist, PHONE_CULL_M, bucketInstances };
+  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, sceneryCullDist, MOTION_PAD, PHONE_CULL_M, bucketInstances };
 })();
 Object.freeze(Frustum);
