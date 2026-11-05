@@ -70,14 +70,21 @@ const readList = (rel) => fs.existsSync(path.join(ROOT, rel)) ? JSON.parse(read(
  * The filename's date, else the OLDEST commit date the clone holds for the note
  * (a shallow clone bottoms out at its boundary commit, which only makes an old
  * note look younger, never older). The last commit would re-date a note on every
- * link repoint. A tracked note with no filename date and no log hit (typical on
- * depth-1 checkouts) is dated 1970-01-01 so Kind enforcement does not treat the
- * whole grandfathered tree as "new". Only untracked paths fall through to today.
+ * link repoint. On a shallow clone, batched `git log -- docs/notes` re-dates
+ * undated files at the boundary commit, so git dates are ignored there; a tracked
+ * note with no filename date and no full-clone log hit is dated 1970-01-01 so Kind
+ * enforcement does not treat the grandfathered tree as "new". Only untracked paths
+ * fall through to today.
  */
 export function dateOf(rel) {
   const m = /(\d{4}-\d{2}-\d{2})/.exec(path.basename(rel));
   if (m) return m[1];
-  const fromGit = gitDates().get(rel);
+  let fromGit;
+  try {
+    if (git(["rev-parse", "--is-shallow-repository"], { stdio: "pipe" }).trim() !== "true") {
+      fromGit = gitDates().get(rel);
+    }
+  } catch { /* no git */ }
   if (fromGit) return fromGit;
   try {
     git(["ls-files", "--error-unmatch", "--", rel], { stdio: "pipe" });
