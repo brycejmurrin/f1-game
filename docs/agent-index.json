@@ -2493,7 +2493,7 @@
     {
       "path": "js/career/career-backup.js",
       "global": "CareerBackup",
-      "roster": "tag"
+      "roster": "LAZY_CAREER_UI"
     },
     {
       "path": "js/career/career-planning-ui.js",
@@ -5053,7 +5053,7 @@
     {
       "path": "js/ui/watch-transport.js",
       "global": "WatchTransport",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",
