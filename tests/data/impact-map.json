@@ -12803,6 +12803,7 @@
         "tests/unit/race-ceremony.test.mjs"
       ],
       "reset": [
+        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "resetLive": [
@@ -15300,7 +15301,8 @@
       ],
       "*": [
         "tests/unit/build-worker.test.mjs",
-        "tests/unit/deploy-tool.test.mjs"
+        "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
     "js/render/shared/gltf.js": {
@@ -15549,7 +15551,11 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cull": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
+      ],
+      "cullMirror": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "free": [
         "tests/unit/build-worker.test.mjs",
@@ -17637,6 +17643,7 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "*": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -18470,6 +18477,7 @@
     },
     "js/ui/layout-presets.js": {
       "apply": [
+        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/layout-presets.test.mjs"
       ],
       "current": [
@@ -18480,6 +18488,15 @@
       ],
       "mount": [
         "tests/unit/layout-presets.test.mjs"
+      ],
+      "normalizeShapes": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
+      "restore": [
+        "tests/unit/appearance-shapes.test.mjs"
+      ],
+      "setShapeSplit": [
+        "tests/unit/appearance-shapes.test.mjs"
       ],
       "snapshot": [
         "tests/unit/layout-presets.test.mjs"
@@ -19301,6 +19318,9 @@
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "presets": [
+        "tests/unit/player-tools-ui.test.mjs"
+      ],
       "show": [
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -19599,6 +19619,7 @@
     },
     "js/ui/watch-transport.js": {
       "create": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
@@ -19609,6 +19630,7 @@
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
       "start": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
       ],

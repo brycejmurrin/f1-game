@@ -73,6 +73,7 @@
     "js/track/scenery/themes.js",
     "js/track/scenery/venue.js",
     "js/ui/podium-beat.js",
-    "js/ui/results-sheet.js"
+    "js/ui/results-sheet.js",
+    "js/ui/watch-transport.js"
   ]
 }

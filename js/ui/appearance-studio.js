@@ -262,6 +262,13 @@ const AppearanceStudio = (function () {
     setScene("photo"); sceneChanged(true);
     ui.photoNote.textContent = row.title + " chosen as your menu background.";
   }
+  // PER-ORIENTATION (#4529): the swap is lazy LayoutPresets.syncShape, loaded on a rotation or a stale boot shape.
+  const shapeNow = () => (typeof document != "undefined" && document.body && document.body.getAttribute("data-shape") == "tall" ? "tall" : "wide");
+  let shapeAt = shapeNow();
+  function orient(was) {
+    const run = () => typeof LayoutPresets !== "undefined" && LayoutPresets.syncShape(was);
+    if (!run() && typeof SettingsNav !== "undefined" && SettingsNav.presets) SettingsNav.presets().then(run);
+  }
   function initUI() {
     if (ui || typeof document === "undefined") return;
     const panel = document.getElementById("pm-panel-appearance"); if (!panel) return;
@@ -354,6 +361,13 @@ const AppearanceStudio = (function () {
       { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
     ]);
   }
+  try {
+    const sv = store.get("appearanceShapes", null);
+    if (isObject(sv) && sv.split !== false && sv.live && sv.live != shapeAt) Promise.resolve(sv.live).then(orient);
+    if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body)
+      new MutationObserver(() => { const was = shapeAt; shapeAt = shapeNow(); if (was !== shapeAt) orient(was); })
+        .observe(document.body, { attributes: true, attributeFilter: ["data-shape"] });
+  } catch (e) { Log.warn("ui", "orientation: " + e.message); }
   // Same readyState rule as SettingsExport.mount: deferred scripts run at
   // "interactive", after DOMContentLoaded would already have missed a late listen.
   if (typeof document !== "undefined") {
@@ -361,5 +375,5 @@ const AppearanceStudio = (function () {
     else initUI();
   }
   return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
-    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
+    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, shapeNow, attach, setPreviewFrame, notify: say, initUI });
 })();

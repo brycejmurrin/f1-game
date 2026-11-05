@@ -1,7 +1,7 @@
 {
   "tree": {
     "assertPins": 1,
-    "eagerGzip": -8040,
-    "raceEntryBytes": 42647
+    "eagerGzip": -15640,
+    "raceEntryBytes": 54163
   }
 }
