@@ -132,8 +132,7 @@ const GarageCameraOptions = (function () {
     return ax > BAY.jambX - BAY.jambClear && ax < BAY.jambX + BAY.jambClear;
   }
 
-  // PER MOMENT (#4745: GarageArrival MOMENTS): each of the four moments may pick its own bay camera and
-  // STAY INSIDE; an untouched moment uses ENTRY (pit in, race end) or EXIT (race start, pit out).
+  // PER MOMENT (#4745): a moment's own BAY CAMERA + STAY INSIDE, else ENTRY (pitIn, home) / EXIT (start, pitOut).
   const MOMENT_IDS = Object.freeze(["start", "pitIn", "pitOut", "home"]);
   const MOMENT_EXIT = Object.freeze({ start: true, pitOut: true });
   function settings(value) {
@@ -447,19 +446,16 @@ const GarageCameraOptions = (function () {
 
   // ---- UI (injected: index.html is shrink-only) ----
   let _bound = false, _paint = null;
-  /** COPY TO ALL MOMENTS: every moment takes `from`'s BAY CAMERA and STAY INSIDE. */
+  // COPY TO ALL: each moment takes `from`'s BAY CAMERA + STAY INSIDE. RESET: `m` follows ENTRY / EXIT again.
   function copyMoment(store, from) {
-    const cur = read(store), v = forMoment(cur, MOMENT_IDS.includes(from) ? from : "start"), ms = {};
-    for (const m of MOMENT_IDS) ms[m] = { shot: v.shot, stayInside: v.stayInside };
-    return write(store, Object.assign({}, cur, { moments: ms }));
+    const cur = read(store), v = forMoment(cur, MOMENT_IDS.includes(from) ? from : "start"), moments = {};
+    for (const m of MOMENT_IDS) moments[m] = { shot: v.shot, stayInside: v.stayInside };
+    return write(store, Object.assign(cur, { moments }));
   }
-  /** RESET: moment `m` drops its own pick and follows the shared ENTRY / EXIT one again. */
   function resetMoment(store, m) {
-    const cur = read(store), ms = Object.assign({}, cur.moments || {});
-    delete ms[m];
-    const next = Object.assign({}, cur, { moments: ms });
-    if (!Object.keys(ms).length) delete next.moments;
-    return write(store, next);
+    const cur = read(store);
+    if (cur.moments) delete cur.moments[m];
+    return write(store, cur); // settings() drops an empty `moments`
   }
   function bindUi($, store, hooks) {
     if (_bound || typeof document === "undefined" || !$) return false;
@@ -550,9 +546,7 @@ const GarageCameraOptions = (function () {
       stay.onchange = () => saveMoment({ stayInside: stay.checked });
     }
 
-    // DIRECTOR · THREE CAMERAS truncates to "DIRECTOR - THRE" at the 12rem select
-    // width; shorten the option text (arrival.js still owns ANGLE_TEXT) and CSS
-    // widens the row so the full short label stays visible.
+    // The full DIRECTOR label truncates in the 12rem select: shorten it (arrival.js owns ANGLE_TEXT).
     const angleSel = $("ga-angle");
     if (angleSel) {
       for (const o of angleSel.options || []) {
