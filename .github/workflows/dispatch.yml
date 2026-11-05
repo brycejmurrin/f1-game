@@ -8,7 +8,7 @@ permissions:
 jobs:
   dispatch:
     name: Implementation-agent launch retired
-    if: ${{ false }}
+    if: ${{ false }} # zizmor: ignore[obfuscation] User-retired implementation-agent launcher must remain unconditionally inert in every mode.
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:

@@ -45,7 +45,7 @@ on:
         default: "bot/model-import"
 
 permissions:
-  contents: write
+  contents: read
 
 # One import per branch at a time, and never cancelled: this job PUSHES a bot
 # branch, and two runs racing on the same `commit_branch` would each try to
@@ -59,6 +59,8 @@ concurrency:
 
 jobs:
   import:
+    permissions:
+      contents: write
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     # Every job carries a cap (tests/unit/ci-coverage.test.mjs); generous, it

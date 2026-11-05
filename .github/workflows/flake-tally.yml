@@ -42,7 +42,6 @@ on:
 permissions:
   contents: read
   actions: read
-  issues: write
 
 concurrency:
   group: flake-tally${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
@@ -50,6 +49,10 @@ concurrency:
 
 jobs:
   tally:
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20

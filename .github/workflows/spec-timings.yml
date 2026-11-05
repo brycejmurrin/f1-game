@@ -58,7 +58,7 @@ on:
 
 # Read the triggering run's artifacts; write only the side branch below.
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 # One merge at a time: two runs racing would both read the same committed file
@@ -76,6 +76,9 @@ env:
 
 jobs:
   merge:
+    permissions:
+      contents: write
+      actions: read
     name: Merge junit durations into the rolling record
     runs-on: ubuntu-latest
     timeout-minutes: 10

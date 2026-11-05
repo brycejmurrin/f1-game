@@ -1,11 +1,11 @@
 name: Actions coordinator
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] Protected workflow_sha checkout only; PR source is read as planning data, never executed by this privileged controller.
     branches: [claude/f1-game-project-26h3ng]
     types: [opened, synchronize, reopened, closed, ready_for_review, converted_to_draft, edited, labeled, unlabeled]
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers] Exact authorized PR/control commands are parsed as data by protected code; comment text is never interpolated into a shell.
     types: [created]
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] Protected controller validates canonical run/attempt/lease and receipt identities; downloaded evidence is data, never executable code.
     workflows: [Actions test executors, CI, Deploy to GitHub Pages]
     types: [completed]
   schedule:

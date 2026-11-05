@@ -7,6 +7,7 @@
 // Run: node --test tests/unit/ci-guard-tools.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
+import { parse } from "yaml";
 import { decide, prNumberOf } from "../../tools/ci/ci-rerun.mjs";
 
 const run = (o = {}) => ({ id: 1, status: "completed", conclusion: "failure", event: "pull_request", head_sha: "aaaa1111", run_attempt: 1, pull_requests: [{ number: 7 }], ...o });
@@ -54,15 +55,22 @@ test("ci-cancel-on-close.yml joins ci.yml's PR concurrency group exactly", async
     assert.match(wf, new RegExp(`\\b${st}\\b`), `straggler sweep covers live status ${st}`);
 });
 
-// B3 (2026-11-03): Dispatch also fires on `pull_request: closed`; the straggler sweep cancelled that very cycle.
-test("ci-cancel-on-close.yml never cancels the Dispatch run its own close started", async () => {
+// Dispatch is retired; retain the exclusion for legacy stragglers without launching new coding agents.
+test("Dispatch stays inert and the close canceller preserves legacy Dispatch stragglers", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const wf = fs.readFileSync(path.join(root, ".github/workflows/ci-cancel-on-close.yml"), "utf8");
   const dispatch = fs.readFileSync(path.join(root, ".github/workflows/dispatch.yml"), "utf8");
-  assert.match(dispatch, /pull_request:\s*\n\s*types: \[[^\]]*\bclosed\b/, "dispatch.yml still fires on a PR close (else this pin is moot)");
+  const retired = parse(dispatch);
+  assert.deepEqual(Object.keys(retired.on), ['workflow_dispatch'], 'Dispatch has no automatic event triggers');
+  assert.deepEqual(retired.permissions, { contents: 'read' }, 'retired Dispatch has no write permissions');
+  assert.deepEqual(Object.keys(retired.jobs), ['dispatch']);
+  assert.equal(retired.jobs.dispatch.if, '${{ false }}', 'even a manual dispatch cannot acquire a runner');
+  assert.deepEqual(retired.jobs.dispatch.steps,
+    [{ run: "echo 'This workflow is retired; only PR test executors are managed.'" }],
+    'the inert compatibility entrypoint contains only a notice, with no checkout, API, network or launcher I/O');
   assert.match(wf, /select\(\.path \| startswith\("\.github\/workflows\/dispatch\.yml"\) \| not\)/);
 });
 

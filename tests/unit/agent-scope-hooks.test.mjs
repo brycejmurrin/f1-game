@@ -151,7 +151,7 @@ test("mcp-browser-guard.sh: a subagent never drives a browser; the main session 
   } finally { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } fs.rmSync(bin, { recursive: true, force: true }); }
 });
 
-test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/train dispatch, ask a close and a hold drop, allow the rest", () => {
+test("github-mcp-guard.sh: deny protected mutations, preserve queue pauses, and fail closed on unknown labels", () => {
   const gh = (tool_name, tool_input, env = {}) => {
     const r = sh(".claude/hooks/github-mcp-guard.sh", { tool_name, tool_input }, env);
     if (r.status === 2) return "exit2";
@@ -171,13 +171,21 @@ test("github-mcp-guard.sh: the table — deny merges/arms/writes/cancels/reruns/
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "allow", "the ready flip is the Plan gate's and CI's");
   assert.equal(gh("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), "allow");
   assert.equal(gh("mcp__github__actions_run_trigger", { method: "run_workflow", workflow_id: "browser-group.yml", ref: "x" }), "allow", "other workflows pass the hook (settings.json asks)");
-  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["hold", "ready"] }), "allow", "labels that keep hold");
-  assert.equal(gh("mcp__github__issue_write", { method: "create", title: "x", labels: ["ready"] }), "allow", "a create has no hold to drop");
+  assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["queue:paused", "queue:priority"] }), "allow", "preserving the pause needs no remote lookup");
+  assert.equal(gh("mcp__github__issue_write", { method: "create", title: "x", labels: ["queue:priority"] }), "allow", "a create has no existing pause to drop");
   assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, title: "x" }), "allow", "no labels field");
-  // labels the hook cannot read (gh fails) → ask; a fake gh at the front of PATH stands in for a logged-out host
+  // All label lookups are fixtures: a real authenticated gh made this table
+  // pass locally while the token-free CI runner correctly asked for context.
   const noGh = fs.mkdtempSync(path.join(ROOT, "artifacts", "no-gh-"));
-  fs.writeFileSync(path.join(noGh, "gh"), "#!/bin/sh\nexit 1\n"); fs.chmodSync(path.join(noGh, "gh"), 0o755);
-  try { assert.equal(gh("mcp__github__issue_write", { method: "update", issue_number: 1, labels: ["ready"] }, { PATH: `${noGh}:${process.env.PATH}` }), "ask", "labels unknown (no gh) → ask"); }
+  fs.writeFileSync(path.join(noGh, "gh"), '#!/bin/sh\nif [ "$FAKE_GH_FAILURE" = 1 ]; then exit 1; fi\nprintf \'%s\\n\' "$FAKE_GH_LABELS"\n'); fs.chmodSync(path.join(noGh, "gh"), 0o755);
+  const lookup = labels => ({ PATH: `${noGh}:${process.env.PATH}`, FAKE_GH_LABELS: labels, FAKE_GH_FAILURE: '0' });
+  try {
+    const replacement = { method: 'update', issue_number: 1, labels: ['queue:priority'] };
+    assert.equal(gh('mcp__github__issue_write', replacement, lookup('queue:paused\nqueue:priority')), 'ask', 'dropping an existing pause requires owner confirmation');
+    assert.equal(gh('mcp__github__issue_write', replacement, lookup('queue:priority')), 'allow', 'known unpaused labels can be replaced');
+    assert.equal(gh('mcp__github__issue_write', replacement, { ...lookup(''), FAKE_GH_FAILURE: '1' }), 'ask', 'unknown labels fail closed on an unauthenticated runner');
+    assert.equal(gh('mcp__github__issue_write', { ...replacement, labels: ['queue:paused'] }, { ...lookup(''), FAKE_GH_FAILURE: '1' }), 'allow', 'retaining a pause is safe without API access');
+  }
   finally { fs.rmSync(noGh, { recursive: true, force: true }); }
   assert.equal(gh("mcp__github__pull_request_read", {}), "allow");
   assert.equal(gh("merge_pull_request", JSON.stringify({ pullNumber: 1 })), "deny", "Cursor's bare name and string input");

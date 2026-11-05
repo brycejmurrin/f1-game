@@ -112,6 +112,7 @@ test('admission identity includes immutable source, environment and experiment p
 
 test('candidate validation is independent of active cutover and only publishes exact-tree evidence after passing checks', () => {
   const w = read('actions-validation'), job = w.jobs.validate;
+  assert.deepEqual(w.on.push.branches,['claude/f1-game-project-26h3ng'],'feature branches validate through PR events without a duplicate push run');
   assert.deepEqual(w.permissions, { contents: 'read' });
   assert.deepEqual({ condition: job.if, displayName: job.name }, { condition: undefined, displayName: 'Actions validation' }, 'the installed validation job must match the cutover evidence contract');
   const tests = job.steps.findIndex(s => s.run === 'node --test tests/unit/actions-*.test.mjs');

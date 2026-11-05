@@ -48,8 +48,13 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
      test is the thing standing between a future "just move it into CI" and a
      dead release train. */
   const timings = fs.readFileSync(new URL("../../.github/workflows/spec-timings.yml", import.meta.url), "utf8");
-  assert.match(timings, /^permissions:\n  contents: write\n  actions: read$/m,
-    "the merge workflow needs write for the side branch and read for the artifacts");
+  const workflow = parseYaml(timings);
+  assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' },
+    'workflow defaults remain read-only');
+  assert.deepEqual(workflow.jobs.merge.permissions ?? workflow.permissions, { contents: 'write', actions: 'read' },
+    'the actual merge job needs write for the side branch and read for artifacts');
+  assert.deepEqual(workflow.jobs['request-admission'].permissions, { contents: 'write', actions: 'write' },
+    'the admission job grants only its durable request and dispatch permissions');
   // ci.yml must NOT gain a write permission, or every Pages call fails at startup.
   assert.doesNotMatch(ciWorkflow, /^\s+contents: write\s*$/m,
     "a contents:write job in ci.yml fails startup validation on every pages.yml call (train #2241)");
@@ -88,7 +93,6 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   // THE TRAIN ONLY (2026-09-30): listening to "CI" as well created a run per
   // PR completion that the job's `if:` then skipped — 119 skipped runs in
   // seven hours, queued one at a time, after the `branches:` filter landed.
-  const workflow = parseYaml(timings);
   assert.deepEqual(workflow.on.workflow_run.workflows, ['Deploy to GitHub Pages', 'Actions test executors'],
     'timings follow both legacy train evidence and admitted test-executor evidence');
   assert.deepEqual(workflow.on.workflow_run.branches, ['claude/f1-game-project-26h3ng']);

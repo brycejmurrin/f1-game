@@ -425,8 +425,10 @@ test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same lea
   assert.match(wf, /^\s+- cron: "17 \*\/2 \* \* \*"$/m, "every 2 h");
   assert.match(wf, /MODE: \$\{\{ github\.event\.schedule == '17 \*\/2 \* \* \*' && 'base-red' \|\| inputs\.mode \|\| 'daily' \}\}/);
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --base-red --hours 3 --issue/);
-  assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "no new permission");
   const workflow = parseYAML(wf);
+  assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' }, 'workflow defaults cannot write issues');
+  assert.deepEqual(workflow.jobs.tally.permissions || workflow.permissions,
+    { contents: 'read', actions: 'read', issues: 'write' }, 'the actual tally still has its one issue publication grant');
   for (const mode of ["shadow", "active", "paused"]) {
     const context = workflowContext({ mode, event: "workflow_dispatch" });
     assert.equal(evalTemplate(workflow.jobs.tally.if, context), mode === "shadow");
@@ -438,9 +440,11 @@ test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same lea
 test("flake-tally.yml keeps legacy reporting least-privileged and records active requests through protected code", () => {
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
   assert.match(wf, /^\s+- cron: "19 6 \* \* \*"$/m, "daily");
-  assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "issues: write for the one issue, nothing else");
   const workflow = parseYAML(wf);
+  assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' }, 'the issue write is not inherited by unrelated jobs');
   assert.deepEqual(workflow.jobs.tally.permissions || workflow.permissions, { contents: "read", actions: "read", issues: "write" });
+  assert.deepEqual(workflow.jobs['request-admission'].permissions || workflow.permissions, { contents: 'write', actions: 'write' },
+    'active intake records and dispatches without an issues write grant');
   assert.doesNotMatch(JSON.stringify(workflow.jobs.tally), /secrets\./);
   assert.equal(workflow.jobs["request-admission"].steps.find(step => step.uses?.startsWith("actions\/checkout")).with.ref, "claude/f1-game-project-26h3ng");
   assert.match(wf, /timeout-minutes: 20/);

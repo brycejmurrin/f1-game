@@ -123,7 +123,12 @@ test("fold build: --build wins, else the stamped build; never version.json", asy
   assert.ok(run.includes("npm run -s fold"));
   assert.ok(run.includes('gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/changelog-fold'));
   assert.ok(!/git push[^\n]*claude\/f1-game-project-26h3ng/.test(run), "the deploy branch is reached only through the PR");
-  assert.equal(wf.permissions.actions, "write");
+  assert.deepEqual(wf.permissions, { contents: 'read' }, 'workflow defaults remain read-only');
+  assert.deepEqual(wf.jobs.fold.permissions || wf.permissions,
+    { contents: 'write', 'pull-requests': 'write', issues: 'write', actions: 'write' },
+    'only the legacy publisher can push its bot branch, open the PR/fallback issue and start CI');
+  assert.deepEqual(wf.jobs['request-admission'].permissions || wf.permissions, { contents: 'write', actions: 'write' },
+    'the active request adapter has no legacy PR or issue publication permission');
   const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts.fold, "node tools/gen/gen-changelog.mjs --fold");
   assert.ok(pkg.scripts["gen:check"].split(" && ").includes("node tools/gen/gen-changelog.mjs --check"));

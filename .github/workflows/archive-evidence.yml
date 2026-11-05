@@ -34,11 +34,14 @@ on:
         type: string
 
 permissions:
+  contents: read
   actions: read
-  contents: write
 
 jobs:
   archive:
+    permissions:
+      actions: read
+      contents: write
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20

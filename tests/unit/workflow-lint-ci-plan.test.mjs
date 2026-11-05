@@ -82,7 +82,12 @@ test("fold workflows FAIL when gh pr create is refused, and open one issue inste
     ["changelog-fold.yml", "bot/changelog-fold", {}],
   ]) {
     const w = wf(f);
-    assert.equal(w.permissions.issues, "write", `${f}: the refusal issue needs issues: write`);
+    assert.deepEqual(w.permissions, { contents: 'read' }, `${f}: defaults remain read-only`);
+    assert.deepEqual(w.jobs.fold.permissions ?? w.permissions,
+      { contents: 'write', 'pull-requests': 'write', issues: 'write', actions: 'write' },
+      `${f}: the fold job needs branch, PR, refusal issue and CI dispatch writes`);
+    assert.deepEqual(w.jobs['request-admission'].permissions, { contents: 'write', actions: 'write' },
+      `${f}: admission does not inherit the fold job's PR or issue writes`);
     const run = w.jobs.fold.steps.find((st) => st.name === "Fold").run;
     const at = run.indexOf("PR_TITLE=");
     assert.ok(at > 0, `${f}: the PR block starts at PR_TITLE=`);

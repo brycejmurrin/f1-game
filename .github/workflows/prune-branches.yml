@@ -50,7 +50,7 @@ on:
         default: ""
 
 permissions:
-  contents: write        # delete refs
+  contents: read
   pull-requests: read    # the open-PR heads that are never pruned
   actions: read          # the audit's last-CI-run column
 
@@ -60,6 +60,10 @@ concurrency:
 
 jobs:
   prune:
+    permissions:
+      contents: write        # delete refs
+      pull-requests: read    # the open-PR heads that are never pruned
+      actions: read          # the audit's last-CI-run column
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

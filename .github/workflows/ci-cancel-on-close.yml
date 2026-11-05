@@ -39,11 +39,13 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: write
   contents: read
 
 jobs:
   cancel-stragglers:
+    permissions:
+      actions: write
+      contents: read
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     name: Cancel the closed PR's other runs
     runs-on: ubuntu-latest

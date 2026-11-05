@@ -67,7 +67,12 @@ test("the workflow is daily + dispatch, starts its own CI, pushes a bot branch t
     "a GITHUB_TOKEN PR starts no CI; the dispatch does");
   assert.equal(/startswith\("bot\/ratchets-fold"\)/.test(skipRun), true,
     "skip while any open fold PR uses the bot/ratchets-fold prefix");
-  assert.equal(wf.permissions.actions, "write");
+  assert.deepEqual(wf.permissions, { contents: 'read' }, 'workflow defaults grant no publisher writes to unrelated jobs');
+  assert.deepEqual(wf.jobs.fold.permissions || wf.permissions,
+    { contents: 'write', 'pull-requests': 'write', issues: 'write', actions: 'write' },
+    'the legacy fold job retains its bot-branch, PR, fallback-issue and CI-dispatch permissions');
+  assert.deepEqual(wf.jobs['request-admission'].permissions || wf.permissions, { contents: 'write', actions: 'write' },
+    'active intake can write its ledger and dispatch admitted work, without publishing issues or PRs');
   assert.doesNotMatch(w, /git push[^\n]*claude\/f1-game-project-26h3ng/, "the protected deploy branch is reached only through the PR");
   assert.match(w, /MIN_FRAGMENTS: \$\{\{ inputs\.min_fragments/, "the dispatch input enters shell via env only");
   assert.doesNotMatch(w, /run:[^\n]*\$\{\{ inputs\./);

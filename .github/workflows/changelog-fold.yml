@@ -28,10 +28,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write    # the "fold PR needs a hand" issue when gh pr create is refused
-  actions: write   # workflow_dispatch of ci.yml on bot/changelog-fold (the fold PR's CI)
+  contents: read
 
 concurrency:
   group: changelog-fold${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
@@ -39,6 +36,11 @@ concurrency:
 
 jobs:
   fold:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write    # the "fold PR needs a hand" issue when gh pr create is refused
+      actions: write   # workflow_dispatch of ci.yml on bot/changelog-fold (the fold PR's CI)
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -1,6 +1,7 @@
 name: Actions validation
 on:
   push:
+    branches: [claude/f1-game-project-26h3ng]
     paths:
       - '.github/workflows/**'
       - '.github/labels.json'

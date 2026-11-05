@@ -31,10 +31,7 @@ on:
         default: "21"
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write    # the "gc PR needs a hand" issue when gh pr create is refused
-  actions: write   # workflow_dispatch of ci.yml on the gc branch (the PR's CI)
+  contents: read
 
 concurrency:
   group: knowledge-gc${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
@@ -42,6 +39,11 @@ concurrency:
 
 jobs:
   gc:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write    # the "gc PR needs a hand" issue when gh pr create is refused
+      actions: write   # workflow_dispatch of ci.yml on the gc branch (the PR's CI)
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

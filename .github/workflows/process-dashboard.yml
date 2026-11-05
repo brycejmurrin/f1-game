@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 concurrency:
@@ -34,6 +34,9 @@ env:
 
 jobs:
   publish:
+    permissions:
+      contents: write
+      actions: read
     if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     name: Publish process-dashboard.json
     runs-on: ubuntu-latest
