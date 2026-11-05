@@ -12,7 +12,7 @@ test('coordinator rejects taxonomy noise before allocating a runner and recovers
   for (const name of ['queue:ready', 'queue:paused', 'queue:priority']) assert.ok(job.if.includes(name));
   assert.match(job.if, /startsWith\(github.event.comment.body, '\/apex '\)/);
   assert.match(job.if, /github.event_name == 'schedule'/);
-  assert.equal(w.concurrency['cancel-in-progress'], false);
+  assert.deepEqual(w.concurrency, { group: 'actions-coordinator', queue: 'max', 'cancel-in-progress': false }, 'pending control commands must not be replaced by the next webhook');
   assert.equal(w.on.push, undefined, 'state branch writes cannot recursively trigger reconciliation');
   const steps = job.steps;
   assert.equal(steps.find(s => s.uses?.startsWith('actions/checkout')).with.ref, '${{ github.workflow_sha }}');
@@ -97,7 +97,7 @@ test('admission identity includes immutable source, environment and experiment p
 test('candidate validation is independent of active cutover and only publishes exact-tree evidence after passing checks', () => {
   const w = read('actions-validation'), job = w.jobs.validate;
   assert.deepEqual(w.permissions, { contents: 'read' });
-  assert.equal(job.if, undefined);
+  assert.deepEqual({ condition: job.if, displayName: job.name }, { condition: undefined, displayName: 'Actions validation' }, 'the installed validation job must match the cutover evidence contract');
   const tests = job.steps.findIndex(s => s.run === 'node --test tests/unit/actions-*.test.mjs');
   const lint = job.steps.findIndex(s => s.name === 'Validate every workflow');
   const evidence = job.steps.findIndex(s => s.name?.startsWith('Write evidence'));
