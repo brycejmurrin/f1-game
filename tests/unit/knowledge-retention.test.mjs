@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ROOT, DAYS, SIZE_CAP, SIZE_ALLOW, UNCITED_ALLOW, INDEX, REFUSED_PREFIX, KIND_REQUIRED_FROM,
-  scan, header, renderNotesList, demoteArchiveLinks, liveDocNoArchive, tracked,
+  scan, header, renderNotesList, demoteArchiveLinks, liveDocNoArchive, tracked, setGitDateCacheForTest,
 } from "../../tools/docs/knowledge-gc.mjs";
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -115,6 +115,24 @@ test("header() reads Kind:, Re-measure-by: and the Supersedes pin from the first
   assert.deepEqual(header("# T\n\nKind: measurement · Re-measure-by: 2026-12-01\n"), { kind: "measurement", remeasure: "2026-12-01", pinned: false });
   assert.deepEqual(header("# T\n**Kind:** how-to\n\nSupersedes: [x](X.md)\n"), { kind: "how-to", remeasure: null, pinned: true });
   assert.deepEqual(header("# T\nno header\n"), { kind: null, remeasure: null, pinned: false });
+});
+
+test(`shallow clone: tracked undated note with empty gitDates is not missingKind when today ≥ ${KIND_REQUIRED_FROM}`, () => {
+  const rel = "docs/notes/CEILING-HISTORY.md";
+  assert.ok(files.includes(rel), `${rel} must be tracked for the fixture`);
+  setGitDateCacheForTest(new Map());
+  const today = "2026-12-01";
+  assert.ok(today >= KIND_REQUIRED_FROM);
+  const out = scan({
+    today,
+    files: [rel],
+    corpus: path.basename(rel),
+    sizeAllow: [],
+    uncitedAllow: [rel],
+  });
+  assert.equal(out.notes[0].date, "1970-01-01");
+  assert.deepEqual(out.missingKind.map((n) => n.file), []);
+  setGitDateCacheForTest(null);
 });
 
 test("scan() with a pinned clock: uncited past the window is stale, a citation or the allow-list clears it, a refused prefix ignores age", () => {

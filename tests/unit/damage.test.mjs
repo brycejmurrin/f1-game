@@ -218,6 +218,15 @@ test("DamageHandling ships OFF: forCar is null, even for a wrecked local car, un
   assert.equal(H.forCar(car({ local: false })), null, "ON: an AI / remote car keeps the readout-only contract");
 });
 
+test("DamageHandling: Time Trial hides the DAMAGE row, so forCar is null there even when ON (#4939)", () => {
+  const { Damage: D, DamageHandling: H } = loadDH();
+  const c = car({ local: true });
+  D.apply(D.get(c), 4.8, 0, 1);
+  H.setEnabled(true);
+  assert.ok(H.forCar(c, false), "a race still gets the factors");
+  assert.equal(H.forCar(c, true), null, "TT: no damage handling");
+});
+
 test("DamageHandling factors: front wing → front aero, rear wing → rear aero, floor → both, knock → grip", () => {
   const { DamageHandling: H } = loadDH();
   const clean = H.factors({ fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0 });
@@ -251,7 +260,7 @@ test("the physics reads damage ONLY through the gated ctx.damage seam", () => {
   assert.match(pf, /const dmg = ctx\.damage;/);
   assert.match(pf, /let dmgF = 1, dmgR = 1;\s*\n\s*if \(dmg\) \{/, "OFF leaves both axle ratios at exactly 1");
   const fills = [...g.matchAll(/pf\.damage = ([^;]+);/g)].map((m) => m[1]);
-  assert.deepEqual(fills, ['typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c) : null'], "game.js fills it from DamageHandling once");
+  assert.deepEqual(fills, ['typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c, isTimeTrial()) : null'], "game.js fills it from DamageHandling once");
   for (const f of fs.readdirSync(path.join(ROOT, "js/physics")).filter((x) => x.endsWith(".js")))
     assert.doesNotMatch(read("js/physics/" + f), /\bDamageHandling\b/, f + " must not reach for the module itself");
 });

@@ -45,8 +45,8 @@ var DamageHandling = (function () {
   }
 
   /** The factors PlayerForces applies to car `c` this step, or null (= no effect). */
-  function forCar(c) {
-    if (!enabled || !c || !c.local || typeof Damage === "undefined") return null;
+  function forCar(c, tt) {   // tt: no DAMAGE row in Time Trial (#4939)
+    if (!enabled || tt === true || !c || !c.local || typeof Damage === "undefined") return null;
     return factors(Damage.get(c), out);
   }
 
