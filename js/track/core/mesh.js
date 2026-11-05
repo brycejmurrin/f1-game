@@ -1385,7 +1385,8 @@ const TrackMesh = (function () {
       // paved end to end; this is the paving.
       const fi = o.fastIn * v, fo = o.fastOut * w;
       const co = fo + (o.corrOut - o.fastOut) * b, wo = co + (o.workOut - o.corrOut) * b;
-      const apron = Math.max(wo, o.outer * w + 0.3);
+      // no overrun into bays (#4969)
+            const apron = Math.max(wo, o.outer * w + 0.3 * (p.b ? 1 - Math.min(1, b / w) : 1));
       const dash = Math.floor((k * ds) / 2) % 2 === 0;
       const innerCol = v < 0.5 ? (dash ? white : TARMAC) : white;
       const edge = Math.min(PIT_EDGE_W, Math.max(0, fo - fi) * 0.5);
