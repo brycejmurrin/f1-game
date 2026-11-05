@@ -19010,7 +19010,8 @@
     },
     "js/ui/save-health.js": {
       "boot": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ],
       "cleanup": [
         "tests/unit/save-durability.test.mjs"
@@ -19019,7 +19020,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "mount": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "js/ui/scale.js": {
@@ -19268,6 +19270,9 @@
       "isGarageKey": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/player-tools-backup.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/settings-export.test.mjs"
       ],
       "pick": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
