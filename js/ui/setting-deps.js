@@ -457,8 +457,10 @@ const SettingDeps = (function () {
     else setTimeout(init, 1500);
   }
   if (doc()) {
-    if (doc().readyState === "loading") doc().addEventListener("DOMContentLoaded", arm, { once: true });
-    else init();
+    // Deferred scripts run while readyState is "interactive" (#4926): only an
+    // already-COMPLETE document (tests, late loads) inits now; everything else arms.
+    if (doc().readyState === "complete") init();
+    else arm();
   }
 
   // S stays module-local (state / explain predicates).
