@@ -3720,3 +3720,8 @@ after 10 s instead of 1 s). The file ships in the race entry bundle and the chan
 Nothing else is stacked in the raise and no tolerance was widened.
 ## 2026-11-05 — #5101 (PR #5123): raceEntryBytes +265
 Three small player-facing fixes on the race entry path: the DAILY streak reads the local calendar day (#5010), queued engineer cards age on ticked game time so a pause no longer drops them (#5068), and the ceremony podium hides a points line it has no table for (#5064). The bytes are the fixes themselves; no new module, so the boot budget is untouched.
+## 2026-11-05 — revert of PR #5077 (cursor/revert-5077-deploy-red): raceEntryBytes +144
+The deploy went red at d3c8fa33 (#5077 merge): geometry sweeps failed on props triangles (12 circuits, up to +13 % at
+sepang) and Mexico floating/unsupported scenery. This branch reverts #5077 whole; the +144 B is the pre-#5077
+frustum/tlx-chunked/hidden-faces/mesh code coming back on the race entry path, not new code. Fragment:
+`ratchets.d/cursor--revert-5077-deploy-red.json`. No tolerance widened.

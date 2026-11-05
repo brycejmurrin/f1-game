@@ -56,8 +56,8 @@ const SceneryLandforms = (function () {
     // stretch = len/w); opts.rough (default 0.22) / opts.crest (default 0.35) shape it. Omitted = unchanged.
     const ridge = (x, z, baseY, ang, len, w, h, col, opts) => {
       const hill = opts && opts.profile;
-      // Skip if the footprint corner reaches tarmac (a hill's foot: 1.3x).
-      if (onTrack(x, z, Math.hypot(len, w) * 0.5 * (hill ? 1.3 : 1) + ROAD_SKIRT)) {
+      // Skip if footprint half-extent reaches tarmac (a rounded hill's noisy foot reaches ~1.3x further).
+      if (onTrack(x, z, Math.max(len, w) * 0.5 * (hill ? 1.3 : 1) + ROAD_SKIRT)) {
         ctx.noteSuppressed("ridge", `ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
         return;
       }
