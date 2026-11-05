@@ -249,6 +249,21 @@ test("race-setup.css keeps a display-only rule for #rs-preset-custom", () => {
   assert.equal(decl(rules, "#rs-preset-custom", "cursor"), "default");
 });
 
+test("#5071 START RACE foot is sticky and opaque on the one-surface compact/tall scroll", () => {
+  const rules = raceCss();
+  const sel = '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > .sheet-foot';
+  assert.equal(decl(rules, sel, "position"), "sticky");
+  assert.equal(decl(rules, sel, "bottom"), "0");
+  assert.equal(decl(rules, sel, "background-color"), "var(--surf-1)");
+});
+
+test("#5067 every dialog.screen padding rule keeps the --kb keyboard term", () => {
+  for (const file of ["css/components.css", "css/dialog-platform.css"]) {
+    const rules = cssRules(fs.readFileSync(path.join(ROOT, file), "utf8"));
+    assert.equal(decl(rules, "dialog.screen", "padding-bottom"), "max(var(--safe-b), var(--kb))", file);
+  }
+});
+
 test("race presets restore balanced wrap and a --tap floor (phone portrait 2×2)", () => {
   const rules = raceCss();
   const tile = "#rs-presets.balanced-row > .preset-btn";

@@ -58,6 +58,7 @@ const RACE_SESSION_READY = {
   "js/race/podium-beat.js": () => typeof RacePodium !== "undefined" && !!RacePodium,
   "js/race/parc-ferme.js": () => typeof ParcFerme !== "undefined" && !!ParcFerme && !ParcFerme._stub,
   "js/race/cooldown-lap.js": () => typeof CooldownLap !== "undefined" && !!CooldownLap && !CooldownLap._stub,
+  "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined" && !!WatchTransport,   // no stub: RealReplay typeof-guards it
   "js/race/ceremony.js": () => typeof RaceCeremony !== "undefined" && !!RaceCeremony && !RaceCeremony._stub,
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
@@ -767,7 +768,17 @@ function loadAgentSurface() {
   })();
   return _agentLoad;
 }
+// LAZY_DEV (#4978): flag-gated diagnostics (gfx-debug-overlay). Injected at boot
+// only when a flag asks; each file self-installs, so a miss is just no overlay.
+function bootDevPanels() {
+  const files = ApexRoster.LAZY_DEV || [];
+  let want = false;
+  try { want = typeof DevFlags !== "undefined" && !!DevFlags.get("gfxdebug"); } catch (_) { /* blocked storage */ }
+  if (!want || !files.length) return Promise.resolve(false);
+  return loadBackendScripts(files, [], {}).catch((e) => { Log.warn("game", "dev panels failed: " + (e && e.message)); return false; });
+}
 async function bootAgentSurface() {
+  bootDevPanels();   // not awaited: never on the boot path
   if (!wantAgentSurface()) return;
   try { await loadAgentSurface(); }
   catch (e) { Log.warn("game", "bootAgentSurface failed: " + (e && e.message)); }
