@@ -449,3 +449,32 @@ test("a screen rotation releases a held HUD pedal (no pointerup arrives) — #47
   assert.equal(h.Input.throttle(), false, "rotation drops the held pedal");
   assert.equal(h.Input.throttleLevel(), 0);
 });
+
+test("a screen rotation drops a THROTTLE = LATCH too, so RESUME never inherits GAS (#5019)", () => {
+  const h = boot();
+  h.Input.setThrottleLatch(true);
+  h.pedal.fire("pointerdown", { pointerId: 3 });
+  h.pedal.fire("pointerup", { pointerId: 3 });
+  assert.equal(h.Input.throttle(), true, "latched");
+  (h.listeners.orientationchange || []).forEach((f) => f({}));
+  assert.equal(h.Input.throttleLatched(), false, "rotation drops the latch like blur does");
+  assert.equal(h.Input.throttle(), false);
+  assert.equal(h.pedal.classList.contains("on"), false, "GAS no longer paints latched");
+});
+
+test("unplugging the pad that armed GAS TOGGLE with a second pad still connected does not re-arm it (#5028)", () => {
+  const h = bootPad(), { Input, sb, listeners, poll, button, pad } = h;
+  const pad2 = { index: 1, id: "Wheel", mapping: "standard", connected: true,
+    axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad, pad2];
+  (listeners.gamepadconnected || []).forEach((f) => f({ gamepad: pad2 }));
+  Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
+  button(7, true); poll(); button(7, false); poll();
+  assert.equal(Input.throttle(), true, "the toggle is armed");
+  pad.connected = false;
+  sb.navigator.getGamepads = () => [null, pad2];
+  (listeners.gamepaddisconnected || []).forEach((f) => f({ gamepad: pad }));
+  poll(); poll();
+  assert.equal(Input.throttle(), false, "the remaining device must not re-arm full throttle");
+  assert.equal(Input.throttleLevel(), 0);
+});

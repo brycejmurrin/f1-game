@@ -9118,6 +9118,11 @@
       "holdReleasePointer": [
         "tests/unit/key-binds-hunt.test.mjs"
       ],
+      "press": [
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "release": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9139,7 +9144,8 @@
     },
     "js/input/input.js": {
       "activeInputSource": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
       ],
       "activePad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
@@ -15323,6 +15329,7 @@
       "*": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
@@ -15609,6 +15616,7 @@
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ]
     },
@@ -17090,6 +17098,7 @@
     "js/track/core/hidden-faces.js": {
       "strip": [
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/track-build-grids.test.mjs"
       ],
       "*": [
@@ -19008,7 +19017,8 @@
     },
     "js/ui/save-health.js": {
       "boot": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ],
       "cleanup": [
         "tests/unit/save-durability.test.mjs"
@@ -19017,7 +19027,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "mount": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "js/ui/scale.js": {
@@ -19266,6 +19277,9 @@
       "isGarageKey": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/player-tools-backup.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/settings-export.test.mjs"
       ],
       "pick": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",

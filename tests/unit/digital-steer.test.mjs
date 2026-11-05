@@ -605,3 +605,23 @@ test("dropping a pad still forgets its use record when the live set is reused", 
   h.clock.t += 16; h.Input.poll();
   assert.ok(Math.abs(h.Input.steer(1 / 60)) < 0.05, "the unplugged pad's use record must not survive");
 });
+
+test("a thumb slid from the LEFT arrow onto the RIGHT arrow hands the contact over (#5016)", () => {
+  const { Input, clock, left, right } = bootButtons();
+  Input.reset();
+  Input.setSteerMode("buttons");
+  Input.setAdaptiveButtons(0);
+  Input.setSpeedStd(0);
+  clock.t = 1000;
+  right().getBoundingClientRect = () => ({ left: 120, right: 200, top: 300, bottom: 380, width: 80, height: 80 });
+  left().fire("pointerdown", { pointerId: 5, clientX: 60, clientY: 340 });
+  for (let i = 0; i < 20; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), -1, "full left");
+  left().fire("pointermove", { pointerId: 5, clientX: 100, clientY: 340 });   // still between the arrows: easing
+  left().fire("pointermove", { pointerId: 5, clientX: 150, clientY: 340 });   // inside RIGHT
+  for (let i = 0; i < 60; i++) Input.steer(1 / 60);
+  assert.ok(Input.steer(1 / 60) > 0.9, "the slide onto RIGHT steers right (was stuck at -0.12)");
+  right().fire("pointerup", { pointerId: 5 });
+  for (let i = 0; i < 60; i++) Input.steer(1 / 60);
+  assert.equal(Input.steer(1 / 60), 0, "lifting the thumb releases the arrow it ended on");
+});
