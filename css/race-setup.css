@@ -258,6 +258,14 @@
   scrollbar-color: var(--plate-line) transparent;
 }
 #race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > #rs-body { overflow: visible; }
+/* START RACE stays on screen. The one-surface scroll at the full UI scale put
+   #rs-go (autofocus, focused with preventScroll) 760 px below the fold at UI
+   SIZE 200% on 844x390 (#5071): the foot pins to the scroller's bottom, on
+   an opaque plate so the rows scrolling under it never show through. */
+#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > .sheet-foot {
+  position: sticky; bottom: 0; z-index: 1;
+  background-color: var(--surf-1);
+}
 /* Context stays one glanceable line; its full text remains available to
    assistive technology. Editable values take priority over repeated context. */
 #rs-body #rs-preset-options > summary,

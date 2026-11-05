@@ -1658,6 +1658,31 @@ test("a FULL code room reopens the same code when a guest leaves (#4820)", async
   } finally { h.lobby.cancel(); }
 });
 
+test("evicting from a FULL code room never reopens the evicted player's code (#4937)", async () => {
+  const { h, made, rooms, ts, until, withGuest, codes } = codeRoomHarness();
+  try {
+    await withGuest();
+    for (const [n, who] of [[2, "g2"], [3, "g3"]]) {
+      const t = ts[ts.length - 1];
+      await rooms[rooms.length - 1].onJoiner(who, "answer-" + n);
+      t.status = "open";
+      await until(() => made.length === n, "guest " + n + " session bound");
+      if (n === 2) await until(() => rooms.length === 3, "room reopened for guest 3");
+    }
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(h.lobby.status().guests, 3);
+    codes.next = "NEW999";
+    assert.equal(h.lobby.removeGuest("g3"), true);
+    ts[2].status = "closed";
+    for (const fn of ts[2].closers) fn("peer");        // g3's close is the evict ack
+    await until(() => rooms.some((r) => r.code === "NEW999"), "the evict minted a fresh code");
+    const before = rooms.length;
+    ts[1].closers[0]("remote");                         // g2 leaves normally
+    await new Promise((r) => setTimeout(r, 400));
+    assert.deepEqual(rooms.slice(before).map((r) => r.code), [], "ABC234 is never advertised again");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a second HELLO from one guest does not re-send the whole catch-up (#4820)", async () => {
   const { h, made, until, withGuest } = codeRoomHarness();
   try {

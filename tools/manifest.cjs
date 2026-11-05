@@ -182,7 +182,6 @@ const FULL = [
   "js/core/i18n.js",
   "js/core/dom-apply.js",
   "js/career/restore-points.js",
-  "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
   "js/track/core/geom.js",
@@ -369,7 +368,7 @@ const FULL = [
   "js/overlay/bridge.js",      // OverlayBridge: BroadcastChannel game ⇄ overlay.html (overlay.html loads it too)
   "js/overlay/publisher.js",   // OverlayPublisher: 4 Hz __apex sampler + #announce caption tap, only while an overlay listens
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
-  "js/ui/watch-transport.js",
+  // watch-transport.js (WatchTransport, ~11 KB) → LAZY_RACE_SESSION; RealReplay makes it on start
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race-pace.js", // RealRacePace: pure timing-script helpers RealRace drives (lap maps, tables, pace multiplier)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
@@ -709,7 +708,6 @@ const HARD_EDGES = [
   ["js/car/car-shade.js", "js/car/car-body-geom.js"],
   ["js/car/car-shade.js", "js/car/car3d.js"],
   ["js/core/store.js", "js/ui/appearance-studio.js"],
-  ["js/ui/watch-transport.js", "js/race/real-replay.js"],
   ["js/ui/appearance-studio.js", "js/game.js"],
   ["js/ui/photo-studio.js", "js/game.js"],
   ["js/ui/experience.js", "js/game.js"],
@@ -855,9 +853,6 @@ const HARD_EDGES = [
   ["js/career/save-migrate.js", "js/core/save-schema-registry.js"],
   ["js/core/save-schema-registry.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/core/store.js"],
-  ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
-  ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
-  ["js/core/native-download.js", "js/career/career-backup.js"], // Capacitor Share download path
   ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
@@ -1132,6 +1127,7 @@ const LAZY_RACE_SESSION = [
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
   "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
+  "js/ui/watch-transport.js", // WatchTransport: WATCH replay controls; RealReplay.start creates it (typeof-guarded)
   "js/race/ceremony.js", // RaceCeremony: post-flag cooldown → parc fermé → podium → results (#4067); session-stub.js holds the title-time stub
 ];
 const LAZY_RACE_SESSION_EDGES = [
@@ -1311,9 +1307,12 @@ const LAZY_CAM_EDITOR_EDGES = [];
 
 // CAREER screen body (~63 KB). Title buttons call CareerUI.openHub/openSlots
 // (FULL stub in career-ui-boot.js); the sheet itself is unreachable until
-// CAREER opens. Dom / Career / CareerBackup stay FULL; planning cards load
-// before the screen that calls them.
+// CAREER opens. Dom / Career stay FULL; planning cards load
+// before the screen that calls them. CareerBackup (~1 KLOC, six-slot export/import)
+// rides this bundle: only career-ui.js reads it; its deps (store, save-migrate,
+// native-download) are FULL, so it needs no edge.
 const LAZY_CAREER_UI = [
+  "js/career/career-backup.js", // CareerBackup: versioned six-slot export/import
   "js/career/career-planning-ui.js", // read-only planning cards and explicit recovery
   "js/career/career-ui.js",   // CareerScreen
 ];

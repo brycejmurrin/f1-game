@@ -242,6 +242,7 @@
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
     "js/race/cooldown-lap.js",
+    "js/ui/watch-transport.js",
     "js/race/ceremony.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
@@ -784,6 +785,7 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],

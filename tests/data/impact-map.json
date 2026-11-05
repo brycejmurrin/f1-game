@@ -3904,7 +3904,8 @@
         "tests/unit/career-backup.test.mjs"
       ],
       "build": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-ui-lazy.test.mjs"
       ],
       "download": [
         "tests/unit/mobile-native-download.test.mjs"
@@ -4244,6 +4245,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs"
       ],
       "inCareer": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -5387,6 +5389,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/stage-minify.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
@@ -10463,6 +10466,9 @@
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
+      "reportLap": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "reportResult": [
         "tests/unit/net-start-arming.test.mjs"
       ],
@@ -14217,6 +14223,9 @@
       ],
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
       ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
@@ -18988,7 +18997,8 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "summary": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/results-story.test.mjs"
       ],
       "*": [
         "tests/unit/podium-beat.test.mjs",
@@ -19631,6 +19641,7 @@
     },
     "js/ui/watch-transport.js": {
       "create": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
@@ -19641,6 +19652,7 @@
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
       "start": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
       ],

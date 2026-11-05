@@ -1,0 +1,1 @@
+Fixed: RETRY SAVE no longer overwrites the standalone season with an unengaged career's championship (#4944); a MY TEAM career started before any GP livery was saved no longer shows CUSTOM on a factory-painted car (#4945); settings export/import now carries WHEEL LOCK & ABS (#4946); replay previous/next after the followed car's data ends steps from where it retired (#4948).
