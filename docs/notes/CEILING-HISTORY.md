@@ -3700,3 +3700,12 @@ fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) 
 none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
+
+## 2026-11-05 — PR #4984 (cursor/red-flag-pit-classify-4938): red-flag pit plan and classification
+
+`raceEntryBytes` +649 via `ratchets.d/cursor--red-flag-pit-classify-4938.json (folded)`. The deploy tip
+sat exactly at the 2129163 ceiling, so the PR's own growth in the race entry shows as a raise: the
+`redFlagFit` plan splice in `js/race/pit-lane.js` (+11), the held-lap cap in `RaceControl.classify`
+and the `endRace` chequered-flag test (B5.14.2, B6.3.6). Eager bytes are −157 net (race-control.js
+comments trimmed), the tree total is not, because the bundle count includes the pit-lane and game
+hunks. No tolerance widened and nothing else stacked in the raise.
