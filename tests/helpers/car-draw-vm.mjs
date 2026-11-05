@@ -92,6 +92,10 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     },
     CarWheels: {
       tints: () => ({ rim: null, cal: null, ink: null, key: "" }),   // livery wheel tints: none set
+      // The one wheel recipe (#4907): ids key, no livery tints.
+      spec: (T) => { const v = (T && T._visual) || {}, i = (T && T._ids) || {};
+        return { band: [1, 1, 0], cal: null, rim: null, tyre: v.tyres || null, brake: v.brakes || null, wheel: v.wheels || null,
+          ink: null, surf: null, key: "|i" + i.tyres + ":" + i.brakes + ":" + i.wheels }; },
       WHEEL_R: 0.34,
       // Mirror js/car/car-wheels.js — advanceWheelPhases calls these by name.
       phaseStep(speed, dt, wheelR, lock) {

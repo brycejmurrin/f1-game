@@ -96,11 +96,12 @@ test("Car3D.build: no tint = byte-identical car; tint changes only wheel-vertex 
 
 test("wheel mesh caches key on the tints (source pins)", () => {
   const draw = read("js/car/car-draw.js");
-  assert.match(draw, /playerWheelId \+ wt\.key/, "player wheel key lacks the tint key");
+  // #4907: the player key IS CarWheels.spec's key (option ids + every livery wheel field); spec owns the fallbacks.
+  assert.match(draw, /putBoundedMesh\(wheelMeshCache, wheelMeshOrder, ws\.key,/, "player wheel key is not the spec key");
   assert.match(draw, /st\.fwKeyFull = base \+ wt\.key/,"field wheel key lacks the tint key");
-  assert.match(draw, /wt\.cal \|\| \(playerBrakeVisual/);
-  assert.match(draw, /wt\.rim \|\| \(brake && brake\.rim\)/);
-  assert.match(read("js/camera/cockpit-preview.js"), /CarWheels\.tints\(s\.livery\)/);
+  assert.match(read("js/car/car-wheels.js"), /cal: tint\.cal \|\| \(b \? b\.cal :/);
+  assert.match(read("js/car/car-wheels.js"), /rim: tint\.rim \|\| \(w && w\.rim\) \|\| \(b && b\.rim\)/);
+  assert.match(read("js/camera/cockpit-preview.js"), /CarWheels\.spec\(s\.parts \|\| \{ tyres: 1, brakes: 1 \},s\.livery\)/);
 });
 
 test("editor: WHEELS & BRAKES section carries rimTint and caliperTint rows", () => {

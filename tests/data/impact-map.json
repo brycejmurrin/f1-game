@@ -1620,6 +1620,7 @@
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/shell-ids.test.mjs"
       ]
@@ -2649,6 +2650,7 @@
       "*": [
         "tests/unit/legends.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2839,6 +2841,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/perf-race-entry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -2865,6 +2868,7 @@
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2879,6 +2883,7 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2902,6 +2907,7 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/team-livery.test.mjs"
@@ -3074,6 +3080,7 @@
       "*": [
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -3090,6 +3097,7 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
@@ -3104,6 +3112,7 @@
       ],
       "createGarage": [
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
       "draw": [
@@ -3119,11 +3128,15 @@
       "prepare": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
       "release": [
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
+      ],
+      "spec": [
+        "tests/unit/livery-wheel-paths.test.mjs"
       ],
       "tints": [
         "tests/unit/garage-mesh.test.mjs",
@@ -3140,6 +3153,9 @@
       ]
     },
     "js/car/car3d.js": {
+      "appearanceParts": [
+        "tests/unit/livery-wheel-paths.test.mjs"
+      ],
       "bodyStyleKey": [
         "tests/unit/livery-stations.test.mjs"
       ],
@@ -3157,6 +3173,7 @@
         "tests/unit/helmets.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/rear-wing-drs-rail.test.mjs"
       ],
@@ -3475,6 +3492,7 @@
         "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "designFor": [
@@ -3528,6 +3546,7 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
@@ -3753,6 +3772,7 @@
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/parts-ladder.test.mjs",
         "tests/unit/setup-tune.test.mjs"
@@ -3772,6 +3792,7 @@
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "isOptionAvailable": [
@@ -5382,6 +5403,7 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/log-namespaces.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
@@ -5543,6 +5565,7 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-tier.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs",
@@ -6302,6 +6325,7 @@
         "tests/unit/livery-stations.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
         "tests/unit/livery-tier.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
@@ -8292,6 +8316,7 @@
       "*": [
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs"
       ]
@@ -8730,6 +8755,7 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "previewKey": [
+        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs"
       ],
       "renderSetupPreview": [
