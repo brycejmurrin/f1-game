@@ -21,7 +21,7 @@ Update after the tip sync that also moved WatchTransport into LAZY_RACE_SESSION
 2129163 on the merge tree; tip's watch-transport race-entry bytes are the catch-up
 above the prior +40410). eagerGzip fragment delta **−15640** (gzip-9 of
 career-backup.js) so the LOOSE slack from the deeper eager cut clears; never raise
-an eager ceiling.
+an eager ceiling. assertPinsAll fragment +1 covers career-ui-lazy.test.mjs pins on the merge tree.
 
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 

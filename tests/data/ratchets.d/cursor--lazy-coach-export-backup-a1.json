@@ -2,6 +2,7 @@
   "tree": {
     "assertPins": 1,
     "eagerGzip": -15640,
-    "raceEntryBytes": 54163
+    "raceEntryBytes": 54163,
+    "assertPinsAll": 1
   }
 }
