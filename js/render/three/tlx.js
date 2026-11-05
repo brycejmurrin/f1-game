@@ -7143,7 +7143,7 @@ const TLX = (function () {
                   const ro = renderer._objects && renderer._objects._renderObjects;
                   o.rObj = ro && typeof ro.size === "number" ? ro.size : null;
                 }
-                if (inf.render) { o.calls = inf.render.calls; }
+                if (inf.render) { o.calls = inf.render.frameCalls; }  // render() calls this frame; render.calls is a lifetime count three never resets
               }
             } catch (_) { /* three's info shape is version-dependent; absent is reported as absent */ }
             // The render group's version must advance once per renderer.render():

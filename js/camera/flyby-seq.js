@@ -13,6 +13,7 @@
  * world coordinates:
  *
  *   { at: "start"|"pole"|"grid"|"corner", n, off, x, y }   along the lap
+ *   { at: "pitexit", off, x, y }                           the pit-exit line (track.pit.sOut)
  *   { at: "centre", bear, distR, yR }                      the whole circuit
  *   { at: "landmark", rank, bear, distK, yK }              this circuit's own
  *
@@ -81,16 +82,13 @@ const FlybySeq = (function () {
     return (k % 2 === 0 ? -1 : 1) * Math.min((_gs.hw || 7) * 0.4, 3);
   }
 
-  /* HOW THE FLYBY IS RENDERED, not where it is pointed — and the reason those
-   * two live in the same file. The shots are VISTAS: a crane 190 m up looking
-   * down a 5.8 km circuit is nothing like a chase cam 8 m behind a car, so the
-   * cinematic renders with the far plane pushed out and the fog thinned, the
-   * way photo mode does.
-   *
+  /* HOW THE FLYBY IS RENDERED (kept beside where it is pointed). The shots are
+   * VISTAS: a crane 190 m up over a 5.8 km circuit is not a chase cam, so the
+   * cinematic pushes the far plane out and thins the fog, as photo mode does.
    * BOTH ENDS READ THESE: the live screen (js/game.js's flyby branch) and the
-   * EDITOR's preview (__apex.flybyCam, through dbgCam). With separate far clip
-   * and fog (6000 m / 15 % vs gameplay's 900 m / 100 %) the same shot is clear
-   * in the editor and a wall of haze on the loading screen. */
+   * EDITOR's preview (__apex.flybyCam, through dbgCam); separate far clip and
+   * fog (6000 m / 15 % vs gameplay's 900 m / 100 %) would show a clear shot in
+   * the editor and a wall of haze on the loading screen. */
   const FAR = 6000;               // metres of far clip — a whole circuit, not a corner
   const FOG = 0.15;               // × the session's fog density (photo mode's value)
   // Near plane. Pinned rather than inherited: gameplay picks 0.3 for cockpit and
@@ -422,6 +420,7 @@ const FlybySeq = (function () {
       case "grid": return wrapS(track, total - POLE_BACK - (Math.min(GRID_ROWS, _gridSize) - 1) * GRID_SPACING + off);
       case "corner": return wrapS(track, cornerS(track, pose.n || 1) + off);
       case "slot": return wrapS(track, total - POLE_BACK - slotIndex(pose) * GRID_SPACING + off);
+      case "pitexit": return wrapS(track, (track.pit && isFinite(track.pit.sOut) ? track.pit.sOut : 0) + off);
       default: return wrapS(track, off);          // "start" — the line is s = 0 by construction
     }
   }
@@ -527,11 +526,8 @@ const FlybySeq = (function () {
     // radius, so one establishing shot frames Monaco and Spa alike.
     if (pose.at === "centre") {
       const b = bounds(track);
-      // CLAMPED, because a multiple of the radius alone is a satellite. Monza's
-      // lap radius is ~800 m, so 0.85 of it put the eye 680 m up and the
-      // establishing shot became a map of the circuit with no scenery, no
-      // scale and nothing to recognise. These bounds are what a helicopter
-      // shot actually lives in.
+      // CLAMPED: a multiple of the radius alone is a satellite (Monza, 0.85 of
+      // ~800 m = 680 m up, a map with no scenery). These bounds are a helicopter's.
       // ZERO MEANS THE CENTROID. The clamps are for a camera; the establishing
       // shots' LOOK pose is {distR: 0, yR: 0}, "at the middle of the lap", and
       // clamping it too aimed every one of them at a point 200 m out towards the
@@ -745,17 +741,12 @@ const FlybySeq = (function () {
     return p && p.at !== "centre" && p.at !== "landmark";
   }
 
-  /** A MOVE ALONG THE TRACK FOLLOWS THE TRACK. Interpolating two track-anchored
-   *  poses as world points draws a straight line between them, which cuts every
-   *  corner in between: the closing grid shot runs ~200 m from behind the back
-   *  row to the line, and at Bahrain that chord left the road by up to 49 m —
-   *  a shot authored as "up the middle of the grid" ended up in the run-off.
-   *  Track-anchored pairs therefore interpolate in TRACK space (arc, lateral,
-   *  height) and convert once, which also handles a move that crosses the
-   *  start line, where the raw arc numbers jump by a lap.
-   *
-   *  A pair that is not track-anchored (the whole-circuit and landmark orbits)
-   *  has no arc to walk, so those still interpolate as world points. */
+  /** A MOVE ALONG THE TRACK FOLLOWS THE TRACK. A world-space lerp between two
+   *  track-anchored poses cuts every corner (Bahrain's ~200 m closing grid shot
+   *  left the road by up to 49 m), so such pairs interpolate in TRACK space (arc,
+   *  lateral, height) and convert once; that also handles a move across the start
+   *  line, where raw arc numbers jump by a lap. Pairs that are not track-anchored
+   *  (whole-circuit and landmark orbits) still interpolate as world points. */
   function lerpPose(track, a, b, u, out) {
     if (trackAnchored(a) && trackAnchored(b)) {
       const total = track.total || 1;
@@ -802,16 +793,23 @@ const FlybySeq = (function () {
        grid        up the aisle between the columns, ending among the front
                    rows with the start gantry ahead */
   const DEFAULT = [
+    // RACE START (#4745 C): the player's menu car rolls out of the pit lane (rollHero), broadcast-only.
+    {
+      id: "pit-exit", dur: 0.07, ease: "out", roll: "pitexit",
+      eye: [{ at: "pitexit", off: -34, x: 0, y: 1.5 }, { at: "pitexit", off: -20, x: 0, y: 1.3 }],
+      look: [{ at: "pitexit", off: 6, x: 0, y: 0.8 }, { at: "pitexit", off: 26, x: 0, y: 0.8 }],
+      fov: [44, 38],
+    },
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.09, ease: "inOut", sway: 0.35,
+      id: "wide", dur: 0.07, ease: "inOut", sway: 0.35,
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.08, ease: "inOut", sway: 0.25,
+      id: "wide2", dur: 0.06, ease: "inOut", sway: 0.25,
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -819,14 +817,14 @@ const FlybySeq = (function () {
     },
     // ---- this circuit in particular ----------------------------------------
     {
-      id: "landmark1", dur: 0.09, ease: "inOut",
+      id: "landmark1", dur: 0.08, ease: "inOut",
       eye: [{ at: "landmark", rank: 0, bear: -0.28, distK: 1.7, yK: -0.15, y: 12 },
             { at: "landmark", rank: 0, bear: -0.08, distK: 1.5, yK: -0.1, y: 12 }],
       look: [{ at: "landmark", rank: 0, distK: 0, yK: 0.2 }, { at: "landmark", rank: 0, distK: 0, yK: 0.25 }],
       fov: [38, 40],
     },
     {
-      id: "landmark2", dur: 0.08, ease: "inOut",
+      id: "landmark2", dur: 0.07, ease: "inOut",
       eye: [{ at: "landmark", rank: 1, bear: 0.30, distK: 1.8, yK: -0.1, y: 12 },
             { at: "landmark", rank: 1, bear: 0.10, distK: 1.6, yK: -0.05, y: 12 }],
       look: [{ at: "landmark", rank: 1, distK: 0, yK: 0.15 }, { at: "landmark", rank: 1, distK: 0, yK: 0.2 }],
@@ -866,28 +864,22 @@ const FlybySeq = (function () {
     // The road draws without slope-scaled depth bias (PR #248), so the grid can
     // be filmed from ahead of pole.
     {
-      id: "grid-walk", dur: 0.08, ease: "inOut",
-      // THE GRID WALK: head height, a slow dolly up the aisle between the
-      // staggered rows (the pole anchor is the centreline) — the TV walk before
-      // the formation lap. Numbered slots: a grid too small to fill them (time
-      // trial, duel) leaves it out.
-      // FROM THE BACK HALF, looking up the field: walked from between rows 5
-      // and 6 it kept 20-26 % of the grid in frame on every circuit (frame
-      // report, 2026-10-04) — the rest were behind the lens. From behind row
-      // 14, 14-15 of the 22 are ahead of it, stacked up towards the lights.
-      // The look stays on ONE column (slots 4 and 2, both left): 4 -> 3
-      // crossed the aisle mid-shot, a 6 m lateral swing no squeeze can slow.
+      id: "grid-walk", dur: 0.07, ease: "inOut",
+      // THE GRID WALK: head height, a slow dolly up the aisle (the pole anchor
+      // is the centreline); a grid too small for the numbered slots (time trial,
+      // duel) leaves it out. From the BACK half: from rows 5-6 only 20-26 % of
+      // the grid stayed in frame (frame report, 2026-10-04); behind row 14,
+      // 14-15 of 22 are ahead. The look stays on ONE column (slots 4 and 2):
+      // 4 -> 3 crossed the aisle, a 6 m swing no squeeze can slow.
       eye: [{ at: "pole", off: -118, x: 0, y: 1.7 }, { at: "pole", off: -110, x: 0, y: 1.7 }],
       look: [{ at: "slot", n: 4, off: 0, x: 0, y: 0.6 }, { at: "slot", n: 2, off: 0, x: 0, y: 0.6 }],
       fov: [50, 46],
     },
     {
       id: "grid-crane", dur: 0.09, ease: "inOut",
-      // A slow crane up behind the back row, long lens: the whole field stacked
-      // up towards the lights.
-      // On the aisle's line and tight behind the last row: from 6 m left and
-      // 38 m back, Bahrain's crane stood by the final bend and filmed its
-      // trackside hoarding across two thirds of the frame.
+      // A slow crane behind the back row, long lens, on the aisle's line and tight
+      // behind the last row (from 6 m left, 38 m back Bahrain's crane filmed its
+      // trackside hoarding across two thirds of the frame).
       eye: [{ at: "grid", off: -16, x: -1, y: 2.2 }, { at: "grid", off: -8, x: 0, y: 5.8 }],
       // Aimed at MID-GRID, not at pole: a grid that runs out of the final bend
       // (Bahrain's) puts pole round the corner, and the sightline to it crossed
@@ -897,21 +889,19 @@ const FlybySeq = (function () {
     },
     {
       id: "grid-front", dur: 0.10, ease: "inOut",
-      // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole
-      // big in frame and the field stacked behind it. Close and a little off
-      // the aisle — measured with frame-report across eight circuits, 40+ m
-      // out on a long lens left the cars at 1-2 % of the frame and put the
-      // eye inside Bahrain's and Istanbul's main grandstands.
+      // THE FRONT ROW, FROM THE START LINE, looking back down the grid: pole big,
+      // the field behind. Close and a little off the aisle: 40+ m out on a long
+      // lens left the cars at 1-2 % of the frame and the eye inside Bahrain's and
+      // Istanbul's grandstands (frame-report, eight circuits).
       eye: [{ at: "pole", off: 14, x: 3.5, y: 2.2 }, { at: "pole", off: 10, x: 2.5, y: 1.8 }],
       look: [{ at: "pole", off: -12, x: 0, y: 0.6 }, { at: "pole", off: -12, x: 0, y: 0.6 }],
       fov: [40, 40],
     },
     {
       id: "grid-mine", dur: 0.12, ease: "out",
-      // YOUR CAR, in the slot the race starts you from (menuGridCars seats the
-      // field as gridUp will, and tells FlybySeq which slot is yours): a low
-      // push-in from two rows back that settles just behind the car, looking
-      // past it at the lights — the frame the race's own camera takes over from.
+      // YOUR CAR, in the slot the race starts you from (menuGridCars tells
+      // FlybySeq which): a low push-in from two rows back, looking past it at the
+      // lights — the frame the race's own camera takes over from.
       eye: [{ at: "slot", n: "player", off: -22, x: 0, y: 1.9 }, { at: "slot", n: "player", off: -9, x: 0, y: 1.5 }],
       look: [{ at: "slot", n: "player", off: 6, x: 0, y: 0.9 }, { at: "start", off: 30, x: 0, y: 1.2 }],
       fov: [36, 40],
@@ -928,13 +918,11 @@ const FlybySeq = (function () {
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
   const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0, corner: 0 };
 
-  /* ONE CAR THROUGH EACH CORNER SHOT. The menu field is scenery, not a
-     simulation: move the player's menu model along the baked racing line while a turn is on
-     air, then put it back on its grid box before the finale. The apex is the
-     midpoint by construction; speedAt supplies both the travel window and the
-     displayed wheel/body speed. This is broadcast-only and never runs on the
-     player's physics state or after the menu hands over to the countdown. The
-     player's model is deliberate: the field renderer culls rivals more than
+  /* ONE CAR THROUGH EACH CORNER SHOT. The menu field is scenery: the player's
+     menu model drives the baked racing line while a turn is on air, then goes
+     back to its grid box. The apex is the midpoint; speedAt gives the travel
+     window and displayed speed. Broadcast-only: never the player's physics, never
+     after the countdown. The player's model, because the field renderer culls rivals more than
      550 m from the grid-seated player, while it always keeps that model. */
   let _heroCars = null, _hero = null, _heroHome = null;
   function restoreHero() {
@@ -960,13 +948,24 @@ const FlybySeq = (function () {
     let s = apexS + (Math.max(0, Math.min(1, t)) - 0.5) * apexV * Math.max(0, seconds || 0);
     s %= track.total; if (s < 0) s += track.total;
     const line = TrackLine.at(track, s), v = DrivingLine.speedAt(s);
+    return placeHero(track, s, line && isFinite(line.x) ? line.x : 0, v > 0 ? v : apexV);
+  }
+  function placeHero(track, s, x, speed) {
     Tracks.sample(track, s, _heroSmp);
-    const x = line && isFinite(line.x) ? line.x : 0;
     _hero.s = _hero.rPrevS = s; _hero.x = _hero.rPrevX = _hero.xVis = x;
     _hero.px = _hero.rPrevPx = _heroSmp.p[0] + _heroSmp.r[0] * x;
     _hero.pz = _hero.rPrevPz = _heroSmp.p[2] + _heroSmp.r[2] * x;
-    _hero.speed = v > 0 ? v : apexV;
+    _hero.speed = speed;
     return _hero;
+  }
+
+  /** Menu model along the pit-exit road, -30..+28 m of the line; restoreHero() undoes it. */
+  function rollHero(track, t, cars) {
+    if (cars !== undefined) setHeroCars(cars);
+    if (!_hero || !track || !track.pit || !isFinite(track.pit.sOut) || typeof TrackLine === "undefined" || typeof Tracks === "undefined") return null;
+    const s = wrapS(track, track.pit.sOut - 30 + 58 * Math.max(0, Math.min(1, t)));
+    const lane = Tracks.pitLaneAt ? Tracks.pitLaneAt(track, s) : null;
+    return placeHero(track, s, lane && isFinite(lane.centre) ? lane.centre : 0, 22);
   }
 
   /** The camera at `u` (0..1) through the whole sequence. Returns a POOLED
@@ -975,12 +974,11 @@ const FlybySeq = (function () {
    *
    *  Beyond 1 the sequence holds on its last frame rather than looping: the
    *  screen is skippable, so a player who waits should not see it restart. */
-  /** Plan `shots` before they play: a cold corner plan is a visible stall at its
-   *  cut (up to ~0.2 s desktop, ~1 s on a phone). The opening WARM_NOW shots are
-   *  planned at once and the rest one per timer slice, so the RACE! tap does not
-   *  pay for shots 20 s away. Plans go straight into planShot's cache — never
-   *  through solve(), whose cut tracking a background call would disturb. A newer
-   *  warm() (the next load) retires an unfinished one. */
+  /** Plan `shots` before they play: a cold corner plan stalls at its cut (~0.2 s
+   *  desktop, ~1 s phone). The opening WARM_NOW shots are planned at once, the rest
+   *  one per timer slice. Plans go into planShot's cache, never through solve()
+   *  (whose cut tracking a background call would disturb). A newer warm() retires
+   *  an unfinished one. */
   const WARM_NOW = 2;
   let _warmGen = 0;
   function warm(track, shots) {
@@ -1090,6 +1088,7 @@ const FlybySeq = (function () {
     const k = shotCorner(shot);
     _out.corner = _airCorner = typeof k === "number" && k > 0 ? k : 0;
     if (_out.corner) driveHero(track, cornerS(track, _out.corner), t, dur / total * _flyS);
+    else if (shot.roll === "pitexit" && track.pit) rollHero(track, t);
     else restoreHero();
     const reduced = reducedMotion();
     const sway = swayAt(shot, t, reduced);
@@ -1700,13 +1699,11 @@ const FlybySeq = (function () {
    *  report does not score a lap's in-frame share, so without this the cheapest
    *  high eye on Spa framed a third of the lap where the authored one framed
    *  62 %. LAP_SLACK of the authored share is free. */
-  // …and for the road it thins: an eye high enough to see over the trees sees
-  // a thinner ribbon, and Jeddah's and Vegas's raised framings kept a third of
-  // their lap's cover (the report's SUBJECT_SMALL, 0.5 %). The planner's lap
-  // cover is only roughly on the report's scale, so it pays twice: as a RATIO
-  // to the plain framing it would replace (under LAP_THIN of it, LAP_THIN_K a
-  // unit) and under LAP_COVER of the frame (a margin over the report's 0.5 %:
-  // Spa's raised wide reads 0.76 here, 1.0-1.3 there; Jeddah's 0.47 and 0.3).
+  // …and for the road it thins: a high eye sees a thinner ribbon (Jeddah's and
+  // Vegas's raised framings kept a third of their lap cover; the report's
+  // SUBJECT_SMALL is 0.5 %). The planner's cover is only roughly on the report's
+  // scale, so it pays twice: as a RATIO to the plain framing it replaces (under
+  // LAP_THIN of it, LAP_THIN_K a unit) and under LAP_COVER of the frame.
   const LAP_SLACK = 0.08, LAP_LOSS = 200, LAP_TILT = 60, W_HIGH_VIS = 0.6, LAP_THIN = 0.5, LAP_THIN_K = 100, LAP_COVER = 0.006;
   function lapLoss(j0, j, cand, rate) {
     if (!(cand && cand.aim)) return 0;
@@ -2030,7 +2027,7 @@ const FlybySeq = (function () {
     landmarks, bounds, lmBase, landmarkFallback, planShot,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn,
     poseFromWorld, shotFromView, select, setSession, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
-    boundaries, presentation, swayAt, setHeroCars, driveHero, gridProgress,
+    boundaries, presentation, swayAt, setHeroCars, driveHero, rollHero, gridProgress,
     DEFAULT, GRID_SHOTS,
     FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };

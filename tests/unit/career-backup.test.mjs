@@ -2175,3 +2175,14 @@ test("NEW CAREER BACK steps back to the slot picker and restores the borrowed li
   ui.G.$("cr-back").onclick();
   assert.equal(toTitle, 1, "BACK from the title-opened picker then leaves to the title");
 });
+
+test("a MY TEAM identity captured on a device with no GP keys falls back to the caller's default (#4945)", () => {
+  const b = loadHarness();
+  b.Career.start({ flavour: "myteam", teamId: "custom", seed: 1 });
+  assert.equal(b.Career.data().flavour, "myteam");
+  assert.ok(Object.hasOwn(b.Career.data().myTeamIdentity, "livery.custom"), "the nulls are captured as own keys");
+  b.Career.engage(true);
+  assert.equal(b.Career.inCareer(), true);
+  assert.equal(b.Career.identityValue("livery.custom", "default"), "default");
+  assert.equal(b.Career.identityValue("customTeam", "fallback"), "fallback");
+});

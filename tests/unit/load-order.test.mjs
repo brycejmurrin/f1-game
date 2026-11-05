@@ -398,7 +398,8 @@ function lazyFiles() {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
+    ...(MANIFEST.LAZY_DEV || []), ...(MANIFEST.OVERLAY_PAGE || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {

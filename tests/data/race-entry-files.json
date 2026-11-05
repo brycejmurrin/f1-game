@@ -21,6 +21,7 @@
     "js/audio/spotify.js",
     "js/audio/tone-model.js",
     "js/audio/voice-pack.js",
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     "js/data/garage-camera-options.js",
@@ -72,6 +73,7 @@
     "js/track/scenery/themes.js",
     "js/track/scenery/venue.js",
     "js/ui/podium-beat.js",
-    "js/ui/results-sheet.js"
+    "js/ui/results-sheet.js",
+    "js/ui/watch-transport.js"
   ]
 }
