@@ -174,7 +174,7 @@ test("Colour Vision profiles, reset and Undo update the actual owner, palette an
 
 test("profile restore, Undo and reset repaint mounted title and pause controls without duplicating them", () => {
   const { studio, dom } = loadWithControls();
-  const snapshot = studio.snapshot(); snapshot.titleLayout = { btns: { x: 18, size: 130 }, layout: "stack", side: "swap" };
+  const snapshot = studio.snapshot(); snapshot.titleLayout = { btns: { x: 18, size: 130 }, layout: "stack", side: "swap", xUnit: "screen" };
   snapshot.pauseLayout = "sidebar"; snapshot.pauseSide = "right"; snapshot.pauseDim = "off";
   studio.applySnapshot(snapshot); studio.saveProfile("Custom layout");
   const titleCount = dom.byId("pm-titlescreen-body").children.length, pauseCount = dom.byId("pm-pausemenu-body").children.length;

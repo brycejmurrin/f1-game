@@ -49,7 +49,9 @@ const TitleLayout = (function () {
   const PARTS = ["btns", "title", "art"];
   const LAYOUTS = [["grid", "GRID"], ["stack", "STACK"], ["row", "ROW"]];
   const SIDES = [["auto", "AUTO"], ["swap", "SWAPPED"]];
-  const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], size: [50, 200], width: [0, 100] });
+  // bx: the BUTTONS' LEFT/RIGHT (#5126) — % of the SCREEN, unzoomed, so ±100 reaches either safe-area edge at any
+  // WIDTH and SIZE (CSS clamps it there). The title and the drawing keep x in ±50.
+  const LIM = Object.freeze({ x: [-50, 50], bx: [-100, 100], y: [-50, 50], size: [50, 200], width: [0, 100] });
   const DEFAULT = Object.freeze({
     btns: Object.freeze({ x: 0, y: 0, size: 100, width: 0 }),
     title: Object.freeze({ x: 0, y: 0, size: 100 }),
@@ -62,14 +64,22 @@ const TitleLayout = (function () {
   const doc = typeof document !== "undefined" ? document : null;
   const root = doc ? doc.documentElement : null;
 
+  function uiScale() {
+    try { return parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { return 1; }
+  }
   const num = (v, k) => {
     const [lo, hi] = LIM[k];
+    if (k === "bx") return typeof v === "number" && isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v * 10) / 10)) : 0;
     const n = typeof v === "number" && isFinite(v) ? Math.round(v) : DEFAULT.btns[k];   // btns carries every key
     // WIDTH: 0 is AUTO; anything else is at least 20 % of the screen.
     if (k === "width") return n <= 0 ? 0 : Math.max(20, Math.min(hi, n));
     return Math.max(lo, Math.min(hi, n));
   };
-  /** Any stored value -> a complete, clamped layout. Junk reads as shipped. */
+  /** Any stored value -> a complete, clamped layout. Junk reads as shipped.
+   *  THE BUTTONS' X UNIT (#5126, docs/notes/TITLE-LAYERS-2026-11-05.md): a layout marked `xUnit: "screen"` holds
+   *  btns.x as % of the screen. Anything older held it in the cluster's ZOOMED vw (a translate inside a box zoomed by
+   *  UI SIZE × SIZE), so it is read through that zoom, ONCE, at today's UI SIZE: the cluster lands on the same pixel,
+   *  and the next write stores the screen value. The same arithmetic is index.html's first-paint copy. */
   function normalize(v) {
     const o = v && typeof v === "object" ? v : {};
     const out = {};
@@ -78,6 +88,9 @@ const TitleLayout = (function () {
       out[p] = {};
       for (const k of Object.keys(DEFAULT[p])) out[p][k] = num(src[k] === undefined ? DEFAULT[p][k] : src[k], k);
     }
+    const bx = typeof o.btns === "object" && o.btns ? o.btns.x : 0;
+    out.btns.x = o.xUnit === "screen" ? num(bx, "bx") : num(out.btns.x * uiScale() * out.btns.size / 100, "bx");
+    out.xUnit = "screen";
     out.layout = LAYOUTS.some(([id]) => id === o.layout) ? o.layout : "grid";
     out.side = o.side === "swap" ? "swap" : "auto";
     return out;
@@ -100,6 +113,8 @@ const TitleLayout = (function () {
     return out;
   }
 
+  /** The clamp key of one number: the buttons' X has its own range and step. */
+  const limKey = (part, k) => (part === "btns" && k === "x" ? "bx" : k);
   const ALL_VARS = Object.keys(vars({ btns: { width: 50 } }));
   /** The shape the title screen is laid out in right now: body[data-shape]. */
   function shape() {
@@ -174,7 +189,7 @@ const TitleLayout = (function () {
     if (k === "size") return n + "%";
     if (k === "width") return n ? n + "% of screen" : "AUTO";
     if (!n) return "CENTRE";
-    if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
+    if (k === "x") return Math.round(Math.abs(n)) + "% " + (n < 0 ? "left" : "right");
     return Math.abs(n) + "% " + (n < 0 ? "up" : "down");
   };
   const NAMES = { size: "SIZE", width: "WIDTH", x: "LEFT / RIGHT", y: "UP / DOWN" };
@@ -224,7 +239,8 @@ const TitleLayout = (function () {
     function slider(part, k) {
       const id = `pm-tl-${part}-${k}`;
       const out = el("b", { id: id + "-v" });
-      const inp = el("input", { id, type: "range", min: String(LIM[k][0]), max: String(LIM[k][1]), step: "1",
+      const lk = limKey(part, k);
+      const inp = el("input", { id, type: "range", min: String(LIM[lk][0]), max: String(LIM[lk][1]), step: "1",
         attrs: { "aria-label": `${part === "btns" ? "Buttons" : part === "title" ? "Title" : "Car drawing"} ${NAMES[k].toLowerCase()}` } });
       const paint = () => {
         const n = current()[part][k];
@@ -233,7 +249,7 @@ const TitleLayout = (function () {
       };
       inp.addEventListener("input", () => {
         const l = current();
-        l[part][k] = num(parseFloat(inp.value), k);
+        l[part][k] = num(parseFloat(inp.value), lk);
         set(l); out.textContent = pctTxt(k, l[part][k]); paintSum();
         peek(true, 900);
       });
@@ -325,7 +341,8 @@ const TitleLayout = (function () {
      where they overlap, the doors win the pointer.
      A DRAG TRACKS THE POINTER: X is vw and Y is vh, but the two UI pieces are
      zoomed (--ui-scale × their SIZE) and zoom multiplies a translate, so the
-     pixel delta is divided by that zoom. The drawing scales with `scale`, which
+     pixel delta is divided by that zoom — except the BUTTONS' X, already a
+     screen % (#5126; CSS divides it by the zoom itself). The drawing scales with `scale`, which
      does not touch its translate. */
   const PIECES = { btns: "BUTTONS", title: "TITLE", art: "CAR DRAWING" };
   const STEP = { size: 5, width: 5 };
@@ -334,9 +351,6 @@ const TitleLayout = (function () {
   const byId = (id) => doc.getElementById(id);
   const win = () => (typeof window !== "undefined" ? window : {});
   const pieceEl = (p) => (p === "art" ? ed.els.art : byId(p === "btns" ? "menu-buttons" : "menu-brand"));
-  const uiScale = () => {
-    try { return parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { return 1; }
-  };
   const zoomOf = (p, size) => (p === "art" ? 1 : uiScale() * size / 100);
 
   function page(on) {
@@ -450,7 +464,7 @@ const TitleLayout = (function () {
       const r = pieceEl("btns").getBoundingClientRect();
       const w = (p.width || Math.round(r.width / (win().innerWidth || 1) * 100)) + d;
       p.width = w < 20 ? 0 : num(w, "width");
-    } else p[k] = num(p[k] + d, k);
+    } else p[k] = num(p[k] + d, limKey(ed.sel, k));
     set(l);
     paintEd();
   }
@@ -507,8 +521,9 @@ const TitleLayout = (function () {
     if (!ed.on || !d || e.pointerId !== d.id) return;
     const l = current(), p = l[d.part], w = win();
     if (d.mode === "move") {
+      // The buttons' X is % of the screen (#5126), so the pointer's own delta; Y and the title ride their zoom.
       const f = zoomOf(d.part, d.from.size);
-      p.x = num(d.from.x + (e.clientX - d.x0) / (w.innerWidth || 1) * 100 / f, "x");
+      p.x = num(d.from.x + (e.clientX - d.x0) / (w.innerWidth || 1) * 100 / (d.part === "btns" ? 1 : f), limKey(d.part, "x"));
       p.y = num(d.from.y + (e.clientY - d.y0) / (w.innerHeight || 1) * 100 / f, "y");
     } else {
       // SIZE by the corner: the pointer's distance from the piece's centre,

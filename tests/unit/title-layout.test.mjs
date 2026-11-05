@@ -21,7 +21,7 @@ const SHELL = read("index.html");
 const CSS = read("css/responsive.css");
 const plain = (o) => JSON.parse(JSON.stringify(o));
 
-function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
+function boot(stored = {}, { shape = "wide", editor = false, fx = null, gcs = null } = {}) {
   const dom = makeDom();
   const panel = dom.byId("pm-panel-appearance");
   // The shell's TITLE SCREEN fold: summary + body, REPLAY INTRO last in the body.
@@ -63,6 +63,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
     innerWidth: 1000, innerHeight: 500,
   };
   if (fx) sb.TitleFx = fx;   // js/ui/title-fx.js's three title looks (loads first in the shell)
+  if (gcs) sb.getComputedStyle = gcs;   // the live --ui-scale the buttons' X migration reads (#5126)
   sb.window = sb;
   const ctx = vm.createContext(sb);
   for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js", "js/ui/screen-looks.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
@@ -79,9 +80,11 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null } = {}) {
 test("normalize clamps every field and reads junk as shipped", () => {
   const { M } = boot();
   const d = plain(M.normalize(null));
-  assert.deepEqual(d, { btns: { x: 0, y: 0, size: 100, width: 0 }, title: { x: 0, y: 0, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" });
+  assert.deepEqual(d, { btns: { x: 0, y: 0, size: 100, width: 0 }, title: { x: 0, y: 0, size: 100 }, art: { x: 0, y: 0, size: 100 }, xUnit: "screen", layout: "grid", side: "auto" });
   const n = plain(M.normalize({ btns: { x: 90, y: -90, size: 999, width: 5 }, title: { size: "big" }, art: { x: 12.6 }, layout: "diagonal", side: "left" }));
-  assert.deepEqual(n.btns, { x: 50, y: -50, size: 200, width: 20 }, "clamped; a width under 20% of the screen is 20");
+  assert.deepEqual(n.btns, { x: 100, y: -50, size: 200, width: 20 }, "clamped: an unmarked X is the old ±50 in the cluster's zoomed vw (50 at SIZE 200 is 100% of the screen); a width under 20% of the screen is 20");
+  assert.equal(M.normalize({ btns: { x: -140.06 }, xUnit: "screen" }).btns.x, -100, "a screen X clamps to ±100");
+  assert.equal(M.normalize({ btns: { x: 37.26 }, xUnit: "screen" }).btns.x, 37.3, "a screen X keeps tenths");
   assert.equal(n.title.size, 100, "junk is the shipped value");
   assert.equal(n.art.x, 13, "whole percents");
   assert.equal(n.layout, "grid"); assert.equal(n.side, "auto");
@@ -93,7 +96,7 @@ test("untouched, the page carries nothing; custom lands as --tl-* tokens and htm
   const { M, html, data } = boot();
   assert.equal(html.dataset.titleLayout, undefined);
   assert.deepEqual(plain(html.style._decls), {});
-  M.set({ btns: { x: -10, y: 5, size: 120, width: 40 }, art: { size: 150 }, layout: "stack", side: "swap" });
+  M.set({ btns: { x: -10, y: 5, size: 120, width: 40 }, art: { size: 150 }, layout: "stack", side: "swap", xUnit: "screen" });
   assert.equal(html.dataset.titleLayout, "on");
   assert.equal(html.dataset.titleSide, "swap");
   assert.equal(html.dataset.titleBtns, "stack");
@@ -138,6 +141,36 @@ test("index.html's first-paint copy writes exactly what the module writes", () =
     assert.deepEqual(de.style._d, want, "and both are TitleLayout.vars of the shape's layout: " + why);
   }
   assert.ok(SHELL.indexOf("// Title layout: apex26.titleLayout") > SHELL.indexOf('b.setAttribute("data-shape"'), "it runs after data-shape is known");
+});
+
+test("#5126 migration: an unmarked buttons X is the old zoomed vw, read once through today's zoom, then stored as a screen %", () => {
+  // Bryce's saved landscape layout (tests/data/settings-defaults-export.json): X -2 at SIZE 91, a v2 object with no xUnit.
+  const saved = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/settings-defaults-export.json"), "utf8")).settings.appearance.titleLayout;
+  assert.equal(saved.wide.xUnit, undefined, "the export predates the marker");
+  const { M, data, html } = boot({ titleLayout: plain(saved) });
+  const was = Math.round(saved.wide.btns.x * 1 * saved.wide.btns.size / 100 * 10) / 10;   // the old translate in screen vw, UI SIZE 1
+  const l = M.normalize(saved.wide);
+  assert.equal(l.xUnit, "screen");
+  assert.equal(l.btns.x, was, "the same screen offset");
+  assert.equal(html.style.getPropertyValue("--tl-btns-x"), was + "vw", "applied at eval without a write");
+  assert.deepEqual(plain(data.titleLayout), plain(saved), "reading migrates nothing in the store");
+  M.set(M.current());
+  assert.equal(data.titleLayout.wide.xUnit, "screen", "the next write stores the marker");
+  assert.equal(data.titleLayout.wide.btns.x, was, "and the screen value");
+  assert.deepEqual(plain(M.normalize(data.titleLayout.wide)), plain(l), "a marked layout reads back unchanged (idempotent)");
+});
+
+test("#5126 migration: the conversion uses the live UI SIZE, in the module and the first-paint copy alike", () => {
+  const saved = { v: 2, wide: { btns: { x: -10, y: 0, size: 150, width: 40 }, layout: "grid", side: "auto" } };
+  const m = SHELL.match(/\/\/ Title layout: apex26\.titleLayout[\s\S]*?\n    try \{\n([\s\S]*?)\n    \} catch \(e\) \{ \/\* TitleLayout answers at eval \*\/ \}/);
+  const de = { style: { _d: {}, setProperty(k, v) { this._d[k] = v; } }, dataset: {} };
+  const gcs = () => ({ getPropertyValue: (k) => (k === "--ui-scale" ? "1.09" : "") });
+  vm.runInContext(m[1], vm.createContext({ localStorage: { getItem: () => JSON.stringify(saved) }, document: { documentElement: de }, JSON, Math,
+    getComputedStyle: gcs, b: { getAttribute: () => "wide" } }), { filename: absSrc("index.html") });
+  const want = Math.round(-10 * 1.09 * 1.5 * 10) / 10;   // -10 zoomed vw at UI SIZE 1.09 × SIZE 150%
+  assert.equal(de.style._d["--tl-btns-x"], want + "vw", "first paint");
+  const { M } = boot({ titleLayout: saved }, { gcs });
+  assert.equal(M.current("wide").btns.x, want, "the module reads the same");
 });
 
 test("v1 → v2: a one-layout store is BOTH shapes, and the next write keeps the untouched shape", () => {
@@ -371,7 +404,8 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   // Gated at the front, or (inside the large-landscape block, whose selectors
   // must START with the density guard) by a :where(:root[data-title-side]) clause.
   for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|:root\[data-tl-edit\]|:root\[data-appearance-peek(="title")?\]|:where\(body:not\(\[data-density="compact"\]\)\):where\(:root\[data-title-side="swap"\] \*\))/, `gated: ${s}`);
-  assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: var\(--tl-btns-x, 0\) var\(--tl-btns-y, 0\)/);
+  // #5126: the buttons' X is a screen %, divided by the cluster's own zoom once, and every placement reads --_tl-bx.
+  assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*--_tl-bx: calc\(var\(--tl-btns-x, 0vw\) \/ \(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)\);[^}]*translate: var\(--_tl-bx\) var\(--tl-btns-y, 0\)/);
   assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)/);
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
 });

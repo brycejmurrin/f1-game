@@ -235,8 +235,12 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    replacing them. Size is zoom on the two UI pieces so a bigger cluster still
    takes up layout room and scrolls like the shipped one; the drawing is not a
    grid item, so it scales from its foot. */
+/* THE BUTTONS' X IS % OF THE SCREEN (#5126; docs/notes/TITLE-LAYERS-2026-11-05.md). Every length in this zoomed box
+   is multiplied by its zoom, so the screen offset is divided by it once, here, and every rule that places the
+   cluster reads --_tl-bx. Y keeps the zoomed vh it always had. */
 :root[data-title-layout] #menu-buttons {
-  translate: var(--tl-btns-x, 0) var(--tl-btns-y, 0);
+  --_tl-bx: calc(var(--tl-btns-x, 0vw) / (var(--ui-scale) * var(--tl-btns-size, 1)));
+  translate: var(--_tl-bx) var(--tl-btns-y, 0);
   zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1));
 }
 :root[data-title-layout] #menu-brand {
