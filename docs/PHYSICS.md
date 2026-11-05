@@ -1199,7 +1199,7 @@ classified into its legitimate channel. Audited 2026-08-27 by the
 physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
 telemetry. `tests/unit/curvature-channels.test.mjs` asserts every file that
-reads curvature appears here, so a new consumer must be classified before
+reads curvature appears here, pins the `kCur`/`kTurn`/`kPath`/`TrackLine`/`bankAngle` reads per file, and checks the human arms of `updateCarBrakePlan`/`updateCarLateral`/`updateCarBicycle` hold none outside `ROAD_FOLLOW`/`raceLineAssist` (#4950), so a new consumer must be classified before
 it lands.
 
 | file | sites (symbol) | channel | why it never reaches the player with assists off |
@@ -1223,6 +1223,8 @@ it lands.
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
 | `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue. Its condition-aware estimate (`conditionCues`, default ON since #2177) scales the cue's grip by weather/tread and solves the corner speed with the car's aero load; still no force path (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md) |
 | `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
+| `js/camera/flyby-seq.js` | `driveHero` (`TrackLine.at`) | **broadcast-only** | the pre-race flyby moves the player's pose along the baked line for the camera and restores it before the lights; no force or steer input sees the line (#4950) |
+| `js/physics/collide.js` | `cornerK(a.kTurn, b.kTurn)` | **AI-only** | read only when NEITHER car is human, so a player rub never takes an arc-derived value (#4950) |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/perf/soak-run.js` | `probe` + the `control` look-ahead loop (AUTO SOAK) | **assist-gated** | a soak-only INPUT SYNTHESISER, the same law as `tests/specs/autopilot.spec.js`: it writes `G._testInput` (the seam `inputOf()` reads for the local car) and nothing else on the car. It exists only between `SoakRun.start()` and `finish()`; the sole caller of `start()` is PhoneRecorder's AUTO SOAK button, and it is not a setting, persists nothing, and clears `_testInput` on completion, quit, or a hidden page. A normal race never reaches it, with assists on or off |

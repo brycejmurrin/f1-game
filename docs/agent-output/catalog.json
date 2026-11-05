@@ -2642,6 +2642,14 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/emit-json.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/lib/flicker-metric.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
