@@ -288,7 +288,8 @@ const NetLobby = (function () {
             if (G.setNetRoom) G.setNetRoom(true);
             // Only a CODE room rotates: a link/QR room never advertised one, and
             // minting it here left a public code up to expire later (H3-7).
-            const hadCode = !!(codeRoom || codeReopenTimer);
+            const hadCode = !!(codeRoom || codeReopenTimer || fullCode);
+            fullCode = null;   // the evicted player holds that code (#4937)
             stopCodeWait();
             dropPending();
             codeReopen = null;
@@ -331,7 +332,9 @@ const NetLobby = (function () {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
             }
           }
-          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();   // a removed player must not walk back in on the reopened code
+          const evictHadCode = wasHostEvict && role === "host" && !!(codeRoom || codeReopenTimer || fullCode);
+          if (wasHostEvict && role === "host") fullCode = null;   // the evicted player still holds a full room's code (#4937)
+          if (evictHadCode && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace())) rotateRoomAfterEvict();   // a removed player must not walk back in on the reopened code
           else if (!wasHostEvict && role === "host" && !friendQualifying && fullCode && !codeReopenTimer) {
             codeReopen = fullCode; fullCode = null; reopenRoom(true); }   // a full room consumed its reopen (#4820)
         }
@@ -382,7 +385,7 @@ const NetLobby = (function () {
       // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
       // teardowns with nobody connected — leaving the string made the next
       // unrelated onConnected quietly reopen that dead room code.
-      codeReopen = null;
+      codeReopen = null; fullCode = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear();
