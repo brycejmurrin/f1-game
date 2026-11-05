@@ -546,7 +546,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `experience.js` | `GarageExperience` | tag | reversible garage/home cameras, ambient clock, and honest part comparisons. |
-| `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants. |
+| `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants: the room's dimensions and wall colours, the block / cylinder / tube / hose / tile /… |
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
@@ -565,7 +565,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
 | `setup-trials.js` | `SetupTrials` | tag | Deliberate unscored launch comparisons. |
 | `setup-presets.js` | `SetupPresets` | tag | Named, bounded mechanical sheets. |
-| `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
+| `setup-experiments.js` | `SetupExperiments` | tag | the SETUP tab: tune sliders, reversible symptom experiments and the active-aero bench. |
 | `livery-design-editor.js` | `GarageLiveryDesignEditor` | tag | Livery editing tools. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 | `entrance-motion.js` | `GarageEntranceMotion` | LAZY_RACE | Blender-authored entrance motion. |

@@ -2896,7 +2896,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
-  const suspended = raceCtl.level === 4;   // ended under a red flag, never resumed: B6.3.6's 30 s, not a DSQ
+  const suspended = raceCtl.level === 4 && !RaceControl.flagOut(cars);   // a red never resumed, not one after the chequer (#4942): B6.3.6's 30 s
   // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
   // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
   const cmpApplies = pits.twoCompoundApplies();
@@ -2974,7 +2974,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
-  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out).concat(dsq));   // DSQ: last, no points
+  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out, suspended).concat(dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
   Log.info("game", "Race finished track=" + (track && track.def.id) + " session=" + session + " laps=" + lapsTarget + " pos=" + (player ? player.finPos : "-") + " time=" + (player && player.finished ? (+player.finishT).toFixed(3) : "-") + " pen=" + ((player && player.penalty) || 0) + "s" + (player && player.dsq ? " dsq=" + player.dsq : "") + " retired=" + out.length + " dsqs=" + dsq.length + (suspended ? " suspended" : ""));
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
@@ -4828,7 +4828,7 @@ function collideFx(a, b, impact) {
 }
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
-const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
+const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, zoneBraking: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
@@ -5420,7 +5420,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     const br = AiDrive.brakeDecision(_aiBr);
     braking = br.braking;
     brakeLvl = br.brakeLvl;
-    if (aiLod) aiLod.put(c, braking, brakeLvl, kMax);
+    if (aiLod) aiLod.put(c, braking, brakeLvl, kMax); S.zoneBraking = braking;
     }
     // Slipstream: in the wake ahead on a straight, shed drag and gain top speed —
     // what lets a following car CLOSE and pull out to pass instead of queueing.
@@ -5887,10 +5887,9 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = S.pvB;
       _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c); defend = AiDrive.defendPull(_aiDefend);
     }
-    // One defensive move per straight (AiDrive.defendOnce); the side resets in
-    // the braking zone, where defending is over anyway (holdLine below).
-    if (braking || caution) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
-    else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
+    // One move per straight (defendOnce): the side resets in the braking zone only.
+    if (S.zoneBraking || caution) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA)
+    else if (braking) defend = 0; else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side; when both sides are gone (a wall pile), pull TOWARD the
     // centre of the road so a stacked group fans off the barrier instead of all
@@ -6157,7 +6156,7 @@ function updateCarBicycle(c, dt, ranked, S) {
     pf.surfaceMu = surfaceMu; pf.kerbGrip = kerbGrip; pf.bankMu = bankMu; pf.modsCornering = mods.cornering; pf.modsBraking = mods.braking;
     pf.loadF = loadF; pf.loadR = loadR; pf.vertLoad = vertLoad; pf.af = af; pf.ar = ar; pf.sp = sp; pf.steer = steer;
     pf.weatherGrip = gmC; pf.aeroDf = aeroDfMult(c); pf.dirtyMul = dirtyAirMul(c.wake || 0, c.speed);
-    pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres; pf.damage = typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c) : null;   // #1578: null unless the opt-in is ON
+    pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres; pf.damage = typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c, isTimeTrial()) : null;
     playerForces.step(c, pf);
     if (Wind.latA()) c.vLat += Wind.latA() * vT / VMAX * dt;   // crosswind side force (js/race/wind.js; capped)
     const fx = Math.sin(c.head), fz = Math.cos(c.head);

@@ -211,8 +211,7 @@ const STRIP = {
   // → #3280 cantilever gantries keep one mast (2026-10-26): the two Monaco
   //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
   // → #4724 coplanar slab offsets (hedge/fence/street-barrier panels): 274099 → 274063, strip-after 255176 → 254867.
-  // → #4970 hidden-faces keeps boxes a swaying FOLIAGE box encloses: Monaco strip-after 254804 → 257210 (emission unchanged).
-  monaco: { before: 273991, after: 257210 },
+  monaco: { before: 273991, after: 254804 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -267,8 +266,7 @@ const STRIP = {
   // → #4724 coplanar slab offsets: strip-after 284510 → 284209.
   // → #4799 flat-coplanar fixes (tyre-cap lift, place() slot lift, hedge slab de-dup):
   //   monaco 274063/254867 → 273991/254804, monza 313432/284209 → 312472/283945.
-  // → #4967/#4970 tier-cap + ridge corner guard (2026-11-04): monza emission 312472 → 312352.
-  monza: { before: 312352, after: 283845 },
+  monza: { before: 312472, after: 283945 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

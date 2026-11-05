@@ -264,7 +264,7 @@ const GarageArrival = (function () {
     return out;
   }
   /** opts.preview(moment, btn) starts one playback of the picked moment (null stops one; both return whether
-   *  they acted; setup-camera.js startArrivalPreview); opts.changed() follows every saved edit. */
+   *  they acted); changed() follows a saved edit; momentChanged(m), copied(m), reset(m) a tab, COPY, RESET. */
   /* THE ANGLE MAP: the bay in plan under GARAGE ANGLE (walls, door, lane, car, the five CAMS with cones), the
    * used eyes lit and numbered by shot. Pure SVG; x maps to 10..110, z (-6.4 .. 6.4) to 8..92. */
   function angleMap(angle, shots, dir = "in") {
@@ -284,8 +284,8 @@ const GarageArrival = (function () {
       + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`;
     // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
     if (rigData(angle)) {
-      const pts = [];
-      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, dir === "out" ? "out" : "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
+      const pts = [], d = dir === "out" || dir === "home" ? dir : "in";
+      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, d, i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
       const a = pts[0].split(" "), b = pts[16].split(" ");
       return room + `<polyline points="${pts.join(" ")}" fill="none" stroke="#e10600" stroke-width="2" stroke-dasharray="4 3"/>`
         + `<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>`
@@ -294,12 +294,8 @@ const GarageArrival = (function () {
     return room + CAM_IDS.map(eye).join("");
   }
   const CAM_NAMES = Object.freeze({ left: "left of the bay", right: "right of the bay", high: "high corner", low: "floor level", door: "door jamb" });
-  /* THE ROWS BEYOND THE SHIPPED FORM, built from these tables into #ga-rows once
-   * (index.html's node budget is shrink-only: tests/data/ratchets.json shellNodes).
-   * A row: [id, label, options as [value, text] (or a function making them: the
-   * moods are GarageScene's) | "check"];
-   * a string is a help line; { group, rows } a block CUSTOM shows and hides. The
-   * extra GARAGE ANGLE presets join #ga-angle's shipped three the same way. */
+  /* THE ROWS BEYOND THE SHIPPED FORM, built into #ga-rows once (the shell's node budget is shrink-only): [id, label,
+   * options | () => options | "check"]; a string is a help line, { group, rows } a block CUSTOM shows and hides. */
   const CAM_TEXT = Object.freeze({ left: "LEFT BAY", right: "RIGHT BAY", high: "HIGH CORNER", low: "FLOOR LEVEL", door: "DOOR JAMB" });
   const camOpts = () => CAM_IDS.map((id) => [id, CAM_TEXT[id]]);
   const crewOpts = (first) => [first, ["current", "GARAGE CREW"], ["guides", "GUIDE CREW"], ["service", "SERVICE CREW"], ["welcome", "WELCOME CREW"], ["none", "NO CREW"]];
@@ -340,7 +336,7 @@ const GarageArrival = (function () {
   const ANGLE_TEXT = Object.freeze({ high: "HIGH CORNER", low: "FLOOR LEVEL", door: "DOOR JAMB", director: "DIRECTOR · THREE CAMERAS", custom: "CUSTOM · PICK EACH SHOT" });
   function buildRows($) {
     const doc = typeof document !== "undefined" && document.createElement ? document : null, angle = $("ga-angle"), fov = $("ga-fov");
-    // Once: the presets' options are the mark (a second bindSettings builds nothing).
+    // Once: the presets mark it.
     if (!doc || !angle || !fov || !angle.closest || !fov.closest || Array.from(angle.children || []).some((o) => o.value === "custom")) return;
     for (const id of Object.keys(ANGLE_TEXT)) { const o = doc.createElement("option"); o.value = id; o.textContent = ANGLE_TEXT[id]; angle.appendChild(o); }
     for (const id of RIG_IDS) { const o = doc.createElement("option"); o.value = id; o.textContent = "BLENDER · " + RIG_LABEL[id]; angle.appendChild(o); }
@@ -378,8 +374,7 @@ const GarageArrival = (function () {
       }
       first.parentNode.insertBefore(bar, first);
     }
-    // THE MOMENT TABS head the rows: every row below edits the picked moment
-    // (EditorWorkspace lifts them into its always-visible sequence row).
+    // THE MOMENT TABS head the rows (EditorWorkspace lifts them into its sequence row).
     const rows = $("ga-rows");
     if (rows) {
       const tabs = make("div", "balanced-row ga-moments");
@@ -398,9 +393,7 @@ const GarageArrival = (function () {
       reset.parentNode.insertBefore(b, kids[kids.indexOf(reset) + 1] || null);
     }
   }
-  /* Rows that only mean something for some moments (the crew that meets or sees
-   * the car off, AFTER THE RACE's by-result picks); every other row is every
-   * moment's. PLAY AFTER A RACE folds into RACE END's PLAY ANIMATIONS. */
+  // Rows only some moments use; PLAY AFTER A RACE folds into RACE END's PLAY ANIMATIONS.
   const ROW_MOMENTS = Object.freeze({ enterCrew: ["pitIn"], leaveCrew: ["start", "pitOut"],
     light: ["start", "pitIn", "pitOut"], cue: ["start", "pitIn", "pitOut"], afterRace: [],
     homeCrew: ["home"], homeLight: ["home"], homeCue: ["home"], result: ["home"], race: ["home"] });
@@ -419,11 +412,10 @@ const GarageArrival = (function () {
       captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo"), sound: $("ga-sound"), cue: $("ga-cue"), homeCue: $("ga-cue-home"),
       race: $("ga-race") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
-    // STYLE quick-picks: one tap lays a look over the saved settings (save() is below; a click comes after).
+    // STYLE quick-picks lay a look over the saved settings.
     for (const id of Object.keys(STYLES)) { const b = $("ga-style-" + id); if (b) b.onclick = () => save(applyStyle(read(), id)); }
     const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell", "slowmo"], CHECK = ["enabled", "afterRace", "captions", "bars", "sound"];
-    // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
-    // their own table, once: the static five stay index.html's.
+    // MIX and the Blender crews join each crew picker from their own table, once.
     const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
     for (const [key, dir] of [["enterCrew", "in"], ["leaveCrew", "out"], ["homeCrew", "in"]]) {
       const el = fields[key], ids = typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.IDS[dir].filter((id) => key === "homeCrew" || !resultClip(id)) : [];
@@ -431,6 +423,15 @@ const GarageArrival = (function () {
       el.add(option("mix", "MIX: NEW CREW EACH VISIT"), 0);
       const none = Array.from(el.options).find((o) => o.value === "none") || null;
       for (const id of ids) el.add(option(id, GarageCrewChoreo.label(id)), none);
+    }
+    // An off-list value (PIT OUT 1.6x, a STYLE's 4 deg zoom) gets an option, not a blank select.
+    const offOpts = new WeakSet();
+    function offList(el, want) {
+      if (!el.add || !el.options) return;
+      for (const o of Array.from(el.options)) if (offOpts.has(o) && o.value !== want) o.remove();
+      if (Array.from(el.options).some((o) => o.value === want)) return;
+      const o = option(want, want); offOpts.add(o);
+      el.add(o, Array.from(el.options).find((x) => +x.value > +want) || null);
     }
     function refresh() {
       const value = read();
@@ -444,8 +445,9 @@ const GarageArrival = (function () {
       for (const key of Object.keys(fields)) {
         const el = fields[key];
         if (!el) continue;
-        if (CHECK.includes(key)) el.checked = value[key];
-        else el.value = key === "hold" && value.hold === null ? "auto" : String(value[key]);
+        if (CHECK.includes(key)) { el.checked = value[key]; continue; }
+        const want = key === "hold" && value.hold === null ? "auto" : String(value[key]);
+        offList(el, want); el.value = want;
       }
       shotEls.forEach((el, i) => { if (el) el.value = value.shots[i]; });
       const style = styleOf(value);
@@ -453,8 +455,7 @@ const GarageArrival = (function () {
       // CUSTOM's three per-shot pickers only show under CUSTOM.
       const row = $("ga-shots-row");
       if (row) row.hidden = value.angle !== "custom";
-      // The angle map lives next to the selector it explains (made once, here:
-      // the panel's markup is index.html's, this picture is the setting's).
+      // The angle map, made once, beside its selector.
       const sel = $("ga-angle");
       let map = $("ga-angle-map");
       if (!map && sel && sel.insertAdjacentHTML) {
@@ -462,10 +463,10 @@ const GarageArrival = (function () {
         map = $("ga-angle-map");
       }
       if (map) {
-        const dir = MOMENT_DIR[moment] === "out" ? "out" : "in";
+        const dir = MOMENT_DIR[moment];
         map.innerHTML = angleMap(value.angle, value.shots, dir);
         const used = shotsFor(value, dir);
-        if (map.setAttribute) map.setAttribute("aria-label", RIGS[value.angle] ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
+        if (map.setAttribute) map.setAttribute("aria-label", rigData(value.angle) ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
           : value.angle === "cut" ? "Two camera cut: left of the bay, then right"
           : new Set(used).size === 1 ? "One camera, " + CAM_NAMES[used[0]] + ", looking out of the door"
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
@@ -498,18 +499,19 @@ const GarageArrival = (function () {
     }
     const copyAll = $("ga-copy-all");
     if (copyAll) copyAll.onclick = () => {
-      const value = read(), ms = {};
-      for (const m of MOMENTS) ms[m] = settings(value);
-      store1(ms); refresh(); if (changed) changed();
+      const value = read(), ms = {};   // the look, not each moment's own switch
+      for (const m of MOMENTS) { const own = settingsFor(raw(), m); ms[m] = Object.assign(settings(value), { enabled: own.enabled, afterRace: own.afterRace }); }
+      store1(ms); if (opts.copied) opts.copied(moment);
+      refresh(); if (changed) changed();
     };
     shotEls.forEach((el, i) => { if (el) el.onchange = () => { const value = read(); value.shots[i] = el.value; save(value); }; });
     $("ga-reset").onclick = () => {
       const ms = momentsNow();
       ms[moment] = settings(MOMENT_BASE[moment] || {});
-      store1(ms); refresh(); if (changed) changed();
+      store1(ms); if (opts.reset) opts.reset(moment);
+      refresh(); if (changed) changed();
     };
-    // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
-    // it takes the settings page's place while open and gives it back on DONE.
+    // ADVANCED VISUALS tool, docked right: it takes the settings page's place until DONE.
     const page = (on) => {
       const ps = $("pmsettings"), dp = $("pm-panel-display");
       if (ps) ps.hidden = !on;
@@ -527,8 +529,7 @@ const GarageArrival = (function () {
       if (preview && preview(null)) return;   // DONE (or Escape) mid-playback stops it, back to the panel
       panel.hidden = true; page(true);
       if (typeof document !== "undefined" && document.body) document.body.classList.remove("lt-open");
-      // After the settings dialog's own re-show handling, which focuses its
-      // CLOSE door; a tool's DONE hands focus back to the tool's button.
+      // After the settings dialog's re-show, DONE hands focus back to the tool's button.
       if (openBtn && openBtn.focus) { if (typeof setTimeout === "function") setTimeout(() => openBtn.focus(), 0); else openBtn.focus(); }
     };
     refresh();

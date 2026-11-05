@@ -2058,7 +2058,8 @@ test('THE FOUR MOMENTS: an edit lands in the picked moment only; COPY TO ALL and
   assert.deepEqual([...Arrival.ROW_MOMENTS.homeCrew], ['home'], 'AFTER-RACE rows are RACE END\'s only');
   $('ga-moment-pitIn').onclick(); $('ga-copy-all').onclick();
   assert.deepEqual([...Arrival.MOMENTS].map((m) => Arrival.settingsFor(saved, m).angle), ['low', 'low', 'low', 'low'], 'COPY TO ALL');
-  assert.equal(Arrival.settingsFor(saved, 'home').enabled, true, 'a copy carries the picked moment\'s switch');
+  // #4909: the look, not the switch: copying from an OFF moment had switched the other three off.
+  assert.equal(Arrival.settingsFor(saved, 'home').enabled, false, 'a copy keeps each moment\'s own switch');
   $('ga-reset').onclick();
   assert.deepEqual([...Arrival.MOMENTS].map((m) => Arrival.settingsFor(saved, m).angle), ['low', 'cut', 'low', 'low'], 'RESET: the picked moment only');
   assert.equal(Arrival.saved({ moments: { pitIn: { angle: 'x' }, bogus: {} } }).moments.pitIn.angle, 'cut', 'moments normalize; unknown ids drop');

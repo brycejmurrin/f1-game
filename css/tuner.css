@@ -1515,6 +1515,13 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
    workspace's always-visible sequence row); every row below edits it. */
 :is(#ga-moments, #garrival [data-editor-sequences]) > button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
+/* PHONE LANDSCAPE (844x390, #4909): the rows pane was an 82px band under two-line moment tabs and the
+   save note. One-line 44px tabs, no note and a smaller map give the rows ~136px; taps stay >= 44px. */
+@media (orientation: landscape) and (max-height: 420px) {
+  #garrival-inner.editor-workspace > .ew-note { display: none; }
+  #garrival [data-editor-sequences] > button { white-space: nowrap; padding-inline: calc(var(--gap) / 3); font-size: var(--fs-micro); line-height: 1.1; }
+  #ga-angle-map { max-width: 112px; }
+}
 /* ENTRY / EXIT CAMERA OPTIONS (injected by the garage camera-options binder) */
 #ga-cam-options { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); margin: 0 0 var(--gap); padding: calc(var(--gap) / 2) 0; border-top: 1px solid var(--card-line); border-bottom: 1px solid var(--card-line); }
 #ga-cam-options > .adv-help { margin: 0 0 calc(var(--gap) / 2); font-size: var(--fs-micro); line-height: 1.35; color: var(--muted); }

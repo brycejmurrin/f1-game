@@ -88,6 +88,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/cursor-transcript.mjs** | Parse Cursor run streams into rows: chat, tool calls (args, outcome, result head), failures, results; modes + masking. | steward |
 | **lib/custom-survey-locations.mjs** | Native custom-design imports and source-located authored scenery targets (no browser). | — |
 | **lib/deploy-status.mjs** | deploy.mjs verdict markers (`= deploy start/done` in artifacts/logs/deploy.log) and the reader for --status/--wait. | — |
+| **lib/emit-json.mjs** | Write a CLI --json document to stdout synchronously; a failed write exits non-zero, never a silent truncation. | — |
 | **lib/flicker-metric.mjs** | Pure per-pixel temporal-instability metric for `shot/flicker-gate.mjs`: luma, flip masks, 8-connected clusters, verdict. | playwright-probe |
 | **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
 | **lib/frame-fleet.mjs** | Pure FLEET half of frame-report.mjs: compact per-circuit reports, worst-frame summary, and the old-vs-new diff. | — |
