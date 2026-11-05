@@ -1,0 +1,1 @@
+Fixed: livery WHEELS & BRAKES picks now show on the garage car and in its arrival, pit and drive-out moments (#4907). Wheel, tyre and brake styles were missing there, and a wheel style's own rim colour was missing on every car, including in the race.

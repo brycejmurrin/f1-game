@@ -370,7 +370,7 @@ const SceneryStands = (function () {
         for (let t = 0; t < tiers; t++) {
           const a = anchor(k, side, gap + t * tierDepth);
           const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + t * tierDepth));
-          const row = curveTier(a, kn, 0, tierDepth * 0.465, 0.98, spacing, side, gap, k);
+          const row = curveTier(a, kn, 0, tierDepth * 0.465, 0.98, spacing, side, gap + t * tierDepth, k);
           if (row.seg <= 0) continue;
           const b = row.b;
           seg = row.seg;
@@ -388,7 +388,7 @@ const SceneryStands = (function () {
         if (opts.roof && seg > 0) {
           const aR = anchor(k, side, gap + (tiers - 0.5) * tierDepth);
           const knR = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + (tiers - 0.5) * tierDepth));
-          const roof = curveTier(aR, knR, 0, tierDepth * 0.65, 0.98, spacing, side, gap, k);
+          const roof = curveTier(aR, knR, 0, tierDepth * 0.65, 0.98, spacing, side, gap + (tiers - 0.5) * tierDepth, k);
           const bR = roof.b, rSeg = roof.seg || seg;
           const ry = base + (tiers - 1) * rise + 2.6;
           if (!rejBox(vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1], bR)) {

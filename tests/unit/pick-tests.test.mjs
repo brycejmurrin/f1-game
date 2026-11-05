@@ -22,7 +22,7 @@ const manifestFiles = () => [
   ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
   ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []), ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_CIRCUIT || []), ...MANIFEST.LAZY_SCENERY, ...(MANIFEST.LAZY_AUDIO || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
   ...(MANIFEST.LAZY_EDITOR || []), ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-  ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
+  ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_DEV || []), ...(MANIFEST.OVERLAY_PAGE || []),
 ];
 const run = (...args) =>
   execFileSync("node", ["tools/ci/pick-tests.mjs", "--json", ...args],
@@ -315,4 +315,14 @@ test("an index.html edit selects the service-worker group (the precached shell a
   assert.ok(groups.includes("service-worker"), `index.html must pick service-worker, got ${groups}`);
   assert.ok(groups.includes("baseline") && groups.includes("ui"), "the existing routes stay");
   assert.ok(!json("css/hud.css").groups.some((g) => g.group === "service-worker"), "a stylesheet edit does not drag it in");
+});
+
+// #4943: `console.log(json); process.exit(0)` lost the tail of a piped document above
+// ~145 KB and still exited 0. Every path under js/ is a document well past that.
+test("--json survives a wide diff over a pipe (no truncation)", () => {
+  const files = execFileSync("git", ["ls-files", "js"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
+  const out = execFileSync("node", ["tools/ci/pick-tests.mjs", "--json", ...files],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20, stdio: ["ignore", "pipe", "inherit"] });
+  assert.ok(out.length > 100_000, `document only ${out.length} B — the repro no longer exercises the pipe limit`);
+  assert.equal(JSON.parse(out).files.length, files.length);
 });

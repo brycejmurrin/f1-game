@@ -157,7 +157,12 @@ const DockLayout = (function () {
     function docks() {
       return { L: $("dock-left"), R: $("dock-right") };
     }
-    function paint() { apply(schemeOf(), bag, docks()); }
+    // The translate is divided by the dock's zoom AT PAINT TIME, so a later zoom change
+    // (a SIZE step, the race fit capping --hud-z-dock, body.in-race) left it scaled by
+    // z_new / z_old: the saved offset landed shifted (#5025). paintedZ names the zooms it used.
+    let paintedZ = "";
+    function zKey() { const d = docks(); return zoomOf(d.L) + "," + zoomOf(d.R); }
+    function paint() { paintedZ = zKey(); apply(schemeOf(), bag, docks()); }
     // During a drag: pad cached at pointerdown, fit invalidated once per frame.
     let fitRaf = 0;
     function fitNow() {
@@ -200,6 +205,7 @@ const DockLayout = (function () {
       // then re-run the slider's paint so its "fits N%" reads the fresh cap.
       if (G.refreshHud) G.refreshHud(true);
       el.dispatchEvent(new Event("input", { bubbles: true }));
+      paint();
       paintBar();
     }
     function paintBar() {
@@ -449,6 +455,16 @@ const DockLayout = (function () {
           paint();
         }
       });
+    }
+
+    if (typeof MutationObserver === "function" && typeof document !== "undefined" && document.documentElement) {
+      let zRaf = 0;
+      const onZoom = () => {
+        if (zRaf || typeof requestAnimationFrame !== "function") return;
+        zRaf = requestAnimationFrame(() => { zRaf = 0; if (zKey() !== paintedZ) paint(); });
+      };
+      new MutationObserver(onZoom).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+      if (document.body) new MutationObserver(onZoom).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
 
     paint();

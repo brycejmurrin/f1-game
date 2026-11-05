@@ -1751,6 +1751,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/emit-json.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/chromium-path.mjs": {
       "action": "protocol-only",
       "presentation": "native",

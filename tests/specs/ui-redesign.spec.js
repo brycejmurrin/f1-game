@@ -384,6 +384,12 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
 
   // Settings: at 200%, landscape still spends one row on its three categories.
   await page.setViewportSize({ width: 852, height: 393 });
+  // #5091: the portrait -> landscape flip swaps the per-orientation appearance
+  // values (#4529) through the LAZY LayoutPresets bundle, which can land AFTER
+  // the 200% below and put the parked UI SIZE back, so the fit read "off" about
+  // 2 runs in 3 on CI. Let the swap settle first; the tolerance is unchanged.
+  await page.waitForFunction(() => document.body.getAttribute("data-shape") === "wide", null, { polling: 100, timeout: 5_000 });
+  await page.evaluate(async () => { await SettingsNav.presets(); });
   await page.evaluate(() => {
     document.getElementById("cs-back").click();
     document.getElementById("sel-back").click();

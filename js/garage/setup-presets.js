@@ -2,8 +2,15 @@
 const SetupPresets = (function () {
   "use strict";
   const PREFIX = "setupPresets.", MAX = 12;
+  const FEEDBACK = { full: "Twelve setups saved. Delete one before saving another.", name: "That name is already used. Choose a new name.",
+    invalid: "Enter a name for this setup.", incompatible: "This preset library uses an unsupported or damaged format. Export it before replacing anything.",
+    changed: "The setup changed since the preview. Preview it again.", missing: "That saved setup is no longer available." };
   let sequence = 0;
   const key = (team) => PREFIX + team;
+  const revision = (store, k) => store.keyRevision ? store.keyRevision(k) : null;
+  const outcome = (result) => ({ ok: result.ok !== false, durable: result.durable !== false, reason: result.reason || null });
+  const cleanText = (v, n) => typeof v === "string" ? v.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, n) : null;
+  const cleanTrackId = (v) => typeof v === "string" ? v.slice(0, 128) : null;
   function cleanTune(tune) {
     if (!tune || typeof tune !== "object") return null;
     const out = {};
@@ -17,13 +24,12 @@ const SetupPresets = (function () {
   }
   function cleanContext(raw) {
     if (!raw || raw.v !== 1) return null;
-    const text = (v, n) => typeof v === "string" ? v.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, n) : null;
     const parts = {};
     if (raw.parts && typeof raw.parts === "object") for (const k of Object.keys(raw.parts).sort().slice(0, 32)) {
-      if (/^[a-z0-9_-]{1,48}$/i.test(k) && typeof raw.parts[k] === "string") parts[k] = text(raw.parts[k], 96);
+      if (/^[a-z0-9_-]{1,48}$/i.test(k) && typeof raw.parts[k] === "string") parts[k] = cleanText(raw.parts[k], 96);
     }
-    return { v: 1, physics: text(raw.physics, 96), track: text(raw.track, 128), parts,
-      note: text(raw.note, 160) || "" };
+    return { v: 1, physics: cleanText(raw.physics, 96), track: cleanText(raw.track, 128), parts,
+      note: cleanText(raw.note, 160) || "" };
   }
   function contextDiff(saved, current) {
     const a = cleanContext(saved), b = cleanContext(current);
@@ -46,8 +52,7 @@ const SetupPresets = (function () {
       if (!tune || typeof row.id !== "string" || !/^[a-z0-9_-]{1,64}$/i.test(row.id) || ids.has(row.id)
           || typeof row.name !== "string" || !row.name.trim()) continue;
       ids.add(row.id);
-      items.push({ id: row.id, name: row.name.trim().slice(0, 32), tune,
-        trackId: typeof row.trackId === "string" ? row.trackId.slice(0, 128) : null,
+      items.push({ id: row.id, name: row.name.trim().slice(0, 32), tune, trackId: cleanTrackId(row.trackId),
         at: Number.isFinite(row.at) ? row.at : 0, ...(Object.hasOwn(row, "context") ? { context: cleanContext(row.context) } : {}) });
     }
     return { v: 1, items };
@@ -61,8 +66,7 @@ const SetupPresets = (function () {
   function write(store, team, items) {
     if (!editable(store, team)) return { ok: false, reason: "incompatible" };
     const value = { v: 1, items };
-    const result = store.write ? store.write(key(team), value) : { ok: true, durable: store.set(key(team), value) !== false };
-    return { ok: result.ok !== false, durable: result.durable !== false, reason: result.reason || null };
+    return outcome(store.write ? store.write(key(team), value) : { ok: true, durable: store.set(key(team), value) !== false });
   }
   function save(store, team, name, tune, trackId, context) {
     const items = list(store, team), clean = cleanTune(tune), title = String(name || "").trim().slice(0, 32);
@@ -70,7 +74,7 @@ const SetupPresets = (function () {
     if (items.length >= MAX) return { ok: false, reason: "full" };
     if (items.some((r) => r.name.toLowerCase() === title.toLowerCase())) return { ok: false, reason: "name" };
     const row = { id: Date.now().toString(36) + "-" + (++sequence).toString(36), name: title, tune: clean,
-      trackId: typeof trackId === "string" ? trackId.slice(0, 128) : null, at: Date.now(), ...(context ? { context: cleanContext(context) } : {}) };
+      trackId: cleanTrackId(trackId), at: Date.now(), ...(context ? { context: cleanContext(context) } : {}) };
     const result = write(store, team, items.concat([row]));
     return Object.assign(result, { row });
   }
@@ -90,8 +94,7 @@ const SetupPresets = (function () {
     if (!row) return null;
     const current = SetupTune.get(team);
     return { id, tune: row.tune, current, context: row.context, at: row.at, contextChanges: contextDiff(row.context, context), changes: diff(current, row.tune),
-      setupRevision: store.keyRevision ? store.keyRevision("setup." + team) : null,
-      libraryRevision: store.keyRevision ? store.keyRevision(key(team)) : null };
+      setupRevision: revision(store, "setup." + team), libraryRevision: revision(store, key(team)) };
   }
   function apply(store, team, pending) {
     if (!pending) return { ok: false, reason: "missing" };
@@ -101,8 +104,10 @@ const SetupPresets = (function () {
         || pending.libraryRevision !== store.keyRevision(key(team))))
         || diff(SetupTune.get(team), pending.current).length
         || diff(row.tune, pending.tune).length) return { ok: false, reason: "changed" };
-    const result = store.write ? store.write("setup." + team, row.tune) : { ok: true, durable: store.set("setup." + team, row.tune) !== false };
-    return { ok: result.ok !== false, durable: result.durable !== false, reason: result.reason || null };
+    return outcome(store.write ? store.write("setup." + team, row.tune) : { ok: true, durable: store.set("setup." + team, row.tune) !== false });
+  }
+  function appendItems(listEl, texts) {
+    for (const text of texts) { const li = document.createElement("li"); li.textContent = text; listEl.appendChild(li); }
   }
   function mount(host, o) {
     const section = document.createElement("section"); section.className = "player-tool-panel"; section.setAttribute("aria-label", "Named mechanical setups");
@@ -117,7 +122,7 @@ const SetupPresets = (function () {
     const intent = document.createElement("input"); intent.type = "text"; intent.maxLength = 160; intent.setAttribute("aria-label", "Setup context note"); intent.placeholder = "Optional note, e.g. dry braking practice";
     const context = () => Object.assign({}, o.context ? o.context() : {}, { note: intent.value || "" });
     let pending = null, deleting = null;
-    const feedback = (result, success) => { note.textContent = !result.ok ? ({ full: "Twelve setups saved. Delete one before saving another.", name: "That name is already used. Choose a new name.", invalid: "Enter a name for this setup.", incompatible: "This preset library uses an unsupported or damaged format. Export it before replacing anything.", changed: "The setup changed since the preview. Preview it again.", missing: "That saved setup is no longer available." }[result.reason] || "Could not save this setup.")
+    const feedback = (result, success) => { note.textContent = !result.ok ? FEEDBACK[result.reason] || "Could not save this setup."
       : result.durable === false ? success + " — SESSION ONLY. Keep this session open and use SAVE RETRY." : success; };
     function disarm() { pending = null; deleting = null; differences.replaceChildren(); provenance.replaceChildren(); applyButton.textContent = "PREVIEW APPLY"; deleteButton.textContent = "DELETE SETUP"; }
     function render(id) {
@@ -135,25 +140,26 @@ const SetupPresets = (function () {
       const result = save(o.store, o.teamId, name.value, SetupTune.get(o.teamId), o.trackId, context());
       feedback(result, "Setup saved"); if (result.ok) { name.value = ""; disarm(); render(result.row.id); }
     });
+    function showPreview() {
+      pending = preview(o.store, o.teamId, pick.value, context()); differences.replaceChildren(); provenance.replaceChildren();
+      if (!pending) { feedback({ ok: false, reason: "missing" }); return; }
+      appendItems(provenance, ["Saved " + (pending.at ? new Date(pending.at).toLocaleString() : "date unknown"),
+        ...(pending.context && pending.context.note ? [pending.context.note] : []), ...pending.contextChanges]);
+      appendItems(differences, pending.changes.map((change) => change.label + ": " + change.before + " → " + change.after + change.unit));
+      note.textContent = pending.changes.length ? "Only these mechanical values will change. Confirm to apply." : "This setup already matches. Confirming makes no other changes.";
+      applyButton.textContent = "CONFIRM APPLY";
+      // Put the proposed change in view before offering the second press.
+      // Scrolling never moves keyboard focus off the same action button.
+      const previewBlock = pending.changes.length ? differences : note;
+      if (previewBlock.scrollIntoView) previewBlock.scrollIntoView({ block: "start", behavior: "instant" });
+    }
     const applyButton = button("PREVIEW APPLY", () => {
       deleting = null; deleteButton.textContent = "DELETE SETUP";
-      if (!pending) {
-        pending = preview(o.store, o.teamId, pick.value, context()); differences.replaceChildren(); provenance.replaceChildren();
-        if (!pending) { feedback({ ok: false, reason: "missing" }); return; }
-        for (const text of ["Saved " + (pending.at ? new Date(pending.at).toLocaleString() : "date unknown"), ...(pending.context && pending.context.note ? [pending.context.note] : []), ...pending.contextChanges]) { const li = document.createElement("li"); li.textContent = text; provenance.appendChild(li); }
-        for (const change of pending.changes) { const li = document.createElement("li"); li.textContent = change.label + ": " + change.before + " → " + change.after + change.unit; differences.appendChild(li); }
-        note.textContent = pending.changes.length ? "Only these mechanical values will change. Confirm to apply." : "This setup already matches. Confirming makes no other changes.";
-        applyButton.textContent = "CONFIRM APPLY";
-        // Put the proposed change in view before offering the second press.
-        // Scrolling never moves keyboard focus off the same action button.
-        const previewBlock = pending.changes.length ? differences : note;
-        if (previewBlock.scrollIntoView) previewBlock.scrollIntoView({ block: "start", behavior: "instant" });
-        return;
-      }
+      if (!pending) { showPreview(); return; }
       const result = apply(o.store, o.teamId, pending); feedback(result, "Mechanical setup applied"); disarm(); if (result.ok && o.refresh) o.refresh();
     });
     const deleteButton = button("DELETE SETUP", () => {
-      if (!deleting || deleting.id !== pick.value) { pending = null; applyButton.textContent = "PREVIEW APPLY"; differences.replaceChildren(); deleting = { id: pick.value, revision: o.store.keyRevision ? o.store.keyRevision(key(o.teamId)) : null }; deleteButton.textContent = "CONFIRM DELETE"; note.textContent = "Delete this saved preset? Your fitted mechanical setup stays as it is."; return; }
+      if (!deleting || deleting.id !== pick.value) { pending = null; applyButton.textContent = "PREVIEW APPLY"; differences.replaceChildren(); deleting = { id: pick.value, revision: revision(o.store, key(o.teamId)) }; deleteButton.textContent = "CONFIRM DELETE"; note.textContent = "Delete this saved preset? Your fitted mechanical setup stays as it is."; return; }
       const result = remove(o.store, o.teamId, deleting.id, deleting.revision); feedback(result, "Saved setup deleted"); disarm(); render();
     });
     pick.onchange = () => { disarm(); applyButton.disabled = deleteButton.disabled = !pick.value; };
