@@ -3700,3 +3700,6 @@ fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) 
 none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
+
+## 2026-11-05 — PR #5002 (#4939 + #4940): raceEntryBytes +86
+The Time Trial fix for `DAMAGE: HANDLING` (#4939) is the whole raise: `js/race/damage-handling.js` +64 B (`forCar(c, tt)` returns null in TT) and `js/race/session-records.js` +22 B (the TT ghost key drops `damage`). Both files sit on the race entry path. The AI defend fix (#4940) is in `js/game.js` and nets -38 B there, so `js/game.js` shrinks. Measured against the tip it merged with (ef5b24bc): 2,129,163 -> 2,129,249. Recorded in `ratchets.d/cursor--tt-damage-ai-defend-4939.json` (a per-branch delta, no edit to `ratchets.json`).
