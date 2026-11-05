@@ -59,6 +59,13 @@ const require = createRequire(import.meta.url);
 // share a plane) exposes each cap's end-face sliver the hidden-face strip used to delete —
 // +874 of the delta measured by reverting that change alone; place()'s slot lift +11; the
 // rest is earlier in-band drift. Visible geometry, the intended cost of the coplanar fix.
+// 2026-11-05: #5077 (#4970) stops a swaying FOLIAGE box from enclosing faces, so the
+// strip keeps what the crown can uncover. Re-measured with that guard reverted alone;
+// the whole overage is that guard. monaco 254772 -> 257210, singapore 313144 -> 320601,
+// cota 301685 -> 304855, interlagos 221969 -> 225773, jeddah 269467 -> 272959,
+// albert_park 330738 -> 333020, miami 304002 -> 315897, baku 432937 -> 436347,
+// qatar 193250 -> 194264, abudhabi 283451 -> 304272, sepang 248471 -> 280882,
+// jacarepagua 179042 -> 183932.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

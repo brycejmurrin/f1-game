@@ -101,7 +101,8 @@ function mergeFactory(value, constructors = {}) {
   const sandbox = {
     window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxChunkMerge" ? value : null) },
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
-    Frustum: {}, ...constructors,
+    // build() subtracts Frustum.MOTION_PAD. 0 keeps these fixtures on the vertex box.
+    Frustum: { MOTION_PAD: 0 }, ...constructors,
   };
   vm.createContext(sandbox);
   seedLog(sandbox);

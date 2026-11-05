@@ -379,10 +379,12 @@ const SceneryStands = (function () {
           out._mat = MAT.CONCRETE;
           addBox(out, vadd(a.c, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
                  t % 2 ? shell[0] : shell[1], b);                                        // riser
-          crowdBand(vadd(a.c, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
+          // Seat the lip into the riser.
+          const bandLen = seg - 1, lipUp = bandLen > 0.5;
+          if (lipUp) crowdBand(vadd(a.c, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, bandLen,
                     opts.crowd, dens, k * 3.1 + t * 31.7 + side * 2.3);
           out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg + 0.5],
+          addBox(out, vadd(a.c, a.u, lipUp ? h + 1.85 : h + 0.13), [tierDepth * 0.86, 0.32, seg + 0.5],
                  fascia, b);                                                             // fascia lip
         }
         if (opts.roof && seg > 0) {
