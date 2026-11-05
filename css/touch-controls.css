@@ -334,7 +334,7 @@ body.manual #btn-aero  { bottom: calc(16px + 4 * var(--btn-pitch) + var(--sab));
    produced was wrong; the real landscape budget is the sum in the buttons-mode
    block at the bottom of this file. In portrait 428px fits with 239px to spare
    on the shortest screen the suite tests (at BUTTON SIZE 100%; the portrait
-   cap of 1.35 keeps it inside 844px). */
+   height budget caps a bigger BUTTON SIZE). */
 /* POSITION ONLY, NEVER A FILL. `body.steer-buttons #btn-throttle` is (1,1,1)
    and `#btn-throttle:active` is (1,1,0), so a background restated here beats
    the pressed colour and the pedal stops lighting up under the thumb — in
@@ -363,11 +363,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    portrait phone painted the fixed 76px ladder at every setting. Scale the
    ladder itself. 1.35 is the width cap: two arrows (16 + 2 x 84s + 12) and the
    GAS column (76s + 16) side by side fit a 390px-wide phone; 0.58 keeps a 44px
-   tap. Tablets (>= 744px) keep their own ladder below. */
+   tap. HEIGHT caps it too: the five-high column (64 + 5 x --btn) must stay under
+   the tyre / plan plate, which ends ~330px down at HUD 150% (hud-layout.spec
+   "portrait bottom cluster"), but never below the old 76px. Tablets (>= 744px)
+   keep their own ladder below. */
 @media (orientation: portrait) and (max-width: 743px) {
   :root {
-    --btn: calc(76px * clamp(0.58, var(--hud-btn-scale, 1), 1.35));
-    --steer: calc(84px * clamp(0.58, var(--hud-btn-scale, 1), 1.35));
+    --btn: clamp(44px, 76px * clamp(0.58, var(--hud-btn-scale, 1), 1.35),
+      max(76px, (100svh - 330px - var(--sat) - var(--sab)) / 5));
+    --steer: calc(var(--btn) * 84 / 76);
   }
 }
 

@@ -825,8 +825,10 @@ test("BUTTON SIZE reaches a portrait phone race: the ladder itself scales, cappe
     .filter((r) => r.context.some((c) => /orientation: portrait/.test(c) && /max-width: 743px/.test(c)));
   assert.equal(rules.length, 1, "one portrait-phone :root rule scales the ladder");
   const CAP = 1.35;
-  for (const [p, base] of [["--btn", 76], ["--steer", 84]])
-    assert.equal(rules[0].decls.get(p), `calc(${base}px * clamp(0.58, var(--hud-btn-scale, 1), ${CAP}))`, `${p} consumes BUTTON SIZE in portrait`);
+  assert.equal(rules[0].decls.get("--btn"),
+    `clamp(44px, 76px * clamp(0.58, var(--hud-btn-scale, 1), ${CAP}), max(76px, (100svh - 330px - var(--sat) - var(--sab)) / 5))`,
+    "--btn consumes BUTTON SIZE in portrait, capped by width (CAP) and by the five-high column's height budget, never under 76px");
+  assert.equal(rules[0].decls.get("--steer"), "calc(var(--btn) * 84 / 76)", "the arrows scale with the pedals");
   const cap = CAP;
   assert.ok(16 + 2 * 84 * cap + 12 + 76 * cap + 16 <= 390, "two arrows and the GAS column fit a 390px-wide phone at the cap");
   const clear = rulesFor(css("css/touch-controls.css"), /^body\.steer-buttons \.hud-bottom$/)
