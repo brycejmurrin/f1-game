@@ -198,7 +198,7 @@ test("profile restore, Undo and reset repaint mounted title and pause controls w
   studio.loadProfile("profile-1"); assertControls(true);
   studio.undo(); assertControls(false);
   studio.undo(); assertControls(true);
-  studio.applyPreset("classic"); assertControls(false);
+  studio.applyPreset("classic"); assertControls(true);   // a cosmetic preset never moves the menu layouts (#5058)
 });
 
 test("Studio mounts once the document has passed loading (interactive included)", () => {
@@ -491,6 +491,41 @@ test("cosmetic presets retain accessibility and units without writing those pref
     }
     studio.undo(); assert.deepEqual(plain(studio.snapshot()), before);
   }
+});
+
+test("cosmetic presets keep Bryce's sizes, opacities, main-menu layout and screen looks (#5058)", () => {
+  const exported = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+  const titleLayout = exported.settings.appearance.titleLayout;
+  assert.ok(titleLayout, "the export carries a custom title layout");
+  const mine = { hudScale: 155.25, hudBtnScale: 245, hudBtnOpacity: 65, hudPanelOpacity: 80, titleLayout,
+    pauseLayout: "sidebar", pauseSide: "right", lookGarage: { btn: 125, pw: 135 }, lookCareer: { density: "tight", corners: "sharp" }, lookDesigner: { size: 150 } };
+  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+    const { studio, values, writes } = load(structuredClone(mine));
+    studio.applyPreset(preset);
+    for (const key of ["hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "lookGarage", "lookDesigner"]) {
+      assert.equal(new Set(writes).has(key), false, preset + " leaves " + key + " unwritten");
+      assert.deepEqual(plain(values[key]), plain(mine[key]), preset + " keeps " + key);
+    }
+    // A look the preset names merges its knob into the current look.
+    const named = studio.PRESETS.find((p) => p.id === preset).values.lookCareer;
+    assert.deepEqual(plain(values.lookCareer), { ...mine.lookCareer, ...named }, preset + " merges lookCareer");
+  }
+});
+
+test("no preset value names a key presets preserve (no dead FOCUS / SUNLIGHT values)", () => {
+  const { studio } = load(), preserved = new Set(studio.PRESET_PRESERVE);
+  assert.equal(preserved.has("hudBtnScale") && preserved.has("titleLayout"), true);
+  for (const p of studio.PRESETS) for (const k of Object.keys(p.values)) assert.equal(preserved.has(k), false, p.id + " sets preserved key " + k);
+});
+
+test("HUD preview prints the speed in the chosen unit only (#5058)", () => {
+  const h = loadStudioRenderCounts(), descendants = node => [node, ...node.children.flatMap(descendants)];
+  const all = () => descendants(h.dom.byId("appearance-studio"));
+  const speed = () => all().find(node => node.dataset.as === "preview-speed").textContent;
+  h.dom.dispatch(all().find(node => node.tagName === "BUTTON" && node.textContent === "HUD"), { type: "click", bubbles: true });
+  assert.equal(speed(), "287 KM/H");
+  h.studio.applySnapshot({ ...h.studio.snapshot(), speedUnits: "mph" });
+  assert.equal(speed(), "178 MPH");
 });
 
 test("profile application obeys selected screen scope and undo restores the affected screen", () => {
