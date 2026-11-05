@@ -44,11 +44,11 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8223,
+      "ceiling": 8196,
       "slack": 200
     },
     "assertPinsAll": {
-      "ceiling": 10351,
+      "ceiling": 10278,
       "slack": 200
     },
     "bareCatches": {
