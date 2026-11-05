@@ -19639,6 +19639,7 @@
     },
     "js/ui/watch-transport.js": {
       "create": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
@@ -19649,6 +19650,7 @@
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
       "start": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
