@@ -132,7 +132,7 @@ const GarageCameraOptions = (function () {
     return ax > BAY.jambX - BAY.jambClear && ax < BAY.jambX + BAY.jambClear;
   }
 
-  // PER MOMENT (#4745): a moment's own BAY CAMERA + STAY INSIDE, else ENTRY (pitIn, home) / EXIT (start, pitOut).
+  // PER MOMENT (#4745): own BAY CAMERA + STAY INSIDE, else ENTRY (pitIn, home) / EXIT (start, pitOut).
   const MOMENT_IDS = Object.freeze(["start", "pitIn", "pitOut", "home"]);
   const MOMENT_EXIT = Object.freeze({ start: true, pitOut: true });
   function settings(value) {
@@ -446,16 +446,15 @@ const GarageCameraOptions = (function () {
 
   // ---- UI (injected: index.html is shrink-only) ----
   let _bound = false, _paint = null;
-  // COPY TO ALL: each moment takes `from`'s BAY CAMERA + STAY INSIDE. RESET: `m` follows ENTRY / EXIT again.
-  function copyMoment(store, from) {
-    const cur = read(store), v = forMoment(cur, MOMENT_IDS.includes(from) ? from : "start"), moments = {};
+  function copyMoment(store, from) { // COPY TO ALL
+    const cur = read(store), v = forMoment(cur, from), moments = {};
     for (const m of MOMENT_IDS) moments[m] = { shot: v.shot, stayInside: v.stayInside };
     return write(store, Object.assign(cur, { moments }));
   }
-  function resetMoment(store, m) {
+  function resetMoment(store, m) { // RESET
     const cur = read(store);
     if (cur.moments) delete cur.moments[m];
-    return write(store, cur); // settings() drops an empty `moments`
+    return write(store, cur);
   }
   function bindUi($, store, hooks) {
     if (_bound || typeof document === "undefined" || !$) return false;
@@ -546,7 +545,7 @@ const GarageCameraOptions = (function () {
       stay.onchange = () => saveMoment({ stayInside: stay.checked });
     }
 
-    // The full DIRECTOR label truncates in the 12rem select: shorten it (arrival.js owns ANGLE_TEXT).
+    // Shorten DIRECTOR's label for the 12rem select.
     const angleSel = $("ga-angle");
     if (angleSel) {
       for (const o of angleSel.options || []) {
