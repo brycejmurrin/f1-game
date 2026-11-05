@@ -200,7 +200,9 @@ const XROpts = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    // #4798: the rows wire at first Settings enter / tap / idle, not in the DCL task.
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI);
+    else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
     else initUI();
   }
 

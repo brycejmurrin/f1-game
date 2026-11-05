@@ -3903,7 +3903,8 @@
         "tests/unit/career-backup.test.mjs"
       ],
       "build": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-ui-lazy.test.mjs"
       ],
       "download": [
         "tests/unit/mobile-native-download.test.mjs"
@@ -5384,6 +5385,7 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/stage-minify.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
@@ -19622,6 +19624,7 @@
     },
     "js/ui/watch-transport.js": {
       "create": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
@@ -19632,6 +19635,7 @@
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
       "start": [
+        "tests/specs/watch-transport-layout.spec.js",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
       ],
