@@ -244,16 +244,19 @@ async function runTrace() {
     await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
     await prepareRace(page);
-    await page.evaluate(() => {
-      const A = window.__apex;
-      if (A.go() !== "race" || !A.jump(0.1, 55, 0)) throw new Error("profile: race did not reach the trace scenario");
-      A.setInput({ throttle: true }); A.perf({ on: true, reset: true, measure: true });
-    });
+    // Arm tracing BEFORE the race starts: CpuProfiler::StartProfiling costs 600+ ms on the main thread and would
+    // otherwise land in perf().open.maxMs / frameTimes.maxMs as a fake worst frame. Drop the first 60 frames.
     const cdp = await page.context().newCDPSession(page);
     const chunks = [];
     cdp.on("Tracing.dataCollected", (e) => chunks.push(...e.value));
     const done = new Promise((r) => cdp.once("Tracing.tracingComplete", r));
     await cdp.send("Tracing.start", { categories: "devtools.timeline,v8.execute,blink.user_timing", transferMode: "ReportEvents" });
+    await page.evaluate(() => {
+      const A = window.__apex;
+      if (A.go() !== "race" || !A.jump(0.1, 55, 0)) throw new Error("profile: race did not reach the trace scenario");
+      A.setInput({ throttle: true });
+    });
+    await page.evaluate(async () => { for (let i = 0; i < 60; i++) await new Promise((r) => requestAnimationFrame(r)); window.__apex.perf({ on: true, reset: true, measure: true }); });
     await page.evaluate(async (n) => { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(r)); }, frames);
     await cdp.send("Tracing.end"); await done;
     const file = join(OUT, `${track}-trace.json`);

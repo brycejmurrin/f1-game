@@ -2,6 +2,7 @@
 const DriveLens = (function () {
   "use strict";
 
+  const EMPTY = Object.freeze({});
   function abs(v) { return v < 0 ? -v : v; }
 
   function chase(mode, eye, tgt, ctx) {
@@ -17,20 +18,17 @@ const DriveLens = (function () {
   function n(v) {
     return typeof v === "number" && isFinite(v) ? v : 0;
   }
-  function read(ctx) {
-    ctx = ctx || {};
-    return { sp: n(ctx.sp), yaw: n(ctx.yaw), brake: n(ctx.brake), slip: n(ctx.slip) };
-  }
   function broadcast(mode, eye, tgt, ctx) {
-    const c = read(ctx);
-    if (mode === "heli") return 8 * c.sp + 3 * Math.abs(c.yaw);
-    if (mode === "side") return 5 * c.sp;
-    if (mode === "cinematic") return 4 * c.sp;
-    if (mode === "overhead") return 3 * c.sp;
-    if (mode === "drone") return 6 * c.sp + 2 * Math.abs(c.yaw);
-    if (mode === "rival") return 6 * c.sp;
-    if (mode === "pitwall") return 2 * c.sp;
-    if (mode === "trackside") return 3 * c.sp + 0.5 * Math.abs(c.yaw);
+    if (!ctx) ctx = EMPTY;
+    const sp = n(ctx.sp);   // read in place: no per-frame {sp, yaw, ...} object
+    if (mode === "heli") return 8 * sp + 3 * Math.abs(n(ctx.yaw));
+    if (mode === "side") return 5 * sp;
+    if (mode === "cinematic") return 4 * sp;
+    if (mode === "overhead") return 3 * sp;
+    if (mode === "drone") return 6 * sp + 2 * Math.abs(n(ctx.yaw));
+    if (mode === "rival") return 6 * sp;
+    if (mode === "pitwall") return 2 * sp;
+    if (mode === "trackside") return 3 * sp + 0.5 * Math.abs(n(ctx.yaw));
     return null;
   }
 
