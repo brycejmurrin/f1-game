@@ -202,7 +202,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `team-identity.js` | `CareerTeamIdentity` | tag | Per-career MY TEAM appearance. |
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
-| `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career-planning.js` | `CareerPlanning` | tag | Career planning: pure projections and bounded choices; never changes Parts legality. |
@@ -213,6 +212,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
+| `career-backup.js` | `CareerBackup` | LAZY_CAREER_UI | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `career-planning-ui.js` | `CareerPlanningUI` | LAZY_CAREER_UI | Read-only Career planning cards and explicit local save recovery actions. |
 | `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
 
@@ -269,7 +269,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
-| `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
+| `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal, same verdict and points rules as GameResults; no timers or writes. |
 | `results-boot.js` | `GameResults` | tag | results sheet boot stub (FULL). |
 | `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — visual presets, named profiles and a readable preview. |
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
@@ -597,13 +597,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
 | `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
-| `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera brain for the race the player is driving. |
+| `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): broadcast-style camera brain for the player's race. |
 | `photo-looks.js` | `PhotoLooks` | tag | photo-mode look presets: a transient grade applied while the free camera is open, restored when the visit ends. |
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
 | `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.5 MB / 24 cars, under a 0.7 MB cap). |
-| `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
+| `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a highlights montage from the solo ReplayBuf tags. |
 | `cam-tuner-boot.js` | `CamTunerPanel` | tag | CAMERA TUNER boot stub (FULL). |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `cockpit-finishes.js` | `CockpitFinishes` | tag | first-person finish preferences. |
