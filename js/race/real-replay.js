@@ -336,6 +336,8 @@ const RealReplay = (function () {
       run.onKey = (e) => onKey(e);
       try { window.addEventListener("keydown", run.onKey, true); } catch (e) { /* no window: a VM */ }
       pose();
+      // WatchTransport is LAZY_RACE_SESSION (resident before any race arms): made on the first start.
+      if (!transport && typeof WatchTransport !== "undefined") transport = WatchTransport.create(G, api);
       if (transport) transport.start();
       Log.info("game", "RealReplay.start T=" + T.toFixed(1) + " cars=" + [...cars.values()].filter((f) => f.tr).length + " reel=" + (reel ? reel.length : 0) + " follow=" + (follow ? follow.code : "-"));
       return true;
@@ -758,7 +760,6 @@ const RealReplay = (function () {
              // TV director, ask who has it, or take it (a shot picked by the viewer).
              setAuto, autoOn: () => !!(bc && run && bc.autoOn()),
              takePicture: () => { if (bc && run) bc.manual(); } };
-    if (typeof WatchTransport !== "undefined") transport = WatchTransport.create(G, api);
     return api;
   }
 
