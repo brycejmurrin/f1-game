@@ -52,6 +52,9 @@ const slide = (page, id, value) => page.evaluate(({ id, value }) => {
     btns: box(document.getElementById("menu-buttons")),
     brand: box(document.getElementById("menu-brand")), car: box(document.getElementById("title-car")),
     inL: ob.left + parseFloat(cs.paddingLeft), inR: ob.right - parseFloat(cs.paddingRight),
+    // Read only in a failure message: what the overlay grid and the cluster looked like at that cell.
+    diag: { density: document.body.dataset.density, cols: cs.gridTemplateColumns, rows: cs.gridTemplateRows,
+      scroll: [o.scrollLeft, o.scrollWidth, o.clientWidth], ms: getComputedStyle(document.getElementById("menu-buttons")).marginInlineStart },
   };
 }, { id, value });
 
@@ -92,9 +95,10 @@ test.describe("Title layers: the button cluster reaches both safe-area edges at 
             // WIDTH resizes, LEFT/RIGHT only moves: the box keeps its width.
             expect(Math.abs(row.btns.w - w.btns.w), `${label} ${name}: LEFT/RIGHT keeps the width`).toBeLessThanOrEqual(0.5);
             // The art layer never moves when the buttons change.
+            const why = `(baseline ${JSON.stringify(art.diag)}, now ${JSON.stringify(row.diag)})`;
             for (const k of ["l", "r", "t", "b"]) {
-              expect(Math.abs(row.brand[k] - art.brand[k]), `${label} ${name}: title box ${k}`).toBeLessThanOrEqual(0.5);
-              expect(Math.abs(row.car[k] - art.car[k]), `${label} ${name}: drawing box ${k}`).toBeLessThanOrEqual(0.5);
+              expect(Math.abs(row.brand[k] - art.brand[k]), `${label} ${name}: title box ${k} ${why}`).toBeLessThanOrEqual(0.5);
+              expect(Math.abs(row.car[k] - art.car[k]), `${label} ${name}: drawing box ${k} ${why}`).toBeLessThanOrEqual(0.5);
             }
           }
           // X 0 sits on the anchored edge: right on AUTO, left when SWAPPED.
