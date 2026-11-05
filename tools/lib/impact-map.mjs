@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 const NARROW_FN = "narrow";
 
 /** Specs listed under the `narrow` key for any changed `js/` file (when `narrowOnly`). */

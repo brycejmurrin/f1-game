@@ -389,6 +389,7 @@ function captureTokenInPage() {
     return { ...token, mode: "copy-generation", submitted: first.seq, required: first.seq + 1 };
   }
   if (soft && "maxPx" in first && "post" in first && Number.isFinite(first.gen)) {
+    if (Number.isFinite(first.captureGen)) return { ...token, mode: "synchronous-generation", clock: "capture", submitted: first.captureGen, required: first.captureGen + 1 };
     return { ...token, mode: "synchronous-generation", submitted: first.gen, required: first.gen + 1 };
   }
   if (soft) return { ...token, mode: "legacy-two-presents", required: 2, before: Number.isFinite(first.gen) ? first.gen : 0 };
@@ -436,7 +437,7 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000, pauseRender =
     // A resize, reload or renderer replacement can invalidate a marker. In
     // that case request freshness against the current source instead.
     const currentSubmitted = marked?.mode === "source-generation" ? first.submittedGen
-      : marked?.mode === "copy-generation" ? first.seq : first.gen;
+      : marked?.mode === "copy-generation" ? first.seq : marked?.clock === "capture" ? first.captureGen : first.gen;
     const sameDisplay = !marked?.display || (Array.isArray(first.display)
       && marked.display[0] === first.display[0] && marked.display[1] === first.display[1]);
     const usable = marked && marked.soft === soft && sameDisplay
@@ -452,7 +453,7 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000, pauseRender =
     };
     const waitSoft = async () => {
       if (!gfx?.awaitSoftPresent) throw new Error("probe: software renderer has no presentation clock");
-      const result = await gfx.awaitSoftPresent(remaining());
+      const result = await gfx.awaitSoftPresent(remaining(), "capture");
       if (!Number.isFinite(result)) throw new Error("probe: software renderer did not present a fresh frame");
       return result;
     };
@@ -490,7 +491,7 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000, pauseRender =
           const shown = () => {
             const s = state();
             return mode === "source-generation" ? s.shownGen
-              : mode === "copy-generation" ? s.shown : s.gen;
+              : mode === "copy-generation" ? s.shown : request.clock === "capture" ? s.captureGen : s.gen;
           };
           while (!(shown() >= required)) await waitSoft();
           return { mode, required, shown: shown() };
@@ -888,7 +889,8 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
 
 /** Fade the setup panel and capture the presented canvas for a clean garage shot.
  * Prefer #game-soft toDataURL while the loop still runs (fast multi-angle path).
- * Fall back to freeze + CDP Page.captureScreenshot — never the Playwright
+ * Native renderers use their same-present pixel readback; soft capture can
+ * fall back to freeze + CDP Page.captureScreenshot — never the Playwright
  * screenshot API (document.fonts.ready hung GHA smoke shards 2/3).
  * CDP budget: `opts.timeout` / `opts.shotTimeout`, else area-scaled via
  * `resolveShotTimeoutMs` (1920×1080 → 180 s). */
@@ -906,6 +908,12 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
     writeFileSync(outPath, buf);
     return { bytes: buf.length, clip: null, via: "game-soft" };
   }
+  // Native backbuffers are not preserved across browser tasks. The garage
+  // caller may already have paused after its freshness barrier; CDP then sees
+  // a cleared canvas on Metal. Resume for one real present and enqueue the
+  // renderer readback before pausing, restoring the caller's original state.
+  const native = await screenshotNativeCanvas(page, { path: outPath, timeout });
+  if (native) return { bytes: native.bytes, clip: null, via: native.via };
   // FREEZE across CDP capture — live GLX keeps the main thread hot enough that
   // Playwright's screenshot path starved on fonts. The shared CDP path restores
   // the previous pause state, including callers that were already frozen.

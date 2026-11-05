@@ -42,7 +42,8 @@ export function classify(file, source, npmNames = []) {
   const evidence = [];
   if (/require\.main\s*===\s*module|\bisMain\s*\(\s*import\.meta\.url\s*\)|import\.meta\.url\s*===|pathToFileURL\(process\.argv\[1\]\)/.test(source)) evidence.push("main-guard");
   if (npmNames.length) evidence.push("npm-script-reference");
-  if (!file.startsWith("lib/") && /process\.argv|sys\.argv|argparse\.|ArgumentParser/.test(source)) evidence.push("argv-or-parser");
+  const argvPattern = ext === '.py' ? /sys\.argv|argparse\.|ArgumentParser/ : /process\.argv/;
+  if (!file.startsWith("lib/") && argvPattern.test(source)) evidence.push("argv-or-parser");
   if (/^#!/.test(source) && [".sh", ".py"].includes(ext)) evidence.push("shell-or-python-shebang");
   if (evidence.length) return { classification: "entrypoint-candidate", evidence };
   return { classification: file.startsWith("lib/") ? "library" : "ambiguous", evidence: [] };

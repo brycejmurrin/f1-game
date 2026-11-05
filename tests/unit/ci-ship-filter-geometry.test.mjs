@@ -9,7 +9,7 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
-import { ciWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 
 test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
   const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "shipfilter");
@@ -118,8 +118,11 @@ test("ci.yml runs on PRs into the deploy branch only, on four event types, with 
   const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
   assert.ok(reuse.includes('"Structural guards (tooling A)"') && !/run-ci|CI ignored/.test(reuse),
     "a green run whose tooling A did not run is never reused as the fast tier; the label vocabulary is gone");
-  assert.equal(wf.jobs.selected.if, "${{ needs.select.outputs.any == 'true' }}",
-    "the selected legs run on a draft too (one 5-min shard: the budget test below)");
+  for (const draft of [true, false]) {
+    const needs = { select: { outputs: { any: "true" } } };
+    assert.equal(evalTemplate(wf.jobs.selected.if, workflowContext({ draft, needs })), true);
+    assert.equal(evalTemplate(wf.jobs.selected.if, workflowContext({ mode: "active", draft, needs })), false);
+  }
 });
 
 // EVERY PUSH RUNS (2026-11-03). Evaluated, not pattern-matched: every job's `if`, the group, the verdict name and
@@ -225,7 +228,8 @@ test("geometry rollup accepts only successful shards or a proven empty plan", ()
 
 test("cancellation diagnostics preserve truthful checks and evidence", () => {
   const jobs = parseYAML(ciWorkflow).jobs;
-  assert.equal(jobs["sweeps-parts"].if, undefined, "the census runs on every event, a draft push included (2026-11-03)");
+  assert.equal(evalTemplate(jobs["sweeps-parts"].if, workflowContext({ draft: true })), true);
+  for (const mode of ["active", "paused"]) assert.equal(evalTemplate(jobs["sweeps-parts"].if, workflowContext({ mode })), false);
   assert.match(jobs["ci-verdict"].name, /CI \(draft fast tier\)/);
   for (const id of ["smoke", "driving-model", "xr"]) {
     const upload = jobs[id].steps.find((s) => s.name === "Failure artifacts");
@@ -262,12 +266,13 @@ test("ci-verdict always reports under an evaluated name: `CI (draft fast tier)` 
   // run and its one work step carries no gate of its own; a draft's success must never satisfy the required
   // check, so only the evaluated name separates the tiers. Evaluated over every event shape.
   const job = parseYAML(ciWorkflow).jobs["ci-verdict"];
-  assert.equal(job.if, "${{ !cancelled() }}", "the aggregator must not skip");
+  assert.equal(evalTemplate(job.if, workflowContext()), true, "legacy aggregator reports on uncancelled runs");
+  for (const mode of ["active", "paused"]) assert.equal(evalTemplate(job.if, workflowContext({ mode })), false, "retired executors cannot report success");
   const work = job.steps.find((st) => st.run && /ci-verdict\.mjs/.test(st.run));
   assert.ok(work && work.if === undefined, "the aggregate step runs on every run it is part of");
   assert.ok(!job.steps.some((st) => /No verdict for a label event/.test(st.name || "")), "no label-event no-op step is left");
   const name = (ev, act, draft) => evalTemplate(String(job.name),
-    { github: { event_name: ev, event: { action: act, pull_request: ev === "pull_request" ? { draft } : undefined } } });
+    { ...workflowContext(), github: { event_name: ev, event: { action: act, pull_request: ev === "pull_request" ? { draft } : undefined } } });
   let cases = 0;
   for (const ev of ["pull_request", "push", "workflow_dispatch", "schedule"])
     for (const act of ev === "pull_request" ? ["opened", "synchronize", "reopened", "ready_for_review"] : [undefined])

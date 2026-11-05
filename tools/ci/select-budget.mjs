@@ -5,12 +5,11 @@
 // Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
 import { loadDb, unionDb, median, inBuckets, TIMINGS_FILE } from "./spec-timings.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 
 // MEASURED, not assumed. Change these only with a CI run id to point at.
 // `secPerTest` is the FALLBACK now, not the whole model: a spec with enough
@@ -167,8 +166,15 @@ function circuitDefCount() {
  *  never sets TRACK, so the selected gate runs the whole roster. */
 function auditRosterCount() {
   try {
-    const list = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS;
-    return Array.isArray(list) ? list.length : null;
+    // Planning a detached PR source tree must never execute its manifest.
+    // The roster is a literal array; an unfamiliar expression is unknown,
+    // rather than permission to evaluate repository JavaScript.
+    const ast = espree.parse(fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8"), { ecmaVersion: "latest", sourceType: "script" });
+    for (const statement of ast.body) for (const decl of statement.declarations || []) {
+      if (decl.id?.name === "CIRCUITS" && decl.init?.type === "ArrayExpression"
+          && decl.init.elements.every(e => e?.type === "Literal" && typeof e.value === "string")) return decl.init.elements.length;
+    }
+    return null;
   } catch { return null; }
 }
 

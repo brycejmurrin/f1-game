@@ -1,11 +1,10 @@
 name: Task
 description: One unit of work an agent session can pick up cold and finish in one PR.
-labels: ["ready"]
 body:
   - type: markdown
     attributes:
       value: |
-        Agents pick these up with `is:open label:ready -label:claimed -label:blocked` (AGENTS.md §Backlog).
+        Filing creates an unqueued issue. Add queue:ready explicitly after checking dependencies and batch scope (docs/ACTIONS.md).
         Write it so an agent with no chat history can start. Bigger than one PR? Make this the parent
         and file each piece as a sub-issue.
   - type: textarea
@@ -31,4 +30,4 @@ body:
     id: context
     attributes:
       label: Context
-      description: Links, files, repro steps, related issues. Write "Blocked by #n" here and add the blocked label if it must wait.
+      description: Links, files, repro steps, related issues. Record prerequisites with native issue dependencies; describe non-issue prerequisites here.

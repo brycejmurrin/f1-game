@@ -4,19 +4,13 @@ Read when `ci-watch` says `cancelled`, or `needs-sync` says `conflict` or `stale
 
 ## `cancelled`: read the jobs, not the conclusion
 
-Which `cancelled` is benign (the draft/ready dedupe on one `head_sha`) and which is a timeout is AGENTS.md rule 8.
-Deploy-branch pushes queue in pages.yml's `pages-train-*` group (`ci-watch.mjs --sha` says `superseded`). A job at
-its `timeout-minutes` cap with zero failures is a real red. List the run's jobs before deciding; agent
-`ci-red-triage` does that and returns the status line.
+A cancellation alone proves neither success nor a timeout. Read the current request/attempt, expected SHA, job
+failures and coordinator replacement reason. A job reaching its timeout is a real failure; a superseded attempt
+cannot supply current-head evidence. Follow the replacement rather than dispatching another copy.
 
-A PR that ends `cancelled` twice with zero failures:
-
-1. `node tools/ci/ci-watch.mjs --sha <head sha> --once` (exit 2 / `= ci cancelled` = newest run per workflow, no
-   failed job, no live sibling).
-2. Same head SHA both times → the dedupe or a push over a live run: wait for the newest run, do not re-run.
-3. The newest run itself `cancelled` → `ci-red-triage` for a job at its cap (a real red); check `/proc/loadavg`.
-4. Neither → re-run once via `node tools/ci/ci-rerun.mjs <run_id>` (a `ci.yml` `group:` dispatch runs a browser
-   group, not the PR's tier); never sync to "refresh" it.
+Sessions do not cancel or rerun independently. Trusted coordinator cleanup may cancel proven obsolete work while
+preserving attempt history. Recovery/retry stays bounded and cannot silently replace required failed evidence.
+Read `docs/ACTIONS.md` for shadow mode and the current admission path.
 
 ## When to sync
 

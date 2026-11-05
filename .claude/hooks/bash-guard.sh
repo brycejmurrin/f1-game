@@ -29,7 +29,7 @@
 #  3. the commit gate stays reachable: no `git commit --no-verify|-n`, no
 #     core.hooksPath write (.githooks/pre-commit owns test:guards).
 #  4. no `gh run cancel` / REST …/cancel, `gh pr merge` / REST or GraphQL merge,
-#     `gh pr ready` — ever, with or without `-R <repo>`: land.yml lands,
+#     `gh pr ready` — ever, with or without `-R <repo>`: the trusted coordinator merges,
 #     ship-pr.mjs + the MCP flip ready, Bryce cancels in the UI.
 #
 # Exit 2 refuses with the reason on stderr; exit 0 lets the normal permission
@@ -126,11 +126,11 @@ has '(?i)core\.hookspath' && ! has '(?i)^\s*git\s+config\s+(--(global|local|syst
   && refuse "core.hooksPath is set once by the SessionStart hook / npm run prepare (.githooks); an agent never moves it (a read is 'git config --get core.hooksPath'). Run 'npm run prepare' if commits say no hook would run."
 
 # --- 4. no cancel, merge or ready flip from a shell ------------------------------
-has "${PRE}${GH}run\s+cancel(\s|$)" && refuse "cancelling an Actions run: a queued run holds no slot, so a cancel only loses its place and buys a retrigger push (AGENTS.md §Coordination). Your superseded run is replaced by your next push; Bryce cancels in the UI."
-has 'actions/runs/[^/\s]+/(force-)?cancel' && refuse "cancelling an Actions run through the API (…/actions/runs/<id>/cancel): never (AGENTS.md §Coordination). Bryce cancels in the UI."
+has "${PRE}${GH}run\s+cancel(\s|$)" && refuse "sessions cannot cancel Actions runs; only trusted coordinator cleanup may cancel proven obsolete attempts with replacement evidence (docs/ACTIONS.md)."
+has 'actions/runs/[^/\s]+/(force-)?cancel' && refuse "sessions cannot cancel through the API; obsolete-attempt cleanup belongs to the trusted coordinator (docs/ACTIONS.md)."
 { has "${PRE}${GH}pr\s+merge(\s|$)" || has "${PRE}${GH}api\b(?=[^;&|\n]*(-X\s*PUT|--method[=\s]+PUT))[^;&|\n]*pulls/[0-9]+/merge\b" \
   || { has "${PRE}${GH}api\s+graphql\b" && raw '\b(mergePullRequest|enablePullRequestAutoMerge)\b'; }; } \
-  && refuse "no session merges or arms (AGENTS.md §Coordination): add the 'land' label and land.yml's gate arms auto-merge."
+  && refuse "no session merges or arms (AGENTS.md §Coordination): request '/apex merge' on the PR; the trusted coordinator enforces current-head validation and pause."
 { has "${PRE}${GH}pr\s+ready(\s|$)" || { has "${PRE}${GH}api\s+graphql\b" && raw '\bmarkPullRequestReadyForReview\b'; }; } \
   && refuse "a draft goes ready through 'node tools/ci/ship-pr.mjs' and the GitHub MCP update_pull_request flip (the Plan gate and CI check it), never 'gh pr ready'."
 exit 0

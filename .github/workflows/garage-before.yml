@@ -54,11 +54,12 @@ permissions:
 # keys on the ref the plan resolves (a scheduled run has no inputs -> ship).
 # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
 concurrency:
-  group: garage-before-${{ inputs.ref || 'claude/f1-game-project-26h3ng' }}
-  cancel-in-progress: false
+  group: garage-before-${{ inputs.ref || 'claude/f1-game-project-26h3ng' }}${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
+  cancel-in-progress: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (false) }}
 
 jobs:
   plan:
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     name: Plan pack
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -86,7 +87,7 @@ jobs:
   capture:
     name: Capture ${{ matrix.teams }}
     needs: plan
-    if: needs.plan.outputs.capture == 'true'
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (needs.plan.outputs.capture == 'true') }}
     runs-on: macos-latest
     timeout-minutes: 25
     # No concurrency: here; on a matrix job it cancels shards (header).
@@ -126,7 +127,7 @@ jobs:
   pack:
     name: Merge pack
     needs: [plan, capture]
-    if: needs.plan.outputs.capture == 'true' && needs.capture.result == 'success'
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (needs.plan.outputs.capture == 'true' && needs.capture.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # One pack per sha even when two refs resolve to the same commit. The
@@ -157,3 +158,30 @@ jobs:
           path: scratch/garage-before/
           if-no-files-found: error
           retention-days: 30
+
+  request-admission:
+    concurrency:
+      group: actions-claim
+      queue: max
+    name: Record request for bounded Actions admission
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE == 'active' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Trusted request adapter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve the request without starting its expensive work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_WORKFLOW: garage-before.yml
+        run: node tools/ci/actions/cli.mjs request --workflow "$REQUEST_WORKFLOW" --event-file "$GITHUB_EVENT_PATH"

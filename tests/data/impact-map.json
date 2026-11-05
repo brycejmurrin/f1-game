@@ -7805,6 +7805,7 @@
       "update": [
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/actions-landing.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/body-attitude.test.mjs",
@@ -14898,7 +14899,8 @@
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
       "readbackLdrPixels": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "setup": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -15009,6 +15011,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
+      "blitIfDue": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -15028,6 +15033,9 @@
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/select-specs.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "softBlit": [
         "tests/unit/renderer-soft-lifecycle.test.mjs"
@@ -18413,6 +18421,7 @@
       "*": [
         "tests/specs/hud-mirror.spec.js",
         "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/actions-coverage.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",

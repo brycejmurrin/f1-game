@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
 import { EventEmitter } from 'node:events';
 import sharp from 'sharp';
-import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene, withCaptureRendering, screenshotNativeCanvas } from '../../tools/shot/probe-page.mjs';
+import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene, withCaptureRendering, screenshotNativeCanvas, screenshotGameCanvas } from '../../tools/shot/probe-page.mjs';
 import { poolMap, startWorkerPool, waitCaptureFrame, openPage } from '../../tools/shot/apex-capture.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
 import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
@@ -395,6 +395,9 @@ test('recordCapture passes the real CDP helper sixty-second cap or smaller remai
     evaluate: async (fn, arg) => {
       const body = String(fn);
       if (body.includes('const deadline = Date.now() + ms')) { presents++; assert.ok(arg.ms > 0 && arg.ms <= 30000); return; }
+      // This fixture exercises the soft-renderer CDP fallback; the native
+      // same-present readback path is covered separately below.
+      if (body.includes('const read = GLX.capturePixels()')) return null;
       if (body.includes('const a = window.__apex')) return { diag: { env: { backend: 'three', backendState: { api: 'webgl2', gpuErrors: 0 } } }, frame: { camera: { eye: [0, 1, 2] } } };
       if (fn === visibleScreen) return { errorOverlay: null, visibleRoots: [] };
       if (body.includes('const softLive')) return null;
@@ -976,4 +979,40 @@ test('timed-out native presentation cannot later start a readback or pause its o
   assert.equal(paused, false); complete('frame');
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(reads, 0); assert.equal(paused, false);
+});
+
+test('garage capture reads the native presented pixels before a paused Metal backbuffer clears', async () => {
+  const dir = mkdtempSync(resolve(ROOT, 'artifacts/capture-native-regression-'));
+  try {
+    const pixels = new Uint8ClampedArray([255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]);
+    const png = await sharp(Buffer.from(pixels), { raw: { width: 2, height: 2, channels: 4 } }).png().toBuffer();
+    for (const before of [false, true]) {
+      let paused = before, readbacks = 0, encoded = 0;
+      const window = { __apex: { headless: value => value === undefined ? paused : (paused = value) } };
+      const game = { width: 2, height: 2, getContext: () => null,
+        getBoundingClientRect: () => ({ x: 0, y: 0, width: 2, height: 2, right: 2, bottom: 2 }) };
+      const document = {
+        getElementById: id => id === 'game' ? game : id === 'carsetup' ? { style: {} } : null,
+        createElement: () => ({ width: 0, height: 0, getContext: () => ({
+          putImageData: image => assert.deepEqual([...image.data], [...pixels]), drawImage() {},
+        }), toDataURL: () => { encoded++; return `data:image/png;base64,${png.toString('base64')}`; } }),
+      };
+      const GLX = { softPresent: () => false, awaitSoftPresent: async () => {
+        assert.equal(paused, false, 'temporarily resume an already paused owner'); return 'frame';
+      }, capturePixels: () => { readbacks++; assert.equal(paused, false, 'submit readback before pause'); return Promise.resolve({ width: 2, height: 2, data: pixels }); } };
+      const page = { viewportSize: () => ({ width: 2, height: 2 }),
+        evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)', {
+          window, document, GLX, payload, setTimeout, clearTimeout, devicePixelRatio: 1,
+          Uint8ClampedArray, ImageData: class { constructor(data, width, height) { Object.assign(this, { data, width, height }); } },
+        }), context: () => { assert.fail('native pixels must never fall through to blank CDP'); } };
+      const file = join(dir, `native-${before}.png`);
+      const result = await screenshotGameCanvas(page, file, { skipAwait: true, skipVisible: true });
+      assert.equal(result.via, 'native-pixels'); assert.equal(paused, before); assert.equal(readbacks, 1); assert.equal(encoded, 1);
+      const stats = await sharp(file).stats();
+      assert.ok(Math.max(...stats.channels.map(c => c.stdev)) > 8, 'original nonblank bay threshold remains meaningful');
+      GLX.capturePixels = () => Promise.reject(new Error('native GPU readback failed'));
+      await assert.rejects(screenshotGameCanvas(page, file, { skipAwait: true, skipVisible: true }), /native GPU readback failed/);
+      assert.equal(paused, before, 'failed readback also restores the original render state');
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

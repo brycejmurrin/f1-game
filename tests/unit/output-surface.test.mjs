@@ -17,6 +17,8 @@ test("static inventory distinguishes commands from libraries, data and ambiguous
   assert.equal(classify("check/x.mjs", "if (isMain(import.meta.url)) main();").classification, "entrypoint-candidate");
   assert.equal(classify("env/x.sh", "#!/bin/bash\necho ok").classification, "entrypoint-candidate");
   assert.equal(classify("check/x.mjs", "console.log(1)", ["x"]).classification, "entrypoint-candidate");
+  assert.equal(classify('ci/input.mjs', 'export const python = "import sys; print(sys.argv[1])"').classification, 'ambiguous', 'embedded Python does not make its JavaScript library executable');
+  assert.equal(classify('ci/input.py', 'import sys; print(sys.argv[1])').classification, 'entrypoint-candidate');
 });
 
 test("catalog covers every file, npm command and configured MCP route without fake native flags", () => {
@@ -78,6 +80,27 @@ test("static flag mentions are labelled and generation is deterministic", () => 
   assert.match(data.output.limitations, /comments or subcommand-specific/);
   assert.equal(render(options), render({ ...options, files: [...options.files].reverse() }));
   assert.equal(render(), fs.readFileSync(path.join(ROOT, TARGET), "utf8"), "regenerate catalog from current source");
+});
+
+test('Actions machine receipts retain native output and import-only queue modules are not wrapped', () => {
+  const inventory = collect();
+  const policies = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/agent-output/policies.json'), 'utf8'));
+  const actions = inventory.tools.filter(row => row.path.startsWith('tools/ci/actions/'));
+  assert.ok(actions.length >= 19, 'every current queue component is covered by a reviewed output policy');
+  for (const row of actions) {
+    const policy = resolveToolPolicy(policies, row.path);
+    assert.equal(policy.presentation, 'native', row.path);
+    assert.ok(policy.preserve, row.path);
+    const receiptProducer = ['cli', 'coverage', 'executor', 'publisher'].some(name => row.path.endsWith(`/${name}.mjs`));
+    const historicalAnalyzer = row.path.endsWith('/analyze-garage-retry.mjs');
+    if (receiptProducer || historicalAnalyzer) {
+      assert.equal(policy.action, 'keep-native', 'machine identities and complete/partial results cannot be shortened');
+      if (receiptProducer) assert.match(policy.preserve, /receipt schemas.*lease identities/);
+    } else {
+      assert.equal(policy.action, 'no-direct-output', row.path);
+      assert.equal(agentCommandFor(row), undefined, 'import-only state and policy modules have no command wrapper');
+    }
+  }
 });
 
 test("generator help, unknown arguments and a clean --check never write", () => {

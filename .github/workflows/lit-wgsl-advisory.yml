@@ -34,13 +34,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: lit-wgsl-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  group: lit-wgsl-${{ github.event.pull_request.head.ref || github.ref_name }}${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
+  cancel-in-progress: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (true) }}
 
 jobs:
   census:
     # A draft does nothing; the ready flip runs the census.
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (!github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: true
@@ -67,3 +67,30 @@ jobs:
             cat "$RUNNER_TEMP/lit-wgsl.md" >> "$GITHUB_STEP_SUMMARY"
             echo "::notice title=lit-WGSL changed::This PR re-keys the lit shader family: every phone with a warm WebGPU pipeline cache recompiles it (~20 s on an iPhone 14). See the job summary."
           fi
+
+  request-admission:
+    concurrency:
+      group: actions-claim
+      queue: max
+    name: Record request for bounded Actions admission
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Trusted request adapter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve the request without starting its expensive work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_WORKFLOW: lit-wgsl-advisory.yml
+        run: node tools/ci/actions/cli.mjs request --workflow "$REQUEST_WORKFLOW" --event-file "$GITHUB_EVENT_PATH"

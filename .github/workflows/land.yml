@@ -202,15 +202,7 @@ jobs:
   # Which PRs does this event concern, and are they asking to land? Seconds, no checkout.
   resolve:
     name: resolve
-    if: >-
-      (github.event_name == 'pull_request_target' && (
-        ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'land' || github.event.label.name == 'hold'))
-        || github.event.action == 'converted_to_draft'
-        || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land')
-            && (github.event.action != 'edited' || github.event.changes.body))))
-      || (github.event_name == 'workflow_run'
-        && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')
-      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale != 'true')
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((github.event_name == 'pull_request_target' && (         ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && (github.event.label.name == 'land' || github.event.label.name == 'hold'))         || github.event.action == 'converted_to_draft'         || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land')             && (github.event.action != 'edited' || github.event.changes.body))))       || (github.event_name == 'workflow_run'         && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale != 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -338,7 +330,7 @@ jobs:
   trusted-rows:
     name: trusted-rows
     needs: resolve
-    if: needs.resolve.outputs.landable == 'true'
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (needs.resolve.outputs.landable == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -387,7 +379,7 @@ jobs:
   land-gate:
     name: land-gate (#${{ matrix.pr.number }})
     needs: resolve
-    if: needs.resolve.outputs.landable == 'true'
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (needs.resolve.outputs.landable == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -444,9 +436,7 @@ jobs:
   post:
     name: post + arm
     needs: [resolve, trusted-rows, land-gate]
-    if: >-
-      !cancelled() && needs.resolve.result == 'success'
-      && (needs.resolve.outputs.landable == 'true' || needs.resolve.outputs.notasked != '[]' || needs.resolve.outputs.disarm != '[]')
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (!cancelled() && needs.resolve.result == 'success'       && (needs.resolve.outputs.landable == 'true' || needs.resolve.outputs.notasked != '[]' || needs.resolve.outputs.disarm != '[]')) }}
     runs-on: ubuntu-latest
     # One runner replaces the old post (10 min) + arm (3 min) job boundary.
     timeout-minutes: 13
@@ -744,9 +734,7 @@ jobs:
   retry:
     name: retry
     needs: [resolve, post]
-    if: >-
-      !cancelled() && needs.resolve.result == 'success'
-      && ((needs.post.outputs.retry != '' && needs.post.outputs.retry != '[]') || needs.post.outputs.arm_retry != '')
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (!cancelled() && needs.resolve.result == 'success'       && ((needs.post.outputs.retry != '' && needs.post.outputs.retry != '[]') || needs.post.outputs.arm_retry != '')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -785,7 +773,7 @@ jobs:
   # `gate` statuses written after that CI run, since every re-gate writes one; nothing is counted in repo files).
   sweep:
     name: sweep
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng' && github.event.inputs.stale == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

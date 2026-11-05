@@ -1,23 +1,18 @@
-# Issue dependencies and finding work
+# Finding work and dependencies
 
-## Finding work
+Search open issues with `label:queue:ready` to find requested work, then consult the coordinator's ledger for
+actual eligibility and ownership. A label search alone does not authorize a launch or takeover.
 
-Search, never page `list_issues` (its pages miss issues): GitHub MCP `search_issues` with
-`repo:brycejmurrin/f1-game is:issue is:open label:ready -label:claimed -label:blocked -label:epic`. An `epic` is a
-parent; its sub-issues are the work. In a Claude cloud session `gh api search/*` is refused (repo-scoped REST only).
+Native `blocked_by` issue relationships express prerequisites. Read the actual blocking issue states; unreadable
+relationships remain pending. Record real dependencies using GitHub's dependencies API: the POST `issue_id` is the
+blocking issue's numeric id, not its issue number. Do not infer prerequisites from arbitrary body references.
 
-## Native `blocked_by`
+Use `/apex batch #123 #456` on a parent to request explicit ledger membership. Implementation and merge ordering
+are separate decisions. A parent and members cannot dispatch duplicate scopes. Legacy body Members sections need
+an explicit migration mapping; a tracking issue is not automatically an implementation task.
 
-For an issue blocked by another issue, record the relationship with GitHub's native
-`GET` / `POST /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by` REST API. Read both issue scopes
-and existing relationships first; the POST body takes the blocking issue's numeric `id` as `issue_id`, not its issue
-number. Add only a real prerequisite, not a test-only relationship. The authenticated cloud route was verified on
-2026-10-29: #3971 is blocked by #1578 (HTTP 201 and GET readback).
+File findings without queue labels, with scope and an observable acceptance check. Enqueue executable work
+explicitly after checking overlap, dependencies and batching. `docs/ACTIONS.md` owns rollout and command authority.
 
-## The `blocked` label
-
-The native relation records the dependency; the `blocked` label is a compatibility projection while the dispatch
-Action and the ready search above still filter labels (neither reads native blockers). The label also covers gates
-without a blocking issue, such as an explicit maintainer deferral. Check the actual prerequisite before removing a
-stale label. Do not replace complete label lists or remove another owner's relationship merely to make an issue
-launchable. Evidence and reproducible counts: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`.
+Migration provenance: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md` records the original native-dependency
+rollout and API evidence. Preserve that history when importing relationships; its old label procedures are retired.

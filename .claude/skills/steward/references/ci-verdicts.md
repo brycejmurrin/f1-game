@@ -26,14 +26,13 @@ JOB (a `cancelled` run can hide a FAILED one; the rota covers the specs `select-
 - `superseded` → follow the named current head or replacement run before concluding anything about that tree.
 - `= ci blocked` → the PR conflicts, so GitHub starts no run: `sync-pr.mjs <branch>`, then push.
 - `= ci none-yet` → no run 10 min after the push: read the PR's `mergeable_state` (a conflicting PR starts no run).
-- `= ci cancelled-external` → someone cancelled it (not a timeout): re-run once (`ci-rerun.mjs`) or re-push.
+- `= ci cancelled-external` → read the attempt reason and replacement; request trusted recovery if current work lacks evidence.
 - `= ci timeout` → the WATCH gave up, not CI: re-read with `--once`.
-- Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a proven draft→ready cancel with a live
-  sibling still 0-failed on the same SHA.
+- Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a proven obsolete attempt with a named replacement; a live replacement is still not a pass.
 
 ## The `gate` status
 
-`gate` is a COMMIT STATUS posted by `land.yml`, not a workflow run, so ci-watch never shows it. Read it with
+`gate` is a COMMIT STATUS published only by the trusted finalization path, not a workflow run, so ci-watch never shows it. Read it with
 `gh api repos/<owner>/<repo>/commits/<sha>/statuses` (the newest `context: gate`; its description and the linked
 run's summary name the failing merge-gate row).
 

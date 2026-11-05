@@ -13,7 +13,7 @@ comments and answers each with an ` ```apex-result ` comment. Routes ruled out, 
 
 1. Use the open bridge issue, or create one ("Phone bridge <date>", body: what you will run). The repo is public:
    say so in the body.
-2. Ask Bryce (AskUserQuestion in an attended session; `needs-decision` otherwise) to open
+2. Ask Bryce (in an attended session, or one issue/PR decision comment otherwise) to open
    `https://brycejmurrin.github.io/f1-game/?apex=1&bridge=<n>`, paste his fine-grained token once (Issues read/write,
    this repo only; it stays in that phone's `localStorage`), tap LINK, and keep the game IN FRONT (iOS suspends a
    background tab: no polls, no rAF).

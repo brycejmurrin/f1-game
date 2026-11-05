@@ -1,31 +1,26 @@
 ---
 name: track-with-tasks-and-messages
-description: "Fleet work: keep a TaskCreate/TaskUpdate list per stream, and workers send_message the dispatcher one-line status"
+description: "Keep orchestration plans current and report verified changes; durable reservations coordinate worker ownership"
 metadata:
   type: feedback
 ---
 
-An orchestrating session (dispatcher, orchestrator) keeps a live task list,
-one task per stream: the land queue, dirty PRs, drafts waiting on CI, each
-launch wave, and items waiting on Bryce. It updates the list after each batch
-of worker reports.
+Keep a current task plan when coordinating several streams and record verified checkpoints. A host-local task
+list is a planning aid; it is not the authority for queue admission, ownership or completion.
 
-Every worker prompt ends with a Coordination line. The line tells the worker
-to `send_message` the dispatcher
-`#<issue> → PR #<n> <state> <sha> next: <step>` at five points: PR open, red,
-`needs-decision`, `needs-owner` and `land`. A worker sends nothing else. A
-status ping from the dispatcher needs no reply when nothing has changed, and a
-worker sends a report only after the GitHub write it describes has succeeded
-(the fleet review of 2026-11-03 counted duplicate and premature reports). To
-move a live owner along, message it; never launch a second worker on the same
-PR (#4597 got two CONTINUE workers in the same minute).
+The durable coordinator ledger on `bot/actions-state` owns reservations and attempts. Workers verify an
+authenticated reservation before editing, preserve the PR Plan and Hand-off, and report a GitHub write only after
+it succeeds. A denied/failed write is not done. Repeated comments, labels or session messages cannot transfer a
+lease or start a second worker; recovery requires evidence that the previous execution is no longer live.
 
-**Why:** Bryce, 2026-11-03 (relayed by the dispatcher): "use task planning
-tools to keep track of everything", "use task tools and message to
-coordinate", "update memory to use tasks more and messaging".
+Use the queue labels and `/apex` commands documented in `docs/ACTIONS.md`; the reset defaults to shadow. There is
+no persistent dispatcher session to message and no fixed session id to preserve. A request recorded in GitHub is
+not proof that a worker started, validation passed, approval was granted or a merge completed.
 
-**How to apply:** on a fleet or orchestration task, open the task list before
-the first launch. Put the Coordination line in every brief. Read the worker
-messages before you read the Board. GitHub stays the state store
-(AGENTS.md §Coordination); messages are the fast path, not the record.
-Evidence: the fleet review note `docs/notes/AGENT-FLEET-REVIEW-2026-11-03.md` (its own PR).
+**Why:** Bryce's 2026-11-03 preference was to keep task plans and coordination current; the 2026-11-05 reset (D-031)
+replaces the old session-message transport and label state machine. Preserve the useful planning and truthful
+reporting behavior through the current coordinator instead of following the retired transport.
+
+**How to apply:** read AGENTS.md §Coordination, `docs/ACTIONS.md`, and the assigned item's actual head/ledger state.
+Use only exposed host capabilities. Keep decision requests, waiting reasons and evidence on the issue/PR, and do
+independent work while an answer is pending. Do not launch another worker to move an existing owner along.

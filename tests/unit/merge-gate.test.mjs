@@ -533,8 +533,16 @@ function ghExpr(src, github) {
   const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
   const startsWith = (a, b) => String(a ?? "").startsWith(b);
   const cancelled = () => false;
-  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", "steps", "success", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs, github?.steps, () => github?.success !== false);
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", "steps", "success", "vars", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs, github?.steps, () => github?.success !== false, github?.vars || { ACTIONS_COORDINATOR_MODE: "shadow" });
 }
+
+test("active and paused coordination cannot invoke legacy landing jobs", () => {
+  for (const mode of ["active", "paused"]) {
+    for (const [id, job] of Object.entries(LAND.jobs)) {
+      assert.equal(ghExpr(job.if, { vars: { ACTIONS_COORDINATOR_MODE: mode } }), false, `${mode}/${id}`);
+    }
+  }
+});
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
   const on = LAND.on;

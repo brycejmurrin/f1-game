@@ -59,7 +59,6 @@ export const PROPOSE_FLAKY_RUNS = 2;
 /** proposeRows: a test that failed on this many distinct branches follows the test, not the change. */
 export const PROPOSE_FAIL_BRANCHES = 3;
 export const ISSUE_TITLE = "Flaky tests (daily tally)";
-const ISSUE_LABEL = "flaky";
 export const ISSUE_MARKER = "<!-- flake-tally: rewritten daily by .github/workflows/flake-tally.yml -->";
 export const ARTIFACT_PREFIX = "playwright-artifacts-";
 /** --base-red (2026-10-16 CI jobs review): a spec red on UNRELATED diffs within a short window is the base's, not a branch's. */
@@ -67,7 +66,6 @@ const BASE_RED_HOURS = 3;
 /** A first-try failure on this many distinct branches in the window (the deploy branch counts as one). */
 const BASE_RED_BRANCHES = 3;
 export const BASE_RED_TITLE = "Base red suspects (auto)";
-const BASE_RED_LABEL = "base-red";
 export const BASE_RED_MARKER = "<!-- flake-tally base-red: rewritten every 2 h by .github/workflows/flake-tally.yml -->";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -361,8 +359,27 @@ export function formatBaseRedBody(suspects, { runsExamined = 0, hours = BASE_RED
   for (const r of suspects.slice(0, 30)) {
     lines.push(`| ${r.test.replace(/\|/g, "\\|")} | ${r.spec} | ${r.fails} | ${(r.branches || []).length} | ${r.lastSeenRunId} |`);
   }
-  lines.push("", "Advisory only: this issue and its `base-red` label block nothing. It is rewritten every 2 h and closed when no spec qualifies. Daily detail: the `Flaky tests (daily tally)` issue.");
+  lines.push("", "Advisory only: this marker-identified issue blocks nothing and needs no queue label. It is rewritten every 2 h and closed when no spec qualifies. Daily detail: the `Flaky tests (daily tally)` issue.");
   return lines.join("\n");
+}
+
+/** Find an existing advisory by its stable marker after label reset. Unknown pages cannot justify creating
+ * another issue; an exact-title collision without its marker also needs identity repair first. */
+async function advisoryIssue(marker, title, token) {
+  let titleConflict = false;
+  for (let page = 1; page <= 100; page++) {
+    const list = await githubApi("GET", `issues?state=open&per_page=100&page=${page}`, { token });
+    if (list.error) return { error: list.error };
+    if (!Array.isArray(list.json)) return { error: "Advisory issue lookup returned no issue array" };
+    const issues = list.json.filter(i => !i.pull_request);
+    const hit = issues.find(i => String(i.body || "").trimStart().startsWith(marker));
+    if (hit) return Number.isInteger(hit.number) && hit.number > 0 ? { hit } : { error: "Advisory issue identity is unreadable" };
+    titleConflict ||= issues.some(i => i.title === title);
+    if (list.json.length < 100) return titleConflict
+      ? { error: "An advisory title exists without its stable marker; verify identity before creating another issue" }
+      : { hit: null };
+  }
+  return { error: "Advisory issue lookup exceeded its pagination budget" };
 }
 
 /**
@@ -370,15 +387,15 @@ export function formatBaseRedBody(suspects, { runsExamined = 0, hours = BASE_RED
  * when the first appears, close it when the window is clean.
  */
 export async function syncBaseRedIssue(suspects, body, { token } = {}) {
-  const list = await githubApi("GET", `issues?state=open&labels=${encodeURIComponent(BASE_RED_LABEL)}&per_page=50`, { token });
-  if (list.error) return { error: list.error };
-  const hit = (list.json || []).find((i) => !i.pull_request && String(i.body || "").startsWith(BASE_RED_MARKER));
+  const found = await advisoryIssue(BASE_RED_MARKER, BASE_RED_TITLE, token);
+  if (found.error) return { error: found.error };
+  const { hit } = found;
   if (suspects.length) {
     if (hit) {
       const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ body, title: BASE_RED_TITLE }) });
       return r.error ? { error: r.error } : { number: hit.number, updated: true };
     }
-    const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title: BASE_RED_TITLE, body, labels: [BASE_RED_LABEL] }) });
+    const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title: BASE_RED_TITLE, body }) });
     return r.error ? { error: r.error } : { number: r.json?.number, created: true };
   }
   if (!hit) return { none: true };
@@ -465,16 +482,16 @@ export async function listAllRuns({ days = DEFAULT_DAYS, token, now = new Date()
   return { runs };
 }
 
-/** Create or rewrite the one open `flaky`-labelled issue whose body starts with ISSUE_MARKER. */
-export async function upsertIssue(body, { token, title = ISSUE_TITLE, label = ISSUE_LABEL } = {}) {
-  const list = await githubApi("GET", `issues?state=open&labels=${encodeURIComponent(label)}&per_page=50`, { token });
-  if (list.error) return { error: list.error };
-  const hit = (list.json || []).find((i) => !i.pull_request && String(i.body || "").startsWith(ISSUE_MARKER));
+/** Create or rewrite the open marker-identified report without using queue or retired labels. */
+export async function upsertIssue(body, { token, title = ISSUE_TITLE } = {}) {
+  const found = await advisoryIssue(ISSUE_MARKER, title, token);
+  if (found.error) return { error: found.error };
+  const { hit } = found;
   if (hit) {
     const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ body, title }) });
     return r.error ? { error: r.error } : { number: hit.number, updated: true };
   }
-  const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title, body, labels: [label] }) });
+  const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title, body }) });
   return r.error ? { error: r.error } : { number: r.json?.number, created: true };
 }
 
@@ -757,12 +774,12 @@ to stdout and appends it to $GITHUB_STEP_SUMMARY when set.
                only the logs of its failed browser and node jobs are read
 --propose      also print the repeat offenders as quarantine rows (JSON) in
                the ledger's current shape; nothing is written
---issue        create or rewrite the open \`${ISSUE_LABEL}\`-labelled issue
+--issue        create or rewrite the stable-marker advisory issue without labels
                "${ISSUE_TITLE}" with the table and the proposals
 --base-red     (implies --events all) read the last --hours N (default ${BASE_RED_HOURS}) and name the specs
                that failed first-try on ${BASE_RED_BRANCHES}+ branches, or on 2 incl. the deploy branch (a
                red on the base, not on one diff); with --issue, open / refresh / close
-               the \`${BASE_RED_LABEL}\` issue "${BASE_RED_TITLE}"`;
+               the stable-marker issue "${BASE_RED_TITLE}"`;
 
 function parseArgs(argv) {
   const opt = (k, d) => {

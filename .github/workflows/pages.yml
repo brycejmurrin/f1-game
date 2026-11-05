@@ -110,6 +110,7 @@ jobs:
   # not share the gate's concurrency group. Any lookup failure is reuse=false,
   # which costs exactly the gate run every commit paid before this existed.
   verdict:
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused' }}
     name: Anything new, and was this exact tree already gated?
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -191,7 +192,7 @@ jobs:
     # always false since 2026-10-07, when run 3112 (37689226760) published
     # 61e0a6442 on a smoke-only pass after dispatch 3110 (37687308660) had
     # failed the full gate on that tree — see pages-reuse-verdict.sh).
-    if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused' && (needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true') }}
     # A CALLED workflow may not request more than its caller passes, and the
     # check happens at startup for every declared job, skipped or not. ci.yml's
     # jobs ask for contents: read and actions: read (the fast-tier reuse and
@@ -229,7 +230,7 @@ jobs:
     # otherwise, so this spells out the two ways in: the gate passed, or the
     # gate was skipped BECAUSE the verdict reused an earlier pass. A failed or
     # cancelled gate matches neither and the run stops here.
-    if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.verdict.outputs.nothing_new != 'true' && (needs.ci.result == 'success' || (needs.ci.result == 'skipped' && needs.verdict.outputs.reuse == 'true')) }}
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused' && (!cancelled() && needs.verdict.result == 'success' && needs.verdict.outputs.nothing_new != 'true' && (needs.ci.result == 'success' || (needs.ci.result == 'skipped' && needs.verdict.outputs.reuse == 'true'))) }}
     runs-on: ubuntu-latest
     # A checkout and one script (2026-10-04): it had no cap (360 min default)
     # and inherited the workflow's pages: write + id-token: write, neither of
@@ -259,7 +260,7 @@ jobs:
     # even though publishable ran and said yes (run 2237, 2026-09-10). The
     # explicit result check keeps the failure semantics: a failed or skipped
     # publishable still stops here.
-    if: ${{ !cancelled() && needs.publishable.result == 'success' && needs.publishable.outputs.deploy == 'true' }}
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused' && (!cancelled() && needs.publishable.result == 'success' && needs.publishable.outputs.deploy == 'true') }}
     # The ONLY step that actually touches GitHub's single-slot Pages queue.
     # cancel-in-progress stays false: a publish in flight is never interrupted,
     # and a newer run simply queues behind it and publishes next.
@@ -388,7 +389,7 @@ jobs:
     name: Live shell matches the published commit and build
     needs: deploy
     # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
-    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused' && (!cancelled() && needs.deploy.result == 'success') }}
     runs-on: ubuntu-latest
     # 15 min: poll-live-shell DEFAULT_ATTEMPTS/backoff worst-case + checkout/stamp/
     # verify-live.mjs overhead must finish so a wrong shell still emits the clear
@@ -449,4 +450,29 @@ jobs:
               "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` / \`apex-sha\` metas on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
               "" \
               "Opened automatically by pages.yml verify-live.")" \
-            --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"
+            || echo "::warning::could not open the issue; the failure above still stands"
+
+  request-admission:
+    concurrency:
+      group: actions-claim
+      queue: max
+    name: Request exact-SHA release coverage
+    if: vars.ACTIONS_COORDINATOR_MODE == 'active' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve the release request without allocating its gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ci/actions/cli.mjs request --workflow pages.yml --event-file "$GITHUB_EVENT_PATH"

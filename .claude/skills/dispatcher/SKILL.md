@@ -1,28 +1,29 @@
 ---
 name: dispatcher
-description: "Use when asked how workers get launched, why an issue was not picked up, or to plan or run a dispatch cycle by hand: the dispatch Action, dispatch.mjs --plan, the Board. Not for: owning one PR → steward."
+description: "Use when asked how workers get launched, why an issue was not picked up, or to plan or run a dispatch cycle by hand: the dispatch Action, queue ledger and capacity. Not for: owning one PR → steward."
 ---
 
-# Dispatch — a GitHub Action, not a session
+# Dispatch — durable, bounded GitHub coordination
 
-Dispatch is `.github/workflows/dispatch.yml` running `tools/ci/dispatch.mjs` (hourly cron plus `issues` /
-`pull_request` label events, one concurrency group): it plans over GitHub state and `tools/ci/dispatch.json` (the
-caps), writes labels and the Board comment (issue #1780) with `GITHUB_TOKEN`, fires one "Apex worker" scheduled task
-per `CREATE_SESSION` with a one-line address (`ISSUE n` / `CONTINUE PR n` / `DEPLOY-RED`), and posts the claim
-comment with the returned session id. The exact rules, line formats and the saved worker prompt are the header of
-`tools/ci/dispatch.mjs` (their one home). A launched session loads skill `steward` §Lane.
+Read `docs/ACTIONS.md` for the active/shadow distinction, label catalog, `/apex` commands and migration. The ledger
+on `bot/actions-state` is durable state. PR bodies/comments are human-readable requests and hand-offs; there is no
+session task-list authority and no comment-first ownership election.
 
-- ONE launcher exists: the dispatch Action. Once the persistent dispatcher session is live, no orchestrator test-runs a
-  cycle or adopts a PR by hand (seen 2026-11-03: two launchers adopted #4597 seven seconds apart). The plan also skips a
-  `CONTINUE PR n` while an `adopts PR #n` comment is under 10 minutes old, or while head CI runs with 0 failed jobs and
-  no conflict; each skip is a row on the Board.
-- A console may run `node tools/ci/dispatch.mjs --plan` (read-only) to see what the next cycle would do; `--apply`
-  is the Action's, never a session's.
-- Bryce's switches are labels on the Dispatch issue (#3899): `dispatch:pause` stops launches (running owners carry
-  on), `dispatch:merge-pause` stops arming; `priority` on an issue or PR launches or lands it first.
-- Bryce's setup, once: the "Apex worker" scheduled task with an API trigger and the saved prompt from
-  `dispatch.mjs`'s header; the `LAND_TOKEN` secret (skill `steward` `references/vendors.md`).
-- The dispatcher's one state store is its task list (TaskCreate / TaskUpdate, one task per stream); no `roster.md`.
-  Workers report by one-line `send_message` (`tools/ci/worker-prompt.md` Coordination); read those before the Board.
-- Session sweep: `node tools/ci/archive-sweep.mjs --sessions <list_sessions JSON file>` prints the sessions whose PR
-  merged or closed in one call; archive each with `archive_session`. Do not page `list_sessions` repeatedly.
+Only the trusted coordinator reserves and launches work. Persist the request/attempt before dispatch; startup
+claims it atomically. A duplicate event or startup cannot acquire a second lease. Timeouts do not reassign a
+proven live worker; `/apex recover` requests a checked recovery, not a force takeover.
+
+Intake uses open `queue:ready` issues with satisfied native dependencies, explicit batch membership and no pause
+or owner. Check parent/member overlap before admission. Owner-direct `queue:priority` reorders eligible work but
+adds no validation request. `queue:paused` stops new expensive work and merge; owner pauses are sticky.
+
+Global `/apex pause` and `/apex resume` controls are on issue #3899, with workers, validation, merges or all as
+the scope. Owner provenance is mandatory for resume/priority/approval. Unreadable authoritative state stays pending.
+
+Control jobs also consume runners. Coalesce wakeups, admit bounded waves and record why each request waits.
+Separate implementation, validation and release capacity. Latest head supersedes within a PR; fair admission
+across PRs; explicit experiments retain durable FIFO. Do not claim GitHub concurrency provides FIFO guarantees.
+
+Shadow mode proposes decisions only. Do not invoke a second launcher, edit ledger ownership by hand, migrate labels
+or bypass gates from a session. A status request is read-only: report request/attempt id, head, pending reason,
+capacity and available evidence. Sweeps/archive cleanup must not evict an active owner or claim a release succeeded.

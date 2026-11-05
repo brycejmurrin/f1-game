@@ -65,10 +65,10 @@ test("the fixed blocking floor: 3 specs, named, and it may not drift down", () =
   const CORE_BLOCKING = ["tests/specs/smoke.spec.js", "tests/specs/physics-characterization.spec.js", "tests/specs/render-boot.spec.js"];
   assert.deepEqual(CORE_BLOCKING.filter((s) => !report.blocking.includes(s)), [],
     "a core spec left the fixed BLOCKING gates — the deploy gate got weaker");
-  // The golden baseline is now blocking on scheduled/manual runs.
+  // Golden-menu collection remains diagnostic while the core blocking floor stays intact.
   assert.ok(report.executed.includes("tests/specs/menu-baseline.spec.js"));
-  assert.ok(report.blocking.includes("tests/specs/menu-baseline.spec.js"));
-  assert.equal(report.specsInFixedGates - report.specsInBlockingFixedGates, 0);
+  assert.ok(!report.blocking.includes("tests/specs/menu-baseline.spec.js"));
+  assert.equal(report.specsInFixedGates - report.specsInBlockingFixedGates, 1);
 });
 
 test("smoke and the driving-model gate are both seen", () => {

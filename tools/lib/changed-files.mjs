@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 
 /** Parse `git diff --name-status -z` output into unique paths, rename/copy
  *  sources included. Pure, so the format handling is testable without a repo. */

@@ -10,7 +10,7 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -62,8 +62,13 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // of merges routed; tools/ci/ci-resolve-before.sh).
   // 2026-10-15: the job also plans the node slices (was unit-plan), so it runs whenever the node
   // matrix does (`fast_tier_run == ''`); the spec selection keeps its own event test on the step.
-  assert.ok(selectJob.includes(`if: \${{ (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}`),
-    "the select job carries only its own clause (no draft/label/edit gate since 2026-11-03)");
+  const selectIf = parseYAML(ciWorkflow).jobs.select.if;
+  for (const event of ["pull_request", "schedule", "workflow_dispatch"]) {
+    assert.equal(evalTemplate(selectIf, workflowContext({ event })), true, event);
+  }
+  for (const mode of ["active", "paused"]) {
+    assert.equal(evalTemplate(selectIf, workflowContext({ mode })), false, `${mode}: legacy selection is retired`);
+  }
   // The JOB and the selection STEP never exclude the deploy gate; the ship
   // filter step inside the same job legitimately sits out the fast tier.
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
@@ -75,7 +80,7 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // The runner consumes the plan as a matrix and takes its cap per shard.
   // 2026-10-10 (R3-CI-HEALTH-2): the selected legs start as soon as the plan exists; a guards red
   // still fails selected-verdict / ci-verdict, which keep `guards` in their needs.
-  assert.match(selectedJob, /needs: \[select\]$/m);
+  assert.deepEqual(parseYAML(ciWorkflow).jobs.selected.needs, ["select", "guards-a", "guards-b", "guards-c", "guards-d"], "expensive legacy legs wait for structural prerequisites");
   assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
   assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
   assert.match(selectedJob, /APEX_WORKERS: \$\{\{ matrix\.workers \|\| 1 \}\}/,
@@ -214,14 +219,20 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
 test("ci-verdict is the always-run aggregator every other job feeds", () => {
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(body, "ci-verdict job missing");
-  // The required-check display name stays the stable `CI` on every real run;
-  // only a label-noise run (all jobs skipped, #2184) is named otherwise.
-  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && 'CI \(draft fast tier\)' \|\| 'CI' \}\}$/m,
-    "the required-check display name is the stable `CI` on a non-draft run; a draft fast tier is named apart (#2664)");
-  assert.match(body, /^    if: \$\{\{ !cancelled\(\) \}\}$/m, "runs (never skips) on every non-cancelled run: a skipped job is named by the raw expression (P9)");
+  const verdictJob = parseYAML(ciWorkflow).jobs["ci-verdict"];
+  for (const draft of [true, false]) {
+    const legacy = workflowContext({ draft });
+    assert.equal(evalTemplate(verdictJob.if, legacy), true);
+    assert.equal(evalTemplate(verdictJob.name, legacy), draft ? "CI (draft fast tier)" : "CI");
+  }
+  for (const mode of ["active", "paused"]) {
+    const current = workflowContext({ mode });
+    assert.equal(evalTemplate(verdictJob.if, current), false, `${mode}: no legacy aggregator`);
+    if (mode === "active") assert.notEqual(evalTemplate(verdictJob.name, current), "CI", "retired checks cannot grant validation success");
+  }
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
-  for (const j of ["guards", "node-suites", "smoke", "selected", "baseline-trial"]) {
+  for (const j of ["guards", "node-suites", "smoke", "selected"]) {
     assert.match(body, new RegExp(`- ${j}\\b`), `ci-verdict must need ${j}`);
   }
   // 2026-10-04: CI needed `selected` and not `selected-verdict`, so a plan
@@ -233,7 +244,7 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   const parsed = parseYAML(ciWorkflow);
   const needs = new Set(parsed.jobs["ci-verdict"].needs);
   // No exemption since 2026-11-03: draft-ci-skipped (the opt-out notice) is gone; poke-train went on 2026-10-16.
-  const NOT_A_VERDICT = new Set();
+  const NOT_A_VERDICT = new Set(["baseline-trial"]);
   for (const [id, job] of Object.entries(parsed.jobs)) {
     if (id === "ci-verdict") continue;
     if (NOT_A_VERDICT.has(id)) {
@@ -302,8 +313,13 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   // Decisions D1/D2 (the CI selection plan, PR #2560 §6): no draft
   // (run-ci or not) and no Pages call runs the node slices; ready PRs, the
   // nightly and dispatch do.
-  assert.ok(nodeIf.includes("!(github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast')) &&"),
-    "node-suites skips every draft, every draft, now that drafts otherwise run");
+  const nodeNeeds = { select: { outputs: { any_node: "true" } } };
+  for (const draft of [true, false]) {
+    assert.equal(evalTemplate(nodeIf, workflowContext({ draft, needs: nodeNeeds })), !draft);
+  }
+  for (const mode of ["active", "paused"]) {
+    assert.equal(evalTemplate(nodeIf, workflowContext({ mode, needs: nodeNeeds })), false);
+  }
   assert.match(nodeIf, /inputs\.concurrency_key == ''/, "node-suites skips on the Pages call");
   const steps = node.split(/\n      - /).slice(1);
   const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff/.test(st));
@@ -338,8 +354,9 @@ test("test:xr is path-gated (a filter step of select → xr) and feeds ci-verdic
   assert.match(filter.run, /js\/xr\//);
   assert.match(filter.run, /vr-emulated/);
   assert.match(selectJob, /^      xr: \$\{\{ steps\.xrfilter\.outputs\.xr \}\}$/m);
-  assert.match(String(filter.if), /pull_request' && !\(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)/,
-    "the xr filter must skip draft PRs (heavy Chromium suite; fast tier)");
+  assert.equal(evalTemplate(filter.if, workflowContext({ draft: true })), false);
+  assert.equal(evalTemplate(filter.if, workflowContext({ draft: false })), true);
+  assert.equal(evalTemplate(filter.if, workflowContext({ concurrencyKey: "pages-1" })), false);
   const xr = (ciWorkflow.split("\n  xr:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(xr, "xr job missing");
   assert.match(xr, /^    needs: select$/m);

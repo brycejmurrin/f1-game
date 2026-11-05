@@ -13,7 +13,7 @@ description: "Use when adding or editing a skill (SKILL.md, fat body, descriptio
 | Codex mirror | `.agents/skills/<name>` → `../../.claude/skills/<name>` | `bash tools/env/mirror-skills.sh` after an add/rename; no Cursor fork (`.claude/rules/claude-config.md`) |
 | Subagents | `.claude/agents/<name>.md` | a `tools:` list must hold every `mcp__<server>__*` the body names; enforce read-only with `disallowedTools: Write, Edit, NotebookEdit`; `.claude/agents/README.md` §Parent and child is the parent/child protocol |
 | Area rules | `.claude/rules/*.md` (`paths:` frontmatter) | loads with the matching paths; `npm run gen` regenerates `.cursor/rules` (`gen-cursor-rules.mjs`) |
-| Hooks | `.claude/hooks/*.sh`/`*.py`, wired in `.claude/settings.json` | a must-hold rule lives here, listed in `.claude/rules/claude-config.md`; a hook or settings PR needs Bryce's own `config-ok` label (merge-gate `config` row); tests: `bash-guard-hardening.test.mjs`, `memory-sync.test.mjs`, `agent-config.test.mjs` |
+| Hooks | `.claude/hooks/*.sh`/`*.py`, wired in `.claude/settings.json` | a must-hold rule lives here, listed in `.claude/rules/claude-config.md`; sensitive changes use owner-direct `/apex approve <sha>` for the exact head (docs/ACTIONS.md); tests: `bash-guard-hardening.test.mjs`, `memory-sync.test.mjs`, `agent-config.test.mjs` |
 
 ## Budgets the tests enforce (`tests/unit/agent-config.test.mjs`, `skill-descriptions.test.mjs`)
 

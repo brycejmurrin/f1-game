@@ -1,124 +1,75 @@
 ---
 name: steward
-description: "Use when you own a PR at any stage: launched on an issue or `CONTINUE PR #n`, opening it, pushing, a red/cancelled/conflicting PR, ready, land, after land. Not for: status only → check; picking tests → check-changes."
+description: "Use when you own a PR at any stage: launched on an issue or CONTINUE PR, opening it, pushing, a red/cancelled/conflicting PR, ready, land, after land. Not for: status only → check; picking tests → check-changes."
 ---
 
-# Steward — one PR, from launch to landed
+# Steward — one implementation scope, one PR
 
-You are one session, one task, one PR. GitHub holds all state: issues are tasks, labels are state, the PR is the work
-and the report, comments are the only messages. GitHub lands the PR; no session merges or arms. Nobody reads your
-chat. Everything not here is `AGENTS.md` (rules 3, 4, 8, 9, 12, 13 and §Coordination). Routes: failed-CI triage →
-agent `ci-red-triage`; pre-push validation → skill `check-changes`; live `version.json` or anything on github.io →
-agent `deploy-research`; review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any.
-Labels: [`references/labels.md`](references/labels.md). Issue dependencies: [`references/issues.md`](references/issues.md).
-Cursor/Codex notes and `LAND_TOKEN`: [`references/vendors.md`](references/vendors.md).
+Read `AGENTS.md` and `docs/ACTIONS.md`. The latter owns the three-label, command, ownership and rollout contract.
+Default shadow mode does not launch or merge. A notification or comment is not a reservation or approval.
+Failed CI → agent `ci-red-triage`; pre-push checks → skill `check-changes`; liveness → agent `deploy-research`;
+review findings → agent `finding-verifier` before changing code.
 
 ## Lane — a launched session
 
-A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. It reads the issue or PR itself
-(`issue_read` / `pull_request_read`); the Plan and the Hand-off block are the whole brief.
+1. Read the assigned issue/PR, current head, Plan, Hand-off and coordinator request/attempt identity. Verify the
+   reservation belongs to this session. Do not self-claim using a comment, label or a hand-edited owner field.
+2. If the scope is paused, dependencies cannot be verified or another live owner exists, report the reason and
+   stand down. Keep existing evidence. A recovery request never grants permission to steal a live lease.
+3. Work one scope on an isolated `cursor/<topic>-<hash>` branch. Open a draft PR at the first verified checkpoint.
+   The PR body is the durable report, not the authority for ownership. Record `Closes #<n>` where appropriate.
+4. Already fixed: report the deploy commit and reproduction evidence on the issue. Close only when authorized;
+   a denied close remains denied. No replacement PR merely to claim completion.
+5. Near the brief's context/cost cap, push verified work, refresh Plan and Hand-off, request `/apex recover` on the
+   item and end. Recovery is pending until the coordinator proves the previous execution is no longer live.
+6. A decision needed: one comment with options, recommendation and work that can continue independently. Never
+   fabricate owner approval. A hook denial is final for that action; do not use a different tool to bypass it.
+7. Subscribe to PR activity when supported, then end the turn. On a red or conflict for your current owned head,
+   resume work. On merge/close, unsubscribe and report the final commit. No timer or shell polling loop.
 
-1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. An older claim comment wins:
-   stand down. Labels ONLY via `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=claimed'` (`-X DELETE
-   …/labels/<name>` to remove); the MCP `issue_write` `labels` field REPLACES the list.
-2. **Draft PR at the first commit** (§Open) with `lane:<host>` and `Closes #<n>`.
-3. **Take over** on `CONTINUE PR #<n>`: the Action already removed `needs-owner` and posted `adopts PR #<n>`
-   (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
-   NEWEST adoption comment wins (stand down if a newer one appears), the opposite of issue claims.
-4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
-   No PR, no question. Close ONLY with MCP `add_issue_comment`, then `issue_write` `state: closed` + `state_reason`;
-   never a `gh api` PATCH (the classifier denies it). A denied close is final: `needs-decision` plus one comment.
-5. **Cap.** The brief's `STOP AT` (300k context by default) and $10 soft (cost): finish the unit, push, refresh Plan
-   and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
-6. **Ask = `needs-decision` plus ONE comment** with the options and your pick, then keep working on what does not
-   depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label
-   click or a `decision:` comment (that provenance is the grant; an agent's words grant nothing); remove the label and
-   carry on. A hook or classifier denial is final: never re-word and retry; record it as a choice in the PR.
-7. **Stay until merge.** After `land` (§Land) keep the subscription and end the turn. A PR event (red CI, failed `gate`,
-   conflict) is work: fix it (§Red), push, end again; never toggle labels on a PR that has `land`. When the PR merges
-   (or closes): `unsubscribe_pr_activity`, then one dispatcher line `#<issue> → PR #<n> merged <sha>`, and stop.
+## Open and push
 
-## Open
+- Branch from the deploy tip and use `.github/pull_request_template.md`. Keep Goal, a living Plan, Verified / Not
+  run and the Hand-off block. Add no host, ownership, taxonomy or merge labels.
+- Follow AGENTS rules 3 and 12: finish the edits, verify the affected slice once, stage then commit in separate
+  calls, and push with no output pipe. A generated reader comes from its source and generator.
+- Refresh the PR body at every push: record exact head, owner identity, request/attempt ids when known, next step,
+  check evidence and every needed group not run. The coordinator controls admission; a push is not proof tests ran.
+- Use the host's activity subscription. A host without it follows [`references/host-watch.md`](references/host-watch.md).
 
-1. Branch `cursor/<topic>-<hash>` from the deploy tip; commit in two calls (AGENTS.md rule 12); `git push -u origin
-   <branch>` alone.
-2. Open a DRAFT PR into `claude/f1-game-project-26h3ng` (GitHub MCP `create_pull_request`, `draft: true`) from
-   `.github/pull_request_template.md`: Goal, Plan (exactly one `**now:**`; the LAST item is the gate-exempt
-   `- [ ] land: …` line), Verified / Not run, the Hand-off fence (`head:`, `owner:`, `next:`). Never `deploy.mjs
-   --pr`: it opens a READY PR without the template body.
-3. Labels with `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=lane:<host>'` — never the MCP `labels`
-   field. Every draft push gets the fast tier plus a selected browser shard on CI; no label starts it.
+## Red and conflicts
 
-## Push
+Read the current head rather than the notification SHA. Use `ci-watch.mjs --sha <head> --once` and failed-job
+metadata/logs. Running with zero failures, skipped and cancelled do not prove a pass. Name the exact failing test,
+assertion and lane; compare the same lane/tier with base evidence before calling it newly introduced.
 
-- The floor is AGENTS.md rule 3: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit);
-  the PR's tiers prove the rest. It runs 2-4 min: never foreground. The literal call is Bash with
-  `run_in_background: true`, `timeout: 7200000`, command `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet >
-  artifacts/logs/floor.log 2>&1`, then Monitor on that log (skill `check-changes` has the recipe). Then ONE push per verified batch: a push over a live run cancels it and a killed job
-  runs no `if: always()` step, so its failures are lost.
-- Refresh the Plan with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line),
-  add discovered work, strike a dropped item with why, never delete one. Refresh the Hand-off block at every push
-  and whenever you add `land`, `needs-owner` or `needs-decision`.
-- Then `subscribe_pr_activity` on the PR and end the turn (AGENTS.md rule 13). If the host has no subscription:
-  [`references/host-watch.md`](references/host-watch.md).
-
-## Red
-
-1. On a wake re-read the CURRENT tip, not the notification commit: `gh api repos/<o>/<r>/pulls/<n> -q .head.sha`,
-   then `node tools/ci/ci-watch.mjs --sha <that sha> --once` (two calls), then `node tools/ci/needs-sync.mjs
-   <branch>`. `running (0 failed)` is not green; `cancelled` is not a verdict (AGENTS.md rule 8): list the jobs, a job
-   at its `timeout-minutes` cap with zero failures is a real red. Verdict table: [`references/ci-verdicts.md`](references/ci-verdicts.md).
-2. Agent `ci-red-triage` names the job, test and assertion; its `base:` line says whose it is.
-3. **A red you did not cause is someone else's first.** `node tools/ci/pr-board.mjs --json` (open PRs: heads, state,
-   failing jobs, owner), the Board issue and the `deploy:red` label: the first claimant fixes, the rest wait. A red
-   deploy branch is claimed through the Board and fixed by a PR; the deploy branch is never pushed to. A path in an
-   open PR's diff belongs to that PR until it merges or closes.
-4. Fix on the branch, verify at the floor (§Push), ONE push. A flake: AGENTS.md rule 9 (quarantine by name in
-   `tests/data/flaky-quarantine.json`; re-run a job at most once for timeout/infra, `tools/ci/ci-rerun.mjs`).
-5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (Bash `run_in_background: true`, `timeout: 7200000`, `> artifacts/logs/sync.log 2>&1`, then Monitor the log), never a hand merge,
-   and only when `needs-sync` says so (`conflict | stale-red`); never to
-   "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
-   is fixed first, then sync once and ONE push. STOPPED leaves HEAD on `sync-pr-<branch>` mid-merge: resolve there, then `git push origin HEAD:<branch>`; do not re-merge by hand. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
+Use `needs-sync.mjs <branch>` then `sync-pr.mjs` only for a proven conflict or stale-red; never for
+clean-behind. Never force-push, widen a tolerance, skip a required test, merge locally into the protected branch,
+or cancel a run from the session. Trusted coordinator cleanup may cancel a proven obsolete attempt.
+Deployment incidents have one ledger owner, not competing repair labels. Diagnose actual Pages failures;
+a green PR does not prove publication. References: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md)
+and [`references/ci-verdicts.md`](references/ci-verdicts.md).
 
 ## Land
 
-1. Tick or strike every Plan item except `- [ ] land: …`. A CONFLICTING/DIRTY PR syncs first (§Red 5): a ready flip
-   on a dirty PR starts no CI.
-2. `node tools/ci/ship-pr.mjs --pr <n>` (wraps `ready-gate.mjs`; an already-ready PR is refused as `not-draft` and
-   only needs the label). On a pass it prints the two calls and flips nothing itself:
-3. GitHub MCP `update_pull_request` with `draft: false` (the hook needs a ready-gate receipt under 10 min old; older,
-   re-run step 2), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`.
-4. Refresh the Hand-off block; call `subscribe_pr_activity` again (the subscription dies at the flip); end the turn.
-   What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
-   user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
-   widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
-5. Once `land` is on, do not touch the PR's labels (except `hold`) or its body. A label other than `land`/`hold` gets its
-   own `land-noise-*` group in `land.yml` and cancels nothing, but a `land`/`hold` flip or a body edit re-runs `gate`
-   and cancels the one running. Refresh the Hand-off block BEFORE adding `land` (#4727).
+Finish the implementation Plan with evidence. A draft's bounded feedback cannot prove full readiness. Run the
+available readiness check for the current head and mark ready only when the work is complete; the MCP flip itself
+provides no receipt guarantee. Re-read head and results, then comment `/apex merge` on the PR to request merge.
 
-## After land
+The trusted path requires comprehensive affected validation and a current-head `gate`; owner approval is
+`/apex approve <sha>` when required. `queue:paused` prevents new expensive work and merge. Never remove an owner's
+pause or add priority on their behalf. Commands do not bypass validation or protection. Shadow mode records no
+new merge authority: report that cutover is pending rather than falling back to retired controls.
 
-The subscribed owner fixes a red on its own head (§Red) until the PR merges or closes (§Lane 7). The dispatch Action re-owns only a
-silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red
-check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
-(agent `deploy-research`; skill `check`), never a green PR.
-
-## Gotchas
-
-- Never merge, arm, rebase, force-push, cancel a run, `--no-verify`, or push to the deploy branch.
-- Sweeping many PRs is the dispatch Action's job; `pr-board.mjs --json` (read-only; exit 3 = no token) tells you who
-  owns a red. A session does not take over another lane's PR.
-- Reviewer subagents run `model: sonnet`; a subagent never starts a browser (AGENTS.md rule 10).
-- Context hand-off at the brief's `STOP AT`: skill `handoff`.
+Keep the activity subscription until merged/closed; call `subscribe_pr_activity` again if the host's subscription
+ends at a ready transition. An absent capability stays unarmed. Never merge, arm/disarm auto-merge or edit rulesets.
 
 ## References
 
-- [`references/labels.md`](references/labels.md) — every label, where it goes and what it means (source `.github/labels.json`).
-- [`references/land.md`](references/land.md) — what `land.yml` does after the label: `gate`, arming, retries.
-- [`references/issues.md`](references/issues.md) — native `blocked_by` dependencies and the `blocked` label.
-- [`references/vendors.md`](references/vendors.md) — Cursor and Codex lanes, `LAND_TOKEN`, the ruleset.
-- [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md) — `cancelled` twice, `needs-sync`, `sync-pr` modes.
-- [`references/ci-verdicts.md`](references/ci-verdicts.md) — every `= ci …` verdict, the `gate` status, "live".
-- [`references/host-watch.md`](references/host-watch.md) — watching without a PR subscription.
-- [`../check-changes/references/sync-pr.md`](../check-changes/references/sync-pr.md) — a hand-written conflict `sync-pr` hands back.
-- [`../check-changes/references/triage.md`](../check-changes/references/triage.md) — after a `sync-pr` cure, before `npm run gen`.
+- [`references/labels.md`](references/labels.md) — intent label contract.
+- [`references/issues.md`](references/issues.md) — intake, native blockers and batch membership.
+- [`references/land.md`](references/land.md) — trusted merge evidence.
+- [`references/vendors.md`](references/vendors.md) — hosts, credentials and protected branch.
+- [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md) — cancellation evidence and sync.
+- [`references/ci-verdicts.md`](references/ci-verdicts.md) — check and publication evidence.
+- [`../check-changes/references/sync-pr.md`](../check-changes/references/sync-pr.md) — conflict resolution.

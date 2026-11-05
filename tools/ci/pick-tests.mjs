@@ -43,7 +43,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { changedPaths } from "../lib/changed-files.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 
 // The branch `.github/workflows/pages.yml` deploys from — the repo's real trunk.
 // tests/unit/pick-tests.test.mjs asserts this against pages.yml, so the two cannot

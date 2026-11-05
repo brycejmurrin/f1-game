@@ -13,7 +13,7 @@ your change touches → the skill that drives it.
 | # | Read | Why |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules; every flat prohibition lives there. Read all of it. |
-| 2 | [steward](../.claude/skills/steward/SKILL.md) | The PR lifecycle: claim, draft PR, push, red, `land`, after land; labels in its `references/labels.md`, the dispatcher in skill `dispatcher`. |
+| 2 | [steward](../.claude/skills/steward/SKILL.md) | The PR lifecycle: reservation, draft PR, push, red and merge requests; queue protocol in ACTIONS.md. |
 | 3 | [VERIFICATION.md](VERIFICATION.md) | Edit-loop, pre-push, docs-only, CI and Pages commands and what each proves. |
 | 4 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Boot path, layer map, data flow, where to edit what. Ten minutes. |
 | 5 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module contract, the `G` façade, the loop, the three renderers. Read your directory's section. |
@@ -39,20 +39,21 @@ your change touches → the skill that drives it.
 | [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | Player guide to the in-game track designer. |
 | [STREAMING.md](STREAMING.md) | Streamer guide to `overlay.html`: the OBS setup, page options, accessibility. |
 | [PLATFORM.md](PLATFORM.md) / [PACKAGING.md](PACKAGING.md) | iOS/Safari and static-host limits; Electron and Capacitor packaging. |
-| [BUGS.md](BUGS.md) | A pointer: open defects are the `bug`-labelled issues; fixed classes are in the defect ledger. |
+| [BUGS.md](BUGS.md) | Defect reference; new findings are unqueued issues and fixed classes live in the defect ledger. |
 | [DECISIONS.md](DECISIONS.md) | The `D-NNN` ledger of Bryce's decisions; rules and tests cite a row instead of quoting. |
 
 ## Agent surface and evidence
 
 | Doc | Covers |
 |---|---|
+| [ACTIONS.md](ACTIONS.md) | Three queue labels, durable reservations, command authority, runner admission and shadow/cutover policy. |
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs: which `apex_*` wraps exist and why. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | The `window.__apex` dev API (generated) and the agent world view. |
 | [EVIDENCE-STORAGE.md](EVIDENCE-STORAGE.md) / [evidence/historical-catalog.json](evidence/historical-catalog.json) | Publishing captures as release assets; the reviewed historical catalog. |
 | [agent-output/](agent-output/README.md) | Selectable tool output levels and saved evidence. |
 | [DESIGN-TOOLS.md](DESIGN-TOOLS.md) | Free design tooling: private MCP recovery, token/accessibility evidence, screenshot reviews, procedural room/glTF checks. |
 
-[WORKERS.md](WORKERS.md) is a retired stub (2026-11-03): the lane contract is skill `steward`.
+[WORKERS.md](WORKERS.md) points to the implementation contract in skill `steward` and the coordinator protocol in ACTIONS.md.
 One redirect stub remains: [PERF-FINDINGS.md](PERF-FINDINGS.md) → `notes/PERF-FINDINGS.md`
 (dozens of `js/` comments cite the old path; repoint them and delete the stub together). The other six went on 2026-11-03.
 

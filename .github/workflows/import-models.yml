@@ -54,11 +54,12 @@ concurrency:
   # Serialize by the bot branch being written, not by the source ref. Two
   # dispatches from different refs may target the same commit_branch; keyed by
   # github.ref they can race and each replace the other's baked pack.
-  group: import-models-${{ github.repository }}-${{ inputs.commit_branch || 'bot/model-import' }}
-  cancel-in-progress: false
+  group: import-models-${{ github.repository }}-${{ inputs.commit_branch || 'bot/model-import' }}${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
+  cancel-in-progress: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (false) }}
 
 jobs:
   import:
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     runs-on: ubuntu-latest
     # Every job carries a cap (tests/unit/ci-coverage.test.mjs); generous, it
     # bounds a hang rather than the work.
@@ -200,3 +201,30 @@ jobs:
           to ship; nothing places these until a circuit calls api.bakedModel()."
           git push ${PUSH_LEASE:+"$PUSH_LEASE"} origin "$COMMIT_BRANCH"
           echo "pushed to $COMMIT_BRANCH — merge it into the deploy branch to ship"
+
+  request-admission:
+    concurrency:
+      group: actions-claim
+      queue: max
+    name: Record request for bounded Actions admission
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE == 'active' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Trusted request adapter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve the request without starting its expensive work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_WORKFLOW: import-models.yml
+        run: node tools/ci/actions/cli.mjs request --workflow "$REQUEST_WORKFLOW" --event-file "$GITHUB_EVENT_PATH"

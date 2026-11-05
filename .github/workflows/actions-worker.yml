@@ -1,0 +1,248 @@
+name: Actions worker
+on:
+  workflow_dispatch:
+    inputs:
+      wave:
+        description: Durable reservation ID; never a command or task plan
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: actions-wave-${{ inputs.wave }}
+  cancel-in-progress: false
+jobs:
+  claim:
+    concurrency:
+      group: actions-claim
+      queue: max
+    if: vars.ACTIONS_COORDINATOR_MODE == 'active' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+      checks: write
+    outputs:
+      matrix: ${{ steps.claim.outputs.matrix }}
+      claimed: ${{ steps.claim.outputs.claimed }}
+      publisher_matrix: ${{ steps.claim.outputs.publisher_matrix }}
+      publisher_claimed: ${{ steps.claim.outputs.publisher_claimed }}
+      release_matrix: ${{ steps.claim.outputs.release_matrix }}
+      release_claimed: ${{ steps.claim.outputs.release_claimed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Claim canonical tasks from the state ledger
+        id: claim
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAVE: ${{ inputs.wave }}
+        run: node tools/ci/actions/cli.mjs claim --wave "$WAVE"
+  execute:
+    needs: claim
+    if: needs.claim.outputs.claimed == 'true'
+    name: Task ${{ matrix.id }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.claim.outputs.matrix) }}
+    steps:
+      - name: Trusted executor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+      - name: Immutable task source (data checkout)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.source_sha }}
+          path: source
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Execute the admitted task
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TASK_JSON: ${{ matrix.task_json }}
+          ACTIONS_RECEIPT_DIR: ${{ runner.temp }}/actions-receipt
+        run: node control/tools/ci/actions/cli.mjs run --task-json "$TASK_JSON" --root source
+      - name: Publish reusable garage before pack
+        if: success() && fromJSON(matrix.task_json).task.suite == 'garage-before'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: garage-before-${{ matrix.source_sha }}
+          path: source/artifacts/actions/diagnostic/garage-before/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Preserve measured JUnit with canonical task identity
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: spec-timings-junit-${{ matrix.id }}-${{ github.run_attempt }}
+          path: source/artifacts/test-results*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Retain success, failure and incomplete evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: actions-receipt-${{ matrix.id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/actions-receipt/
+            source/artifacts/actions/
+            source/desktop/test-results/
+            source/desktop/playwright-report/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Trusted publisher ${{ matrix.id }}
+    concurrency:
+      group: actions-trusted-publisher
+      queue: max
+    needs: claim
+    if: needs.claim.outputs.publisher_claimed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.claim.outputs.publisher_matrix) }}
+    steps:
+      - name: Protected publisher code only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install protected publisher dependencies without lifecycle hooks
+        working-directory: control
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Publish the canonical admitted request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TASK_JSON: ${{ matrix.task_json }}
+          ACTIONS_RECEIPT_DIR: ${{ runner.temp }}/actions-receipt
+        run: node control/tools/ci/actions/cli.mjs publish --task-json "$TASK_JSON" --root control
+      - name: Preserve publisher outcome and receipt
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: actions-receipt-${{ matrix.id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/actions-receipt/
+            control/artifacts/actions/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Admitted release ${{ matrix.id }}
+    needs: claim
+    if: needs.claim.outputs.release_claimed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: pages
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.claim.outputs.release_matrix) }}
+    steps:
+      - name: Trusted release implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Exact tested source, used as data only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.source_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install trusted staging dependencies
+        working-directory: control
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify complete receipts, check live ancestry and stage the exact source
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TASK_JSON: ${{ matrix.task_json }}
+          ACTIONS_RECEIPT_DIR: ${{ runner.temp }}/actions-receipt
+        run: node control/tools/ci/actions/cli.mjs release-prepare --task-json "$TASK_JSON" --root source --control-root control
+      - name: Configure Pages
+        if: steps.prepare.outputs.publish == 'true'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
+      - name: Upload exact staged artifact for this attempt
+        if: steps.prepare.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: control/artifacts/actions/release/site
+          name: github-pages-${{ github.run_attempt }}-${{ matrix.id }}
+      - name: Publish exact staged artifact
+        id: deploy
+        if: steps.prepare.outputs.publish == 'true'
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}-${{ matrix.id }}
+      - name: Verify live runtime bytes and record the release outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TASK_JSON: ${{ matrix.task_json }}
+          DEPLOYMENT_RESULT: ${{ steps.deploy.outcome }}
+          PREPARE_RESULT: ${{ steps.prepare.outcome }}
+          ACTIONS_RECEIPT_DIR: ${{ runner.temp }}/actions-receipt
+        run: node control/tools/ci/actions/cli.mjs release-complete --task-json "$TASK_JSON" --root source --control-root control
+      - name: Retain canonical release receipt and artifact provenance
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: actions-receipt-${{ matrix.id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/actions-receipt/
+            control/artifacts/actions/release/prepared.json
+          if-no-files-found: error
+          retention-days: 30

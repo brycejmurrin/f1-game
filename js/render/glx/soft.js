@@ -14,6 +14,7 @@ const GLXSoft = (function () {
     let _displayCanvas = null, _displayCtx = null;
     let _softBuf = null, _softImg = null;
     let _softBlitGen = 0;
+    let _softCaptureGen = 0;
     let _softPresentWaiters = [];
     let _softLastMaxPx = 0;
     let _softCaptureDue = false;
@@ -54,8 +55,9 @@ const GLXSoft = (function () {
       try { Log.info("gfx", "GLX soft-present on"); } catch (_) { /* harness */ }
     }
 
-    function softBlitNotify() {
+    function softBlitNotify(captured) {
       _softBlitGen++;
+      if (captured) _softCaptureGen++;
       const keep = [];
       const ws = _softPresentWaiters.splice(0);
       for (let i = 0; i < ws.length; i++) {
@@ -76,13 +78,15 @@ const GLXSoft = (function () {
       // Software GL + menu/race-entry sheets: skip full-frame readback (post.js
       // readPixels) while PerfGov.softwareGlUiReadbackDefer() — garage, race
       // settings flyby, loading cover (#3589; live race-entry on SwiftShader).
-      // Tests and __apex.awaitPresent() still need a generation bump: satisfy
-      // waiters without touching the GPU (same contract as a successful blit).
+      // Ordinary __apex.awaitPresent() callers need progress without a GPU
+      // read. An explicit screenshot waiter requires actual pixels; do not
+      // acknowledge that request with a progress-only generation.
+      const forceCapture = _softPresentWaiters.some(function (waiter) { return waiter.capture; });
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
+        if (!forceCapture && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
           if (_softPresentWaiters.length || _softCaptureDue) {
             _softCaptureDue = false;
-            softBlitNotify();
+            softBlitNotify(false);
           }
           return;
         }
@@ -101,7 +105,7 @@ const GLXSoft = (function () {
       const n = w * h * 4;
       if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
       try {
-        if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h))) return;
+        if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h, forceCapture))) return;
       } catch (_) { return; }
       if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
         _softImg = _displayCtx.createImageData(w, h);
@@ -128,7 +132,7 @@ const GLXSoft = (function () {
         // opaque black, and showing that hid the live canvas underneath.
         if (_displayCanvas.style.opacity !== "1") _displayCanvas.style.opacity = "1";
         _softCaptureDue = false;
-        softBlitNotify();
+        softBlitNotify(true);
       } catch (_) { /* 2D blit failed */ }
     }
 
@@ -137,6 +141,7 @@ const GLXSoft = (function () {
       return {
         on: !!enabled,
         gen: _softBlitGen,
+        captureGen: _softCaptureGen,
         maxPx: _softLastMaxPx,
         display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
         post: (PST && PST.postPath) ? PST.postPath() : null,   // js/render/glx/post.js _lastPath
@@ -173,7 +178,8 @@ const GLXSoft = (function () {
       // stored — see renderer-soft-lifecycle. Return true/false so notify's
       // keep[] can re-queue waiters whose predicate has not fired (a dim
       // skip never notifies; the next good blit must still wake them).
-      const start = _softBlitGen;
+      const capture = arguments[1] === "capture";
+      const start = capture ? _softCaptureGen : _softBlitGen;
       const ms = timeoutMs == null ? 8000 : timeoutMs;
       return new Promise(function (resolve, reject) {
         let waiter = null;
@@ -183,13 +189,15 @@ const GLXSoft = (function () {
           reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
         }, ms);
         waiter = function (gen) {
-          if (gen > start) {
+          const shown = capture ? _softCaptureGen : gen;
+          if (shown > start) {
             try { clearTimeout(t); } catch (_) { /* harness */ }
-            resolve(gen);
+            resolve(shown);
             return true;
           }
           return false;
         };
+        waiter.capture = capture;
         _softPresentWaiters.push(waiter);
       });
     }

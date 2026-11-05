@@ -18,10 +18,9 @@ run: <the local log's closing `= …` line | none>
 live: <yes|no|unknown> (<live sha7>)
 ```
 
-Green = `CI` success AND the `gate` status success on the PR head. "gate" means three things here; only the
-third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structural guards` (the job it reads), and
-`land.yml`'s `gate` COMMIT STATUS. Never start a run, push or re-run anything to answer.
-
+Green requires complete current-head validation and a successful trusted `gate`. A readiness preflight is not
+merge evidence. `docs/ACTIONS.md` describes active/shadow mode; a pending queue entry proves no execution.
+Never start a run, push or re-run anything to answer.
 1. `node tools/ci/session-status.mjs --summary --pr` — branch, push/dirty state and PR/CI
    snapshot. It finds OPEN PRs only: "no open PR" may mean merged — check with `gh api "repos/brycejmurrin/f1-game/pulls?state=all&head=brycejmurrin:<branch>"`
    (or MCP `search_pull_requests`), then pass `--pr <n>`. Use `git rev-parse HEAD` when the
@@ -31,8 +30,8 @@ third is the ruleset's: `ready-gate.mjs` (the draft→ready receipt), `Structura
    `superseded (merged)` → re-read with `--sha <merge sha> --pages`; `superseded (new head …)` → re-read on that
    sha; `blocked` = conflicts; `unknown` = no API evidence.
 3. The `gate` line: `gh api repos/brycejmurrin/f1-game/commits/<head>/statuses`, newest `context: gate` (ci-watch does not
-   read statuses). Absent on a draft or a PR without `land` is expected; for one PR's land readiness (Plan, LAND/WAIT)
-   `node tools/ci/pr-board.mjs --pr <n>`.
+   read statuses). Absent or pending is not success. Read the coordinator request/attempt evidence for its waiting reason;
+   `node tools/ci/pr-board.mjs --pr <n>` is a snapshot, not authority to merge.
 4. Only when `artifacts/logs/` has a log newer than the head commit: its closing `= …` line
    (`= tooling-fast passed|failed …`; a `test-bg` log's verdict is `= bg exit N`). No closing line = still running.
 5. Live build, only when liveness is asked: agent `deploy-research` returns the live `apex-sha` (never curl

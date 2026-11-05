@@ -178,11 +178,11 @@ test("#2182: pushStartsCi — every open PR starts CI, a draft included (2026-11
     ? { json: [{ number: 9, draft: false, labels: [] }] } : { json: [] }).skip, false, "any target that starts CI measures");
 });
 
-test("the written status file is gitignored and the docs cite the tool and JOBS", () => {
+test("the informational status file is gitignored and the tool remains discoverable without a push-hold rule", () => {
   assert.match(fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8"), /^apex-status\/$/m);
-  // AGENTS.md dropped the gauge sentence on 2026-11-03 (plan §4.4); the path-scoped CI rule is its one live home.
+  // The generated tool index owns discovery; queue admission is a separate durable coordinator contract.
   const rule = fs.readFileSync(path.join(ROOT, ".claude/rules/ci-tools.md"), "utf8");
-  assert.match(rule, /tools\/ci\/queue-depth\.mjs/);
+  assert.match(fs.readFileSync(path.join(ROOT, "tools/README.md"), "utf8"), /queue-depth\.mjs/);
   assert.doesNotMatch(rule, />15 runs/);
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8"), />15 runs/);
   for (const f of ["cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",

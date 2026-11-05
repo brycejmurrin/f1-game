@@ -68,7 +68,7 @@
       "slack": 3506
     },
     "eagerGzip": {
-      "ceiling": 2917000,
+      "ceiling": 2916809,
       "slack": 28625
     },
     "implicitAsserts": {

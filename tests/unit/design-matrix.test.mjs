@@ -11,6 +11,7 @@ import { digest, matrixOutputDir, captureSource, matrixManifest, resumeManifest,
 import { prepareGallery, galleryHtml } from "../../tools/shot/capture-gallery.mjs";
 import { captureRequest } from "../../tools/shot/run-capture-request.mjs";
 import { parse as parseYAML } from "yaml";
+import { evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 import {
   expandMatrix, batchSlice, frameForPart, cameraFor, labelDiff, pendingGroups, parseVariant, parseBatch,
   checkLimits, parseArgs, sheetHtml, PART_BOXES, SAME_PCT,
@@ -209,7 +210,16 @@ test("CI requests bound work, reject output/command injection and retain mixed r
 
 test("capture workflow is dispatch-only, read-only and pins the captured source without cancelling active jobs", () => {
   const w=parseYAML(fs.readFileSync(".github/workflows/capture-gallery.yml","utf8"));
-  assert.deepEqual(w.permissions,{contents:"read"});assert.equal(w.concurrency["cancel-in-progress"],false);assert.equal(w.jobs.capture["runs-on"],"macos-latest");assert.equal(w.jobs.capture["timeout-minutes"],15);
+  assert.deepEqual(w.permissions,{contents:"read"});
+  for (const mode of ["shadow", "active", "paused"]) {
+    const context = workflowContext({ mode, event: "workflow_dispatch" });
+    assert.equal(evalTemplate(w.concurrency["cancel-in-progress"], context), false, `${mode}: capture requests preserve in-flight work`);
+    assert.equal(evalTemplate(w.jobs.capture.if, context), mode === "shadow", `${mode}: legacy capture is disabled after cutover`);
+    assert.equal(evalTemplate(w.jobs["request-admission"].if, context), mode === "active", `${mode}: active requests enter durable admission`);
+  }
+  const group = runId => evalTemplate(w.concurrency.group, workflowContext({ mode: "active", runId }));
+  assert.notEqual(group(1), group(2), "a newer capture request cannot replace an older pending admission");
+  assert.equal(w.jobs.capture["runs-on"],"macos-latest");assert.equal(w.jobs.capture["timeout-minutes"],15);
   assert.deepEqual(Object.keys(w.on),["workflow_dispatch"],"dispatch only: no push-request relay");assert.equal(w.jobs.capture.steps[0].with.ref,"${{ github.sha }}");assert.equal(w.jobs.capture.steps[0].with["persist-credentials"],false);
   assert.ok(w.jobs.capture.steps.some(s=>s.run==="node tools/shot/run-capture-request.mjs"));assert.ok(w.jobs.capture.steps.some(s=>s.with?.["retention-days"]===7));
 });

@@ -8,6 +8,8 @@
 // lie the coverage reporter exists to catch from the other side.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
+import { parse as parseYAML } from "yaml";
+import { evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 import assert from "node:assert/strict";
 import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
@@ -381,14 +383,20 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   assert.match(step, /--overflow-shards "\$OVERFLOW_SHARDS" --stale-first/);
   assert.match(step, /--budget-min "\$BUDGET_MIN"/);
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
-  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '5' \|\| '' \}\}/);
-  // The nightly widens to 12; a DRAFT gets no OVERFLOW legs (the first draft push of #4515 fanned out to 24 browser
-  // legs on the default 11, 2026-11-03). This caps the overflow pool only: fit() never drops a routed spec, so the
-  // bounded spill and oversize legs still run (26 legs on that PR's 660-file diff at 0); ready, dispatch and the
-  // train take the default.
-  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '0' \|\| '' \}\}/,
-    "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan; a draft takes no overflow legs");
+  const env = parseYAML(yml).jobs.select.steps.find(step => step.id === "sel").env;
+  for (const [event, draft, concurrencyKey, budget, overflow] of [
+    ["schedule", false, "", "60", "12"],
+    ["schedule", false, "pages-1", "", ""],
+    ["pull_request", true, "", "5", "0"],
+    ["pull_request", false, "", "", ""],
+    ["workflow_dispatch", false, "", "", ""],
+  ]) {
+    const context = workflowContext({ event, draft, concurrencyKey });
+    assert.equal(evalTemplate(env.BUDGET_MIN, context), budget, `${event}/${draft}/${concurrencyKey}: budget`);
+    assert.equal(evalTemplate(env.OVERFLOW_SHARDS, context), overflow, `${event}/${draft}/${concurrencyKey}: overflow`);
+  }
+  assert.doesNotMatch(yml, /READY_TIER/, "ready validation cannot opt into draft-only feedback");
+
 });
 
 test("a spec that reserves more than the selected-gate timeout runs in the OVER-BUDGET POOL, never the budget", () => {
@@ -1284,10 +1292,9 @@ test("declared-slow specs are split by MEASURED time, not 8 tests a leg: the 22-
   assert.equal(blind.length, Math.max(Math.ceil(expectedSec(rows[0], EMPTY) / TARGET_SHARD_SEC), Math.ceil(rows[0].tests / MAX_TESTS_PER_JOB)));
 });
 
-test("the browser legs do not wait on the guards aggregator, and a guards red still fails the run (R3-CI-HEALTH-2)", () => {
-  // Ship run 38041862767: the legs started at 11.3 min behind the 30 s
-  // aggregator's own queue trip instead of ~2; in the 07:59Z burst that trip
-  // alone queued 26-37 min. The verdict jobs keep the edge.
+test("browser legs require structural shards before expensive work and guards failures still propagate", () => {
+  // Historical ship run 38041862767 waited behind the aggregator's own queue trip. Depend directly on the
+  // structural shards: expensive work requires their success without another aggregator scheduling boundary.
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   const job = (name) => (yml.split(`\n  ${name}:\n`)[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   const needsOf = (name) => {
@@ -1297,7 +1304,8 @@ test("the browser legs do not wait on the guards aggregator, and a guards red st
     const list = body.match(/^    needs:\n((?:      - [\w-]+\n)+)/m);
     return list ? list[1].trim().split("\n").map((l) => l.replace(/^\s*- /, "")) : [];
   };
-  assert.deepEqual(needsOf("selected"), ["select"], "the matrix starts as soon as the plan exists");
+  assert.deepEqual(needsOf("selected"), ["select", "guards-a", "guards-b", "guards-c", "guards-d"],
+    "the matrix waits for each structural prerequisite before consuming browser capacity");
   assert.doesNotMatch(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards/, "its if: must not read a job it does not need");
   for (const j of ["selected-verdict", "ci-verdict"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
   const verdictSrc = fs.readFileSync(path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "utf8");

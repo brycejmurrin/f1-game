@@ -37,12 +37,11 @@ What changed underneath it, and why the old steps are gone:
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
 4. **A PR is the path that lands work** — the deploy branch is protected: its
-   ruleset requires the checks `CI` and `gate` and forbids direct pushes
+   ruleset requires the trusted `gate` status and forbids direct pushes
    (skill `steward` `references/vendors.md` §`LAND_TOKEN`). GitHub creates the merge commit, so the PR
    is a real record — a local fast-forward auto-closes the PR instead (#67).
-   No session arms auto-merge: `land.yml` arms it once the `land` label is on a
-   ready PR and the `gate` check passes. Merge commits only, never squash or
-   rebase-merge (AGENTS.md §Coordination).
+   No session arms auto-merge. `/apex merge` requests the trusted path after complete affected validation;
+   shadow mode grants no merge authority (`docs/ACTIONS.md`). Merge commits only, never squash or rebase-merge.
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
 conflict outside the generated files it can re-derive (`index.html`, `version.json`, ratchets, …). Everything below is the manual

@@ -9,7 +9,7 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
-import { ciWorkflow, gpuWorkflow } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, gpuWorkflow, evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 
 // THE FOUR CONTROL LEGS. The opt-in relaunch step (#3235: the TLX/WebGPU check twice on one
 // profile, the returning player's launch) is not a fifth control; it is cut out here and pinned
@@ -70,8 +70,14 @@ test("gpu-census: agents may still request by push; dispatches queue, push reque
   // cancelling a census in flight (A/B arms used to cancel each other).
   // PUSH: one group per run_id, so two request legs never cancel or queue.
   // NIGHTLY: its own group, the only one that cancels.
-  assert.equal(wf.concurrency.group, "gpu-census-${{ (github.event_name == 'push' && format('{0}-{1}', github.ref, github.run_id)) || (github.event_name == 'schedule' && 'nightly') || github.ref }}");
-  assert.equal(wf.concurrency["cancel-in-progress"], "${{ github.event_name == 'schedule' }}");
+  const group = (mode, event, runId) => evalTemplate(wf.concurrency.group, workflowContext({ mode, event, runId }));
+  assert.notEqual(group("shadow", "push", 1), group("shadow", "push", 2), "legacy push requests are independent");
+  assert.equal(group("shadow", "workflow_dispatch", 1), group("shadow", "workflow_dispatch", 2), "legacy explicit dispatches share their ref queue");
+  assert.notEqual(group("active", "workflow_dispatch", 1), group("active", "workflow_dispatch", 2), "admission records cannot replace each other as pending runs");
+  for (const event of ["schedule", "push", "workflow_dispatch"]) {
+    assert.equal(evalTemplate(wf.concurrency["cancel-in-progress"], workflowContext({ event })), event === "schedule");
+    for (const mode of ["active", "paused"]) assert.equal(evalTemplate(wf.concurrency["cancel-in-progress"], workflowContext({ mode, event })), false);
+  }
   assert.equal(wf.concurrency.queue, undefined, "queue: max cannot combine with a cancel-in-progress that may be true");
   // INHERITED REQUESTS DO NOT RUN (2026-09-24): only the branch's own
   // first-parent, non-merge commits that edited the file. Executed against a
@@ -94,7 +100,11 @@ test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time 
   assert.match(gate.run, /event=schedule&status=success&branch=\$BRANCH&per_page=1/, "the base is the last GREEN nightly");
   assert.equal((gate.run.match(/echo "run=false"/g) || []).length, 2, "exactly two paths skip: an inherited push request, an unchanged nightly");
   assert.equal(wf.jobs.plan.permissions.actions, "read");
-  assert.equal(wf.jobs.census.if, "${{ needs.plan.outputs.run != 'false' }}", "an empty gate output (dispatch) must run");
+  for (const run of ["", "true", "false"]) {
+    const needs = { plan: { outputs: { run } } };
+    assert.equal(evalTemplate(wf.jobs.census.if, workflowContext({ needs })), run !== "false", "legacy unknown base runs fail-safe");
+    for (const mode of ["active", "paused"]) assert.equal(evalTemplate(wf.jobs.census.if, workflowContext({ mode, needs })), false);
+  }
   // G3: each leg ends red inside the job's 30-min cap, so a hang names its leg
   // instead of the whole job reading `cancelled`.
   const legs = wf.jobs.census.steps.filter((s) => /^Game check — /.test(s.name || "") && s.name !== RELAUNCH_NAME);

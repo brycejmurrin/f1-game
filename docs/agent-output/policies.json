@@ -521,6 +521,106 @@
       "presentation": "native",
       "preserve": "@c1"
     },
+    "tools/ci/actions/analyze-garage-retry.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Native validation JSON, CPU-profile attribution and native hardware claim distinctions; preserve analysis.json/report.md, failure exit status and explicit input provenance."
+    },
+    "tools/ci/actions/api.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/cli.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exact JSON and receipt schemas, immutable source/tree/base/plan and lease identities, complete/partial/failure distinctions, artifact paths and native exit status; preserve stdout and stderr without summarizing machine output."
+    },
+    "tools/ci/actions/controller.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/controls.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/coverage.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exact JSON and receipt schemas, immutable source/tree/base/plan and lease identities, complete/partial/failure distinctions, artifact paths and native exit status; preserve stdout and stderr without summarizing machine output."
+    },
+    "tools/ci/actions/cutover.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/diagnostic-executor.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/diagnostics.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/executor.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exact JSON and receipt schemas, immutable source/tree/base/plan and lease identities, complete/partial/failure distinctions, artifact paths and native exit status; preserve stdout and stderr without summarizing machine output."
+    },
+    "tools/ci/actions/landing.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/migration.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/policy.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/publisher.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exact JSON and receipt schemas, immutable source/tree/base/plan and lease identities, complete/partial/failure distinctions, artifact paths and native exit status; preserve stdout and stderr without summarizing machine output."
+    },
+    "tools/ci/actions/release.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/requests.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/scheduler.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/state.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/store.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
+    "tools/ci/actions/workers.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/ci/archive-sweep.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2386,11 +2486,6 @@
       "presentation": "native",
       "preserve": "@c1"
     },
-    "tools/perf/trace-census.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "The per-second layout / style / paint rows, the GC and long-task line, the trace-overhead line, the invalidation-site rows and the self-time rows; --json writes the same census as JSON."
-    },
     "tools/perf/devicefarm-host.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2490,6 +2585,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"
+    },
+    "tools/perf/trace-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The per-second layout / style / paint rows, the GC and long-task line, the trace-overhead line, the invalidation-site rows and the self-time rows; --json writes the same census as JSON."
     },
     "tools/perf/trace-gate.mjs": {
       "action": "no-direct-output",

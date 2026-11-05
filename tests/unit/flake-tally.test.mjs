@@ -8,6 +8,8 @@
  * Run: node --test tests/unit/flake-tally.test.mjs
  */
 import test from "node:test";
+import { parse as parseYAML } from "yaml";
+import { evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -341,7 +343,7 @@ test("listAllRuns pages FAILED ci.yml / pages.yml runs since the window; green, 
   } finally { setFlakeTallyTestHooks(); }
 });
 
-test("upsertIssue rewrites the open marker issue, else creates one with the flaky label", async () => {
+test("upsertIssue finds reports after label reset and creates an unlabelled advisory only after a complete lookup", async () => {
   const calls = [];
   const hook = (issues) => ({
     fetch: async (url, init) => {
@@ -361,7 +363,7 @@ test("upsertIssue rewrites the open marker issue, else creates one with the flak
     setFlakeTallyTestHooks(hook([]));
     assert.deepEqual(await upsertIssue("new body", { token: "t" }), { number: 77, created: true });
     assert.equal(calls[1][0], "POST");
-    assert.deepEqual(calls[1][2], { title: ISSUE_TITLE, body: "new body", labels: ["flaky"] });
+    assert.deepEqual(calls[1][2], { title: ISSUE_TITLE, body: "new body" });
   } finally { setFlakeTallyTestHooks(); }
 });
 
@@ -402,8 +404,8 @@ test("syncBaseRedIssue opens on the first suspect, refreshes while it lasts, clo
   try {
     setFlakeTallyTestHooks(hook([]));
     assert.deepEqual(await syncBaseRedIssue(suspects, "B", { token: "t" }), { number: 88, created: true });
-    assert.match(calls[0][1], /labels=base-red/);
-    assert.deepEqual(calls[1][2], { title: BASE_RED_TITLE, body: "B", labels: ["base-red"] });
+    assert.doesNotMatch(calls[0][1], /labels=/);
+    assert.deepEqual(calls[1][2], { title: BASE_RED_TITLE, body: "B" });
     calls.length = 0;
     setFlakeTallyTestHooks(hook([{ number: 12, body: BASE_RED_MARKER + "\nold" }, { number: 13, body: "unrelated" }]));
     assert.deepEqual(await syncBaseRedIssue(suspects, "B2", { token: "t" }), { number: 12, updated: true });
@@ -418,27 +420,33 @@ test("syncBaseRedIssue opens on the first suspect, refreshes while it lasts, clo
   } finally { setFlakeTallyTestHooks(); }
 });
 
-test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same least privilege; the base-red label exists", () => {
+test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same least privilege; marker reports need no control labels", () => {
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
   assert.match(wf, /^\s+- cron: "17 \*\/2 \* \* \*"$/m, "every 2 h");
   assert.match(wf, /MODE: \$\{\{ github\.event\.schedule == '17 \*\/2 \* \* \*' && 'base-red' \|\| inputs\.mode \|\| 'daily' \}\}/);
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --base-red --hours 3 --issue/);
   assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "no new permission");
-  const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
-  const l = labels.find((x) => x.name === "base-red");
-  assert.ok(l && l.description.length <= 100, "labels.json is the label source; GitHub caps a description at 100 chars");
+  const workflow = parseYAML(wf);
+  for (const mode of ["shadow", "active", "paused"]) {
+    const context = workflowContext({ mode, event: "workflow_dispatch" });
+    assert.equal(evalTemplate(workflow.jobs.tally.if, context), mode === "shadow");
+    assert.equal(evalTemplate(workflow.jobs["request-admission"].if, context), mode === "active");
+  }
+
 });
 
-test("flake-tally.yml runs the daily tally with least privilege, and the flaky label exists", () => {
+test("flake-tally.yml keeps legacy reporting least-privileged and records active requests through protected code", () => {
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
   assert.match(wf, /^\s+- cron: "19 6 \* \* \*"$/m, "daily");
   assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "issues: write for the one issue, nothing else");
-  assert.doesNotMatch(wf, /pull-requests: write|contents: write|secrets\./);
+  const workflow = parseYAML(wf);
+  assert.deepEqual(workflow.jobs.tally.permissions || workflow.permissions, { contents: "read", actions: "read", issues: "write" });
+  assert.doesNotMatch(JSON.stringify(workflow.jobs.tally), /secrets\./);
+  assert.equal(workflow.jobs["request-admission"].steps.find(step => step.uses?.startsWith("actions\/checkout")).with.ref, "claude/f1-game-project-26h3ng");
   assert.match(wf, /timeout-minutes: 20/);
   assert.match(wf, /persist-credentials: false/);
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --events all --days "\$DAYS" --propose --issue/);
-  const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
-  assert.ok(labels.some((l) => l.name === "flaky"), "labels.json is the label source; the issue needs the label");
+
 });
 
 test("#2233: listRunJobs pages 30 at a time (per_page=100 is a 502 on large runs) and keeps what it read when a later page fails", async () => {
@@ -527,4 +535,27 @@ test("node jobs count: tooling-fast FAIL blocks become first-try fails on the un
   const rows = quarantineRows([{ spec: ["tests", "unit", "x.test.mjs"].join("/"), test: "t", reason: "r", fails: 3, flakyPasses: 0, runsSeen: 3, lastSeenRunId: 1 },
     { spec: ["tests", "specs", "y.spec.js"].join("/"), test: "t", reason: "r", fails: 0, flakyPasses: 2, runsSeen: 2, lastSeenRunId: 2 }], { schemaKeys: ["spec", "title"] });
   assert.deepEqual(rows.map((r) => r.spec), [["tests", "specs", "y.spec.js"].join("/")]);
+});
+
+
+test("advisory discovery pages without label filters and refuses partial or conflicting identity", async () => {
+  const calls = [];
+  const page = Array.from({ length: 100 }, (_, index) => ({ number: index + 1, title: "unrelated", body: "other" }));
+  const reply = json => ({ status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify(json)) });
+  try {
+    setFlakeTallyTestHooks({ fetch: async (url, init) => {
+      calls.push([init.method, url]);
+      if (init.method !== "GET") return reply({ number: 201 });
+      assert.ok(!url.includes("labels="));
+      return reply(new URL(url).searchParams.get("page") === "1" ? page : [{ number: 201, title: ISSUE_TITLE, body: ISSUE_MARKER + "\nold report" }]);
+    }, delay: async () => {} });
+    assert.deepEqual(await upsertIssue("new", { token: "t" }), { number: 201, updated: true });
+    assert.deepEqual(calls.map(call => call[0]), ["GET", "GET", "PATCH"]);
+    for (const invalid of [null, [{ number: 7, title: ISSUE_TITLE, body: "identity missing" }]]) {
+      calls.length = 0;
+      setFlakeTallyTestHooks({ fetch: async (url, init) => { calls.push(init.method); return reply(invalid); }, delay: async () => {} });
+      assert.ok((await upsertIssue("new", { token: "t" })).error);
+      assert.deepEqual(calls, ["GET"], "unknown identity cannot create or overwrite a report");
+    }
+  } finally { setFlakeTallyTestHooks(); }
 });

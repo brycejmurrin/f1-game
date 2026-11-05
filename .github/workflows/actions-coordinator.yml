@@ -1,0 +1,76 @@
+name: Actions coordinator
+on:
+  pull_request_target:
+    branches: [claude/f1-game-project-26h3ng]
+    types: [opened, synchronize, reopened, closed, ready_for_review, converted_to_draft, edited, labeled, unlabeled]
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: [Actions worker, CI, Deploy to GitHub Pages]
+    types: [completed]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: Optional diagnostic workflow request (for example ci.yml)
+        required: false
+        type: string
+      request:
+        description: JSON object containing structured workflow inputs
+        required: false
+        default: '{}'
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: actions-coordinator
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    # Taxonomy edits and projection writes allocate no control runner.
+    if: >-
+      (github.actor != 'github-actions[bot]' || github.event_name == 'schedule' || github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+       contains(fromJSON('["queue:ready","queue:paused","queue:priority"]'), github.event.label.name)) &&
+      (github.event_name != 'issue_comment' || (startsWith(github.event.comment.body, '/apex ') || startsWith(github.event.comment.body, 'decision:'))) &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/claude/f1-game-project-26h3ng') &&
+      (github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.body)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+      checks: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install protected planner dependencies without lifecycle hooks
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Reconcile durable requests and reserved capacity
+        id: reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTIONS_COORDINATOR_MODE: ${{ vars.ACTIONS_COORDINATOR_MODE || 'shadow' }}
+          WORKER_HOST_ADAPTER: ${{ vars.WORKER_HOST_ADAPTER }}
+          WORKER_FIRE_URL: ${{ secrets.WORKER_FIRE_URL }}
+          WORKER_FIRE_TOKEN: ${{ secrets.WORKER_FIRE_TOKEN }}
+        run: node tools/ci/actions/cli.mjs reconcile --event-file "$GITHUB_EVENT_PATH" --mode "$ACTIONS_COORDINATOR_MODE"
+      - name: Dispatch the reserved wave from the protected branch
+        if: steps.reconcile.outputs.wave != '' && vars.ACTIONS_COORDINATOR_MODE == 'active'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAVE: ${{ steps.reconcile.outputs.wave }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh workflow run actions-worker.yml --repo "$REPOSITORY" --ref claude/f1-game-project-26h3ng -f "wave=$WAVE"

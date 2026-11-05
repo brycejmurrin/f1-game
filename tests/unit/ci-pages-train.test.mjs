@@ -10,7 +10,7 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter, evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
@@ -49,17 +49,8 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // (a tick waits, a later tick replaces the waiting one), so lag is bounded
   // and no gate is ever killed a spec from green.
   assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
-  // The dedupe SAVES ~47 job-minutes and COSTS one `cancelled` row per push,
-  // which is the exact shape AGENTS.md rule 8 teaches a session to read as a
-  // starved-runner timeout. It cost a real triage on 2026-09-22 (run 4657
-  // cancelled by 4658 on one SHA), so both triage surfaces must name the
-  // signature — same head_sha, cancelled seconds in, sibling still running.
-  const repo = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-  const agents = fs.readFileSync(path.join(repo, "AGENTS.md"), "utf8");
-  assert.match(agents, /`ready_for_review` run share a group[\s\S]{0,200}head_sha/,
-    "AGENTS.md rule 8 must except the designed draft/ready dedupe, or the next session triages it as a timeout");
-  const triage = fs.readFileSync(path.join(repo, ".claude/agents/ci-red-triage.md"), "utf8");
-  assert.match(triage, /draft\/ready dedupe/, "ci-red-triage must tell the dedupe from a superseded push");
+  // A superseded run is evidence to follow, never a pass or proof of timeout. The reset's controlled
+  // cancellation behavior is exercised by actions controller/executor tests rather than sentence pins.
   const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
   assert.match(pagesCi, /group: pages-gate-\$\{\{ github\.ref \}\}/);
   assert.match(pagesCi, /cancel-in-progress: false/,
@@ -91,11 +82,13 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   // looks at every job upstream TRANSITIVELY, so with the gate skipped (nothing
   // new / reused pass) deploy was skipped even though publishable said yes
   // (run 2237). The result check keeps a failed or skipped publishable fatal.
-  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/,
-    "a run that cannot publish must skip the environment job entirely; a reused gate must not");
-  const verifyLive = pagesWorkflow.split("\n  verify-live:")[1];
-  assert.match(verifyLive, /if: \$\{\{ !cancelled\(\) && needs\.deploy\.result == 'success' \}\}/,
-    "verify-live must run exactly when deploy succeeded, whatever was skipped upstream");
+  const pageJobs = parseYAML(pagesWorkflow).jobs;
+  for (const result of ["success", "failure", "skipped"]) for (const deployValue of ["true", "false"]) {
+    const needs = { publishable: { result, outputs: { deploy: deployValue } }, deploy: { result } };
+    assert.equal(evalTemplate(pageJobs.deploy.if, workflowContext({ needs })), result === "success" && deployValue === "true");
+    assert.equal(evalTemplate(pageJobs["verify-live"].if, workflowContext({ needs })), result === "success");
+    for (const mode of ["active", "paused"]) assert.equal(evalTemplate(pageJobs.deploy.if, workflowContext({ mode, needs })), false);
+  }
   assert.match(deploy, /environment:\s*\n\s+name: github-pages/);
   assert.match(deploy, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"[\s\S]*?REFUSING DEPLOY:[\s\S]*?exit 1/,
     "the in-lock recheck must fail the run, never become a successful no-op deployment");
@@ -172,7 +165,12 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.match(verdict, /fetch-depth: 0/, "the parents' trees are the question; a shallow clone has no parents");
   assert.match(verdict, /tools\/ci\/pages-reuse-verdict\.sh "\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
   assert.match(ciJob, /needs: verdict/);
-  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'$/m, "the gate runs unless nothing is new or an earlier gate on this tree is reused");
+  const gateIf = parseYAML(pagesWorkflow).jobs.ci.if;
+  for (const nothing of ["true", "false"]) for (const reuse of ["true", "false"]) {
+    const needs = { verdict: { outputs: { nothing_new: nothing, reuse } } };
+    assert.equal(evalTemplate(gateIf, workflowContext({ needs })), nothing !== "true" && reuse !== "true");
+    for (const mode of ["active", "paused"]) assert.equal(evalTemplate(gateIf, workflowContext({ mode, needs })), false);
+  }
   assert.doesNotMatch(pagesWorkflow, /ship_only|smoke_only/, "the smoke-only ship path is gone (always false since 2026-10-07)");
   assert.match(preflight, /needs: \[verdict, ci\]/);
   assert.match(preflight, /needs\.ci\.result == 'success' \|\| \(needs\.ci\.result == 'skipped' && needs\.verdict\.outputs\.reuse == 'true'\)/,

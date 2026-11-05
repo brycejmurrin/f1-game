@@ -25,6 +25,6 @@ subagent's permission mode is ignored under auto, so these limits are yours to k
 4. Post ONE review with `pull_request_review_write` event COMMENT (never APPROVE or REQUEST_CHANGES: nothing here
    approves or merges; if that tool is absent, `gh api -X POST repos/brycejmurrin/f1-game/pulls/<n>/reviews -f event=COMMENT -f body=…`): a table of CLAIM | VERDICT (holds / stale / refuted / unproven) | EVIDENCE (file:line, or
    command and exit) | SEVERITY, ending with the attribution footer from the system prompt.
-5. A `refuted` high-severity row that contradicts a Plan item the author ticked also gets the `needs-decision`
-   label (`gh api -X POST repos/brycejmurrin/f1-game/issues/<n>/labels -f 'labels[]=needs-decision'`, never the MCP `labels` field) and nothing else.
+5. A `refuted` high-severity row contradicting a completed Plan item gets one decision comment with the
+   evidence and recommended next step. Do not add a control label or pretend the review grants owner approval.
 6. Final message: PR, counts by verdict, review link. The author or skill `steward` acts on it.

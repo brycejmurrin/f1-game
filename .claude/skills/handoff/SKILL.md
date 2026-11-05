@@ -15,47 +15,24 @@ spawns over the hard cap; a session without a brief has no cap and hands off whe
 long. Before idling, write the follow-up prompts into the PR's Hand-off block. Model names and messaging routes are
 host-specific; use only exposed host capabilities.
 
-Two audiences, two endings (steps 1–2 are shared):
+An attended handoff returns a prompt in chat after updating the PR. An unattended owner at its cap refreshes the
+PR and requests `/apex recover`; a successor is not launched until trusted recovery confirms no live owner remains.
+Neither a comment nor a changed Hand-off owner field transfers a lease.
 
-- **Attended** (the user asked, or `context-cap.py` names your live context near its stop): steps 1–3, then
-  output the prompt in chat in ONE code block. Add no `needs-owner` unless the user leaves the PR to the fleet.
-- **Unattended owner at its cap or stuck** (skill `steward` §Lane 5): steps 1–2, then add `needs-owner` with
-  `gh api -X POST …/labels -f 'labels[]=needs-owner'` and end. No chat prompt: the takeover reads only the Hand-off
-  block and the Plan; the dispatch Action launches it once no live owner names the PR.
+1. Push verified work under AGENTS rule 12. List unverified paths and failed checks honestly; never bypass a commit
+   hook to preserve a checkpoint. Record any unstaged work that remains local to this workspace.
+2. Read the actual branch/PR head and refresh the living Plan, Verified / Not run and Hand-off fence with head,
+   descriptive owner and next step. Include coordinator request/attempt identities where available. Read back the
+   update; success proves the report was saved, not that a successor started.
+3. The cold-start prompt names repository, branch, pushed head, PR URL, goal, done/now/next, OWNED/FORBIDDEN paths,
+   grants with their source, needed checks not run, failures and accessible evidence. Local artifacts remain local
+   unless transferred. Preserve queue pauses and pending decisions; an app-mediated removal cannot lift an owner's
+   pause. Do not claim merge approval or ownership based on the previous agent's prose.
+4. First commands: inspect status, read AGENTS, fetch the branch and compare the resolved head with the recorded
+   SHA. Use an isolated worktree if another session owns the checkout. Verify coordinator ownership before edits;
+   `/apex recover` is a request, never permission to displace a live owner.
+5. Keep the prompt under about 25 lines and link the PR for detail. Record armed subscriptions/background handles
+   and exact run/log identities without promising capabilities the new host does not expose.
 
-1. **Push first.** A dirty tree or unverified work: commit it as WIP anyway, in two calls (`git add <paths>`, then
-   `git commit`; AGENTS.md rule 12), and list what is unverified as **Not run**. If the commit hook's guards
-   refuse, fix that guard row, or leave those paths unstaged and list them as "uncommitted, lost with this
-   container". Then `git push -u origin <branch>` and confirm on the remote:
-   `git ls-remote origin refs/heads/<branch>` shows `git rev-parse HEAD`.
-2. **Facts**: `node tools/ci/session-status.mjs --summary --pr` for branch/PR/CI state (its Markdown feeds
-   **Verified / Not run**; it is not the Hand-off block). Read the PR body for its Plan and Next step with
-   GitHub MCP `pull_request_read` (or `gh api repos/brycejmurrin/f1-game/pulls/<n> -q .body`). No PR yet → open a
-   DRAFT PR (skill `steward` §Open): the body is the durable log. Refresh its Plan and the ` ```handoff ` fence
-   (`head`, `owner`, `next`; `.github/pull_request_template.md`) with `update_pull_request`.
-3. **The prompt**, in this order:
-   - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL
-   - first: ADOPT the PR (skill `steward` §Lane 3): comment `adopts PR #<n> — <host>:<session id>`,
-     remove `needs-owner` if set (`gh api -X DELETE …/labels/needs-owner`; a dispatch-launched owner skips this, the
-     Action already did), set `owner:` in the Hand-off block
-   - Goal in one sentence; Plan: the done / now / next items from the PR body
-   - what is not run, unverified or red, with the exact command to reproduce
-   - accessible evidence links; ignored `artifacts/` or `scratch/` paths are
-     local to the old workspace unless separately transferred or published. Read back the updated PR body;
-     a successful update records the hand-off, but does not prove a successor was launched or acknowledged it
-   - first commands: inspect `git status` and read `AGENTS.md`; fetch `origin <branch>`, resolve
-     `FETCH_HEAD` and compare it with the recorded pushed head. Create an isolated worktree from that SHA
-     when another session owns the checkout; never switch its branch. Run
-     `node tools/ci/session-status.mjs --summary --pr` from the resolved checkout
-   - skills to load (`.claude/skills/README.md`), and the user's grants quoted
-     with their time; no merge grant is implied
-   - the rest of AGENTS.md `# Compact instructions` that applies: the `hold`,
-     `needs-decision` and `claimed` labels you set, a run in flight and its log
-     path (`artifacts/logs/<name>.log`), armed Monitor / background-task ids (so the
-     successor can stop them), OWNED / FORBIDDEN paths
-4. Under ~25 lines. Link the PR for detail instead of pasting it. The PR body's
-   Hand-off block is the one hand-off a lane leaves behind.
-
-A hunt or survey session ends by filing: its ranked findings become `ready` issues (one per finding) or ONE tracking
-issue before the session ends; findings left in branch notes are lost (the UI hunts left 12 and 17 bugs there). Give
-every hunt an id nothing else carries and a `docs/notes/` index entry linking its reports.
+A hunt/survey files scoped findings as unqueued issues or a tracking issue with an index entry linking its reports.
+Queue only executable scope after dependency, batch and overlap checks. Protocol and shadow rollout: `docs/ACTIONS.md`.

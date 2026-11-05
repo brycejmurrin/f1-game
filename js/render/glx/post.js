@@ -1155,8 +1155,11 @@ const GLXPost = (function () {
     // the finish() the read repeats the previous frame and grade captures go stale.
     function readbackLdrPixels(buf, w, h) {
       if (!gl || !buf || w < 1 || h < 1) return false;
+      // Only an explicit capture waiter may pay this synchronous read during
+      // the software-GL garage/loading cover. Ordinary UI presents stay cheap.
+      const forceCapture = arguments[3] === true;
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
+        if (!forceCapture && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
       } catch (_) { /* harness */ }
       try {
         gl.finish();

@@ -53,6 +53,10 @@ the log's `= run …` line, then the `= bg exit N` trailer.
 
 ### Run the groups your change needs, not all of them
 
+Queue/capacity policy is [ACTIONS.md](ACTIONS.md): the reset defaults to shadow. A legacy run retains its original
+workflow evidence; a shadow plan cannot satisfy checks. After cutover, bounded draft feedback is distinct from
+comprehensive affected validation before merge. Required tasks may wait for capacity but cannot be dropped.
+
 The whole suite is roughly 40 minutes of software rendering. Which groups a
 change needs is mechanical, so ask `pick-tests` (the command forms are
 [VERIFICATION.md](VERIFICATION.md) §1, their one home).
@@ -60,9 +64,8 @@ change needs is mechanical, so ask `pick-tests` (the command forms are
 The routing rules live in `RULES` at the top of `tools/ci/pick-tests.mjs` and are
 deliberately coarse and biased toward running too much — a rule that is too
 narrow is a missed regression, one that is too wide costs 10-40 minutes of
-serialized SwiftShader per extra browser group. The cap lives at the RUN, not
-the rule: AGENTS.md's verification policy is two browser groups per change,
-the rest named as not-run in the PR.
+serialized SwiftShader per extra browser group. The local editing budget does not reduce required CI coverage. Report needed work that has not run; the
+coordinator admits it within capacity, and comprehensive affected validation must finish before merge.
 `tests/unit/test-groups.test.mjs` asserts every group they name exists.
 
 When the named group is much bigger than the change, select SPECS instead of
@@ -173,7 +176,7 @@ serializes the agent behind SwiftShader several times over.
 | generated files in the diff | `--changed` does not widen on generator output (`index.html`/`sw.js` `@gen-shell` blocks, `js/roster.js`, `impact-map.json`, `ratchets.json`, `agent-index.json`, `version.json`, …): it runs `npm run gen:check` plus the tests that pin the file. A HEAD that is a pure deploy-tip merge selects `gen:check` plus docs-integrity. `--quiet` ends a red run with `failing files:` and `log:` lines |
 | before the ready flip | `node tools/ci/preflip-probe.mjs --pr <n>` merges the current deploy tip into the PR head in a temp worktree and runs the ratchets, `fixture-consumer-audit`, the assert-pin ratchet and the diff's unit files: the reds GitHub's merge ref shows and the branch alone cannot (#4108, #4190). `ready-gate --pr` prints its receipt as an `advisory:` line, never a block |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | nothing local: the groups `pick-tests` names run on the PR — every push gets the `selected` legs (a draft one 5-min shard, ready the 10-min budget), `node tools/ci/remote-group.mjs <group>` a whole group; name any left unrun in the PR. A Bryce-attended session may run ONE spec by grant (`node tools/ci/test-bg.mjs --spec <file>`) |
+| once, when the edits are done | Browser checks run through admitted CI; draft feedback is bounded and comprehensive affected validation must finish before merge. Name needed checks that have not run. A Bryce-attended session may run ONE named spec by explicit grant. |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
@@ -953,35 +956,31 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 <apex-sha>` against `<meta name="apex-sha">` in the live `index.html`
 (deploy-research); `version.json`'s build number says how far behind, not which commit.
 
-### Merge train (concurrent PRs)
+### Merge requests and capacity
 
-No agent merges, and there is no merge queue or one-PR-at-a-time rule: the
-flow is skill `steward` §Land ([land.md](../.claude/skills/steward/references/land.md)). A worker flips its PR ready and adds the
-`land` label; `land.yml` posts the `gate` commit status (`merge-gate.mjs`) and arms auto-merge. `gate` is the
-deploy branch's ONLY ruleset-required check; it requires `CI` green on the
-head. `pages.yml`'s concurrency group paces the trains. Before marking
-ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
-CI check-run named `Structural guards` — the aggregator after the
-`Structural guards (tooling A)` … `(tooling D)` shards — or a local
-full-suite stamp). There is no cap on ready PRs. GitHub bounds the LEGS
-(2026-10-15): a ready PR's `selected` legs each join one of LANES fleet-wide
-`concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
-field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
-rotated by run number), so at most LANES selected legs run across every
-ready PR at once and the rest wait FIFO without holding a runner or being
-cancelled; the train, the nightly and a dispatch get a group of their own
-per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
-2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
-smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only by
-AGENTS.md §Git branch & deploy (CONFLICTING/DIRTY, via `node tools/ci/sync-pr.mjs <branch>`);
-never enable auto-update-branch bots or a require-up-to-date protection rule
-(`land.yml`'s AUTO-SYNC went with merge-gate's `distance` row on 2026-11-03). `tools/ci/behind-ship.mjs` (at the end of
-Structural guards tooling B since 2026-10-15, PR only) prints how far the head is behind
-ship and emits a `::warning::` over 10 commits; it never fails the job.
-Deploy / Pages runs keep their own concurrency groups with
-`cancel-in-progress: false` so a publish is never cancelled by a later tick.
+The protocol is [ACTIONS.md](ACTIONS.md) and skill `steward` §Land. `/apex merge` requests the trusted path for the
+current PR head; the command is not approval or a test result. `queue:paused` stops new expensive work and merge;
+owner-established pauses remain sticky. Owner-direct `/apex approve <sha>` covers only that full 40-hex head.
+The reset defaults to shadow and grants no live merge authority until reviewed cutover.
+
+The deploy branch requires trusted `gate` success, checked against complete affected validation and the current
+head/base. Workers cannot publish success, merge or publish releases. Failed, missing, cancelled, skipped or
+superseded required tasks do not satisfy coverage. Labels and unrelated body edits never duplicate validation.
+
+Admission is bounded by runner permits. Latest head supersedes within a PR; fair scheduling with owner-direct
+priority applies across PRs, while explicit experiment requests retain durable FIFO. GitHub concurrency groups
+are not a durable FIFO guarantee. Control jobs consume capacity too. Pages keeps an active train and newest pending
+tip; trusted obsolete-attempt cleanup records replacement evidence, and sessions never cancel runs themselves.
+
+Use `sync-pr.mjs` only for a proven conflict/stale-red. Do not force-push, enable auto-update-branch bots or weaken
+protected checks merely to advance a request. Live publication requires successful release evidence and ancestry,
+not just a green PR. Read each run's actual workflow/mode rather than inferring behavior from a historical table.
 
 ### CI aggregator and Selected specs (verdict) (#480 / #507)
+
+The mechanics below describe legacy runs retained during shadow rollout. After cutover, the trusted finalizer
+instead requires the reset manifest's complete current-head coverage; legacy skip/advisory behavior cannot grant
+success to omitted required tasks. Consult the actual run and [ACTIONS.md](ACTIONS.md).
 
 The ruleset requires one check, the `gate` commit status from `land.yml`
 (§Merge train); `gate`'s ci row then reads the check named exactly `CI`. Any
@@ -1022,118 +1021,18 @@ Two always-judged checks give the PR verdict fixed names:
 
 ### What runs on PRs versus nightly
 
-| Lane | When | What |
+| Lane | Admission | Required evidence |
 |---|---|---|
-| **Draft PR** | `pull_request` + draft (`opened` / `synchronize` / `reopened`) | Fast tier on EVERY push, no opt-in (2026-11-03: the `run-ci` label, the `CI: run` body line, the `labeled`/`edited` triggers, their noise groups and the `Draft push (CI skipped)` notice are retired): Structural guards A–D (ratchets, test:audit, ci-coverage and behind-ship at the end of the last shard) + `Select specs for this change` (node-slice plan, spec selection, ship / renderer / xr path filters in one job since 2026-10-15) + parts census + driving-model + the `selected` browser legs on a **5-min budget** (`BUDGET_MIN` on the select step: ONE budgeted shard plus whatever oversize / overflow rows the selector derives; `Selected specs (verdict)` WARNS, never reds, on a spec that budget dropped — the ready run's 10-min plan or `remote-group.mjs` runs it). NOT the node slices (decision D1, PR #2560 §6: 0 unique catches on drafts in 40 h). Heavy jobs skipped: geometry sweeps, smoke, staged-boot, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. The verdict job is named `CI (draft fast tier)`, so its success can never satisfy the required `CI` while the ready-for-review full tier is still running (#2664); on a non-draft PR run `ci-verdict.mjs` also requires `guards-a`…`guards-d`, `guards`, `select`, `smoke` and `staged-boot` to be `success`, not skipped (`REQUIRE_SUCCESS`). |
-| **Ready PR** | `pull_request` + not draft / `ready_for_review` | Full tier on the same head: smoke + sweeps (ship filter is a step of `select`), every node-slice name when planned, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
+| Draft PR | Current-head request under bounded feedback limits | Report only the completed feedback slice; do not present it as merge coverage. |
+| Ready PR | Comprehensive affected manifest, admitted in bounded waves | Every required task completes successfully for the expected head/base before trusted gate success. |
+| Deploy push / Pages | Release capacity, one active train and newest pending tip | Validate and publish the exact release commit; verify live ancestry. |
+| Explicit experiment | Durable FIFO request under shared capacity | Preserve its requested scope, provenance and results; do not duplicate it on label edits. |
+| Maintenance/nightly | Bounded background capacity | Report actual executed scope; no blanket success for deferred work. |
 
-**Check names (GitHub UI)** — fast tier on a **draft** PR or a **deploy-branch push** (`ci.yml` jobs unless noted):
-
-- `Structural guards (tooling A)` … `(tooling D)` (four shards since 2026-10-24, A·H16 B2), `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
-- `Pure-node unit suites (<slice>)` (the needed legs on a READY PR only — planned by `Select specs for this change`, which replaced `Plan node unit slices` on 2026-10-15; drafts and the Pages train skip them since 2026-10-16, the nightly and a dispatch run every leg)
-- `Parts option-resolution census` (job `sweeps-parts`), `Driving model (characterization traces)` (job `driving-model`, when planned). Names as of 2026-10-26: `name:` lines in `ci.yml`
-- `Select specs for this change`, `Selected specs (…)` matrix legs when routed, `Selected specs (verdict)`
-- `CI` (aggregator `ci-verdict`; skipped jobs count as pass)
-- (`Docs guards (prose-tree unit files)` — `docs-guards.yml` — ran on every PR until 2026-10-15; retired, see the `docs-guards` group row)
-
-**Full tier** adds (ready/non-draft PR, Pages train / `workflow_dispatch` with `concurrency_key`, nightly `schedule` where noted):
-
-- `Smoke (page boots, __apex responds)`, `Per-circuit geometry sweeps` (+ four shard legs and roll-up); the ship / renderer / WebXR path questions are steps of `Select specs for this change` (2026-10-15; they were the `Does this diff …?` jobs)
-- `Renderer specs on a real GPU (macos-latest, Metal)` when the diff reaches `js/render/**`
-- `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
-- `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)
-- `Golden menus on a runner (trial, non-blocking)` (nightly/dispatch only, advisory)
-
-Heavy jobs use one shared skip expression on deploy pushes and draft PRs (`github.event.pull_request.draft` inside `ci.yml`; `desktop.yml` uses `draft == false`). `ready_for_review` is listed on every `pull_request` trigger so marking ready starts the full tier on the same `head_sha` (draft fast runs may cancel — AGENTS.md rule 8 dedupe).
-| **Ship push** | push to deploy branch | Starts `pages.yml` directly (2026-10-16): no ci.yml run of its own. |
-| **Pages train** | push / dispatch / cron | Full gate against live `before_sha` (ci.yml called with `concurrency_key`); one running + one pending, the newest push replaces the pending one; never cancelled mid-run. |
-| **Nightly** | `ci.yml` schedule `17 4 * * *` (04:17 UTC) | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the ~61 specs `select-specs` never picks. `gpu-census.yml` runs on its own staggered cron (`47 5 * * *`, 05:47 UTC) for adapter identity. |
-
-Every `pull_request` workflow uses a per-PR concurrency group with
-`cancel-in-progress: true`. Deploy / Pages / import-models / spec-timings do
-**not** cancel in-progress runs.
-
-### Flaky tests
-
-The flake procedure — retries, `APEX_FAIL_ON_FLAKY=1`, the quarantine ledger
-`tests/data/flaky-quarantine.json`, the daily `flake-tally.yml` detector and the
-`base-red` issue — lives in [VERIFICATION.md](VERIFICATION.md) §5 (its one home
-since 2026-11-03). CSS-only changes select a one-boot title/touch/pause
-reachability smoke and relevant menu goldens; they do not discard the browser plan.
-
-## 4. Philosophy — debug-hooks first
-
-Prefer assertions driven by the `window.__apex` API and geometric/mesh probes
-over rendering- or timing-based heuristics.
-
-**Assert behaviour and geometry, not brittle magnitudes.** A threshold like
-"speed > 10 after 2 s" goes stale the moment physics is retuned. Prefer
-relative/directional checks — "faster on tarmac than on grass", "heading barely
-changes off-track with zero steer", "reverses then recovers to forward". The
-off-track specs were tightened this way after several thresholds drifted stale.
-
-**Use the deterministic hooks:**
-
-- `obs()` / `act()` / `reset()` — headless control loop
-- `seed()` — same seed + same inputs ⇒ same result
-- `step()` + `physState()` / `probe()` — physics
-- `groundY()` / `Tracks.terrainY()` — rendered-terrain raycast, exact geometry
-- `modelDiagnostics()` / `geometryDiagnostics()` — required-model outcomes and finite mesh manifests
-- `eyeAt()` / `orbit()` / `view()` — deterministic camera framing for screenshots
-
-**Freeze the render loop before a screenshot, not just the physics.** `park()`/
-`freeze()` stop physics; `frame()` in `js/game.js` keeps redrawing every rAF tick
-regardless (sky/cloud animation continues on purpose). Under SwiftShader that
-redraw never idles, so a `.screenshot()` issued while it is still running queues
-behind an endless render loop instead of a quiet compositor — measured on
-`tests/specs/smoke.spec.js`'s rendering checks, `headless(true)` after the pose settles
-cut solo wall time from 88-96s to 29-32s. `tests/helpers/track-helpers.js`'s visual-regression
-capture already does this (`snapCam()` → settle → `headless(true)`); reach for the
-same shape rather than raising a test's timeout budget.
-
-**Read the log ring, not the console.** `__apex.logs({ns: "scenery"})` returns
-structured records; scraping console text ties a spec to a message's exact
-wording and misses anything below the print threshold.
-
-**Legacy specs are coarser heuristics** and are inherently flakier:
-`tests/manual/blank-scan.spec.js` (PNG byte-size thresholds — the geometric
-`terrain-over-road.spec.js` is the modern successor for the terrain subclass)
-and `tracks-visual.spec.js` (per-circuit pixel diff). Keep them; write new
-checks against hooks and geometry.
-
-**When a spec fails**, first check whether it is a stale expectation rather than
-a regression — confirm by reading the actual hook values.
-
-**A tolerance can be hiding a second measurement.** If a spec settles the sim
-before reading (`step()` to let a gearbox pick a gear, a frame or two for a
-filter), it is reading the thing it named PLUS whatever those frames did — and
-a loose tolerance will absorb the difference silently until something widens the
-range being swept.
-
-Measured instance. `sliders.spec.js` › *OVERALL SPEED leaves the dial→gear
-mapping identical* jumps to the speed that puts the dial at a target km/h, steps
-two frames so the automatic box can choose a gear, and reads gear AND `dashKph`
-out of the same `obs()`. Those frames coast, so the car sheds
-`COAST_DRAG * 2/60 = 0.2 m/s` first — and `COAST_DRAG` is an absolute force
-(deliberately: it is part of what makes low pace forgiving) while `dashKph`
-divides by pace. The dial therefore loses `0.2 / pace * 3.6` km/h, which is
-1.54 at pace 0.47 and 0.54 at 1.34. Under the old 1..10 pace grid the spread was
-0.886 km/h against a `< 1` tolerance; widening the grid to 1..19 took it to
-0.998 and the spec went red — for a defect it had been carrying all along.
-
-The fix is never to widen the tolerance. Read the value the test is about at the
-moment it is true (here: the dial at the jump) and read the value that needs
-settling after the settle (the gear). Two reads from two `obs()` calls, with a
-comment saying why they are not one.
-
-### Viewport rules
-
-- Tests that touch `#pm-steer` / `#pm-calib` must use `hasTouch: true` — desktop
-  mode adds `body.desktop`, which hides those elements.
-- In-race tests must use LANDSCAPE `{width: 844, height: 390}` to avoid the
-  `#rotate-device` overlay blocking interaction.
-
----
+These are reset semantics after reviewed cutover; shadow plans do not launch or replace legacy runs. Legacy runs
+must be interpreted from their actual workflow/tier, not from current queue labels. A ready transition requests
+full coverage for its current head; it does not make earlier draft feedback sufficient. Pauses and priority update
+existing request intent and never create duplicate validation.
 
 ## 5. Coverage table
 

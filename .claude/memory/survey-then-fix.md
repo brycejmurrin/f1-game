@@ -20,5 +20,6 @@ stops at recommendations costs a second round-trip.
 after delivering the survey, be ready to apply them on the same branch, verify
 with the gate, and refresh the PR body. Name what cannot be done in the cloud
 session (interactive slash commands) explicitly rather than skipping it silently.
-Related: AGENTS.md §Verification (verify once, let the PR's CI run the full tiers) and
-[skill steward](../skills/steward/SKILL.md) (the `land` label lands the PR).
+Related: AGENTS.md §Verification (verify the affected slice, then require comprehensive affected CI evidence) and
+[skill steward](../skills/steward/SKILL.md). `/apex merge` requests the trusted merge path; it does not bypass
+a pause, required validation or exact-head approval. The reset defaults to shadow (`docs/ACTIONS.md`).

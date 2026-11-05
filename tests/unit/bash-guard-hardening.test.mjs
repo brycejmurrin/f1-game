@@ -95,7 +95,7 @@ test("4. gh run cancel, the REST cancel, gh pr merge and gh pr ready are refused
   for (const cmd of ["gh run cancel 123", "gh run cancel 123 --repo a/b", "curl -X POST https://api.github.com/repos/a/b/actions/runs/1/cancel",
     "gh api -X POST repos/a/b/actions/runs/1/force-cancel", "gh pr merge 1 --merge", "gh pr merge 1 --squash", "gh pr ready 1"])
     refused(cmd, /cancel|merges or arms|ready/);
-  for (const cmd of ["gh run view 123", "gh run list", "gh pr view 1", "gh pr checks 1", "gh api repos/a/b/pulls/1", "gh pr edit 1 --add-label land"])
+  for (const cmd of ["gh run view 123", "gh run list", "gh pr view 1", "gh pr checks 1", "gh api repos/a/b/pulls/1", "gh pr edit 1 --add-label queue:paused"])
     allowed(cmd);
   // no env hatch for a cancel any more
   assert.equal(run("gh run cancel 1", {}, { APEX_RUN_CANCEL_OK: "1" }).status, 2);

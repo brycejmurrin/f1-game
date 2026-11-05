@@ -1,6 +1,10 @@
 # actionlint configuration — read by tools/check/workflow-lint.mjs (actionlint v1.7.12).
 # Reference: https://github.com/rhysd/actionlint/blob/main/docs/config.md
 paths:
+  .github/workflows/actions-worker.yml:
+    ignore:
+      # Native FIFO for admitted publisher tasks; actionlint 1.7.12 predates queue.
+      - 'unexpected key "queue" for "concurrency" section'
   .github/workflows/ci.yml:
     ignore:
       # `concurrency.queue: max` is real (GitHub changelog 2026-05-07, "concurrency groups
@@ -14,6 +18,57 @@ paths:
   # reviewed word-split of a space-separated option string. Warning- and error-level
   # shellcheck findings stay on everywhere, and every other SC2086 is still reported.
   .github/workflows/car-shot.yml:
-    ignore: ['SC2086:info']
+    ignore: ['SC2086:info', 'unexpected key "queue" for "concurrency" section']
   .github/workflows/gpu-census.yml:
-    ignore: ['SC2086:info']
+    ignore: ['SC2086:info', 'unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/prune-branches.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/pages.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/import-models.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/garage-before.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/process-dashboard.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/lit-wgsl-advisory.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/flake-tally.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/perf-census-webgpu.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/archive-evidence.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/desktop.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/knowledge-gc.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/changelog-fold.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/capture-gallery.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/spec-timings.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/repo-size.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/ratchets-fold.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']
+
+  .github/workflows/browser-group.yml:
+    ignore: ['unexpected key "queue" for "concurrency" section']

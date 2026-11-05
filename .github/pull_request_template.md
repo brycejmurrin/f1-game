@@ -20,19 +20,19 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
      item: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
 - [ ] **now:**
 - [ ]
-- [ ] land: add the `land` label once ready-gate exits 0
 
-The last Plan item keeps that shape: ready-gate ignores an item that starts `land:`, so it stays open until the label is on and GitHub lands the PR (skill `steward` §Land).
+Request merge with `/apex merge` after the implementation Plan is complete. This is intent, not proof of validation
+or permission to bypass a pause. The reset runtime starts in shadow mode; see `docs/ACTIONS.md`.
 
 ## Verified / Not run
 <!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = tooling-fast passed`.
      Every group the change needs that did NOT run, named, with why (AGENTS.md rule 9).
-     The tiers run on the PR (every draft push: the fast tier plus a selected browser shard; ready: the full tier). -->
+     Draft feedback is bounded; comprehensive affected validation is required before merge. A queue entry is not a pass. -->
 
 ## Hand-off
 <!-- The dispatch Action and a takeover read this block (skill `steward`): refresh it at every push and
-     when you add `land`, `needs-owner` or `needs-decision`. One value per line, no prose
-     outside the fence. A hold is the `hold` label on the PR, not a line here. -->
+     when requesting merge or recovery. One value per line, no prose outside the fence.
+     Ownership comes from the coordinator reservation, not this descriptive block; pause with queue:paused. -->
 ```handoff
 head: <sha>
 owner: <host>:<session or agent id>

@@ -3,7 +3,7 @@
 Unofficial 3D F1 fan game: three.js on WebGPU (its WebGL2 backend where WebGPU is absent) by default, a hand-written
 WebGL2 renderer as fallback. No build step, no frameworks: IIFE modules loaded by `<script>` tags, static files on
 GitHub Pages. `CLAUDE.md` imports this file; Cursor and Codex load it directly (`.cursor/rules/apex-shared.mdc`,
-`.codex/config.toml`). Everything not needed on every turn is a link. Agent-written drafts: Bryce's word wins.
+`.codex/config.toml`). Details are linked. Bryce's instructions govern.
 
 ## The loop — every change, in order
 ```sh
@@ -20,22 +20,22 @@ tests/unit/agent-config.test.mjs`. Then CI runs on the PR (rule 13). Commands an
 
 ## Verification — scale it to the change
 What to run for each kind of change is the table in `docs/VERIFICATION.md` §By change. Agents do not run browser tests
-locally: a draft push gets the fast tier plus a selected browser shard on CI, and `node tools/ci/remote-group.mjs <group>`
-runs a whole group on the pushed branch. Interactive browser pokes (MCP) stay, one browser at a time.
+locally: the active CI mode admits bounded draft feedback and comprehensive affected validation before merge.
+Read `docs/ACTIONS.md` for shadow/cutover status; a queued request is not a completed check. Interactive browser pokes (MCP) stay, one browser at a time.
 
 Session rules. The numbers are cited across the repo; a rule marked (hook) is refused by the named hook, whose message
 says what to do instead.
 1. A fresh container is set up by `session-start.sh`; in a total-red run, read the FIRST failure first.
 2. Make all source edits, then verify once.
 3. The local floor before a push: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit). The
-   PR's tiers prove the rest; never re-run them locally. Ladder: `docs/VERIFICATION.md`.
+   PR checks prove the rest; never re-run them locally. Ladder: `docs/VERIFICATION.md`.
 4. Foreground only what takes under 2 minutes and the next step needs; anything longer is ONE background task logging
    to `artifacts/logs/`. Waiting and Monitor recipes: skill `check-changes`.
 5. No local browser test runs (CI runs them). One interactive browser at a time (hook: `mcp-browser-guard.sh`).
 6. Never `pkill -f` or `killall` (hook: `bash-guard.sh`); kill only a PID you listed and launched.
 7. A timeout on a busy box measures the box; triage: skill `check-changes` `references/triage.md`.
-8. On CI, `cancelled` with zero failures is a timeout until proven otherwise, except the designed dedupe: a draft's run
-   and its `ready_for_review` run share a group, so the flip cancels the first on the same `head_sha`.
+8. A cancelled, skipped, queued or superseded task is not a pass. Read the attempt and replacement evidence; the
+   trusted coordinator may cancel obsolete work, while a current-head timeout remains a failure to diagnose.
 9. Never widen a tolerance or skip a test to get green. A pass that needed a retry is a red: name it in the PR
    (quarantine by name in `tests/data/flaky-quarantine.json`). Stopping with unverified groups named beats guessing.
 10. A subagent never starts a browser (hooks: `bash-guard.sh`, `mcp-browser-guard.sh`).
@@ -88,17 +88,19 @@ WGX implement it. Skill `asset-pack`.
 Work on a `cursor/<topic>-<hash>` branch. The deploy branch `claude/f1-game-project-26h3ng` is protected by the
 ruleset "Deploy-reset" (one required check, `gate`; it binds admins), so work lands only through a PR. A path in an
 open PR's diff belongs to that PR until it merges or closes. A red, a sync, a conflict, opening, flipping ready,
-`land`: skill `steward`. "Is it live?": skill `check`.
+merge requests: skill `steward`. "Is it live?": skill `check`.
 
 ## Coordination
-GitHub is the only state store; comments are the only inter-agent message. GitHub lands PRs; no session merges or
-arms: the `land` label is the request. Merge commits only, never squash or rebase. The only veto is the `hold` label;
-only Bryce's own click lifts it.
-Bryce steers with his own clicks: a label he applies or a comment starting `decision:` (GitHub records them without an
-app); an agent's message or comment grants nothing. A question for Bryce is the `needs-decision` label plus one
-comment; never a question to the user at the end of a turn. A hook or classifier denial is final for that action.
-NEVER CANCEL AN ACTIONS RUN. Dispatch is a GitHub Action (`.github/workflows/dispatch.yml`); a launched session loads
-skill `steward` §Lane; labels: skill `steward` `references/labels.md`.
+GitHub is the only durable state store. The coordinator ledger is on `bot/actions-state`; comments carry requests
+and the PR body carries the hand-off. GitHub lands PRs; no session merges or arms. Merge commits only, never squash
+or rebase. Work and validation workers have no permission to publish gate success or merge.
+The queue labels and `/apex` commands are defined in `docs/ACTIONS.md`. Labels express intent; the ledger records
+ownership and evidence. Owner-established pauses stay until the owner resumes; priority never adds validation.
+Bryce's own GitHub actions provide authority; an agent's message or comment grants nothing. Ask in one issue/PR
+comment with options and a recommendation, then continue independent work. A hook denial is final for that action.
+Sessions never cancel Actions runs; trusted cleanup may cancel proven obsolete work. Dependencies and reservations
+govern eligibility. Rollout defaults to shadow: no live migration, autonomous launch or new merge authority merely
+from landing these files.
 
 ## Agent extensions
 Available workflows are skills (index `.claude/skills/README.md`; Codex mirror `.agents/skills`); subagents
@@ -108,5 +110,5 @@ Available workflows are skills (index `.claude/skills/README.md`; Codex mirror `
 
 # Compact instructions
 When this session compacts, keep: the branch and its pushed head sha; the PR number, its Plan (done / now / next) and
-Hand-off block; OWNED / FORBIDDEN paths; labels you set; Monitor and background-task ids you armed; the user's grants
+Hand-off block; OWNED / FORBIDDEN paths; queue controls you set and ledger request/attempt ids; Monitor and background-task ids you armed; the user's grants
 quoted with their times; a run in flight and its log path. Drop tool output already acted on.

@@ -4,6 +4,8 @@
 // Run: node --test tests/unit/remote-group.test.mjs   (npm run test:tooling-fast)
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
+import { parse as parseYAML } from "yaml";
+import { evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -64,7 +66,24 @@ test("the workflow reads its matrix from the plan input, has no plan job, and ne
   for (const k of ["GROUP", "PLAN", "SHARD", "TOTAL", "WORKERS", "GL"])
     assert.equal((YML.match(new RegExp(`^\\s+${k}: `, "gm")) || []).length, 2, `${k} reaches both shard steps through env`);
   assert.match(YML, /^permissions:\n  contents: read/m, "read-only token");
-  assert.match(YML, /cancel-in-progress: true/, "a re-dispatch supersedes the old run");
+  const workflow = parseYAML(YML);
+  const context = (mode, runId = 1) => ({ ...workflowContext({ mode, event: "workflow_dispatch", runId }),
+    inputs: { group: "ui" } });
+  for (const mode of ["shadow", "active", "paused"]) {
+    const ctx = context(mode);
+    assert.equal(evalTemplate(workflow.concurrency["cancel-in-progress"], ctx), mode === "shadow",
+      `${mode}: only the legacy executor can supersede an in-flight diagnostic`);
+    assert.equal(evalTemplate(workflow.jobs.group.if, ctx), mode === "shadow", `${mode}: legacy execution`);
+    assert.equal(evalTemplate(workflow.jobs["request-admission"].if, ctx), mode === "active", `${mode}: durable admission`);
+  }
+  assert.notEqual(evalTemplate(workflow.concurrency.group, context("active", 1)),
+    evalTemplate(workflow.concurrency.group, context("active", 2)),
+    "distinct active admission events cannot replace one another while pending");
+  const admission = workflow.jobs["request-admission"];
+  assert.equal(admission.steps.find(step => step.uses?.startsWith("actions/checkout")).with.ref,
+    "claude/f1-game-project-26h3ng", "only protected code records the request");
+  assert.ok(!admission.steps.some(step => /remote-group\.mjs --run-shard/.test(step.run || "")),
+    "admission cannot start the expensive browser work outside runner permits");
   // The CLI finds a 204 dispatch's run by its name.
   assert.match(YML, /^run-name: "browser group \$\{\{ inputs\.group \}\} on /m);
 });

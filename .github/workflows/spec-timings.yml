@@ -44,7 +44,7 @@ on:
     # queued in the one-at-a-time group below, AFTER the `branches:` filter
     # was added. The train runs on the deploy branch by construction and is
     # the one gate that runs the whole smoke suite, so it is the record.
-    workflows: ["Deploy to GitHub Pages"]
+    workflows: ["Deploy to GitHub Pages", "Actions worker"]
     types: [completed]
     # FILTERED AT THE TRIGGER, not only by the job's `if:` (2026-09-29). Every
     # PR's CI run fired this workflow and the job then skipped: 354 runs in
@@ -64,8 +64,8 @@ permissions:
 # One merge at a time: two runs racing would both read the same committed file
 # and the later push would drop the earlier one's samples.
 concurrency:
-  group: spec-timings
-  cancel-in-progress: false
+  group: spec-timings${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && github.run_id || '' }}
+  cancel-in-progress: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (false) }}
 
 env:
   # `bot/`, NOT `claude/`, and the prefix is load-bearing. This branch is FORCE
@@ -85,10 +85,7 @@ jobs:
     # Only a SUCCESSFUL Pages run (2026-10-27, review WP-W1): a pending-replaced
     # (cancelled) train still fired this job, a 77 s full-history checkout on
     # each of 371 cancelled runs in 14 d, and it measures a train that never shipped.
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch'
-          || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
-              && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (github.event_name == 'workflow_dispatch'           || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'               && github.event.workflow_run.conclusion == 'success')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job force-pushes the bot/spec-timings side branch
         with:
@@ -200,3 +197,30 @@ jobs:
           # (never the deploy branch, never a delete) are kept by the case above.
           git -c core.hooksPath=/dev/null push -f origin "$TIMINGS_BRANCH"
           echo "pushed $TIMINGS_BRANCH — merge it to adopt the new samples" >> "$GITHUB_STEP_SUMMARY"
+
+  request-admission:
+    concurrency:
+      group: actions-claim
+      queue: max
+    name: Record request for bounded Actions admission
+    if: ${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && github.event.workflow_run.conclusion == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Trusted request adapter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve the request without starting its expensive work
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_WORKFLOW: spec-timings.yml
+        run: node tools/ci/actions/cli.mjs request --workflow "$REQUEST_WORKFLOW" --event-file "$GITHUB_EVENT_PATH"

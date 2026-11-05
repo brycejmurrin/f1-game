@@ -165,24 +165,7 @@ on:
     # `ready_for_review` is not a default type; the other three are.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
     #
-    # THE READY-TIER SWITCH (#4836, 2026-11-04). Repo variable `READY_TIER`
-    # (Settings → Secrets and variables → Actions → Variables). Unset or `full`:
-    # the above. `fast`: a READY PR runs the draft tier too (every
-    # `github.event.pull_request.draft` test below reads
-    # `(… .draft || vars.READY_TIER == 'fast')`), and the Pages train stays the
-    # only full gate, after merge. The ready run still reports `CI` (ci-verdict's
-    # name keys on the real draft flag), so `gate` is unchanged. The merge queue
-    # #4836 asked for needs an organisation-owned repo
-    # (docs/notes/CI-MERGE-QUEUE-2026-11-04.md); this is the user-owned route.
-    #
-    # NO `labeled`, NO `edited` (2026-11-03). Both existed for one opt-in
-    # (the `run-ci` label and its `CI: run` body-line twin, #2184 / Bryce
-    # 2026-10-26) that gated a draft's fast tier; since `on:` cannot filter a
-    # label by name, every other label or Plan tick started a run that a
-    # 600-character guard on every job had to skip and rename (~147 noise
-    # runs a day, measured 2026-10-30 → 11-03). Drafts run unconditionally
-    # now, so the opt-in, its label, the marker, the noise groups and the
-    # `draft-ci-skipped` notice are gone.
+    # Draft is an authoring state; it cannot weaken the ready PR receipt.
     types: [opened, synchronize, reopened, ready_for_review]
     # THE DEPLOY BRANCH AS BASE ONLY (#2179, 2026-10-15). `branches` on
     # pull_request matches the PR's BASE branch. PRs into track-survey-assets
@@ -346,7 +329,7 @@ jobs:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # 12 cancelled this job at load 6+ with every file passing (2026-10-21); the shards are balanced since #3389
-    if: ${{ (inputs.fast_tier_run == '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '')) }}
     permissions:
       contents: read
       actions: read
@@ -454,7 +437,7 @@ jobs:
     name: Structural guards (tooling B)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (inputs.fast_tier_run == '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '')) }}
     permissions:
       contents: read
       actions: read
@@ -573,7 +556,7 @@ jobs:
     name: Structural guards (tooling C)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (inputs.fast_tier_run == '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '')) }}
     permissions:
       contents: read
       actions: read
@@ -674,7 +657,7 @@ jobs:
     name: Structural guards (tooling D)
     runs-on: ubuntu-latest
     timeout-minutes: 18   # same budget as tooling A
-    if: ${{ (inputs.fast_tier_run == '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '')) }}
     permissions:
       contents: read
       actions: read
@@ -751,7 +734,7 @@ jobs:
     name: Structural guards
     needs: [guards-a, guards-b, guards-c, guards-d]
     runs-on: ubuntu-latest
-    if: ${{ (!cancelled() && inputs.fast_tier_run == '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!cancelled() && inputs.fast_tier_run == '')) }}
     timeout-minutes: 5
     # NO CHECKOUT, NO npm ci (2026-10-15): the ratchet / audit / coverage /
     # behind-ship steps run at the end of tooling B, where the tree and the
@@ -773,7 +756,7 @@ jobs:
     name: Workflow and shader lints
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ (inputs.fast_tier_run == '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '')) }}
     permissions:
       contents: read
     env:
@@ -835,7 +818,7 @@ jobs:
     # Pages call (`concurrency_key` set) skip the job; a merge interaction in
     # a node slice surfaces at the nightly. With no draft run to reuse, this
     # job no longer asks the ready_for_review reuse question.
-    if: ${{ !(github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast')) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (!(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request'))) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -1104,6 +1087,7 @@ jobs:
           esac
 
   sweeps-parts:
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     name: Parts option-resolution census
     runs-on: ubuntu-latest
     permissions:
@@ -1224,7 +1208,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [select]
     # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
-    if: ${{ (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast'))))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '')) }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
     # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
@@ -1351,7 +1335,7 @@ jobs:
   sweeps-roll-up:
     name: Per-circuit geometry sweeps
     needs: [select, sweeps]
-    if: ${{ (always() && !cancelled() && needs.select.result == 'success' && (needs.sweeps.result != 'skipped' || (needs.select.outputs.geometry == 'false' && needs.select.outputs.geometry_targeted == ''))) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((always() && !cancelled() && needs.select.result == 'success' && (needs.sweeps.result != 'skipped' || (needs.select.outputs.geometry == 'false' && needs.select.outputs.geometry_targeted == '')))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1369,7 +1353,7 @@ jobs:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
     # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
-    if: ${{ (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast'))))) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like
@@ -1705,7 +1689,7 @@ jobs:
     # (ci-verdict treats that skip as a pass). Not on the Pages call
     # (`concurrency_key` set; decision D2 in the CI selection plan,
     # PR #2560 §6): 0 train catches in 40 h; PRs and the nightly keep it.
-    if: ${{ (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '' && inputs.concurrency_key == '' && needs.select.outputs.driving == 'true')) }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1836,7 +1820,7 @@ jobs:
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !(github.event.pull_request.draft || vars.READY_TIER == 'fast')))) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft)))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1935,7 +1919,7 @@ jobs:
   xr:
     name: Emulated VR (IWER / xr-emulated)
     needs: select
-    if: ${{ (!inputs.concurrency_key && needs.select.outputs.xr == 'true') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!inputs.concurrency_key && needs.select.outputs.xr == 'true')) }}
     runs-on: ubuntu-latest
     # Unmeasured on CI; local IWER suite is minutes. Cap generously.
     timeout-minutes: 25
@@ -1973,7 +1957,7 @@ jobs:
   train-twins:
     name: VM twins on the train (dropped browser twins)
     needs: [select]
-    if: ${{ (!cancelled() && inputs.concurrency_key != '' && needs.select.result == 'success' && (needs.select.outputs.twins != '' || needs.select.outputs.adapted != '')) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!cancelled() && inputs.concurrency_key != '' && needs.select.result == 'success' && (needs.select.outputs.twins != '' || needs.select.outputs.adapted != ''))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2056,7 +2040,7 @@ jobs:
     # whenever the node matrix does (`fast_tier_run == ''`), so a dispatch
     # without a diff still gets its --all plan; the spec selection keeps its
     # own event test on the step.
-    if: ${{ (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '')) }}
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -2322,14 +2306,14 @@ jobs:
           # A DRAFT PR (2026-11-03): ONE ~5-min shard, so every push gets a
           # browser verdict; the 10-min default (select-specs DEFAULT_BUDGET_MIN)
           # stays for ready PRs and the train; the nightly keeps 60.
-          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast')) && '5' || '' }}
+          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '5' || '' }}
           # A DRAFT gets no OVERFLOW legs (plan §4.2: one small browser verdict per push). This caps only the
           # overflow pool: select-specs never drops a routed spec, so what overflow would have taken goes to the
           # bounded `spill` legs (MAX_SPILL_SHARDS) and a spec bigger than the 5-min budget still runs as an
           # `oversize` leg. A typical worker diff routes a handful of specs and gets one leg; #4515's 660-file
           # diff (2026-11-03) routed ~70 and ran 26 legs (1 selected, 6 spill, 19 oversize) with this at 0,
           # 24 with the default 11. A draft mode that names the rest as not-run instead is a follow-up.
-          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast')) && '0' || '' }}
+          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '0' || '' }}
         run: bash tools/ci/ci-select-specs-step.sh
       # THE TRAIN'S VM TWINS (audit4 D1 / ci-7d C2, 2026-10-26). The plan drops
       # every VM-twinned browser spec (coveredByVmTwin) on the premise that the
@@ -2396,7 +2380,7 @@ jobs:
       # ship on a run whose smoke never booted it. Unknown -> ships=true.
       - name: Does this diff change anything that ships?
         id: shipfilter
-        if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast')))) }}
+        if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
         env:
           EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
@@ -2526,7 +2510,7 @@ jobs:
       # fail-safing every PR into the full fleet until 2026-09-22.
       - name: Does this diff touch the renderer?
         id: renderer
-        if: ${{ inputs.concurrency_key != '' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !(github.event.pull_request.draft || vars.READY_TIER == 'fast')) }}
+        if: ${{ inputs.concurrency_key != '' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft) }}
         env:
           BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before) }}
           EVENT: ${{ github.event_name }}
@@ -2577,7 +2561,7 @@ jobs:
 
       - name: Does this diff touch WebXR?
         id: xrfilter
-        if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !(github.event.pull_request.draft || vars.READY_TIER == 'fast'))) }}
+        if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
         env:
           BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           EVENT: ${{ github.event_name }}
@@ -2632,22 +2616,9 @@ jobs:
 
   selected:
     name: Selected specs (change-aware gate)
-    # NOT `guards` (R3-CI-HEALTH-2, 2026-10-10). Waiting on the aggregator put
-    # one more trip through the account's runner queue on the critical path:
-    # ship run 38041862767 started its 30 legs at 11.3 min instead of ~2 (the
-    # run took 20.3 min, ~9 of them that hop), and in the 07:59Z burst the
-    # 30-second aggregator itself QUEUED 26-37 min before the legs could. A
-    # guards red still fails the run: selected-verdict and ci-verdict both
-    # need `guards` and red on it (tools/ci/selected-gate-verdict.mjs), and
-    # poke-train needs it green. The price is ~70-95 job-min of browser legs
-    # on the few runs whose guards are red (4 of 100 ship runs).
-    # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
-    # — "If a job fails or is skipped, all jobs that need it are skipped".)
-    needs: [select]
-    # A DRAFT runs it too (2026-11-03): its plan is the 5-min budget the select
-    # step sets, so a work-in-progress push gets one browser shard instead of
-    # none; selected-verdict warns (never reds) a draft on dropped specs.
-    if: ${{ needs.select.outputs.any == 'true' }}
+    # No expensive PR leg starts after a structural prerequisite has failed.
+    needs: [select, guards-a, guards-b, guards-c, guards-d]
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (needs.select.outputs.any == 'true') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2883,7 +2854,7 @@ jobs:
     #
     # A failed/cancelled selected matrix is red, including setup failures before
     # its marker. Clean sibling JUnit cannot prove every planned test ran.
-    if: ${{ (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != ''))) }}
     steps:
       # Collect JUnit before the verdict for diagnostics and carry-forward.
       # Missing execution evidence never authorizes a failed selected matrix.
@@ -2965,7 +2936,7 @@ jobs:
           GUARDS: ${{ needs.guards.result }}
           DROPPED: ${{ needs.select.outputs.dropped }}
           CALLED: ${{ inputs.concurrency_key != '' }}
-          DRAFT: ${{ github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast') }}
+          DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
           DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}
         run: |
           set -u
@@ -3018,7 +2989,8 @@ jobs:
     # "re-bless, then confirm across a few runs", which a nightly and a
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
-    if: ${{ (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'))) }}
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -3072,7 +3044,7 @@ jobs:
   staged-boot:
     name: Staged build boots (minified _site, as Pages ships it)
     runs-on: ubuntu-latest
-    if: ${{ (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && (github.event.pull_request.draft || vars.READY_TIER == 'fast'))))) }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && ((!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))))) }}
     timeout-minutes: 20
     steps:
       # fetch-depth: 0 because the stamp's build is 2000 + the commit count
@@ -3149,7 +3121,7 @@ jobs:
     # The DRAFT fast tier is named apart (#2664): its success would otherwise sit on the head under the required
     # name `CI`, and when the PR goes ready that stale success satisfies the requirement while the full tier is still
     # running (retro finding 10: a merge landed with the full-tier run in progress). Only a non-draft run supplies `CI`.
-    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'CI (draft fast tier)' || 'CI' }}
+    name: ${{ vars.ACTIONS_COORDINATOR_MODE == 'active' && inputs.concurrency_key == '' && 'Legacy validation (retired)' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'CI (draft fast tier)' || 'CI' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
@@ -3172,13 +3144,12 @@ jobs:
       - select
       - selected
       - selected-verdict
-      - baseline-trial
     # RUNS, NEVER SKIPS (audit4 D1 / pr-flow P9, 2026-10-26): a skipped job's
     # check-run is named by the raw `${{ … }}` text of `name:` above. Running,
     # it reports under its EVALUATED name — `CI (draft fast tier)` on a draft,
     # never `CI`, so a draft never satisfies the required check (#2664). A
     # CANCELLED run still has no verdict (#510), so `!cancelled()` stays.
-    if: ${{ !cancelled() }}
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (!cancelled()) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -3189,5 +3160,5 @@ jobs:
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
           # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
           # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
-          REQUIRE_SUCCESS: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && (vars.READY_TIER == 'fast' && 'guards-a,guards-b,guards-c,guards-d,guards,select' || 'guards-a,guards-b,guards-c,guards-d,guards,select,smoke,staged-boot') || '' }}
+          REQUIRE_SUCCESS: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft && 'guards-a,guards-b,guards-c,guards-d,guards,select,smoke,staged-boot' || '' }}
         run: node tools/ci/ci-verdict.mjs

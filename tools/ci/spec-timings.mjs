@@ -37,7 +37,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+export const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 export const TIMINGS_FILE = "tests/data/spec-timings.json";
 
 // Ten samples per key. Enough for a stable median and a "has it doubled?"

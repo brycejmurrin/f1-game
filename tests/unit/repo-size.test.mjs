@@ -8,6 +8,8 @@
 // one. The workflow is pinned read-only, dispatch-only and fetch-depth 0.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
+import { parse as parseYAML } from "yaml";
+import { evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -86,6 +88,15 @@ test("the workflow is read-only, dispatch-only and checks out full history", () 
   assert.match(on, /workflow_dispatch:/);
   assert.doesNotMatch(on, /\n  (push|pull_request|schedule):/);
   assert.match(yml, /permissions:\n  contents: read\n/);
-  assert.doesNotMatch(yml, /contents: write/);
+  const workflow = parseYAML(yml);
+  assert.deepEqual(workflow.jobs.size.permissions || workflow.permissions, { contents: "read" }, "measurement has no write authority");
+  for (const mode of ["shadow", "active", "paused"]) {
+    const context = workflowContext({ mode, event: "workflow_dispatch" });
+    assert.equal(evalTemplate(workflow.jobs.size.if, context), mode === "shadow");
+    assert.equal(evalTemplate(workflow.jobs["request-admission"].if, context), mode === "active");
+  }
+  const admission = workflow.jobs["request-admission"];
+  assert.deepEqual(admission.permissions, { contents: "write", actions: "write" }, "only trusted request recording can write state");
+  assert.equal(admission.steps.find(step => step.uses?.startsWith("actions/checkout")).with.ref, "claude/f1-game-project-26h3ng");
   assert.match(yml, /fetch-depth: 0/);
 });

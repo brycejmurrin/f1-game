@@ -46,7 +46,7 @@ permissions:
 jobs:
   dispatch:
     name: Dispatch cycle
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (github.actor != 'github-actions[bot]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

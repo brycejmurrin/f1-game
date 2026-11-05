@@ -23,6 +23,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
 import { capOverride, verdict, legReport, readArtifacts, main, LEGS } from "../../tools/gfx/census-verdict.mjs";
+import { evalTemplate, workflowContext } from '../helpers/ci-workflow.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOL = path.join(ROOT, "tools/gfx/census-verdict.mjs");
@@ -46,8 +47,18 @@ test("historical garage A/B only runs for its explicit full push request; normal
   for (const step of controls) assert.equal(step.if, "${{ needs.plan.outputs.census_only != 'true' }}");
   assert.equal(steps.find((s) => s.name === "Verdict — fail the job on what the game reported").if,
     "${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}");
-  assert.equal(WF.jobs.garage_reanalysis.if,
-    "${{ needs.plan.outputs.run != 'false' && needs.plan.outputs.reanalysis == 'true' }}");
+  for (const mode of ['', 'shadow', 'active', 'paused']) for (const run of ['true', 'false']) for (const reanalysis of ['true', 'false']) {
+    const context = workflowContext({ mode, needs: { plan: { outputs: { run, reanalysis } } } });
+    const legacy = !['active', 'paused'].includes(mode);
+    assert.equal(evalTemplate(WF.jobs.plan.if, context), legacy, `${mode}: legacy planner`);
+    assert.equal(evalTemplate(WF.jobs.census.if, context), legacy && run !== 'false', `${mode}/${run}: legacy controls`);
+    assert.equal(evalTemplate(WF.jobs.garage_reanalysis.if, context), legacy && run !== 'false' && reanalysis === 'true',
+      `${mode}/${run}/${reanalysis}: historical reanalysis`);
+    assert.equal(evalTemplate(WF.jobs['request-admission'].if, context), mode === 'active', `${mode}: durable diagnostic admission`);
+  }
+  const admission = WF.jobs['request-admission'].steps.find(step => step.run);
+  assert.equal(admission.env.REQUEST_WORKFLOW, 'gpu-census.yml');
+  assert.match(admission.run, /cli\.mjs request --workflow/, 'active mode records the profile rather than launching the GPU controls');
 
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-experiment-"));

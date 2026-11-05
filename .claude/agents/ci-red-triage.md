@@ -29,22 +29,18 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    SHA, list the runs on that `head_sha` and take the newest run
    per workflow INCLUDING cancelled. Inspect failed/cancelled jobs and elapsed
    time at timeout caps before deciding whether cancellation was superseded (AGENTS.md rules 8 and 13).
-   Default (rule 8): a `cancelled` run with zero failures is a TIMEOUT until
-   proven otherwise. Two shapes prove otherwise, both NOT reds: a newer commit superseded it, or — same `head_sha`, cancelled
-   seconds in, a sibling still running — the designed draft/ready dedupe
-   (one group per branch name; marking a draft ready cancels its fast run;
-   before 2026-09-24 a branch push and its PR run did the same). Say which,
-   and read the live sibling for dedupe. A newest cancelled run with failed jobs
-   or timeout-cap evidence is a real red; identify its job and assertion.
+   Cancellation is not success or automatic proof of timeout. Read the current request/attempt, named
+   replacement and coordinator reason. A newer head may supersede the old attempt; follow its actual evidence.
+   A job at its timeout cap or a cancelled run with failed jobs is a real red. Name the job and assertion.
+   Sessions cannot cancel or independently dispatch retries; trusted cleanup handles proven obsolete attempts.
 2. Identify PR CI (`ci.yml` on a PR head), manual CI, or Pages (`pages.yml`,
    which calls reusable `ci.yml` with a `before_sha` and may select different
    specs). Current deploy pushes start Pages, not a separate ship-push CI run;
    historical ship-push runs retain their original trigger label. Inspect the
    failed Pages job: deployment/verify-live failures are not nested test failures.
-   A green PR run proves nothing about Pages. PR CI has two tiers: a draft PR
-   runs the fast tier plus one 5-min `selected` shard, a ready PR the full tier;
-   their job sets differ, so compare a red only with a base run of the SAME
-   tier and lane.
+   A green PR run proves nothing about Pages. Read the actual workflow mode and request manifest:
+   legacy runs retain their original tier; the reset bounds draft feedback and requires comprehensive affected
+   validation before merge. Shadow decisions do not replace legacy verdicts. Compare the SAME tier and lane.
 3. Read FAILED jobs and CANCELLED jobs with timing/timeout evidence. Prefer the GitHub MCP read tools when the session
    has them (`mcp__github__actions_list` for the runs on a SHA,
    `mcp__github__actions_get`, `mcp__github__get_job_logs` with `run_id` and
@@ -127,4 +123,4 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
 On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.
-Never dispatch a re-run yourself; recommend one only under AGENTS.md's one-re-run rule.
+Never dispatch a re-run yourself; recommend a bounded trusted retry only for a diagnosed infrastructure failure.

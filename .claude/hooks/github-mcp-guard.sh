@@ -6,14 +6,14 @@
 # stay identical to the two doors' matchers (tests/unit/cross-tool-guards.test.mjs).
 #
 #   DENY  merge_pull_request, enable_pr_auto_merge, disable_pr_auto_merge
-#         (no session merges or arms: land.yml lands — AGENTS.md §Coordination)
+#         (no session merges or arms: the trusted coordinator merges — AGENTS.md §Coordination)
 #   DENY  push_files, create_or_update_file, delete_file, create_branch
 #         (a file write on the admin token lands on any branch with no PR, no CI)
 #   DENY  update_pull_request_branch (sync through tools/ci/sync-pr.mjs)
 #   DENY  actions_run_trigger: any *cancel* / *rerun* method, run_workflow of
 #         pages.yml / ci.yml (the release train is never dual-dispatched)
 #   ASK   update_pull_request with state "closed"
-#   ASK   issue_write whose `labels` would drop `hold` (the list REPLACES the
+#   ASK   issue_write whose `labels` would drop `queue:paused` (the list REPLACES the
 #         labels; the live ones come from `gh api`; unknown → ask)
 #   ALLOW the rest, draft→ready included: the Plan gate and CI check a flip.
 # Output is the documented PreToolUse JSON; an unreadable payload or a guarded
@@ -53,7 +53,7 @@ def slug():
     except Exception:
         return None
 if op in ("merge_pull_request", "enable_pr_auto_merge", "disable_pr_auto_merge"):
-    emit("deny", "No session merges, arms or disarms (AGENTS.md §Coordination): add the `land` label; land.yml's gate arms auto-merge with the MERGE method. `hold` is the only veto.")
+    emit("deny", "No session merges, arms or disarms (AGENTS.md §Coordination): request `/apex merge` on the PR. Only trusted finalization/merge may act; `queue:paused` blocks admission and merge.")
 if op in ("push_files", "create_or_update_file", "create_branch", "delete_file"):
     emit("deny", op + " writes repository contents through the API: on the admin token it lands on any branch with no PR and no CI. Commit on a cursor/* branch and push.")
 if op == "update_pull_request_branch":
@@ -61,9 +61,9 @@ if op == "update_pull_request_branch":
 if op == "actions_run_trigger":
     m = str(ti.get("method") or "").strip().lower()
     if "cancel" in m:
-        emit("deny", "NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination): a queued run holds no slot; your superseded run is replaced by your next push. Bryce cancels in the UI.")
+        emit("deny", "Sessions cannot cancel Actions runs. Only trusted coordinator cleanup may cancel attempts proven obsolete, with recorded replacement evidence (docs/ACTIONS.md).")
     if "rerun" in m:
-        emit("deny", "No re-run dispatch from a session: `node tools/ci/ci-rerun.mjs` re-runs a failed job at most once for a timeout or infra error (AGENTS.md §Coordination).")
+        emit("deny", "No re-run dispatch from a session: request bounded trusted recovery after diagnosing the failed attempt (docs/ACTIONS.md).")
     wf = os.path.basename(str(ti.get("workflow_id") or "").strip().lower())
     if m == "run_workflow" and (wf in ("pages.yml", "pages.yaml", "ci.yml", "ci.yaml") or wf.isdigit()):
         emit("deny", "pages.yml is the release train (a push to the deploy branch starts it) and ci.yml runs on the PR: neither is dispatched by a session (" + wf + ").")
@@ -78,7 +78,7 @@ if op == "issue_write":
     if labels is None or number is None or str(ti.get("method") or "update").strip().lower() == "create":
         sys.exit(0)
     names = [str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels])]
-    if "hold" in names:
+    if "queue:paused" in names:
         sys.exit(0)
     cur = None
     s = slug()
@@ -90,9 +90,9 @@ if op == "issue_write":
         except Exception:
             cur = None
     if cur is None:
-        emit("ask", "This `labels` list REPLACES the labels and omits `hold`; the current labels could not be read. `hold` is the only veto (whoever set it removes it; Bryce always can) — confirm by hand.")
-    if "hold" in cur:
-        emit("ask", "This `labels` list REPLACES the labels and would REMOVE `hold`, the only veto. Only whoever set it (or Bryce) removes it — confirm by hand.")
+        emit("ask", "This `labels` list REPLACES the labels and omits `queue:paused`; the current labels could not be read. An owner-established pause is sticky; owner-direct resume is required. Confirm current state before replacing labels.")
+    if "queue:paused" in cur:
+        emit("ask", "This `labels` list REPLACES the labels and would REMOVE `queue:paused`, which stops new expensive work and merge. An owner-established pause requires owner-direct resume; confirm by hand.")
 sys.exit(0)
 PY
 rc=$?

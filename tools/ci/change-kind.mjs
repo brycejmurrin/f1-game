@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 
 const DOCS = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//, /^\.codex\//];
 const isDocs = (f) => DOCS.some((re) => re.test(f));

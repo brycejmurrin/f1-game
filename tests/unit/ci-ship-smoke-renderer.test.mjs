@@ -3,6 +3,7 @@
 
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
+import { parse as parseYAML } from "yaml";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +12,7 @@ import { parse as parseYaml } from "yaml";
 import { spawnSync } from "node:child_process";
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
 import { report, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, shipFilter, rendererJob, rendererFilter, SELECTED_TIMEOUT_MS } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, pagesWorkflow, selectJob, selectedJob, selectStep, shipFilter, rendererJob, rendererFilter, SELECTED_TIMEOUT_MS, evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 
 test("a GREEN run's junit survives — the timings CI already measures", () => {
   /* tools/ci/spec-timings.mjs was written to build a rolling per-test duration
@@ -87,10 +88,25 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   // THE TRAIN ONLY (2026-09-30): listening to "CI" as well created a run per
   // PR completion that the job's `if:` then skipped — 119 skipped runs in
   // seven hours, queued one at a time, after the `branches:` filter landed.
-  assert.match(timings, /workflows: \["Deploy to GitHub Pages"\]/,
-    "the Pages train's gate is the one full smoke run on the tip, and the only trigger worth a run");
-  assert.doesNotMatch(timings, /workflows: \[[^\]]*"CI"/,
-    "a workflow_run on CI fires for every PR completion and skips (2026-09-29: 119 in 7 h)");
+  const workflow = parseYaml(timings);
+  assert.deepEqual(workflow.on.workflow_run.workflows, ['Deploy to GitHub Pages', 'Actions worker'],
+    'timings follow both legacy train evidence and admitted worker evidence');
+  assert.deepEqual(workflow.on.workflow_run.branches, ['claude/f1-game-project-26h3ng']);
+  assert.ok(!workflow.on.workflow_run.workflows.includes('CI'), 'ordinary PR completion does not trigger a timings job');
+  for (const mode of ['', 'shadow', 'active', 'paused']) for (const event of ['workflow_run', 'workflow_dispatch']) {
+    for (const branch of ['claude/f1-game-project-26h3ng', 'topic']) for (const conclusion of ['success', 'failure', 'cancelled']) {
+      const context = workflowContext({ mode, event });
+      context.github.event.workflow_run = { head_branch: branch, conclusion };
+      const eligible = event === 'workflow_dispatch' || (branch === 'claude/f1-game-project-26h3ng' && conclusion === 'success');
+      assert.equal(evalTemplate(workflow.jobs.merge.if, context), !['active', 'paused'].includes(mode) && eligible,
+        `${mode}/${event}/${branch}/${conclusion}: legacy merge`);
+      assert.equal(evalTemplate(workflow.jobs['request-admission'].if, context), mode === 'active' && eligible,
+        `${mode}/${event}/${branch}/${conclusion}: durable publisher request`);
+    }
+  }
+  const admissionRun = workflow.jobs['request-admission'].steps.find(step => step.run)?.run;
+  assert.match(admissionRun, /cli\.mjs request --workflow/, 'active entrypoint records a request before any timings publisher runs');
+  assert.doesNotMatch(admissionRun, /spec-timings\.mjs|git push/, 'the admission job cannot merge or publish samples itself');
 });
 
 test("the ship filter is ONE job whose answer every smoke shard reads", () => {
@@ -177,20 +193,14 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
     "an env-gated spec (material-shimmer) must be named, not scheduled");
 });
 
-test("the golden-menu check is blocking AND never runs on the Pages call", () => {
-  // E3 (2026-09-16): its `if:` was `pull_request || workflow_dispatch` under a
-  // comment promising "never the Pages call" — but a called workflow sees the
-  // CALLER's event, and "deploy now" is a workflow_dispatch of pages.yml, so
-  // the trial ran in train #2348 (run 35066895398). An advisory job that leaks
-  // into the deploy gate is one `continue-on-error` deletion away from
-  // blocking it, so both halves of the contract are pinned here.
-  const trial = (ciWorkflow.split("\n  baseline-trial:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(trial, "baseline-trial job missing");
-  assert.doesNotMatch(trial, /^    continue-on-error: true$/m, "the baseline must fail the scheduled verdict");
-  assert.match(trial, /inputs\.concurrency_key == ''/,
-    "a Pages call carries a concurrency_key whatever its caller's event; that is the only reliable tell");
-  assert.match(ciWorkflow, /- baseline-trial/,
-    "the required CI aggregator must consume the baseline result");
+test("golden-menu collection is diagnostic and cannot delay required validation", () => {
+  const jobs = parseYAML(ciWorkflow).jobs;
+  assert.equal(jobs["baseline-trial"]["continue-on-error"], true);
+  assert.ok(!jobs["ci-verdict"].needs.includes("baseline-trial"));
+  const condition = jobs["baseline-trial"].if;
+  assert.equal(evalTemplate(condition, workflowContext({ event: "workflow_dispatch" })), true);
+  assert.equal(evalTemplate(condition, workflowContext({ concurrencyKey: "pages-1" })), false);
+  for (const mode of ["active", "paused"]) assert.equal(evalTemplate(condition, workflowContext({ mode })), false);
 });
 
 test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: swiftshader` opts out", () => {

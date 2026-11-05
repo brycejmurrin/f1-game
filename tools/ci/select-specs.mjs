@@ -39,7 +39,7 @@ import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
 import * as espree from "espree";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ROOT = path.resolve(process.env.APEX_CI_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.."));
 
 // The selected gate's settings, per select-budget's table. It has no retry so a
 // failure reports promptly while smoke retains the retry used for deploy safety.
@@ -1519,6 +1519,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // also touches the engine must leave it empty (the whole fleet runs).
   const r = { reason, changed: changed.length, tracked, unclaimed, groups: browserGroups,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
+              candidateSpecs: candidates.map((file) => ({ file, rank: rank(file) })),
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);

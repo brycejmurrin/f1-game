@@ -20,6 +20,7 @@ import {
   writeManifest, USAGE,
 } from "../../tools/shot/garage-before.mjs";
 import { USAGE as FETCH_USAGE, loadArtifactsOverride, fetchPack } from "../../tools/garage-angles-fetch.mjs";
+import { evalTemplate, workflowContext } from '../helpers/ci-workflow.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Temp dirs live under scratch/ (repo rule: never /tmp) and go in after(), so a
@@ -148,7 +149,7 @@ test("workflow is Garage before, not an extension of Car shot", () => {
   assert.equal(wf.on.workflow_dispatch.inputs.ref.default, "claude/f1-game-project-26h3ng");
   assert.equal(wf.on.pull_request, undefined, "never on pull requests");
   assert.equal(wf.jobs.capture["runs-on"], "macos-latest", "capture is macOS, not ubuntu");
-  assert.equal(wf.concurrency["cancel-in-progress"], false);
+  for (const mode of ['shadow', 'active', 'paused']) assert.equal(evalTemplate(wf.concurrency['cancel-in-progress'], workflowContext({ mode })), false);
   const upload = steps("pack").find((st) => /upload-artifact/.test(st.uses || ""));
   assert.ok(upload, "pack uploads the pack");
   assert.equal(upload.with.name, "garage-before-${{ needs.plan.outputs.sha }}");
@@ -174,8 +175,14 @@ test("workflow: single-flight per run, never a concurrency group on a matrix job
   assert.equal(wf.jobs.capture.strategy["max-parallel"], 2, "capture holds at most 2 of the 5 macOS slots");
   assert.equal(wf.jobs.capture["runs-on"], "macos-latest");
   // The run holds the group; a newer run waits instead of discarding a pack.
-  assert.match(String(wf.concurrency?.group), /^garage-before-\$\{\{ inputs\.ref \|\| 'claude\/f1-game-project-26h3ng' \}\}$/);
-  assert.equal(wf.concurrency["cancel-in-progress"], false);
+  for (const mode of ['shadow', 'active', 'paused']) {
+    const context = workflowContext({ mode, event: 'workflow_dispatch', runId: 19,
+      needs: { plan: { outputs: { capture: 'true', sha: 'a'.repeat(40) } }, capture: { result: 'success' } } });
+    assert.equal(evalTemplate(wf.concurrency.group, context), `garage-before-claude/f1-game-project-26h3ng${mode === 'active' ? '19' : ''}`);
+    assert.equal(evalTemplate(wf.concurrency['cancel-in-progress'], context), false);
+    for (const id of ['plan', 'capture', 'pack']) assert.equal(evalTemplate(wf.jobs[id].if, context), mode === 'shadow', `${mode}: legacy ${id}`);
+    assert.equal(evalTemplate(wf.jobs['request-admission'].if, context), mode === 'active', `${mode}: durable capture request`);
+  }
   // pack keeps its own per-sha group, distinct from the run-level one (no self-deadlock).
   assert.equal(wf.jobs.pack.concurrency.group, "garage-before-pack-${{ needs.plan.outputs.sha }}");
   assert.equal(wf.jobs.pack.concurrency["cancel-in-progress"], false);

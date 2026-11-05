@@ -1,19 +1,15 @@
-# Land mechanics — what happens after `land`
+# Trusted merge path
 
-Read when you need the detail behind SKILL.md §Land (the steps themselves are there).
+`/apex merge` on a PR requests merge of the current head; it grants no exception to validation, pause, approval
+or branch protection. In shadow mode the reset runtime cannot merge. See `docs/ACTIONS.md` for rollout state.
 
-- `land.yml` runs `merge-gate.mjs --check` as the commit status named `gate` and arms auto-merge pinned to your head;
-  the ruleset merges when `gate` is green. Its ci row requires the newest check named exactly `CI` green on your head.
-- Adding `land` while CI still runs is fine: `gate` shows in progress ("waiting") and re-evaluates when CI ends. Going
-  back to draft or removing `land` turns `gate` red.
-- `land` on a draft does nothing until the flip (`gate` reads "draft: flip ready first", one comment per head).
-  Removing and re-adding `land` re-gates a stale `gate` by hand; `land.yml` also re-gates on a PR-body edit and on a schedule.
-- Route: `node tools/ci/ship-pr.mjs --pr <n>` (runs ready-gate; prints the next two calls), the GitHub MCP
-  `update_pull_request` with `draft:false` (the hook allows it within 10 min of the ready-gate receipt; older: re-run
-  ready-gate), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`.
-- Arming: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; the `retry` job dispatches a
-  re-gate (at most 3 per head). An API or git error leaves `gate` in progress ("error, will retry"), never red. `gate`
-  turns green only while the deploy tip is the one it measured. `land.yml` never merges the tip into a PR branch.
-- Gate rows that read Bryce's own click (provenance, not a relay): `hold` (only the actor who set it, or Bryce,
-  lifts it), `ratchet-raise`, `config` (`config-ok` on a hooks/settings PR).
-- `LAND_TOKEN` and the ruleset: [`vendors.md`](vendors.md).
+Only a trusted finalizer may publish success for the required `gate` status, after verifying complete affected
+validation for the exact expected head/base and independent approval where required. Test workers cannot write
+that status. Missing evidence, changed head/base, API errors or cancelled tasks cannot become success.
+
+Only the trusted merge path may merge a currently gated head, using a merge commit. Recheck pause, head, base,
+intent and authoritative state immediately before merge. A race requeues the current request within its bounded
+budget. Sessions never arm or disarm auto-merge, bypass a ruleset or use an alternate merge route.
+
+Owner approval uses `/apex approve <sha>` for that exact head. Owner-established pauses remain sticky until the
+owner resumes. A green PR is not proof that the release path successfully published it.

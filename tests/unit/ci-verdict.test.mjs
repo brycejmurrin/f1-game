@@ -1,6 +1,8 @@
 // ci-verdict — the required-check aggregator for path-skipped CI jobs.
 // Cancelled needed jobs fail the aggregator (same as failure) — do not treat cancel as green.
 import test from "node:test";
+import { parse as parseYAML } from "yaml";
+import { evalTemplate, workflowContext } from "../helpers/ci-workflow.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -134,14 +136,17 @@ test("the CLI reads REQUIRE_SUCCESS: the same needs JSON passes bare and fails s
 test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming jobs ci-verdict needs; the draft fast tier is not named `CI`", async () => {
   const fs = await import("node:fs");
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  const body = wf.split("\n  ci-verdict:\n")[1];
-  // READY_TIER=fast (#4836): a ready PR running the draft tier still requires the guards and select.
-  const m = /REQUIRE_SUCCESS: \$\{\{ github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft && \(vars\.READY_TIER == 'fast' && '([^']+)' \|\| '([^']+)'\) \|\| '' \}\}/.exec(body);
-  assert.ok(m, "REQUIRE_SUCCESS must be set only when the run is a non-draft pull_request");
-  assert.match(m[2], /\bsmoke\b/, "the full ready tier requires smoke");
-  const needs = body.split("needs:")[1].split("if:")[0];
-  for (const j of [...m[1].split(","), ...m[2].split(",")]) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
-  assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
+  const job = parseYAML(wf).jobs["ci-verdict"];
+  const expression = job.steps.find(step => step.env?.REQUIRE_SUCCESS).env.REQUIRE_SUCCESS;
+  const required = String(evalTemplate(expression, workflowContext({ draft: false }))).split(",");
+  assert.ok(required.includes("smoke"));
+  assert.ok(required.includes("staged-boot"));
+  for (const id of required) assert.ok(job.needs.includes(id), `required ${id} must contribute to the verdict`);
+  assert.equal(evalTemplate(expression, workflowContext({ draft: true })), "");
+  assert.equal(evalTemplate(expression, workflowContext({ event: "schedule" })), "");
+  assert.equal(evalTemplate(job.name, workflowContext({ draft: true })), "CI (draft fast tier)");
+  for (const mode of ["active", "paused"]) assert.equal(evalTemplate(job.if, workflowContext({ mode })), false);
+
 });
 
 // #3507: a green CI must say which jobs executed and which were skipped.

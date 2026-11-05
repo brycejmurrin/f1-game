@@ -82,3 +82,15 @@ export function evalTemplate(template, ctx) {
   if (parts.length === 3 && !parts[0] && !parts[2]) return compile(parts[1]);
   return parts.map((p, n) => (n % 2 ? String(compile(p) ?? "") : p)).join("");
 }
+
+/** Explicit execution-mode fixtures keep legacy behavior checks separate from active admission. */
+export function workflowContext({ mode = "shadow", event = "pull_request", draft = false,
+  concurrencyKey = "", needs = {}, runId = 1, ref = "refs/heads/topic" } = {}) {
+  return {
+    vars: { ACTIONS_COORDINATOR_MODE: mode },
+    inputs: { concurrency_key: concurrencyKey, fast_tier_run: "" },
+    github: { event_name: event, ref, ref_name: ref.replace(/^refs\/heads\//, ""), run_id: runId,
+      event: { action: "synchronize", pull_request: { draft } } },
+    needs,
+  };
+}

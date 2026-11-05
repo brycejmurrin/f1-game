@@ -7,6 +7,14 @@ TESTING.md and plans link here instead of restating a command. Merged
 ladder note `notes/PREPUSH-GATE-LADDER.md` and TESTING.md's §1 command blocks and
 §3 flake procedure.
 
+## Queue rollout and evidence
+
+`docs/ACTIONS.md` owns the reset protocol and shadow/cutover state. Its default is shadow; repository policy edits
+do not prove a live migration or a capacity increase. Existing runs retain their actual workflow/tier evidence.
+After cutover, draft feedback is bounded and ready heads require comprehensive affected validation before merge.
+Missing, cancelled, skipped or superseded work is not success. Priority and body edits do not add validation
+requests. Only trusted finalization can publish gate success; workers cannot merge or publish releases.
+
 ## By change
 
 What to run for each kind of change (AGENTS.md §Verification points here). Agents run no browser test locally: the
@@ -58,26 +66,16 @@ serve `js/` and `css/` from the working tree.
 
 ## 3. The pre-push floor
 
-`tooling-fast --changed --jobs=3 --quiet` plus the ONE spec `pick-tests` /
-`select-specs` names, run in the background (`node tools/ci/test-bg.mjs --spec
-tests/specs/<file>.spec.js`); `node tools/track/verify-track.cjs <id>` for a
-circuit; the docs-only fast path for prose:
+`tooling-fast --changed --jobs=3 --quiet` is the local affected-node floor; `verify-track.cjs <id>` is the
+circuit check. Browser verification runs through admitted CI. Do not start local browser tests unless Bryce
+explicitly requests a named attended exception. The docs-only fast path is:
 
 ```sh
 node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
 ```
 
-Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
-The full tiers run on the PR: every draft push gets the fast tier plus the
-`selected` legs under a 5-min budget with no overflow — one leg for a typical
-diff; a wide diff still fans out, because `select-specs` never drops a routed
-spec (its `Structural guards` A–D run the full `tooling-fast`, the check
-`ready-gate` reads), the full tier runs once the PR is ready, and
-`land.yml`'s `gate` check judges the merge result. With the repo variable
-`READY_TIER=fast` (Bryce's switch, #4836; unset = full) a ready PR runs the
-draft tier as well, and the Pages train is the only full gate, after merge
-(ci.yml §THE READY-TIER SWITCH). A worker ends its turn at
-`land` (skill `steward` §Land).
+Run `npm run gen:check` when a generated reader or a tool `@doc` header changed. Local success describes only
+that slice. Required affected coverage must all complete before merge; a budget can defer it, not discard it.
 
 ## 4. The gate is a ladder, and the rungs are not the same size
 
@@ -159,13 +157,13 @@ every morning over every FAILED `ci.yml` and `pages.yml` run of the last two
 days (a green run holds no unquarantined flake under `APEX_FAIL_ON_FLAKY=1`, a
 cancelled run tested nothing), tallied by spec + title, with the repeat offenders
 proposed as quarantine rows — a test that passed only on retry in ≥ 2 runs, or
-failed first-try on ≥ 3 branches. It rewrites one open issue labelled `flaky`;
+failed first-try on ≥ 3 branches. Its legacy implementation identifies one open flake issue; after cutover use stable ledger/issue identity, not a label;
 the ledger itself stays a PR with an owner and the evidence run.
 
 **Base-red detector.** The same workflow runs every 2 hours in `--base-red` mode
 over the last 3 h of failed runs: a spec that failed first-try on 3 or more
 unrelated branches, or on 2 including the deploy branch, is a red on the base,
-not on any one diff. It opens, refreshes or closes ONE issue labelled `base-red`
+not on any one diff. Its legacy implementation opens, refreshes or closes ONE advisory issue
 ("Base red suspects (auto)"). Advisory: nothing blocks on it; it exists so the
 tenth session to meet the same red looks at the deploy branch first.
 
@@ -177,9 +175,9 @@ successful rerun.
 ## 6. CI and Pages
 
 PR CI validates the PR head; the deploy branch requires one check, `gate`, whose
-ci row requires `CI` green on the head (D-002). Every PR push starts CI (a
-draft's run is the fast tier plus the 5-min-budget `selected` legs, §3); `= ci none` after a
-push means no open PR carries the sha. A deploy-branch push starts the Pages release
+trusted evidence requires comprehensive affected validation on the exact head. Legacy and reset runs must be
+interpreted using their actual mode; shadow results are not replacement checks. A queue entry or absent run does
+not prove validation. A deploy-branch push starts the Pages release
 train; there is no separate ship-push CI run. A green PR is not proof that Pages
 is live; verify live `version.json` and the apex SHA with `deploy-research`
 after Pages succeeds. For failure triage: `node tools/ci/ci-watch.mjs --sha <head>`
@@ -197,7 +195,7 @@ commit; unknown states stay unknown and the ready gate is not evaluated by it.
 ## Related readers
 
 - [AGENTS.md](../AGENTS.md) — the binding rules, one line each.
-- [steward](../.claude/skills/steward/SKILL.md) — the PR lifecycle: open, push, red, `land`, where a session ends.
+- [steward](../.claude/skills/steward/SKILL.md) — the PR lifecycle: open, push, red and merge requests.
 - [TESTING.md](TESTING.md) — test groups, costs, harnesses and the release train.
 - [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) — where verification tools fit.
 - [AGENT-SURFACE.md](AGENT-SURFACE.md) — CLI and MCP ownership.

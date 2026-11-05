@@ -6,5 +6,5 @@ disable-model-invocation: true
 
 # /ship — the user's verb for "push this and land it"
 
-Load skill `steward` and run §Open (no PR yet: branch, draft PR, labels) or §Land (ready flip, `land` label). The
+Load skill `steward` and run §Open (branch and draft PR) or §Land (ready state and `/apex merge` request). The
 user's "ship" is the grant to push and open or update the PR, never to merge or arm.

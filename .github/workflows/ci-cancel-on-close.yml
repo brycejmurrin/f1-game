@@ -44,6 +44,7 @@ permissions:
 
 jobs:
   cancel-stragglers:
+    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') }}
     name: Cancel the closed PR's other runs
     runs-on: ubuntu-latest
     timeout-minutes: 3

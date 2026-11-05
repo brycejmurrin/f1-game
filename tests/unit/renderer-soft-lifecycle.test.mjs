@@ -10,6 +10,7 @@ import vm from "node:vm";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { awaitCaptureReady, mutateCaptureScene } from '../../tools/shot/probe-page.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -312,7 +313,7 @@ test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
     const src = read(file);
     const at = src.indexOf("awaitSoftPresent(timeoutMs)");
     assert.ok(at >= 0, file + " exposes awaitSoftPresent");
-    const body = src.slice(at, at + 1600);
+    const body = fnSource(src, src.includes('function awaitSoftPresent(timeoutMs) {') ? 'function awaitSoftPresent(timeoutMs) {' : 'awaitSoftPresent(timeoutMs) {');
     assert.match(body, /let waiter = null/);
     assert.match(body, /_softPresentWaiters\.indexOf\(waiter\)/);
     assert.match(body, /_softPresentWaiters\.splice\(i, 1\)/);
@@ -349,6 +350,70 @@ test("GLX soft-present reads back only for an explicit capture waiter", () => {
   const glx = read("js/render/glx/glx.js");
   const present = glx.slice(glx.indexOf("present: (opts) =>"), glx.indexOf("softPresent: () =>"));
   assert.match(present, /Soft\.blitIfDue\(\)/);
+});
+
+function deferredGlxCapture() {
+  let reads = 0, paints = 0, paused = false;
+  const canvas = { parentNode: { insertBefore() {} }, nextSibling: null };
+  const ctx = { createImageData: (width, height) => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }),
+    putImageData: image => { paints++; assert.ok(image.data.some(value => value > 8)); } };
+  const document = { createElement: () => ({ id: '', width: 300, height: 150, style: {}, setAttribute() {}, getContext: () => ctx }) };
+  const sandbox = { document, Uint8Array, Uint8ClampedArray, setTimeout, clearTimeout, Date,
+    PerfGov: { softwareGlUiReadbackDefer: () => true }, Log: { info() {} },
+    window: { __apex: { headless: value => value === undefined ? paused : (paused = value) } } };
+  vm.runInNewContext(read('js/render/glx/soft.js'), sandbox);
+  const soft = vm.runInNewContext('GLXSoft', sandbox).create({ getCanvas: () => canvas,
+    getGl: () => ({ drawingBufferWidth: 2, drawingBufferHeight: 2 }), getOutFBO: () => null, ctxGone: () => false,
+    getWidth: () => 2, getHeight: () => 2,
+    getPST: () => ({ postPath: () => ({ readFb: 'default' }), readbackLdrPixels: (data, _w, _h, force) => {
+      assert.equal(force, true, 'only an explicit capture can bypass the UI defer'); reads++;
+      for (let i = 0; i < data.length; i++) data[i] = (i * 37) % 256;
+      return true;
+    } }) });
+  soft.setEnabled(true);
+  sandbox.GLX = { softPresent: soft.isEnabled, softPresentState: soft.softPresentState,
+    awaitSoftPresent: soft.awaitSoftPresent, invalidateSoftPresent: soft.invalidateSoftPresent };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext(`(${fn.toString()})(payload)`, { ...sandbox, payload }) };
+  return { soft, page, reads: () => reads, paints: () => paints, paused: () => paused };
+}
+
+test('GLX software garage progress cannot masquerade as a captured frame', async () => {
+  const h = deferredGlxCapture();
+  const progress = h.soft.awaitSoftPresent(100);
+  h.soft.blitIfDue();
+  assert.equal(await progress, 1);
+  assert.equal(h.soft.softPresentState().captureGen, 0);
+  assert.equal(h.reads(), 0, 'ordinary UI progress remains readback-free');
+  await mutateCaptureScene(h.page, () => 'camera changed');
+  // A UI-only progress event between the mutation and capture must not make
+  // the freshness barrier accept the still-empty #game-soft canvas.
+  const intermediate = h.soft.awaitSoftPresent(100);
+  h.soft.blitIfDue(); await intermediate;
+  const capture = awaitCaptureReady(h.page, { timeoutMs: 100, pauseRender: true });
+  assert.equal(h.paused(), false);
+  h.soft.blitIfDue();
+  const result = await capture;
+  assert.equal(result.required, 1); assert.equal(result.shown, 1);
+  assert.equal(h.reads(), 1); assert.equal(h.paints(), 1); assert.equal(h.paused(), true);
+});
+
+test('expired GLX screenshot waiters cannot leave a forced readback armed', async () => {
+  const h = deferredGlxCapture();
+  await assert.rejects(h.soft.awaitSoftPresent(5, 'capture'), /timeout/);
+  h.soft.invalidateSoftPresent(); h.soft.blitIfDue();
+  assert.equal(h.reads(), 0); assert.equal(h.paints(), 0);
+  assert.equal(h.soft.softPresentState().captureGen, 0);
+});
+
+test('GLX post readback bypasses the software UI defer only for explicit capture', () => {
+  const calls = [], gl = { FRAMEBUFFER: 1, RGBA: 2, UNSIGNED_BYTE: 3, finish: () => calls.push('finish'),
+    bindFramebuffer: (_target, value) => calls.push(value), readPixels: () => calls.push('pixels') };
+  const fn = vm.runInNewContext(`(${fnSource(read('js/render/glx/post.js'), 'function readbackLdrPixels(buf, w, h) {')})`, {
+    gl, PerfGov: { softwareGlUiReadbackDefer: () => true }, _softReadFB: 'present', core: { outputFBO: () => 'output' },
+  });
+  assert.equal(fn(new Uint8Array(16), 2, 2), false); assert.deepEqual(calls, []);
+  assert.equal(fn(new Uint8Array(16), 2, 2, true), true);
+  assert.deepEqual(calls, ['finish', 'present', 'pixels', 'output']);
 });
 
 test("GLX links SGSR only after spatial upscaling is requested", () => {
