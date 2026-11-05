@@ -3903,7 +3903,8 @@
         "tests/unit/career-backup.test.mjs"
       ],
       "build": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-ui-lazy.test.mjs"
       ],
       "download": [
         "tests/unit/mobile-native-download.test.mjs"
