@@ -59,10 +59,8 @@ const FieldLod = (function () {
     const k = Math.tan(fovY * 0.5) / REF_HALF_TAN;
     return k * k;
   }
-  // HYSTERESIS. A car hovering at a threshold flipped its decal on and off
-  // every few frames. With `car` given, its last tier is kept on it (car._lodTier)
-  // and a boundary is crossed outward only past +10 % of its distance and back
-  // inward only inside -10 %. Without `car`, the plain table (tests, __apex).
+  // HYSTERESIS: with `car`, the last verdict is kept (car._lodTier / WeakMaps) and a cut flips outward
+  // only past +10 % and back only inside -10 %. Without `car`, the plain table (tests, __apex).
   const HYST_OUT = 1.1 * 1.1, HYST_IN = 0.9 * 0.9;
   function crossed(d2, m, beyond, sticky) {
     if (!sticky) return d2 > sq(m);
@@ -94,8 +92,15 @@ const FieldLod = (function () {
   }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M : T.LEGACY_FLAPS_M; }
-  function flame(dist2) { return !on || dist2 < sq(T.FLAME_M); }
-  function castsShadow(dist2) { return !on || dist2 < sq(T.SHADOW_CAST_M); }
+  const _nearOf = new WeakMap();   // car -> sticky verdicts
+  function near(k, m, d2, car) {
+    if (!car) return d2 < sq(m);
+    let o = _nearOf.get(car); if (!o) _nearOf.set(car, o = {});
+    return (o[k] = !crossed(d2, m, o[k] === false, k in o));
+  }
+  function flame(dist2, car) { return !on || near("flame", T.FLAME_M, dist2, car); }
+  function castsShadow(dist2, car) { return !on || near("cast", T.SHADOW_CAST_M, dist2, car); }
+  function flapsNear(dist2, car) { return near("flaps", flapsM(), dist2, car); }
   function mirrorCap() { return on ? T.MIRROR_CARS : Infinity; }
   // Keep the `cap` smallest of dist2s[0..n): writes keep[i] = 1/0 and returns
   // how many are kept. `force` (an index, or -1) is always kept first — the
@@ -131,6 +136,6 @@ const FieldLod = (function () {
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
-  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
+  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flapsNear, flame, castsShadow, mirrorCap, nearest, parts };
 })();
 Object.freeze(FieldLod);

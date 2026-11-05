@@ -22,6 +22,7 @@ Parse: take the text between ` ```apex-result\n ` and the closing fence, `JSON.p
 | `path` | `to` webgpu / webgl2 / auto, `reload` (default true) | `{was, pinned, reloading}`; no `to` = the `render` state alone |
 | `bench` | `op` tests / start (+`test`) / stop / status / result / leg (+`i`) | BenchRun (SETTINGS > GRAPHICS > BENCHMARK) |
 | `snap` | `w` 64–640 (320), `q` start quality (0.6) | `{w, h, q, from, chars, jpeg: "data:image/jpeg;base64,…"}` |
+| `layout` | — | title-screen geometry: `{sha, w, h, dpr, vv, body:{density, shape, cls}, root:{btnw, side, uiScale, tl}, overlay, overlayPad, buttons, css:{width, max-width, justify-self, grid-column, margin-left, margin-right, translate, zoom}}` (#4862) |
 | `wait` | `ms` 0–30000 | `{waited}`; for spacing steps inside a `batch` |
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |
