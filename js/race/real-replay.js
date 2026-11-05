@@ -729,6 +729,7 @@ const RealReplay = (function () {
       if (run.paused) { for (const [c, f] of run.cars) if (f.tr && !c.retired) c.speed = 0; return; }
       if (G.state === "race") run.T += dt * run.speed;
       pose();
+      { const i = runningOrder().indexOf(run.follow); if (i >= 0) run.followRank = i; }
       if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
       fire();

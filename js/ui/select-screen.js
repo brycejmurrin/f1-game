@@ -80,7 +80,8 @@ const retrySave = () => {
       (!store.careerWriteStatus || store.careerWriteStatus().ok)) {
     Career.save(); results.push(Career.saveStatus());
   }
-  if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
+  const cd = typeof Career !== "undefined" && Career.data && Career.data();   // G.season aliases the career's season
+  if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) && !(cd && cd.season === G.season))
     results.push(SeasonCal.save(G.season));
   // Career/season above re-save their CURRENT state; whatever else the outage
   // refused (garage, settings, leaderboards) is rewritten from the store's own

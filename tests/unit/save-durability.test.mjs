@@ -499,3 +499,24 @@ test("SAVE RETRY heals unrelated settings in a read-only career tab and still re
     await h.store.mirrorFlush();
   }
 });
+
+test("SAVE RETRY never writes the career's nested season over the standalone one when the career did not engage (#4944)", async () => {
+  const source = src("js/ui/select-screen.js");
+  const begin = source.indexOf("const retrySave = () => {");
+  const end = source.indexOf("let recoveryExporting", begin);
+  const h = boot();
+  await h.store.mirror.ready;
+  const career = save(2);
+  const saved = [];
+  h.c.Career = { data: () => career, inCareer: () => false, save() {}, saveStatus: () => ({ ok: true }) };
+  h.c.SeasonCal = { save: (s) => { saved.push(s); return { ok: true }; } };
+  h.c.G = { season: career.season, announce() {} };
+  h.c.hideSaveWarning = () => {}; h.c.showSaveWarning = () => {};
+  vm.runInContext(source.slice(begin, end) + ";globalThis.retrySaveAction=retrySave", h.c, { filename: absSrc("js/ui/select-screen.js") });
+  h.c.retrySaveAction();
+  assert.deepEqual(saved, [], "the career's alias season is not a standalone season");
+  const standalone = { round: 1 };
+  h.c.G.season = standalone;
+  h.c.retrySaveAction();
+  assert.deepEqual(saved, [standalone], "a real standalone season still retries");
+});
