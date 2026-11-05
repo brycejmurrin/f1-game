@@ -3701,5 +3701,12 @@ none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_ST
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
 
+## 2026-11-05 — PR #5001 (cursor/career-download-revoke-4932): career plan download revokes its object URL
+
+`raceEntryBytes` +351 via `ratchets.d/cursor--career-download-revoke-4932.json (folded)`. The deploy tip
+sat exactly at the 2129163 ceiling. The whole raise is the PR's own edit to `js/career/career-planning-ui.js`
+(6277 B to 6628 B: the download tries `NativeDownload.saveBlob` first, and the anchor path revokes its blob URL
+after 10 s instead of 1 s). The file ships in the race entry bundle and the change is behaviour, not comments, so it stays.
+Nothing else is stacked in the raise and no tolerance was widened.
 ## 2026-11-05 — #5101 (PR #5123): raceEntryBytes +265
 Three small player-facing fixes on the race entry path: the DAILY streak reads the local calendar day (#5010), queued engineer cards age on ticked game time so a pause no longer drops them (#5068), and the ceremony podium hides a points line it has no table for (#5064). The bytes are the fixes themselves; no new module, so the boot budget is untouched.
