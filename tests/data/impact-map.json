@@ -10463,6 +10463,9 @@
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
+      "reportLap": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "reportResult": [
         "tests/unit/net-start-arming.test.mjs"
       ],
