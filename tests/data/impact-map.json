@@ -9117,6 +9117,11 @@
       "holdReleasePointer": [
         "tests/unit/key-binds-hunt.test.mjs"
       ],
+      "press": [
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "release": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9138,7 +9143,8 @@
     },
     "js/input/input.js": {
       "activeInputSource": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
       ],
       "activePad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
