@@ -21,6 +21,11 @@
  * identifier and shape, never by exact whitespace, argument order or comment
  * text. Remaining pin count: see tests/unit/assert-match-ratchet.test.mjs.
  *
+ * RESIDUAL DECLARED LINT-CLASS (#1682): the TLX/WGSL/GLSL/TSL, vendored-bundle,
+ * workflow-YAML, tool and boot-order source pins left in this file cannot run
+ * in Node (no three.js, no GPU), so they are identifier-shape lint by design
+ * and are not further converted; new behaviour coverage goes in a VM/mock test.
+ *
  * Tier-4 / stall-watchdog shed (bloom off, doBloom false): software GL composite
  * flare, exposure and drawGlow knees in post.js / glx.js — pinned in one test.
  *
