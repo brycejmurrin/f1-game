@@ -22,7 +22,7 @@ Parse: take the text between ` ```apex-result\n ` and the closing fence, `JSON.p
 | `path` | `to` webgpu / webgl2 / auto, `reload` (default true) | `{was, pinned, reloading}`; no `to` = the `render` state alone |
 | `bench` | `op` tests / start (+`test`) / stop / status / result / leg (+`i`) | BenchRun (SETTINGS > GRAPHICS > BENCHMARK) |
 | `snap` | `w` 64–640 (320), `q` start quality (0.6) | `{w, h, q, from, chars, jpeg: "data:image/jpeg;base64,…"}` |
-| `layout` | — | title-screen geometry: `{sha, w, h, dpr, vv, body:{density, shape, cls}, root:{btnw, side, uiScale, tl}, overlay, overlayPad, buttons, css:{width, max-width, justify-self, grid-column, margin-left, margin-right, translate, zoom}}` (#4862) |
+| `layout` | `try[]` (optional) 1–8 of `{width, x, size, y, side}` | with `try`: each previewed through `TitleLayout.apply` (no store write), read, then the saved layout re-applied: `{saved, rows:[{try, at}]}` (#5134). Without: title-screen geometry: `{sha, w, h, dpr, vv, body:{density, shape, cls}, root:{btnw, side, uiScale, tl}, overlay, overlayPad, buttons, css:{width, max-width, min-width, justify-self, grid-column, margin-left, margin-right, translate, zoom, display, grid-template-columns, --_tl-bw, --_tl-free, --_tl-bx, --vwz}, kids:[{id, l, w, display}], cssZoom}` (#4862) |
 | `wait` | `ms` 0–30000 | `{waited}`; for spacing steps inside a `batch` |
 | `gpuTest` | `op` start / stop / status / active | GPU TEST (`GpuTestRun`) |
 | `recorder` | `op` start / stop / isOn / json | PHONE TEST recorder |

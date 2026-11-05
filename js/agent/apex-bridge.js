@@ -230,7 +230,7 @@ const ApexBridge = (function () {
   // The title-screen geometry (#4862): what the title WIDTH / LEFT-RIGHT settings actually laid out on the device.
   // Read-only: rects of #overlay and #menu-buttons, the body's density/shape/class, --ui-scale, the cluster's zoom and
   // the computed properties the WIDTH rules write, the viewport (with visualViewport) and the build.
-  function layout() {
+  function layoutRead() {
     const d = typeof document !== "undefined" ? document : null;
     if (!d || !d.getElementById) throw new Error("no document");
     const rect = (id) => {
@@ -253,8 +253,40 @@ const ApexBridge = (function () {
         tl: pick(r, ["--tl-btns-w", "--tl-btns-x", "--tl-btns-y", "--tl-btns-size"]) } : null,
       overlay: rect("overlay"), overlayPad: pick(o, ["padding-left", "padding-right"]),
       buttons: rect("menu-buttons"),
-      css: pick(b, ["width", "max-width", "justify-self", "grid-column", "margin-left", "margin-right", "translate", "zoom"]),
+      css: pick(b, ["width", "max-width", "min-width", "justify-self", "grid-column", "margin-left", "margin-right", "translate", "zoom",
+        "display", "grid-template-columns", "--_tl-bw", "--_tl-free", "--_tl-bx", "--vwz"]),
+      // #5134: the doors inside the cluster: a cluster that widens while its doors keep their width reads as a move.
+      kids: btns && btns.children ? Array.prototype.slice.call(btns.children, 0, 8).map((k) => {
+        const kr = k.getBoundingClientRect ? k.getBoundingClientRect() : null;
+        return { id: k.id || null, l: kr ? Math.round(kr.left) : null, w: kr ? Math.round(kr.width) : null, display: (cs(k) || { getPropertyValue: () => null }).getPropertyValue("display") || null };
+      }) : null,
+      cssZoom: btns && "currentCSSZoom" in btns ? btns.currentCSSZoom : null,
     };
+  }
+  // `layout` with `try: [{width, x, size, side}…]` (#5134) previews each title layout on the page through
+  // TitleLayout.apply (tokens and attributes only, NO store write), reads it, then re-applies the saved layout. One
+  // round trip measures a whole WIDTH × LEFT/RIGHT sweep on the device without Bryce touching a slider.
+  const TRY_MAX = 8;
+  function layout(args) {
+    const tries = args && Array.isArray(args.try) ? args.try : null;
+    if (!tries) return layoutRead();
+    if (!tries.length || tries.length > TRY_MAX) throw new Error("layout.try must hold 1–" + TRY_MAX + " entries");
+    const TL = typeof TitleLayout !== "undefined" ? TitleLayout : null;
+    if (!TL || typeof TL.apply !== "function" || typeof TL.current !== "function") throw new Error("no TitleLayout");
+    const saved = TL.current();
+    const out = [];
+    try {
+      for (const t of tries) {
+        const l = JSON.parse(JSON.stringify(saved));
+        l.xUnit = "screen";
+        l.btns = Object.assign({}, l.btns);
+        for (const k of ["width", "x", "size", "y"]) if (t && typeof t[k] === "number") l.btns[k] = t[k];
+        if (t && (t.side === "swap" || t.side === "auto")) l.side = t.side;
+        TL.apply(l);
+        out.push({ try: t, at: layoutRead() });
+      }
+    } finally { TL.apply(saved); }
+    return { saved: saved.btns, rows: out };
   }
 
   // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and

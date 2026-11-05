@@ -354,3 +354,26 @@ test("layout reads the title-screen geometry the WIDTH rules wrote, read-only (#
   assert.equal(v.overlayPad["padding-right"], "8px");
   assert.equal((await load({ search: "", extra: { document: { getElementById: null } } }).api.handle({ cmd: "layout" })).ok, false);
 });
+
+test("layout try previews each title layout through TitleLayout.apply, never stores, and restores the saved one (#5134)", async () => {
+  const saved = { btns: { x: -2, y: -2, size: 91, width: 20 }, side: "auto", xUnit: "screen" };
+  const applied = [];
+  let w = 0;
+  const TitleLayout = { current: () => JSON.parse(JSON.stringify(saved)), apply: (l) => { applied.push(l); w = l.btns.width; } };
+  const btns = { getBoundingClientRect: () => ({ left: 0, top: 0, right: w * 9, bottom: 1, width: w * 9, height: 1 }), children: [] };
+  const doc = {
+    getElementById: (id) => (id === "menu-buttons" ? btns : null), documentElement: { getAttribute: () => null },
+    body: { dataset: {}, className: "" }, querySelector: () => null,
+  };
+  const getComputedStyle = () => ({ getPropertyValue: () => "" });
+  const b = load({ search: "", extra: { document: doc, getComputedStyle, TitleLayout } });
+  const r = await b.api.handle({ cmd: "layout", args: { try: [{ width: 60, x: 0 }, { width: 100, side: "swap" }] } });
+  assert.equal(r.ok, true, r.error);
+  const v = plain(r.value);
+  assert.deepEqual(v.rows.map((row) => row.at.buttons.w), [540, 900]);
+  assert.equal(applied.length, 3, "two previews, then the saved layout again");
+  assert.equal(applied[1].side, "swap");
+  assert.deepEqual(plain(applied[2]), saved);
+  assert.equal(b.store.size, 0, "no store write");
+  assert.equal((await b.api.handle({ cmd: "layout", args: { try: [] } })).ok, false);
+});
