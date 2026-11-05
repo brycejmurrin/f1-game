@@ -402,8 +402,8 @@ body.hud-prof-minimal #hud-ot { display: none !important; }
    (tests/unit/css-layers.test.mjs). */
 body.hud-prof-minimal #hud-pit { order: -1; font-size: var(--fs-3); }
 body.hud-prof-minimal #hud-pit-arrow { font-size: 2em; line-height: 1; }
-body.hud-hide-map #minimap { display: none !important; }
-body.hud-hide-gaps .hud-gaps { display: none !important; }
+body.hud-hide-map #minimap { display: none; }
+body.hud-hide-gaps .hud-gaps { display: none; }
 /* Broadcast tower takes the top-left — park map + gaps under it.
    Same --hud-top-h stack as body.hud-prof-broadcast below (measured tower
    height, not a guessed 68px). */
