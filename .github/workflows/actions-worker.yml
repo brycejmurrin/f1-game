@@ -1,4 +1,5 @@
-name: Actions worker
+name: Actions test executors
+# These workers execute admitted tests and releases; they never launch coding agents.
 on:
   workflow_dispatch:
     inputs:
@@ -22,7 +23,6 @@ jobs:
     permissions:
       contents: write
       actions: read
-      checks: write
     outputs:
       matrix: ${{ steps.claim.outputs.matrix }}
       claimed: ${{ steps.claim.outputs.claimed }}
@@ -53,6 +53,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+      actions: read
+      pull-requests: read
+      issues: read
     strategy:
       fail-fast: false
       max-parallel: 8

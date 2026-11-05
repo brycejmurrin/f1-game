@@ -12,7 +12,7 @@
     "code-nav": { "fire": ["where is updateCar defined", "who calls applyRaceSettings", "what does renaming this symbol touch"], "near": [{ "q": "find dead code in game.js", "expect": "slim-bloat" }] },
     "css-play": { "fire": ["hud font size too small", "pause menu padding off", "tap target too tiny on the button"], "near": [{ "q": "settings screen cut off on my phone", "expect": "ui-menu-a11y" }] },
     "data-hub": { "fire": ["data hub standings tab empty", "data hub shows the wrong year", "highlights loads the wrong race"], "near": [{ "q": "season points table wrong", "expect": "season-mode" }] },
-    "dispatcher": { "fire": ["why wasn't my issue picked up", "how do workers get launched", "run a dispatch plan by hand"], "near": [{ "q": "take over pr 4411", "expect": "steward" }] },
+    "dispatcher": { "fire": ["why are PR tests queued", "how do Actions runners queue tests", "run a dispatch plan by hand"], "near": [{ "q": "take over pr 4411", "expect": "steward" }] },
     "f1-animation-cameras": { "fire": ["chase camera cuts are jumpy", "replay camera snaps after a seek", "flyby camera motion looks wrong"], "near": [{ "q": "measure the chase camera lag", "expect": "playwright-probe" }] },
     "game-feel": { "fire": ["crashes feel weak", "want more shake on the kerbs", "gear shifts need more punch"], "near": [{ "q": "car feels floaty at monaco", "expect": "tune-physics" }] },
     "garage-parts-livery": { "fire": ["garage parts catalog missing a wing", "livery paint looks wrong", "sponsor logo unreadable on the car"], "near": [{ "q": "screenshot the livery in the studio", "expect": "playwright-probe" }] },

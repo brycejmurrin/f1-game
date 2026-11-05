@@ -7,13 +7,13 @@ import { main } from '../../tools/ci/actions/cli.mjs';
 import { newState, enqueue } from '../../tools/ci/actions/state.mjs';
 import { computePlanDigest } from '../../tools/ci/actions/coverage.mjs';
 import { snapshotDigest } from '../../tools/ci/actions/migration.mjs';
+import { requestFromPR } from '../../tools/ci/actions/requests.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const NOW = '2026-11-05T12:00:00Z', BASE = 'a'.repeat(40), TREE = 'b'.repeat(40);
 const response = json => ({ status: 200, json });
 function fixture({ request = () => response([]), mode = 'active' } = {}) {
   let state = newState({ mode, now: NOW }); state.migration = { stage: 'complete' };
-  state.workers = { capability: { supported: true } };
   let writes = 0;
   const store = {
     read: () => ({ state: structuredClone(state), missing: false }),
@@ -26,7 +26,6 @@ function fixture({ request = () => response([]), mode = 'active' } = {}) {
     transport: () => ({ api, store, request }), now: () => NOW, requestTime: () => NOW,
     eventContext: (_name, payload) => ({ event: { relevant: true, kind: 'reconcile' }, payload, now: NOW }),
     collectObservations: () => [], publishVerdicts: async () => {}, landNext: async () => ({ status: 'deferred' }),
-    reconcileWorkers: async () => ({ capability: { supported: true } }),
   };
   return { store, api, dependencies };
 }
@@ -51,20 +50,29 @@ test('CLI shadow manual requests do not enqueue or execute on an active ledger',
   assert.equal(result.mode, 'shadow'); assert.equal(f.store.writes, 0); assert.deepEqual(f.store.state.requests, {});
 });
 
-test('CLI persists producer hysteresis before starting a producer and admits at most one per cycle', async () => {
+test('CLI automatically admits a ready PR without labels, coding-agent services or launch secrets', async () => {
   const f = fixture();
-  f.store.update(state => {
-    state.producer.paused = true;
-    for (const number of [1, 2]) enqueue(state, { id: `issue:${number}`, kind: 'issue', number, acceptedAt: NOW, tasks: [] });
+  const pr = { number: 17, state: 'open', draft: false, labels: [], head: { sha: 'c'.repeat(40) }, base: { sha: BASE } };
+  const context = { event: { relevant: true, kind: 'pr', number: 17 }, payload: { action: 'ready_for_review', pull_request: pr },
+    issue: { number: 17, state: 'open', labels: [], pull_request: {} }, pr, events: [], now: NOW };
+  f.dependencies.eventContext = () => context;
+  f.dependencies.prepareRequest = () => ({ ...requestFromPR(pr, { now: NOW }),
+    sourceSha: 'd'.repeat(40), headSha: pr.head.sha, baseSha: BASE, treeSha: TREE,
+    coverageDigest: 'ready-plan', requiredCoverage: ['guard:one'],
+    tasks: [{ id: 'guard', kind: 'guard', runner: 'ubuntu-latest', expectedSeconds: 1, setupSeconds: 1,
+      coverageIds: ['guard:one'], prerequisites: [] }], results: {} });
+  await environment({ WORKER_FIRE_URL: undefined, WORKER_FIRE_TOKEN: undefined }, async () => {
+    const result = await main(['reconcile', '--mode', 'active', '--event', 'pull_request_target'], f.dependencies);
+    assert.ok(result.wave, 'ready PR test work is admitted automatically');
+    assert.equal(result.producer, undefined, 'test admission does not expose a coding-agent producer');
+    const stored = Object.values(f.store.state.requests)[0];
+    assert.equal(stored.kind, 'pr'); assert.equal(stored.number, 17); assert.equal(stored.draft, false);
+    assert.equal(stored.tasks[0].status, 'reserved');
+    assert.ok(Object.values(f.store.state.waves).some(wave => wave.tasks.some(task => task.requestId === stored.id)));
   });
-  let launches = 0;
-  f.dependencies.executeWorkerLaunch = async () => { launches++; assert.equal(f.store.state.producer.paused, false); return { status: 'accepted' }; };
-  await main(['reconcile', '--mode', 'active', '--event', 'schedule'], f.dependencies);
-  assert.equal(f.store.state.producer.paused, true); assert.equal(f.store.state.producer.healthyObservations, 1); assert.equal(launches, 0);
-  // A new observation, not a second phase in the same cycle, permits recovery.
-  f.store.update(state => { state.producer.observedAt = '2026-11-05T11:59:00Z'; });
-  await main(['reconcile', '--mode', 'active', '--event', 'schedule'], f.dependencies);
-  assert.equal(f.store.state.producer.paused, false); assert.equal(launches, 1);
+  const source = fs.readFileSync(path.join(ROOT, 'tools/ci/actions/cli.mjs'), 'utf8');
+  assert.doesNotMatch(source, /planWorkerLaunches|executeWorkerLaunch|reconcileWorkers|WORKER_FIRE_(?:URL|TOKEN)/,
+    'the executable CLI has no coding-agent host or retired dispatch-fire dependency');
 });
 
 test('CLI manual diagnostic intake is durable and replay does not reset age or multiply requests', async () => {
@@ -85,6 +93,27 @@ test('CLI manual diagnostic intake is durable and replay does not reset age or m
     assert.equal(stored.acceptedAt, acceptedAt); assert.equal(stored.sourceSha, sha); assert.equal(stored.baseSha, BASE);
     assert.ok(stored.tasks.length); assert.ok(stored.tasks.every(task => task.treeSha === stored.treeSha && task.planDigest === stored.planDigest));
   });
+});
+
+test('periodic PR discovery reuses the actual current base despite stale PR base metadata', async () => {
+  const head = 'c'.repeat(40), reportedBase = 'd'.repeat(40);
+  const pr = { number: 18, state: 'open', draft: false, labels: [], head: { sha: head }, base: { sha: reportedBase } };
+  const calls = [];
+  const f = fixture({ request: endpoint => {
+    calls.push(endpoint);
+    if (endpoint.startsWith('pulls?')) return response([pr]);
+    if (endpoint.startsWith('branches/')) return response({ commit: { sha: BASE } });
+    assert.fail(`an unchanged current test plan needs no extra API read: ${endpoint}`);
+  } });
+  f.store.update(state => {
+    state.controls.validation = true;
+    enqueue(state, { ...requestFromPR(pr, { now: NOW }), headSha: head, sourceSha: head, baseSha: BASE,
+      tasks: [{ id: 'guard', kind: 'guard', runner: 'ubuntu-latest', prerequisites: [], coverageIds: [] }] });
+  });
+  f.dependencies.prepareRequest = () => assert.fail('stale PR metadata must not replan the current tree');
+  await main(['reconcile', '--mode', 'active', '--event', 'schedule'], f.dependencies);
+  assert.equal(calls.length, 2);
+  assert.equal(Object.keys(f.store.state.requests).length, 1);
 });
 
 test('CLI retains a fresh rate cooldown instead of replacing it with an older saved value', async () => {
@@ -147,11 +176,10 @@ test('paused reconciliation records an owner pause without planning or launching
     author_association: 'OWNER', performed_via_github_app: null };
   fs.writeFileSync(file, JSON.stringify({ action: 'created', issue: { number: 3899 }, comment }));
   f.dependencies.prepareRequest = () => assert.fail('paused controls must not plan work');
-  f.dependencies.executeWorkerLaunch = () => assert.fail('paused controls must not launch work');
   const result = await main(['reconcile', '--mode', 'paused', '--event', 'issue_comment', '--event-file', file], f.dependencies);
   assert.equal(result.controlsRecorded, true);
-  assert.deepEqual(f.store.state.controls, { workers: true, validation: true, merges: true });
-  assert.equal(f.store.state.controlProvenance.workers.commentId, 9001);
+  assert.deepEqual(f.store.state.controls, { validation: true, merges: true });
+  assert.equal(f.store.state.controlProvenance.validation.commentId, 9001);
 });
 
 test('an approval created before the current deploy base grants no new diff authority', async () => {

@@ -13,7 +13,7 @@ your change touches → the skill that drives it.
 | # | Read | Why |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules; every flat prohibition lives there. Read all of it. |
-| 2 | [steward](../.claude/skills/steward/SKILL.md) | The PR lifecycle: reservation, draft PR, push, red and merge requests; queue protocol in ACTIONS.md. |
+| 2 | [steward](../.claude/skills/steward/SKILL.md) | The PR lifecycle: user task, draft PR, push, red and merge requests; queue protocol in ACTIONS.md. |
 | 3 | [VERIFICATION.md](VERIFICATION.md) | Edit-loop, pre-push, docs-only, CI and Pages commands and what each proves. |
 | 4 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Boot path, layer map, data flow, where to edit what. Ten minutes. |
 | 5 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module contract, the `G` façade, the loop, the three renderers. Read your directory's section. |
@@ -46,7 +46,7 @@ your change touches → the skill that drives it.
 
 | Doc | Covers |
 |---|---|
-| [ACTIONS.md](ACTIONS.md) | Three queue labels, durable reservations, command authority, runner admission and shadow/cutover policy. |
+| [ACTIONS.md](ACTIONS.md) | Two PR labels, automatic ready validation, explicit merge requests, runner capacity and shadow/cutover policy. |
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs: which `apex_*` wraps exist and why. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | The `window.__apex` dev API (generated) and the agent world view. |
 | [EVIDENCE-STORAGE.md](EVIDENCE-STORAGE.md) / [evidence/historical-catalog.json](evidence/historical-catalog.json) | Publishing captures as release assets; the reviewed historical catalog. |

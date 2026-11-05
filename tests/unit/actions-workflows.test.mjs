@@ -8,8 +8,16 @@ const SHA = 'a'.repeat(40);
 
 test('coordinator rejects taxonomy noise before allocating a runner and recovers every five minutes', () => {
   const w = read('actions-coordinator'), job = w.jobs.reconcile;
+  assert.equal(job.permissions.issues,'read');
+  assert.equal(job.permissions.checks,undefined);
+  assert.equal(job.permissions.statuses,'write');
+  assert.ok(w.on.workflow_run.workflows.includes('Actions test executors'));
+  assert.ok(read('spec-timings').on.workflow_run.workflows.includes('Actions test executors'));
   assert.equal(w.on.schedule[0].cron, '*/5 * * * *');
-  for (const name of ['queue:ready', 'queue:paused', 'queue:priority']) assert.ok(job.if.includes(name));
+  for (const name of ['queue:paused', 'queue:priority']) assert.ok(job.if.includes(name));
+  assert.equal(w.on.issues,undefined,'issue intake cannot launch work');
+  assert.ok(!job.if.includes('queue:ready'));
+  assert.match(job.if,/github.event.issue.pull_request \|\| github.event.issue.number == 3899/);
   assert.match(job.if, /startsWith\(github.event.comment.body, '\/apex '\)/);
   assert.match(job.if, /github.event_name == 'schedule'/);
   assert.deepEqual(w.concurrency, { group: 'actions-coordinator', queue: 'max', 'cancel-in-progress': false }, 'pending control commands must not be replaced by the next webhook');
@@ -18,6 +26,8 @@ test('coordinator rejects taxonomy noise before allocating a runner and recovers
   assert.equal(steps.find(s => s.uses?.startsWith('actions/checkout')).with.ref, '${{ github.workflow_sha }}');
   assert.ok(steps.filter(s => /npm (ci|install)/.test(s.run || '')).every(s => s.run.includes('--ignore-scripts')), 'protected dependency setup never runs lifecycle hooks');
   assert.ok(steps.find(s => s.env?.ACTIONS_COORDINATOR_MODE).env.ACTIONS_COORDINATOR_MODE.includes("'shadow'"));
+  assert.ok(!JSON.stringify(w).includes('WORKER_FIRE'));
+  assert.ok(!JSON.stringify(w).includes('WORKER_HOST_ADAPTER'));
 });
 
 test('worker claims canonical reservations with write permission and executes mixed PR tasks with read permission only', () => {
@@ -25,7 +35,9 @@ test('worker claims canonical reservations with write permission and executes mi
   assert.equal(w.jobs.claim.permissions.contents, 'write');
   assert.deepEqual(w.jobs.claim.concurrency, {group:'actions-claim',queue:'max'});
   assert.match(w.jobs.claim.if, /github.ref == 'refs\/heads\/claude\/f1-game-project-26h3ng'/);
-  assert.deepEqual(w.jobs.execute.permissions, { contents: 'read' });
+  assert.deepEqual(w.jobs.execute.permissions, { contents: 'read', actions: 'read', 'pull-requests': 'read', issues: 'read' });
+  assert.equal(w.name,'Actions test executors');
+  assert.equal(w.jobs.claim.permissions.checks,undefined);
   assert.equal(w.jobs.publish.permissions.contents, 'write');
   assert.equal(w.jobs.publish.steps.filter(s => s.uses?.startsWith('actions/checkout')).length, 1);
   assert.equal(w.jobs.publish.steps.find(s => s.uses?.startsWith('actions/checkout')).with.ref, '${{ github.workflow_sha }}');
@@ -48,7 +60,11 @@ test('worker claims canonical reservations with write permission and executes mi
 });
 
 test('cutover guards legacy executors, preserves Pages readonly reusable permissions and prerequisite barriers', () => {
-  for (const name of ['dispatch', 'land']) for (const job of Object.values(read(name).jobs)) assert.match(job.if, /ACTIONS_COORDINATOR_MODE != 'active'/);
+  const retired=read('dispatch');
+  assert.deepEqual(Object.keys(retired.on),['workflow_dispatch']);
+  assert.ok(Object.values(retired.jobs).every(job=>job.if==='${{ false }}'));
+  assert.ok(!JSON.stringify(retired).includes('--fire'));
+  for (const job of Object.values(read('land').jobs)) assert.match(job.if, /ACTIONS_COORDINATOR_MODE != 'active'/);
   const ci = read('ci');
   assert.equal(ci.jobs['request-admission'], undefined, 'a skipped write job still invalidates a readonly reusable caller');
   assert.match(ci.jobs['ci-verdict'].name, /Legacy validation \(retired\)/, 'a skipped retired executor must not publish the required CI name');

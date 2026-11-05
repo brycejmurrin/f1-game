@@ -44,7 +44,7 @@ on:
     # queued in the one-at-a-time group below, AFTER the `branches:` filter
     # was added. The train runs on the deploy branch by construction and is
     # the one gate that runs the whole smoke suite, so it is the record.
-    workflows: ["Deploy to GitHub Pages", "Actions worker"]
+    workflows: ["Deploy to GitHub Pages", "Actions test executors"]
     types: [completed]
     # FILTERED AT THE TRIGGER, not only by the job's `if:` (2026-09-29). Every
     # PR's CI run fired this workflow and the job then skipped: 354 runs in

@@ -1,7 +1,7 @@
-// dispatch — the Actions dispatcher's pure plan (tools/ci/dispatch.mjs planDispatch) over fixture GitHub state:
+// Retired dispatch — the historical dispatcher's pure plan (tools/ci/dispatch.mjs planDispatch) over fixture GitHub state:
 // ready-issue launches and their one-line addresses, provenance-gated priority / pause, the per-run, per-day and live
 // caps, claims, stale PRs → needs-owner + CONTINUE, codex 6 h, hold, deploy red, nudges as PR comments, needs-decision
-// digests and clearing, the Board markdown, and the fire path with a stubbed fetch (claim only after a 200). No network.
+// digests and clearing and Board markdown. Launch and mutating CLI paths are retired with zero credential/HTTP access.
 // Every check is an exact equality on the produced string (no regex pins: the assertPins ratchet counts those).
 import fs from "node:fs";
 import test from "node:test";
@@ -241,56 +241,28 @@ test("ready issues with an open PR closing them, or an open prerequisite, do not
   assert.deepEqual(skips(planDispatch(state({ prs: [stale(40, { labels: ["needs-owner"], commits: [c("Cursor Agent", 1)] })] }), cfg(), NOW)), ["PR #40: stale 3h but foreign activity (a commit by Cursor Agent 1h ago): no takeover"]);
 });
 
-test("apply: labels, digests, nudges and the Board go through the client; without --fire every launch prints LAUNCH <address> and `= fire skipped: --fire not given`", async () => {
-  const calls = [], out = [];
-  const api = (p, o = {}) => {
-    calls.push(`${o.method || "GET"} ${p}`);
-    if (p === "issues/1/comments?per_page=100&page=1") return { json: [{ id: 9, body: `${BOARD_MARKER}\nold` }] };
-    return { json: {} };
-  };
-  const asked = { author: "brycejmurrin", body: "which?", created_at: ago(1), performed_via_github_app: APP };
-  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { updated_at: ago(3) }), pr(21, { updated_at: ago(1) }),
-    pr(22, { labels: ["needs-decision"], events: [ev("needs-decision", 1, { app: APP })], comments: [asked] })] }), cfg(), NOW);
-  const r = await applyPlan(p, { api, config: cfg(), log: (s) => out.push(s), now: NOW });
-  assert.deepEqual(calls, ["POST issues/20/labels", "POST issues/22/comments", "POST issues/21/comments", "GET issues/1/comments?per_page=100&page=1", "PATCH issues/comments/9",
-    "GET pulls/20", "GET pulls/20/commits?per_page=30", "GET issues/10"], "the re-check reads the PR, its commits and the issue right before each LAUNCH line");
-  assert.deepEqual(r, { writes: 4, fired: 0 });
-  assert.deepEqual(out, ["LAUNCH CONTINUE PR 20  ([Worker] CONTINUE PR #20 PR 20)", "= fire skipped: --fire not given", "LAUNCH ISSUE 10  ([Worker] #10 Task 10)", "= fire skipped: --fire not given"]);
+test("retired apply export performs no API reads, writes, credentials or HTTP", async () => {
+  const options = new Proxy({}, { get: () => assert.fail("retired mutator must not inspect capabilities") });
+  assert.deepEqual(await applyPlan({ launches: [{}], labels: [{}], nudges: [{}] }, options), { writes: 0, fired: 0, skipped: "retired" });
 });
 
-test("fire: the POST carries the bearer token, anthropic-version and {text: address}; a 200 posts the claim naming the session (and adopts a CONTINUE); non-200 posts nothing; unset env is skipped", async () => {
-  const env = { WORKER_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_abc/fire", WORKER_FIRE_TOKEN: "sk-ant-oat01-test" };
+test("retired fire entrypoint never reads credentials or performs HTTP", async () => {
+  const env = new Proxy({}, { get: () => assert.fail("no credential access") });
   const requests = [];
-  const respond = (status, body, headers = {}) => async (url, init) => { requests.push({ url, init }); return { status, json: async () => body, headers: { get: (k) => headers[k.toLowerCase()] || null } }; };
-  const ok = respond(200, { type: "routine_fire", claude_code_session_id: SID, claude_code_session_url: `https://claude.ai/code/${SID}` });
-  assert.deepEqual(await fireWorker("ISSUE 10", { env, fetchImpl: ok }), { status: 200, session: SID, url: `https://claude.ai/code/${SID}` });
-  assert.equal(requests[0].url, env.WORKER_FIRE_URL);
-  assert.deepEqual(requests[0].init, { method: "POST", headers: { Authorization: "Bearer sk-ant-oat01-test", "anthropic-version": ANTHROPIC_VERSION, "Content-Type": "application/json" }, body: '{"text":"ISSUE 10"}' });
-  assert.deepEqual(await fireWorker("ISSUE 10", { env: {}, fetchImpl: ok }), { skipped: "WORKER_FIRE_URL unset" });
-  assert.deepEqual(await fireWorker("ISSUE 10", { env: { WORKER_FIRE_URL: env.WORKER_FIRE_URL }, fetchImpl: ok }), { skipped: "WORKER_FIRE_TOKEN unset" });
-  assert.deepEqual(await fireWorker("ISSUE 10", { env, fetchImpl: respond(429, { type: "error", error: { type: "rate_limit_error", message: "hourly fire limit" } }, { "retry-after": "120" }) }),
-    { status: 429, error: "hourly fire limit", retryAfter: "120" });
-  assert.deepEqual(await fireWorker("ISSUE 10", { env, fetchImpl: respond(200, { type: "routine_fire" }) }), { status: 200, error: "200 without a claude_code_session_id" });
-  assert.deepEqual(await fireWorker("ISSUE 10", { env, fetchImpl: async () => { throw new Error("ECONNRESET"); } }), { status: 0, error: "ECONNRESET" });
-  // applyPlan: the claim comment only after a 200; a CONTINUE also drops needs-owner and posts the adoption.
+  assert.deepEqual(await fireWorker("ISSUE 10", { env, fetchImpl: (...args) => requests.push(args) }),
+    { skipped: "retired: coding-agent launches are outside the PR/test queue" });
+  assert.deepEqual(requests, []);
   const writes = [], out = [];
-  const api = (p, o) => { if (o?.method) writes.push(`${o.method} ${p}${o.body?.body ? " " + o.body.body : ""}`); return { json: {} }; };
-  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(20, { labels: ["needs-owner"], updated_at: ago(0.1) })] }), cfg(), NOW);
-  let n = 0;
-  const flaky = async (url, init) => (n++ === 0 ? ok(url, init) : respond(503, { type: "error", error: { type: "overloaded_error", message: "overloaded" } })(url, init));
-  const r = await applyPlan(p, { api, config: cfg(), log: (s) => out.push(s), now: NOW, fire: true, env, fetchImpl: flaky });
-  assert.deepEqual(r, { writes: 3, fired: 1 }, "the Board, the claim and the adoption");
-  assert.deepEqual(writes.filter((w) => !w.startsWith("PATCH") && !w.includes("issues/1/comments")),
-    [`POST issues/20/comments dispatch: launched claude:[Worker] CONTINUE PR #20 PR 20 for #20 at ${ISO} as ${SID}`, "DELETE issues/20/labels/needs-owner",
-      `POST issues/20/comments adopts PR #20 — claude:${SID} (posted by the dispatcher when it launched the takeover)`], "no claim for the refused ISSUE 10 fire");
-  assert.deepEqual(out.filter((l) => l.startsWith("=") && !l.startsWith("= board")),
-    [`= launched CONTINUE PR 20 as ${SID} https://claude.ai/code/${SID}`, "= needs-owner removed from #20", "= fire failed 503 overloaded"]);
-  const skipped = [];
-  await applyPlan(p, { api: () => ({ json: {} }), config: cfg(), log: (s) => skipped.push(s), now: NOW, fire: true, env: {}, fetchImpl: ok });
-  assert.deepEqual(skipped.filter((l) => l.startsWith("= fire")), ["= fire skipped: WORKER_FIRE_URL unset", "= fire skipped: WORKER_FIRE_URL unset"]);
+  const api = (path, options) => { if (options?.method) writes.push([path, options]); return { json: {} }; };
+  const plan = planDispatch(state({ issues: [board(), issue(10, ["ready"])] }), cfg(), NOW);
+  const result = await applyPlan(plan, { api, config: cfg(), now: NOW, log: line => out.push(line), fire: true, env, fetchImpl: () => assert.fail("no HTTP") });
+  assert.equal(result.fired, 0);
+  assert.ok(!writes.some(([, options]) => /dispatch: launched|adopts PR/.test(options.body?.body || "")), "retirement cannot create a phantom coder claim");
+  assert.deepEqual(writes, []);
+  assert.equal(result.skipped, "retired");
 });
 
-test("finding 7: a merged or closed PR, a closed issue, or a non-Claude push inside 60 min is refused right before the fire, and applyPlan says why", async () => {
+test("historical launch rechecks stay read-only while the mutating export remains retired", async () => {
   const recheckApi = (pull, commits = [], issueState = "open") => (p) => p.startsWith("pulls/20/commits") ? { json: commits } : p.startsWith("pulls/") ? { json: pull } : { json: { state: issueState } };
   const cont = { kind: "continue", number: 20 }, iss = { kind: "issue", number: 10 };
   const commitBy = (author, h) => ({ author: { login: author }, commit: { committer: { date: ago(h) } } });
@@ -305,7 +277,7 @@ test("finding 7: a merged or closed PR, a closed issue, or a non-Claude push ins
   const p = planDispatch(state({ prs: [pr(20, { updated_at: ago(3) })] }), cfg(), NOW);
   const out = [];
   await applyPlan(p, { api: (path, o) => (o ? { json: {} } : path.startsWith("pulls/20") ? { json: { state: "closed", merged_at: ISO } } : { json: [] }), config: cfg(), log: (x) => out.push(x), now: NOW, fire: true, env: { WORKER_FIRE_URL: "x", WORKER_FIRE_TOKEN: "y" }, fetchImpl: () => assert.fail("no fire") });
-  assert.deepEqual(out.filter((x) => !x.startsWith("= board")), ["= launch skipped for continue #20: PR #20 is merged"]);
+  assert.deepEqual(out, [], "retired apply produces no legacy wakeup or launch");
 });
 
 test("readState paginates issues, PRs and comments; fetches label events only for provenance labels; reads the newest COMPLETED train and its run id", () => {
@@ -346,7 +318,7 @@ test("readState paginates issues, PRs and comments; fetches label events only fo
   assert.deepEqual(getAll(() => ({ json: { check_runs: [{ id: 1 }] } }), "commits/x/check-runs", { pick: (j) => j.check_runs }), [{ id: 1 }]);
 });
 
-test("main: --plan prints the plan lines, the Board and a summary; --apply --fire reads WORKER_FIRE_* from env; usage errors exit 1; an API error exits 3", async () => {
+test("legacy CLI --plan remains read-only while --apply/--fire refuse before any reads or writes", async () => {
   const api = (p, o) => {
     if (o?.method) return { json: { id: 1 } };
     if (p.startsWith("issues?state=open")) return { json: p.endsWith("page=1") ? [{ number: 1, title: "Board", labels: [], body: "" }, { number: 10, title: "T", labels: [{ name: "ready" }], body: "x", updated_at: ago(1) }] : [] };
@@ -360,10 +332,12 @@ test("main: --plan prints the plan lines, the Board and a summary; --apply --fir
   const json = [];
   await main(["--plan", "--json"], { api, log: (x) => json.push(x), read: () => "{}", now: () => NOW });
   assert.equal(JSON.parse(json[0]).launches[0].address, "ISSUE 10");
-  const fired = [];
-  const fetchImpl = async () => ({ status: 200, json: async () => ({ claude_code_session_id: SID }), headers: { get: () => null } });
-  assert.equal(await main(["--apply", "--fire"], { api, log: (x) => fired.push(x), read: () => "{}", now: () => NOW, env: { WORKER_FIRE_URL: "u", WORKER_FIRE_TOKEN: "t" }, fetchImpl }), 0);
-  assert.equal(fired.at(-1), "= dispatch applied: 1 launches planned, 1 fired, 0 digests, 0 nudges, 2 GitHub writes");
+  for (const args of [["--apply"], ["--fire"], ["--apply", "--fire"], ["--plan", "--fire"], ["--apply=true"]]) {
+    const output = [];
+    assert.equal(await main(args, { api: () => assert.fail("no GitHub access"), read: () => assert.fail("no config access"),
+      env: new Proxy({}, { get: () => assert.fail("no credential access") }), fetchImpl: () => assert.fail("no HTTP"), log: line => output.push(line) }), 1);
+    assert.ok(output[0].includes("retired"));
+  }
   assert.equal(await main(["--plan", "--apply"], { api, log: () => {}, read: () => "{}" }), 1);
   assert.equal(await main(["--plan", "--now", "yesterday"], { api, log: () => {}, read: () => "{}" }), 1);
   assert.equal(await main(["--plan"], { api: () => ({ error: "HTTP 500" }), log: () => {}, read: () => "{}" }), 3);

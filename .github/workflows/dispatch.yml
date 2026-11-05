@@ -1,72 +1,15 @@
-name: Dispatch
-
-# THE DISPATCHER IS THIS ACTION (docs/plans/2026-11-03-agent-surface-reset.md §4.1). Hourly and on the events that
-# change what a worker should do, it runs tools/ci/dispatch.mjs from the DEPLOY branch's checkout: labels, the Board
-# comment, needs-decision digests and nudges with its own GITHUB_TOKEN, and one HTTP fire of Bryce's "Apex worker"
-# scheduled task per launch (routines-fire: https://platform.claude.com/docs/en/api/claude-code/routines-fire,
-# read 2026-11-03). The two secrets are the task's own API-trigger URL and token (tools/ci/worker-prompt.md).
-#
-# Trust model, in five lines:
-# 1. `ref:` pins the deploy branch, so a PR's edit of dispatch.mjs or this file never runs here before it lands.
-# 2. `pull_request` (never pull_request_target): a fork's run gets a read-only token and its writes fail closed.
-# 3. The job skips runs the bot caused itself (its labels and comments), so a write never re-triggers a cycle.
-# 4. Only the deploy branch's checkout runs; no npm install, no PR code, no browser: node builtins + repo libs.
-# 5. One concurrency group, never cancelled: two overlapping events serialise instead of double-launching.
-
+name: Dispatch (retired)
+# Implementation-agent dispatch is retired in every mode. This file exists only
+# to make an accidental/manual invocation visibly inert during queue migration.
 on:
-  schedule:
-    - cron: "17 * * * *"
-  issues:
-    types: [labeled, unlabeled, closed, reopened]
-  pull_request:
-    types: [labeled, unlabeled, closed, ready_for_review, converted_to_draft]
-  check_suite:
-    types: [completed]
-  # zizmor: ignore[dangerous-triggers] the comment body is never interpolated or run: dispatch.mjs reads it as data over REST, from the deploy branch's own checkout
-  issue_comment:
-    types: [created]
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "plan prints the plan as JSON and writes nothing; apply writes labels, the Board and fires workers"
-        type: choice
-        options: [plan, apply]
-        default: plan
-
-concurrency:
-  group: dispatch
-  cancel-in-progress: false
-
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
-  actions: read
-
 jobs:
   dispatch:
-    name: Dispatch cycle
-    if: ${{ (vars.ACTIONS_COORDINATOR_MODE != 'active' && vars.ACTIONS_COORDINATOR_MODE != 'paused') && (github.actor != 'github-actions[bot]') }}
+    name: Implementation-agent launch retired
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 1
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: claude/f1-game-project-26h3ng
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      - name: Plan or apply
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          WORKER_FIRE_URL: ${{ secrets.WORKER_FIRE_URL }}
-          WORKER_FIRE_TOKEN: ${{ secrets.WORKER_FIRE_TOKEN }}
-          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
-        run: |
-          set -euo pipefail
-          if [ "$MODE" = plan ]; then
-            node tools/ci/dispatch.mjs --plan --json
-          else
-            node tools/ci/dispatch.mjs --apply --fire
-          fi
+      - run: echo 'This workflow is retired; only PR test executors are managed.'

@@ -1,12 +1,13 @@
-# Workers
+# Actions test executors and native implementation agents
 
-The implementation contract is `.claude/skills/steward/SKILL.md` §Lane. Queue labels, reservations, command
-provenance, validation capacity and shadow/cutover behavior are defined in `docs/ACTIONS.md`. The PR Hand-off
-format is `.github/pull_request_template.md`; host notes are in steward's `references/vendors.md`.
+The Actions coordinator schedules PR validation, diagnostics, releases and requested merges. It never launches
+coding agents, assigns issue work or manages coding-session leases. Ready PRs queue validation automatically;
+merging still requires explicit `/apex merge` and complete trusted evidence. See `docs/ACTIONS.md`.
 
-A worker cannot self-claim through labels/comments, publish required gate success, merge or publish a release.
-Use the trusted reservation identity and preserve the head, evidence and next step for a successor.
+GitHub Actions test executors claim persisted attempt reservations and run with read-only repository permissions.
+Only trusted finalization may publish gate success; merge and release credentials remain separate. Missing or
+cancelled tasks do not satisfy required coverage. `tools/ci/worker-prompt.md` documents this execution boundary.
 
-Implementation dispatch stays disabled until a trusted host adapter can authenticate startup and observe the exact
-session lifecycle. Pending startup waits for native resume after trusted binding; never fire another worker to
-resolve an in-flight response. See `docs/ACTIONS.md` and the saved `tools/ci/worker-prompt.md`.
+Native implementation subagents are permitted for a user-authorized task and explicit parent brief. They follow
+`.claude/agents/worker.md`, skill `steward` and `.github/pull_request_template.md`; their coding scope is independent
+of test reservations. `/apex recover` repairs PR test infrastructure and cannot launch a coding successor.

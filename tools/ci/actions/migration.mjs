@@ -1,4 +1,4 @@
-// @doc Export legacy labels and import explicit, idempotent queue and batch migration state.
+// @doc Export every legacy label attachment and import only PR test/merge queue controls.
 /** Label reset: pure planning and injected, checkpointed transport. Never mutates on export or plan. */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -30,13 +30,13 @@ export async function exportSnapshot({ request, repo = 'brycejmurrin/f1-game', n
   const labels = await pages(request, 'labels');
   const items = await pages(request, 'issues?state=all&sort=created&direction=asc');
   if (new Set(labels.map(l => l.name)).size !== labels.length || new Set(items.map(i => i.number)).size !== items.length) throw new Error('Duplicate pagination entries; snapshot cannot be complete');
-  for (const item of items.filter(i => i.state === 'open' || i.number === 3899)) {
+  for (const item of items.filter(i => (i.state === 'open' && i.pull_request) || i.number === 3899)) {
     item.controlEvents = await pages(request, `issues/${item.number}/events`);
-    item.ownershipComments = await pages(request, `issues/${item.number}/comments`);
+    item.controlComments = await pages(request, `issues/${item.number}/comments`);
     if (item.pull_request) item.pullRequest = await read(request, `pulls/${item.number}`);
-    else item.nativeBlockedBy = await pages(request, `issues/${item.number}/dependencies/blocked_by`);
+
   }
-  const snapshot = { schema: MIGRATION_SCHEMA, repo, capturedAt: now, complete: true, nativeDependenciesComplete: true, labels, items, expectedCounts };
+  const snapshot = { schema: MIGRATION_SCHEMA, repo, capturedAt: now, complete: true, labels, items, expectedCounts };
   // Avoid undefined fields in the digest: persisted JSON and in-memory exports must have identical identity.
   const serializable = JSON.parse(JSON.stringify(snapshot));
   serializable.digest = snapshotDigest(serializable);
@@ -47,7 +47,6 @@ export async function exportSnapshot({ request, repo = 'brycejmurrin/f1-game', n
 /** Full read-only refresh before any delete; a stale export must be redone, not silently accepted. */
 export async function verifySnapshotCurrent({ request, snapshot } = {}) {
   validateSnapshot(snapshot);
-  if (!snapshot.nativeDependenciesComplete) throw new Error('Snapshot lacks complete native dependency evidence; export again');
   const current = await exportSnapshot({ request, repo: snapshot.repo });
   const normalize = source => ({
     repo: source.repo,
@@ -56,25 +55,12 @@ export async function verifySnapshotCurrent({ request, snapshot } = {}) {
       number: item.number, state: item.state, body: item.body || '', title: item.title || '',
       labels: names(item).sort(), assignees: (item.assignees || []).map(a => a.login).sort(),
       controlEvents: [...(item.controlEvents || [])].sort((a, b) => (a.id || 0) - (b.id || 0)),
-      ownershipComments: [...(item.ownershipComments || [])].sort((a, b) => (a.id || 0) - (b.id || 0)),
-      nativeBlockedBy: [...(item.nativeBlockedBy || [])].map(d => ({ number: d.number, state: d.state, repository_url: d.repository_url || null })).sort((a, b) => a.number - b.number),
+      controlComments: [...(item.controlComments || [])].sort((a, b) => (a.id || 0) - (b.id || 0)),
       pullRequest: item.pull_request ? { head: item.pullRequest?.head?.sha || null, base: item.pullRequest?.base?.sha || null, draft: item.pullRequest?.draft ?? null } : null,
     })).sort((a, b) => a.number - b.number),
   });
-  if (JSON.stringify(canonical(normalize(snapshot))) !== JSON.stringify(canonical(normalize(current)))) throw new Error('Snapshot stale: labels, attachments, active controls, ownership or native dependencies changed; export again before deletion');
+  if (JSON.stringify(canonical(normalize(snapshot))) !== JSON.stringify(canonical(normalize(current)))) throw new Error('Snapshot stale: labels, attachments, active PR controls or source metadata changed; export again before deletion');
   return { verified: true, snapshotDigest: snapshot.digest, checkedAt: current.capturedAt, currentDigest: current.digest };
-}
-
-export function parseMembers(body = '') {
-  const match = /^##\s+Members\s*\r?\n([\s\S]*?)(?=^#{1,2}\s|$(?![\s\S]))/im.exec(body);
-  if (!match) return null;
-  const members = [];
-  for (const line of match[1].split(/\r?\n/)) {
-    const m = /^\s*[-*]\s+(?:\[[ xX]\]\s*)?(?:#(\d+)\b|\[[^\]]*\]\(https:\/\/github\.com\/[^/]+\/[^/]+\/(?:issues|pull)\/(\d+)\))/.exec(line);
-    if (m) members.push(Number(m[1] || m[2]));
-  }
-  if (new Set(members).size !== members.length) throw new Error('Duplicate Members entry');
-  return members;
 }
 
 export function importSnapshot(input) {
@@ -91,85 +77,50 @@ function validateSnapshot(snapshot) {
   for (const item of snapshot.items) for (const label of names(item)) if (!defined.has(label)) throw new Error(`Unknown attached label ${label}`);
 }
 
-/** Consume only explicit Members lists. References elsewhere never imply membership or hard dependencies. */
-export function planMigration(snapshot, { labels = JSON.parse(readFileSync(new URL('../../../.github/labels.json', import.meta.url), 'utf8')), expectedCounts = snapshot.expectedCounts, owner = snapshot.repo.split('/')[0], parentNumbers = [] } = {}) {
+/** Import only PR queue/control intent. Legacy implementation metadata stays solely in the backup. */
+export function planMigration(snapshot, { labels = JSON.parse(readFileSync(new URL('../../../.github/labels.json', import.meta.url), 'utf8')), expectedCounts = snapshot.expectedCounts, owner = snapshot.repo.split('/')[0] } = {}) {
   validateSnapshot(snapshot);
-  const required = ['queue:ready', 'queue:paused', 'queue:priority'];
-  if (labels.length !== 3 || required.some(n => !labels.some(l => l.name === n))) throw new Error('Policy must define exactly the three queue labels');
-  const byNumber = new Map(snapshot.items.map(i => [i.number, i]));
-  const parents = [], membership = new Map();
-  for (const item of snapshot.items) {
-    if (item.number === 4915 || item.state !== 'open' || (!names(item).includes('batch') && !parentNumbers.includes(item.number))) continue; // archive historical sections; only registered active batches define work
-    const members = parseMembers(item.body);
-    if (members === null) continue;
-    if (!members.length) throw new Error(`Empty Members section #${item.number}`);
-    parents.push(item.number);
-    for (const member of members) {
-      if (!byNumber.has(member) || member === 4915 || member === item.number || membership.has(member)) throw new Error(`Invalid or duplicate member #${member}`);
-      membership.set(member, item.number);
-    }
-  }
-  if (parents.some(n => membership.has(n))) throw new Error('Parent cannot also be a member');
-  const counts = { labels: snapshot.labels.length, parents: parents.length, members: membership.size };
-  for (const [key, value] of Object.entries(expectedCounts || {})) if (counts[key] !== value) throw new Error(`Expected ${key}=${value}, observed ${counts[key]}`);
-  // Legacy global controls outlive removal by automation or another worker.
-  // Missing provenance can retain a pause, but can never authorize clearing one.
+  const required = ['queue:paused', 'queue:priority'];
+  if (labels.length !== 2 || required.some(name => !labels.some(label => label.name === name))) throw new Error('Policy must define exactly the two PR queue labels');
+  const controls = { validation: false, merges: false }, controlProvenance = {};
   const controlIssue = snapshot.items.find(item => item.number === 3899);
-  const controls = { workers: false, validation: false, merges: false };
-  const controlProvenance = {};
-  for (const [label, scope] of [['dispatch:pause', 'workers'], ['dispatch:merge-pause', 'merges']]) {
-    let paused = names(controlIssue || {}).includes(label);
-    const events = (controlIssue?.controlEvents || []).filter(event => ['labeled', 'unlabeled'].includes(event.event) && event.label?.name === label);
-    for (const event of events) {
-      if (event.event === 'labeled') paused = true;
-      else if (event.actor?.login === owner && Object.hasOwn(event, 'performed_via_github_app') && event.performed_via_github_app === null) paused = false;
-    }
-    controls[scope] = paused;
-    if (paused) controlProvenance[scope] = { source: 'legacy-label', issue: 3899, label, paused: true, event: events.at(-1) || null };
+  const mergeEvents = (controlIssue?.controlEvents || []).filter(event => ['labeled', 'unlabeled'].includes(event.event) && event.label?.name === 'dispatch:merge-pause');
+  let mergePause = names(controlIssue || {}).includes('dispatch:merge-pause');
+  for (const event of mergeEvents) {
+    if (event.event === 'labeled') mergePause = true;
+    else if (event.actor?.login === owner && Object.hasOwn(event, 'performed_via_github_app') && event.performed_via_github_app === null) mergePause = false;
   }
-  const records = snapshot.items.filter(i => i.state === 'open' && i.number !== 4915).map(item => {
-    const legacyLabels = names(item), comments = item.ownershipComments || [], events = item.controlEvents || [];
-    const claims = comments.filter(c => /\bclaims\s+#\d+\b/i.test(c.body || ''));
-    const claimed = legacyLabels.includes('claimed') || claims.length > 0 || (item.assignees || []).length > 0 || legacyLabels.some(l => l.startsWith('lane:'));
-    const holdEvents = events.filter(e => ['labeled', 'unlabeled'].includes(e.event) && e.label?.name === 'hold');
+  controls.merges = mergePause;
+  if (mergePause) controlProvenance.merges = { source: 'legacy-label', issue: 3899, label: 'dispatch:merge-pause', paused: true, event: mergeEvents.at(-1) || null };
+  const records = snapshot.items.filter(item => item.state === 'open' && item.pull_request).map(item => {
+    const legacyLabels = names(item), events = item.controlEvents || [];
     let held = legacyLabels.includes('hold');
-    for (const e of holdEvents) if (e.event === 'labeled') held = true; else if (e.actor?.login === owner && Object.hasOwn(e, 'performed_via_github_app') && e.performed_via_github_app === null) held = false;
-    const conditional = /(?:\bonly\s+if\b|\bconditional\s+(?:on|merge|dependency|prerequisite)\b|\bif\s+#\d+[^\n]*(?:merges?|lands?)\b|\bmerge\s+order[^\n]*(?:unclear|undecided|conditional)\b)/i.test(item.body || '');
-    const nativeBlockedBy = item.nativeBlockedBy || [];
-    const textDependencies = [...(item.body || '').matchAll(/^\s*(?:[-*]\s*)?Blocked by\s+#(\d+)\s*\.?\s*$/gim)].map(m => Number(m[1]));
-    const dependencies = [...new Set([...textDependencies, ...nativeBlockedBy.map(d => d.number)])];
-    const foreignDependency = nativeBlockedBy.some(d => d.repository_url && !d.repository_url.endsWith(`/repos/${snapshot.repo}`));
-    const unknownDependency = foreignDependency || dependencies.some(n => !byNumber.has(n));
-    const blocked = foreignDependency || dependencies.some(n => byNumber.get(n)?.state !== 'closed');
-    const priorityEvent = events.filter(e => ['labeled', 'unlabeled'].includes(e.event) && e.label?.name === 'priority').at(-1);
-    const priority = legacyLabels.includes('priority') && priorityEvent?.event === 'labeled' && priorityEvent.actor?.login === owner && Object.hasOwn(priorityEvent, 'performed_via_github_app') && priorityEvent.performed_via_github_app === null;
-    const reasons = [...(held ? ['sticky-hold'] : []), ...(claimed ? ['existing-owner'] : []), ...(conditional || unknownDependency ? ['migration-review'] : []), ...(blocked ? ['dependency'] : []), ...legacyLabels.filter(l => ['blocked', 'needs-decision', 'dispatch:pause', 'dispatch:merge-pause'].includes(l)).map(l => `legacy:${l}`)];
-    const intended = membership.has(item.number) || parents.includes(item.number) || !!item.pull_request || legacyLabels.includes('ready') || claimed;
-    const paused = reasons.length > 0 || legacyLabels.some(l => ['blocked', 'needs-decision', 'dispatch:pause', 'dispatch:merge-pause'].includes(l));
-    return { number: item.number, kind: item.pull_request ? 'pr' : 'issue', state: item.state, parent: membership.get(item.number) || null, isParent: parents.includes(item.number), intended, claimed, pauseOwner: held || legacyLabels.includes('needs-decision'), owners: (item.assignees || []).map(a => a.login), ownershipComments: claims, legacyLabels, legacyLand: legacyLabels.includes('land'), controlEvents: events,
-      acceptedAt: events.find(e => e.event === 'labeled' && e.label?.name === 'ready')?.created_at || item.created_at || snapshot.capturedAt,
-      sourceSha: item.pullRequest?.head?.sha || null, baseSha: item.pullRequest?.base?.sha || null,
-      nativeBlockedBy, priorityProvenance: priorityEvent || null, dependencies, paused, pauseReasons: reasons, queueLabels: intended ? [paused ? 'queue:paused' : 'queue:ready', ...(priority ? ['queue:priority'] : [])] : [] };
-  });
-  for (const parent of records.filter(record => record.isParent)) {
-    const members = [...membership].filter(([, number]) => number === parent.number).map(([member]) => member);
-    parent.memberStates = Object.fromEntries(members.map(number => [number, byNumber.get(number).state]));
-    const blockedMembers = records.filter(record => members.includes(record.number) && (record.claimed || record.paused));
-    if (blockedMembers.length) {
-      parent.paused = true;
-      parent.pauseReasons.push(...blockedMembers.map(member => `batch-member:${member.number}`));
-      parent.queueLabels = parent.queueLabels.map(label => label === 'queue:ready' ? 'queue:paused' : label);
+    for (const event of events.filter(event => ['labeled', 'unlabeled'].includes(event.event) && event.label?.name === 'hold')) {
+      if (event.event === 'labeled') held = true;
+      else if (event.actor?.login === owner && Object.hasOwn(event, 'performed_via_github_app') && event.performed_via_github_app === null) held = false;
     }
-  }
-  const requests = records.filter(r => r.intended).map(record => ({
-    id: record.kind === 'pr' ? `pr:${record.number}:${record.sourceSha || 'unverified'}` : `issue:${record.number}`,
-    kind: record.kind, number: record.number, sourceSha: record.sourceSha, baseSha: record.baseSha, treeSha: null,
-    acceptedAt: record.acceptedAt, priority: record.queueLabels.includes('queue:priority'), paused: true,
-    tasks: [], results: {}, members: [...membership].filter(([, parent]) => parent === record.number).map(([member]) => member),
-    owner: record.claimed ? { kind: 'legacy-unverified', terminal: false, evidence: { snapshotDigest: snapshot.digest, labels: record.legacyLabels, commentIds: record.ownershipComments.map(comment => comment.id).filter(Boolean), assignees: record.owners } } : null, pauseOwner: record.pauseOwner, mergeRequested: record.legacyLand, memberStates: record.memberStates || {},
-    blockers: [...record.pauseReasons, ...(record.claimed ? ['live-ownership-unverified'] : []), ...(record.kind === 'pr' && !record.sourceSha ? ['pr-head-unverified'] : [])],
+    const paused = held || legacyLabels.includes('needs-decision') || legacyLabels.includes('queue:paused');
+    const priorityEvent = events.filter(event => ['labeled', 'unlabeled'].includes(event.event) && ['priority', 'queue:priority'].includes(event.label?.name)).at(-1);
+    const priority = legacyLabels.some(name => ['priority', 'queue:priority'].includes(name)) && priorityEvent?.event === 'labeled' && priorityEvent.actor?.login === owner && Object.hasOwn(priorityEvent, 'performed_via_github_app') && priorityEvent.performed_via_github_app === null;
+    const draft = item.pullRequest?.draft ?? item.draft ?? true;
+    return { number: item.number, kind: 'pr', state: 'open', intended: true, draft, paused,
+      pauseOwner: held || legacyLabels.includes('needs-decision'), priority, legacyLabels,
+      legacyLand: legacyLabels.includes('land'), ready: !draft, mergeRequested: legacyLabels.includes('land'),
+      controlEvents: events, pauseReasons: [...(held ? ['sticky-hold'] : []), ...(legacyLabels.includes('needs-decision') ? ['legacy:needs-decision'] : [])],
+      acceptedAt: events.find(event => event.event === 'ready_for_review')?.created_at || item.created_at || snapshot.capturedAt,
+      sourceSha: item.pullRequest?.head?.sha || null, baseSha: item.pullRequest?.base?.sha || null,
+      queueLabels: [...(paused ? ['queue:paused'] : []), ...(priority ? ['queue:priority'] : [])] };
+  });
+  const requests = records.map(record => ({
+    id: `pr:${record.number}:${record.sourceSha || 'unverified'}`, kind: 'pr', number: record.number,
+    sourceSha: record.sourceSha, headSha: record.sourceSha, baseSha: record.baseSha, treeSha: null,
+    acceptedAt: record.acceptedAt, priority: record.priority, paused: true, pauseOwner: record.pauseOwner, draft: record.draft, ready: record.ready,
+    tasks: [], results: {}, mergeRequested: record.mergeRequested,
+    blockers: [...record.pauseReasons, ...(!record.sourceSha ? ['pr-head-unverified'] : [])],
   }));
-  const plan = { schema: MIGRATION_SCHEMA, repo: snapshot.repo, snapshotDigest: snapshot.digest, counts, complete: true, stage: 'paused', controls, controlProvenance, parents, records, requests, deleteLabels: snapshot.labels.map(l => l.name), createLabels: labels };
+  const counts = { labels: snapshot.labels.length, prs: records.length };
+  for (const [key, value] of Object.entries(expectedCounts || {})) if (counts[key] !== value) throw new Error(`Expected ${key}=${value}, observed ${counts[key]}`);
+  const plan = { schema: MIGRATION_SCHEMA, repo: snapshot.repo, snapshotDigest: snapshot.digest, counts, complete: true, stage: 'paused', controls, controlProvenance, records, requests, deleteLabels: snapshot.labels.map(label => label.name), createLabels: labels };
   plan.digest = snapshotDigest(plan);
   return plan;
 }
@@ -199,7 +150,7 @@ export async function applyMigration(plan, { request, checkpoint, dryRun = true,
     else if (existing?.status === 404) await mutation(key, 'labels', 'POST', label);
     else throw new Error(`Cannot inspect label ${label.name}`);
   }
-  for (const record of plan.records.filter(r => r.intended)) {
+  for (const record of plan.records.filter(record => record.kind === 'pr' && record.queueLabels.length)) {
     const live = await read(request, `issues/${record.number}`);
     if (live.state !== 'open') continue;
     await mutation(`attach:${record.number}`, `issues/${record.number}/labels`, 'POST', { labels: record.queueLabels });

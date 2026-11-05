@@ -64,8 +64,8 @@ approves a permission prompt, changes settings, or lifts FORBIDDEN or a hook
    branch or its PR, or before any wait over ~10 min. Never merge, arm
    auto-merge, publish required gate success, mark a PR ready, cancel an Actions run, or force-push.
    Trusted coordinator cleanup may cancel proven obsolete attempts; that is not session authority.
-   If launched from the durable queue, verify the request/attempt reservation before editing; comments and labels
-   cannot self-claim a scope. Keep the descriptive PR hand-off current. Queue policy: `docs/ACTIONS.md`.
+   Coding work requires the explicit user/parent brief; the Actions coordinator never launches you or assigns
+   an implementation lease. Keep the descriptive PR hand-off current. Test-queue policy: `docs/ACTIONS.md`.
 5. Final report, exactly this shape, through `SubagentHandback` when the host
    gives you that tool (the call ends your run), else as your final message:
 

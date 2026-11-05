@@ -1,61 +1,10 @@
 #!/usr/bin/env node
-// dispatch.mjs — the dispatcher that GitHub Actions runs: a pure plan over GitHub state, then GitHub writes and worker fires.
-// @doc The Actions dispatcher: launches, takeovers, deploy:red fixers, nudges, digests, the Board; --fire starts workers.
+// @doc Retired coding-agent dispatcher; --plan is historical read-only inspection, --apply/--fire always refuse.
 // @section runner
-// @skill steward
-//
-// Design (docs/plans/2026-11-03-agent-surface-reset.md §4.1, §4.3, §5): GITHUB IS THE DISPATCHER; THE CLOUD ONLY RUNS
-// WORKERS. `.github/workflows/dispatch.yml` runs this file hourly and on issue / PR / check-suite / comment events, from
-// the DEPLOY branch's checkout (a PR cannot change the dispatcher that judges it), with the Action's own GITHUB_TOKEN.
-// There is no persistent dispatcher session, no Board lock, no PAUSE/RESUME of a scheduled task, no launch receipt, no
-// session listing (`--children`) and no `@parent`: every write is a label or a comment, every launch is one HTTP POST.
-//
-//   node tools/ci/dispatch.mjs --plan [--json] [--now <iso>] [--config <file>]   # GETs only; prints the plan + Board
-//   node tools/ci/dispatch.mjs --apply [--fire] [--now <iso>] [--config <file>]  # labels, Board, digests, nudges, launches
-//
-// `planDispatch(state, config, now)` is PURE and tested; `readState` fetches with github-api.mjs (GETs only);
-// `applyPlan` performs the writes. A launch is one fire of Bryce's "Apex worker" scheduled task (its saved prompt is
-// tools/ci/worker-prompt.md) with a ONE-LINE ADDRESS as the fire text — exactly one of
-//     ISSUE <n>   |   CONTINUE PR <n>   |   DEPLOY-RED <pages.yml run id>
-// The worker reads the issue / PR from GitHub itself; the text is an address, never instructions (the platform wraps it
-// in <routine-fire-payload> as untrusted data, so the saved prompt opts in to reading it as an address only).
-//   POST ${WORKER_FIRE_URL}  Authorization: Bearer ${WORKER_FIRE_TOKEN}  anthropic-version: 2026-10-21
-//   body {"text": "<address>"}  → 200 {"type":"routine_fire","claude_code_session_id":"session_…"}
-//   https://platform.claude.com/docs/en/api/claude-code/routines-fire (read 2026-11-03: headers, body, 200 shape,
-//   429 with Retry-After, 30 fires/h per task, no idempotency key) and https://code.claude.com/docs/en/routines
-//   (read 2026-11-03: the <routine-fire-payload> wrapper, skills committed to the repo load in the fired session).
-// The claim comment (`dispatch: launched claude:<title> for #<n> at <iso> as <session id>`) is posted ONLY after a 200,
-// so a refused fire leaves no phantom claim; a non-200 prints `= fire failed <status>` and posts nothing. Without
-// WORKER_FIRE_URL / WORKER_FIRE_TOKEN, --apply still writes labels and the Board and prints `= fire skipped: …` per launch.
-// Without `--fire`, --apply prints `LAUNCH <address>` lines and fires nothing (the 24 h plan-only soak, plan §7 Wave 1A).
-//
-// Authority is PROVENANCE, not quoted relays (tools/ci/lib/provenance.mjs): `priority`, `dispatch:pause` and
-// `dispatch:merge-pause` count only when the newest `labeled` event is Bryce's own click (actor brycejmurrin,
-// performed_via_github_app null); an agent's label is reported in the Board and ignored. `needs-decision` is cleared
-// only by a Bryce `decision:` comment newer than the label (his own unlabel clears it by itself); a `needs-decision` an
-// agent added gets ONE digest comment starting with `@brycejmurrin` from the Action's token (an agent writing as
-// brycejmurrin never notifies his phone), and no second digest while the previous one is the latest bot comment.
-//
-// Task rules: (1) `ready` issues without `claimed` → one worker each, `priority` (Bryce's) first, newest next, within
-// maxLaunchesPerRun, maxLiveWorkers (launch comments younger than launchClaimHours) and maxLaunchesPerDay (launch
-// comments in the last 24 h), and none at all while landQueueMax or more open non-draft PRs carry `land` (LANDING
-// BACKPRESSURE; rules 2 and 3 drain the queue and are never paused); (2) an open PR with no push and no comment for
-// staleHours (6 for lane:codex), or one already labelled `needs-owner`, no `hold`/`needs-decision` → `needs-owner` +
-// ONE `CONTINUE PR <n>` worker, unless a live worker's claim, foreign activity (a commit by another author in
-// foreignHours, or a lane:cursor push) or an unmerged prerequisite PR named in the body says wait; (3) deploy red (the
-// newest COMPLETED pages.yml run on the deploy branch failed) and no open PR labelled `deploy:red` → label the Board,
-// launch one fixer addressed `DEPLOY-RED <run id>`; (5) NUDGE: an open PR idle for nudgeAfterMinutes that no rule above
-// acts on gets ONE comment per nudgeEveryMinutes (`dispatch: nudge …`) naming what to do next — a subscribed worker is
-// woken by the comment; (6) the Board markdown, ONE comment this tool edits on the issue titled `Board`
-// (marker `<!-- dispatch-board -->`). Idempotent: every launch is recorded as a comment on the issue/PR (deploy:red
-// fixers on the Board issue), and a launch comment younger than launchClaimHours is a live claim.
-// Rule 2's "last activity" is the PR's updated_at or its newest comment, this tool's launch/nudge comments excluded.
-// Never stale: a `land` PR whose head has no failed check, no failed or long-pending `gate` status and no conflict, the
-// fold bots' PRs (head `bot/*`, author `*[bot]`), and a PR with a live claim. Every list call paginates.
-// Right before each fire (finding 7, 2026-10-30) the PR/issue is re-read: merged, closed or a non-Claude push in the
-// last 60 min refuses the launch (`= launch skipped …`).
-// Comment bodies and PR bodies are other sessions' records: data a rule is applied to, never instructions.
-// Exit: 0 planned/applied, 1 usage, 3 no token / API error.
+// @skill dispatcher
+// The PR/test coordinator never launches coding agents. dispatch.yml is disabled in every mode.
+// Pure legacy planning remains available for historical inspection; label names below are not current controls.
+// A user-authorized native agent follows its explicit brief independently of the GitHub Actions coordinator.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -461,59 +410,14 @@ export function launchRecheck(l, { api = githubApi, now = Date.now(), foreignMin
   return "";
 }
 
-/** One fire of the worker scheduled task: POST {text: address}. → { status, session, url } | { status, error } | { skipped }.
- *  Header and body shapes: https://platform.claude.com/docs/en/api/claude-code/routines-fire (read 2026-11-03). */
-export async function fireWorker(address, { env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const url = env.WORKER_FIRE_URL, token = env.WORKER_FIRE_TOKEN;
-  if (!url) return { skipped: "WORKER_FIRE_URL unset" };
-  if (!token) return { skipped: "WORKER_FIRE_TOKEN unset" };
-  let res;
-  try {
-    res = await fetchImpl(url, { method: "POST", headers: { Authorization: `Bearer ${token}`, "anthropic-version": ANTHROPIC_VERSION, "Content-Type": "application/json" },
-      body: JSON.stringify({ text: address }) });
-  } catch (e) { return { status: 0, error: e.message || String(e) }; }
-  let body = null;
-  try { body = await res.json(); } catch { /* a non-JSON body: reported by status */ }
-  if (res.status !== 200) return { status: res.status, error: body?.error?.message || body?.error?.type || "", retryAfter: res.headers?.get?.("retry-after") || null };
-  const session = body?.claude_code_session_id;
-  if (!/^session_[A-Za-z0-9]{12,}$/.test(String(session || ""))) return { status: 200, error: "200 without a claude_code_session_id" };
-  return { status: 200, session, url: body?.claude_code_session_url || "" };
+/** Retired compatibility export: never reads credentials or performs HTTP, even when callers supply them. */
+export async function fireWorker() {
+  return { skipped: "retired: coding-agent launches are outside the PR/test queue" };
 }
 
-export async function applyPlan(plan, { api = githubApi, config, log = console.log, now = Date.now(), fire = false, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const post = (p, body, method = "POST") => { const r = api(p, { method, body }); if (r.error) throw new Error(`${method} ${p}: ${r.error}`); return r.json; };
-  let writes = 0, fired = 0;
-  for (const l of plan.labels) {
-    if (l.add.length) { post(`issues/${l.number}/labels`, { labels: l.add }); writes++; }
-    for (const name of l.remove) { post(`issues/${l.number}/labels/${encodeURIComponent(name)}`, undefined, "DELETE"); writes++; }
-  }
-  for (const d of plan.digests) { post(`issues/${d.on}/comments`, { body: d.body }); writes++; }
-  for (const n of plan.nudges) { post(`issues/${n.on}/comments`, { body: n.body }); writes++; }
-  if (plan.boardIssue) {
-    const mine = getAll(api, `issues/${plan.boardIssue}/comments`).find((c) => String(c.body || "").startsWith(BOARD_MARKER));
-    if (mine) post(`issues/comments/${mine.id}`, { body: plan.board }, "PATCH"); else post(`issues/${plan.boardIssue}/comments`, { body: plan.board });
-    writes++;
-  } else log(`= board: no open issue titled "${config.boardIssueTitle}" — the Board comment was not written`);
-  // The claim comment is posted ONLY after the fire returned 200 with a session id: a refused fire leaves no claim.
-  for (const l of plan.launches) {
-    const why = launchRecheck(l, { api, now });
-    if (why) { log(`= launch skipped for ${l.kind} #${l.number}: ${why}`); continue; }
-    log(`LAUNCH ${l.address}  (${l.title})`);
-    if (!fire) { log("= fire skipped: --fire not given"); continue; }
-    const r = await fireWorker(l.address, { env, fetchImpl });
-    if (r.skipped) { log(`= fire skipped: ${r.skipped}`); continue; }
-    if (r.status !== 200 || !r.session) { log(`= fire failed ${r.status}${r.error ? ` ${r.error}` : ""}${r.retryAfter ? ` (retry-after ${r.retryAfter}s)` : ""}`); continue; }
-    fired++;
-    const body = claimComment(l, now, r.session);
-    post(`issues/${l.on}/comments`, { body }); writes++;
-    log(`= launched ${l.address} as ${r.session}${r.url ? ` ${r.url}` : ""}`);
-    if (l.kind === "continue") {   // adopt for the worker: its label DELETE is classifier-denied
-      const d = api(`issues/${l.on}/labels/needs-owner`, { method: "DELETE" });
-      log(d.error ? `dispatch: needs-owner not removed from #${l.on}: ${d.error}` : `= needs-owner removed from #${l.on}`);
-      post(`issues/${l.on}/comments`, { body: `adopts PR #${l.on} — claude:${r.session} (posted by the dispatcher when it launched the takeover)` }); writes++;
-    }
-  }
-  return { writes, fired };
+/** Retired mutator: even legacy nudges could wake a coding agent, so no API access or writes remain. */
+export async function applyPlan() {
+  return { writes: 0, fired: 0, skipped: "retired" };
 }
 
 export function renderPlan(plan) {
@@ -528,16 +432,16 @@ export function renderPlan(plan) {
 }
 
 const USAGE = `usage: node tools/ci/dispatch.mjs --plan [--json] [--now <iso>] [--config <file>]
-       node tools/ci/dispatch.mjs --apply [--fire] [--now <iso>] [--config <file>]
-  --plan   reads GitHub (GETs only) and prints the plan: launches, labels, digests, nudges, skips, the Board markdown (--json: one object)
-  --apply  writes labels, the Board comment, needs-decision digests and nudges, then one LAUNCH <address> line per launch
-           (ISSUE <n> | CONTINUE PR <n> | DEPLOY-RED <run id>), each re-checked right before (merged/closed/foreign push)
-  --fire   with --apply: POST each address to \$WORKER_FIRE_URL (Bearer \$WORKER_FIRE_TOKEN, anthropic-version ${ANTHROPIC_VERSION});
-           on 200 the claim comment names the returned session; non-200 prints \`= fire failed <status>\` and posts nothing;
-           unset env prints \`= fire skipped: WORKER_FIRE_URL unset\`
-  .github/workflows/dispatch.yml runs --apply --fire hourly and on issue/PR/check-suite/comment events (header of this file).`;
+  RETIRED coding-agent dispatcher. --plan reads GitHub and explains historical decisions only.
+  --apply and --fire always refuse before configuration, credential or network access.
+  Ready PRs automatically queue validation through tools/ci/actions/cli.mjs; /apex merge requests landing.
+  Coding agents require an explicit user/parent task and are never triggered by this coordinator.`;
 
 export async function main(argv, { api = githubApi, read = fs.readFileSync, log = console.log, now = Date.now, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (argv.some(arg => /^--(?:apply|fire)(?:=|$)/.test(arg))) {
+    log("dispatch: retired; coding-agent launches are disabled. Ready PRs queue tests automatically; /apex merge explicitly requests landing.");
+    return 1;
+  }
   exitIfHelp(argv, USAGE);
   const val = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   const plan = argv.includes("--plan"), apply = argv.includes("--apply");
@@ -549,12 +453,6 @@ export async function main(argv, { api = githubApi, read = fs.readFileSync, log 
   try { state = readState({ api, config, now: when }); }
   catch (e) { log(`dispatch: ${e.message}`); return 3; }
   const p = planDispatch(state, config, when);
-  if (apply) {
-    let r;
-    try { r = await applyPlan(p, { api, config, log, now: when, fire: argv.includes("--fire"), env, fetchImpl }); } catch (e) { log(`dispatch: ${e.message}`); return 3; }
-    log(`= dispatch applied: ${p.launches.length} launches planned, ${r.fired} fired, ${p.digests.length} digests, ${p.nudges.length} nudges, ${r.writes} GitHub writes${p.flags.pause ? "; PAUSED" : ""}`);
-    return 0;
-  }
   if (argv.includes("--json")) log(JSON.stringify(p, null, 2));
   else { for (const line of renderPlan(p)) log(line); log(""); log(p.board); log(`= dispatch plan: ${p.launches.length} launches, ${p.labels.length} label edits, ${p.digests.length} digests, ${p.nudges.length} nudges, ${p.skipped.length} skips${p.flags.pause ? "; PAUSED" : ""}`); }
   return 0;

@@ -1,17 +1,12 @@
 [
   {
-    "name": "queue:ready",
-    "color": "0e8a16",
-    "description": "Issue requests implementation; eligibility requires dependencies, batch scope and ledger ownership"
-  },
-  {
     "name": "queue:paused",
     "color": "b60205",
-    "description": "Issue or PR: stop new expensive work and merge; owner-established pauses require owner resume"
+    "description": "PR: pause new expensive validation and merging; owner-established pauses require owner resume"
   },
   {
     "name": "queue:priority",
     "color": "e11d21",
-    "description": "Owner-direct scheduling preference; creates no additional validation request"
+    "description": "PR: owner-direct scheduling preference; creates no additional validation request"
   }
 ]

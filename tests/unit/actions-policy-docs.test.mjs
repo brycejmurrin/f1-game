@@ -12,7 +12,7 @@ const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
 test("queue catalog has exactly the supported intent labels; issue templates do not enqueue findings", () => {
   const labels = JSON.parse(read(".github/labels.json"));
-  assert.deepEqual(labels.map((l) => l.name).sort(), ["queue:paused", "queue:priority", "queue:ready"]);
+  assert.deepEqual(labels.map((l) => l.name).sort(), ["queue:paused", "queue:priority"]);
   for (const label of labels) {
     assert.match(label.color, /^[a-f0-9]{6}$/i);
     assert.ok(label.description.length > 0 && label.description.length <= 100, "GitHub label description limit");
@@ -20,7 +20,7 @@ test("queue catalog has exactly the supported intent labels; issue templates do 
   for (const name of fs.readdirSync(path.join(ROOT, ".github/ISSUE_TEMPLATE"))) {
     if (!/\.ya?ml$/.test(name) || name === "config.yml") continue;
     const template = parseYAML(read(`.github/ISSUE_TEMPLATE/${name}`));
-    assert.ok(!template.labels || template.labels.length === 0, `${name} must require explicit intake`);
+    assert.ok(!template.labels || template.labels.length === 0, `${name} must not create test or implementation requests`);
   }
 });
 
@@ -43,18 +43,18 @@ function guard(input, { current = "", apiCode = 0 } = {}) {
 const update = (labels) => ({ owner: "fixture", repo: "fixture", method: "update", issue_number: 7, labels });
 
 test("replacement label lists cannot silently clear a queue pause or unknown current state", () => {
-  assert.equal(guard(update(["queue:paused", "queue:ready"]), { apiCode: 1 }), null,
+  assert.equal(guard(update(["queue:paused", "queue:priority"]), { apiCode: 1 }), null,
     "explicitly retaining the pause requires no destructive read");
-  assert.equal(guard(update(["queue:ready"]), { current: "queue:paused" }).permissionDecision, "ask");
+  assert.equal(guard(update(["queue:priority"]), { current: "queue:paused" }).permissionDecision, "ask");
   assert.equal(guard(update([]), { apiCode: 1 }).permissionDecision, "ask");
-  assert.equal(guard(update(["queue:ready"]), { current: "queue:ready" }), null);
+  assert.equal(guard(update(["queue:priority"]), { current: "queue:priority" }), null);
   assert.equal(guard({ owner: "fixture", repo: "fixture", issue_number: 7, body: "checkpoint" }), null,
     "body updates do not replace labels");
 });
 
 test("legacy label attachments no longer act as pause aliases", () => {
   for (const current of ["hold", "claimed", "blocked", "dispatch:pause"]) {
-    assert.equal(guard(update(["queue:ready"]), { current }), null, current);
+    assert.equal(guard(update(["queue:priority"]), { current }), null, current);
   }
 });
 
@@ -64,6 +64,6 @@ test("active queue guidance does not teach retired label controls", () => {
     ".claude/skills/handoff/SKILL.md", ".claude/rules/ci-tools.md", ".claude/rules/claude-config.md",
     ".claude/memory/track-with-tasks-and-messages.md", ".claude/memory/survey-then-fix.md",
     "tools/ci/worker-prompt.md", "docs/README.md", "docs/TESTING.md"];
-  const retired = /`(?:hold|claimed|config-ok|needs-owner|needs-decision|lane:(?:claude|codex|cursor)|dispatch:(?:pause|merge-pause))`|label:ready|labels\[\]=(?:ready|claimed|land)|`land` label/;
+  const retired = /`(?:hold|claimed|config-ok|needs-owner|needs-decision|lane:(?:claude|codex|cursor)|dispatch:(?:pause|merge-pause)|queue:ready)`|label:ready|labels\[\]=(?:ready|claimed|land)|`land` label/;
   for (const name of files) assert.doesNotMatch(read(name), retired, name);
 });

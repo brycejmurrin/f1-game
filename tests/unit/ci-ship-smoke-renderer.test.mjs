@@ -89,8 +89,8 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   // PR completion that the job's `if:` then skipped — 119 skipped runs in
   // seven hours, queued one at a time, after the `branches:` filter landed.
   const workflow = parseYaml(timings);
-  assert.deepEqual(workflow.on.workflow_run.workflows, ['Deploy to GitHub Pages', 'Actions worker'],
-    'timings follow both legacy train evidence and admitted worker evidence');
+  assert.deepEqual(workflow.on.workflow_run.workflows, ['Deploy to GitHub Pages', 'Actions test executors'],
+    'timings follow both legacy train evidence and admitted test-executor evidence');
   assert.deepEqual(workflow.on.workflow_run.branches, ['claude/f1-game-project-26h3ng']);
   assert.ok(!workflow.on.workflow_run.workflows.includes('CI'), 'ordinary PR completion does not trigger a timings job');
   for (const mode of ['', 'shadow', 'active', 'paused']) for (const event of ['workflow_run', 'workflow_dispatch']) {

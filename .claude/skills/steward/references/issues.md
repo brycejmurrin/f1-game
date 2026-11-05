@@ -1,18 +1,13 @@
-# Finding work and dependencies
+# Issues and implementation context
 
-Search open issues with `label:queue:ready` to find requested work, then consult the coordinator's ledger for
-actual eligibility and ownership. A label search alone does not authorize a launch or takeover.
+Issues describe user work and native dependencies; the Actions coordinator does not intake issues, dispatch
+coding agents, group implementation batches or assign coding-session leases. Work only on the user's request or
+an explicitly authorized parent brief. File findings as unqueued issues with scope and observable acceptance.
 
-Native `blocked_by` issue relationships express prerequisites. Read the actual blocking issue states; unreadable
-relationships remain pending. Record real dependencies using GitHub's dependencies API: the POST `issue_id` is the
-blocking issue's numeric id, not its issue number. Do not infer prerequisites from arbitrary body references.
+Native `blocked_by` relationships can record actual implementation prerequisites. Read their real states; the
+POST `issue_id` is the blocking issue's numeric id, not its issue number. Ordinary body references do not create
+prerequisites. This context guides the implementation owner and does not turn an issue into an Actions task.
 
-Use `/apex batch #123 #456` on a parent to request explicit ledger membership. Implementation and merge ordering
-are separate decisions. A parent and members cannot dispatch duplicate scopes. Legacy body Members sections need
-an explicit migration mapping; a tracking issue is not automatically an implementation task.
-
-File findings without queue labels, with scope and an observable acceptance check. Enqueue executable work
-explicitly after checking overlap, dependencies and batching. `docs/ACTIONS.md` owns rollout and command authority.
-
-Migration provenance: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md` records the original native-dependency
-rollout and API evidence. Preserve that history when importing relationships; its old label procedures are retired.
+Ready PRs automatically enter the test queue; explicit `/apex merge` requests landing after complete validation.
+See `docs/ACTIONS.md` for PR controls. Legacy claims/batch history is retained for audit, not converted to work.
+Migration provenance: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md` records the original native-dependency rollout.

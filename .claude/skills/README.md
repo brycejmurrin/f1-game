@@ -32,7 +32,7 @@ auto-selects on, so a fold that leaves the vocabulary behind makes the workflow 
 | **code-nav** | a JS symbol through `apex-lsp`, not grep |
 | **css-play** | one menu/HUD element's styling, or a CSS restructure (`css/**`) |
 | **data-hub** | Data Hub tabs and the F1 data feeds |
-| **dispatcher** | how workers get launched: the dispatch Action, `dispatch.mjs --plan`, the Board |
+| **dispatcher** | GitHub Actions PR validation queue, runner capacity and explicit merge requests |
 | **f1-animation-cameras** | camera and animation motion, replay cameras |
 | **game-feel** | shake, hit-stop, sparks, haptics — without changing physics |
 | **garage-parts-livery** | the GARAGE parts catalog, liveries, car meshes |

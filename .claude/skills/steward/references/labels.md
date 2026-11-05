@@ -1,11 +1,9 @@
-# Queue intent labels
+# PR queue labels
 
-The complete catalog is `.github/labels.json`; semantics, provenance, commands and shadow rollout are in
-`docs/ACTIONS.md` §Labels. The three supported names are `queue:ready`, `queue:paused` and `queue:priority`.
+The complete catalog is `.github/labels.json`: `queue:paused` and `queue:priority`, both on PRs. Ready PRs queue
+validation automatically; explicit `/apex merge` authorizes the landing request. Neither label launches a coding
+agent or adds test work. Commands, provenance and shadow rollout are defined in `docs/ACTIONS.md`.
 
-Add one label with the additive GitHub API rather than replacing the whole list. MCP `issue_write.labels`
-replaces all labels and may accidentally clear a pause. An owner-established pause is sticky until the owner
-resumes it; an app acting under the owner's login cannot supply owner-direct provenance.
-
-Labels never prove ownership, validation or approval. The ledger records these facts. New issues have no default
-queue label. In shadow mode, do not migrate labels or claim that intent changes launched work.
+Use additive label APIs rather than replacing the whole list. MCP `issue_write.labels` replaces labels and may
+accidentally clear a pause. An owner-established pause stays until the owner resumes it through an authoritative
+action. An app using the owner login cannot grant owner-direct priority, resume or exact-head approval.

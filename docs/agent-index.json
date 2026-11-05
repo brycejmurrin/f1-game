@@ -680,7 +680,6 @@
         "tests/unit/actions-policy-docs.test.mjs",
         "tests/unit/actions-scheduler.test.mjs",
         "tests/unit/actions-store.test.mjs",
-        "tests/unit/actions-workers.test.mjs",
         "tests/unit/actions-workflows.test.mjs",
         "tests/unit/agent-config.test.mjs",
         "tests/unit/agent-scope-hooks.test.mjs",

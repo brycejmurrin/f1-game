@@ -6,9 +6,9 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { classifyEvent } from './policy.mjs';
 import { applyControls } from './controls.mjs';
-import { requestFromIssue, requestFromPR } from './requests.mjs';
+import { requestFromPR } from './requests.mjs';
 import { enqueue, claimWave, completeTask, reconcileOwner, retryTask, requestComplete, runnerPool, timeMs, withArchiveContext } from './state.mjs';
-import { admit, producerBackpressure } from './scheduler.mjs';
+import { admit, pendingMetrics } from './scheduler.mjs';
 import { planCoverage, bundleTasks, verifyCoverage, computePlanDigest } from './coverage.mjs';
 import { buildDiagnosticRequest } from './diagnostics.mjs';
 import { readArchivedRequest } from './store.mjs';
@@ -127,18 +127,11 @@ export async function prepareRequest(context, state, { request, checkout = sourc
   };
   const { issue, events } = context;
   let { pr } = context;
-  if (!issue || issue.state === 'closed') return null;
+  if (!issue || !pr || issue.state === 'closed') return null;
   const previous = Object.values(state.requests).filter(r => r.number === issue.number && !r.superseded)
     .sort((a, b) => Date.parse(b.acceptedAt) - Date.parse(a.acceptedAt))[0];
   const intent = state.intents?.[issue.number] || {};
   const metadata = { previous, intent, events, now, owner: 'brycejmurrin' };
-  if (!pr) {
-    const parent = Object.values(state.requests).find(r => !r.superseded && !r.closed && r.members?.includes(issue.number));
-    const blockers = listAll(request, `issues/${issue.number}/dependencies/blocked_by`).filter(i => i.state !== 'closed').map(i => `issue:${i.number}`);
-    const item = requestFromIssue(issue, { ...metadata, blockers, batchParent: parent?.number });
-    if (item && !state.requests[item.id]) await lookup(item.id);
-    return finish(item);
-  }
   const baseTip = await readBase(DEPLOY_BRANCH);
   if (!SHA.test(baseTip || '') || !pr.base || pr.base.ref && pr.base.ref !== DEPLOY_BRANCH) throw new Error('Current protected base identity is unavailable');
   pr = { ...pr, reportedBaseSha: pr.reportedBaseSha || pr.base.sha, base: { ...pr.base, sha: baseTip } };
@@ -199,7 +192,7 @@ export function ingest(state, context, prepared = null) {
   if (prepared) {
     if (next.requests[prepared.id]) {
       // Controls can change; evidence and original admission age cannot.
-      for (const key of ['paused', 'pauseOwner', 'priority', 'mergeRequested', 'mergeRequestedAt', 'approvedSha', 'approvedDiffSha', 'approvedBy', 'approvedViaApp', 'intakeWithdrawn', 'recoverRequested', 'blockers', 'members']) {
+      for (const key of ['paused', 'pauseOwner', 'priority', 'mergeRequested', 'mergeRequestedAt', 'approvedSha', 'approvedDiffSha', 'approvedBy', 'approvedViaApp', 'recoverRequested', 'blockers']) {
         if (Object.hasOwn(prepared, key)) next.requests[prepared.id][key] = prepared[key];
       }
       const newer = Object.values(next.requests).some(r => r.kind === 'pr' && r.number === prepared.number && !r.superseded &&
@@ -233,7 +226,6 @@ export function ingest(state, context, prepared = null) {
       for (const key of ['approvedSha', 'approvedDiffSha', 'approvedBy', 'approvedViaApp']) record[key] = matches ? intent[key] ?? null : null;
     }
     if (Object.hasOwn(intent, 'recoverRequested')) record.recoverRequested = intent.recoverRequested === true;
-    if (intent.commandProvenance?.batch) record.members = [...intent.members];
     if (intent.commandProvenance?.decision) record.decision = structuredClone(intent.decision);
   }
   const command = classifyEvent(context.eventName, context.payload);
@@ -257,12 +249,6 @@ export function ingest(state, context, prepared = null) {
   if (context.issue?.state === 'closed' || context.pr?.merged) {
     const number = context.issue?.number || context.pr?.number;
     for (const r of Object.values(next.requests)) if (r.number === number) { r.superseded = true; r.closed = true; }
-  }
-  for (const member of Object.values(next.requests)) if (member.kind === 'issue') member.blockers = member.blockers.filter(blocker => !String(blocker).startsWith('batch:'));
-  for (const parent of Object.values(next.requests).filter(r => !r.superseded && !r.closed)) for (const number of parent.members || []) {
-    for (const member of Object.values(next.requests)) if (member.kind === 'issue' && member.number === number) {
-      member.blockers = [...new Set([...(member.blockers || []), `batch:${parent.number}`])];
-    }
   }
   return next;
 }
@@ -302,7 +288,7 @@ export function canonicalExecution(state, envelope, identity) {
 export function diagnosticRequest(workflow, event, context) {
   const metadata = buildDiagnosticRequest(workflow, event, context);
   return { id: metadata.request_id, kind: metadata.publisher ? 'maintenance' : 'experiment', sourceSha: metadata.source_sha,
-    baseSha: null, treeSha: null, acceptedAt: new Date().toISOString(), priority: false, paused: false, blockers: [], members: [],
+    baseSha: null, treeSha: null, acceptedAt: new Date().toISOString(), priority: false, paused: false, blockers: [],
     tasks: [], results: {}, diagnostic: metadata };
 }
 
@@ -375,7 +361,7 @@ function recoveryScopeMatches(record) {
 export function collectInfrastructureRetries(state, { request, now = new Date().toISOString(), maxRequests = 8, maxOwnerReads = 8 } = {}) {
   if (!Number.isInteger(maxRequests) || maxRequests < 1 || !Number.isInteger(maxOwnerReads) || maxOwnerReads < 1) throw new Error('Invalid infrastructure recovery bounds');
   const observations = [], owners = new Map();
-  const records = Object.values(state.requests).filter(record => record.kind !== 'issue' && record.recoverRequested && !record.superseded && !record.closed)
+  const records = Object.values(state.requests).filter(record => record.recoverRequested && !record.superseded && !record.closed)
     .sort((a, b) => timeMs(a.recoveryObservedAt || 0) - timeMs(b.recoveryObservedAt || 0) || a.id.localeCompare(b.id)).slice(0, maxRequests);
   for (const record of records) {
     const observation = { ...recoveryIdentity(record), now, tasks: [] };
@@ -408,7 +394,7 @@ export function applyInfrastructureRetries(state, observations) {
   const outcomes = [];
   for (const observation of observations) {
     const record = state.requests[observation.requestId];
-    if (!record || record.kind === 'issue' || !record.recoverRequested || record.superseded || record.closed ||
+    if (!record || !record.recoverRequested || record.superseded || record.closed ||
       digest(recoveryIdentity(record)) !== digest({ requestId: observation.requestId, sourceSha: observation.sourceSha,
         baseSha: observation.baseSha, treeSha: observation.treeSha, planDigest: observation.planDigest, recoveryToken: observation.recoveryToken })) continue;
     record.recoveryObservedAt = new Date(timeMs(observation.now)).toISOString();
@@ -450,8 +436,8 @@ export function validationVerdict(state, request, { currentPR } = {}) {
 
 export function prepareAdmission(state, now, { dispatchBackoffMs = 120_000 } = {}) {
   if (!Number.isFinite(dispatchBackoffMs) || dispatchBackoffMs < 0) throw new Error('Invalid dispatch backoff');
-  const producer = producerBackpressure(state, { now });
-  if (state.mode !== 'active' || state.controls.validation) return { producer, waves: [] };
+  const queue = pendingMetrics(state, { now });
+  if (state.mode !== 'active' || state.controls.validation) return { queue, waves: [] };
   let wave = Object.values(state.waves).filter(w => w.status === 'reserved' && !w.owner &&
     (!w.dispatchRequestedAt || timeMs(now) - timeMs(w.dispatchRequestedAt) >= dispatchBackoffMs))
     .sort((a, b) => timeMs(a.reservedAt) - timeMs(b.reservedAt) || a.id.localeCompare(b.id))[0];
@@ -460,7 +446,7 @@ export function prepareAdmission(state, now, { dispatchBackoffMs = 120_000 } = {
     wave.dispatchRequestedAt = new Date(timeMs(now)).toISOString();
     wave.dispatchAttempts = (wave.dispatchAttempts || 0) + 1;
   }
-  return { producer, waves: wave ? [wave] : [] };
+  return { queue, waves: wave ? [wave] : [] };
 }
 
 /** A receipt file is data, never an executable artifact. */

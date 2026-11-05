@@ -97,7 +97,7 @@ async function reconcile(options) {
   const payload = options['event-file'] ? fileJSON(options['event-file']) : {};
   const eventName = options.event || process.env.GITHUB_EVENT_NAME || 'workflow_dispatch';
   const now = using(options, 'now', at)();
-  if (mode === 'paused' && !['issue_comment', 'issues', 'pull_request_target'].includes(eventName)) {
+  if (mode === 'paused' && !['issue_comment', 'pull_request_target'].includes(eventName)) {
     writeOutputs({ wave: '' }); return { mode, mutated: false };
   }
   if (eventName === 'workflow_dispatch' && payload.inputs?.workflow) {
@@ -128,7 +128,7 @@ async function reconcile(options) {
       throw new Error('Approval must be a fresh owner comment for the current head and deploy base');
     }
   }
-  // Apply new intent before deriving a plan (batch/merge/approval command).
+  // Apply PR merge/approval intent before deriving its validation plan.
   state = ingest(state, context);
   if (context.event.command?.type === 'approve' && context.pr) {
     const files = listAll(request, `pulls/${context.pr.number}/files`);
@@ -136,16 +136,18 @@ async function reconcile(options) {
     context.diffSha = approvalDigest(files);
     state = ingest(snapshot.state, context);
   }
-  const prepared = context.issue ? await using(options, 'prepareRequest', prepareRequest)(context, state, { request, now, policyVersion: policyVersion() }) : null;
+  const prepared = context.pr ? await using(options, 'prepareRequest', prepareRequest)(context, state, { request, now, policyVersion: policyVersion() }) : null;
   state = ingest(state, context, prepared);
   const refreshes = [];
   if (!context.issue && ['schedule', 'workflow_dispatch', 'workflow_run'].includes(eventName)) {
     // Recover replaced hints, in bounded rotating slices rather than N full comment scans per event.
     const prs = listAll(request, `pulls?state=open&base=${encodeURIComponent(DEPLOY_BRANCH)}`);
+    const currentBase = prs.length ? requireResponse(request, `branches/${encodeURIComponent(DEPLOY_BRANCH)}`).commit?.sha : null;
+    if (prs.length && !/^[a-f0-9]{40}$/.test(currentBase || '')) throw new Error('Current deploy base is unavailable for queue discovery');
     const cursor = state.discoveryCursor || 0;
     const ordered = [...prs.slice(cursor), ...prs.slice(0, cursor)];
     for (const pr of ordered.slice(0, 4)) {
-      const current = Object.values(state.requests).find(r => r.kind === 'pr' && r.number === pr.number && !r.superseded && r.headSha === pr.head.sha && r.baseSha === pr.base.sha && r.draft === pr.draft && r.tasks.length);
+      const current = Object.values(state.requests).find(r => r.kind === 'pr' && r.number === pr.number && !r.superseded && r.headSha === pr.head.sha && r.baseSha === currentBase && r.draft === pr.draft && r.tasks.length);
       if (!current) {
         const refresh = await refreshPR(pr.number, state, request, now);
         refreshes.push(refresh); state = ingest(state, refresh.context, refresh.prepared);
@@ -177,22 +179,7 @@ async function reconcile(options) {
   await using(options, 'publishVerdicts', publishVerdicts)(saved.state, { request, store });
   const { landNext } = await import('./landing.mjs');
   const landing = await using(options, 'landNext', landNext)({ store, request, now });
-  const { planWorkerLaunches, executeWorkerLaunch, reconcileWorkers } = await import('./workers.mjs');
-  await using(options, 'reconcileWorkers', reconcileWorkers)(store, { now });
-  const workers = planWorkerLaunches(store.read().state, { now });
-  store.update(live => { live.producer = workers.producer; });
-  // One new producer per recovery cycle prevents a resume burst.
-  for (const launch of workers.launches.slice(0, 1)) await using(options, 'executeWorkerLaunch', executeWorkerLaunch)(store, { requestId: launch.requestId, now,
-    read: async record => {
-      const issue = requireResponse(request, `issues/${record.number}`);
-      const { parseMembers } = await import('./migration.mjs');
-      const timeline = listAll(request, `issues/${record.number}/timeline`);
-      return { issue, blockers: listAll(request, `issues/${record.number}/dependencies/blocked_by`).filter(i => i.state !== 'closed'),
-        members: parseMembers(issue.body || ''), paused: record.paused,
-        linkedPrs: timeline.filter(e => e.event === 'cross-referenced' && e.source?.issue?.pull_request && e.source.issue.state === 'open'),
-        batchParent: Object.values(store.read().state.requests).find(r => !r.superseded && r.members?.includes(record.number))?.number };
-    } });
-  return { mode, wave, requests: Object.keys(saved.state.requests).length, landing, producer: workers.producer, api: api.metrics };
+  return { mode, wave, requests: Object.keys(saved.state.requests).length, landing, queue: saved.result.queue, api: api.metrics };
 }
 
 async function publishVerdicts(state, { request, store }) {
@@ -414,9 +401,9 @@ async function migrationCommand(options) {
     if (state.migration?.snapshotDigest && state.migration.snapshotDigest !== snapshot.digest &&
       state.migration.checkpoint?.completed?.some(key => key.startsWith('delete:'))) throw new Error('Resume the existing snapshot migration after label deletion has begun');
     state.migration = { ...state.migration, snapshotDigest: snapshot.digest, planDigest: plan.digest,
-      controlsBeforeFreeze: state.migration?.controlsBeforeFreeze || Object.fromEntries(['workers', 'validation', 'merges'].map(scope => [scope, !!(state.controls[scope] || plan.controls?.[scope])])),
+      controlsBeforeFreeze: state.migration?.controlsBeforeFreeze || Object.fromEntries(['validation', 'merges'].map(scope => [scope, !!(state.controls[scope] || plan.controls?.[scope])])),
       frozenAt: state.migration?.frozenAt || at() };
-    state.mode = 'paused'; state.controls = { workers: true, validation: true, merges: true };
+    state.mode = 'paused'; state.controls = { validation: true, merges: true };
   });
   const freeze = [];
   for (const name of ['dispatch.yml', 'land.yml']) {

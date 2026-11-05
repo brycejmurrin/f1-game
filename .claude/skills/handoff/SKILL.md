@@ -15,24 +15,22 @@ spawns over the hard cap; a session without a brief has no cap and hands off whe
 long. Before idling, write the follow-up prompts into the PR's Hand-off block. Model names and messaging routes are
 host-specific; use only exposed host capabilities.
 
-An attended handoff returns a prompt in chat after updating the PR. An unattended owner at its cap refreshes the
-PR and requests `/apex recover`; a successor is not launched until trusted recovery confirms no live owner remains.
-Neither a comment nor a changed Hand-off owner field transfers a lease.
+A handoff preserves user-authorized implementation context. The Actions coordinator manages tests, not coding
+sessions; `/apex recover` is only for missing PR test-executor evidence. It cannot request a successor coder.
 
-1. Push verified work under AGENTS rule 12. List unverified paths and failed checks honestly; never bypass a commit
-   hook to preserve a checkpoint. Record any unstaged work that remains local to this workspace.
-2. Read the actual branch/PR head and refresh the living Plan, Verified / Not run and Hand-off fence with head,
-   descriptive owner and next step. Include coordinator request/attempt identities where available. Read back the
-   update; success proves the report was saved, not that a successor started.
+1. Push verified work under AGENTS rule 12. List unverified paths and failures; never bypass a commit hook. Record
+   local unstaged work honestly, including the risk that a replacement workspace cannot read it.
+2. Read the actual PR head and refresh Plan, Verified / Not run and Hand-off with implementation owner and next
+   step. Include validation request/attempt ids when relevant. Read back the update; a saved handoff is not proof
+   another agent started or that tests passed.
 3. The cold-start prompt names repository, branch, pushed head, PR URL, goal, done/now/next, OWNED/FORBIDDEN paths,
-   grants with their source, needed checks not run, failures and accessible evidence. Local artifacts remain local
-   unless transferred. Preserve queue pauses and pending decisions; an app-mediated removal cannot lift an owner's
-   pause. Do not claim merge approval or ownership based on the previous agent's prose.
-4. First commands: inspect status, read AGENTS, fetch the branch and compare the resolved head with the recorded
-   SHA. Use an isolated worktree if another session owns the checkout. Verify coordinator ownership before edits;
-   `/apex recover` is a request, never permission to displace a live owner.
-5. Keep the prompt under about 25 lines and link the PR for detail. Record armed subscriptions/background handles
-   and exact run/log identities without promising capabilities the new host does not expose.
+   grants with sources, needed checks not run, failures and accessible evidence. Local artifacts stay local unless
+   transferred. Preserve PR pauses and pending decisions; another agent's prose cannot grant merge approval.
+4. Inspect status, read AGENTS, fetch and compare the resolved head with the recorded SHA. Use an isolated
+   worktree if another session owns the checkout. A successor needs user or explicit parent authorization.
+5. Keep the prompt under about 25 lines and link the PR for detail. Record actual subscriptions/background handles
+   without promising unavailable host capabilities. An unattended session may hand back to its authorized parent;
+   it does not create an automatic coding-agent launch through GitHub controls.
 
-A hunt/survey files scoped findings as unqueued issues or a tracking issue with an index entry linking its reports.
-Queue only executable scope after dependency, batch and overlap checks. Protocol and shadow rollout: `docs/ACTIONS.md`.
+File hunt/survey findings as ordinary issues with an index linking reports. Queue readiness applies to PR tests,
+not implementation scope. Protocol and shadow rollout: `docs/ACTIONS.md`.

@@ -1,5 +1,5 @@
-// @doc Admit bounded fair validation waves and apply producer capacity backpressure.
-import { ACTIVE_TASK_STATUSES, capacityUsage, isoTime, runnerPool, timeMs, releaseLaneOwner, implementationWorkerCount } from "./state.mjs";
+// @doc Admit bounded fair validation waves and report queue work by runner pool.
+import { ACTIVE_TASK_STATUSES, capacityUsage, isoTime, runnerPool, timeMs, releaseLaneOwner } from "./state.mjs";
 export { newState, enqueue, claimWave, completeTask, reconcileOwner, retryTask, requestComplete, capacityUsage, validateState, releaseStarted, releaseLaneOwner } from "./state.mjs";
 
 function eligibleRequest(request) {
@@ -97,25 +97,4 @@ export function pendingMetrics(state, { now = Date.now() } = {}) {
   }
   const drainMinutesByPool = Object.fromEntries(Object.entries(seconds).map(([pool, value]) => [pool, value ? (state.limits[pool] ? value / state.limits[pool] / 60 : Infinity) : 0]));
   return { tasks, seconds, drainMinutesByPool, drainMinutes: Math.max(...Object.values(drainMinutesByPool)), oldestWaitMinutes: oldestWaitSeconds / 60 };
-}
-
-/** Hysteresis stops oscillating producer launches. Sampling twice at the same
- * timestamp does not constitute two healthy observations. */
-export function producerBackpressure(state, { now = Date.now(), drainMinutes, oldestWaitMinutes, activeWorkers } = {}) {
-  const metrics = pendingMetrics(state, { now });
-  const drain = drainMinutes ?? metrics.drainMinutes, oldest = oldestWaitMinutes ?? metrics.oldestWaitMinutes;
-  if (!Number.isFinite(drain) && drain !== Infinity || !Number.isFinite(oldest) && oldest !== Infinity || drain < 0 || oldest < 0) throw new Error("Invalid pressure metrics");
-  const producer = state.producer;
-  const distinct = producer.observedAt !== isoTime(now);
-  if (drain > 30 || oldest > 10) { producer.paused = true; producer.healthyObservations = 0; }
-  else if (drain < 15 && oldest < 5) {
-    if (distinct) producer.healthyObservations++;
-    if (producer.healthyObservations >= 2) producer.paused = false;
-  } else producer.healthyObservations = 0;
-  producer.observedAt = isoTime(now);
-  const workers = activeWorkers ?? implementationWorkerCount(state);
-  if (!Number.isInteger(workers) || workers < 0) throw new Error("Invalid worker count");
-  const allowed = state.mode === "active" && !state.controls.workers && !producer.paused && workers < state.limits.maxWorkers;
-  return { ...metrics, drainMinutes: drain, oldestWaitMinutes: oldest, paused: producer.paused, allowed, activeWorkers: workers,
-    availableWorkers: allowed ? state.limits.maxWorkers - workers : 0, healthyObservations: producer.healthyObservations };
 }

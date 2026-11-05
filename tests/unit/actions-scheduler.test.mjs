@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   newState, enqueue, admit, claimWave, completeTask, reconcileOwner,
-  capacityUsage, requestComplete, producerBackpressure, pendingMetrics, retryTask, releaseLaneOwner, validateState,
+  capacityUsage, requestComplete, pendingMetrics, retryTask, releaseLaneOwner, validateState,
 } from "../../tools/ci/actions/scheduler.mjs";
 
 const NOW = Date.parse("2026-11-05T12:00:00Z");
@@ -25,8 +25,8 @@ test("shadow mode and independent global pause controls never admit validation",
   assert.deepEqual(admit(s), []);
   s.mode = "active"; s.controls.validation = true;
   assert.deepEqual(admit(s), []);
-  s.controls.validation = false; s.controls.workers = true;
-  assert.equal(admit(s).length, 1, "worker pause does not pause validation");
+  s.controls.validation = false; s.controls.merges = true;
+  assert.equal(admit(s).length, 1, "merge pause does not pause validation");
 });
 
 test("all executor types share bounded pools and Linux PR usage never exceeds four", () => {
@@ -285,14 +285,14 @@ test("an assertion failure cannot be retried into green as infrastructure", () =
   assert.equal(requestComplete(s, r.id), false);
 });
 
-test("producer backpressure uses work and age, requires two distinct healthy samples, and enforces eight workers", () => {
+test("only validation requests and executor ownership are accepted by the coordinator", () => {
   const s = active();
-  assert.equal(producerBackpressure(s, { now: NOW, drainMinutes: 31, oldestWaitMinutes: 0 }).allowed, false);
-  assert.equal(producerBackpressure(s, { now: NOW + 1, drainMinutes: 14, oldestWaitMinutes: 4 }).paused, true);
-  assert.equal(producerBackpressure(s, { now: NOW + 1, drainMinutes: 14, oldestWaitMinutes: 4 }).paused, true, "same observation cannot count twice");
-  assert.equal(producerBackpressure(s, { now: NOW + 2, drainMinutes: 14, oldestWaitMinutes: 4 }).allowed, true);
-  assert.equal(producerBackpressure(s, { now: NOW + 3, activeWorkers: 8 }).allowed, false);
-  assert.equal(producerBackpressure(s, { now: NOW + 4, drainMinutes: 0, oldestWaitMinutes: 11 }).paused, true);
+  assert.throws(() => enqueue(s, request("issue:9", [], { kind: "issue" })), /supported kind/);
+  assert.throws(() => enqueue(s, request("p1", [], { owner: { session: "coding-session" } })), /Unsupported implementation request/);
+  assert.equal(Object.keys(s.requests).length, 0);
+  assert.throws(() => newState({ limits: { maxWorkers: 8 } }), /Unsupported implementation admission/);
+  assert.throws(() => validateState({ ...s, producer: { paused: false } }), /Unsupported implementation admission/);
+  assert.deepEqual(s.controls, { validation: false, merges: false });
 });
 
 test("pressure includes setup and every runner class rather than browser-job counts", () => {

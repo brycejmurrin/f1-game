@@ -616,11 +616,6 @@
       "presentation": "native",
       "preserve": "@c3"
     },
-    "tools/ci/actions/workers.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
     "tools/ci/archive-sweep.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -734,7 +729,7 @@
     "tools/ci/dispatch.mjs": {
       "action": "page-results",
       "presentation": "shared-levels",
-      "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
+      "preserve": "Historical read-only --plan output and native exit status; --apply/--fire refuse before access, and mutating exports never read credentials, perform HTTP or post wakeups."
     },
     "tools/ci/fat-shard.mjs": {
       "action": "keep-native",

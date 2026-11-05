@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Filing creates an unqueued issue. Add queue:ready explicitly after checking dependencies and batch scope (docs/ACTIONS.md).
+        Filing records work for a user or explicitly authorized implementation agent. Ready PRs enter the test queue automatically (docs/ACTIONS.md).
         Write it so an agent with no chat history can start. Bigger than one PR? Make this the parent
         and file each piece as a sub-issue.
   - type: textarea

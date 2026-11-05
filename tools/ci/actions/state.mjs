@@ -3,23 +3,10 @@
  * compare-and-swap before performing any dispatch or other external side effect. */
 import crypto from "node:crypto";
 export const SCHEMA_VERSION = 1;
-export const DEFAULT_LIMITS = Object.freeze({ linux: 24, macos: 2, windows: 2, perPrLinux: 4, maxWorkers: 8 });
-const KINDS = new Set(["issue", "pr", "release", "experiment", "maintenance"]);
+export const DEFAULT_LIMITS = Object.freeze({ linux: 24, macos: 2, windows: 2, perPrLinux: 4 });
+const KINDS = new Set(["pr", "release", "experiment", "maintenance"]);
+const UNSUPPORTED_REQUEST_FIELDS = ["owner", "workerLaunch", "members", "batch", "batchParent", "intakeWithdrawn", "agentHost", "codingHost", "workerHost"];
 export const ACTIVE_TASK_STATUSES = new Set(["reserved", "running"]);
-export function implementationWorkerCount(state) {
-  const owners = new Set();
-  for (const request of Object.values(state.requests)) {
-    if (request.owner?.terminal) continue;
-    const launch = request.workerLaunch;
-    if (!request.owner && !(request.kind === 'issue' && ['reserved', 'firing', 'accepted', 'ambiguous'].includes(launch?.status))) continue;
-    // Repeated validation heads retain the same migrated PR owner. Distinct
-    // scopes stay separate until authenticated host evidence binds them.
-    const legacy = request.owner?.kind === 'legacy-unverified';
-    owners.add(legacy ? `legacy:${request.owner.evidence?.snapshotDigest}:${request.kind}:${request.number}`
-      : request.owner?.launchId || launch?.id || request.id);
-  }
-  return owners.size;
-}
 export const clone = (value) => structuredClone(value);
 export const archiveKey = id => crypto.createHash("sha256").update(id).digest("hex").slice(0, 2);
 let archiveContext = null;
@@ -81,10 +68,9 @@ export function newState({ mode = "shadow", limits = {}, controls = {}, now = Da
   const state = {
     schemaVersion: SCHEMA_VERSION, mode, createdAt: isoTime(now),
     // A true control is a pause. Shadow mode independently prevents admission.
-    controls: { workers: false, validation: false, merges: false, ...controls },
+    controls: { validation: false, merges: false, ...controls },
     limits: { ...DEFAULT_LIMITS, ...limits }, requests: {}, waves: {},
     scheduling: { sequence: 0, priorityTurn: 0, priorityTurns: { release: 0, shared: 0 }, lastRequestByTier: {}, releaseTurn: 0 },
-    producer: { paused: false, healthyObservations: 0 },
   };
   validateState(state);
   return state;
@@ -94,7 +80,8 @@ export function validateState(state) {
   if (!object(state) || state.schemaVersion !== SCHEMA_VERSION) throw new Error("Unsupported Actions state schema");
   if (!["shadow", "paused", "active"].includes(state.mode)) throw new Error("Invalid Actions mode");
   if (!object(state.requests) || !object(state.waves) || !object(state.controls) || !object(state.limits)) throw new Error("Malformed Actions state");
-  for (const name of ["workers", "validation", "merges"]) if (typeof state.controls[name] !== "boolean") throw new Error(`Invalid control: ${name}`);
+  for (const name of ["validation", "merges"]) if (typeof state.controls[name] !== "boolean") throw new Error(`Invalid control: ${name}`);
+  if (Object.hasOwn(state, "producer") || Object.hasOwn(state.controls, "workers") || Object.hasOwn(state.limits, "maxWorkers")) throw new Error("Unsupported implementation admission state");
   for (const [name, max] of Object.entries(DEFAULT_LIMITS)) {
     if (!Number.isInteger(state.limits[name]) || state.limits[name] < 0 || state.limits[name] > max) throw new Error(`Invalid capacity: ${name}`);
   }
@@ -105,12 +92,12 @@ export function validateState(state) {
   if (!object(state.scheduling) || !Number.isInteger(state.scheduling.sequence) || state.scheduling.sequence < 0 ||
     !Number.isInteger(state.scheduling.priorityTurn) || !Number.isInteger(state.scheduling.releaseTurn) ||
     !object(state.scheduling.priorityTurns) || !["release", "shared"].every((key) => Number.isInteger(state.scheduling.priorityTurns[key])) ||
-    !object(state.scheduling.lastRequestByTier) || !object(state.producer) || typeof state.producer.paused !== "boolean" ||
-    !Number.isInteger(state.producer.healthyObservations) || state.producer.healthyObservations < 0) throw new Error("Malformed scheduling state");
+    !object(state.scheduling.lastRequestByTier)) throw new Error("Malformed scheduling state");
   for (const [id, request] of Object.entries(state.requests)) {
     if (request.id !== id || !KINDS.has(request.kind) || !Array.isArray(request.tasks) || !object(request.results) ||
-      !Array.isArray(request.blockers) || !Array.isArray(request.members) || typeof request.paused !== "boolean" ||
+      !Array.isArray(request.blockers) || typeof request.paused !== "boolean" ||
       typeof request.superseded !== "boolean") throw new Error(`Malformed request: ${id}`);
+    if (UNSUPPORTED_REQUEST_FIELDS.some(field => Object.hasOwn(request, field))) throw new Error(`Unsupported implementation request fields: ${id}`);
     timeMs(request.acceptedAt);
     const ids = new Set();
     for (const task of request.tasks) {
@@ -186,6 +173,7 @@ function supersedePendingRelease(state, request) {
  * metadata, but cannot reset queue age, tasks, receipts, or ownership. */
 export function enqueue(state, input) {
   if (!object(input) || typeof input.id !== "string" || !input.id || !KINDS.has(input.kind)) throw new Error("Request needs an immutable id and supported kind");
+  if (UNSUPPORTED_REQUEST_FIELDS.some(field => Object.hasOwn(input, field))) throw new Error("Unsupported implementation request fields");
   let restored = false;
   if (!Object.hasOwn(state.requests, input.id)) {
     const record = archivedRecord(state, input.id);
@@ -233,10 +221,10 @@ export function enqueue(state, input) {
     ...clone(input), id: input.id, number: input.number ?? null,
     sourceSha: input.sourceSha ?? null, baseSha: input.baseSha ?? null, treeSha: input.treeSha ?? null,
     acceptedAt: isoTime(input.acceptedAt ?? Date.now()), priority: Boolean(input.priority), paused: Boolean(input.paused),
-    blockers: clone(input.blockers || []), members: clone(input.members || []), owner: input.owner ? clone(input.owner) : null,
+    blockers: clone(input.blockers || []),
     tasks, results: {}, superseded: false,
   };
-  if (!Array.isArray(request.blockers) || !Array.isArray(request.members)) throw new Error("Invalid request blockers/members");
+  if (!Array.isArray(request.blockers)) throw new Error("Invalid request blockers");
   if (request.kind === "pr") {
     const siblings = Object.values(state.requests).filter((r) => r.kind === "pr" && r.number === request.number && !r.superseded);
     for (const sibling of siblings) {

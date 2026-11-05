@@ -68,13 +68,20 @@ function observationApi(wave, rows, { artifacts = [], runStatus = 'completed', a
   return { request, calls };
 }
 
-test('planning verifies merge parents and bundles immutable source data with bundle prerequisites', async () => {
+test('ready PRs automatically queue verified integration validation without requesting a merge', async () => {
   const state = active(), planned = await prepare(context(), state);
   assert.ok(planned.id.includes(`${HEAD}:${BASE}:actions-v1:ready`));
   assert.equal(planned.sourceSha, SOURCE); assert.equal(planned.headSha, HEAD); assert.equal(planned.treeSha, TREE);
   assert.equal(planned.tasks.length, 3);
+  assert.equal(planned.mergeRequested, false);
   assert.deepEqual(planned.tasks[1].prerequisites, [planned.tasks[0].id]);
   enqueue(state, planned); assert.equal(prepareAdmission(state, NOW).waves[0].tasks.length, 1);
+});
+
+test('ordinary issues never create implementation requests or perform intake reads', async () => {
+  const issue = { number: 9, state: 'open', labels: [{ name: 'queue:ready' }] };
+  const planned = await prepareRequest(context({ issue, pr: null }), active(), { request() { throw new Error('Issue intake must not read external state'); } });
+  assert.equal(planned, null);
 });
 
 test('lagging PR base SHA is normalized to the protected tip before fencing the synthetic merge or planning', async () => {
@@ -395,24 +402,28 @@ test('an older accepted recovery comment cannot replace a newer recovery token o
 });
 
 test('event context includes its event name and authoritative label provenance; pagination cannot silently truncate', () => {
-  const issue = { number: 9, state: 'open', labels: [{ name: 'queue:priority' }] };
-  const payload = { action: 'labeled', issue, label: { name: 'queue:priority' }, sender: { login: 'brycejmurrin' } };
-  const fetched = eventContext('issues', payload, active(), { now: at(0), request(endpoint) {
-    return { status: 200, json: endpoint.includes('/events?') ? [{ id: 2, created_at: at(0), event: 'labeled', label: { name: 'queue:priority' }, actor: { login: 'brycejmurrin' }, performed_via_github_app: null }] : issue };
+  const ctx = context(), issue = { ...ctx.issue, labels: [{ name: 'queue:priority' }] };
+  const payload = { action: 'labeled', pull_request: ctx.pr, label: { name: 'queue:priority' }, sender: { login: 'brycejmurrin' } };
+  const fetched = eventContext('pull_request_target', payload, active(), { now: at(0), request(endpoint) {
+    const json = endpoint.includes('/events?') ? [{ id: 2, created_at: at(0), event: 'labeled', label: { name: 'queue:priority' }, actor: { login: 'brycejmurrin' }, performed_via_github_app: null }] :
+      endpoint.startsWith('branches/') ? { commit: { sha: BASE } } : endpoint.startsWith('pulls/') ? ctx.pr : issue;
+    return { status: 200, json };
   } });
-  assert.equal(fetched.eventName, 'issues'); assert.equal(fetched.provenance.id, 2);
+  assert.equal(fetched.eventName, 'pull_request_target'); assert.equal(fetched.provenance.id, 2);
   assert.throws(() => listAll(() => ({ status: 200, json: Array(100).fill({}) }), 'issues', x => x, { maxPages: 2 }), /Incomplete paginated/);
 });
 
 test('late label webhooks reconcile the newest authoritative state while preserving sticky owner pauses', async () => {
   const state = active(), prepared = await prepare(context(), state); enqueue(state, prepared);
   state.requests[prepared.id].paused = true; state.requests[prepared.id].pauseOwner = true;
-  const issue = { number: 9, state: 'open', labels: [] };
-  const payload = { action: 'labeled', issue, label: { name: 'queue:paused' }, sender: { login: 'brycejmurrin' } };
+  const ctx = context(), issue = { ...ctx.issue, labels: [] };
+  const payload = { action: 'labeled', pull_request: ctx.pr, label: { name: 'queue:paused' }, sender: { login: 'brycejmurrin' } };
   const event = (id, action, actor) => ({ id, created_at: at(0), event: action, label: { name: 'queue:paused' }, actor: { login: actor }, performed_via_github_app: null });
   for (const remover of ['brycejmurrin', 'agent']) {
-    const fetched = eventContext('issues', payload, state, { now: at(2000), request(endpoint) {
-      return { status: 200, json: endpoint.includes('/events?') ? [event(10, 'labeled', 'brycejmurrin'), event(20, 'unlabeled', remover)] : issue };
+    const fetched = eventContext('pull_request_target', payload, state, { now: at(2000), request(endpoint) {
+      const json = endpoint.includes('/events?') ? [event(10, 'labeled', 'brycejmurrin'), event(20, 'unlabeled', remover)] :
+        endpoint.startsWith('branches/') ? { commit: { sha: BASE } } : endpoint.startsWith('pulls/') ? ctx.pr : issue;
+      return { status: 200, json };
     } });
     assert.equal(fetched.payload.action, 'unlabeled'); assert.equal(fetched.provenance.id, 20);
     const next = ingest(state, fetched);

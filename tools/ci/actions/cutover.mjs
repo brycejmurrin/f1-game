@@ -2,7 +2,7 @@
 /** Activation uses live evidence, never caller-supplied permission assertions. */
 import { importSnapshot } from './migration.mjs';
 const WORKFLOWS = ['actions-coordinator.yml', 'actions-worker.yml', 'actions-validation.yml'];
-const SCOPES = ['workers', 'validation', 'merges'];
+const SCOPES = ['validation', 'merges'];
 const SHA = /^[a-f0-9]{40}$/i;
 async function get(request, path, options = { method: 'GET' }) {
   const r = await request(path, options);
@@ -68,8 +68,8 @@ async function verifyMigration(request, state) {
   const snapshot = importSnapshot(Buffer.from(document.content, 'base64').toString('utf8'));
   if (snapshot.digest !== checkpoint.snapshotDigest || snapshot.digest !== migration.snapshotDigest) throw new Error('Durable backup digest differs from migration');
   const labels = await collection(request, 'labels');
-  const expected = ['queue:paused', 'queue:priority', 'queue:ready'];
-  if (labels.length !== 3 || labels.map(l => l.name).sort().join('|') !== expected.join('|')) throw new Error('Live repository must contain exactly the three queue labels');
+  const expected = ['queue:paused', 'queue:priority'];
+  if (labels.length !== 2 || labels.map(l => l.name).sort().join('|') !== expected.join('|')) throw new Error('Live repository must contain exactly the two PR queue labels');
   for (const name of ['dispatch.yml', 'land.yml']) {
     const workflow = await get(request, `actions/workflows/${name}`);
     if (workflow.state !== 'disabled_manually') throw new Error(`Old consumer remains enabled: ${name}`);
@@ -102,8 +102,8 @@ export async function activate({ request, store, validationRunId, now = new Date
     const records = state.migration.checkpoint.records || [];
     for (const request of Object.values(state.requests)) {
       const record = records.find(r => r.number === request.number && r.kind === request.kind);
-      // No inferred owner release or manual-pause removal. Only known migration staging is lifted.
-      if (record && !record.paused && !record.claimed && !request.owner && !request.pauseOwner && !request.pauseProvenance?.paused && !(request.blockers || []).length) request.paused = false;
+      // Only migration staging is lifted; manual PR pause provenance remains authoritative.
+      if (record && !record.paused && !request.pauseOwner && !request.pauseProvenance?.paused && !(request.blockers || []).length) request.paused = false;
     }
     for (const scope of SCOPES) {
       const provenance = state.controlProvenance?.[scope];

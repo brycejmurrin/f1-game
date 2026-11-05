@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createStore, compactHistory, readArchivedRequest } from "../../tools/ci/actions/store.mjs";
-import { newState, enqueue, claimWave, completeTask, capacityUsage, archiveKey } from "../../tools/ci/actions/state.mjs";
+import { newState, enqueue, claimWave, completeTask, reconcileOwner, capacityUsage, archiveKey } from "../../tools/ci/actions/state.mjs";
 import { admit } from "../../tools/ci/actions/scheduler.mjs";
-import { prepareRequest, ingest } from "../../tools/ci/actions/controller.mjs";
+import { prepareRequest, ingest, POLICY_VERSION } from "../../tools/ci/actions/controller.mjs";
 
 const state = () => newState({ mode: "active", now: 0 });
 const req = (id) => ({ id, kind: "experiment", sourceSha: "head", treeSha: "tree", baseSha: "base", acceptedAt: 0,
@@ -218,18 +218,19 @@ test('verified negative archive lookup permits new IDs in an occupied index shar
 test('the pure planning prepass carries verified negative archive proof without persisting runtime lookup data', async () => {
   const f = archiveFake(terminalExperiment()), store = createStore({ request: f.api });
   compactHistory({ store, request: f.api, thresholdBytes: 0 });
-  let number; for (let i = 1; i < 10000; i++) if (archiveKey(`issue:${i}`) === archiveKey('old')) { number = i; break; }
+  const head = '1'.repeat(40), base = '2'.repeat(40);
+  const requestId = number => `pr:${number}:${head}:${base}:${POLICY_VERSION}:ready:blocked`;
+  let number; for (let i = 1; i < 10000; i++) if (archiveKey(requestId(i)) === archiveKey('old')) { number = i; break; }
   assert.ok(number);
-  const issue = { number, state: 'open', labels: [{ name: 'queue:ready' }] };
-  const context = { eventName: 'issues', issue, pr: null, events: [], now: new Date(1000).toISOString(),
-    payload: { action: 'opened', issue, sender: { login: 'person' } } };
+  const issue = { number, state: 'open', pull_request: {}, labels: [] };
+  const pr = { number, state: 'open', draft: false, mergeable: false, head: { sha: head }, base: { sha: base } };
+  const context = { eventName: 'pull_request_target', issue, pr, events: [], now: new Date(1000).toISOString(),
+    payload: { action: 'opened', pull_request: pr, sender: { login: 'person' } } };
   const current = f.current;
-  const prepared = await prepareRequest(context, current, { request(endpoint, options) {
-    return endpoint.startsWith('issues/') ? { status: 200, json: [] } : f.api(endpoint, options);
-  } });
+  const prepared = await prepareRequest(context, current, { readBase: () => base, request: f.api });
   assert.equal(JSON.stringify(prepared).includes('__archiveLookups'), false);
   const preview = ingest(current, context, prepared);
-  assert.ok(preview.requests[`issue:${number}`]);
+  assert.equal(preview.requests[requestId(number)].kind, 'pr');
   assert.equal(JSON.stringify(preview).includes('__archiveLookups'), false);
 });
 
@@ -287,12 +288,17 @@ test('restoring an archived PR preserves age and evidence while reopening its cu
   assert.equal(restored.state.requests['new-pr'].superseded, true);
 });
 
-test('active tasks, unresolved worker ownership, current PRs and pending landing publication are retained', () => {
-  const initial = terminalExperiment(); initial.requests.old.owner = { terminal: false };
+test('active executor tasks, current PRs and pending landing publication are retained', () => {
+  const initial = state(), old = enqueue(initial, { ...req('old'), tasks: [...req('old').tasks,
+    { id: 'old-live', runner: 'ubuntu-latest', kind: 'guard', expectedSeconds: 10, setupSeconds: 0 }] });
+  const [wave] = admit(initial); claimWave(initial, wave.id, { runId: '123', runAttempt: 1, now: 0 });
+  completeTask(initial, { waveId: wave.id, runId: '123', runAttempt: 1, taskId: old.tasks[0].id },
+    { status: 'failure', complete: false, sourceSha: old.sourceSha, baseSha: old.baseSha, treeSha: old.treeSha, exitCode: 1 });
   enqueue(initial, { ...req('current-pr'), kind: 'pr', number: 9 });
   const f = archiveFake(initial), store = createStore({ request: f.api });
   assert.deepEqual(compactHistory({ store, request: f.api, thresholdBytes: 0 }).archived, []);
-  const next = f.current; next.requests.old.owner.terminal = true;
+  const next = f.current;
+  reconcileOwner(next, wave.id, { runId: '123', runAttempt: 1, status: 'completed', now: 1000 });
   next.requests.old.landing = { status: 'merged', publication: 'pending' }; next.landing = { requestId: 'old', ...next.requests.old.landing }; f.replace(next);
   assert.deepEqual(compactHistory({ store, request: f.api, thresholdBytes: 0 }).archived, []);
   const ready = f.current; ready.landing.publication = 'dispatched'; ready.requests.old.landing.publication = 'dispatched'; f.replace(ready);

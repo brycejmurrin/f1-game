@@ -86,7 +86,7 @@ test('Actions machine receipts retain native output and import-only queue module
   const inventory = collect();
   const policies = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/agent-output/policies.json'), 'utf8'));
   const actions = inventory.tools.filter(row => row.path.startsWith('tools/ci/actions/'));
-  assert.ok(actions.length >= 19, 'every current queue component is covered by a reviewed output policy');
+  for (const name of ['cli', 'coverage', 'executor', 'publisher']) assert.ok(actions.some(row => row.path.endsWith(`/${name}.mjs`)), `required queue entrypoint ${name} is inventoried`);
   for (const row of actions) {
     const policy = resolveToolPolicy(policies, row.path);
     assert.equal(policy.presentation, 'native', row.path);

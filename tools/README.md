@@ -146,15 +146,14 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/actions/diagnostics.mjs** | Normalize diagnostic workflow inputs into immutable, deduplicated admission requests. | — |
 | **ci/actions/executor.mjs** | Token-free task execution bound to an exact controller lease and source tree. | — |
 | **ci/actions/landing.mjs** | Check current-head evidence, owner approval and live pause/base state before trusted merge. | — |
-| **ci/actions/migration.mjs** | Export legacy labels and import explicit, idempotent queue and batch migration state. | — |
+| **ci/actions/migration.mjs** | Export every legacy label attachment and import only PR test/merge queue controls. | — |
 | **ci/actions/policy.mjs** | Classify supported queue events and parse the small public command vocabulary. | — |
 | **ci/actions/publisher.mjs** | Publish admitted workflow artifacts through the trusted release boundary. | — |
 | **ci/actions/release.mjs** | Continue an admitted release with trusted artifact staging, publication and live-commit checks. | — |
-| **ci/actions/requests.mjs** | Build immutable issue and PR requests while preserving scheduling identity and ownership. | — |
-| **ci/actions/scheduler.mjs** | Admit bounded fair validation waves and apply producer capacity backpressure. | — |
+| **ci/actions/requests.mjs** | Build immutable PR validation requests while preserving queue age, intent and exact-head evidence. | — |
+| **ci/actions/scheduler.mjs** | Admit bounded fair validation waves and report queue work by runner pool. | — |
 | **ci/actions/state.mjs** | Maintain immutable requests, runner reservations, ownership, results and verified archive restoration. | — |
 | **ci/actions/store.mjs** | Read and compare-and-swap the GitHub branch ledger with bounded conflict recovery. | — |
-| **ci/actions/workers.mjs** | Reserve implementation launches before firing and retain ambiguous ownership until recovery. | — |
 | **ci/branch-audit.mjs** | Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch). | check-changes |
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/change-kind.mjs** | PR diff kind: docs-only, css-only (plus prose), or code — step-level skips, never a pull_request paths filter. | — |
@@ -778,7 +777,7 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
 | **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/debug-unit.mjs** | Wrapper: npm run debug:unit -- <file> loads vm-debug-preload so vm-loaded js/ is file://-debuggable. |
-| **ci/dispatch.mjs** | The Actions dispatcher: launches, takeovers, deploy:red fixers, nudges, digests, the Board; --fire starts workers. |
+| **ci/dispatch.mjs** | Retired coding-agent dispatcher; --plan is historical read-only inspection, --apply/--fire always refuse. |
 | **ci/fat-shard.mjs** | Duration-balanced fat UI spec pieces: static titles + per-title timings, LPT-packed into --test-list files. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
@@ -828,7 +827,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **ci/dispatch.json** | `ci/dispatch.mjs`, `ci/lib/provenance.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md`, `tests/unit/dispatch.test.mjs` |
-| **ci/worker-prompt.md** | `ci/dispatch.mjs`, `tests/unit/actions-policy-docs.test.mjs` |
+| **ci/worker-prompt.md** | `tests/unit/actions-policy-docs.test.mjs` |
 | **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/memory-sync.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tooling-fast-runner.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
 | **environment/ENVIRONMENT.md** | `environment/MCP-STARTUP-SKILL.md`, `environment/bind-canonical.sh`, `environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md` |
 | **environment/MCP-STARTUP-SKILL.md** | `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/install-environment.sh` |

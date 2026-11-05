@@ -1,4 +1,4 @@
-// @doc Build immutable issue and PR requests while preserving scheduling identity and ownership.
+// @doc Build immutable PR validation requests while preserving queue age, intent and exact-head evidence.
 import { byOwner, LABELS, namesOf } from "./policy.mjs";
 
 function latest(events, name) {
@@ -14,35 +14,25 @@ function controls(item, { events, owner, previous = {} } = {}) {
   return { priority: !!(labels.includes(LABELS.priority) && priority?.event === "labeled" && byOwner(priority, owner)),
     paused: !!(labels.includes(LABELS.paused) || (ownerPause && !lifted) || (previous.paused && !pause)), pauseOwner: !!(ownerPause && !lifted) };
 }
-function common(item, options, kind, id) {
-  const previous = options.previous || {}, intent = options.intent || {};
-  const liveOwner = previous.owner && !previous.owner.terminal;
-  const requestedMembers = intent.pendingMembership || intent.members || options.members || previous.members || [];
-  const members = liveOwner ? previous.members || [] : requestedMembers;
-  const pendingMembership = liveOwner && JSON.stringify(members) !== JSON.stringify(requestedMembers) ? [...requestedMembers] : undefined;
-  const headChanged = !!previous.sourceSha && !!item.head?.sha && previous.sourceSha !== item.head.sha;
-  return { ...previous, id, kind, number: Number(item.number), sourceSha: item.head?.sha || null,
-    baseSha: item.base?.sha || options.baseSha || null, treeSha: options.treeSha || null,
-    acceptedAt: previous.acceptedAt || options.now || new Date().toISOString(),
-    ...controls(item, options), blockers: [...(options.blockers || [])], members: [...members], pendingMembership,
-    owner: options.claimOwner || previous.owner || null, tasks: headChanged ? [] : previous.tasks || [], results: headChanged ? {} : previous.results || {},
-    mergeRequested: intent.mergeRequested || previous.mergeRequested || false,
-    mergeRequestedAt: intent.mergeRequestedAt || previous.mergeRequestedAt || null,
-    approvedSha: intent.approvedSha || previous.approvedSha || null, approvedDiffSha: intent.approvedDiffSha || previous.approvedDiffSha || null,
-    approvedBy: intent.approvedBy || previous.approvedBy || null, approvedViaApp: Object.hasOwn(intent, "approvedViaApp") ? intent.approvedViaApp : previous.approvedViaApp,
-    recoverRequested: intent.recoverRequested || previous.recoverRequested || false };
-}
-/** Parent membership is authoritative metadata supplied by the adapter, never inferred from an area label. */
-export function requestFromIssue(issue, options = {}) {
-  if (!issue || issue.pull_request || issue.state === "closed" || !namesOf(issue).includes(LABELS.ready)) return null;
-  const request = common(issue, options, "issue", `issue:${issue.number}`);
-  if (options.batchParent) request.blockers.push(`batch:${options.batchParent}`);
-  if (request.members.length) request.batch = true;
-  return request;
-}
+/** PR events request validation automatically; implementation agents are outside this coordinator. */
 export function requestFromPR(pr, options = {}) {
   if (!pr?.head?.sha || pr.state === "closed" || pr.merged) return null;
-  return { ...common(pr, options, "pr", `pr:${pr.number}:${pr.head.sha}`), draft: !!pr.draft };
+  const previous = options.previous || {}, intent = options.intent || {};
+  const { owner, workerLaunch, members, pendingMembership, batch, batchParent, intakeWithdrawn, agentHost, codingHost, workerHost, ...retained } = previous;
+  const headChanged = !!(previous.headSha || previous.sourceSha) && (previous.headSha || previous.sourceSha) !== pr.head.sha;
+  return { ...retained, id: `pr:${pr.number}:${pr.head.sha}`, kind: "pr", number: Number(pr.number),
+    sourceSha: pr.head.sha, headSha: pr.head.sha, draft: !!pr.draft,
+    baseSha: pr.base?.sha || options.baseSha || null, treeSha: options.treeSha || null,
+    acceptedAt: previous.acceptedAt || options.now || new Date().toISOString(),
+    ...controls(pr, options), blockers: [...(options.blockers || [])],
+    tasks: headChanged ? [] : previous.tasks || [], results: headChanged ? {} : previous.results || {},
+    mergeRequested: intent.mergeRequested === true || previous.mergeRequested === true,
+    mergeRequestedAt: intent.mergeRequestedAt || previous.mergeRequestedAt || null,
+    approvedSha: intent.approvedSha || previous.approvedSha || null,
+    approvedDiffSha: intent.approvedDiffSha || previous.approvedDiffSha || null,
+    approvedBy: intent.approvedBy || previous.approvedBy || null,
+    approvedViaApp: Object.hasOwn(intent, "approvedViaApp") ? intent.approvedViaApp : previous.approvedViaApp,
+    recoverRequested: intent.recoverRequested === true || previous.recoverRequested === true };
 }
 /** Cheap trusted admission before any integration code executes. Inputs are authoritative adapter evidence. */
 export function trustedLandingEligibility(pr, options = {}) {

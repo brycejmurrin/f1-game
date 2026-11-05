@@ -1,6 +1,10 @@
 # actionlint configuration — read by tools/check/workflow-lint.mjs (actionlint v1.7.12).
 # Reference: https://github.com/rhysd/actionlint/blob/main/docs/config.md
 paths:
+  .github/workflows/dispatch.yml:
+    ignore:
+      # User-retired implementation-agent launch remains inert in every mode.
+      - 'constant expression "false" in condition'
   .github/workflows/actions-coordinator.yml:
     ignore:
       # Preserve control events until durable ingestion; the validator predates queue.

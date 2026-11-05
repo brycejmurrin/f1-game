@@ -54,7 +54,7 @@ export function readArchivedRequest({ state, request, id, branch = "bot/actions-
 }
 
 function eligibleHistory(state, record) {
-  if (record.recoverRequested || record.owner && !record.owner.terminal || ["reserved", "firing", "accepted", "ambiguous"].includes(record.workerLaunch?.status) || record.tasks.some(task => ACTIVE_TASK_STATUSES.has(task.status))) return false;
+  if (record.recoverRequested || record.tasks.some(task => ACTIVE_TASK_STATUSES.has(task.status))) return false;
   const landing = state.landing?.requestId === record.id ? state.landing : record.landing;
   if (landing && landing.status !== "rejected" && !(landing.status === "merged" && landing.publication === "dispatched")) return false;
   if (record.kind === "pr") return record.superseded === true;

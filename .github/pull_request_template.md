@@ -30,9 +30,9 @@ or permission to bypass a pause. The reset runtime starts in shadow mode; see `d
      Draft feedback is bounded; comprehensive affected validation is required before merge. A queue entry is not a pass. -->
 
 ## Hand-off
-<!-- The dispatch Action and a takeover read this block (skill `steward`): refresh it at every push and
+<!-- The implementation owner or an explicitly authorized successor reads this block: refresh it at every push and
      when requesting merge or recovery. One value per line, no prose outside the fence.
-     Ownership comes from the coordinator reservation, not this descriptive block; pause with queue:paused. -->
+     This is implementation context, not an Actions coding lease. queue:paused governs PR tests and merging. -->
 ```handoff
 head: <sha>
 owner: <host>:<session or agent id>

@@ -6,7 +6,7 @@ const sha = 'a'.repeat(40), tree = 'b'.repeat(40), blob = 'c'.repeat(40);
 const workflows = ['actions-coordinator.yml', 'actions-worker.yml', 'actions-validation.yml'];
 function fixture() {
   const snapshot = { schema: 1, repo: 'o/r', complete: true, labels: [], items: [] }; snapshot.digest = snapshotDigest(snapshot);
-  const state = { mode: 'paused', controls: { workers: true, validation: true, merges: true }, migration: { stage: 'complete', frozenAt: '2026-11-05T00:00:00Z', controlsBeforeFreeze: { workers: false, validation: false, merges: false }, planDigest: 'plan', snapshotDigest: snapshot.digest, checkpoint: { stage: 'complete', snapshotDigest: snapshot.digest, backupReceipt: `migrations/snapshot.json@${blob}`, records: [{ number: 1, kind: 'issue', paused: false, claimed: false }, { number: 2, kind: 'issue', paused: true, claimed: true }] } }, requests: { a: { number: 1, kind: 'issue', paused: true, blockers: [] }, b: { number: 2, kind: 'issue', paused: true, blockers: ['live-ownership-unverified'] } } };
+  const state = { mode: 'paused', controls: { validation: true, merges: true }, migration: { stage: 'complete', frozenAt: '2026-11-05T00:00:00Z', controlsBeforeFreeze: { validation: false, merges: false }, planDigest: 'plan', snapshotDigest: snapshot.digest, checkpoint: { stage: 'complete', snapshotDigest: snapshot.digest, backupReceipt: `migrations/snapshot.json@${blob}`, records: [{ number: 1, kind: 'pr', paused: false }, { number: 2, kind: 'pr', paused: true }] } }, requests: { a: { number: 1, kind: 'pr', paused: true, blockers: [] }, b: { number: 2, kind: 'pr', paused: true, blockers: ['sticky-hold'] } } };
   const calls = []; let variable = 'paused';
   const request = async (path, options = {}) => {
     const method = options.method || 'GET'; calls.push({ path, method, body: options.body });
@@ -22,7 +22,7 @@ function fixture() {
     else if (path === 'actions/runs/123' || path === 'actions/runs/123/attempts/1') json = { workflow_id: 3, status: 'completed', conclusion: 'success', run_attempt: 1, head_sha: sha, path: '.github/workflows/actions-validation.yml', head_repository: { full_name: 'o/r' } };
     else if (path.startsWith('actions/runs/123/attempts/1/jobs?')) json = { jobs: [{ name: 'Actions validation', status: 'completed', conclusion: 'success' }] };
     else if (path === 'contents/migrations/snapshot.json?ref=bot%2Factions-state') json = { sha: blob, encoding: 'base64', content: Buffer.from(JSON.stringify(snapshot)).toString('base64') };
-    else if (path.startsWith('labels?')) json = ['queue:ready', 'queue:paused', 'queue:priority'].map(name => ({ name }));
+    else if (path.startsWith('labels?')) json = ['queue:paused', 'queue:priority'].map(name => ({ name }));
     else throw Error(path);
     return { status: 200, json };
   };
@@ -106,10 +106,10 @@ test('new variable creation uses POST and failed write never activates ledger', 
 test('activation restores pre-freeze controls but retains later owner pauses and pause provenance', async () => {
   const f = fixture();
   f.state.migration.controlsBeforeFreeze.merges = true;
-  f.state.controlProvenance = { workers: { at: '2026-11-05T00:00:01Z', paused: true, actor: 'owner' }, validation: { at: '2026-11-04T00:00:00Z', paused: true, actor: 'owner' } };
+  f.state.controlProvenance = { validation: { at: '2026-11-05T00:00:01Z', paused: true, actor: 'owner' }, merges: { at: '2026-11-04T00:00:00Z', paused: true, actor: 'owner' } };
   f.state.requests.a.pauseOwner = true;
   await activate({ ...f, validationRunId: 123 });
-  assert.deepEqual(f.state.controls, { workers: true, validation: false, merges: true });
+  assert.deepEqual(f.state.controls, { validation: true, merges: true });
   assert.equal(f.state.requests.a.paused, true);
 });
 
@@ -122,7 +122,7 @@ test('missing pre-freeze controls fail before variable mutation', async () => {
 test('rollback pauses variable and ledger without restoring labels or enabling old workflows', async () => {
   const f = fixture(); await activate({ ...f, validationRunId: 123 });
   await rollback({ ...f, now: '2026-11-05T01:00:00Z', reason: 'regression' });
-  assert.equal(f.state.mode, 'paused'); assert.deepEqual(f.state.controls, { workers: true, validation: true, merges: true });
+  assert.equal(f.state.mode, 'paused'); assert.deepEqual(f.state.controls, { validation: true, merges: true });
   assert.equal(f.state.migration.rollback.labelsRestored, false);
   assert.ok(f.calls.filter(c => c.method !== 'GET').every(c => c.path.startsWith('actions/variables')));
   await rollback({ ...f, now: '2026-11-05T01:00:00Z', reason: 'regression' });
@@ -139,13 +139,13 @@ test('rollback variable-first crash keeps execution frozen and retry completes l
 });
 
 test('later explicit owner resume overrides a pre-freeze pause while rollback pauses stay sticky', async () => {
-  const f = fixture(); f.state.migration.controlsBeforeFreeze.workers = true;
+  const f = fixture(); f.state.migration.controlsBeforeFreeze.validation = true;
   f.state.controlProvenance = {
-    workers: { at: '2026-11-05T00:00:01Z', paused: false, source: 'owner', actor: 'owner', commentId: 10 },
+    validation: { at: '2026-11-05T00:00:01Z', paused: false, source: 'owner', actor: 'owner', commentId: 10 },
     merges: { at: '2026-11-05T00:00:01Z', paused: true, source: 'rollback' },
   };
   await activate({ ...f, validationRunId: 123 });
-  assert.equal(f.state.controls.workers, false); assert.equal(f.state.controls.merges, true);
+  assert.equal(f.state.controls.validation, false); assert.equal(f.state.controls.merges, true);
 });
 
 test('non-owner or undated resume evidence cannot release an inherited global pause', async () => {
@@ -154,8 +154,8 @@ test('non-owner or undated resume evidence cannot release an inherited global pa
     { paused: false, source: 'owner' },
     { at: '2026-11-04T00:00:01Z', paused: false, source: 'owner' },
   ]) {
-    const f = fixture(); f.state.migration.controlsBeforeFreeze.workers = true;
-    f.state.controlProvenance = { workers: provenance };
-    await activate({ ...f, validationRunId: 123 }); assert.equal(f.state.controls.workers, true);
+    const f = fixture(); f.state.migration.controlsBeforeFreeze.validation = true;
+    f.state.controlProvenance = { validation: provenance };
+    await activate({ ...f, validationRunId: 123 }); assert.equal(f.state.controls.validation, true);
   }
 });
