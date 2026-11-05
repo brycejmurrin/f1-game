@@ -18,7 +18,7 @@
 // Each pass is keyed by its render target (name + size) or "canvas"; `render.drawCalls` and `.triangles`
 // are summed per key per frame and averaged over the measured frames.
 //
-//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--webgpu] [--json PATH]
+//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object|--by-mesh] [--webgpu] [--json PATH]
 //        [--camera chase|helmet|...] [--park] [--tune knob=value]...
 //
 // Output: one table row per pass key: frames it ran in (of N), mean draw calls and triangles per frame it
@@ -31,8 +31,10 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--camera MODE] [--park] [--tune knob=value]... [--json PATH]
+exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object|--by-mesh] [--camera MODE] [--park] [--tune knob=value]... [--json PATH]
   --by-object attributes each pass's triangles to object groups (the mesh's userData flags: tlxLgRoad, tlxBatch, ...), for the mirror and main passes.
+  --by-mesh is --by-object with each mesh told apart: its index count, draw range and bounding radius in the label (a merged
+    chunk draw shows its visible set's radius), every row printed whole. How the helmet mirror's 60k-tri terrain cell was found.
   --webgpu runs three's WebGPU backend on Mesa lavapipe (CI Lavapipe shard) instead of the WebGL2 pin.
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
   --park freezes the normal camera at 10% of the track, pins tier/resolution, and preserves the real fog/distance budgets (free cameras disable them).
@@ -53,7 +55,8 @@ const FRAMES = Math.max(10, +flag("--frames", 120) || 120);
 const WARM = Math.max(0, +flag("--warm", 60) || 60);
 const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
-const BY_OBJECT = argv.includes("--by-object");
+const BY_MESH = argv.includes("--by-mesh");
+const BY_OBJECT = BY_MESH || argv.includes("--by-object");
 const CAMERA = flag("--camera", null);
 const PARK = argv.includes("--park");
 // --webgpu: three's WebGPU backend (Bryce's iPhone path) on Mesa lavapipe. Needs the lvp ICD; SwiftShader cannot run it.
@@ -111,7 +114,13 @@ function installWrap() {
     const origRO = r.renderObject.bind(r);
     // Group label: the mesh's userData flags (tlxLgRoad, tlxEmissive, tlxBatch, ...), which are what TLX marks its mesh kinds with
     // (meshes carry no names, and every material is the same node-material class, so neither separates them).
-    const label = (o) => { const k = o.userData ? Object.keys(o.userData).join(",") : ""; return k || (o.geometry && o.geometry.name) || "unflagged"; };
+    const flags = (o) => { const k = o.userData ? Object.keys(o.userData).join(",") : ""; return k || (o.geometry && o.geometry.name) || "unflagged"; };
+    // --by-mesh: the geometry's own size, so rows of one flag set separate (bounding sphere as the draw path left it).
+    const mesh = (o) => {
+      const g = o.geometry || {}, bs = g.boundingSphere, n = g.index ? g.index.count : g.attributes && g.attributes.position ? g.attributes.position.count : 0;
+      return flags(o) + " idx=" + n + (g.drawRange && Number.isFinite(g.drawRange.count) ? " dr=" + g.drawRange.count : "") + (bs ? " r=" + Math.round(bs.radius) : "");
+    };
+    const label = (o) => (r.__passCensus.byMesh ? mesh(o) : flags(o));
     r.renderObject = function (object) {
       if (!r.__passCensus.on || !r.__passCensus.byObject) return origRO.apply(this, arguments);
       const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
@@ -177,15 +186,15 @@ async function main() {
       }, null, { timeout: 180000, polling: 500 }).then(() => true, () => false);
       if (!advanced) console.error("webgpu: renderer.render() was not called 5 times within 180s of the wrap");
     }
-    const rows = await page.evaluate(async ({ n, by }) => {
+    const rows = await page.evaluate(async ({ n, by, byMesh }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       const r = window.renderer, pc = r.__passCensus;
-      pc.rows.length = 0; pc.objRows.length = 0; pc.byObject = by; pc.on = true;
+      pc.rows.length = 0; pc.objRows.length = 0; pc.byObject = by; pc.byMesh = byMesh; pc.on = true;
       let frames = 0;
       for (let i = 0; i < n; i++) { A.setInput({ throttle: true, steer: 0.35 * Math.sin((i + 200) / 25) }); await raf(); frames++; }
       pc.on = false; A.clearInput();
       return { frames, rows: pc.rows.slice(), objRows: pc.objRows.slice() };
-    }, { n: FRAMES, by: BY_OBJECT });
+    }, { n: FRAMES, by: BY_OBJECT, byMesh: BY_MESH });
     const by = new Map();
     for (const [key, calls, tris] of rows.rows) {
       const e = by.get(key) || { key, renders: 0, calls: 0, tris: 0 };
@@ -208,7 +217,7 @@ async function main() {
       for (const [pass, lab, calls, tris] of rows.objRows) { const k = pass + " | " + lab; const e = m.get(k) || { pass, group: lab, draws: 0, calls: 0, tris: 0 }; e.draws++; e.calls += calls; e.tris += tris; m.set(k, e); }
       byObj = [...m.values()].map((e) => ({ pass: e.pass, group: e.group, callsPerFrame: +(e.calls / rows.frames).toFixed(1), trisPerFrame: Math.round(e.tris / rows.frames) })).sort((a, b) => b.trisPerFrame - a.trisPerFrame);
       console.log("\nby object group (pass | group)".padEnd(58) + "calls/frame  tris/frame");
-      for (const e of byObj.slice(0, 24)) console.log((e.pass + " | " + e.group).slice(0, 56).padEnd(58) + String(e.callsPerFrame).padStart(11) + String(e.trisPerFrame).padStart(12));
+      for (const e of byObj.slice(0, BY_MESH ? 60 : 24)) console.log((BY_MESH ? (e.pass + " | " + e.group).padEnd(96) : (e.pass + " | " + e.group).slice(0, 56).padEnd(58)) + String(e.callsPerFrame).padStart(11) + String(e.trisPerFrame).padStart(12));
       if (!byObj.length) console.log("(no renderObject calls seen: this three build does not expose renderer.renderObject)");
     }
     const summary = { track, frames: rows.frames, backend: backend.api, forceWebGL: backend.forceWebGL,
