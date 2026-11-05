@@ -7,6 +7,7 @@ Log.info("ui", "SetupUI.create");
 const tuneExperiments = SetupExperiments.create(G, (team) => renderStatBars($("cs-stats-inner"), team));
 let surfaceControls = null;
 function clearSurfaceControls() { if (surfaceControls) surfaceControls.dispose(); surfaceControls = null; }
+function endSurfaceInspection() { if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); }
 // Write on change: the livery editor's per-input passes would otherwise queue a MutationRecord per
 // unchanged attribute or text, and each wakes the #carsetup observers (livery-design-editor.js).
 function attrIf(el, k, v) {
@@ -15,24 +16,19 @@ function attrIf(el, k, v) {
 function propIf(el, k, v) {
   if (el[k] !== v) el[k] = v;
 }
-// Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
         getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures } = G;
 
-// The stat list and the display curve now live in Parts, because the in-world
-// stats board on the garage wall reads the same numbers and a second copy of
-// the curve would let the two disagree.
-const CS_STATS = Parts.STAT_KEYS;
-const displayStat = Parts.displayStat;
+// The stat list and display curve are Parts': the garage wall's stats board reads the same numbers.
 function renderStatBars(container, team) {
   const stats = (typeof GarageExperience !== "undefined" ? GarageExperience.statsOf(team) : team.stats) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
   const mods = Parts.getMods(getTeamParts(team.id), team, tune);   // the bars move with the SETUP sheet too
   container.textContent = "";
-  for (const { key, label } of CS_STATS) {
+  for (const { key, label } of Parts.STAT_KEYS) {
     const base = stats[key] || 75;
-    const effective = Math.round(displayStat(base * mods[key]));
+    const effective = Math.round(Parts.displayStat(base * mods[key]));
     const delta = effective - base;
 
     const row = document.createElement("div");
@@ -71,33 +67,28 @@ function renderStatBars(container, team) {
   }
 }
 
-// Persisted like the settings tab and the circuit filter (the other two
-// tab-strips), and defaulting to TEAM: opening on the first PARTS category
-// shows a player coming to change their team FRONT WING options, with the
-// rail's selected tab not the first one and LIVERY 14th behind a horizontal scroll.
-let csVisitGeneration = 0;
-let csActiveCat = null;   // id of the tab currently open in the GARAGE
+let csVisitGeneration = 0;  // bumped per open and per hide: a deferred build from an older visit is dropped
+let csActiveCat = null;    // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
-let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
+let csLivDraft = null;     // the paint job being edited (livDraftFrom's shape)
 let csLivDirty = null;     // () => unsaved design edits? (set with the editor, cleared with the draft)
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 let csLivTeamId = null;    // the team the draft belongs to: a team change discards it
+let csLivQuery = "";       // livery search text, sticky across rebuilds (#3339)
+// Factory-finishes <details> open state: null = platform default (open on desktop so
+// End/Home reach past content-visibility, collapsed on phone); a player toggle sticks.
+let csLivFactoryOpen = null;
+let livBuild = 0;          // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
 
 const PSEUDO_CATS = ["team", "tune", "livery"];
 const SECONDARY_CATS = new Set(["floor", "cockpit", "wheels", "tune", "livery"]);
 
 // ONE DRAFT SHAPE, THREE DOORS INTO THE EDITOR. New, edit-in-place and
-// "customize a copy" share one field list, because hand-spelled copies drift
-// silently: a copy missing the eight structural fields (finStyle, finBadge,
-// spineLogo, finShape, tcam, coverVents, spineHeight, spineSide) fails
-// nothing — pillRow falls back to `dflt` when a key is absent, so the editor
-// shows STANDARD/NONE, and the save writes a field only when it differs from
-// that default — yet hands back a team's own paint job with a shark fin and a
-// flat spine (every team sets finShape "none" + spineHeight "dorsal" in
-// js/data/teams.js), with the editor agreeing.
-// The save's own `if (d.x && d.x !== <default>)` chain and Liveries.forTeam's
-// copy list are the other two spellings of these keys; team-livery.test.mjs
-// holds all three together.
+// "customize a copy" share one field list, because a hand-spelled copy drifts
+// silently: a missing pill falls back to its default here AND in the save, so a
+// team's own paint job (finShape "none", spineHeight "dorsal") came back with a
+// shark fin and nothing failed. Liveries.forTeam's copy list is the other
+// spelling of these keys; team-livery.test.mjs holds them together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "lower", "upper", "wing", "halo",
                           "rearWing", "cover", "spineTint", "saddleTint",
                           "sideTint", "sunTint",
@@ -120,17 +111,11 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team", crestTone: "team", crestFrame: "none",
                           floorFinish: "inherit", suspFinish: "inherit", rimFinish: "inherit", noseFinish: "inherit",
                           ductFinish: "inherit", deflectorFinish: "inherit", cockpitFinish: "inherit", boardFinish: "inherit" };
-// WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
-// named a SURFACE, so the sheet could not answer its own first question: what
-// does this change? Worse, two rows read as a pair and are not one — ACCENT is
-// the second BASE colour (`c2`) that a dozen other rows fall back to, while
-// DETAIL is a THIRD colour (`accent`) that overrides c2 on six small trim
-// pieces. The labels invert the field names, so even the source misleads.
-//
-// A row that only INHERITS says so, because "already coloured" and "set" look
-// identical on the car: leave WINGS alone and it is c2, and the player has no
-// way to tell that from having chosen it. Surfaces are read from car3d.js —
-// keep them true to the code, not to the label.
+// WHAT EACH ROW ACTUALLY PAINTS: the surface, not the colour. Note the labels
+// invert two field names — ACCENT is `c2`, the second BASE colour other rows
+// fall back to, while DETAIL is `accent`, a third colour on small trim. A row
+// that only inherits says what it inherits, because "unset" and "chosen" look
+// identical on the car. Surfaces are read from car3d.js: keep them true to the code.
 const LIV_ROW_HINT = {
   c1: "PRIMARY — the bodywork itself: monocoque, nose, sidepods, engine cover.",
   c2: "ACCENT — the second BASE colour. Unset optional rows fall back to this or PRIMARY — not to each other.",
@@ -236,13 +221,11 @@ function livDraftFrom(liv, name) {
   return d;
 }
 
-// THE PREVIEW IS THE SAVE (livery editor audit 2026-10-18, D1). The editor previews
-// a draft under a custom id, as SAVE & FIT stores it, so the team marks on screen are
-// the marks you get. A paint job started from the team's OWN scheme (NEW, or a copy of
-// Team Livery) would then lose the brand colours that scheme resolves its mark to
-// (Ferrari's yellow shield went white on save), so they are written into the mark
-// rows instead: visible, editable, saved. mark → logo, plate → logo2 reproduces the
-// team's own atlas exactly on every team (livery-design.test.mjs).
+// THE PREVIEW IS THE SAVE (audit D1): the draft previews under a custom id, as SAVE &
+// FIT stores it. A paint job started from the team's OWN scheme would then lose the
+// brand colours that scheme resolves its mark to (Ferrari's yellow shield went white),
+// so they are seeded into the mark rows: mark → logo, plate → logo2 reproduces the
+// team's own atlas on every team (livery-design.test.mjs).
 function livDraftFromOwn(src, name, teamId) {
   const d = livDraftFrom(src, name);
   const LTn = typeof LiveryTex !== "undefined" ? LiveryTex : null;
@@ -256,15 +239,11 @@ function livDraftFromOwn(src, name, teamId) {
   return d;
 }
 
-// THE REVERSE, and the ONLY one: the SAVE and livePreviewDraft both build
-// through it, so the car you are LOOKING at while dragging a colour and the
-// livery you get on SAVE & FIT cannot be assembled by different code.
-//
-// One rule, two callers. A colour is written when it is set; a pill when it
-// differs from its own default — which is what keeps a saved livery sparse
-// (and the garage file small). `keepNull` is the only difference: the live
-// preview needs every key PRESENT so resolveLivery's draft branch can read a
-// null and paint the fallback, while the stored livery omits them.
+// THE REVERSE, and the only one: the SAVE and livePreviewDraft both build through
+// it, so the previewed car and the saved livery cannot be assembled differently.
+// A colour is written when set, a pill when it differs from its default (a sparse
+// save). `keepNull`: the live preview needs every key PRESENT so resolveLivery's
+// draft branch reads a null and paints the fallback; the stored livery omits them.
 function livDraftTo(d, keepNull) {
   const out = {};
   for (const k of LIV_DRAFT_COLORS) {
@@ -280,14 +259,9 @@ function livDraftTo(d, keepNull) {
 
 function csTabId(id) { return `cs-tab-${String(id).replace(/[^a-z0-9_-]/gi, "-")}`; }
 
-// SHOW THE PART YOU JUST FITTED. Every catalog category changes the mesh
-// (js/car/parts.js: each option carries a `visual` recipe), but a turntable
-// left at whatever angle it is on makes an airbox swapped on a car facing away,
-// or a caliper changed behind a sidepod, read as "nothing happened". One preset per
-// category, chosen for where its parts live on the car; the existing camera
-// bar presets, so a pick lands on exactly what SIDE or REAR would. Same idiom
-// as the LIVERY tab framing FRONT: the preset stops the turntable, and SPIN or
-// RESET hands it back. TEAM, SETUP and LIVERY are not parts and have no entry.
+// SHOW THE PART YOU JUST FITTED: a caliper changed behind a sidepod reads as
+// "nothing happened". One camera-bar preset per category, framed on where its
+// parts live; the preset stops the turntable, and SPIN or RESET hands it back.
 const CAT_VIEW = {
   engine: "hero",        // airbox, sidepods, engine cover: rear three-quarter
   aero: "wingRear",      // the flap and DRS, orbiting the rear wing
@@ -307,12 +281,8 @@ function framePreset(name) {
   // landscape) still runs the handler, so the preset works on every layout.
   const b = document.querySelector(`#cs-stack [data-cs-view="${name}"]`);
   if (!b) return;
-  // But click() replays that button's WHOLE handler, its uiTick included — so
-  // fitting a part sounded twice: uiSelect for the fit, then uiTick for the
-  // camera that followed it. The camera move is a CONSEQUENCE of the click, not a second
-  // click, so it gets no voice of its own. Muting across the synthetic click
-  // beats deleting the handler's uiTick: a REAL press of that button still has
-  // to sound. click() dispatches synchronously, so the window is one statement.
+  // Muted: the camera move is a consequence of the fit, not a second click with
+  // its own uiTick. click() dispatches synchronously, so the window is one statement.
   const was = G.soundOn;
   try { G.soundOn = false; b.click(); } finally { G.soundOn = was; }
 }
@@ -350,13 +320,10 @@ function csTabKey(id, e) {
   activateCsCat(tabs[next].dataset.csCat, true);
 }
 
-/* A SIGNATURE part's name is its works (a place) and then the part:
-   "Enstone Aero Kit", "Neuburg Brake Pack". Under a tab that already says AERO
-   or BRAKES the place is the one word the rail can spare, and a width that
-   ellipsises the subtitle kept exactly that word: a full signature build read
-   "Kannapolis…" under every tab (layout audit, desktop-narrow / iPad
-   landscape, 2026-09-30). The rail shows the part; the tab's aria-label and
-   the option list keep the full name. */
+/* A SIGNATURE part's name is its works (a place) and then the part ("Enstone
+   Aero Kit"). Under a tab that already says AERO the place is the word the rail
+   can spare; an ellipsised subtitle kept only it ("Kannapolis…" under every tab).
+   The tab's aria-label and the option list keep the full name. */
 function tabSub(opt) {
   if (!opt) return "";
   const words = String(opt.label || "").split(" ");
@@ -519,51 +486,43 @@ function buildTeamOptions(optsEl, team) {
   optsEl.appendChild(editRow);
   buildLookRows(optsEl);
 
-  // THE GARAGE FILE — parts, liveries, setup sheets and an invented team, for
-  // every team, saved out and read back in. It lives HERE rather than beside
-  // the settings file in SETTINGS because this is where a player manages the
-  // things it carries. The row is built fresh on every rebuild of this tab
-  // (js/ui/settings-export.js garageRow), which is why nothing is cached.
+  // THE GARAGE FILE (parts, liveries, setup sheets, an invented team) lives here,
+  // where a player manages what it carries; settings-export.js builds it fresh per rebuild.
   if (typeof SettingsExport !== "undefined" && SettingsExport.garageRow) {
     const row = SettingsExport.garageRow();
     if (row) { optsEl.appendChild(csLabel("GARAGE FILE")); optsEl.appendChild(row); }
   }
-  // Share-a-code (player-a11y slice 4): pasteable APXS/APXL for this team's
-  // setup sheet and active livery. JS-built chips — no new shell nodes.
-  if (typeof ShareCode !== "undefined" && ShareCode.encode) {
-    const team = Teams.LIST[G.teamIdx];
-    if (team) {
-      optsEl.appendChild(csLabel("SHARE CODE"));
-      const shareRow = document.createElement("div");
-      shareRow.className = "sel-edit-row";
-      shareRow.id = "cs-share-code-row";
-      const mk = (id, label, kind) => {
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "sel-chip"; b.id = id; b.textContent = label;
-        b.onclick = () => {
-          let payload = null;
-          if (kind === "setup" && typeof SetupTune !== "undefined") {
-            payload = { team: team.id, tune: SetupTune.get(team.id) };
-          } else if (kind === "livery") {
-            const idLiv = G.getLiveryId ? G.getLiveryId(team.id) : "default";
-            const customs = G.getCustomLiveries ? (G.getCustomLiveries(team.id) || []) : [];
-            const liv = customs.find((l) => l && l.id === idLiv) || null;
-            payload = { team: team.id, id: idLiv, livery: liv || undefined };
-          }
-          const encoded = ShareCode.encode(kind, payload);
-          if (!encoded.ok) { b.textContent = "UNAVAILABLE"; return; }
-          const done = (ok) => { b.textContent = ok ? "COPIED" : encoded.code; };
-          if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) {
-            ApexClipboard.write(encoded.code).then(done, () => done(false));
-          } else done(false);
-        };
-        return b;
-      };
-      shareRow.append(mk("cs-share-setup", "COPY SETUP CODE", "setup"),
-        mk("cs-share-livery", "COPY LIVERY CODE", "livery"));
-      optsEl.appendChild(shareRow);
-    }
-  }
+  if (typeof ShareCode !== "undefined" && ShareCode.encode) buildShareCodeRow(optsEl, team);
+}
+
+// Pasteable APXS/APXL codes for this team's setup sheet and fitted livery.
+function shareCodePayload(kind, team) {
+  if (kind === "setup") return typeof SetupTune !== "undefined" ? { team: team.id, tune: SetupTune.get(team.id) } : null;
+  const id = getLiveryId(team.id);
+  const liv = (getCustomLiveries(team.id) || []).find((l) => l && l.id === id);
+  return { team: team.id, id, livery: liv || undefined };
+}
+function buildShareCodeRow(optsEl, team) {
+  optsEl.appendChild(csLabel("SHARE CODE"));
+  const shareRow = document.createElement("div");
+  shareRow.className = "sel-edit-row";
+  shareRow.id = "cs-share-code-row";
+  const mk = (id, label, kind) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "sel-chip"; b.id = id; b.textContent = label;
+    b.onclick = () => {
+      const encoded = ShareCode.encode(kind, shareCodePayload(kind, team));
+      if (!encoded.ok) { b.textContent = "UNAVAILABLE"; return; }
+      const done = (ok) => { b.textContent = ok ? "COPIED" : encoded.code; };
+      if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) {
+        ApexClipboard.write(encoded.code).then(done, () => done(false));
+      } else done(false);
+    };
+    return b;
+  };
+  shareRow.append(mk("cs-share-setup", "COPY SETUP CODE", "setup"),
+    mk("cs-share-livery", "COPY LIVERY CODE", "livery"));
+  optsEl.appendChild(shareRow);
 }
 
 // BACK stays only when DONE is a different door (RACE SETUP from #select).
@@ -577,52 +536,84 @@ function syncGarageExitChrome() {
 
 function buildSetup() {
   clearSurfaceControls();
-  if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
+  endSurfaceInspection();
   syncGarageExitChrome();
   const team = Teams.LIST[G.teamIdx];
   // A draft is ONE team's paint: after a team pick it would SAVE & FIT onto the new team.
   if (csLivCreating && csLivTeamId !== team.id) discardLivDraft();
   tuneExperiments.capture(team);
   const parts = getTeamParts(team.id);
+  remapUnavailableParts(team, parts);
 
-  // Remap any saved exclusive option this team can't use onto its universal
-  // equivalent (Parts._resolve's peer). Deleting fell through to DEFAULTS and
-  // made a locked sig_rb_street photograph as medium instead of supersoft.
-  // Only the PERMANENT locks (supplier / team) remap: an era ban is read with the
-  // legality suspended (CareerAiDev.worksSetup's pattern), so opening the garage
-  // under a ban never deletes a fitted part that comes back when the era lapses.
+  const owned = G.careerOwned();
+  const cap = owned ? Career.budget() : Parts.BUDGET;
+  const budget = { owned, cap, unlimited: !owned && G.unlimitedBudget, spent: Parts.getCost(parts, team) };
+  renderSheetHead(team, budget);
+
+  // Defaults to TEAM: opening on a PARTS category put the selected tab mid-rail
+  // and LIVERY behind a horizontal scroll. Persisted like the other tab strips.
+  if (!csActiveCat) csActiveCat = store.get("garageTab", "team");
+  if (!PSEUDO_CATS.includes(csActiveCat) && !Parts.CATALOG.some((c) => c.id === csActiveCat)) csActiveCat = "team";
+  const resolveOpt = (cat) => fittedOption(cat, parts, team);
+  buildTabs(team, resolveOpt);
+
+  const optsEl = $("cs-options");
+  optsEl.textContent = "";
+  optsEl.setAttribute("role", "tabpanel");
+  optsEl.setAttribute("aria-labelledby", csTabId(csActiveCat));
+  optsEl.tabIndex = 0;
+  // LIVERY adds this grid; TEAM and the part cats must not inherit it (a squeezed team card).
+  optsEl.classList.remove("cs-liv-grid");
+  if (csActiveCat === "team") buildTeamOptions(optsEl, team);
+  else if (csActiveCat === "livery") buildLiveryOptions(optsEl, team);
+  else if (csActiveCat === "tune") tuneExperiments.build(optsEl, team);
+  else buildPartOptions(optsEl, team, parts, Parts.CATALOG.find((c) => c.id === csActiveCat), resolveOpt, budget);
+  renderStatBars($("cs-stats-inner"), team);
+}
+
+// Remap a saved exclusive option this team can't use onto its universal
+// equivalent (Parts._resolve's peer): deleting fell through to DEFAULTS and
+// photographed a locked sig_rb_street as medium instead of supersoft. Only the
+// PERMANENT locks (supplier / team) remap: an era ban is read with legality
+// suspended, so opening the garage under a ban never deletes a part that comes back.
+function remapUnavailableParts(team, parts) {
   let partsChanged = false;
   const legalFn = Parts.legality ? Parts.legality() : null, legalKey = legalFn ? Parts.legalityKey() : "";
   if (legalFn) Parts.setLegality(null, "");
   try {
     for (const cat of Parts.CATALOG) {
       const selId = parts[cat.id];
-      if (selId) {
-        const opt = cat.options.find((o) => o.id === selId);
-        if (opt && !Parts.isOptionAvailable(opt, team)) {
-          const eq = opt.equivalent
-            && cat.options.find((o) => o.id === opt.equivalent
-              && Parts.isOptionAvailable(o, team));
-          if (eq) parts[cat.id] = eq.id;
-          else delete parts[cat.id];
-          partsChanged = true;
-        }
-      }
+      if (!selId) continue;
+      const opt = cat.options.find((o) => o.id === selId);
+      if (!opt || Parts.isOptionAvailable(opt, team)) continue;
+      const eq = opt.equivalent
+        && cat.options.find((o) => o.id === opt.equivalent && Parts.isOptionAvailable(o, team));
+      if (eq) parts[cat.id] = eq.id;
+      else delete parts[cat.id];
+      partsChanged = true;
     }
   } finally { if (legalFn) Parts.setLegality(legalFn, legalKey); }
   if (partsChanged) saveTeamParts(team.id, parts);
+}
 
-  const owned = G.careerOwned();
-  const cap = owned ? Career.budget() : Parts.BUDGET;
-  const unlimited = !owned && G.unlimitedBudget;
+// The fitted option for a category, as Parts._resolve reads it: a locked
+// SIGNATURE shows its equivalent (what is actually fitted), else the default.
+function fittedOption(cat, parts, team) {
+  const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
+  const sel = cat.options.find((o) => o.id === id);
+  if (sel && Parts.isOptionAvailable(sel, team)) return sel;
+  if (sel && sel.equivalent) {
+    const eq = cat.options.find((o) => o.id === sel.equivalent && Parts.isOptionAvailable(o, team));
+    if (eq) return eq;
+  }
+  return cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
+}
 
-  const spent = Parts.getCost(parts, team);
+function renderSheetHead(team, { owned, cap, unlimited, spent }) {
   const remaining = cap - spent;
-
   const teamEl = $("cs-team");
   teamEl.textContent = team.name.toUpperCase();
   teamEl.title = team.name;
-
 
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
@@ -648,48 +639,28 @@ function buildSetup() {
     unlimitedBtn.textContent = unlimited ? "∞ FREE BUILD: ON" : "∞ FREE BUILD";
     unlimitedBtn.className = "cs-unlimited-btn" + (unlimited ? " on" : "");
   }
+}
 
-  if (!csActiveCat) csActiveCat = store.get("garageTab", "team");
-  if (!PSEUDO_CATS.includes(csActiveCat) && !Parts.CATALOG.some((c) => c.id === csActiveCat)) csActiveCat = "team";
-  const activeCat = Parts.CATALOG.find((c) => c.id === csActiveCat);
-
-  // Resolve the currently-fitted option for a category (respecting supplier lock).
-  // Mirror Parts._resolve: a locked SIGNATURE shows its equivalent's name
-  // (what is actually fitted), not the category default and not the foreign
-  // signature label.
-  const resolveOpt = (cat) => {
-    const id = parts[cat.id] || Parts.DEFAULTS[cat.id];
-    const sel = cat.options.find((o) => o.id === id);
-    if (sel && Parts.isOptionAvailable(sel, team)) return sel;
-    if (sel && sel.equivalent) {
-      const eq = cat.options.find((o) => o.id === sel.equivalent
-        && Parts.isOptionAvailable(o, team));
-      if (eq) return eq;
-    }
-    return cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]);
-  };
-
+function buildTabs(team, resolveOpt) {
   const tabs = $("cs-tabs");
   tabs.textContent = "";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Garage categories");
-  // The two tiers are layout only: a tablist owns tabs and nothing else, so a
-  // role=group row cut every tab off from its tablist (axe aria-required-parent;
-  // Lighthouse a11y 88 on the Garage, UI hunt 3). data-tier names the row for tests.
-  const primaryTabs = document.createElement("div");
-  primaryTabs.className = "cs-tab-row";
-  primaryTabs.setAttribute("role", "none");
-  primaryTabs.dataset.tier = "Performance categories";
-  const secondaryTabs = document.createElement("div");
-  secondaryTabs.className = "cs-tab-row";
-  secondaryTabs.setAttribute("role", "none");
-  secondaryTabs.dataset.tier = "Finishing and setup categories";
+  // The two tiers are layout only (role=none): a tablist owns tabs and nothing
+  // else, and a role=group row cut every tab off from it (axe aria-required-parent).
+  const tierRow = (tier) => {
+    const row = document.createElement("div");
+    row.className = "cs-tab-row";
+    row.setAttribute("role", "none");
+    row.dataset.tier = tier;
+    return row;
+  };
+  const primaryTabs = tierRow("Performance categories");
+  const secondaryTabs = tierRow("Finishing and setup categories");
   tabs.append(primaryTabs, secondaryTabs);
   const appendTab = (id, tab) => (SECONDARY_CATS.has(id) ? secondaryTabs : primaryTabs).appendChild(tab);
-  {
-    const d = team.drivers[G.driverIdx] || team.drivers[0];
-    appendTab("team", pseudoTab("team", "TEAM", d ? d.name.split(" ").pop() : team.short));
-  }
+  const driver = team.drivers[G.driverIdx] || team.drivers[0];
+  appendTab("team", pseudoTab("team", "TEAM", driver ? driver.name.split(" ").pop() : team.short));
   for (const cat of Parts.CATALOG) {
     const cur = resolveOpt(cat);
     appendTab(cat.id, pseudoTab(cat.id, cat.tab || cat.label, tabSub(cur),
@@ -697,34 +668,19 @@ function buildSetup() {
   }
   appendTab("tune", pseudoTab("tune", "SETUP", SetupTune.isDefault(team.id) ? "WORKS" : "TUNED",
                               !SetupTune.isDefault(team.id)));
-  {
-    const custom = getLiveryId(team.id) !== "default";
-    appendTab("livery", pseudoTab("livery", "LIVERY", custom ? "CUSTOM" : "DEFAULT", custom));
-  }
+  const customLivery = getLiveryId(team.id) !== "default";
+  appendTab("livery", pseudoTab("livery", "LIVERY", customLivery ? "CUSTOM" : "DEFAULT", customLivery));
+}
 
-  const optsEl = $("cs-options");
-  optsEl.textContent = "";
-  optsEl.setAttribute("role", "tabpanel");
-  optsEl.setAttribute("aria-labelledby", csTabId(csActiveCat));
-  optsEl.tabIndex = 0;
-  // LIVERY adds this grid; TEAM and the part cats must not inherit it.
-  // Measured 2026-08-18 Playwright MCP: switching LIVERY → TEAM left
-  // `cs-liv-grid` on #cs-options, so #cs-team-card painted 91×64 with
-  // `.tm-name` at 14px (`McLaren` / `MCL · Mercedes` truncated).
-  optsEl.classList.remove("cs-liv-grid");
-  if (csActiveCat === "team")   { buildTeamOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
-  if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
-  if (csActiveCat === "tune")   { buildTuneOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
+function buildPartOptions(optsEl, team, parts, activeCat, resolveOpt, { owned, cap, unlimited, spent }) {
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   const showComparison = GarageExperience.partSummary(optsEl, team, parts, activeCat, curOpt,
     typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null, unlimited ? Infinity : cap,
     () => framePreset(CAT_VIEW[activeCat.id] || "hero"));
   const factorySetup = Parts.getFactorySetup(team);
-  // Cheapest first, so a category reads as the ladder it now is. The CATALOG
-  // is in authoring order — McLaren's aero tab ran 0, 80, 40, 60, 0, 50 … 110,
-  // 95, 185, and its own signature wing was row 18 of 18. Stable within a
-  // price: `slice()` first, and ties keep authoring order.
+  // Cheapest first, so a category reads as a ladder (the CATALOG is in authoring
+  // order). slice() then a stable sort: ties keep authoring order.
   const shownOpts = activeCat.options.slice()
     .sort((a, b) => (a.cost || 0) - (b.cost || 0));
   for (const opt of shownOpts) {
@@ -860,8 +816,6 @@ function buildSetup() {
     };
     optsEl.appendChild(row);
   }
-
-  renderStatBars($("cs-stats-inner"), team);
 }
 
 const CS_DELTA_DEFS = [
@@ -904,12 +858,6 @@ function statDeltaChips(opt) {
   return any ? wrap : null;
 }
 
-let livBuild = 0;   // one per buildLiveryOptions: swatchCanvas never hands one canvas to two cards of a build
-let csLivQuery = "";           // #3339: filter string sticky across rebuilds
-// #3339: factory <details> open state. null = platform default (desktop open so
-// End/Home can land past content-visibility; phone collapsed for scroll). Once
-// the player toggles, the boolean sticks across rebuilds.
-let csLivFactoryOpen = null;
 function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
   if (typeof LiveryTex !== "undefined" && LiveryTex.swatchCanvas) {
@@ -925,20 +873,22 @@ function livSwatch(team, liv, tags) {
       sw.appendChild(st);
     }
   }
-  if (tags && tags.length) {
-    for (const label of tags) {
-      const tg = document.createElement("span");
-      tg.className = "cs-opt-tag";
-      tg.textContent = label;
-      sw.appendChild(tg);
-    }
+  for (const label of tags || []) {
+    const tg = document.createElement("span");
+    tg.className = "cs-opt-tag";
+    tg.textContent = label;
+    sw.appendChild(tg);
   }
   return sw;
 }
 
-// SETUP — the mechanical sheet (js/garage/setup-tune.js): five sliders on the
-// tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
-function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
+// The three doors (edit, copy, new) set csLivDraft, then open the editor on it.
+function enterLivEditor(editId, teamId) {
+  csLivEditId = editId;
+  csLivCreating = true; csLivTeamId = teamId;
+  if (G.soundOn) GameAudio.uiSelect();
+  buildSetup();
+}
 
 function makeLiveryRow(team, liv, cur, isCustom) {
   const active = liv.id === cur;
@@ -973,10 +923,7 @@ function makeLiveryRow(team, liv, cur, isCustom) {
     edit.setAttribute("aria-label", "Edit " + liv.name + " livery");
     edit.onclick = () => {
       csLivDraft = livDraftFrom(liv, liv.name || "");
-      csLivEditId = liv.id;
-      csLivCreating = true; csLivTeamId = team.id;
-      if (G.soundOn) GameAudio.uiSelect();
-      buildSetup();
+      enterLivEditor(liv.id, team.id);
     };
     rowWrap.appendChild(edit);
     const del = document.createElement("button");
@@ -1008,10 +955,7 @@ function makeLiveryRow(team, liv, cur, isCustom) {
     dup.onclick = () => {
       const copyName = (liv.name || "Custom").slice(0, 14) + " MK2";
       csLivDraft = liv.id === "default" ? livDraftFromOwn(liv, copyName, team.id) : livDraftFrom(liv, copyName);
-      csLivEditId = null;   // create-new: never overwrites the stock scheme
-      csLivCreating = true; csLivTeamId = team.id;
-      if (G.soundOn) GameAudio.uiSelect();
-      buildSetup();
+      enterLivEditor(null, team.id);   // create-new: never overwrites the stock scheme
     };
     rowWrap.appendChild(dup);
   }
@@ -1094,10 +1038,7 @@ function buildLiveryOptions(container, team) {
       const shape = {};
       if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
       csLivDraft = livDraftFromOwn(Object.assign({ c1: team.color, c2: team.color2 }, shape), "", team.id);
-      csLivEditId = null;
-      csLivCreating = true; csLivTeamId = team.id;
-      if (G.soundOn) GameAudio.uiSelect();
-      buildSetup();
+      enterLivEditor(null, team.id);
     };
     container.appendChild(row);
   }
@@ -1137,6 +1078,7 @@ function buildLiveryOptions(container, team) {
 
 function buildLiveryCreator(container, team) {
   const d = csLivDraft;   // colours held as hex strings; "" stripe = none
+  const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   const wrap = document.createElement("div");
   wrap.className = "cs-liv-editor";
 
@@ -1149,20 +1091,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(prev);
 
   // CONDITIONAL ROWS. A field that paints onto a part the draft does not have
-  // is greyed out, not hidden: FIN SHAPE "none" builds no blade and no fin
-  // decal quads (car3d, car-mesh), so TAIL FIN, TAIL GRAPHIC, TAIL STYLE and
-  // FIN BADGE all paint nothing until a fin is back. The row keeps its value —
-  // choose a fin again and the earlier badge returns — and every control in it
-  // is `disabled` for real, so a tap does nothing rather than editing a field
-  // the car cannot show. Registered by the row builders; synced on every edit,
-  // after refreshPalettes has synced the palette chips it also disables.
-  // A dep is a ROW (every control in it) or one PILL (a value that paints
-  // nothing under the current draft — SPINE TOP "wordmark" with SPONSORS at
-  // "clean" has no name to write). The audit behind the rules, from
-  // liverytex.js: TAIL GRAPHIC is the fin motif's wash AND the ink of a number
-  // or code badge, so it is dead only when the motif is off and the badge is
-  // not a number; NUMBER FONT and the mark colours are always live (the nose
-  // number and its crest head paint on every car), so they carry no dep.
+  // is greyed out (really `disabled`), not hidden, and keeps its value: FIN SHAPE
+  // "none" builds no blade, so TAIL FIN / GRAPHIC / STYLE / FIN BADGE paint
+  // nothing until a fin is back. A dep is a ROW (every control in it) or one PILL
+  // (SPINE TOP "wordmark" under CLEAN sponsors has no name to write). Synced on
+  // every edit, after refreshPalettes. TAIL GRAPHIC is also the ink of a number
+  // or code badge (liverytex.js), so it is dead only with the motif off and no
+  // such badge; NUMBER FONT and the mark colours paint on every car: no dep.
   const deps = [];
   let designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
@@ -1174,7 +1109,7 @@ function buildLiveryCreator(container, team) {
   const haveNames = () => (d.sponsors || "default") !== "clean";
   const NO_NAMES = "Needs sponsor names — SPONSORS is CLEAN";
   const syncDeps = () => {
-    if (typeof markAdvice === "function") markAdvice();
+    markAdvice();
     for (const dep of deps) {
       const off = !dep.when();
       if (dep.pill) { propIf(dep.pill, "disabled", off); propIf(dep.pill, "title", off ? dep.why : ""); continue; }
@@ -1199,19 +1134,13 @@ function buildLiveryCreator(container, team) {
     defer3d ? scheduleLivPreview(team, d) : livePreviewDraft(team, d);
   };
 
-  // MATCHING PALETTE. Twelve slots paint one car, and most paint jobs reuse the
-  // same three or four colours across them — but every slot was a bare OS colour
-  // dialog, so "the same red as the nose" meant eyeballing hex by hand and
-  // getting it nearly right. These chips are the colours already in play: every
-  // distinct value in the draft, then the team's own two stock colours. Click
-  // one and the slot takes it EXACTLY.
-  // The matching chips offer every colour already ON this car, design fills
-  // included — from LiveryTex's own list, so a new fill row joins the chips
-  // without a second copy of the key names here.
+  // MATCHING PALETTE. Most paint jobs reuse three or four colours across the
+  // slots, and "the same red as the nose" should not mean eyeballing hex. Each
+  // row's chips are every distinct colour already on this car (design fills from
+  // LiveryTex's own list), then the team's two stock colours; a click takes it exactly.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
                     "wing", "rearWing", "cover",
-                    ...(((typeof LiveryTex !== "undefined" && LiveryTex.FILL_SURFACES) || [])
-                      .map((f) => f.key)),   // design fills, from the painters' own list
+                    ...((LT && LT.FILL_SURFACES) || []).map((f) => f.key),   // design fills, from the painters' own list
                     "fin", "finArt", "logo", "logo2", "logo3", "halo", "patternTint", "patternSecond"];
   const paletteColours = () => {
     const seen = [];
@@ -1298,11 +1227,8 @@ function buildLiveryCreator(container, team) {
     if (surfaceControls) surfaceControls.row(r, label, key);
     return r;
   };
-  // GROUPED BY THE ZONE EACH ROW PAINTS. The sheet is twenty-three colour rows
-  // now, and a flat list that long stops being a list — "which of these is the
-  // one on the cover crown?" is a question the order should answer, not the
-  // hover text. The headings are inert labels, so nothing about focus order,
-  // the draft or the save changes; only the reading does.
+  // GROUPED BY THE ZONE EACH ROW PAINTS: inert headings, so focus order, the
+  // draft and the save are unchanged; only the reading is.
   const section = (label) => {
     const r = document.createElement("div"); r.className = "cs-liv-ed-sec";
     r.textContent = label; r.setAttribute("role", "presentation");
@@ -1320,21 +1246,15 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("UPPER BODY", "upper", true));   // above that line: W17 silver chassis band
   wrap.appendChild(section("ENGINE COVER"));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
-  // Design fills — greyed until the current TOP/SIDE/BIND paints that surface.
-  // DESIGN FILLS — the rows that only exist while a design paints their
-  // surface. WHICH design paints WHICH fill is LiveryTex's to say (it owns the
-  // painters, see FILL_SURFACES): the sheet asks, so a design added to
-  // SPINE_LOGO_IDS cannot leave a colour row nobody can spend, and a row
-  // cannot go on offering a colour the atlas throws away. The labels and the
-  // greyed-out reason come from the same table.
-  // `LT` is declared further down (the pill rows), so name the global here.
-  const LTX = typeof LiveryTex !== "undefined" ? LiveryTex : null;
-  const LT_FILLS = (LTX && LTX.FILL_SURFACES) || [];
+  // DESIGN FILLS — greyed until the current TOP/SIDE/BIND paints that surface.
+  // Which design paints which fill is LiveryTex's to say (FILL_SURFACES, with the
+  // labels and the greyed-out reason), so no row offers a colour the atlas drops.
+  const LT_FILLS = (LT && LT.FILL_SURFACES) || [];
   const fillRows = LT_FILLS.map((f) => ({ f, row: colorRow(f.label, f.key, true) }));
   for (const { row } of fillRows) wrap.appendChild(row);
   const designNow = () => ({ spineLogo: d.spineLogo, spineSide: d.spineSide, coverBind: d.coverBind });
   for (const { f, row } of fillRows) {
-    deps.push({ row, when: () => !LTX || !LTX.fillInert(f.key, designNow()), why: f.why });
+    deps.push({ row, when: () => !LT || !LT.fillInert(f.key, designNow()), why: f.why });
   }
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
@@ -1353,30 +1273,27 @@ function buildLiveryCreator(container, team) {
   // OUTLINE rather than rows that could mean anything. The LENGTH is the mark's
   // to decide — two rows for a single-loop silhouette that has no second shape,
   // three for a mark that does — so this loops rather than indexing.
-  const mSlots = (window.LiveryTex && LiveryTex.markSlots)
-    ? LiveryTex.markSlots(team.id)
+  const mSlots = (LT && LT.markSlots)
+    ? LT.markSlots(team.id)
     : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" },
        { key: "logo3", label: "OUTLINE" }];
   wrap.appendChild(section("TEAM MARK"));
   for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
-  // ADVISE, NEVER OVERRIDE. The colour you pick for the mark is painted as
-  // picked, with no hidden re-pick to a readable colour, so this note is the
-  // only thing between a pale pick on a
-  // pale cover and a car with no visible mark. It names the surface, the ratio
-  // and the fix (an OUTLINE, the same row team data uses for the same job).
+  // ADVISE, NEVER OVERRIDE. The mark is painted as picked, so this note is all
+  // that stands between a pale pick on a pale cover and an invisible mark: it
+  // names the surface, the ratio and the fix (an OUTLINE).
   const markNote = document.createElement("div");
   markNote.className = "cs-opt-desc";   // the sheet's existing small-text style (no new class)
   markNote.setAttribute("aria-live", "polite");
   markNote.hidden = true;
   wrap.appendChild(markNote);
   const markAdvice = () => {
-    const LTn = typeof LiveryTex !== "undefined" ? LiveryTex : null;
-    if (!LTn || !LTn.contrast || !d.logo) { propIf(markNote, "hidden", true); return; }
+    if (!LT || !LT.contrast || !d.logo) { propIf(markNote, "hidden", true); return; }
     const logo = hexToArr(d.logo);
     const field = hexToArr(d.cover || d.c1);
-    const ratio = LTn.contrast(logo, field);
-    const rim = d.logo3 ? LTn.contrast(hexToArr(d.logo3), field) : 0;
-    const weak = ratio < (LTn.MARK_FLOOR || 4.2) && rim < (LTn.MARK_FLOOR || 4.2);
+    const ratio = LT.contrast(logo, field);
+    const rim = d.logo3 ? LT.contrast(hexToArr(d.logo3), field) : 0;
+    const weak = ratio < (LT.MARK_FLOOR || 4.2) && rim < (LT.MARK_FLOOR || 4.2);
     propIf(markNote, "hidden", !weak);
     if (weak) {
       propIf(markNote, "textContent", "TEAM LOGO reads " + ratio.toFixed(1) + ":1 on ENGINE COVER — it is painted as picked. "
@@ -1442,7 +1359,6 @@ function buildLiveryCreator(container, team) {
     if (key === "deflectorFinish") deps.push({ row: r, when: needDeflectors, why: "Needs wheel deflectors — use FITTED in WHEELS STYLE with a WHEELS part that includes them" });
   }
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
-  const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
   pillRow("CREST", "crestStyle", LT && LT.CREST_STYLE_IDS || ["team"], "team");
@@ -1624,7 +1540,7 @@ function dropDraftAtlases(team) {
 }
 
 function endLivPreview(team) {
-  if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
+  endSurfaceInspection();
   cancelLivPreview();
   _livPreviewKey = "";
   _livPrevDraft = null;
@@ -1641,18 +1557,16 @@ function openSetup() {
   Log.info("ui", "SetupUI.openSetup");
   // A picker left from an earlier garage visit must not sit over pit work.
   if (G.state === "race") G.setTeamPicker(false);
-  // Show the garage sheet first, then build its DOM off the click stack.
-  // Change Car used to call buildSetup() before unhiding #carsetup, so the
-  // select/season screen froze with no sheet (and Back stopped responding).
+  // Show the sheet first, then build its DOM off the click stack: building
+  // before unhiding froze the select screen with no sheet.
   els.select.hidden = true;
   els.overlay.hidden = true;
   $("vsfriend").hidden = true;
   const cs = $("carsetup");
   const generation = ++csVisitGeneration;
   tuneExperiments.visit(Teams.LIST[G.teamIdx]);
-  // Exit chrome (hide BACK, stretch DONE) must match the label openGarage set
-  // BEFORE the sheet paints. Waiting for buildSetup() let the two-button foot
-  // show first and jump when syncGarageExitChrome ran — the CLOSE tap missed.
+  // Exit chrome must match openGarage's label BEFORE the sheet paints, or the
+  // foot jumps under the finger once buildSetup runs.
   syncGarageExitChrome();
   cs.hidden = false;
   G.setupPreviewOn = true;
@@ -1669,14 +1583,10 @@ function openSetup() {
   }
 }
 
-// THE PAINT EDITOR DOES NOT OUTLIVE THE GARAGE. Only CANCEL and SAVE & FIT
-// cleared the draft, so BACK/DONE (game.js leaveGarage) — or the race start
-// hiding every .screen under a VS FRIEND guest — left csLivCreating set and
-// G.livDraftOverride live. resolveLivery() reads that override for the
-// player's team, so the next race painted the UNSAVED draft on the car, and the
-// next garage visit re-opened the editor on it. Watching the screen's own
-// `hidden` attribute (the js/ui/sheet-shape.js idiom) needs no new hook in game.js
-// and catches every exit, including the ones that never call this module.
+// THE PAINT EDITOR DOES NOT OUTLIVE THE GARAGE: a live G.livDraftOverride
+// painted the UNSAVED draft on the next race's car. Watching #carsetup's own
+// `hidden` attribute (the sheet-shape.js idiom) catches every exit, including
+// BACK/DONE and a VS FRIEND race start that never call this module.
 function discardLivDraft() {
   if (!csLivCreating) return;
   csLivCreating = false; csLivDraft = null; csLivEditId = null; csLivDirty = null;
@@ -1688,14 +1598,19 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
-    .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
+  if (cs) new MutationObserver(() => {
+    if (!cs.hidden) return;
+    ++csVisitGeneration;
+    cs.removeAttribute("aria-busy");
+    clearSurfaceControls();
+    endSurfaceInspection();
+    discardLivDraft();
+    tuneExperiments.close();
+  }).observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
-// ESCAPE IS ONE LEVEL. With the paint editor open, Escape pressed the garage's
-// door (data-esc-close="cs-back"): the GARAGE closed and discardLivDraft() threw
-// the unsaved design away. The editor claims the key first, as the camera panel
-// does (setup-camera.js, registered earlier, so an open panel still shuts first):
-// Escape is the editor's CANCEL, which arms before discarding edits.
+// ESCAPE IS ONE LEVEL: with the paint editor open it is the editor's CANCEL
+// (which arms before discarding), not the garage's door. Capture phase, after
+// setup-camera.js registered, so an open camera panel still shuts first.
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !csLivCreating || !G.setupPreviewOn
       || document.querySelector("dialog[open], dialog.screen:not([hidden])")) return;

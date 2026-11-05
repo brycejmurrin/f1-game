@@ -4,6 +4,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
 // Appearance adopts existing controls; mini-dom's default insertions omit
@@ -243,14 +244,43 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
 });
 
-test("HUD screen scope does not rewrite the global HUD profile", () => {
-  assert.equal(studioForScope().includes("hudProfile"), false);
+test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD style (#4920)", () => {
+  assert.equal(studioForScope().includes("hudProfile"), true, "FOCUS / BROADCAST set the HUD style the HUD preview heading shows");
+  const { studio, values } = load({ pauseLayout: "sidebar", pauseSide: "left", pauseDim: "off", hudProfile: "standard", uiTheme: "light" });
+  studio.applyPreset("focus", "screen");           // previewPage is "home": the HUD keys stay
+  assert.equal(values.hudProfile, "standard");
+  // The preview page is UI state; boot the Studio with PAUSE / HUD already picked.
+  const on = (page, initial) => {
+    const v = structuredClone(initial), store = { get: (k, d) => k in v ? v[k] : d, set: (k, x) => { v[k] = x; return true; } };
+    const ctx = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
+      AppearanceOpts: { restore() {} }, ScreenLooks: { normalize: (_id, x) => ({ ...x }), apply() {}, refresh() {} }, window: { matchMedia: () => ({ matches: false }) } });
+    vm.runInContext(source.replace('previewPage = "home"', 'previewPage = "' + page + '"'), ctx, { filename: absSrc("js/ui/appearance-studio.js") });
+    return { s: ctx.AppearanceStudio, v };
+  };
+  const pause = on("pause", { pauseLayout: "sidebar", pauseSide: "left", pauseDim: "off", uiTheme: "light" });
+  pause.s.reset("screen");
+  assert.deepEqual([pause.v.pauseLayout, pause.v.pauseSide, pause.v.pauseDim], ["grid", "centre", "full"], "RESET SCOPE resets the pause menu");
+  assert.equal(pause.v.uiTheme, "light");
+  const hud = on("hud", { hudProfile: "standard", menuAccent: "lime" });
+  hud.s.applyPreset("focus", "screen");
+  assert.equal(hud.v.hudProfile, "minimal", "FOCUS applied to HUD changes the HUD style");
+  assert.equal(hud.v.menuAccent, "lime");
+  hud.s.applyPreset("broadcast", "screen");
+  assert.equal(hud.v.hudProfile, "broadcast");
+  // Every key a preset sets is either device-wide or owned by one screen.
+  const DEVICE_WIDE = new Set(["uiTheme", "menuAccent", "menuAccentHex", "textSize", "uiContrast", "cvdMode", "speedUnits", "menuHelp", "motion", "uiScale"]);
+  const owned = new Set(Object.values(studio.SCREEN_KEYS).flat());
+  for (const p of studio.PRESETS) for (const k of Object.keys(p.values)) {
+    assert.ok(owned.has(k) || DEVICE_WIDE.has(k), p.id + " sets " + k + ", which no THIS SCREEN scope owns");
+  }
+  for (const k of ["pauseLayout", "pauseSide", "pauseDim", "lookPause"]) assert.ok(studio.SCREEN_KEYS.pause.includes(k), "pause scope owns " + k);
+  assert.equal(values.uiTheme, "light");
 });
 
 test("every ScreenLooks page has a screen scope and a preview entry", () => {
   const { studio } = load();
   const keys = id => Array.from(studio.SCREEN_KEYS[id]);
-  assert.deepEqual(keys("pause"), ["lookPause"]);
+  assert.deepEqual(keys("pause"), ["lookPause", "pauseLayout", "pauseSide", "pauseDim"]);
   assert.deepEqual(keys("datahub"), ["lookDatahub"]);
   assert.deepEqual(keys("select"), ["lookSelect"]);
   assert.deepEqual(keys("race"), ["lookRace"]);

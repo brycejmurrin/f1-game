@@ -132,8 +132,7 @@ const GarageCameraOptions = (function () {
     return ax > BAY.jambX - BAY.jambClear && ax < BAY.jambX + BAY.jambClear;
   }
 
-  // PER MOMENT (#4745: GarageArrival MOMENTS): each of the four moments may pick its own bay camera and
-  // STAY INSIDE; an untouched moment uses ENTRY (pit in, race end) or EXIT (race start, pit out).
+  // PER MOMENT (#4745): own BAY CAMERA + STAY INSIDE, else ENTRY (pitIn, home) / EXIT (start, pitOut).
   const MOMENT_IDS = Object.freeze(["start", "pitIn", "pitOut", "home"]);
   const MOMENT_EXIT = Object.freeze({ start: true, pitOut: true });
   function settings(value) {
@@ -447,6 +446,16 @@ const GarageCameraOptions = (function () {
 
   // ---- UI (injected: index.html is shrink-only) ----
   let _bound = false, _paint = null;
+  function copyMoment(store, from) { // COPY TO ALL
+    const cur = read(store), v = forMoment(cur, from), moments = {};
+    for (const m of MOMENT_IDS) moments[m] = { shot: v.shot, stayInside: v.stayInside };
+    return write(store, Object.assign(cur, { moments }));
+  }
+  function resetMoment(store, m) { // RESET
+    const cur = read(store);
+    if (cur.moments) delete cur.moments[m];
+    return write(store, cur);
+  }
   function bindUi($, store, hooks) {
     if (_bound || typeof document === "undefined" || !$) return false;
     const onChange = hooks && typeof hooks.onChange === "function" ? hooks.onChange : null;
@@ -536,9 +545,7 @@ const GarageCameraOptions = (function () {
       stay.onchange = () => saveMoment({ stayInside: stay.checked });
     }
 
-    // DIRECTOR · THREE CAMERAS truncates to "DIRECTOR - THRE" at the 12rem select
-    // width; shorten the option text (arrival.js still owns ANGLE_TEXT) and CSS
-    // widens the row so the full short label stays visible.
+    // Shorten DIRECTOR's label for the 12rem select.
     const angleSel = $("ga-angle");
     if (angleSel) {
       for (const o of angleSel.options || []) {
@@ -595,7 +602,7 @@ const GarageCameraOptions = (function () {
   return Object.freeze({
     STORE_KEY, BAY, VIEW_PRESETS, SHOT_IDS, SHOT_LABEL, STYLE_IDS, STYLE_SHOT, ANGLE_FRAME, DEFAULT,
     NEAR_PLANE,
-    MOMENT_IDS, forMoment, refreshUi: () => { if (_paint) _paint(); },
+    MOMENT_IDS, forMoment, copyMoment, resetMoment, refreshUi: () => { if (_paint) _paint(); },
     settings, read, write, clampEye, clearJamb, outsideBay, inJamb, maxDistInside,
     samplePath, applyArrival, viewPreset, bindUi, pathTable, enforceNearPlane,
   });
