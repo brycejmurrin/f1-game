@@ -2,6 +2,8 @@
 
 Kind: measurement · Re-measure-by: 2026-12-04
 
+Superseded for placement by [TITLE-LAYERS-2026-11-05.md](TITLE-LAYERS-2026-11-05.md) (#5126): LEFT/RIGHT is now a screen-% start margin that reaches both edges.
+
 Bryce reported from his iPhone, 2026-11-04 ~13:25 PST, that the landscape title WIDTH slider still moves the button
 cluster sideways after #4865 (a208bfcc), live in build e3638a06. #4865 was measured only in Chromium. This note covers
 the rule-outs from the reopen comment, run on the deploy tip ab0bc009.

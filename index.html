@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-AeLreRKLyHmzWVUwCsEdK9LF4XrDWEj5IOeI0xAa2jo=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-vr9o8yTp2WngDH0koxvL6h7LFHVAdsls5Q9DHVfmgss=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -617,9 +617,13 @@
       var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
       if (tl && typeof tl === "object" && tl.v === 2) tl = tl[b.getAttribute("data-shape") === "tall" ? "tall" : "wide"];
       if (tl && typeof tl === "object") {
+        // The buttons' X: % of the screen when marked, else the older zoomed vw read through today's zoom (#5126).
+        var tz = 1;
+        try { tz = parseFloat(getComputedStyle(de).getPropertyValue("--ui-scale")) || 1; } catch (e5) { /* 1 */ }
         ["btns", "title", "art"].forEach(function (k) {
-          var o = tl[k] || {};
-          de.style.setProperty("--tl-" + k + "-x", (+o.x || 0) + "vw");
+          var o = tl[k] || {}, x = +o.x || 0;
+          if (k === "btns") x = Math.max(-100, Math.min(100, Math.round((tl.xUnit === "screen" ? x : x * tz * (+o.size || 100) / 100) * 10) / 10));
+          de.style.setProperty("--tl-" + k + "-x", x + "vw");
           de.style.setProperty("--tl-" + k + "-y", (+o.y || 0) + "vh");
           de.style.setProperty("--tl-" + k + "-size", String((+o.size || 100) / 100));
         });

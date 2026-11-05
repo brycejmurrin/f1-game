@@ -2439,6 +2439,7 @@
         "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
         "tests/specs/rotation-recovery.spec.js",
+        "tests/specs/title-cluster.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
         "tests/specs/ui-button-touch.spec.js",
         "tests/specs/ui-redesign.spec.js",
