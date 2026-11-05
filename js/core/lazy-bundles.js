@@ -58,6 +58,7 @@ const RACE_SESSION_READY = {
   "js/race/podium-beat.js": () => typeof RacePodium !== "undefined" && !!RacePodium,
   "js/race/parc-ferme.js": () => typeof ParcFerme !== "undefined" && !!ParcFerme && !ParcFerme._stub,
   "js/race/cooldown-lap.js": () => typeof CooldownLap !== "undefined" && !!CooldownLap && !CooldownLap._stub,
+  "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined" && !!WatchTransport,   // no stub: RealReplay typeof-guards it
   "js/race/ceremony.js": () => typeof RaceCeremony !== "undefined" && !!RaceCeremony && !RaceCeremony._stub,
 };
 // Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
