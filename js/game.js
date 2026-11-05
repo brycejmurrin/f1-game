@@ -9001,7 +9001,6 @@ function raceEndHome(done) {   // RACE END (#4745): the car comes home before th
   const fin = () => { raceEndHome.fin = null; setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; garageReturn = "select"; done(); };
   return setupCam.startRaceEnd(fin, () => { garageReturn = "results"; raceEndHome.fin = fin; openSetup(); $("cs-done").textContent = "SEE RESULTS"; });
 }
-function leaveRaceEnd() { const f = raceEndHome.fin; if (garageReturn !== "results" || !f) return false; if (!setupCam.skipRaceEnd()) f(); return true; }   // #4956
 function openPitWork() {
   if (!pits || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
@@ -9040,6 +9039,7 @@ function leaveGarage() {
     else release();
   }
 }
+function leaveRaceEnd() { if (garageReturn !== "results" || !raceEndHome.fin) return false; if (!setupCam.skipRaceEnd()) raceEndHome.fin(); return true; }   // #4956
 /* BACK — the door DONE cannot be, because DONE goes FORWARD (from the picker it lands on race settings), so
    Escape points here (data-esc-close on #carsetup). Selections are kept as DONE keeps them: nothing is a cancel. */
 function garageBack() {
