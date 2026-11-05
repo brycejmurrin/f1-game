@@ -131,8 +131,9 @@ const reducedMotion = () => {
   if (mv === "reduce") return true;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 };
+const camOpt = (fn, m) => { const O = typeof GarageCameraOptions !== "undefined" ? GarageCameraOptions : null; if (O && fn) O[fn](G.store, m); if (O) O.refreshUi(); };
 const arrivalUi = GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview, changed: () => refreshPreview(),
-  momentChanged: () => { if (typeof GarageCameraOptions !== "undefined" && GarageCameraOptions.refreshUi) GarageCameraOptions.refreshUi(); } });
+  momentChanged: (m) => { previewMoment(m); camOpt(null); }, copied: (m) => camOpt("copyMoment", m), reset: (m) => camOpt("resetMoment", m) });
 const arrival = GarageArrival.create($, reducedMotion, arrivalUi);
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
@@ -228,13 +229,9 @@ function driveOutSound(pose, gap) {
     if (GameAudio.setSkid) GameAudio.setSkid(rolling && v < 2.5 ? 0.35 : 0, false);
   } catch (_) { /* audio is decoration here */ }
 }
-// THE ARRIVAL PREVIEW (#garrival's PREVIEW): the picked moment's saved settings played in this room from the
-// settings page, so a speed, angle or lens is judged by eye. An explicit click: it plays with the moment off or
-// reduced motion on, on its own clock (never arrival.start()/chrome()), and ends by itself, STOP or Escape; the
-// controls sit outside the hidden panel so touch and keyboard keep an exit. THE EDITING TRANSPORT around STOP:
-// PAUSE / PLAY, frame step, SCRUB, LOOP and EDIT (holds the frame with the panel back: an edit re-poses it via
-// bindSettings' `changed`). THE PHASE MARKS tick each beat from GarageArrival.timeline (JUMP TO seeks one); drawn,
-// since Safari draws no <datalist> ticks on a range.
+// THE ARRIVAL PREVIEW (#garrival's PREVIEW): the picked moment played in this room on its own clock (even with
+// the moment off or reduced motion; never arrival.start()), ending by itself, STOP or Escape. The transport:
+// PAUSE / PLAY, frame step, SCRUB, LOOP, EDIT (holds the frame; an edit re-poses it) and drawn phase marks.
 const FRAME_S = 1 / 24;
 let preview = null;
 const previewCfg = (m) => Object.assign(GarageArrival.settingsFor(G.store.get("garageArrival", null), m), { enabled: true });
@@ -329,7 +326,7 @@ function previewSync() {
   set($("ga-phase"), "hidden", !p.editing);
   const bar = $("ga-transport"); if (bar && bar.toggleAttribute) bar.toggleAttribute("data-editing", p.editing);
 }
-/** JUMP TO: hold the first frame of a phase (by id). */
+// JUMP TO: hold a phase's first frame.
 function previewPhase(id) {
   if (!preview) return;
   const m = previewPhases(preview).find((x) => x.id === id);
@@ -350,7 +347,7 @@ function previewSeek(t) {
   else if (preview.travel) preview.travel.primed = false;
   previewSync();
 }
-// EDIT: hold the frame and show the panel over the room; off hides it again.
+// EDIT: hold the frame, the panel over the room.
 function previewEdit(on) {
   if (!preview) return;
   preview.editing = !!on;
@@ -359,12 +356,18 @@ function previewEdit(on) {
   if (inner) inner.hidden = !on;
   previewSync();
 }
-/** bindSettings' `changed`: a setting edited mid-preview re-poses the held frame. */
+// bindSettings' `changed`: re-pose the held frame.
 function refreshPreview() {
   if (!preview) return;
   preview.cfg = previewCfg(preview.moment);
   preview.t = Math.min(preview.t, previewLen(preview));
   previewSync();
+}
+// EDIT's held frame follows the moment tab (#4909).
+function previewMoment(m) {
+  if (!preview || !preview.editing || preview.moment === m) return;
+  Object.assign(preview, { moment: m, dir: GarageArrival.MOMENT_DIR[m], cfg: previewCfg(m), marked: null, motion: null });
+  previewSeek(preview.t);
 }
 // `which` is a moment (GarageArrival MOMENTS) or the shipped direction ("in" pit in, "out" race start, "home").
 function startArrivalPreview(which, btn) {

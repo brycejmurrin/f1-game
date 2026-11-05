@@ -5548,6 +5548,7 @@
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -5967,11 +5968,15 @@
       "clearJamb": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
+      "copyMoment": [
+        "tests/unit/garage-editor-4909.test.mjs"
+      ],
       "enforceNearPlane": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
       "forMoment": [
-        "tests/unit/garage-camera-options.test.mjs"
+        "tests/unit/garage-camera-options.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "inJamb": [
         "tests/unit/garage-camera-options.test.mjs"
@@ -5985,6 +5990,9 @@
       "read": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
+      "resetMoment": [
+        "tests/unit/garage-editor-4909.test.mjs"
+      ],
       "samplePath": [
         "tests/unit/garage-camera-options.test.mjs"
       ],
@@ -5992,7 +6000,8 @@
         "tests/unit/garage-camera-options.test.mjs"
       ],
       "write": [
-        "tests/unit/garage-camera-options.test.mjs"
+        "tests/unit/garage-camera-options.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ]
     },
     "js/data/garage-defaults.js": {
@@ -7976,7 +7985,8 @@
     "js/garage/arrival.js": {
       "angleMap": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew.test.mjs"
+        "tests/unit/garage-crew.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "applyStyle": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7984,7 +7994,8 @@
       ],
       "bindSettings": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-crew-choreo.test.mjs"
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "cancel": [
         "tests/unit/garage-arrival.test.mjs",
@@ -7997,6 +8008,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs",
         "tests/unit/garage-entrance-motion.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
@@ -8005,7 +8017,8 @@
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew-service.test.mjs",
         "tests/unit/garage-crew.test.mjs",
-        "tests/unit/garage-departure-wheels.test.mjs"
+        "tests/unit/garage-departure-wheels.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "finish": [
         "tests/unit/garage-entrance-motion.test.mjs"
@@ -8034,13 +8047,15 @@
       ],
       "rigSample": [
         "tests/unit/garage-arrival.test.mjs",
-        "tests/unit/garage-camera-rigs.test.mjs"
+        "tests/unit/garage-camera-rigs.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "rigU": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "saved": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "select": [
         "tests/unit/garage-crew-choreo.test.mjs"
@@ -8054,7 +8069,8 @@
         "tests/unit/garage-entrance-motion.test.mjs"
       ],
       "settingsFor": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "shotsFor": [
         "tests/unit/garage-arrival.test.mjs"
@@ -8120,7 +8136,8 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-departure-wheels.test.mjs"
+        "tests/unit/garage-departure-wheels.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ]
     },
     "js/garage/crew-motion.js": {
@@ -8289,7 +8306,8 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-camera-rigs.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
-        "tests/unit/garage-departure-wheels.test.mjs"
+        "tests/unit/garage-departure-wheels.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ]
     },
     "js/garage/livery-design-editor.js": {
@@ -8697,6 +8715,7 @@
     "js/garage/setup-camera.js": {
       "create": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs",
         "tests/unit/garage-finish-remap.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -8725,6 +8744,7 @@
       ],
       "endHome": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
@@ -8766,7 +8786,8 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "sequenceLook": [
-        "tests/unit/garage-arrival.test.mjs"
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-editor-4909.test.mjs"
       ],
       "setSetupAero": [
         "tests/unit/garage-aero-no-camera.test.mjs",
