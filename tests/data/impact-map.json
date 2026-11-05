@@ -217,6 +217,7 @@
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -4244,6 +4245,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs"
       ],
       "inCareer": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -5255,7 +5257,8 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "bootAgentSurface": [
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/lazy-dev-panels.test.mjs"
       ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
@@ -5266,6 +5269,7 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -10468,6 +10472,9 @@
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
+      "reportLap": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "reportResult": [
         "tests/unit/net-start-arming.test.mjs"
       ],
@@ -10858,6 +10865,7 @@
     },
     "js/overlay/render.js": {
       "boot": [
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/overlay-feed.test.mjs"
       ],
       "clear": [
@@ -10868,6 +10876,7 @@
         "tests/unit/overlay-render.test.mjs"
       ],
       "create": [
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs"
       ],
@@ -10880,6 +10889,7 @@
         "tests/unit/overlay-render.test.mjs"
       ],
       "text": [
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
@@ -10968,6 +10978,9 @@
       ],
       "wanted": [
         "tests/unit/gfx-debug-overlay.test.mjs"
+      ],
+      "*": [
+        "tests/unit/lazy-dev-panels.test.mjs"
       ]
     },
     "js/perf/gfx-escalation.js": {
@@ -11530,6 +11543,9 @@
       ]
     },
     "js/perf/three-inspector.js": {
+      "boot": [
+        "tests/unit/lazy-dev-panels.test.mjs"
+      ],
       "status": [
         "tests/unit/three-inspector.test.mjs"
       ],
@@ -14214,6 +14230,9 @@
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "setFollow": [
+        "tests/unit/real-replay-vm.test.mjs"
+      ],
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
@@ -16844,6 +16863,7 @@
       "*": [
         "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/gfx-debug-overlay.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -18983,7 +19003,8 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "summary": [
-        "tests/unit/career-experience.test.mjs"
+        "tests/unit/career-experience.test.mjs",
+        "tests/unit/results-story.test.mjs"
       ],
       "*": [
         "tests/unit/podium-beat.test.mjs",
