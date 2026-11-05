@@ -523,7 +523,7 @@
         for (let i = 0; i < idx.length; i++) { if ((i & 8191) === 0) yield; idx[i] = bk.idx[i]; }
       }
       count += idx.length;
-      chunks.push({ idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key),
+      chunks.push({ idx, min: bk.mn.map((v) => v - Frustum.MOTION_PAD), max: bk.mx.map((v) => v + Frustum.MOTION_PAD), gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key),
         subs: bk.subs && bk.subs.length > 1 ? bk.subs : null });
       yield;
     }

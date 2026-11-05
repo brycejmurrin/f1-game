@@ -39,6 +39,7 @@ const AnnounceBanner = (function () {
   function create(deps) {
     let announceT = 0, _annPri = 0, _annFloor = 0;
     const _annQueue = [];
+    let _annClock = 0; // ms of ticked game time (dt is seconds)
     function radioWho(kind) {
       if (typeof Captions !== "undefined" && Captions.radioWho) return Captions.radioWho(kind, deps.player());
       const label = { control: "RACE CONTROL", coach: "COACH", announcer: "COMMENTARY" }[RadioVoice.SPEAKERS[kind]];
@@ -145,7 +146,7 @@ const AnnounceBanner = (function () {
         }
         let at = _annQueue.length;
         while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-        _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
+        _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: _annClock });
         return true;
       }
       showAnnounce(msg, dur, kind, quiet);
@@ -153,6 +154,7 @@ const AnnounceBanner = (function () {
     }
 
     function tick(dt) {
+      _annClock += dt * 1000; // ms of ticked game time: a long pause must not age the queue
       if (announceT > 0) {
         announceT -= dt;
         if (_annFloor > 0 && (_annFloor -= dt) <= 0 && _annQueue.length && _annQueue[0].pri > _annPri) announceT = 0;
@@ -165,7 +167,7 @@ const AnnounceBanner = (function () {
           while (_annQueue.length) {
             const q = _annQueue.shift();
             if (q.still && !q.still()) continue;
-            if (q.pri <= ANN_PRI.info && performance.now() - q.t > ANN_STALE_MS) continue;
+            if (q.pri <= ANN_PRI.info && _annClock - q.t > ANN_STALE_MS) continue;
             showAnnounce(q.msg, q.dur, q.kind); break;
           }
         }

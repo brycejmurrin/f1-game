@@ -61,8 +61,10 @@ it("garage tabs split performance and finishing work into named rows", () => {
   const css = rd("css/carsetup.css");
   assert.match(sheet, /SECONDARY_CATS\s*=\s*new Set\(\["floor",\s*"cockpit",\s*"wheels",\s*"tune",\s*"livery"\]\)/);
   assert.match(sheet, /className = "cs-tab-row"/);
-  assert.match(sheet, /dataset\.tier = "Performance categories"/);
-  assert.match(sheet, /dataset\.tier = "Finishing and setup categories"/);
+  // The rows are named through one tierRow(tier) helper that writes dataset.tier.
+  assert.match(sheet, /dataset\.tier = tier/);
+  assert.match(sheet, /tierRow\("Performance categories"\)/);
+  assert.match(sheet, /tierRow\("Finishing and setup categories"\)/);
   assert.match(css, /#cs-tabs \.cs-tab-row\s*\{[^}]*overflow-x:\s*auto/s,
     "each stacked row can pan without hiding the other tier");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \.cs-tab-row\s*\{[^}]*display:\s*contents/s,
