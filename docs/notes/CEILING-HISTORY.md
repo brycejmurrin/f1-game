@@ -3700,3 +3700,6 @@ fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) 
 none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
+
+## 2026-11-05 — #5101 (PR #5123): raceEntryBytes +265
+Three small player-facing fixes on the race entry path: the DAILY streak reads the local calendar day (#5010), queued engineer cards age on ticked game time so a pause no longer drops them (#5068), and the ceremony podium hides a points line it has no table for (#5064). The bytes are the fixes themselves; no new module, so the boot budget is untouched.
