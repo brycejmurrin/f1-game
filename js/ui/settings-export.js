@@ -258,6 +258,7 @@ const SPEC = [
   { k: "homeScene", lane: "json", group: "appearance", def: "photo", src: "js/ui/appearance-studio.js", oneOf: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"] },
   { k: "backgroundMotion", lane: "json", group: "appearance", def: "ambient", src: "js/ui/appearance-studio.js", oneOf: ["still", "ambient"] },
   { k: "homeCamera", lane: "json", group: "appearance", def: "side", src: "js/ui/appearance-studio.js", oneOf: ["auto", "hero", "front", "side", "rear"] },
+  { k: "appearanceShapes", lane: "json", group: "appearance", def: null, src: "js/ui/layout-presets.js PORTRAIT & LANDSCAPE", normalize: (v) => v === null || (v && typeof v === "object" && v.v === 1) ? v : undefined },
   { k: "appearanceProfiles", lane: "json", group: "appearance", def: [], src: "js/ui/appearance-studio.js", normalize: (v) => Array.isArray(v) ? (!v.length ? [] : typeof AppearanceStudio !== "undefined" ? AppearanceStudio.normalizeProfiles(v) : undefined) : undefined },
   // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
   // string the ladder does not name is skipped here rather than stored.
