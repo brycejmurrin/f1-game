@@ -38,8 +38,8 @@ const WHEN = {
   "photo-scene": (h, on) => { h.mode.scene = on ? "photo" : "garage"; },
 };
 
-function boot(extra = {}) {
-  const dom = makeDom({ readyState: "complete" });
+function boot(extra = {}, readyState = "complete") {
+  const dom = makeDom({ readyState });
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
   const el = (tag, id, parent = dom.body) => { const n = dom.makeElement(tag, id); parent.appendChild(n); return n; };
@@ -335,4 +335,20 @@ test("a refresh that changes nothing writes nothing to the DOM", () => {
     assert.deepEqual(writes, [], `${rule.key}: an idempotent refresh wrote ${writes.length} times: ${writes.slice(0, 4).join("; ")}`);
     assert.ok(live.length > 0);
   }
+});
+
+test("a deferred script (readyState interactive) arms: no observer or refresh until Settings enter, a tap or idle (#4926)", () => {
+  const observers = [], enters = [], idles = [];
+  const h = boot({
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} },
+    SettingsNav: { onEnter: (fn) => enters.push(fn) },
+    requestIdleCallback: (fn) => idles.push(fn),
+  }, "interactive");
+  assert.equal(observers.length, 0, "no MutationObserver in the boot path");
+  assert.equal(enters.length, 1, "exactly one Settings-enter registration");
+  assert.equal(idles.length, 1, "idle fallback registered");
+  enters[0]();
+  assert.equal(observers.length, 1, "the first Settings enter inits");
+  idles[0]();
+  assert.equal(observers.length, 1, "init is idempotent");
 });

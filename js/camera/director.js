@@ -1,11 +1,7 @@
-/* Apex 26 — LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera
- * brain for the race the player is driving. Reuses Broadcast's pure cut policy
- * (battles / shotFor / dwell). When CAM_MODES id "tv" is on — or after the
- * player finishes/retires in solo — it picks a subject (battle / leader) and a
- * shot (side/heli/tcam/chase/cinematic/low), solves the vantage into G.dbgCam,
- * and never touches car forces or sim RNG. Curvature reaches it only through
- * GameCams.vantage (broadcast-only). Netplay: auto-spectate and TV cuts stay
- * off while netPlay.active() — pause does not own the shared sim. */
+/* Apex 26 — LIVE TV DIRECTOR (Director.create(G)): broadcast-style camera brain for the player's race. Reuses
+ * Broadcast's cut policy; when CAM_MODES "tv" is on, or after the player finishes/retires in solo, it picks a subject
+ * and shot and solves the vantage into G.dbgCam. Never touches car forces or sim RNG; curvature only via
+ * GameCams.vantage. Off while netPlay.active(). */
 "use strict";
 const Director = (function () {
   // Prefer Broadcast's shipped shot list and dwell when the module is loaded;
@@ -107,6 +103,7 @@ const Director = (function () {
     // Pooled rows + array (as Broadcast.battles pools its fights): the list is
     // rebuilt on every cut-eligible tick and used only inside it.
     const runRows = [], runOut = [];
+    function byProgDesc(a, b) { return b.prog - a.prog; }
     function runningList() {
       const cars = G.cars || [];
       let n = 0;
@@ -119,7 +116,7 @@ const Director = (function () {
         runOut[n++] = r;
       }
       runOut.length = n;
-      runOut.sort((a, b) => b.prog - a.prog);
+      runOut.sort(byProgDesc);
       return runOut;
     }
     function clearDbg(snap) {
@@ -129,19 +126,9 @@ const Director = (function () {
       // A manual handoff returns to the player's car, possibly far from this shot.
       if (released && snap && G.snapGameCam) G.snapGameCam();
     }
-    /* A CUT SOLVES ONE-SHOT; HOLDING A SHOT SOLVES WITH THE FRAME'S dt.
-       vantage.js eases the corner side of heli/side/cinematic through
-       CamFeel.follow ("a hard sign flip teleported the eye ~36 m") — but only
-       when the solve carries a dt, and this one never did, so mid-shot every
-       curvature sign flip jumped the HELI eye ~24-36 m and TV SIDE ~28-50 m in
-       one frame. dt 0 on a cut keeps the cut whole (every follow lands on its
-       target); `snap` lets the speed-open terms start where they belong.
-       The subject pose is the INTERPOLATED one the car body is drawn at
-       (G.camPoseOf, read after the physics step — game.js ticks this after it):
-       the raw 60 Hz car.s/px/head held-then-jumped on a 90/120 Hz display.
-       The follows run under CamFeel.scoped("tv:"): the player's own rig keeps
-       solving (TV falls to the chase branch) and shared keys like "chaseBend"
-       would otherwise be damped toward two different cars on alternate calls. */
+    /* A cut solves one-shot (dt 0, snap); holding a shot solves with the frame's dt so vantage's CamFeel.follow
+       eases the corner side (no 24-50 m eye jump at a curvature sign flip). The subject pose is the INTERPOLATED
+       one the body is drawn at (G.camPoseOf). Follows run under CamFeel.scoped("tv:") so the player's rig keeps solving. */
     function applyShot(car, shot, dt, cut) {
       if (!car || !G.track || !G.camVantage) return false;
       const extra = _shotExtra;   // pooled: vantage reads it synchronously and keeps no reference
@@ -163,7 +150,9 @@ const Director = (function () {
       if (!v || !v.eye || !v.tgt) return false;
       scratchEye[0] = v.eye[0]; scratchEye[1] = v.eye[1]; scratchEye[2] = v.eye[2];
       scratchTgt[0] = v.tgt[0]; scratchTgt[1] = v.tgt[1]; scratchTgt[2] = v.tgt[2];
-      if (!_dbgCam) _dbgCam = { eye: scratchEye, target: scratchTgt, fov: 55, far: 6000 };
+      // fog + race far plane, else render() uses the dev free-cam lens (#4957)
+      if (!_dbgCam) _dbgCam = { eye: scratchEye, target: scratchTgt, fov: 55, far: 900, fog: 1 };
+      _dbgCam.far = G.gfx && G.gfx.isMobile ? 1100 : 900;
       _dbgCam.fov = v.fov || 55;
       ownCamera = G.dbgCam = _dbgCam;
       onAirShot = shot;

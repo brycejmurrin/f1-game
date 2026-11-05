@@ -137,6 +137,17 @@
       "signature": "^race census must observe the requested renderer and usable counters",
       "expires": "2026-11-18",
       "review": "By 2026-11-18, make the first race census wait for the renderer and counters (or fail with a boot diagnosis); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link."
+    },
+    {
+      "spec": "tests/specs/ui-redesign.spec.js",
+      "since": "2026-11-05",
+      "owner": "brycejmurrin",
+      "why": "Passed only on retry. Two failure modes on the same title: (1) settings panel data-fit 'on' vs 'off' at 200% UI scale on short landscape (#5091 / tip #5120; runs on PR #4934/#4951). (2) PR #4764 ready/full run 41943772606 job 126971118818 (head b2e26b69): TimeoutError page.waitForFunction 5000ms on cold Navigate (7.9s) with service-worker controllerchange mid-test; retry passed. Signature covers both messages only; other fit assertions stay blocking.",
+      "title": "catalogue, garage, settings, data table, and compact multiplayer fit",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41943772606/job/126971118818",
+      "signature": "^(settings 200% short landscape|TimeoutError: page\\.waitForFunction: Timeout \\d+ms exceeded)",
+      "expires": "2026-11-19",
+      "review": "By 2026-11-19, harden the catalogue/garage/settings fit wait past SW controllerchange and the 200% short-landscape orientation-scale settle (#5091); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
     }
   ]
 }

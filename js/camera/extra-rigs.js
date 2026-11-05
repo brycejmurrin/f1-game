@@ -36,14 +36,10 @@ const ExtraRigs = (function () {
 
   const _rvRows = [], _rvOut = [];
 
-  /** Closest battle partner for the player, reusing Broadcast.battles when present. The 20 m/s crawl
-   *  floor rides _vScale (vTop()/VMAX, latched by tickPitAuto(G) each frame before game.js calls this)
-   *  for the sim's PACE-scaled speeds; WATCH's puppets (c.replayRate set by RealReplay.pose) carry the
-   *  trace's real m/s, so they keep the bare floor. */
+  /** Closest battle partner for the player (Broadcast.battles when present). The 20 m/s crawl floor rides _vScale (vTop()/VMAX); WATCH puppets (c.replayRate) carry real m/s and keep the bare floor. */
   function pickRival(cars, player) {
     if (!cars || !player || cars.length < 2) return null;
-    // Pooled rows + array (Broadcast.battles pools its fights the same way):
-    // rival mode calls this every rendered frame, and the rows never escape.
+    // Pooled rows + array: called every rendered frame in rival mode.
     const running = _rvOut;
     let n = 0;
     let vScale = _vScale;
@@ -58,7 +54,7 @@ const ExtraRigs = (function () {
       running[n++] = r;
     }
     running.length = n;
-    running.sort((a, b) => b.prog - a.prog);
+    running.sort(byProgDesc);
     const fights = (typeof Broadcast !== "undefined" && Broadcast.battles)
       ? Broadcast.battles(running, vScale)
       : localBattles(running, vScale);
@@ -90,10 +86,14 @@ const ExtraRigs = (function () {
     return out.sort((x, y) => x.score - y.score);
   }
 
+  const _carRes = { s: 0, x: 0, p: null, t: null, r: null, hw: 0 };   // filled in place; callers read it synchronously
+  function byProgDesc(a, b) { return b.prog - a.prog; }
   function carSample(track, car, out) {
     const s = wrapS(track, car.s || 0), x = car.x || 0;
     Tracks.sample(track, s, out);
-    return { s, x, p: out.p, t: out.t, r: out.r, hw: out.hw };
+    const r = _carRes;
+    r.s = s; r.x = x; r.p = out.p; r.t = out.t; r.r = out.r; r.hw = out.hw;
+    return r;
   }
 
   /** Frame the car ahead or behind in a battle — both cars stay in shot. */
@@ -252,11 +252,7 @@ const ExtraRigs = (function () {
     return !!(c && c.pitState && c.pitState !== "none");
   }
 
-  /** Optional auto-cut onto PIT WALL around pit entry/exit. Returns the mode
-   *  id it switched to, or null. Reads apex26.pitCamAuto — OFF unless the
-   *  player opts in: taking the camera away on every pit entry (and handing it
-   *  back on exit) was reported as unwanted on 2026-10-02, so the player's own
-   *  camera stays put; PIT WALL is still one press of the camera button away. */
+  /** Optional auto-cut onto PIT WALL around pit entry/exit; returns the mode id it switched to, or null. Reads apex26.pitCamAuto, OFF unless opted in (unwanted by default, 2026-10-02). */
   let _pcStore = null, _pcRev = -1, _pcRaw = -1, _pcEnabled = false, _pitModes = null, _pitIdx = -1;
   const _isPitwall = (m) => m.id === "pitwall";
   function tickPitAuto(G) {

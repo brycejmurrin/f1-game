@@ -1,8 +1,6 @@
-/* Apex 26 — RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut,
- * slow orbit behind the results sheet, and a short highlights montage from the
- * solo ReplayBuf tags. Solo presentation only — never touches netplay authority
- * or career settlement. Off on mobile / PerfGov.tier() >= 2. Cap orbit/highlight
- * redraws at 30 fps. Curvature only via G.camVantage (broadcast-only). */
+/* Apex 26 — RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results
+ * sheet, and a highlights montage from the solo ReplayBuf tags. Solo only; off on mobile / PerfGov.tier() >= 2.
+ * Redraws capped at 30 fps. Curvature only via G.camVantage (broadcast-only). */
 "use strict";
 const ResultsCam = (function () {
   const CHEQ_S = 2.2;
@@ -21,23 +19,20 @@ const ResultsCam = (function () {
   }
 
   /** Pure: finish-line side vantage extras for camVantage("side", …). */
-  function chequeredExtra(player) {
-    return {
-      carPos: player && player.px != null ? [player.px, player.pz] : null,
-      carHead: player && player.head,
-      noLook: true, frameSubject: true, snap: true,
-    };
+  function chequeredExtra(player, o) {
+    const c = o.carPos || (o.carPos = [0, 0]);
+    c[0] = player && player.px; c[1] = player && player.pz;
+    if (!(player && player.px != null)) o.carPos = null;
+    o.carHead = player && player.head;
+    return o;
   }
 
   /** Pure: orbit eye/target around a world point (winner). */
-  function orbitPose(cx, cy, cz, yaw) {
-    const eye = [
-      cx + Math.sin(yaw) * ORBIT_RADIUS,
-      cy + ORBIT_HEIGHT,
-      cz + Math.cos(yaw) * ORBIT_RADIUS,
-    ];
-    const target = [cx, cy + 1.2, cz];
-    return { eye, target, fov: 55 };
+  function orbitPose(cx, cy, cz, yaw, out) {
+    const o = out || { eye: [0, 0, 0], target: [0, 0, 0], fov: 55 }, e = o.eye, t = o.target;
+    e[0] = cx + Math.sin(yaw) * ORBIT_RADIUS; e[1] = cy + ORBIT_HEIGHT; e[2] = cz + Math.cos(yaw) * ORBIT_RADIUS;
+    t[0] = cx; t[1] = cy + 1.2; t[2] = cz;
+    return o;
   }
 
   /** Pure: pick highlight windows from ReplayBuf-shaped tags inside [t0,t1]. */
@@ -82,6 +77,13 @@ const ResultsCam = (function () {
     let replayApi = null;
     const anchor = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const bankScratch = { dy: 0, roll: 0 };
+    const _cam = { eye: [0, 0, 0], target: [0, 0, 0], fov: 55, far: 900, fog: 1, _resultsCam: true };  // pooled
+    const _extra = { carPos: null, carHead: 0, noLook: true, frameSubject: true, snap: true, dt: 0 };
+    const _cheq = { eye: null, target: null, fov: 58 };
+    const _orbit = { eye: [0, 0, 0], target: [0, 0, 0], fov: 55 };
+    const _cheqTgt = [0, 0, 0];
+    let _cut = true, _stepDt = 0, _sideS = 0, _sideX = 0, _sideSp = 0;   // _cut: first solve snaps
+    function solveSide() { return G.camVantage("side", _sideS, _sideX, _sideSp, 0, _extra); }
     const allowed = () => enabled(G) && (!eligible || eligible()) &&
       !(G.netPlay && G.netPlay.active && G.netPlay.active());
     function highlightsPresentation(playing) {
@@ -108,7 +110,7 @@ const ResultsCam = (function () {
     }
     function reset() {
       endHighlights();
-      phase = "idle"; age = 0; orbitYaw = 0; frameAcc = 0;
+      phase = "idle"; age = 0; orbitYaw = 0; frameAcc = 0; _cut = true;
       reel = []; reelIdx = 0; clipAge = 0;
       if (G.dbgCam && G.dbgCam._resultsCam) G.dbgCam = null;
       if (typeof document !== "undefined") {
@@ -118,10 +120,10 @@ const ResultsCam = (function () {
     }
     function publish(pose) {
       if (!pose || !pose.eye) return;
-      G.dbgCam = {
-        eye: pose.eye.slice(), target: pose.target.slice(),
-        fov: pose.fov || 55, far: 6000, _resultsCam: true,
-      };
+      const c = _cam;   // race lens (fog 1), not the dev free-cam default (#4957)
+      for (let i = 0; i < 3; i++) { c.eye[i] = pose.eye[i]; c.target[i] = pose.target[i]; }
+      c.fov = pose.fov || 55; c.far = G.gfx && G.gfx.isMobile ? 1100 : 900;
+      G.dbgCam = c;
     }
     function subject() {
       const cars = G.cars || [];
@@ -135,15 +137,20 @@ const ResultsCam = (function () {
     function cheqPose(p = subject()) {
       if (!p || !G.camVantage) return null;
       const pose = G.camPoseOf ? G.camPoseOf(p) : null;
-      const extra = chequeredExtra(p);
+      const extra = chequeredExtra(p, _extra);
+      extra.dt = _cut ? 0 : _stepDt; extra.snap = _cut;
       if (pose && pose.carPos) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
       const s = pose ? pose.s : (p.s || 0), x = pose ? pose.x : (p.x || 0);
       // Match the side rig's smooth bank lift, including replayed highlight poses.
       const bank = G.track && typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
       extra.bankDy = bank ? bank.dy : 0;
-      const v = G.camVantage("side", s, x, p.speed || 0, 0, extra);
+      _sideS = s; _sideX = x; _sideSp = p.speed || 0;
+      const v = typeof CamFeel !== "undefined" && CamFeel.scoped ? CamFeel.scoped("res:", solveSide) : solveSide();
+      _cut = false;
       if (!v || !v.eye) return null;
-      return { eye: v.eye, target: v.tgt || v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
+      _cheq.eye = v.eye; _cheq.fov = v.fov || 58;
+      _cheq.target = v.tgt || v.target || (_cheqTgt[0] = p.px, _cheqTgt[1] = p.py || 1, _cheqTgt[2] = p.pz, _cheqTgt);
+      return _cheq;
     }
     function doOrbit(p = subject()) {
       if (!p) return null;
@@ -152,11 +159,11 @@ const ResultsCam = (function () {
       if (G.track && typeof Tracks !== "undefined") {
         const s = pose ? pose.s : p.s, x = pose ? pose.x : p.x;
         Tracks.sample(G.track, s, anchor);
-        const bank = Tracks.banking ? Tracks.banking(G.track, s, x) : null;
+        const bank = Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
         y = anchor.p[1] + (bank ? bank.dy : 0);
       }
       const pos = pose && pose.carPos;
-      return orbitPose(pos ? pos[0] : (p.px || 0), y, pos ? pos[1] : (p.pz || 0), orbitYaw);
+      return orbitPose(pos ? pos[0] : (p.px || 0), y, pos ? pos[1] : (p.pz || 0), orbitYaw, _orbit);
     }
     function onFlag() {
       reset();
@@ -187,7 +194,7 @@ const ResultsCam = (function () {
         reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: -1 }];   // no tagged car: film the winner
       }
       if (!reel.length || !buf.beginScrub(false)) return false;
-      phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
+      phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0; _cut = true;
       highlightsPresentation(true);
       applyHighlightFrame();
       return true;
@@ -209,7 +216,7 @@ const ResultsCam = (function () {
       if (!allowed()) { reset(); return false; }
       frameAcc += dt;
       if (frameAcc < FRAME_DT) return true;   // still live, but skip work
-      const step = frameAcc; frameAcc = 0;
+      const step = frameAcc; frameAcc = 0; _stepDt = step;
       age += step;
       if (phase === "chequered") {
         const pose = cheqPose();
@@ -227,7 +234,7 @@ const ResultsCam = (function () {
         clipAge += step;
         const clip = reel[reelIdx];
         if (!clip || clipAge >= (clip.t1 - clip.t0)) {
-          reelIdx++; clipAge = 0;
+          reelIdx++; clipAge = 0; _cut = true;
           if (reelIdx >= reel.length) return startOrbit();
         }
         applyHighlightFrame();
@@ -272,9 +279,7 @@ const ResultsCam = (function () {
     };
   }
 
-  // ORBIT_RADIUS / ORBIT_HEIGHT / HIGHLIGHT_* / FRAME_DT / enabled /
-  // chequeredExtra stay module-local — no external readers (tests pin
-  // create / orbitPose / highlightsReel / CHEQ_S / ORBIT_PERIOD_S).
+  // Constants and helpers stay module-local; tests pin create / orbitPose / highlightsReel / CHEQ_S / ORBIT_PERIOD_S.
   return {
     create, CHEQ_S, ORBIT_PERIOD_S, orbitPose, highlightsReel,
   };

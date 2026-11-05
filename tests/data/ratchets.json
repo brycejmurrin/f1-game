@@ -44,11 +44,11 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8223,
+      "ceiling": 8196,
       "slack": 200
     },
     "assertPinsAll": {
-      "ceiling": 10351,
+      "ceiling": 10278,
       "slack": 200
     },
     "bareCatches": {
@@ -68,7 +68,7 @@
       "slack": 3506
     },
     "eagerGzip": {
-      "ceiling": 2917000,
+      "ceiling": 2890000,
       "slack": 28625
     },
     "implicitAsserts": {
@@ -84,7 +84,7 @@
       "slack": 396
     },
     "raceEntryBytes": {
-      "ceiling": 2075000,
+      "ceiling": 2068000,
       "slack": 19685
     },
     "rawColor": {
