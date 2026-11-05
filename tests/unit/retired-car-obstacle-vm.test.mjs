@@ -106,3 +106,11 @@ test("an AI whose line runs through a car parked on the road steers round it at 
   assert.ok(live.minDx >= 2.0, `the AI passed ${live.minDx.toFixed(2)} m from the parked car's centre (bodies overlap under 2.0)`);
   assert.ok(live.vPass > 15, `the AI slowed to ${live.vPass.toFixed(1)} m/s to get by`);
 });
+
+test("a car retired mid-lift loses its after-fire flame and brake glow (#4968)", async () => {
+  await g.race("singapore");
+  const G = g.G, r = G.cars.find((c) => !c.human && !c.isPlayer);
+  r.exhaustPop = 1; r.brakeHeat = 0.8; r.wasOnThrottle = true;
+  g.apex.retire(G.cars.indexOf(r));
+  assert.deepEqual([r.retired, r.exhaustPop, r.brakeHeat, r.wasOnThrottle], [true, 0, 0, false]);
+});

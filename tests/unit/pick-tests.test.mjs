@@ -22,7 +22,7 @@ const manifestFiles = () => [
   ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
   ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []), ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_CIRCUIT || []), ...MANIFEST.LAZY_SCENERY, ...(MANIFEST.LAZY_AUDIO || []), ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
   ...(MANIFEST.LAZY_EDITOR || []), ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-  ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
+  ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_DEV || []), ...(MANIFEST.OVERLAY_PAGE || []),
 ];
 const run = (...args) =>
   execFileSync("node", ["tools/ci/pick-tests.mjs", "--json", ...args],
