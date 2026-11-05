@@ -1,0 +1,1 @@
+Fixed: after a red flag, an AI car that takes its next planned tyre set under the red no longer pits again for it at the restart; a red flag that is never resumed now classifies on the penultimate lap, and a red flag shown after the winner has finished counts as a completed race (#4938, #4942).

@@ -2896,7 +2896,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
-  const suspended = raceCtl.level === 4;   // ended under a red flag, never resumed: B6.3.6's 30 s, not a DSQ
+  const suspended = raceCtl.level === 4 && !RaceControl.flagOut(cars);   // a red never resumed, not one after the chequer (#4942): B6.3.6's 30 s
   // Judged on the weather AT THE FLAG: endSession() below puts the starting weather back, and a MIXED race that
   // turned wet then disqualified every car on one slick for "one dry compound" (B6.3.6 is off in a wet race).
   const cmpApplies = pits.twoCompoundApplies();
@@ -2974,7 +2974,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
-  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out).concat(dsq));   // DSQ: last, no points
+  const order = netOrder(forcedOrder || RaceControl.classify(cars, fin, run, out, suspended).concat(dsq));   // DSQ: last, no points
   order.forEach((c, i) => { c.finPos = i + 1; });
   Log.info("game", "Race finished track=" + (track && track.def.id) + " session=" + session + " laps=" + lapsTarget + " pos=" + (player ? player.finPos : "-") + " time=" + (player && player.finished ? (+player.finishT).toFixed(3) : "-") + " pen=" + ((player && player.penalty) || 0) + "s" + (player && player.dsq ? " dsq=" + player.dsq : "") + " retired=" + out.length + " dsqs=" + dsq.length + (suspended ? " suspended" : ""));
   // Read BEFORE award() advances the stage, or the sprint is wrapped up as the Grand Prix.
