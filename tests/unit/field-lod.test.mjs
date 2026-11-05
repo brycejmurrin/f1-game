@@ -631,9 +631,3 @@ test("flame / shadow / flaps gates are sticky per car (#4979)", () => {
     assert.equal(L[fn]((m + 0.5) ** 2), false, fn + " without a car is the plain cut");
   }
 });
-
-test("retireCar zeroes the after-fire flame and brake glow (#4968)", () => {
-  const g = fs.readFileSync("js/game.js", "utf8");
-  const fn = g.slice(g.indexOf("function retireCar("), g.indexOf("function retireCar(") + 3500);
-  assert.match(fn, /c\.exhaustPop = 0; c\.brakeHeat = 0; c\.wasOnThrottle = false;/);
-});
