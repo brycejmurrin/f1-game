@@ -105,11 +105,10 @@ const MirrorPass = (function () {
   // resolution buys the steadiness. MAX_W/MAX_H are every backend's own clamp,
   // applied here with the aspect kept (a per-axis clamp would stretch it).
   const SS = 2, MAX_W = 1024, MAX_H = 512;
-  // A RUNG HOLDS ~1.5 s before the governor may move it. On a phone the tier
-  // moves on its own measurements, and every move swapped resolution, draw
-  // distance and cadence at once — scenery popping in and out of the mirror,
-  // reported as flashing. The first rung is taken at once (nothing to hold).
-  const Q_DWELL = 90;
+  // A RUNG HOLDS 1.5 s of clock (#4959) before the governor may move it: each
+  // move swaps resolution, draw distance and cadence at once (scenery popping,
+  // reported as flashing). The first rung is taken at once.
+  const Q_DWELL_MS = 1500;
 
   function create(G, deps) {
     Log.info("game", "MirrorPass.create");
@@ -135,7 +134,7 @@ const MirrorPass = (function () {
     // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
     // distance squared per rival that survives the arc / behind-eye / cone tests.
     const _cMats = [], _cCars = [], _cD2 = [], _cKeep = [], _cPosed = [];
-    let _q = QUALITY[0], _qi = -1, _qWant = -1, _qHeld = 0;
+    let _q = QUALITY[0], _qi = -1, _qWant = -1, _qSince = 0, _pzS = NaN, _pzX = NaN;
     // The frame's CSS box (measure()): the target is sized from THAT, not from
     // the render buffer, which the governor's dynamic resolution rescales every
     // few seconds on a phone — each rescale reallocated the mirror target.
@@ -581,7 +580,7 @@ const MirrorPass = (function () {
           else e.style.removeProperty("visibility");
         }
         if (!(box.width > 4 && box.height > 4)) { d.refused.box++; finishPreparation(job, false, "box"); return; }
-        quality(g);
+        quality(g, nowMs());
         const sz = targetSize(box.width, box.height, _q.res), w = sz[0], h = sz[1];
         if (w < 16 || h < 8) { d.refused.size++; finishPreparation(job, false, "size"); return; }
         const before = g.mirrorState ? g.mirrorState() : null;
@@ -612,11 +611,11 @@ const MirrorPass = (function () {
       const user = PerfGov.userTier ? PerfGov.userTier() : 0;
       return Math.max(1, measured, user >= 4 ? 4 : 0);
     }
-    function quality(g) {
+    function quality(g, nowT) {
       const tier = qualityTier(g);
       const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : tier >= 1 ? 1 : 0;
-      if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
-      if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
+      if (qi !== _qWant) { _qWant = qi; _qSince = nowT; }
+      if (qi !== _qi && (_qi < 0 || nowT - _qSince >= Q_DWELL_MS)) _qi = qi;
       _q = QUALITY[_qi];
     }
     function render(frame, frameSky, night, wet, floodEmit) {
@@ -661,12 +660,16 @@ const MirrorPass = (function () {
       // Every frame — a mirror that updates at half rate reads as lag — except
       // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
-      quality(g);
+      quality(g, nowT);
       const sz = targetSize(_cssW, _cssH, _q.res), w = sz[0], h = sz[1];
       if (w < 16 || h < 8) return;
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
       if (_frame % _q.every !== 0 && !G.frozen && same && _drawn > 0) return;
+      // #4959: paused under a tuner/SETTINGS, keep the last target unless the car moved (scrub) or LIGHTING is open.
+      const p = G.player;
+      if (G.paused && same && _drawn > 0 && p && p.s === _pzS && p.x === _pzX && G.els.lighting.hidden) return;
+      if (p) { _pzS = p.s; _pzX = p.x; }
       rearPass(frame, frameSky, night, wet, floodEmit, w, h);
     }
     function rearPass(frame, frameSky, night, wet, floodEmit, w, h) {

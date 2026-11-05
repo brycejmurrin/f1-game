@@ -58,19 +58,20 @@ test("a phone's governor cannot make the mirror flash: the target ignores render
   h.gfx.width = 640; h.gfx.height = 360;
   for (let i = 0; i < 4; i++) h.render();
   assert.deepEqual(size(), [200, 57], "sized from the frame's CSS box, not the render buffer");
-  // A tier blip shorter than the dwell never swaps the rung…
+  // A tier blip shorter than the dwell never swaps the rung… (1.5 s of clock, #4959; 60 fps frames here)
+  const tick = (n) => { for (let i = 0; i < n; i++) { h.clock.t += 1000 / 60; h.render(); } };
   h.setTier(4);
-  for (let i = 0; i < 30; i++) h.render();
-  assert.equal(h.mp.state().quality, "low", "a 30-frame blip to tier 4 holds the rung");
+  tick(30);
+  assert.equal(h.mp.state().quality, "low", "a 0.5 s blip to tier 4 holds the rung");
   h.setTier(2);
-  for (let i = 0; i < 30; i++) h.render();
+  tick(30);
   assert.equal(h.mp.state().quality, "low");
   // …a tier that stays does, once.
   h.setTier(4);
-  for (let i = 0; i < 89; i++) h.render();
+  tick(90);
   assert.equal(h.mp.state().quality, "low", "still inside the dwell");
-  h.render();
-  assert.equal(h.mp.state().quality, "min", "90 frames on: the rung follows");
+  h.clock.t += 20; h.render();
+  assert.equal(h.mp.state().quality, "min", "1.5 s on: the rung follows");
 });
 
 test("the sun's view-dependent terms stay out of the mirror, and the main frame keeps its own tune", () => {
