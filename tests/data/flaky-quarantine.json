@@ -137,6 +137,17 @@
       "signature": "^race census must observe the requested renderer and usable counters",
       "expires": "2026-11-18",
       "review": "By 2026-11-18, make the first race census wait for the renderer and counters (or fail with a boot diagnosis); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link."
+    },
+    {
+      "spec": "tests/specs/ui-redesign.spec.js",
+      "since": "2026-11-05",
+      "owner": "brycejmurrin",
+      "why": "Passed only on retry, three sightings in an hour (#5091): PR #4934 spill-3 and selected-1 (run 41933338420 job 126935817258; about 2 runs in 3 on one head) and PR #4951. Expected the settings panel data-fit 'on', received 'off' at 200% UI scale on a short landscape viewport; none of those diffs touch settings layout. Suspect #4897 (per-orientation appearance) orientation-scale settle. Exempts only this assertion message; the other fit assertions in the test stay blocking.",
+      "title": "catalogue, garage, settings, data table, and compact multiplayer fit",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/41933338420/job/126935817258",
+      "signature": "^settings 200% short landscape",
+      "expires": "2026-11-12",
+      "review": "By 2026-11-12, make the 200% short-landscape settings fit wait for the orientation scale to settle (#5091 root-cause PR) and remove this row. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
     }
   ]
 }
