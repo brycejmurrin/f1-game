@@ -217,6 +217,7 @@
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -5256,7 +5257,8 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "bootAgentSurface": [
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/lazy-dev-panels.test.mjs"
       ],
       "create": [
         "tests/unit/assets-pack.test.mjs",
@@ -5267,6 +5269,7 @@
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -9135,6 +9138,11 @@
       "holdReleasePointer": [
         "tests/unit/key-binds-hunt.test.mjs"
       ],
+      "press": [
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
       "release": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9156,7 +9164,8 @@
     },
     "js/input/input.js": {
       "activeInputSource": [
-        "tests/unit/key-binds.test.mjs"
+        "tests/unit/key-binds.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
       ],
       "activePad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
@@ -10877,6 +10886,7 @@
     },
     "js/overlay/render.js": {
       "boot": [
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/overlay-feed.test.mjs"
       ],
       "clear": [
@@ -10887,6 +10897,7 @@
         "tests/unit/overlay-render.test.mjs"
       ],
       "create": [
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs"
       ],
@@ -10899,6 +10910,7 @@
         "tests/unit/overlay-render.test.mjs"
       ],
       "text": [
+        "tests/unit/lazy-dev-panels.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/overlay-render.test.mjs"
@@ -10987,6 +10999,9 @@
       ],
       "wanted": [
         "tests/unit/gfx-debug-overlay.test.mjs"
+      ],
+      "*": [
+        "tests/unit/lazy-dev-panels.test.mjs"
       ]
     },
     "js/perf/gfx-escalation.js": {
@@ -11549,6 +11564,9 @@
       ]
     },
     "js/perf/three-inspector.js": {
+      "boot": [
+        "tests/unit/lazy-dev-panels.test.mjs"
+      ],
       "status": [
         "tests/unit/three-inspector.test.mjs"
       ],
@@ -15331,6 +15349,7 @@
       "*": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ]
     },
@@ -15617,6 +15636,7 @@
       "*": [
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ]
     },
@@ -16866,6 +16886,7 @@
       "*": [
         "tests/unit/agent-scope-hooks.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/gfx-debug-overlay.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -17097,6 +17118,7 @@
     "js/track/core/hidden-faces.js": {
       "strip": [
         "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/sway-geometry-guards.test.mjs",
         "tests/unit/track-build-grids.test.mjs"
       ],
       "*": [
@@ -19015,7 +19037,8 @@
     },
     "js/ui/save-health.js": {
       "boot": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ],
       "cleanup": [
         "tests/unit/save-durability.test.mjs"
@@ -19024,7 +19047,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "mount": [
-        "tests/unit/save-durability.test.mjs"
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "js/ui/scale.js": {
@@ -19273,6 +19297,9 @@
       "isGarageKey": [
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/player-tools-backup.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/settings-export.test.mjs"
       ],
       "pick": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",

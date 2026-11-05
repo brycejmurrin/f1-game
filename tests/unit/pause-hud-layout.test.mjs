@@ -100,8 +100,7 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
   shown.length = 0;
   banner.announce("UP TO P5", 2, "info");
   banner.announce("TRACK LIMITS", 2, "warning");
-  now = 9000;
-  banner.tick(10);
+  banner.tick(9);   // 9 s of ticked game time
   assert.deepEqual(shown, ["TRACK LIMITS"], "the warning plays; the stale position call is dropped");
   banner.tick(10);
   assert.deepEqual(shown, ["TRACK LIMITS"], "UP TO P5 never reads out 9 s late");
@@ -110,9 +109,9 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
   fresh.banner.announce("HOLD", 5, "penalty-hit");
   fresh.banner.announce("TYRES AT 50%", 2, "info");
   fresh.shown.length = 0;
-  now = 3000;
-  fresh.banner.tick(10);
-  assert.deepEqual(fresh.shown, ["TYRES AT 50%"], "a fresh info card still plays");
+  now = 600000;   // a ten-minute pause: wall time passes, no tick runs (#5068)
+  fresh.banner.tick(6);
+  assert.deepEqual(fresh.shown, ["TYRES AT 50%"], "a fresh info card still plays, and a pause does not age it");
 });
 
 test("a full announce queue sheds comm and coach so a box call can queue", () => {
