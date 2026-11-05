@@ -244,7 +244,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
-| `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
@@ -289,6 +288,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `condition-cue-controls.js` | `ConditionCueControls` | tag | Cue targets that account for current driving conditions: ON by default since the #2177 calibration (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md); the… |
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
+| `watch-transport.js` | `WatchTransport` | LAZY_RACE_SESSION | Visible controls for the real-race replay. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
