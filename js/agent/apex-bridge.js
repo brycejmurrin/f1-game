@@ -227,6 +227,36 @@ const ApexBridge = (function () {
     });
   }
 
+  // The title-screen geometry (#4862): what the title WIDTH / LEFT-RIGHT settings actually laid out on the device.
+  // Read-only: rects of #overlay and #menu-buttons, the body's density/shape/class, --ui-scale, the cluster's zoom and
+  // the computed properties the WIDTH rules write, the viewport (with visualViewport) and the build.
+  function layout() {
+    const d = typeof document !== "undefined" ? document : null;
+    if (!d || !d.getElementById) throw new Error("no document");
+    const rect = (id) => {
+      const el = d.getElementById(id);
+      if (!el || !el.getBoundingClientRect) return null;
+      const r = el.getBoundingClientRect();
+      return { l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) };
+    };
+    const cs = (el) => (el && typeof getComputedStyle === "function" ? getComputedStyle(el) : null);
+    const btns = d.getElementById("menu-buttons"), ov = d.getElementById("overlay"), body = d.body || {}, root = d.documentElement;
+    const b = cs(btns), o = cs(ov), r = cs(root);
+    const pick = (s, keys) => (s ? Object.fromEntries(keys.map((k) => [k, s.getPropertyValue(k) || null])) : null);
+    const meta = d.querySelector && d.querySelector('meta[name="apex-sha"]');
+    const vv = window.visualViewport;
+    return {
+      sha: meta ? meta.content : null, w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio,
+      vv: vv ? { w: vv.width, h: vv.height, scale: vv.scale } : null,
+      body: { density: body.dataset ? body.dataset.density || null : null, shape: body.dataset ? body.dataset.shape || null : null, cls: body.className || "" },
+      root: root ? { btnw: root.getAttribute("data-title-btnw"), side: root.getAttribute("data-title-side"), uiScale: r ? r.getPropertyValue("--ui-scale").trim() : null,
+        tl: pick(r, ["--tl-btns-w", "--tl-btns-x", "--tl-btns-y", "--tl-btns-size"]) } : null,
+      overlay: rect("overlay"), overlayPad: pick(o, ["padding-left", "padding-right"]),
+      buttons: rect("menu-buttons"),
+      css: pick(b, ["width", "max-width", "justify-self", "grid-column", "margin-left", "margin-right", "translate", "zoom"]),
+    };
+  }
+
   // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and
   // a `path` change may only be the last step (the page is gone after them).
   const BATCH_MAX = 10;
@@ -259,6 +289,7 @@ const ApexBridge = (function () {
     path,
     bench,
     snap,
+    layout,
     batch,
   };
 
