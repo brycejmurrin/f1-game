@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
+import { absSrc } from '../helpers/abs-src.mjs';
 const source = fs.readFileSync(new URL('../../js/ui/update-check.js', import.meta.url), 'utf8');
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 function harness(fetchImpl, abort = true) {
@@ -46,4 +47,50 @@ test('successful and rejected reads release their deadline', async () => {
     assert.equal(await h.api.check(true), !fail);
     assert.equal(h.timers.size, 0); assert.equal(h.api.state().checking, false); h.api.stop();
   }
+});
+
+// #5134: a stale shell self-heals. sw.js posts `apex-shell-newer` once it cached a newer shell than the one this
+// page booted from; UpdateCheck reloads by itself (the `?b=` bust, the one-shot key) while the player is idle and
+// within 90 s of boot or of the page coming back — otherwise the chip, as before.
+function autoHarness({ idle = () => true, race = () => false } = {}) {
+  let clock = 1000;
+  const replaced = [], stored = {};
+  const sb = vm.createContext({ Promise, Number, Date, Object, URLSearchParams, setTimeout: () => 1, clearTimeout() {},
+    setInterval: () => 1, clearInterval() {}, navigator: {}, sessionStorage: { setItem(k, v) { stored[k] = v; } } });
+  vm.runInContext(source + ';globalThis.U = UpdateCheck;', sb, { filename: absSrc('js/ui/update-check.js') });
+  const api = sb.U.create({ booted: 320, now: () => clock, fetch: () => Promise.reject(Error('no network')), idle, inRace: race,
+    location: { pathname: '/', search: '', hash: '#vs=abc', replace: (u) => replaced.push(u) } });
+  return { api, replaced, stored, advance: (ms) => { clock += ms; } };
+}
+test('staleShell within the boot window and idle reloads with ?b= (#5134)', async () => {
+  const h = autoHarness();
+  assert.equal(h.api.staleShell(322), true);
+  await flush();
+  assert.deepEqual(h.replaced, ['/?b=322#vs=abc']);
+  assert.equal(h.stored['apex26.shellReloadedTo'], '322');
+  h.api.stop();
+});
+test('staleShell with an equal or older build is ignored (#5134)', async () => {
+  const h = autoHarness();
+  assert.equal(h.api.staleShell(320), false); assert.equal(h.api.staleShell(319), false);
+  await flush(); assert.deepEqual(h.replaced, []); h.api.stop();
+});
+for (const [why, opts, pre] of [
+  ['in a race', { race: () => true }, () => {}],
+  ['not idle (a dialog or screen is open)', { idle: () => false }, () => {}],
+  ['past the 90 s window', {}, (h) => h.advance(90001)],
+]) test(`staleShell ${why}: chip only (#5134)`, async () => {
+  const h = autoHarness(opts); pre(h);
+  assert.equal(h.api.staleShell(322), true, 'the build is still marked ready');
+  await flush();
+  assert.deepEqual(h.replaced, [], 'no reload');
+  assert.equal(h.api.state().ready, 322);
+  h.api.stop();
+});
+test('a return to visibility reopens the window (iOS resume) (#5134)', async () => {
+  const h = autoHarness(); h.advance(600000);
+  assert.equal(h.api.staleShell(321), true); await flush(); assert.deepEqual(h.replaced, []);
+  h.api.onVisible();   // document is undefined in the sandbox: counts as visible
+  assert.equal(h.api.staleShell(322), true); await flush();
+  assert.deepEqual(h.replaced, ['/?b=322#vs=abc']); h.api.stop();
 });

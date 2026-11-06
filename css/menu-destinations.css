@@ -162,29 +162,38 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
     grid-column: 1 / -1; grid-row: auto; width: 100%;
   }
 }
-/* THE BUTTON LAYER in landscape with a WIDTH (#5126, docs/notes/TITLE-LAYERS-2026-11-05.md; #4862/#4906 before it).
-   The cluster spans the WHOLE overlay (its content box: the safe areas are already padding), so the title column
-   never constrains it, and it is placed by ONE start margin:
-     free  = the room left beside it            max(0%, 100% - width)
-     home  = the anchored edge                  free (SIDE AUTO, right edge) | 0 (SWAPPED, left edge)
-     place = clamp(0, home + LEFT/RIGHT, free)  so the box never leaves the safe area
-   WIDTH grows from the anchored edge (home moves with it, the anchored edge does not), and LEFT/RIGHT is a screen %
-   (--_tl-bx, css/responsive.css) that slides the whole cluster across the full free room, ±100 reaching either edge
-   at every WIDTH and SIZE. #4906 clamped -X into an END margin, so a rightward X had nothing to move (Bryce,
-   2026-11-05). In a zoomed box the lengths are zoomed and % is not, so every term is in the overlay's own px. */
+/* THE BUTTON LAYER in landscape with a WIDTH (#5134, docs/notes/TITLE-CLUSTER-SW-2026-11-06.md; #5126, #4862 and #4906
+   before it). The cluster spans the WHOLE overlay (its content box: the safe areas are already padding), so the title
+   column never constrains it, and it is STRETCHED into that area minus two margins — never a `width`:
+     z     = UI SIZE x SIZE                     the cluster's zoom; every length below is divided by it once
+     ovw   = (100svw - --ov-pl - --ov-pr) / z   the overlay's content width as a length (--ov-pl/-pr: css/title.css)
+     free  = max(0, ovw - --_tl-bw)             the room left beside the cluster
+     home  = free (SIDE AUTO, right edge) | 0 (SWAPPED, left edge)
+     start = clamp(0, home + LEFT/RIGHT, free)  so the box never leaves the safe area
+     end   = free - start                       the stretched width is then exactly --_tl-bw
+   WIDTH grows from the anchored edge (home moves with it, the anchored edge does not), and LEFT/RIGHT (--_tl-bx,
+   css/responsive.css, already a screen % divided by z) slides the whole cluster across the full free room, ±100
+   reaching either edge at every WIDTH and SIZE. EVERY TERM IS A LENGTH: four generations of this rule placed the
+   cluster with a `%` margin or a `width: <length>` inside the zoomed box, and on Bryce's iPhone each one MOVED the
+   cluster while WIDTH never resized it (#4862, #5126, #5134). Margins and `stretch` are the two mechanisms that
+   device demonstrably honours. */
 :root[data-title-btnw] :where(body[data-shape="wide"]) #overlay #menu-buttons {
-  --_tl-free: max(0%, calc(100% - var(--_tl-bw)));
+  --_tl-z: calc(var(--ui-scale) * var(--tl-btns-size, 1));
+  --_tl-ovw: calc((100svw - var(--ov-pl, 0px) - var(--ov-pr, 0px)) / var(--_tl-z));
+  --_tl-free: max(0px, calc(var(--_tl-ovw) - var(--_tl-bw)));
+  --_tl-home: var(--_tl-free);
+  --_tl-start: clamp(0px, calc(var(--_tl-home) + var(--_tl-bx, 0px)), var(--_tl-free));
   grid-row: 1;
-  grid-column: 1 / -1; justify-self: start; margin-inline: 0;
-  margin-inline-start: clamp(0%, calc(var(--_tl-free) + var(--_tl-bx, 0vw)), var(--_tl-free));
-  max-width: 100%;
+  grid-column: 1 / -1; justify-self: stretch;
+  width: auto; min-width: 0; max-width: none;
+  margin-inline: var(--_tl-start) calc(var(--_tl-free) - var(--_tl-start));
   translate: 0 var(--tl-btns-y, 0);
   max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
 }
 :root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"]) #overlay #menu-buttons {
-  margin-inline-start: clamp(0%, var(--_tl-bx, 0vw), var(--_tl-free));
+  --_tl-home: 0px;
 }
 /* Compact density only: the single-column stack. Normal density keeps its own door grid. This layer also owns the
    destination placements, so an overlay-layer fix alone cannot undo subgrid. */
@@ -262,7 +271,8 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
     grid-template-columns: minmax(16rem, var(--menu-fit-brand)) minmax(22rem, var(--menu-fit-doors));
     justify-content: center;
     column-gap: clamp(2rem, 4vw, 6rem);
-    padding-inline: max(var(--safe-l, 0rem), 3rem) max(var(--safe-r, 0rem), 3rem);
+    --ov-pl: max(var(--safe-l, 0rem), 3rem); --ov-pr: max(var(--safe-r, 0rem), 3rem);
+    padding-inline: var(--ov-pl) var(--ov-pr);
   }
   body[data-shape="wide"] #overlay #menu-buttons { width: min(var(--menu-fit-doors), 100%); justify-self: end; }
 }

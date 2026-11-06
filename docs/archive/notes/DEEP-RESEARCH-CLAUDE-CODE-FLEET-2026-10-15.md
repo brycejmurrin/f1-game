@@ -116,7 +116,7 @@ The most valuable changes:
 - `mcp__tinyfish`, a lowercase duplicate.
 - `mcp__plugin_browser-use_browser-use`, which names no live server.
 - 4 MDN and BrowserStack lines, overridden by the org `ask` setting.
-- 6 lines for the `.mcp.json` servers (apex-tools, chrome-devtools, playwright-official). These were measured as never matching from the project file in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`, which is consistent with the docs' trust rule.
+- 6 lines for the `.mcp.json` servers (apex-tools, chrome-devtools, playwright-official). These were measured as never matching from the project file in `docs/archive/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`, which is consistent with the docs' trust rule.
 - 16 tools that need no permission.
 
 **`Workflow` is missing.** The repo ships workflow skills (`code-survey`, `total-audit`), so each run prompts in default mode.
@@ -393,7 +393,7 @@ Keep these as they are, because they already match the docs:
 
 **Behaviour known only from the repo's own measurements.** These have no public doc:
 - the `claude-code-remote` tools (`create_session` mode inheritance, `send_message`, `subscribe_pr_activity` dropping `check_run` events, `create_trigger` vs Routines);
-- why project allow rules never match `.mcp.json` server tools (`docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`);
+- why project allow rules never match `.mcp.json` server tools (`docs/archive/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`);
 - whether cloud sessions use server-side classifier review, which would add value to the read-only Bash allows.
 
 **Settings and limits that need the user.**
