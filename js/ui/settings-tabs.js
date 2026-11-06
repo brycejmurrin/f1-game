@@ -86,17 +86,17 @@ const SettingsNav = (function () {
   }
 
   // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
-  // loads on the first APPEARANCE enter or a rotation; a failed load logs, the next call retries.
+  // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
   let presetsLoad = null;
   const presetsLoaded = new Set();
-  function presets() {
+  enterFns.push((id) => {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
-    if (presetsLoad || typeof LayoutPresets != "undefined" || !R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return presetsLoad || Promise.resolve(typeof LayoutPresets != "undefined");
-    const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
-    return (presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
-      .then((ok) => (ok && typeof LayoutPresets !== "undefined") || fail(), fail));
-  }
-  enterFns.push((id) => { if (id === "appearance") presets(); });
+    if (id !== "appearance" || presetsLoad || typeof LayoutPresets !== "undefined" || !R || !R.LAZY_UI_PRESETS
+        || typeof ScriptLoader === "undefined") return;
+    const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); };
+    presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
+      .then((ok) => { if (!ok || typeof LayoutPresets === "undefined") fail(); }, fail);
+  });
 
   function panels() {
     return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
@@ -369,7 +369,7 @@ const SettingsNav = (function () {
     showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
-    lazy, presets,
+    lazy,
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
   };
 })();
