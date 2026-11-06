@@ -572,6 +572,10 @@ jobs:
               fi
             elif [ "$tcode" = 3 ]; then
               code=3; line="$tline"
+            elif [ "$code" = 0 ] && { [ -z "$ttip" ] || [ -z "$tip" ]; }; then
+              # An empty tip on either leg is no measurement: "" = "" must never pass as "the same tip" (#4625).
+              code=1; line="a gate leg returned no deploy tip (trusted-rows '${ttip:0:12}', land-gate '${tip:0:12}')"
+              want_retry "$n" "$head"
             elif [ "$code" = 0 ] && [ "$ttip" != "$tip" ]; then
               code=1; line="the deploy tip moved between trusted-rows (${ttip:0:12}) and land-gate (${tip:0:12})"
               # Both halves passed on different tips: re-gate this PR at once (the `retry` job), not on the next train.
