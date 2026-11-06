@@ -41,6 +41,7 @@ async function loadExport(page) {
   // (css/menus.css), so the brand box changes height once, seconds after boot on a CI worker. A baseline read before
   // the stamp failed "title box b" by 24-31 px at the first LEFT row (CI 42178056848). Wait for the stamp first.
   await page.waitForFunction(() => !!document.getElementById("overlay").dataset.homeScene, null, { polling: 100, timeout: BOOT_MS });
+  await settle(page);
 }
 
 /** Open SETTINGS from the title and unfold TITLE SCREEN › TITLE LAYOUT, as a player does. */
@@ -72,12 +73,28 @@ const slide = (page, id, value) => page.evaluate(({ id, value }) => {
   };
 }, { id, value });
 
+/** The two layers at rest: no running animation or transition on the brand, the drawing or the cluster (the title
+ *  intro, css/title.css; the layer moves and density/side relayouts transition), and their boxes unchanged between
+ *  two polls. A baseline read in the same tick as a density or SIDE change measured a box mid-transition: CI
+ *  42178056848 / 42180719539 failed "title box" by 24-107 px at the first LEFT row of a pass, never on an edge. */
+const settle = (page) => page.waitForFunction(() => {
+  const ids = ["menu-brand", "title-car", "menu-buttons"], els = ids.map((id) => document.getElementById(id));
+  if (els.some((e) => !e) || document.getElementById("overlay").hasAttribute("data-intro")) return false;
+  const live = document.getAnimations().some((a) => a.playState === "running" && a.effect && a.effect.target &&
+    els.some((e) => e.contains(a.effect.target)));
+  if (live) return false;
+  const now = JSON.stringify(els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }));
+  const same = window.__tcLast === now; window.__tcLast = now;
+  return same;
+}, null, { polling: 150, timeout: BOOT_MS });
+
 /** Pin body density: --compact-at is the own-height SheetShape compares against (js/ui/sheet-shape.js classifyDensity).
  *  1px, not 0px: `parseFloat(raw) || SHORT_DEFAULT` reads 0 as unset and falls back to 380 (CI 42175959386). */
 async function forceDensity(page, want) {
   await page.evaluate((v) => { document.body.style.setProperty("--compact-at", v); SheetShape.reclassify(); },
     want === "compact" ? "9999px" : "1px");
   await page.waitForFunction((d) => document.body.dataset.density === d, want, { polling: 100, timeout: BOOT_MS });
+  await settle(page);
 }
 
 /** The whole sweep at one geometry: both densities, both sides, every WIDTH, X at -100 / 100 / 0. */
@@ -85,6 +102,7 @@ async function sweep(page, cell) {
   await page.setViewportSize({ width: cell.width, height: cell.height });
   await page.waitForFunction((w) => innerWidth === w && document.body.dataset.shape === "wide", cell.width,
     { polling: 100, timeout: BOOT_MS });
+  await settle(page);
   await openFold(page);
   for (const density of DENSITIES) {
     await forceDensity(page, density);
@@ -92,6 +110,7 @@ async function sweep(page, cell) {
       // SIDE is the one control that trades the two layers' sides (its documented meaning); within a side the art
       // box is the baseline every button change is held to.
       await page.evaluate((s) => { const l = TitleLayout.current(); l.side = s; TitleLayout.set(l); }, side);
+      await settle(page);
       const art = await slide(page, "pm-tl-btns-width", 20);
       expect([art.min, art.max], "the WIDTH slider").toEqual([0, 100]);
       let prev = null;
