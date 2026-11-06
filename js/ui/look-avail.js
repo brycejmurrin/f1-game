@@ -124,15 +124,20 @@ const LookAvail = (function () {
   });
   const GUT = 24;   // the screen's own gutters, both edges together (CSS px)
   /** The viewport in sheet units: w / h divided by UI SIZE, less the gutters;
-      shortLandscape is css/dialogs.css's raw `(orientation: landscape) and (max-height: 500px)`. */
-  function env(vw, vh, scale) {
+      shortLandscape is css/dialogs.css's raw `(orientation: landscape) and (max-height: 500px)`;
+      phone is the UI contract's rule-4 gate (#5153): a coarse pointer AND a short side under
+      600 CSS px — the window where ROOMY and the career SPLIT are requests the box clamps
+      (`@media (pointer: fine), ((min-width: 600px) and (min-height: 600px))` in
+      css/overlays.css and css/career.css). */
+  function env(vw, vh, scale, finePointer = false) {
     const z = scale > 0 ? scale : 1;
-    return { w: (vw - GUT) / z, h: (vh - GUT) / z, shortLandscape: vw > vh && vh <= 500 };
+    return { w: (vw - GUT) / z, h: (vh - GUT) / z, shortLandscape: vw > vh && vh <= 500, phone: !finePointer && Math.min(vw, vh) < 600 };
   }
+  const PHONE_KEEPS = "A phone-sized window keeps the compact layout.";
   function compactNow(id, look, e) {
     const f = FIT[id];
     if (!f || !f.compactAt) return false;
-    if (look.density === "roomy") return false;
+    if (look.density === "roomy" && !e.phone) return false;
     if (look.density === "tight") return true;
     return e.h < f.compactAt;
   }
@@ -141,6 +146,7 @@ const LookAvail = (function () {
     return !compactNow("career", look, e) && cardW("career", look, e) >= FIT.career.pairAt;
   }
   function careerPairs(look, e) {
+    if (e.phone) return false;   // the pair is gated off a phone-sized window (css/career.css --pair-at)
     return look.layout === "split" || (look.layout !== "stacked" && careerAutoPairs(look, e));
   }
   /** Why value `v` of knob `k` changes nothing here ("" = it does something). */
@@ -150,6 +156,7 @@ const LookAvail = (function () {
       const auto = e.h < f.compactAt;
       if (v === "tight" && auto) return "Already tight on this screen size.";
       if (v === "roomy" && !auto) return "Already roomy on this screen size.";
+      if (v === "roomy" && e.phone) return PHONE_KEEPS;
     }
     if (id === "pause" && (k === "music" || k === "build") && v === "hide" && e.shortLandscape)
       return "Short landscape already hides this line.";
@@ -163,6 +170,7 @@ const LookAvail = (function () {
     if (id === "career" && k === "layout") {
       const auto = careerAutoPairs(look, e);
       if (v === "stacked" && !auto) return "AUTO already stacks the columns here.";
+      if (v === "split" && e.phone) return "A phone-sized window keeps the stacked columns.";
       if (v === "split" && auto) return "AUTO already splits the columns here.";
     }
     if (id === "garage" && k === "glass" && v === "solid") return "SHIPPED is already the solid panel.";
@@ -184,9 +192,10 @@ const LookAvail = (function () {
   /** The live env, from the window and the declared UI SIZE. */
   function liveEnv() {
     if (typeof window === "undefined" || !(window.innerWidth > 0)) return null;
-    let z = 1;
+    let z = 1, fine = false;
     try { z = parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { /* no CSSOM */ }
-    return env(window.innerWidth, window.innerHeight, z);
+    try { fine = !!(window.matchMedia && window.matchMedia("(pointer: fine)").matches); } catch (_) { /* no matchMedia */ }
+    return env(window.innerWidth, window.innerHeight, z, fine);
   }
 
   const STAND_INS = Object.freeze({

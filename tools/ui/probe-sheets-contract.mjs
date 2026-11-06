@@ -14,6 +14,9 @@ const WINDOWS = [
 const only = process.argv[2] ? process.argv[2].split(",") : null;
 const KNOBS = process.argv[3] === "owner" ? [["large", null]] : [["large", null], ["normal", 100], ["large", 100], ["normal", 130], ["large", 130]];
 const BASE = "http://127.0.0.1:3456";
+// SHEETS=pause,results limits a run to those sheets (the flow is select+race, career, pause+results).
+const ONLY_SHEETS = (process.env.SHEETS || "").split(",").filter(Boolean);
+const want = (k) => !ONLY_SHEETS.length || ONLY_SHEETS.includes(k);
 
 const raf2 = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
@@ -140,6 +143,7 @@ async function main() {
     console.log(v.name, JSON.stringify(W.boot));
 
     // SELECT + RACE SETTINGS
+    if (want("select") || want("race")) {
     await page.click("#mb-race");
     await page.waitForSelector("#select:not([hidden])", { timeout: 15000 });
     await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20, null, { polling: 100, timeout: 15000 });
@@ -162,8 +166,10 @@ async function main() {
     await page.waitForTimeout(300);
     await page.evaluate(() => document.getElementById("sel-back")?.click());
     await page.waitForTimeout(300);
+    }
 
     // CAREER HUB
+    if (want("career")) {
     await page.evaluate(() => window.__apex.career({ teamId: "haas", seat: 1, seed: 4242 }));
     await page.waitForSelector("#career:not([hidden])", { timeout: 30000 });
     await page.waitForSelector("#cr-nextrace", { timeout: 60000 });
@@ -183,8 +189,10 @@ async function main() {
     await page.evaluate(() => { document.documentElement.dataset.lookCareerDensity = "roomy"; SheetShape.reclassify(); });
     await page.evaluate(() => document.getElementById("cr-back")?.click());
     await page.waitForTimeout(300);
+    }
 
     // PAUSE + RESULTS (a race)
+    if (want("pause") || want("results")) {
     await page.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: "tier" }); });
     await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: 60000 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
@@ -210,6 +218,7 @@ async function main() {
     for (const [t, u] of KNOBS) {
       await knob(page, t, u);
       W.results[`${t}/${u ?? "exp"}`] = await page.evaluate(RES);
+    }
     }
     await ctx.close();
   }

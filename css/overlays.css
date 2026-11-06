@@ -1093,39 +1093,81 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
     min-height: var(--tap);
   }
 }
-/* PAUSE · SPLIT CARD (design pass #1, docs/notes/DESIGN-PASS-1-2026-10-30.md).
+/* PAUSE · THE PHONE CARD (design pass #1, docs/notes/DESIGN-PASS-1-2026-10-30.md;
+   UI contract #5153 gap 10, docs/notes/UI-PR-D-MEASURE-2026-11-06.md).
    On a short landscape phone the shipped GRID card was 420px on an 844px
    screen, said PAUSED twice, and QUIT sat under the fold (top y 500 of 390).
-   One wide card instead: RESUME a tall slab with QUIT under it, RESTART |
-   SETTINGS and the 3-up tool tray on the right, so every door is on screen
-   and nothing scrolls. The race card's track name is the heading. Only the
-   shipped GRID layout on a compact wide body (the zoom-correct short-landscape
-   answer, js/ui/sheet-shape.js): every player layout keeps its own card. The
-   PAUSE look's CARD WIDTH and BUTTON HEIGHT scale this card (760 px × width,
-   the door floor × height): standing down for them gave a WIDTH 130 player the
-   old stack with QUIT at y 460 of 390 (UI hunt #3, lead 1). Here, not
+   One wide card instead: the race line and RESUME down the thumb column with
+   QUIT under them, RESTART | SETTINGS over the tool tray on the right, so
+   every door is on screen and nothing scrolls. The race card's track name is
+   the heading. The key is the BODY's own-unit density and shape (compact +
+   wide = a landscape phone at any UI SIZE, js/ui/sheet-shape.js), for EVERY
+   player layout: measured 2026-11-06 at 852x393 / 852x283 / 844x390 with the
+   owner export, each stored layout (LIST, COMPACT, WIDE, SIDEBAR) swapped in
+   the 420 card plus the thumb-reach bar and put QUIT 221-420 own px past the
+   sheet. A layout now rearranges doors inside this geometry (WIDE: doors along
+   the bottom edge; SIDE RIGHT mirrors the columns; COMPACT: chip-floor doors);
+   it never changes the box. The PAUSE look's CARD WIDTH and BUTTON HEIGHT
+   scale this card (760 px x width, the door floor x height). Here, not
    css/dialogs.css: this layer outranks the tray's and the race card's own
-   grid-column (experience.css), and the look's own width / height rules. */
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu { --sheet-w: min(calc(760px * var(--look-pause-w, 1)), 100%); }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-head { display: none; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+   grid-column (experience.css), the layouts' own grids, sheet widths and
+   heights, and the look's own width / height rules.
+   The tray is 5-up: in the shortest cell (Safari 852x283 at the export's
+   109 %) the tools track is ~137 own px; ten tiles at 4-up are three rows of
+   --tap-paint (147), at 5-up two rows (97); the 44-painted tile floor keeps
+   even a three-row practice tray (11 tiles, 125) inside the track. */
+body[data-density="compact"][data-shape="wide"] #pausemenu {
+  --sheet-w: min(calc(760px * var(--look-pause-w, 1)), 100%);
+  --pm-door: max(var(--tap), var(--tap-paint), var(--tap-paint-at), calc(var(--tap-0) * var(--look-pause-btn, 0)));
+  justify-items: center;
+}
+/* SIDEBAR's full-height strip and WIDE's bottom dock are geometry: the phone
+   card keeps its own height; a player's VERTICAL POSITION still moves it. */
+body[data-density="compact"][data-shape="wide"] #pausemenu > .sheet { height: auto; }
+:root[data-pause-layout="sidebar"]:not([data-look-pause-vpos]):has(> body[data-density="compact"][data-shape="wide"]) #pausemenu { align-items: center; }
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-head { display: none; }
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
+  display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr auto;
-  grid-template-areas: "ctx ctx ctx" "resume restart settings" "resume tools tools" "quit tools tools";
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "ctx restart settings" "resume tools tools" "quit tools tools";
   align-items: stretch;
 }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context { grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--gap); padding-block: calc(var(--gap) / 3); }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context > span { display: inline; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-restart { grid-area: restart; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-settings { grid-area: settings; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 3; align-content: start; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quit::before { content: none; }
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
-/* The doors outside the tray paint the touch comfort floor, not the compact one. */
-:root:not([data-pause-layout]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body > button:not(.as-tbtn) {
-  min-height: max(var(--tap), var(--tap-paint), var(--tap-paint-at), calc(var(--tap-0) * var(--look-pause-btn, 0)));
+/* The race line shares the doors' row and never grows it: strong + detail,
+   the objective and pit lines stay in the tray's own cards. */
+body[data-density="compact"][data-shape="wide"] #pm-race-context {
+  grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; align-content: center;
+  gap: 0 var(--gap); padding-block: calc(var(--gap) / 3);
+  min-height: 0; max-height: var(--pm-door); overflow: hidden;
+}
+body[data-density="compact"][data-shape="wide"] #pm-race-context > span { display: inline; }
+body[data-density="compact"][data-shape="wide"] #pm-race-context > small { display: none; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); position: static; height: auto; margin: 0; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-restart { grid-area: restart; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-settings { grid-area: settings; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quit::before { content: none; }
+body[data-density="compact"][data-shape="wide"] #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
+/* The doors outside the tray paint the touch comfort floor, not the compact
+   one; COMPACT (the layout that spends the least height) takes the chip floor. */
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body > button:not(.as-tbtn) { min-height: var(--pm-door); flex: none; min-width: 0; }
+:root[data-pause-layout="compact"]:has(> body[data-density="compact"][data-shape="wide"]) #pausemenu {
+  --pm-door: max(var(--tap-paint), var(--chip-h), calc(var(--chip-h-0) * var(--look-pause-btn, 0)));
+}
+/* SIDE RIGHT (and SIDEBAR on its right edge): RESUME under the right thumb. */
+:root[data-pause-side="right"]:has(> body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-areas: "settings restart ctx" "tools tools resume" "tools tools quit";
+}
+/* WIDE: the doors along the bottom edge in one row, the tray above them, so the
+   race keeps the top of the screen (the layout's own align-items: end stands). */
+:root[data-pause-layout="wide"]:has(> body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "ctx ctx ctx ctx" "tools tools tools tools" "resume restart settings quit";
 }
 #race-settings:not([open]) { display: none; }
 #standings:not([open]) { display: none; }
@@ -1159,11 +1201,22 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
 /* DENSITY — SheetShape's own compact tier (js/ui/sheet-shape.js reads
    --compact-at off the sheet): ROOMY never goes compact, TIGHT always does.
    1px, not 0: a zero reads as unset and falls back to the default. */
-:root[data-look-select-density="roomy"] #sel-inner,
-:root[data-look-race-density="roomy"] #race-settings > .sheet,
-:root[data-look-career-density="roomy"] #cr-inner,
-:root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
-:root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
+/* ROOMY is a request the box clamps (UI contract #5153 rule 3 / gap 11): on a
+   phone-sized window — coarse pointer and a short side under 600 CSS px — the
+   compact layout IS the layout, so the knob never lifts it there. Measured
+   2026-11-06 (docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the owner's career
+   ROOMY turned #cr-inner normal at 852x393, which switched the pair ON at
+   657 own px (a 73-115 px left pane) and at 552 left NO scroller at all,
+   2191 own px of content in a 285 sheet. LookAvail says why in the Appearance
+   page (js/ui/look-avail.js, the env's phone flag). The media gate is the contract's
+   rule 4 gate, raw viewport on purpose: the window, not the zoomed box. */
+@media (pointer: fine), ((min-width: 600px) and (min-height: 600px)) {
+  :root[data-look-select-density="roomy"] #sel-inner,
+  :root[data-look-race-density="roomy"] #race-settings > .sheet,
+  :root[data-look-career-density="roomy"] #cr-inner,
+  :root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
+  :root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
+}
 :root[data-look-select-density="tight"] #sel-inner,
 :root[data-look-race-density="tight"] #race-settings > .sheet,
 :root[data-look-career-density="tight"] #cr-inner,

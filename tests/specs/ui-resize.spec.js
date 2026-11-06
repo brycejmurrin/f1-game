@@ -45,7 +45,9 @@
 // the general answer, since a sheet whose box does not depend on the scale would
 // still need it, but it is currently belt-and-braces and this spec does not
 // prove it. Said plainly so nobody cites this file as its justification.
+import fs from "node:fs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
 
@@ -566,5 +568,82 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
         `${label}: GLX.aspect ${seen.aspect.toFixed(4)} must match the live ${seen.css} box `
         + `(${seen.box.toFixed(4)}); backing store ${seen.buf}`).toBeLessThan(0.01);
     }
+  });
+});
+
+// UI contract cells (#5153 gap 10, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
+// measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pause card in the owner's three
+// windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the Safari tab (852x283,
+// insets 59/0/59), D the spec phone (844x390) — seeded from Bryce's own export (TEXT large,
+// UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
+// card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
+// LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.
+const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+const CONTRACT_WINDOWS = [
+  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
+  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
+  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
+];
+for (const win of CONTRACT_WINDOWS) test.describe("UI contract pause cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("one phone card for every stored layout: no scroll, every door on screen, labels fit", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await waitReady(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await waitReady(page);
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await page.evaluate(() => window.__apex.race("monza", null, null, { grid: "tier" }));
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } },
+      null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { window.__apex.park(0.1); document.getElementById("pausemenu").hidden = false; });
+    await page.waitForFunction(() => !document.getElementById("pausemenu").hidden && document.querySelectorAll("#pm-quick-doors > *").length > 3,
+      null, { polling: 50, timeout: 8_000 });
+    const body = await page.evaluate(() => ({ density: document.body.dataset.density, shape: document.body.dataset.shape,
+      ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize }));
+    expect(body, "the owner's window is a compact wide body at the export's knobs").toMatchObject({ density: "compact", shape: "wide", ui: "1.09", text: "large" });
+    const seen = {};
+    for (const [layout, side] of [["grid", null], ["list", null], ["compact", null], ["wide", null], ["sidebar", null], ["grid", "right"], ["sidebar", "right"]]) {
+      await page.evaluate(([l, s]) => {
+        const de = document.documentElement.dataset;
+        if (l === "grid") delete de.pauseLayout; else de.pauseLayout = l;
+        if (s) de.pauseSide = s; else delete de.pauseSide;
+        SheetShape.reclassify();
+      }, [layout, side]);
+      await page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { polling: 50, timeout: 2_000 });
+      const cell = await page.evaluate(() => {
+        const z = (el) => el.currentCSSZoom || 1;
+        const pm = document.getElementById("pausemenu"), sheet = pm.querySelector(":scope > .sheet"), sb = sheet.querySelector(":scope > .sheet-body");
+        const sr = sheet.getBoundingClientRect();
+        const doors = {};
+        for (const id of ["pm-resume", "pm-restart", "pm-settings", "pm-quit"]) {
+          const r = document.getElementById(id).getBoundingClientRect();
+          doors[id] = { pastSheet: +(r.bottom - sr.bottom).toFixed(1), onScreen: r.top >= 0 && r.bottom <= innerHeight + 0.5, paintedH: +r.height.toFixed(1) };
+        }
+        const tiles = [...document.querySelectorAll("#pm-quick-doors > *")].filter((c) => !c.hidden && getComputedStyle(c).display !== "none");
+        const overflowing = tiles.map((t) => t.tagName === "DETAILS" ? t.querySelector("summary") : t).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent.trim());
+        return { areas: getComputedStyle(sb).gridTemplateAreas, bodyScroll: sb.scrollHeight - sb.clientHeight, sheetOwnH: +(sr.height / z(sheet)).toFixed(1),
+          sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5, doors, tiles: tiles.length, overflowing, sheetHeight: getComputedStyle(sheet).height };
+      });
+      seen[layout + (side ? "/" + side : "")] = cell;
+      const tag = `${win.name} ${layout}${side ? " side=" + side : ""}: `;
+      expect(cell.bodyScroll, tag + "the card body never scrolls").toBeLessThanOrEqual(1);
+      expect(cell.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
+      expect(cell.areas, tag + "the phone card's grid (RESUME in a thumb column or along the bottom)").toMatch(/resume/);
+      for (const [id, d] of Object.entries(cell.doors)) {
+        expect(d.pastSheet, tag + id + " ends inside the sheet").toBeLessThanOrEqual(0.5);
+        expect(d.onScreen, tag + id + " is on screen").toBe(true);
+        expect(d.paintedH, tag + id + " paints at least the WCAG 44 (COMPACT is the chip-floor layout; the rest the 52 comfort floor)").toBeGreaterThanOrEqual(layout === "compact" ? 44 : 52);
+      }
+      expect(cell.tiles, tag + "the tool tray is populated").toBeGreaterThanOrEqual(6);
+      expect(cell.overflowing, tag + "every tray label fits its tile").toEqual([]);
+    }
+    // WIDE puts the doors along the bottom edge; SIDE RIGHT mirrors the thumb column.
+    expect(seen.wide.areas).toMatch(/"resume restart settings quit"/);
+    expect(seen["grid/right"].areas).toMatch(/"tools tools resume"/);
+    // The five layouts share ONE box: the card's own height is the same within a door's worth.
+    const heights = Object.values(seen).map((c) => c.sheetOwnH);
+    expect(Math.max(...heights) - Math.min(...heights), "every layout keeps the one phone card's box (" + heights.join("/") + ")").toBeLessThanOrEqual(40);
   });
 });

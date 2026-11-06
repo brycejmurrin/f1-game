@@ -440,18 +440,23 @@ test("designer: the knob is in the settings export, and the CSS keeps the tap fl
 // the look-diff CLI (UI layout program G4) measured 41 DEAD values on (2026-10-30).
 test("availability: the pure checks answer the measured phone no-ops, and only those", () => {
   const { M, A } = boot();
-  const P = A.env(844, 390, 1.09), D = A.env(1600, 1000, 1);
+  // P is the phone (coarse pointer, short side 390 < 600): ROOMY and the career SPLIT are requests the
+  // box clamps there (#5153 gap 11, measured docs/notes/UI-PR-D-MEASURE-2026-11-06.md); M is the same
+  // window with a mouse, where the CSS gate lets them through.
+  const P = A.env(844, 390, 1.09), D = A.env(1600, 1000, 1), Mo = A.env(844, 390, 1.09, true);
+  assert.equal(P.phone, true); assert.equal(D.phone, false); assert.equal(Mo.phone, false);
   const look = (id, o) => Object.assign(M.normalize(id, {}), o || {});
   // [env, screen, knob, value, overrides, expected reason substring, or "" ]
   const ROWS = [
     ...["select", "career", "garage", "popups"].flatMap((id) => [[P, id, "density", "tight", null, "Already tight"],
-      [P, id, "density", "roomy", null, ""], [D, id, "density", "tight", null, ""]]),
+      [P, id, "density", "roomy", null, "phone-sized window keeps the compact"], [Mo, id, "density", "roomy", null, ""], [D, id, "density", "tight", null, ""]]),
     [P, "race", "density", "roomy", null, "Already roomy"], [P, "race", "density", "tight", null, ""],
     [P, "pause", "music", "hide", null, "Short landscape"], [P, "pause", "build", "hide", null, "Short landscape"],
     [D, "pause", "music", "hide", null, ""],
-    [P, "select", "names", "hide", null, "flags only"], [P, "select", "names", "hide", { density: "roomy" }, ""],
+    [P, "select", "names", "hide", null, "flags only"], [P, "select", "names", "hide", { density: "roomy" }, "flags only"], [Mo, "select", "names", "hide", { density: "roomy" }, ""],
     [P, "race", "cols", "two", null, "two columns"], [P, "race", "cols", "one", null, ""], [P, "race", "cols", "two", { w: 60 }, ""],
-    [P, "career", "layout", "stacked", null, "already stacks"], [P, "career", "layout", "split", null, ""],
+    [P, "career", "layout", "stacked", null, "already stacks"], [P, "career", "layout", "split", null, "phone-sized window keeps the stacked"],
+    [Mo, "career", "layout", "split", null, ""],
     [D, "career", "layout", "split", null, "already splits"], [D, "garage", "glass", "solid", null, "SHIPPED is already"],
   ];
   for (const [e, id, k, v, o, want] of ROWS) {
@@ -461,7 +466,7 @@ test("availability: the pure checks answer the measured phone no-ops, and only t
   // Knob-level: WIDTH notes (slider stays live) on the phone only; CAREER's dependents switch with COLUMNS.
   const KNOBS = [
     ...["datahub", "select", "race", "career", "popups"].map((id) => [P, id, "w", null, false]), [D, "race", "w", null, null],
-    ...["split", "side"].flatMap((k) => [[P, "career", k, null, true], [P, "career", k, { layout: "split" }, null], [D, "career", k, { layout: "stacked" }, true]]),
+    ...["split", "side"].flatMap((k) => [[P, "career", k, null, true], [P, "career", k, { layout: "split" }, true], [Mo, "career", k, { layout: "split" }, null], [D, "career", k, { layout: "stacked" }, true]]),
   ];
   for (const [e, id, k, o, off] of KNOBS) {
     const kn = A.whyKnob(id, k, look(id, o), e);
@@ -484,13 +489,22 @@ test("availability: the fold disables moot values with a reason, keeps the store
     sideOff: dom.byId("pm-look-career-side-sel").disabled, splitOff: dom.byId("pm-look-career-split").disabled,
     widthOff: dom.byId("pm-look-select-w").disabled, widthWhy: !dom.byId("pm-look-select-w-why").hidden,
   });
-  assert.deepEqual(state(), { tight: true, densityWhy: "TIGHT", shown: "tight", described: "pm-look-career-density-why",
+  // 844x390 with a coarse pointer is a phone-sized window (#5153 gap 11): TIGHT is already the
+  // answer there and ROOMY is a request the box clamps, so both are moot and the line names both
+  // (ROOMY is the first value in the knob); a stored SPLIT is clamped too, so SIDE stays off.
+  const roomy = () => dom.byId("pm-look-career-density-sel").children.find((o) => o.value === "roomy").disabled;
+  assert.deepEqual(state(), { tight: true, densityWhy: "ROOMY", shown: "tight", described: "pm-look-career-density-why",
     sideOff: true, splitOff: true, widthOff: false, widthWhy: true });
+  assert.equal(roomy(), true, "ROOMY is moot on a phone-sized window");
+  assert.match(dom.byId("pm-look-career-density-why").textContent, /ROOMY: A phone-sized window keeps the compact layout\. TIGHT: Already tight/);
   M.set("career", "layout", "split");
-  assert.equal(state().sideOff, false, "a write re-reads the dependents");
-  M.set("career", "layout", "auto");
+  assert.equal(state().sideOff, true, "a stored SPLIT is clamped on the phone: SIDE stays off");
   Object.assign(sb, { innerWidth: 1600, innerHeight: 1000 });
   for (const { fn } of winL.get("resize") || []) fn();
+  assert.equal(state().sideOff, false, "a write re-reads the dependents: SPLIT pairs on the desk");
+  assert.equal(roomy(), true, "ROOMY stays moot on the desk, for the old reason: already roomy at 976 own px");
+  assert.match(dom.byId("pm-look-career-density-why").textContent, /^ROOMY: Already roomy/);
+  M.set("career", "layout", "auto");
   assert.deepEqual(state(), { tight: false, densityWhy: "ROOMY", shown: "tight", described: "pm-look-career-density-why",
     sideOff: true, splitOff: true, widthOff: false, widthWhy: false });   // stored TIGHT keeps CAREER stacked
   assert.deepEqual(plain(data.lookCareer), { side: "swapped", density: "tight" }, "nothing rewritten");

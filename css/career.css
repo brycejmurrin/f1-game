@@ -116,11 +116,19 @@
    (css/components.css) now — the shared list-detail primitive that #select and
    #carsetup also use. Only the numbers that are this screen's are left. */
 #cr-inner {
-  --pair-at: 620px;
+  --pair-at: 99999px;
   --pair-split: minmax(0, 1fr);
   --pair-main: minmax(0, 1.05fr);
   --pair-gap: calc(var(--pad) * 0.9);
   --pair-compact: off;
+}
+/* The pair is a desktop / tablet answer (UI contract #5153 gap 11): a fine
+   pointer, or a short side of at least 600 CSS px. A phone-sized window never
+   pairs, at any UI SIZE — `--pair-compact: off` already stacks it while the
+   sheet is compact; this gate is the UI SIZE <= 74 % case, where a 480 sheet
+   turns normal on a 393 px window and 620 own px of width would have paired. */
+@media (pointer: fine), ((min-width: 600px) and (min-height: 600px)) {
+  #cr-inner { --pair-at: 620px; }
 }
 
 /* Keyed on the ATTRIBUTE, not on a second copy of the 620px threshold. Two
@@ -183,7 +191,9 @@
    "no pair attribute at all") so any width pairs, and `--pair-compact: on` so a
    compact sheet keeps reading --pair-at instead of being forced to stack.
    STACKED: a threshold no sheet reaches. The engine reclassifies on change. */
-:root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }
+@media (pointer: fine), ((min-width: 600px) and (min-height: 600px)) {
+  :root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }   /* a request the phone box clamps (#5153 gap 11): see --pair-at above */
+}
 :root[data-look-career-layout="stacked"] #cr-inner { --pair-at: 99999px; }
 
 /* CALENDAR SIDE: LEFT (stored "swapped") mirrors the pair — the calendar/championship pane takes
