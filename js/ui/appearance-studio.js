@@ -26,16 +26,14 @@ const AppearanceStudio = (function () {
     titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
-    lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null, lookDesigner: null,
+    lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null,
     homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
   // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
   // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
-  // Cosmetic presets must not replace readability, comfort, unit, size or layout
-  // preferences (#5058): a preset value never names one of these keys, and a
-  // screen look the preset names is merged into the current one, not replaced.
-  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim"]);
-  const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
+  // Cosmetic presets must not replace readability, comfort or unit preferences.
+  const PRESET_PRESERVE = ["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits"];
+  const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
@@ -45,8 +43,8 @@ const AppearanceStudio = (function () {
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
     { id: "paddock", name: "TEAM PADDOCK", note: "Your team, your garage", values: { menuAccent: "team", hudAccent: "team", homeScene: "garage", backgroundMotion: "ambient", lookCareer: { density: "roomy" } } },
     { id: "broadcast", name: "BROADCAST", note: "Timing and race context", values: { menuAccent: "cyan", hudAccent: "cyan", hudProfile: "broadcast", homeScene: "night", backgroundMotion: "still", lookDatahub: { tabs: "underline", stripes: "on" } } },
-    { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
-    { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
+    { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", motion: "reduce", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
+    { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", uiContrast: "high", textSize: "large", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
   ]);
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
@@ -124,7 +122,6 @@ const AppearanceStudio = (function () {
     const p = PRESETS.find((v) => v.id === id); if (!p) return false;
     const current = snapshot(), next = Object.assign({}, DEFAULTS, p.values);
     for (const key of PRESET_PRESERVE) next[key] = current[key];
-    for (const key in LOOKS) next[key] = p.values[key] ? Object.assign({}, current[key], p.values[key]) : current[key];
     const result = applySnapshot(next, { scope: chosenScope, render: false });
     activePreset = id; render(); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + (result.durable ? "." : " for this session; browser storage is unavailable.")); return true;
   }
@@ -139,12 +136,7 @@ const AppearanceStudio = (function () {
     if (!Array.isArray(raw)) return [];
     const ids = new Set();
     return raw.slice(0, 12).filter((p) => isObject(p) && typeof p.id === "string" && /^[a-z0-9-]{1,64}$/i.test(p.id) && typeof p.name === "string" && p.name.trim() && !ids.has(p.id) && ids.add(p.id))
-      .map((p) => {
-        const row = { id: p.id, name: p.name.trim().slice(0, 40), values: normalizeSnapshot(p.values) };
-        // {wide, tall} SHAPE_KEYS sets (#5058), each trimmed back to the keys it carried.
-        if (isObject(p.shapes)) { row.shapes = {}; for (const sh of ["wide", "tall"]) if (isObject(p.shapes[sh])) { const n = normalizeSnapshot(p.shapes[sh]); for (const k in n) if (!(k in p.shapes[sh])) delete n[k]; row.shapes[sh] = n; } }
-        return row;
-      });
+      .map((p) => ({ id: p.id, name: p.name.trim().slice(0, 40), values: normalizeSnapshot(p.values) }));
   }
   function profiles() { return normalizeProfiles(store.get(PROFILE_KEY, [])); }
   function writeProfiles(rows) {
@@ -156,14 +148,10 @@ const AppearanceStudio = (function () {
     const rows = profiles(), at = rows.findIndex((p) => p.id === id);
     if (at < 0 && rows.length >= 12) { say("You have 12 profiles. Select one to update, or delete one first."); return { ok: false, reason: "limit" }; }
     let newId = id; if (at < 0) { let n = 1; while (rows.some((p) => p.id === "profile-" + n)) n++; newId = "profile-" + n; }
-    const row = { id: newId, name: label, values: snapshot() }; if (lp()) row.shapes = lp().profileShapes(row.values);
-    if (at < 0) rows.push(row); else rows[at] = row;
+    const row = { id: newId, name: label, values: snapshot() }; if (at < 0) rows.push(row); else rows[at] = row;
     selectedProfile = newId; return writeProfiles(rows);
   }
-  const lp = () => (typeof LayoutPresets !== "undefined" && LayoutPresets.profileShapes ? LayoutPresets : null);
-  function loadProfile(id, chosenScope = scope) {
-    const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id;
-    const result = applySnapshot(lp() ? lp().profileValues(p.values, p.shapes, snapshot(), chosenScope !== "screen") : p.values, { scope: chosenScope }); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + durabilityNote(result)); return true; }
+  function loadProfile(id, chosenScope = scope) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot(p.values, { scope: chosenScope }); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + durabilityNote(result)); return true; }
   function deleteProfile(id) { const rows = profiles(); if (!rows.some((p) => p.id === id)) return false; selectedProfile = ""; const result = writeProfiles(rows.filter((p) => p.id !== id)); say(result.durable ? "Profile deleted. Your current appearance stays in place." : "Profile deleted for this session. Browser storage could not save that change for your next visit."); return true; }
   function attach(value) { hooks = value || {}; invoke("applyVisuals", snapshot()); sceneChanged(); }
   function setPreviewFrame(url) {
@@ -194,7 +182,7 @@ const AppearanceStudio = (function () {
     else if (previewPage === "select") { plate.append(node("h3", "", "TRACK SELECTOR"), node("p", "", "CLASSICS     SEASON")); for (const name of ["MONZA", "SUZUKA", "MONACO"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "garage") { plate.append(node("h3", "", "GARAGE"), node("p", "", "CAR SETUP")); for (const name of ["ENGINE", "AERO", "CHASSIS", "LIVERY"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "hud") {
-      plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", s.speedUnits === "mph" ? "178 MPH" : "287 KM/H"));
+      plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", "287 " + (s.speedUnits === "mph" ? "KM/H → 178 MPH" : "KM/H")));
       if (s.hudGapsVis !== "off" && s.hudProfile !== "minimal") plate.appendChild(node("p", "", "P2 NOR +1.2     P4 LEC −0.8"));
       if (s.hudMetricsLayout !== "compact") plate.appendChild(node("p", "", s.hudMetricsLayout === "timing" ? "S1 28.412     S2 31.090" : "TYRES 82%     ENERGY 64%"));
     } else { plate.append(node("h3", "", "RACE RESULTS")); for (const name of ["1   NORRIS", "2   VERSTAPPEN", "3   YOU · +8 POSITIONS"]) plate.appendChild(node("div", "as-preview-door", name)); plate.appendChild(node("p", "", "CONTINUE")); }
@@ -384,6 +372,6 @@ const AppearanceStudio = (function () {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
     else initUI();
   }
-  return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, PRESET_PRESERVE, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
+  return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
     applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, shapeNow, attach, setPreviewFrame, notify: say, initUI });
 })();

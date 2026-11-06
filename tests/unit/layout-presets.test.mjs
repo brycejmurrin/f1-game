@@ -159,8 +159,7 @@ test("any single knob changed afterwards reads CUSTOM, and the row repaints off 
   assert.equal(M.current(), "custom", "PauseOpts knobs count");
   P.setDim("full");
   T.set({ btns: { x: 10 } });
-  assert.equal(M.current(), "big", "the title layout is not part of BIG's picture (#5060)");
-  assert.equal(M.matches("shipped"), false, "but a moved title layout is not SHIPPED");
+  assert.equal(M.current(), "custom", "a moved title layout counts");
 });
 
 test("UNDO restores the state the preset replaced, a CUSTOM one included", () => {
@@ -169,8 +168,7 @@ test("UNDO restores the state the preset replaced, a CUSTOM one included", () =>
   assert.equal(M.current(), "custom");
   M.apply("thumb");
   assert.equal(S.read("datahub").tabs, "filled");
-  assert.equal(T.all().wide.btns.x, 12, "THUMB keeps a custom main-menu layout (#5060)");
-  assert.equal(M.current(), "thumb", "the title layout is not part of THUMB's picture");
+  assert.equal(T.isDefault(T.all().wide), true);
   const undo = dom.byId("pm-layoutpreset-undo");
   assert.equal(undo.hidden, false);
   assert.equal(M.undo(), true);
@@ -181,21 +179,6 @@ test("UNDO restores the state the preset replaced, a CUSTOM one included", () =>
   assert.equal(data.layoutPreset, undefined);
   assert.equal(M.current(), "custom");
   assert.equal(M.undo(), false, "one level");
-});
-
-test("THUMB / COMPACT / BIG keep a custom main-menu layout in both shapes; SHIPPED resets it (#5060)", () => {
-  const layout = { v: 2, wide: { btns: { x: 12 } }, tall: { btns: { x: 30 } } };
-  for (const id of ["thumb", "compact", "big"]) {
-    const { M, T, data } = boot({ stored: { titleLayout: structuredClone(layout) } });
-    M.apply(id);
-    assert.equal(T.all().wide.btns.x, 12, id + " keeps landscape"); assert.equal(T.all().tall.btns.x, 30, id + " keeps portrait");
-    assert.notEqual(data.titleLayout, null, id + " leaves apex26.titleLayout");
-    assert.equal(M.current(), id);
-  }
-  const { M, T } = boot({ stored: { titleLayout: structuredClone(layout) } });
-  M.apply("shipped");
-  assert.equal(T.isDefault(T.all().wide) && T.isDefault(T.all().tall), true, "SHIPPED is every screen as it ships");
-  assert.equal(M.undo(), true); assert.equal(T.all().tall.btns.x, 30, "UNDO puts it back");
 });
 
 test("the chevron steps presets: › from SHIPPED applies THUMB, ‹ goes straight back to SHIPPED", () => {

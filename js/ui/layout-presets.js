@@ -9,8 +9,7 @@
      - ScreenLooks.set / reset   (js/ui/screen-looks.js: pause, datahub, select,
        race, career, garage, designer, popups)
      - PauseOpts.setLayout / setSide / setDim   (screen "pauseOpts")
-     - TitleLayout.reset / set   (SHIPPED and UNDO only; THUMB / COMPACT / BIG
-       keep a custom main-menu layout, #5060)
+     - TitleLayout.reset / set   (SHIPPED and UNDO only; no preset moves it)
    Every preset starts from SHIPPED (every managed knob at its default), so a
    preset is the same picture whatever was set before. CONFIRM QUIT is a safety
    behaviour, not a look, and is never touched; text size and UI SCALE are
@@ -140,7 +139,7 @@ const LayoutPresets = (function () {
   /** Do the live knobs equal preset `id`'s picture? */
   function matches(id) {
     const want = expected(id);
-    if (!want || (id === "shipped" && !titleShipped())) return false;
+    if (!want || !titleShipped()) return false;
     const got = actual();
     for (const k in want) if (got[k] !== want[k]) return false;
     return true;
@@ -163,11 +162,10 @@ const LayoutPresets = (function () {
     }
     if (ScreenLooks.read(screen)[k] !== v) ScreenLooks.set(screen, k, v);
   }
-  // `title` only for SHIPPED and UNDO: no other preset moves the main menu (#5060).
-  function resetAll(title) {
+  function resetAll() {
     for (const s of screens()) if (!ScreenLooks.isShipped(s.id)) ScreenLooks.reset(s.id);
     if (has("PauseOpts")) for (const k in PAUSE_KNOBS) setKnob("pauseOpts", k, PAUSE_KNOBS[k].def);
-    if (title && !titleShipped()) TitleLayout.reset();
+    if (!titleShipped()) TitleLayout.reset();
   }
   /** The managed state, in owner terms, for UNDO. */
   function snapshot() {
@@ -179,7 +177,7 @@ const LayoutPresets = (function () {
     return snap;
   }
   function restore(snap) {
-    resetAll(!!snap.title);
+    resetAll();
     for (const id in snap.looks) {
       const s = lookOf(id);
       if (!s) continue;
@@ -202,7 +200,7 @@ const LayoutPresets = (function () {
     let applied = 0, skipped = 0;
     busy = true;
     try {
-      resetAll(id === "shipped");
+      resetAll();
       for (const [screen, k, v] of p.set) {
         const ok = legal(screen, k, v);
         if (ok === undefined) { skipped++; continue; }
@@ -243,7 +241,7 @@ const LayoutPresets = (function () {
   // the other shape's (#4919).
   const SHAPES_KEY = "appearanceShapes";
   const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis",
-    "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups", "lookDesigner"]);
+    "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups"]);
   const studio = () => (typeof AppearanceStudio !== "undefined" && AppearanceStudio) || null;
   const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
   const pick = (v) => { const o = {}; for (const k of SHAPE_KEYS) o[k] = v[k]; return o; };
@@ -266,23 +264,6 @@ const LayoutPresets = (function () {
     if (!park || JSON.stringify(park) === JSON.stringify(out)) return false;
     a.applySnapshot(Object.assign(cur, park), { history: false });
     return true;
-  }
-  // Named profiles (#5058): SAVE keeps one SHAPE_KEYS set per orientation (the
-  // other one from the park while SEPARATE); APPLY uses the set for the current
-  // orientation and parks the other. A profile with no set for this orientation
-  // leaves this orientation's sizes alone instead of copying the other's.
-  function profileShapes(values) {
-    const st = shapes(), now = shapeNow(), out = { [now]: pick(values) };
-    if (st.split) { const other = now === "wide" ? "tall" : "wide"; if (st.live === now && st.park) out[other] = st.park; }
-    else out[now === "wide" ? "tall" : "wide"] = out[now];
-    return out;
-  }
-  function profileValues(values, byShape, cur, park) {
-    if (!isObj(byShape)) return values;
-    const now = shapeNow(), other = now === "wide" ? "tall" : "wide", st = shapes(), s = store();
-    const out = Object.assign({}, values, pick(isObj(byShape[now]) ? byShape[now] : cur));
-    if (park && st.split && s && isObj(byShape[other])) s.set(SHAPES_KEY, { v: 1, split: true, live: now, park: pick(byShape[other]) });
-    return out;
   }
   function setShapeSplit(on) {
     const s = store();
@@ -377,6 +358,6 @@ const LayoutPresets = (function () {
   }
 
   return Object.freeze({ KEY, PRESETS, PAUSE_KNOBS, apply, undo, current, matches, expected, mount, snapshot,
-    SHAPES_KEY, SHAPE_KEYS, shapes, normalizeShapes, syncShape, setShapeSplit, profileShapes, profileValues,
+    SHAPES_KEY, SHAPE_KEYS, shapes, normalizeShapes, syncShape, setShapeSplit,
     get canUndo() { return !!undoSnap; } });
 })();
