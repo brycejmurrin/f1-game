@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2365,
-      "lines": 2626
+      "codeLines": 2353,
+      "lines": 2616
     },
     "js/agent/agentview.js": {
       "lines": 2322
     },
     "js/agent/apex.js": {
-      "codeLines": 1686,
-      "lines": 2516
+      "codeLines": 1687,
+      "lines": 2518
     },
     "js/car/car3d.js": {
       "lines": 2910
     },
     "js/game.js": {
-      "codeLines": 5404,
-      "gMembers": 297,
-      "lines": 9611,
+      "codeLines": 5422,
+      "gMembers": 299,
+      "lines": 9452,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2326
+      "lines": 2359
     },
     "js/render/glx/glx.js": {
-      "lines": 2893
+      "lines": 2898
     },
     "js/track/tracks.js": {
       "lines": 869
     },
     "js/ui/hud.js": {
-      "codeLines": 1439,
-      "lines": 2347
+      "codeLines": 1441,
+      "lines": 2350
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -44,11 +44,11 @@
   },
   "tree": {
     "assertPins": {
-      "ceiling": 8196,
+      "ceiling": 8208,
       "slack": 200
     },
     "assertPinsAll": {
-      "ceiling": 10278,
+      "ceiling": 10297,
       "slack": 200
     },
     "bareCatches": {
@@ -64,11 +64,11 @@
       "slack": 5
     },
     "eagerCssGzip": {
-      "ceiling": 388000,
+      "ceiling": 387930,
       "slack": 3506
     },
     "eagerGzip": {
-      "ceiling": 2890000,
+      "ceiling": 2874334,
       "slack": 28625
     },
     "implicitAsserts": {
@@ -84,18 +84,18 @@
       "slack": 396
     },
     "raceEntryBytes": {
-      "ceiling": 2068000,
+      "ceiling": 2130714,
       "slack": 19685
     },
     "rawColor": {
-      "ceiling": 322,
+      "ceiling": 316,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 178,
+      "ceiling": 175,
       "slack": 0
     },
-    "rawGameReads": 299,
+    "rawGameReads": 300,
     "rawSpacing": {
       "ceiling": 305,
       "slack": 0
