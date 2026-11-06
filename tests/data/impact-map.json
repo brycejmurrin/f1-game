@@ -17711,7 +17711,6 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "loadProfile": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "normalizeSnapshot": [
@@ -17721,7 +17720,6 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "profiles": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "remember": [
@@ -17732,7 +17730,6 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "saveProfile": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "scene": [
@@ -18597,9 +18594,6 @@
       "expected": [
         "tests/unit/layout-presets.test.mjs"
       ],
-      "matches": [
-        "tests/unit/layout-presets.test.mjs"
-      ],
       "mount": [
         "tests/unit/layout-presets.test.mjs"
       ],
@@ -19146,7 +19140,6 @@
     },
     "js/ui/screen-looks.js": {
       "apply": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
       ],
@@ -19173,11 +19166,9 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "refresh": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "reset": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
