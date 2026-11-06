@@ -560,13 +560,12 @@ test("title WIDTH never collapses the hero or the doors (#4816)", () => {
   const dest = readCssSource("css/menu-destinations.css");
   const wide = dest.match(/:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\) #overlay #menu-buttons \{([^}]*)\}/);
   assert.ok(wide, "wide btnw #menu-buttons rule exists for EVERY density (#4862: it was compact-only)");
-  // #4862/#5126: the grid spans the overlay and is placed by ONE start margin from its anchored edge, so WIDTH
-  // resizes instead of translating. A centring margin on a column item made the slider shift the cluster sideways.
-  assert.match(wide[1], /grid-column:\s*1 \/ -1; justify-self: start; margin-inline: 0;/);
+  // #4862: the grid spans the overlay and pins its outer edge, so WIDTH resizes instead of translating. A centring
+  // margin on a column item made the slider shift the cluster sideways.
+  assert.match(wide[1], /grid-column:\s*1 \/ -1; justify-self: end; margin-inline: 0;/);
   assert.match(wide[1], /max-width:\s*100%;/, "capped at the overlay's content box, not 100vw (notch)");
-  // LEFT/RIGHT is that margin, clamped into the overlay both ways (#5126: #4906's END margin clamped a rightward X to
-  // nothing); a translate carried the pinned edge off the screen. Both edges' reach: tests/specs/title-cluster.spec.js.
-  assert.match(wide[1], /margin-inline-start:\s*clamp\(0%, calc\(var\(--_tl-free\) \+ var\(--_tl-bx, 0vw\)\), var\(--_tl-free\)\);/);
+  // LEFT/RIGHT is a margin clamped into the overlay; a translate carried the pinned edge off the screen.
+  assert.match(wide[1], /margin-inline-end:\s*clamp\(0%, calc\(-1 \* var\(--tl-btns-x/);
   assert.match(wide[1], /translate:\s*0 var\(--tl-btns-y/);
   assert.doesNotMatch(dest, /#overlay #menu-buttons \{[^}]*margin-inline:[^};]*--_tl-bw/, "no WIDTH-driven centring margin in landscape");
   assert.doesNotMatch(dest, /:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*(justify-self|max-width|translate)/,

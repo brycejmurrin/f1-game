@@ -123,11 +123,6 @@ const XR_SPECS = [
 const WEBKIT_SPECS = [
   "webkit-boot",
 ].map((n) => `**/${n}.spec.js`);
-// Engine-neutral layout specs the webkit project ALSO runs (Chromium runs them in `headless` as usual), so an
-// iPhone-layout claim can be checked in both engines: `node tools/ci/run-playwright.mjs --project=webkit <spec>`.
-const DUAL_ENGINE_SPECS = [
-  "title-cluster",   // #5126: the title button layer reaches both safe-area edges at every WIDTH
-].map((n) => `**/${n}.spec.js`);
 // Opt-in when the job sets APEX_WEBKIT=1, or when the CLI asks for the
 // project by name (npm run test:webkit → --project=webkit). Bare `npm test`
 // has neither, so the project is absent and no WebKit binary is required.
@@ -297,7 +292,7 @@ export default defineConfig({
       // .github/workflows/webkit-leg.yml / `npm run test:webkit` (sets
       // APEX_WEBKIT=1). Desktop Safari device descriptor; no Chromium args.
       name: "webkit",
-      testMatch: [...WEBKIT_SPECS, ...DUAL_ENGINE_SPECS],
+      testMatch: WEBKIT_SPECS,
       testIgnore: MANUAL_IGNORE,
       use: { ...devices["Desktop Safari"] },
     }] : []),
