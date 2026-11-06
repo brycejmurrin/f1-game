@@ -431,14 +431,6 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000, pauseRender =
   return page.evaluate(async ({ ms, token: marked, readToken, pause }) => {
     const gfx = typeof GLX === "undefined" ? null : GLX;
     const soft = !!gfx?.softPresent?.();
-    // softwareGlUiReadbackDefer() treats a visible #carsetup as "live UI" and
-    // skips readPixels; capture needs a real #game-soft blit (regression after
-    // governor.js fixed getElementById's receiver, 7d21d67002).
-    let cs = null, csHiddenRestore = null;
-    if (soft && marked && typeof document !== "undefined") {
-      cs = document.getElementById("carsetup");
-      if (cs) { csHiddenRestore = cs.hidden; cs.hidden = true; }
-    }
     const state = () => gfx?.softPresentState?.() || {};
     const first = state();
     // A resize, reload or renderer replacement can invalidate a marker. In
@@ -510,10 +502,7 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000, pauseRender =
       // image encoding can queue more software GPU work. The owner restores it.
       if (pause && window.__apex?.headless) window.__apex.headless(true);
       return ready;
-    } finally {
-      if (cs && csHiddenRestore != null) cs.hidden = csHiddenRestore;
-      clearTimeout(watchdog);
-    }
+    } finally { clearTimeout(watchdog); }
   }, { ms: timeoutMs, token, readToken: captureTokenInPage.toString(), pause: pauseRender });
 }
 
@@ -911,24 +900,7 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
   if (!opts.skipVisible) await waitGameVisible(page);
   const timeout = resolveShotTimeoutMs(opts, page.viewportSize?.() || null);
   if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: opts.awaitMs ?? Math.min(timeout, 30000) });
-  const lift = await page.evaluate(() => {
-    const cs = document.getElementById("carsetup");
-    if (!cs || !(typeof GLX !== "undefined" && GLX.softPresent?.())) return null;
-    const was = cs.hidden;
-    cs.hidden = true;
-    return was;
-  });
-  let soft;
-  try {
-    soft = await readSoftCanvasBytes(page, { type: "png" });
-  } finally {
-    if (lift != null) {
-      await page.evaluate(({ was }) => {
-        const cs = document.getElementById("carsetup");
-        if (cs) cs.hidden = was;
-      }, { was: lift });
-    }
-  }
+  const soft = await readSoftCanvasBytes(page, { type: "png" });
   if (soft) {
     const buf = Buffer.from(soft.b64, "base64");
     writeFileSync(outPath, buf);

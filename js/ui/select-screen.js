@@ -80,8 +80,7 @@ const retrySave = () => {
       (!store.careerWriteStatus || store.careerWriteStatus().ok)) {
     Career.save(); results.push(Career.saveStatus());
   }
-  const cd = typeof Career !== "undefined" && Career.data && Career.data();   // G.season aliases the career's season
-  if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()) && !(cd && cd.season === G.season))
+  if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
     results.push(SeasonCal.save(G.season));
   // Career/season above re-save their CURRENT state; whatever else the outage
   // refused (garage, settings, leaderboards) is rewritten from the store's own
@@ -788,8 +787,10 @@ function trackTile(t, i, opts) {
   row.dataset.trackIdx = String(i);
   row.dataset.kind = t.custom ? "custom" : t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
   row.setAttribute("aria-label", t.name);
-  // Country is the tooltip (no room for a second line). Read-only season tiles use
-  // data-tip, not `title`, which pops over the neighbour's name.
+  // The country is the tooltip: five USA tiles and three Italian ones need
+  // it, and the strip has no room for a second line of text under each flag.
+  // Season calendar tiles are read-only and packed: a native `title` pops
+  // over the neighbour's name (Baku over Mexico). data-tip paints above.
   const tip = t.name + (t.country ? " · " + t.country : "");
   if (opts && opts.readOnly) row.dataset.tip = tip;
   else row.title = tip;
@@ -909,7 +910,6 @@ function buildSelect(opts) {
       const row = trackTile(t, i, { readOnly: true, active: !seasonComplete && r === rnd });
       if (r < rnd || seasonComplete) row.dataset.done = "1";
       if (!seasonComplete && r === rnd) row.setAttribute("aria-current", "step");
-      row.onclick = () => { for (const o of els.selTracks.children) o.toggleAttribute("data-tip-open", o === row && !o.hasAttribute("data-tip-open")); };
       const rn = document.createElement("span");
       rn.className = "sur-rnd";
       rn.textContent = "R" + (r + 1);

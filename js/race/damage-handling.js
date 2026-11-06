@@ -15,7 +15,8 @@
  * factors are back to 1 the step after.
  *
  * Scope: the local car only. AI cars keep the readout-only contract, and in a
- * VS FRIEND race the host's choice is a room rule (G.raceDamage, #3971).
+ * VS FRIEND race each screen applies its own setting to its own car (the
+ * room's settings do not carry it; see the PR for #1578).
  * Never reads track curvature or the racing line: inputs are the damage record.
  */
 var DamageHandling = (function () {
@@ -45,8 +46,8 @@ var DamageHandling = (function () {
   }
 
   /** The factors PlayerForces applies to car `c` this step, or null (= no effect). */
-  function forCar(c, tt) {   // tt: no DAMAGE row in Time Trial (#4939)
-    if (!enabled || tt === true || !c || !c.local || typeof Damage === "undefined") return null;
+  function forCar(c) {
+    if (!enabled || !c || !c.local || typeof Damage === "undefined") return null;
     return factors(Damage.get(c), out);
   }
 

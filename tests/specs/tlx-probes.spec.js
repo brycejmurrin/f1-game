@@ -651,10 +651,9 @@ test.describe("TLX — boot", () => {
       await page.evaluate(() => window.__apex.race("monza"));
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
       await page.evaluate(() => window.__apex.park(0.1));
-      // World frames are live once three has counted a render() pass this frame:
-      // memState().calls is info.render.frameCalls (per frame, #4780), not the old lifetime
-      // render.calls, so a lifetime-sized threshold (> 50) can never be met.
-      await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.calls >= 1 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
+      // World frames are live once three's per-frame draw-call count is (the
+      // retained drawList is emptied by present(), so it reads 0 between frames).
+      await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.calls > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
       // Sample both arms the same number of presented frames later, so the
       // lazily compiled program set behind the count is comparable.
       const p0 = await page.evaluate(() => GLX.__tlx.memState().presents);

@@ -10,7 +10,7 @@ const FlybyPanel = (function () {
 // and lifts an eye out of a building, so a slider that can reach silly numbers
 // only costs the author a bad frame, never a crash.
 const EASES = ["linear", "in", "out", "inOut"];
-const AT_KINDS = ["start", "pole", "grid", "slot", "pitexit", "corner", "centre", "landmark"];
+const AT_KINDS = ["start", "pole", "grid", "slot", "corner", "centre", "landmark"];
 const SLOTS = [
   { key: "eye0", arr: "eye", i: 0, label: "EYE FROM" },
   { key: "eye1", arr: "eye", i: 1, label: "EYE TO" },
@@ -26,7 +26,6 @@ const POSE_FIELDS = {
   pole: ["off", "x", "y"],
   grid: ["off", "x", "y"],
   slot: ["off", "x", "y"],
-  pitexit: ["off", "x", "y"],
   corner: ["off", "x", "y"],
   centre: ["bear", "distR", "yR", "y"],
   landmark: ["bear", "distK", "yK", "y"],

@@ -94,10 +94,9 @@ const HudElements = (function () {
     // default follows the current HUD style.
     const slim = {};
     let any = false;
-    const p = store.get(K, null);
     for (let i = 0; i < ELEMENTS.length; i++) {
       const id = ELEMENTS[i][0];
-      if (state[id] !== shippedOf(id) || (id === "rel" && p && p.rel === state.rel)) { slim[id] = state[id]; any = true; }
+      if (state[id] !== shippedOf(id)) { slim[id] = state[id]; any = true; }
     }
     store.set(K, any ? slim : {});
   }

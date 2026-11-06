@@ -353,10 +353,6 @@
     packStats.pad4++; packStats.pad4MB += h.length * 2 / 1048576;
     return new THREE.BufferAttribute(f, itemSize);
   }
-  // A draw chunk of at least SUB_MIN_IDX indices (~8k triangles) carries mirror sub-ranges at cell / SUB_DIV
-  // (24 m on the 72 m default). PERF-HELMET-VISOR-2026-11-04 §1: one monaco chunk held 60k triangles, so the
-  // phone mirror's 120 m cap drew out to the chunk's far side (~350 m) whenever one corner was in reach.
-  const SUB_MIN_IDX = 24000, SUB_DIV = 3;
   function* prepareChunksSteps(data, cellSize, config, releaseSource) {
     if (!validPrepareConfig(config)) throw new Error("unsupported TLX preparation config");
     const cell = ChunkBins.cellSize(cellSize), srcIdx = data.idx, vCount = data.pos.length / 3;
@@ -405,24 +401,9 @@
       buckets.clear();
       for (const [mk, m] of merged) {
         const idx = new IndexArray(m.n);
-        let o = 0, subs = null;
-        if (m.n >= SUB_MIN_IDX) {
-          // MIRROR SUB-RANGES (Bryce's decision: a on PR #4886): a dense draw chunk is laid out as SUB_DIV x
-          // SUB_DIV re-binned sub-cells per lamp cell, back to back, each with its own AABB. Same triangles,
-          // reordered only inside this chunk; the main pass draws the chunk whole as before, and the lite
-          // mirror culls the sub-ranges (cullMirror) so its radial cap is the reach, not the chunk's far edge.
-          subs = [];
-          for (const part of m.parts) {
-            const fine = yield* ChunkBins.binSteps(pos, part, cell / SUB_DIV);
-            for (const [, fb] of fine) {
-              const start = o, f = fb.idx;
-              for (let i = 0; i < f.length; i++) { if ((i & 8191) === 0) yield; idx[o++] = f[i]; }
-              if (o > start) subs.push({ start, count: o - start, min: fb.mn, max: fb.mx });
-            }
-          }
-          if (o !== m.n) throw new Error("tlx-chunked: sub-range re-bin lost indices");
-        } else for (const part of m.parts) for (let i = 0; i < part.length; i++) { if ((i & 8191) === 0) yield; idx[o++] = part[i]; }
-        buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz, subs });
+        let o = 0;
+        for (const part of m.parts) for (let i = 0; i < part.length; i++) { if ((i & 8191) === 0) yield; idx[o++] = part[i]; }
+        buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz });
       }
     }
     // DUST MERGE (needs mergeK > 1, so tlxChunkMerge=1 is its off-switch too). Centroid binning leaves cells
@@ -523,8 +504,7 @@
         for (let i = 0; i < idx.length; i++) { if ((i & 8191) === 0) yield; idx[i] = bk.idx[i]; }
       }
       count += idx.length;
-      chunks.push({ idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key),
-        subs: bk.subs && bk.subs.length > 1 ? bk.subs : null });
+      chunks.push({ idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key) });
       yield;
     }
     return { version: 1, config, attributes, chunks, lampCells, cellSize: cell, count };
@@ -594,11 +574,7 @@
         if (!prepared.chunks) return { __tlx: true, chunked: true, geo: makeGeo(prepared.idx), chunks: null, count: prepared.count };
         const chunks = prepared.chunks.map(c => {
           const geo = makeGeo(c.idx, c.min, c.max);
-          // Sub-ranges are index VIEWS on the chunk's own index (no GPU buffer of their own): only
-          // mergeVisible draws them, through its slot geometry, and it reads .geo.index and .geo.attributes.
-          const subs = c.subs ? c.subs.map(sb => ({ geo: { attributes: geo.attributes, index: { array: c.idx.subarray(sb.start, sb.start + sb.count), count: sb.count, itemSize: 1 } },
-            count: sb.count, min: sb.min, max: sb.max, sub: true })) : null;
-          return { geo, count: c.idx.length, min: c.min, max: c.max, gx: c.gx, gz: c.gz, wrap: { __tlx: true, geo }, subs };
+          return { geo, count: c.idx.length, min: c.min, max: c.max, gx: c.gx, gz: c.gz, wrap: { __tlx: true, geo } };
         });
         if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
         if (!data._keepPositions) data.pos = data.idx = null;
@@ -631,7 +607,7 @@
     // cached geometry and does not touch the index buffer.
     function mergeVisible(mesh, n, slot) {
       const vis = _visList;
-      if (!(n > 1 || (n === 1 && vis[0] && vis[0].sub)) || !mesh || !mesh.chunks) return null;
+      if (!(n > 1) || !mesh || !mesh.chunks) return null;
       const slots = mesh._tlxMv || (mesh._tlxMv = []);
       const si = slot | 0;
       let s = slots[si];
@@ -662,7 +638,6 @@
         for (let k = 0; k < mesh.chunks.length; k++) {
           const ch = mesh.chunks[k], ix = ch.geo && ch.geo.index;
           ch._tlxCi = k;   // record order, which cull lists in: the run search below is one merge walk
-          if (ch.subs) for (let j = 0; j < ch.subs.length; j++) ch.subs[j]._tlxCi = k + (j + 1) / (ch.subs.length + 1);
           if (ix) tot += ix.count;
         }
         mesh._tlxIdxTotal = tot;
@@ -762,36 +737,6 @@
         const ch = chunks[i];
         if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
         if (Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
-        _visList[n++] = ch;
-      }
-      return n;
-    }
-
-    // The lite mirror's cull (Bryce's decision: a, PR #4886): cull() at chunk grain, except that a chunk
-    // straddling the radial cap (its near corner in reach, its far corner past it) is replaced by those of its
-    // sub-ranges that survive the frustum and the cap. A chunk wholly inside the cap still lists whole. Only
-    // mergeVisible may draw the result (sub entries have no GPU geometry): the caller checks that path first.
-    function cullMirror(mesh, vp, eye, cullDist, fog) {
-      const chunks = mesh && mesh.chunks;
-      if (!chunks || !vp) return 0;
-      Frustum.extractPlanes(vp, _fcPlanes);
-      const cd = cullDist > 0 ? cullDist : 0, cf = fog || null,
-            ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
-      let n = 0;
-      for (let i = 0; i < chunks.length; i++) {
-        const ch = chunks[i];
-        if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        if (Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
-        const subs = ch.subs;
-        if (subs && cd > 0 && farDist2(ch.min, ch.max, ex, ey, ez) > cd * cd) {
-          for (let j = 0; j < subs.length; j++) {
-            const sb = subs[j];
-            if (!Frustum.aabbInFrustum(_fcPlanes, sb.min, sb.max)) continue;
-            if (Frustum.radialCulled(sb.min, sb.max, ex, ey, ez, cd, cf)) continue;
-            _visList[n++] = sb;
-          }
-          continue;
-        }
         _visList[n++] = ch;
       }
       return n;
@@ -912,7 +857,7 @@
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
-    return { build, prepareConfig, cull, cullMirror, visList: _visList, releaseMirrors, free, mergeVisible };
+    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, mergeVisible };
   }
 
   // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh
@@ -953,12 +898,6 @@
       r--;
     }
     return r;
-  }
-
-  // Squared distance from (ex, ey, ez) to the AABB's FARTHEST corner.
-  function farDist2(mn, mx, ex, ey, ez) {
-    const dx = Math.max(ex - mn[0], mx[0] - ex), dy = Math.max(ey - mn[1], mx[1] - ey), dz = Math.max(ez - mn[2], mx[2] - ez);
-    return dx * dx + dy * dy + dz * dz;
   }
 
   // Idle yield for menu-path warm stages (#3279): requestIdleCallback when the

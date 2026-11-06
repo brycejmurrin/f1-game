@@ -1,8 +1,8 @@
 /* daily-challenge.test.mjs — the DAILY CHALLENGE plan and record, in a VM.
  *
  * js/race/daily-challenge.js is pure rules over the date and a store: the plan
- * must be the same for every player on the same local day and different across
- * days; the streak counts consecutive local days with a lap; the share line has
+ * must be the same for every player on the same UTC day and different across
+ * days; the streak counts consecutive UTC days with a lap; the share line has
  * one shape. Loaded whole with stub Tracks / Log, like season-cal.test.mjs.
  *
  * Run: node --test tests/unit/daily-challenge.test.mjs   (npm run test:tooling-fast)
@@ -178,7 +178,7 @@ test("the plan is a pure function of the UTC day — same day, same plan; adjace
     assert.ok(["default", "dawn", "day", "dusk", "night"].includes(p.tod));
     assert.ok(p.seed > 0 && Number.isInteger(p.seed));
   }
-  assert.equal(D.dayKey(new Date(2026, 8, 3, 23, 59)), "2026-09-03", "local calendar day, not UTC");
+  assert.equal(D.dayKey(new Date(Date.UTC(2026, 8, 3, 23, 59))), "2026-09-03", "UTC, not local");
   assert.equal(D.prevDay("2026-03-01"), "2026-02-28");
 });
 

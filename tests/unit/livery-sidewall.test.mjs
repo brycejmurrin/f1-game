@@ -124,11 +124,9 @@ test("wheel mesh call sites pass the ink and the editor has the row (source pins
   const draw = read("js/car/car-draw.js");
   // `, wt.surf` is the RIM FINISH surface (livery-paint-zones.test.mjs), passed after the ink; car3d passes its
   // PH_RIM stand-in, which CarMaterials.finishPass resolves to that surface (garage-finish-remap.test.mjs).
-  // #4907: the split paths share CarWheels.spec (livery-wheel-paths.test.mjs), which carries ink and surf.
-  assert.equal((draw.match(/ws\.ink, ws\.surf\)/g) || []).length, 4, "car-draw: player + field, front + rear");
-  assert.match(read("js/car/car-wheels.js"), /ink: tint\.ink, surf: tint\.surf/, "CarWheels.spec carries the ink");
+  assert.equal((draw.match(/wt\.ink(, wt\.surf)?\)/g) || []).length, 4, "car-draw: player + field, front + rear");
   assert.equal((read("js/car/car3d.js").match(/wheelStyle, wt\.ink(, wt\.surf|, PH_RIM)?\)/g) || []).length, 2);
-  assert.match(read("js/camera/cockpit-preview.js"), /w\.wheel,w\.ink,w\.surf\)/);
+  assert.match(read("js/camera/cockpit-preview.js"), /visual\.wheels,wt\.ink(,wt\.surf)?\)/);
   assert.match(read("js/garage/livery-design-editor.js"), /section\("WHEELS & BRAKES"[^\n]*"sidewallInk"/);
   assert.match(read("js/garage/setup-sheet.js"), /colorRow\("SIDEWALL INK", "sidewallInk", true\)/);
 });

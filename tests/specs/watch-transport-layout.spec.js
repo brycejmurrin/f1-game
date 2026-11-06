@@ -11,9 +11,6 @@ for (const vp of [{ width: 932, height: 430 }, { width: 844, height: 390 }]) {
     test("open chapters drawer keeps select and jump button on one row and under 62% of the height", async ({ page }) => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
-      // WatchTransport is LAZY_RACE_SESSION (not on the title page): inject it the way the race-entry load does.
-      // @ts-ignore
-      if (!(await page.evaluate(() => typeof WatchTransport !== "undefined"))) await page.addScriptTag({ url: "/js/ui/watch-transport.js" });
       await page.evaluate(() => {
         const events = Array.from({ length: 6 }, (_, i) => ({ t: 60 + i * 200, lap: i + 1, kind: "pass", text: "VER passes NOR" }));
         const drivers = ["VER", "NOR", "LEC"].map((code) => ({ code, name: code + " Driver" }));

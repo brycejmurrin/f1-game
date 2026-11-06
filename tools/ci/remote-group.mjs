@@ -177,10 +177,6 @@ export function shardPlan(group, shards, scripts, db = loadDb(path.join(ROOT, TI
   return { group: p.group, mode: "time", matrix, shards: lists, load: load.map((x) => Math.round(x)) };
 }
 
-const isGoldenSpec = (f) => /menu-baseline/.test(f);
-/** Env overrides that put a unit back on the ANGLE/SwiftShader default (what the golden PNGs were blessed on). */
-const SWIFTSHADER_ENV = { APEX_GL: "", LIBGL_ALWAYS_SOFTWARE: "" };
-
 /** What one shard runs, from the workflow's env: `{ runs: [{cmd, args}…], mode }`,
  *  `{ empty: true }` for a packed shard with nothing to run, or `{ error }`. The
  *  plan is text from whoever dispatched, so every unit is checked against the
@@ -215,11 +211,8 @@ export function runShardArgs({ group, plan, shard, total, workers, timeoutMs = 9
   }
   if (!plain.length && !pieces.length) return { empty: true, mode: "time" };
   const runs = [];
-  // menu-baseline's goldens are SwiftShader captures (#4891): its own run, off llvmpipe, as ci.yml does.
-  const golden = plain.filter(isGoldenSpec), rest = plain.filter((f) => !isGoldenSpec(f));
-  if (rest.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...rest, ...flags] });
-  if (golden.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...golden, ...flags], env: SWIFTSHADER_ENV });
-  for (const u of pieces) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", u.file, ...flags, `--shard=${u.shard}`], ...(isGoldenSpec(u.file) ? { env: SWIFTSHADER_ENV } : {}) });
+  if (plain.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...plain, ...flags] });
+  for (const u of pieces) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", u.file, ...flags, `--shard=${u.shard}`] });
   return { runs, mode: "time" };
 }
 
@@ -354,7 +347,7 @@ async function main() {
     let code = 0;
     for (const u of r.runs) {   // every unit runs even after a red, so one shard reports all its failures
       say(`shard ${process.env.SHARD}/${process.env.TOTAL} (${r.mode}): ${u.cmd} ${u.args.join(" ")}`);
-      const run = spawnSync(u.cmd, u.args, { cwd: ROOT, stdio: "inherit", env: u.env ? { ...process.env, ...u.env } : process.env });
+      const run = spawnSync(u.cmd, u.args, { cwd: ROOT, stdio: "inherit", env: process.env });
       const st = run.status == null ? 1 : run.status;
       if (st !== 0 && code === 0) code = st;
     }

@@ -42,7 +42,7 @@ test("render interpolates world px/pz for every car, not only humans", () => {
 // every stamp-gate term true and an empty batch). World state, not a draw.
 test("the player's skid stamp precedes the cockpit-rig continue", () => {
   const game = read("js/game.js");
-  const stamp = game.indexOf("skids.stamp(_groundMat,");
+  const stamp = game.indexOf("skids.stamp(tmpMat,");
   // The branch also carries the VISOR eye (no rig, no body) since 2026-09-28.
   const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
   assert.ok(stamp > 0 && cockpit > 0, "both sites present");

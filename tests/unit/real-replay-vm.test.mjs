@@ -425,25 +425,3 @@ test("follow(±1) from a retired car steps from its old slot, not the leader", a
     assert.equal(RR.replay().follow(-1), "LEC", "previous: the car that ran ahead of it, not the leader");
   } finally { g.close(); }
 });
-
-// #4948: the rank was recorded once at setFollow(); a car that climbed and then retired stepped from its stale first slot.
-test("follow(±1) from a retired car steps from where it retired, not where it was picked (#4948)", async () => {
-  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
-  try {
-    const { G } = g;
-    const RR = vm.runInContext("RealRace", g.ctx);
-    const { script } = scriptIn(g);
-    // STR starts last, passes LEC (48 m/s) at 53 m/s, never catches RUS (58 m/s), and its data ends in P2.
-    const traces = { frame: "track", cars: { 63: line(-14, 58, 0, -5, 200), 16: line(-22, 48, 1, -5, 200), 18: line(-30, 53, -1, -5, 60) } };
-    RR.launch(script, { seat: "LEC", watch: true, camera: "heli", traces, startLap: 1 });
-    await g.settle(() => G.track && G.track.def && G.track.def.id === "baku" && (G.state === "count" || G.state === "race"), 8000);
-    g.step(2);
-    g.apex.go();
-    assert.equal(RR.replay().follow("STR"), "STR");
-    RR.replay().setSpeed(8);
-    g.step(60 * 8);
-    const by = (code) => G.cars.find((c) => c.code === code);
-    assert.equal(by("STR").retired, true, "its data ended");
-    assert.equal(RR.replay().follow(-1), "RUS", "previous: the car directly ahead at retirement");
-  } finally { g.close(); }
-});

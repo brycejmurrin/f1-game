@@ -117,7 +117,6 @@ const NetPlay = (function () {
   // clock (raceT is shared through netStart) and only once the POSED lap is
   // past the target; one that arrives before the pose crosses waits in _nFin.
   const FIN_SLACK_S = 5;
-  const PEN_MAX_S = 600;   // a LAP penalty total past ten minutes is a corrupt or hostile payload (#4935)
   const POSE_AGE_MAX_MS = 100;   // tick(now, poseAt): a pose older than this is not "last frame's"
   // A reported lap time must be drivable: no faster than the whole lap at the
   // wire's own speed ceiling, no slower than the qualifying bound.
@@ -667,14 +666,6 @@ const NetPlay = (function () {
             const finOk = finLap > 1 && Number.isFinite(fin) && fin > 0 && Math.abs(fin - (raceTime() || 0)) <= FIN_SLACK_S;
             if (fr && ltOk) fr.car.lastLap = lt;
             if (fr && bestOk && !(fr.car.best <= best)) fr.car.best = best;
-            // PENALTY (#4935): only the owner levies its car's track-limits and
-            // caution seconds, so the host classified a penalised guest clean and
-            // its RESULT wiped the guest's own +5 s. Adopt the owner's running
-            // total as a DELTA over what it last reported, so a fine this peer
-            // levied itself (a remote jump start) is kept, never overwritten.
-            const pen = d.penalty == null ? NaN : Number(d.penalty);
-            const penOk = Number.isFinite(pen) && pen >= 0 && pen <= PEN_MAX_S;
-            if (fr && penOk && pen > (fr.car._nPen || 0)) { fr.car.penalty = (fr.car.penalty || 0) + pen - (fr.car._nPen || 0); fr.car._nPen = pen; }
             if (fr && finOk && !fr.car.retired) {
               // Only a car whose POSE is past its finishing crossing may
               // finish; earlier (the pose trails the crossing by the interp
@@ -712,7 +703,7 @@ const NetPlay = (function () {
               const lapOut = Number.isFinite(ownerLap) ? Math.floor(ownerLap) : fr.car.lap;
               const out = { lap: lapOut, time: ltOk ? lt : null, best: bestOk ? best : null,
                 code: fr.car.code, driverId: fr.car.driverId, fin: finOk && finishAllowed(finLap) ? fin : undefined, invalid: !!d.invalid,
-                retired: ret || undefined, penalty: penOk ? pen : undefined };
+                retired: ret || undefined };
               for (const [sid, os] of sessions) {
                 if (sid !== id) { try { os.sendEvent(EV.LAP, out); } catch (e) { /* peer closed */ } }
               }
@@ -830,7 +821,7 @@ const NetPlay = (function () {
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
         G.setCarRole(car, true, false);
         car._nHuman = true; car._nFallback = false;   // connected membership survives temporary AI motion
-        car._nFin = null; car._nFinLap = null; car._nMid = false; car._nRiseT = null; car._nPen = 0;   // gateLap / pending-fin / owner-penalty state, per race
+        car._nFin = null; car._nFinLap = null; car._nMid = false; car._nRiseT = null;   // gateLap / pending-fin state, per race
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
@@ -1024,9 +1015,6 @@ const NetPlay = (function () {
 
     function reportLap(data) {
       if (!SpectatePolicy.canPublish(role)) return false;
-      // Our own car's running PENALTY rides every LAP (#4935): only the owner
-      // levies track-limits and caution seconds, and the receiver adopts them.
-      if (data && localCar && data.code === localCar.code && data.penalty == null) data = { ...data, penalty: localCar.penalty || 0 };
       // The host also owns AI retirements. Bind their reliable state to each
       // receiver's race, so a queued DNF cannot park next race's fresh car.
       if (role === "host" && data && data.retired) {

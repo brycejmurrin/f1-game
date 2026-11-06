@@ -38,7 +38,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
-import { emitJsonAndExit } from "../lib/emit-json.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TESTS = path.join(ROOT, "tests");
@@ -224,7 +223,7 @@ export function audit() {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const rows = audit();
-  if (argv.includes("--json")) emitJsonAndExit(JSON.stringify(rows, null, 2));
+  if (argv.includes("--json")) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
 
   const declared = rows.reduce((a, r) => a + (r.declared || 0), 0);
   const never = rows.reduce((a, r) => a + r.never.length, 0);

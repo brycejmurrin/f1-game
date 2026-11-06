@@ -1658,31 +1658,6 @@ test("a FULL code room reopens the same code when a guest leaves (#4820)", async
   } finally { h.lobby.cancel(); }
 });
 
-test("evicting from a FULL code room never reopens the evicted player's code (#4937)", async () => {
-  const { h, made, rooms, ts, until, withGuest, codes } = codeRoomHarness();
-  try {
-    await withGuest();
-    for (const [n, who] of [[2, "g2"], [3, "g3"]]) {
-      const t = ts[ts.length - 1];
-      await rooms[rooms.length - 1].onJoiner(who, "answer-" + n);
-      t.status = "open";
-      await until(() => made.length === n, "guest " + n + " session bound");
-      if (n === 2) await until(() => rooms.length === 3, "room reopened for guest 3");
-    }
-    await new Promise((r) => setTimeout(r, 400));
-    assert.equal(h.lobby.status().guests, 3);
-    codes.next = "NEW999";
-    assert.equal(h.lobby.removeGuest("g3"), true);
-    ts[2].status = "closed";
-    for (const fn of ts[2].closers) fn("peer");        // g3's close is the evict ack
-    await until(() => rooms.some((r) => r.code === "NEW999"), "the evict minted a fresh code");
-    const before = rooms.length;
-    ts[1].closers[0]("remote");                         // g2 leaves normally
-    await new Promise((r) => setTimeout(r, 400));
-    assert.deepEqual(rooms.slice(before).map((r) => r.code), [], "ABC234 is never advertised again");
-  } finally { h.lobby.cancel(); }
-});
-
 test("a second HELLO from one guest does not re-send the whole catch-up (#4820)", async () => {
   const { h, made, until, withGuest } = codeRoomHarness();
   try {
@@ -2852,30 +2827,5 @@ test("a guest that un-readied inside one round trip of START still takes GO at t
     s.deliver("settings", { ...initialGuestSettings(), laps: 7, revision: 1 });
     s.deliver("go", { revision: 0 });
     assert.equal(starts, 1, "a stale revision is still refused");
-  } finally { h.lobby.cancel(); }
-});
-
-// ── DAMAGE: HANDLING is a room rule (#3971) ───────────────────────────────────
-test("the host publishes DAMAGE: HANDLING; a guest applies it in memory and keeps its own saved choice", async () => {
-  assert.match(SOURCE, /damage: !!G\.raceDamage,/);
-  const { h, s } = await connectedGuest();
-  try {
-    const stored = new Map([["damageHandling", false]]);
-    h.G.store = {
-      get: (k, d) => (stored.has(k) ? stored.get(k) : d),
-      set: (k, v) => { stored.set(k, v); },
-      rawDel: (k) => stored.delete(k),
-    };
-    let on = false;
-    Object.defineProperty(h.G, "raceDamage", { get: () => on, set: (v) => { on = v; h.G.store.set("damageHandling", v); }, configurable: true });
-    s.deliver("settings", { laps: 5, damage: true });
-    assert.equal(h.G.raceDamage, true, "the host's rule applies");
-    assert.equal(stored.get("damageHandling"), false, "the guest's saved choice is put back");
-    for (const bad of [{ damage: "on" }, { damage: 1 }]) {
-      s.deliver("settings", Object.assign({ laps: 9 }, bad));
-      assert.equal(h.G.raceLaps, 5, `${JSON.stringify(bad)} must reject the payload whole`);
-    }
-    s.deliver("settings", { laps: 6 });   // an older host omits it: ours stays
-    assert.equal(h.G.raceDamage, true);
   } finally { h.lobby.cancel(); }
 });

@@ -1,39 +1,17 @@
-/* Apex 26 — the SETUP tab: tune sliders, reversible symptom experiments and the
- * active-aero bench. Values live in SetupTune; no physics model or stored key. */
+/* Apex 26 — reversible garage setup experiments and the active-aero bench.
+ * Runtime-only API: create captures the existing game facade; build runs after
+ * SetupTune/Parts are available. No physics model or stored key is added. */
 const SetupExperiments = (function () {
   "use strict";
-  const SYMPTOMS = [
-    { id: "wide", label: "Pushes wide mid-corner", trade: "Soften the front bar one step to shift load transfer away from the front. Tradeoff: softer turn-in and relatively more rear load transfer." },
-    { id: "traction", label: "Poor exit traction", trade: "Soften both bars one step together, keeping axle balance. Tradeoff: less sharp turn-in." },
-    { id: "entry", label: "Unstable braking entry", trade: "Move brake bias 0.5% forward to leave more rear lateral budget under braking. Tradeoff: more entry understeer and front demand." },
-  ];
-  const SETUP_HELP = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front shifts load transfer forward and reduces front grip in sustained turns; a stiffer rear helps rotation. "
-    + "Rake sizes the ACTIVE AERO trade, not the car's standing downforce: more rake means more top speed to gain and more grip to lose when the flaps open, and with them shut the car drives exactly the same (measured: identical grip across the whole rake range in Corner Mode). A max-wing car is already at full load. "
-    + "Brake bias splits the friction budget between the axles under braking — forward understeers on entry, rearward rotates. "
-    + "The works sheet is exactly the car it always was.";
-  const sameTune = (a, b) => SetupTune.FIELDS.every((k) => a[k] === b[k]);
-  const changeList = (fields, from, to) => fields.map((k) => SetupTune.RANGE[k].label + ": " + from[k] + " → " + to[k]).join(" · ");
-  function el(tag, className, text) {
-    const n = document.createElement(tag); n.className = className;
-    if (text !== undefined) n.textContent = text;
-    return n;
-  }
-  function plainButton(text) { const b = el("button", "cs-liv-ed-cancel", text); b.type = "button"; return b; }
-  function chipButton(text, onclick) { const b = el("button", "sel-chip", text); b.type = "button"; b.onclick = onclick; return b; }
-  function chipGroup(ariaLabel) { const g = el("div", "chip-row"); g.setAttribute("role", "group"); g.setAttribute("aria-label", ariaLabel); return g; }
-  function liveHelp() { const p = el("p", "adv-help"); p.setAttribute("data-help", "keep"); return p; }
-
   function create(G, refreshStats) {
     const { $, getTeamParts } = G;
     if (typeof SetupTrials !== "undefined") SetupTrials.mountPause(G);
     let trialUi = null;
-    const visitBaselines = new Map();   // team id → tune at visit start (RESTORE PREVIOUS)
-    const experiments = new Map();      // team id → { before, after, symptom }
+    let csVisitTunes = new Map();
+    let csTuneExperiments = new Map();
     function capture(team) {
-      if (team && !visitBaselines.has(team.id)) visitBaselines.set(team.id, SetupTune.get(team.id));
+      if (team && !csVisitTunes.has(team.id)) csVisitTunes.set(team.id, SetupTune.get(team.id));
     }
-    function disposeTrials() { if (trialUi) { trialUi.dispose(); trialUi = null; } }
-
     // A slider drag fires `input` per pixel; each SetupTune.set is a JSON write to
     // localStorage plus a store revision bump that re-keys the garage preview. Commit
     // 75 ms after the last input (the livery pickers' cadence, setup-sheet.js
@@ -55,144 +33,24 @@ const SetupExperiments = (function () {
       clearTimeout(tunePend.timer);
       if (now) flushTune(); else tunePend.timer = setTimeout(flushTune, 75);
     }
-
-    function visit(team) { flushTune(); visitBaselines.clear(); experiments.clear(); capture(team); }
-    function close() { flushTune(); experiments.clear(); disposeTrials(); }
-
-    const pickedTrackId = () => (typeof Tracks !== "undefined" && Tracks.LIST[G.trackIdx]?.id) || null;
-
-    function renderTuneTab(team) {
-      const tab = $("cs-tab-tune"), works = SetupTune.isDefault(team.id);
-      if (!tab) return;
-      tab.classList.toggle("upgraded", !works);
-      const c = tab.querySelector(".cs-tab-cur"); if (c) c.textContent = works ? "WORKS" : "TUNED";
-    }
-
-    function tuneSlider(team, k, value, onEdit, refresh) {
-      const r = SetupTune.RANGE[k];
-      const lab = el("label", "tune-row");
-      const span = el("span", "tune-label", r.label + " ");
-      const b = document.createElement("b"); span.appendChild(b);
-      const inp = document.createElement("input");
-      inp.type = "range"; inp.min = r.min; inp.max = r.max; inp.step = r.step; inp.value = value;
-      inp.dataset.csTune = k;
-      inp.setAttribute("aria-label", r.label);
-      const edit = (now) => {
-        experiments.delete(team.id);
-        const v = parseFloat(inp.value);
-        b.textContent = v + r.unit;   // the readout follows the thumb; the store follows the debounce
-        onEdit();                     // a manual edit ends an applied experiment at once
-        queueTune(team.id, k, v, refresh, now);
-      };
-      inp.oninput = () => edit(false);
-      inp.onchange = () => edit(true);
-      lab.appendChild(span); lab.appendChild(inp);
-      return { lab, b, inp };
-    }
-
-    function mountPresets(wrap, team, refresh) {
-      if (typeof SetupPresets === "undefined") return;
-      SetupPresets.mount(wrap, {
-        teamId: team.id, store: G.store,
-        trackId: pickedTrackId() || G.track?.def?.id || null,
-        context: () => ({ v: 1, physics: typeof PhysicsConsts !== "undefined" ? String(PhysicsConsts.REVISION || "") : null,
-          track: pickedTrackId(), parts: getTeamParts(team.id) }),
-        refresh,
-      });
-    }
-
-    function mountTrials(wrap, team, baseline, refresh) {
-      if (typeof SetupTrials === "undefined" || !G.setupTrialRestart) return;
-      trialUi = SetupTrials.mount(wrap, {
-        teamId: team.id, store: G.store, baseline, candidateNow: () => { flushTune(); return SetupTune.get(team.id); },
-        launch: options => G.setupTrialRestart(options), cancelRuntime: () => { if (G.setupTrialCancel) G.setupTrialCancel(); }, refresh,
-      });
-    }
-
-    function adviceText(symptom, experiment, patch, t) {
-      const detail = !symptom ? "Choose a symptom to preview one change." : symptom.trade + " " + (experiment
-        ? changeList(SetupTune.FIELDS.filter((k) => experiment.before[k] !== experiment.after[k]), experiment.before, experiment.after)
-        : patch ? changeList(Object.keys(patch), t, patch) : "Already at a range limit; this experiment is unavailable.");
-      return "Model-based starting points; test the feel on track. " + detail
-        + (experiment ? " Experiment applied. Undo restores the setup before it; a manual edit starts a new experiment." : "");
-    }
-
-    function buildCoach(wrap, team, refresh) {
-      const group = chipGroup("Setup symptoms");
-      const advice = liveHelp(); advice.setAttribute("role", "status");
-      const apply = plainButton("APPLY EXPERIMENT"), undo = plainButton("UNDO EXPERIMENT");
-      const active = experiments.get(team.id);
-      let symptom = active ? SYMPTOMS.find((item) => item.id === active.symptom) || null : null;
-      const chips = [];
-      const coachRefresh = () => {
-        const t = SetupTune.get(team.id), saved = experiments.get(team.id);
-        if (saved && !sameTune(t, saved.after)) experiments.delete(team.id);
-        const experiment = experiments.get(team.id);
-        const patch = symptom && SetupTune.experiment(symptom.id, t);
-        apply.disabled = !patch || !!experiment; undo.disabled = !experiment;
-        for (let i = 0; i < chips.length; i++) { chips[i].disabled = !!experiment; chips[i].setAttribute("aria-pressed", String(symptom === SYMPTOMS[i])); }
-        advice.textContent = adviceText(symptom, experiment, patch, t);
-      };
-      for (const item of SYMPTOMS) {
-        const b = chipButton(item.label, () => { symptom = item; coachRefresh(); });
-        group.appendChild(b); chips.push(b);
-      }
-      apply.onclick = () => {
-        flushTune();
-        if (!symptom || experiments.has(team.id)) return;
-        const before = SetupTune.get(team.id), patch = SetupTune.experiment(symptom.id, before);
-        if (!patch) return;
-        const after = SetupTune.set(team.id, patch);
-        experiments.set(team.id, { before, after, symptom: symptom.id }); refresh();
-      };
-      undo.onclick = () => {
-        flushTune();
-        const saved = experiments.get(team.id);
-        if (!saved) return;
-        if (sameTune(SetupTune.get(team.id), saved.after)) SetupTune.set(team.id, saved.before);
-        experiments.delete(team.id); refresh();
-      };
-      wrap.append(group, advice, apply, undo);
-      return coachRefresh;
-    }
-
-    function buildBench(wrap, team, refresh) {
-      const bench = liveHelp();
-      const group = chipGroup("Active aero bench mode");
-      let straight = false;
-      const modes = [];
-      const benchRefresh = (baseLoad, effective) => {
-        for (let i = 0; i < modes.length; i++) modes[i].setAttribute("aria-pressed", String(!!i === straight));
-        bench.textContent = "Wing load " + (baseLoad * 100).toFixed(1) + " · effective with rake " + (effective * 100).toFixed(1)
-          + " · change from works " + ((effective - baseLoad) * 100).toFixed(1) + " pts. "
-          + (effective === 1 && SetupTune.rake(team.id) > 0 ? "Capped — extra rake adds no further trade. " : "")
-          + (straight ? "Straight Mode: more effective load sizes a larger speed/grip trade when the flaps open. " : "Corner Mode: flaps shut; rake adds no standing downforce or grip. ");
-        if (straight && typeof G.xVmaxGain === "function" && typeof G.xDfLoss === "function") {
-          const c = { aeroLoad: effective, aeroX: 1 };
-          bench.textContent += "Full-open speed ceiling trade +" + (G.xVmaxGain(c) * 100).toFixed(1)
-            + "% · downforce loss " + (G.xDfLoss(c) * 100).toFixed(1) + "% (current conditions).";
-        }
-      };
-      for (const [i, label] of ["CORNER MODE", "STRAIGHT MODE"].entries()) {
-        const b = chipButton(label, () => { straight = !!i; refresh(); });
-        group.appendChild(b); modes.push(b);
-      }
-      wrap.append(group, bench);
-      return benchRefresh;
-    }
-
+    function visit(team) { flushTune(); csVisitTunes = new Map(); csTuneExperiments = new Map(); capture(team); }
+    function close() { flushTune(); csTuneExperiments.clear(); if (trialUi) { trialUi.dispose(); trialUi = null; } }
+    // RESET TO WORKS. Every slider writes the store (debounced, above); the stat bars and
+    // the player's mods follow through recomputePlayerMods on the next race.
     function build(container, team) {
       flushTune();
-      disposeTrials();
+      if (trialUi) { trialUi.dispose(); trialUi = null; }
       const wrap = document.createElement("div");
       // Not cs-liv-editor: that class widens the car reserve and translucents the
       // sheet for the PAINT editor. SETUP only needs the compact-density help hide.
       wrap.className = "cs-tune-editor";
-      wrap.appendChild(el("h3", "sel-label", "SETUP SHEET — " + team.short));
+      const heading = document.createElement("h3"); heading.className = "sel-label";
+      heading.textContent = "SETUP SHEET — " + team.short; wrap.appendChild(heading);
       const cur = SetupTune.get(team.id);
-      if (!visitBaselines.has(team.id)) visitBaselines.set(team.id, Object.assign({}, cur));
-      const previous = visitBaselines.get(team.id);
-      let restore = null, coachRefresh = null, benchRefresh = null;
+      if (!csVisitTunes.has(team.id)) csVisitTunes.set(team.id, Object.assign({}, cur));
+      const previous = csVisitTunes.get(team.id);
+      const sameTune = (a, b) => SetupTune.FIELDS.every((k) => a[k] === b[k]);
+      let restore, coachRefresh, benchRefresh;
       const rows = {};
       const rakeOut = document.createElement("p"); rakeOut.id = "cs-rake-readout"; rakeOut.className = "adv-help"; rakeOut.setAttribute("data-help", "keep");   // a live readout: HELP TEXT: HIDE keeps it
       const refresh = () => {
@@ -207,24 +65,132 @@ const SetupExperiments = (function () {
         if (coachRefresh) coachRefresh();
         if (benchRefresh) benchRefresh(baseLoad, effective);
         refreshStats(team);
-        renderTuneTab(team);
+        const tab = $("cs-tab-tune");
+        if (tab) { tab.classList.toggle("upgraded", !SetupTune.isDefault(team.id)); const c = tab.querySelector(".cs-tab-cur"); if (c) c.textContent = SetupTune.isDefault(team.id) ? "WORKS" : "TUNED"; }
       };
       for (const k of SetupTune.FIELDS) {
-        rows[k] = tuneSlider(team, k, cur[k], () => { if (coachRefresh) coachRefresh(); }, refresh);
-        wrap.appendChild(rows[k].lab);
+        const r = SetupTune.RANGE[k];
+        const lab = document.createElement("label"); lab.className = "tune-row";
+        const span = document.createElement("span"); span.className = "tune-label";
+        span.textContent = r.label + " ";
+        const b = document.createElement("b"); span.appendChild(b);
+        const inp = document.createElement("input");
+        inp.type = "range"; inp.min = r.min; inp.max = r.max; inp.step = r.step; inp.value = cur[k];
+        inp.dataset.csTune = k;
+        inp.setAttribute("aria-label", r.label);
+        const edit = (now) => {
+          csTuneExperiments.delete(team.id);
+          const v = parseFloat(inp.value);
+          b.textContent = v + r.unit;   // the readout follows the thumb; the store follows the debounce
+          if (coachRefresh) coachRefresh();   // a manual edit ends an applied experiment at once
+          queueTune(team.id, k, v, refresh, now);
+        };
+        inp.oninput = () => edit(false);
+        inp.onchange = () => edit(true);
+        lab.appendChild(span); lab.appendChild(inp);
+        wrap.appendChild(lab);
+        rows[k] = { b, inp };
       }
       wrap.appendChild(rakeOut);
-      mountPresets(wrap, team, refresh);
-      wrap.appendChild(el("p", "adv-help", SETUP_HELP));
-      const reset = plainButton("RESET TO WORKS");
-      reset.onclick = () => { flushTune(); experiments.delete(team.id); SetupTune.reset(team.id); if (G.soundOn) GameAudio.uiTick(); refresh(); };
+      if (typeof SetupPresets !== "undefined") SetupPresets.mount(wrap, {
+        teamId: team.id, store: G.store,
+        trackId: (typeof Tracks !== "undefined" && Tracks.LIST[G.trackIdx]?.id) || G.track?.def?.id || null,
+        context: () => ({ v: 1, physics: typeof PhysicsConsts !== "undefined" ? String(PhysicsConsts.REVISION || "") : null,
+          track: (typeof Tracks !== "undefined" && Tracks.LIST[G.trackIdx]?.id) || null, parts: getTeamParts(team.id) }),
+        refresh,
+      });
+      const note = document.createElement("p"); note.className = "adv-help";
+      note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front shifts load transfer forward and reduces front grip in sustained turns; a stiffer rear helps rotation. "
+        + "Rake sizes the ACTIVE AERO trade, not the car's standing downforce: more rake means more top speed to gain and more grip to lose when the flaps open, and with them shut the car drives exactly the same (measured: identical grip across the whole rake range in Corner Mode). A max-wing car is already at full load. "
+        + "Brake bias splits the friction budget between the axles under braking — forward understeers on entry, rearward rotates. "
+        + "The works sheet is exactly the car it always was.";
+      wrap.appendChild(note);
+      const reset = document.createElement("button"); reset.type = "button"; reset.className = "cs-liv-ed-cancel";
+      reset.textContent = "RESET TO WORKS";
+      reset.onclick = () => { flushTune(); csTuneExperiments.delete(team.id); SetupTune.reset(team.id); if (G.soundOn) GameAudio.uiTick(); refresh(); };
       wrap.appendChild(reset);
-      restore = plainButton("RESTORE PREVIOUS SETUP");
-      restore.onclick = () => { flushTune(); experiments.delete(team.id); SetupTune.set(team.id, previous); refresh(); };
+      restore = document.createElement("button"); restore.type = "button"; restore.className = "cs-liv-ed-cancel";
+      restore.textContent = "RESTORE PREVIOUS SETUP";
+      restore.onclick = () => { flushTune(); csTuneExperiments.delete(team.id); SetupTune.set(team.id, previous); refresh(); };
       wrap.appendChild(restore);
-      coachRefresh = buildCoach(wrap, team, refresh);
-      mountTrials(wrap, team, previous, refresh);
-      benchRefresh = buildBench(wrap, team, refresh);
+
+      const coach = document.createElement("div"); coach.className = "chip-row";
+      coach.setAttribute("role", "group"); coach.setAttribute("aria-label", "Setup symptoms");
+      const advice = document.createElement("p"); advice.className = "adv-help"; advice.setAttribute("data-help", "keep");
+      advice.setAttribute("role", "status");
+      const apply = document.createElement("button"), undo = document.createElement("button");
+      apply.type = undo.type = "button"; apply.className = undo.className = "cs-liv-ed-cancel";
+      apply.textContent = "APPLY EXPERIMENT"; undo.textContent = "UNDO EXPERIMENT";
+      let symptom = null;
+      const symptoms = [
+        { id: "wide", label: "Pushes wide mid-corner", trade: "Soften the front bar one step to shift load transfer away from the front. Tradeoff: softer turn-in and relatively more rear load transfer." },
+        { id: "traction", label: "Poor exit traction", trade: "Soften both bars one step together, keeping axle balance. Tradeoff: less sharp turn-in." },
+        { id: "entry", label: "Unstable braking entry", trade: "Move brake bias 0.5% forward to leave more rear lateral budget under braking. Tradeoff: more entry understeer and front demand." },
+      ];
+      const activeExperiment = csTuneExperiments.get(team.id);
+      if (activeExperiment) symptom = symptoms.find((item) => item.id === activeExperiment.symptom) || null;
+      const chips = [];
+      coachRefresh = () => {
+        const saved = csTuneExperiments.get(team.id), t = SetupTune.get(team.id);
+        if (saved && !sameTune(t, saved.after)) csTuneExperiments.delete(team.id);
+        const experiment = csTuneExperiments.get(team.id);
+        const pending = !!experiment;
+        const patch = symptom && SetupTune.experiment(symptom.id, t);
+        apply.disabled = !patch || pending; undo.disabled = !pending;
+        for (let i = 0; i < chips.length; i++) { chips[i].disabled = pending; chips[i].setAttribute("aria-pressed", String(symptom === symptoms[i])); }
+        advice.textContent = "Model-based starting points; test the feel on track. " + (symptom
+          ? symptom.trade + " " + (pending ? SetupTune.FIELDS.filter((k) => experiment.before[k] !== experiment.after[k]).map((k) => SetupTune.RANGE[k].label + ": " + experiment.before[k] + " → " + experiment.after[k]).join(" · ")
+            : patch ? Object.keys(patch).map((k) => SetupTune.RANGE[k].label + ": " + t[k] + " → " + patch[k]).join(" · ")
+            : "Already at a range limit; this experiment is unavailable.")
+          : "Choose a symptom to preview one change.") + (pending ? " Experiment applied. Undo restores the setup before it; a manual edit starts a new experiment." : "");
+      };
+      for (const item of symptoms) {
+        const b = document.createElement("button"); b.type = "button"; b.className = "sel-chip"; b.textContent = item.label;
+        b.onclick = () => { symptom = item; coachRefresh(); }; coach.appendChild(b); chips.push(b);
+      }
+      apply.onclick = () => {
+        flushTune();
+        if (!symptom || csTuneExperiments.has(team.id)) return;
+        const before = SetupTune.get(team.id), patch = SetupTune.experiment(symptom.id, before);
+        if (!patch) return;
+        const after = SetupTune.set(team.id, patch);
+        csTuneExperiments.set(team.id, { before, after, symptom: symptom.id }); refresh();
+      };
+      undo.onclick = () => {
+        flushTune();
+        const saved = csTuneExperiments.get(team.id);
+        if (!saved) return;
+        if (sameTune(SetupTune.get(team.id), saved.after)) SetupTune.set(team.id, saved.before);
+        csTuneExperiments.delete(team.id); refresh();
+      };
+      wrap.append(coach, advice, apply, undo);
+      if (typeof SetupTrials !== "undefined" && G.setupTrialRestart) trialUi = SetupTrials.mount(wrap, {
+        teamId: team.id, store: G.store, baseline: previous, candidateNow: () => { flushTune(); return SetupTune.get(team.id); },
+        launch: options => G.setupTrialRestart(options), cancelRuntime: () => { if (G.setupTrialCancel) G.setupTrialCancel(); }, refresh,
+      });
+
+      const bench = document.createElement("p"); bench.className = "adv-help"; bench.setAttribute("data-help", "keep");
+      const mode = document.createElement("div"); mode.className = "chip-row";
+      mode.setAttribute("role", "group"); mode.setAttribute("aria-label", "Active aero bench mode");
+      let straight = false;
+      const modes = [];
+      benchRefresh = (baseLoad, effective) => {
+        for (let i = 0; i < modes.length; i++) modes[i].setAttribute("aria-pressed", String(!!i === straight));
+        bench.textContent = "Wing load " + (baseLoad * 100).toFixed(1) + " · effective with rake " + (effective * 100).toFixed(1)
+          + " · change from works " + ((effective - baseLoad) * 100).toFixed(1) + " pts. "
+          + (effective === 1 && SetupTune.rake(team.id) > 0 ? "Capped — extra rake adds no further trade. " : "")
+          + (straight ? "Straight Mode: more effective load sizes a larger speed/grip trade when the flaps open. " : "Corner Mode: flaps shut; rake adds no standing downforce or grip. ");
+        if (straight && typeof G.xVmaxGain === "function" && typeof G.xDfLoss === "function") {
+          const c = { aeroLoad: effective, aeroX: 1 };
+          bench.textContent += "Full-open speed ceiling trade +" + (G.xVmaxGain(c) * 100).toFixed(1)
+            + "% · downforce loss " + (G.xDfLoss(c) * 100).toFixed(1) + "% (current conditions).";
+        }
+      };
+      for (const [i, label] of ["CORNER MODE", "STRAIGHT MODE"].entries()) {
+        const b = document.createElement("button"); b.type = "button"; b.className = "sel-chip"; b.textContent = label;
+        b.onclick = () => { straight = !!i; refresh(); }; mode.appendChild(b); modes.push(b);
+      }
+      wrap.append(mode, bench);
       container.appendChild(wrap);
       refresh();
     }

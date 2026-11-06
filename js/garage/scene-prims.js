@@ -1,44 +1,20 @@
-/* Apex 26 — GaragePrims: the garage bay's mesh primitives and shared constants: the room's dimensions and wall
-   colours, the block / cylinder / tube / hose / tile / panel-grid builders every part of the bay is made of, and the
-   room LOOKS the setup sheet picks between. */
+/* Apex 26 — GaragePrims: the garage bay's mesh primitives and shared constants. The room's dimensions and wall colours, and the block / cylinder / tube / hose / panel-grid builders every part of the bay is made of. Split out of scene.js; the bay reads TrackGeom.MAT at eval here. */
 const GaragePrims = (function () {
   "use strict";
 
 // Interior, metres. The car spans z -2.69..3.18 and x +/-0.95; its nose is +Z,
 // so +Z is the pit-lane end and the deep end of the bay is behind it.
-// js/track/core/pit.js owns the bay's dimensions (TrackPit.BAY, read at eval —
-// a HARD_EDGES pair in the manifest) so the setup screen and the pit complex
-// cannot disagree about the box you drive into.
+// THE ROOM IS THE TRACKSIDE GARAGE. js/track/core/pit.js owns the bay's
+// dimensions (TrackPit.BAY, read at eval — a HARD_EDGES pair in the manifest),
+// so the setup screen and the pit complex cannot disagree about the box you
+// drive into: 10.8 m of frontage, 12.8 m deep, 5 m to the ceiling.
 const HALF_W = TrackPit.BAY.w / 2, Z_BACK = -TrackPit.BAY.depth / 2, Z_DOOR = TrackPit.BAY.depth / 2, CEIL_Y = TrackPit.BAY.h;
 
 const PANEL  = [0.150, 0.156, 0.170];   // upper wall panels
 const STEEL  = [0.230, 0.235, 0.250];
 const DARK   = [0.055, 0.058, 0.066];
 
-// The shared material ids, so the bay names the same surfaces the track does
-// rather than keeping a second copy that can drift. Read at eval (HARD_EDGES
-// pairs this file after TrackGeom in tools/manifest.cjs); the fallback object
-// is only for a harness that loads the module alone.
-const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
-  ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
-
-// ── small helpers ──────────────────────────────────────────────────────────
-const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
-const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-const rgb = (c, dflt) => (c && c.length === 3 ? c : dflt);
-const to255 = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
-const css = (c) => `rgb(${to255(c[0])},${to255(c[1])},${to255(c[2])})`;
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
-// Material ids ride in out.mat only when the caller asked for them.
-function pushMat(out, n, mid) {
-  if (!out.mat) return;
-  for (let i = 0; i < n; i++) out.mat.push(mid || 0);
-}
-
-// ── mesh builders ──────────────────────────────────────────────────────────
+// ── mesh helpers ───────────────────────────────────────────────────────────
 // A flat rectangle spanned by uVec/vVec from origin, subdivided nu x nv and
 // shaded per-vertex by colAt(u01, v01). Winding is derived from the requested
 // normal rather than assumed, which is what lets the same helper build a wall
@@ -56,12 +32,15 @@ function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt, mid) {
     }
   }
   pushMat(out, (nu + 1) * (nv + 1), mid);
-  // (a,d,c)/(a,b,d) is the order that is CCW about uVec x vVec: in (u,v) the
-  // quad is a(0,0) b(1,0) c(0,1) d(1,1), and a->d->c turns the same way as
-  // u->v. So when that cross product already points along the wanted normal,
-  // THAT is the order to emit; the other one faces the wall the wrong way and a
-  // room built from it is a solid box that hides its own interior.
-  const along = dot(cross(uVec, vVec), nrm) > 0;
+  const cr = [uVec[1] * vVec[2] - uVec[2] * vVec[1],
+              uVec[2] * vVec[0] - uVec[0] * vVec[2],
+              uVec[0] * vVec[1] - uVec[1] * vVec[0]];
+  // (a,d,c)/(a,b,d) is the order that is CCW about +cr, where cr = uVec x vVec:
+  // in (u,v) the quad is a(0,0) b(1,0) c(0,1) d(1,1), and a->d->c turns the same
+  // way as u->v. So when cr already points along the wanted normal, THAT is the
+  // order to emit; the other one faces the wall the wrong way and a room built
+  // from it is a solid box that hides its own interior.
+  const along = cr[0] * nrm[0] + cr[1] * nrm[1] + cr[2] * nrm[2] > 0;
   const row = nu + 1;
   for (let j = 0; j < nv; j++) {
     for (let i = 0; i < nu; i++) {
@@ -76,8 +55,8 @@ function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt, mid) {
 // never planes: a camera that wanders inside one then sees only back faces and
 // the prop silently vanishes instead of smearing across the frame.
 const BOX_F = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
-// A WALL-KEYED material must never land on a horizontal face. matWallLike() in
-// js/render/glx/shaders/glsl-lit.js makes CONCRETE/BRICK/METAL/WOOD/FABRIC/ROOF/
+// A WALL-KEYED material must never land on a horizontal face. matWallLike()
+// (matWallLike() in js/render/glx/shaders/glsl-lit.js) makes CONCRETE/BRICK/METAL/WOOD/FABRIC/ROOF/
 // STONE/RUST key their triplanar UV off `(an.x > an.z ? worldZ : worldX,
 // worldY)`; on a face whose normal is +-Y, worldY is constant, so the UV
 // collapses to one axis and the material renders as streaks smeared down it.
@@ -103,12 +82,13 @@ function block(out, cx, cy, cz, hx, hy, hz, col, mid) {
     pushMat(out, 4, sideOnly(mid, n[1]));
     const e = [0, 0, 0]; e[i0] = 1;
     const g = [0, 0, 0]; g[i1] = 1;
-    if (dot(cross(e, g), n) > 0) out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    const cr = [e[1] * g[2] - e[2] * g[1], e[2] * g[0] - e[0] * g[2], e[0] * g[1] - e[1] * g[0]];
+    if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] > 0)
+      out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
   }
 }
 
-// A vertical cylinder standing on (cx, cy, cz), open at the bottom.
 function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
   seg = seg || 10;
   const base = out.pos.length / 3;
@@ -146,10 +126,11 @@ function tube(out, a, b, rad, col, seg, mid) {
   const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
   const n = [d[0] / L, d[1] / L, d[2] / L];
-  let u = cross(Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], n);
+  const h = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let u = [h[1] * n[2] - h[2] * n[1], h[2] * n[0] - h[0] * n[2], h[0] * n[1] - h[1] * n[0]];
   const ul = Math.hypot(u[0], u[1], u[2]) || 1;
   u = [u[0] / ul, u[1] / ul, u[2] / ul];
-  const v = cross(u, n);
+  const v = [u[1] * n[2] - u[2] * n[1], u[2] * n[0] - u[0] * n[2], u[0] * n[1] - u[1] * n[0]];
   const ring = (i) => { const t = (i / seg) * Math.PI * 2, ca = Math.cos(t), sa = Math.sin(t);
     return [u[0] * ca + v[0] * sa, u[1] * ca + v[1] * sa, u[2] * ca + v[2] * sa]; };
   const base = out.pos.length / 3;
@@ -166,8 +147,8 @@ function tube(out, a, b, rad, col, seg, mid) {
     const p = base + i * 2, q = base + ((i + 1) % seg) * 2;
     out.idx.push(p, q, q + 1, p, q + 1, p + 1);
   }
-  for (const [pt, sg] of [[b, 1], [a, -1]]) {
-    const top = out.pos.length / 3;
+  for (const end of [[b, 1], [a, -1]]) {
+    const pt = end[0], sg = end[1], top = out.pos.length / 3;
     for (let i = 0; i < seg; i++) {
       const r = ring(i);
       out.pos.push(pt[0] + r[0] * rad, pt[1] + r[1] * rad, pt[2] + r[2] * rad);
@@ -183,10 +164,29 @@ function hose(out, pts, rad, col, seg, mid) {
   for (let i = 1; i < pts.length; i++) tube(out, pts[i - 1], pts[i], rad, col, seg, mid);
 }
 
-// One bay-floor rectangle at height y (default 0). The markings are REAL
-// GEOMETRY in a gapless tiling, not decals: overlapping coplanar quads z-fight
-// at grazing elevation, and a decal would miss the lamp pools entirely (the
-// decal shader sees sun and ambient only, never the point lights).
+// The shared material ids, so the bay names the same surfaces the track does
+// rather than keeping a second copy that can drift. Read at eval (HARD_EDGES
+// pairs this file after TrackGeom in tools/manifest.cjs); the fallback object
+// is only for a harness that loads the module alone.
+const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
+  ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
+
+const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+const rgb = (c, dflt) => (c && c.length === 3 ? c : dflt);
+
+const to255 = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+const css = (c) => `rgb(${to255(c[0])},${to255(c[1])},${to255(c[2])})`;
+
+const pushMat = (out, n, mid) => {
+  if (!out.mat) return;
+  for (let i = 0; i < n; i++) out.mat.push(mid || 0);
+};
+
+// One bay-floor rectangle at y = 0. The markings are REAL GEOMETRY in a gapless
+// tiling, not decals: overlapping coplanar quads z-fight at grazing elevation,
+// and a decal would miss the lamp pools entirely (the decal shader sees sun and
+// ambient only, never the point lights).
 function tile(out, x0, x1, z0, z1, col, y, mid) {
   const base = out.pos.length / 3;
   const p = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
@@ -198,14 +198,15 @@ function tile(out, x0, x1, z0, z1, col, y, mid) {
   out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
 }
 
-// ── room LOOKS ──────────────────────────────────────────────────────────────
-// The setup sheet's GARAGE row picks the SETUP-SCREEN bay's architecture:
-// walls, floor, ceiling, back-wall branding. `stock` (null) is the shipped room; every other id is a
+// ── room LOOKS (B·G1) ───────────────────────────────────────────────────────
+// The setup sheet's GARAGE row picks the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
+// back-wall branding. `stock` (null) is the shipped room; every other id is a
 // data record GarageDress.look* reads. Trackside pit rows (buildStatic) never
 // see a look. Pick one with ?garageLook=<id>, localStorage apex26.garageLook,
 // or GaragePrims.setLook(id) (the geometry key carries lookId(), so the bay
 // rebuilds on the next frame). Colours are functions of the livery (c1 body,
 // c2 accent) so every team still reads as its own garage.
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const GREY = (v) => [v, v * 1.01, v * 1.05];
 const LOOKS = {
   stock: null,
@@ -311,23 +312,17 @@ const LOOKS = {
   },
 };
 const LOOK_IDS = Object.keys(LOOKS);
-const LOOK_KEY = "apex26.garageLook";
-
-// ?garageLook=<id> wins over the saved pick; an unknown id keeps the stock room.
-function initialLook() {
-  try {
-    const q = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageLook");
-    const s = typeof localStorage !== "undefined" && localStorage.getItem(LOOK_KEY);
-    const v = q || s;
-    if (v && LOOK_IDS.indexOf(v) >= 0) return v;
-  } catch (_) { /* no storage */ }
-  return "stock";
-}
-let _look = initialLook();
+let _look = "stock";
+try {
+  const q = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageLook");
+  const s = typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook");
+  const v = q || s;
+  if (v && LOOK_IDS.indexOf(v) >= 0) _look = v;
+} catch (_) { /* no storage */ }
 function setLook(id) {
   if (LOOK_IDS.indexOf(id) < 0) return false;
   _look = id;
-  try { localStorage.setItem(LOOK_KEY, id); } catch (_) { /* private mode */ }
+  try { localStorage.setItem("apex26.garageLook", id); } catch (_) { /* private mode */ }
   return true;
 }
 const lookId = () => _look;
@@ -335,6 +330,7 @@ const look = () => LOOKS[_look] || null;
 // Resolve a look colour slot: a fixed [r,g,b] or a function of the livery.
 const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
+  // BOX_F / WALL_KEYED / sideOnly / mix stay module-local: only block/cyl/tube + LOOKS use them.
   return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
     LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
 })();

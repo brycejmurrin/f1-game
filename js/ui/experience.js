@@ -400,28 +400,15 @@ const UiExperience = (function () {
       elapsed = 0;
       try { if (G.gfx && typeof G.gfx.resize === "function") G.gfx.resize(); } catch (_) { /* harness / pre-boot */ }
     }
-    function checkHomeViewport() {
+    function onHomeViewportChange() {
       const w = window.innerWidth | 0, h = window.innerHeight | 0;
       if (w === lastViewportW && h === lastViewportH) return;
       lastViewportW = w; lastViewportH = h;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(settleHomeViewport, HOME_RESIZE_MS);
     }
-    // iOS fires resize/orientationchange with the PRE-rotation sizes and may
-    // send nothing once they settle (js/ui/sheet-shape.js SETTLE_MS, WebKit
-    // 170595): the equal-size check above then swallowed the only event and a
-    // STILL Home never re-presented (#5072). Re-ask on SheetShape's settle
-    // times; visualViewport catches a settle that fires on it alone.
-    const HOME_SETTLE_MS = [250, 700, 1500];
-    let settleChecks = [];
-    function onHomeViewportChange() {
-      checkHomeViewport();
-      for (const t of settleChecks) clearTimeout(t);
-      settleChecks = HOME_SETTLE_MS.map((ms) => setTimeout(checkHomeViewport, ms));
-    }
     window.addEventListener("resize", onHomeViewportChange);
     window.addEventListener("orientationchange", onHomeViewportChange);
-    if (window.visualViewport) window.visualViewport.addEventListener("resize", onHomeViewportChange);
     function previewSoftGfx(gfx) {
       if (!gfx) return false;
       try { if (gfx.softPresent && gfx.softPresent()) return true; } catch (_) { /* no soft path */ }

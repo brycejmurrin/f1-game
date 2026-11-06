@@ -1796,29 +1796,3 @@ test("cockpit finish choices round-trip as camera preferences without exporting 
   for (const [key, value] of Object.entries({ cockpitWheelFinish: "suede", cockpitBodyFinish: "chrome", cockpitHaloFinish: "livery" }))
     assert.equal(dst.disk.get("apex26." + key), value);
 });
-
-test("storage health ends up after the SAVES & DATA heading when it self-booted first", () => {
-  const dom = makeDom();
-  const host = dom.byId("pm-panel-files");
-  const ctx = vm.createContext({ document: dom.document, localStorage: {}, Log: { info() {}, warn() {} } });
-  vm.runInContext(read("js/ui/save-health.js") + ";this.SH=SaveHealth;", ctx, { filename: absSrc("js/ui/save-health.js") });
-  const real = host.appendChild; // mini-dom does not detach a moved node like a real DOM
-  host.appendChild = (c) => { const i = host.children.indexOf(c); if (i >= 0) host.children.splice(i, 1); return real(c); };
-  const handle = ctx.SH.mount(host); assert.ok(handle);
-  const h = dom.document.createElement("h3"), nav = dom.document.createElement("div");
-  host.append(h, nav);
-  assert.equal(ctx.SH.mount(host), handle);
-  assert.equal(host.children[host.children.length - 1], handle.root);
-  assert.ok(host.children.indexOf(h) < host.children.indexOf(handle.root));
-});
-
-test("WHEEL LOCK & ABS (wheelState, wheelAssist) survive settings backup and restore (#4946)", () => {
-  const file = boot({ disk: { "apex26.wheelState": "1", "apex26.wheelAssist": "full" } }).collect("changes");
-  const dst = boot();
-  assert.equal(dst.loadSettings(file).skipped, 0);
-  assert.equal(dst.disk.get("apex26.wheelState"), "1");
-  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
-  const bad = dst.loadSettings({ format: "apex26-settings-v1", settings: { driving: { wheelAssist: "turbo" } } });
-  assert.equal(bad.skipped, 1);
-  assert.equal(dst.disk.get("apex26.wheelAssist"), "full");
-});

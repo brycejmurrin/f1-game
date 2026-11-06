@@ -47,31 +47,3 @@ test("a red never resumed classifies on the order the penultimate lap was entere
   G.endRace();
   assert.ok(y.finPos < x.finPos && x.finPos < z.finPos, `y ${y.finPos} x ${x.finPos} z ${z.finPos}: penultimate-lap order, not current progress`);
 });
-
-test("a runner already into the signal lap does not jump the penultimate-lap order (#4942 A)", async () => {
-  await g.race("monza", "day", "dry", { laps: 12 });
-  const G = g.G, L = G.track.total;
-  g.apex.go(); g.step(30);
-  const [x, y, z] = G.cars.filter((c) => !c.retired);
-  const led = g.ctx.RaceControl.lapLedger; led.length = 0; led[3] = [y, x, z];
-  // y, x, z crossed into lap 3; x passed y and crossed into lap 4; the red flies on lap 4, never resumed.
-  x.lap = 4; y.lap = 3; z.lap = 3;
-  for (const c of [x, y, z]) c.finished = false;
-  x.prog = 3 * L + 100; y.prog = 3 * L - 100; z.prog = 3 * L - 400;
-  G.applyCaution({ level: 4, cause: "test" });
-  G.endRace();
-  assert.ok(y.finPos < x.finPos && x.finPos < z.finPos, `y ${y.finPos} x ${x.finPos} z ${z.finPos}: the lap-4 runner keeps its lap-3 place`);
-});
-
-test("a red after the chequered flag is a finished race: a one-compound finisher is disqualified, not +30 s (#4942 B)", async () => {
-  await g.race("monza", "day", "dry", { laps: 12 });
-  const G = g.G;
-  g.apex.go(); g.step(30);
-  const [w] = G.cars.filter((c) => !c.retired);
-  w.lap = 13; w.finished = true; w.finishT = 1; w.penalty = 0;
-  w.tyreLog = w.tyreLog.slice(0, 1); w.compoundShortAtFinish = true;   // one set all race
-  G.applyCaution({ level: 4, cause: "test" });
-  G.endRace();
-  assert.equal(w.dsq, "one dry compound", "B6.3.6: a completed race DSQs a one-compound finisher");
-  assert.equal(w.penalty || 0, 0, "not the suspended race's 30 s");
-});

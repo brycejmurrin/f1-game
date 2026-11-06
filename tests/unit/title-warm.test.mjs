@@ -126,22 +126,3 @@ test("game.js wiring: the prep's current() accepts a title warm, and the poll is
   assert.ok(read("tools/manifest.cjs").includes('"js/perf/title-warm.js"'), "loaded");
   assert.ok(read("js/core/save-schema-registry.js").includes('"titleWarm": entry('), "store key registered");
 });
-
-test("a phone whose warm is already done stops reading the DOM: later polls (and polls off the menu) are free", () => {
-  const h = rig({ phone: true, stored: "1700", build: "1700" });
-  let reads = 0;
-  const ov = h.els.overlay;
-  Object.defineProperty(h.els, "overlay", { get() { reads++; return ov; } });
-  h.tick(100);
-  assert.ok(reads > 0, "the first poll reads the environment once");
-  const first = reads;
-  h.tick(1000); h.tick(1000);
-  assert.equal(reads, first, "done-this-build ends the poll: no env() again");
-  const race = rig({ phone: false });
-  let n = 0;
-  const o2 = race.els.overlay;
-  Object.defineProperty(race.els, "overlay", { get() { n++; return o2; } });
-  race.G.state = "race";
-  race.tick(1000); race.tick(1000);
-  assert.equal(n, 0, "off the menu the poll returns before env()");
-});

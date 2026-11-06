@@ -79,10 +79,6 @@ const PodiumBeat = (function () {
     // Ceremony beat shows the podium tiles; keep the story head as caption.
     while (body.firstChild) body.removeChild(body.firstChild);
     body.appendChild(story);
-    // The ceremony beat has no points table (options.points): "P1 · 0 points" would be a lie.
-    if (!(options && options.points)) {
-      for (const sp of story.querySelectorAll("span")) if (/ · \d+ points$/.test(sp.textContent || "")) sp.hidden = true;
-    }
     host.hidden = false;
     host.setAttribute("data-ceremony-phase", "podium");
     const cont = find(CONTINUE_ID);

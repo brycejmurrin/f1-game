@@ -768,20 +768,19 @@ const SceneryCity = (function () {
         : st === "monopole" || st === "tower" ? [0]
         : [-w * 0.4, w * 0.4];
       for (const o of posts)
-        ctx.instance(`billboard-post|${h}|${st}`,   // colour rides the placement (NODE_COLOR)
-          { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t, col: postCol },
+        ctx.instance(`billboard-post|${h}|${st}|${postCol.join(",")}`,
+          { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t },
           (rec) => {
-            const NC = TrackGraph.NODE_COLOR;
             if (st === "monopole" || st === "tower") {
-              rec.cyl([0, -0.4, 0], 0.42, h + 0.4, NC, 8);                 // one fat column
-              rec.box([0, h + 0.1, 0], [0.9, 0.5, 1.6], NC);               // panel bracket
+              rec.cyl([0, -0.4, 0], 0.42, h + 0.4, postCol, 8);                 // one fat column
+              rec.box([0, h + 0.1, 0], [0.9, 0.5, 1.6], postCol);               // panel bracket
             } else if (st === "banner") {
-              rec.cyl([0, -0.4, 0], 0.09, h + 3.6, NC, 5);                 // slim mast
+              rec.cyl([0, -0.4, 0], 0.09, h + 3.6, postCol, 5);                 // slim mast
             } else if (st === "led") {
-              rec.cyl([0, -0.4, 0], 0.16, h + 0.4, NC, 5);
-              rec.box([0, h + 3.4, 0], [0.5, 0.3, 0.5], NC);               // service walkway
+              rec.cyl([0, -0.4, 0], 0.16, h + 0.4, postCol, 5);
+              rec.box([0, h + 3.4, 0], [0.5, 0.3, 0.5], postCol);               // service walkway
             } else {
-              rec.cyl([0, -0.4, 0], 0.12, h + 0.4, NC, 4);                 // posts, base sunk
+              rec.cyl([0, -0.4, 0], 0.12, h + 0.4, postCol, 4);                 // posts, base sunk
             }
           },
           { kind: "billboard", k, side });
@@ -794,8 +793,7 @@ const SceneryCity = (function () {
       // the TRACK-facing front of every mixed-side board — Silverstone,
       // Montreal), and four branches paint with postCol, which two callers
       // with different post colours were silently sharing.
-      ctx.instance(`billboard-face|${h}|${st}|${side}`
-        + (!["trivision", "arched", "fascia", "banner"].includes(st) ? `|${postCol.join(",")}` : ""),
+      ctx.instance(`billboard-face|${h}|${st}|${side}|${postCol.join(",")}`,
         Object.assign({ s: [1, 1, w], col: face }, place),
         (rec) => {
           const NC = TrackGraph.NODE_COLOR;

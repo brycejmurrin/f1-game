@@ -37,7 +37,6 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
-import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -54,7 +53,6 @@ globalThis.NetSession = NetSession;
 globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
 globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
-const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");   // one load, shared by the line-crossing and classification tests
 
 test("quali-wire and strategy-wire evaluate before netplay", () => {
   const { LAZY_NET, LAZY_NET_EDGES } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
@@ -1715,6 +1713,7 @@ test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire whe
 });
 
 test("temporary fallback cannot finish a connected human or remove it from the result wait", () => {
+  const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
   for (const crossing of [false, true]) {
     const G = poseG(2), net = NetPlay.create(G), s = stateSession();
     G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
@@ -1751,6 +1750,7 @@ test("an owner finish arriving during fallback is preserved when its finishing p
   s.feed(10000, 1, { ...lapPose(4995), lap: 3, speed: 0 }, 10000); net.tick(10000);
   net.tick(12100); G.raceT = 122;
   // Local fallback crosses first, but cannot supply the owner's lap evidence.
+  const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
   RaceControl.lineTransition(rival, 4995, 5, 10, 5000, 3, G.cars, 122, 1 / 60);
   s.deliver(NetPlay.EV.LAP, { code: rival.code, driverId: rival.driverId, lap: 4, fin: 121.9, invalid: true });
   assert.equal(!!rival.finished, false, "owner event waits for owner pose, not fallback lap");
@@ -1927,73 +1927,5 @@ test("a receiver that arrives late still gets a relayed human's full tyre state,
   assert.ok(toB.some((e) => Array.isArray(e.d.tyreLog) && e.d.tyreLog.length === 2 && e.d.tyre && e.d.tyre.id === "soft"),
     "B receives A's fitted set and stint history with its own epoch");
   assert.equal(toB.at(-1).d.fields.tyreWear, 0.3, "…at A's latest wear");
-  net.stop();
-});
-
-// ---- #4935: a guest's penalty reaches the host's classification ----
-// Only the owner levies its car's track-limits / caution seconds; the host never
-// simulates the guest's car, so before the LAP payload carried them the host
-// classified a penalised guest clean and its RESULT wiped the guest's own +5 s.
-test("the host adopts a seated guest's LAP penalty as a delta, bounded, and relays it", () => {
-  const G = poseG(3), ss = { a: stateSession(), b: stateSession() };
-  const net = NetPlay.create(G);
-  assert.equal(net.start({ role: "host", session: ss.a,
-    sessions: Object.entries(ss).map(([, session], i) => ({ id: i + 1, session })),
-    peers: [{ id: 1 }, { id: 2 }] }).ok, true);
-  // A spoofed code (the host's car) is refused by the seat binding.
-  ss.a.deliver(NetPlay.EV.LAP, { code: "D0", lap: 2, time: null, best: null, invalid: true, penalty: 5 });
-  assert.equal(G.cars.filter((c) => c.penalty).length, 0, "nobody else's car is penalised");
-  for (const c of G.cars) if (!c.local) ss.a.deliver(NetPlay.EV.LAP, { code: c.code, lap: 2, time: null, best: null, invalid: true, penalty: 5 });
-  const fined = G.cars.filter((c) => c.penalty);
-  assert.equal(fined.length, 1, "exactly the sender's own car is penalised");
-  const car = fined[0];
-  assert.equal(car.local, false); assert.equal(car.penalty, 5);
-  car.penalty += 5;   // a remote jump-start fine the HOST levied itself
-  const base = car.penalty;
-  ss.a.deliver(NetPlay.EV.LAP, { code: car.code, lap: 3, time: null, best: null, invalid: true, penalty: 5 });
-  assert.equal(car.penalty, base, "a repeated running total is not counted twice");
-  ss.a.deliver(NetPlay.EV.LAP, { code: car.code, lap: 4, time: null, best: null, invalid: true, penalty: 10 });
-  assert.equal(car.penalty, base + 5, "a new +5 s lands once, on top of the host's own fine");
-  for (const bad of [-5, 601, "x", Infinity, null]) {
-    ss.a.deliver(NetPlay.EV.LAP, { code: car.code, lap: 4, time: null, best: null, invalid: true, penalty: bad });
-    assert.equal(car.penalty, base + 5, "rejected penalty " + String(bad));
-  }
-  const relayed = ss.b.sent.filter((m) => m.t === NetPlay.EV.LAP && m.d && m.d.code === car.code).map((m) => [m.t, m.d]);
-  assert.ok(relayed.length, "the host relays the guest's LAP to the other guest");
-  assert.equal(relayed[relayed.length - 1][1].penalty, undefined, "an invalid penalty is not relayed");
-  assert.ok(relayed.some(([, d]) => d.penalty === 10), "the owner's total rides the star relay");
-  net.stop();
-});
-
-test("a guest's +5 s survives the host's RESULT and orders it behind a host 3 s slower on the road", () => {
-  const netOrderSource = symbolSource("function netOrder(order)");
-  // HOST side: the guest's car carries the penalty its LAP delivered.
-  const hostCars = [{ driverId: "host", lap: 6, finishT: 100, penalty: 0 }, { driverId: "guest", lap: 6, finishT: 97, penalty: 5 }];
-  const hostOrder = hostCars.slice().sort(RaceControl.finishOrder);
-  assert.deepEqual(hostOrder.map((c) => c.driverId), ["host", "guest"]);
-  let verdict;
-  const hostCtx = vm.createContext({ cars: hostCars, netPlay: { active: () => true, ownsClassification: () => true, reportResult: (rows) => { verdict = rows; } } });
-  vm.runInContext(netOrderSource, hostCtx, { filename: absSrc("js/game.js") });
-  hostCtx.order = hostOrder;
-  vm.runInContext("netOrder(order)", hostCtx);
-  assert.equal(verdict[1].p, 5, "the host's RESULT echoes the guest's penalty");
-  // GUEST side: its own +5 s is kept, and the host's order is adopted.
-  const guestCars = [{ driverId: "host", lap: 6, finishT: 100, penalty: 0 }, { driverId: "guest", lap: 6, finishT: 97, penalty: 5 }];
-  const guestCtx = vm.createContext({ cars: guestCars, netPlay: { active: () => true, ownsClassification: () => false, peerResult: () => verdict }, Map, Set, Number, Array });
-  vm.runInContext(netOrderSource, guestCtx, { filename: absSrc("js/game.js") });
-  const out = vm.runInContext("netOrder(cars.slice())", guestCtx);
-  assert.deepEqual(Array.from(out, (c) => c.driverId), ["host", "guest"]);
-  assert.equal(guestCars[1].penalty, 5);
-});
-
-test("our own LAP carries our running penalty; another car's (a host AI retirement) does not", () => {
-  const G = poseG(2), s = stateSession(), net = NetPlay.create(G);
-  net.start({ role: "guest", session: s });
-  G.player.penalty = 5;
-  net.reportLap({ lap: 2, time: 90, best: 90, code: G.player.code });
-  net.reportLap({ lap: 2, time: null, best: null, code: G.cars[1].code, invalid: true });
-  const laps = s.sent.filter((m) => m.t === NetPlay.EV.LAP).map((m) => m.d);
-  assert.equal(laps[0].penalty, 5);
-  assert.equal(laps[1].penalty, undefined);
   net.stop();
 });

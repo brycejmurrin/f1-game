@@ -170,7 +170,6 @@
     "js/agent/apex-lobby.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
-    "js/perf/three-inspector.js",
     "js/agent/apex.js",
     "js/agent/apex-bridge.js"
   ],
@@ -202,14 +201,7 @@
     [
       "js/agent/agentview-corners.js",
       "js/agent/agentview.js"
-    ],
-    [
-      "js/perf/three-inspector.js",
-      "js/agent/apex.js"
     ]
-  ],
-    LAZY_DEV: [
-    "js/perf/gfx-debug-overlay.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
@@ -242,7 +234,6 @@
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
     "js/race/cooldown-lap.js",
-    "js/ui/watch-transport.js",
     "js/race/ceremony.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
@@ -785,7 +776,6 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
-    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],

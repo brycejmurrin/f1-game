@@ -649,45 +649,6 @@ test("rear-ended by a net-owned rival, the local car is punted no further than t
   assert.equal(remote.contactT, remoteBefore.contactT);
 });
 
-// #4941: the aligned-plane and oriented paths must agree on net-owned cars: a rival the other peer simulates spawns no debris from either.
-test("a hit on a net-owned rival spawns no debris on the aligned path, as on the oriented one", () => {
-  const counts = {};
-  for (const [name, yaw] of [["aligned", 0], ["oriented", 0.6]]) {
-    for (const owned of [false, true]) {
-      const f = replayContactFixture(); f.replay.stop();
-      const solver = f.create(() => false);
-      const [local, remote] = f.G.cars;
-      f.G.netPlay = { owns: (c) => owned && c === remote };
-      for (const c of [local, remote]) Object.assign(c, { human: true, yawVis: yaw, x: 0, contactT: 0 });
-      Object.assign(local, { prog: 100, s: 100, speed: 50 });
-      Object.assign(remote, { prog: 104.6, s: 104.6, speed: 40 });
-      solver.resolveCollisions([], DT);
-      solver.resolveCollisions(f.G.cars, DT);
-      counts[name + (owned ? "-net" : "-local")] = f.counters().debris;
-    }
-  }
-  assert.ok(counts["aligned-local"] > 0, "the control: an all-local aligned shunt still spawns debris " + JSON.stringify(counts));
-  assert.equal(counts["aligned-net"], 0, "aligned path: a net-owned rival spawns no debris " + JSON.stringify(counts));
-  assert.equal(counts["oriented-net"], 0, "oriented path: a net-owned rival spawns no debris " + JSON.stringify(counts));
-});
-
-// #4833: the side branch must not write speed or contactT onto a net-owned rival, and the local car pays the scrub whichever car sideYieldsA would elect.
-for (const [name, loc, rem] of [["local ahead on arc", { prog: 103, x: 0 }, { prog: 100, x: 1.8 }], ["remote ahead on arc", { prog: 100, x: 0 }, { prog: 103, x: 1.8 }]]) {
-  test(`side rub with a net-owned rival: local yields, remote untouched (${name})`, () => {
-    const f = replayContactFixture(); f.replay.stop();
-    const solver = f.create(() => false);
-    const [local, remote] = f.G.cars;
-    f.G.netPlay = { owns: (c) => c === remote };
-    Object.assign(local, { human: true, yawVis: 0, contactT: 0, speed: 50, s: loc.prog, ...loc });
-    Object.assign(remote, { human: true, yawVis: 0, contactT: 0, speed: 50, s: rem.prog, ...rem });
-    solver.resolveCollisions([], DT);
-    solver.resolveCollisions(f.G.cars, DT);
-    assert.equal(remote.speed, 50, "remote speed belongs to its owner");
-    assert.equal(remote.contactT, 0, "remote contact flag belongs to its owner");
-    assert.ok(local.speed < 50, "the local car pays the scrub");
-  });
-}
-
 // Live debugger hunt 2026-10-16: the rear-end block gated collideFx, the debris
 // hook and IncidentSim.notifyCar on the LAST relaxation pass. The restitution
 // impulse leaves the pair separating after pass 0, so relV > 0 was never true on

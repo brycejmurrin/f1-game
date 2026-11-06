@@ -1,28 +1,5 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
-## 2026-11-04 — PR #4764 (cursor/lazy-coach-export-backup-a1): career-backup moves to LAZY_CAREER_UI (#4748)
-
-`(tree) raceEntryBytes` 2075000 → **2111780** (+36780). Deliberate raise past the 40-line
-absorb. This is accounting, not growth: `js/career/career-backup.js` (1069 lines) left the
-eager base roster for the LAZY_CAREER_UI bundle, which a race entry already loads (the
-career bundle is kicked at boot), so its bytes now count on the race-entry path while
-`eagerGzip` falls by 6000 (the same PR lowers that ceiling). The title screen no longer
-evaluates it. The race-entry golden list gains the file. Fragment delta:
-`ratchets.d/cursor--lazy-coach-export-backup-a1.json`.
-
-Update after the merge with the tip (d351064a): the fragment's raceEntryBytes delta is
-**+40410**, not +36780. The career-backup move itself is the 36780 B above; the other
-+3630 B is a catch-up of ceilings that PRs already merged into the deploy branch left
-behind (measured on the merge ref: 2115408 B vs ceiling 2114000 with the first fragment).
-No file in this PR grew by that amount.
-
-Update after the tip sync that also moved WatchTransport into LAZY_RACE_SESSION
-(4d953007 / merge into this PR): raceEntryBytes fragment delta **+54163** (measured
-2129163 on the merge tree; tip's watch-transport race-entry bytes are the catch-up
-above the prior +40410). eagerGzip fragment delta **−15640** (gzip-9 of
-career-backup.js) so the LOOSE slack from the deeper eager cut clears; never raise
-an eager ceiling. assertPinsAll fragment +1 covers career-ui-lazy.test.mjs pins on the merge tree. After the 2026-11-05 tip sync (behind cleared for land MB=2), eagerGzip fragment deepened to **−15666** (26 B tip slack catch-up; never raise).
-
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
@@ -3700,28 +3677,3 @@ fit/seat/sculpt/curved-nose/spine paths with one shared recipe (CONCEPT_SCULPT) 
 none. The `noseCurve` arm guard keeps each nose recipe's own seated arm. TEAM_STYLE is untouched.
 The shared recipe is `sparse` and `sculptSparse` (half the nose, roof and cover stations), so every
 default-shaped body stays under the pre-train triangle caps: rounded 14,872 and flat complete 17,092.
-
-## 2026-11-05 — PR #5002 (#4939 + #4940): raceEntryBytes +86
-The Time Trial fix for `DAMAGE: HANDLING` (#4939) is the whole raise: `js/race/damage-handling.js` +64 B (`forCar(c, tt)` returns null in TT) and `js/race/session-records.js` +22 B (the TT ghost key drops `damage`). Both files sit on the race entry path. The AI defend fix (#4940) is in `js/game.js` and nets -38 B there, so `js/game.js` shrinks. Measured against the tip it merged with (ef5b24bc): 2,129,163 -> 2,129,249. Recorded in `ratchets.d/cursor--tt-damage-ai-defend-4939.json` (a per-branch delta, no edit to `ratchets.json`).
-## 2026-11-05 — PR #4984 (cursor/red-flag-pit-classify-4938): red-flag pit plan and classification
-
-`raceEntryBytes` +649 via `ratchets.d/cursor--red-flag-pit-classify-4938.json (folded)`. The deploy tip
-sat exactly at the 2129163 ceiling, so the PR's own growth in the race entry shows as a raise: the
-`redFlagFit` plan splice in `js/race/pit-lane.js` (+11), the held-lap cap in `RaceControl.classify`
-and the `endRace` chequered-flag test (B5.14.2, B6.3.6). Eager bytes are −157 net (race-control.js
-comments trimmed), the tree total is not, because the bundle count includes the pit-lane and game
-hunks. No tolerance widened and nothing else stacked in the raise.
-## 2026-11-05 — PR #5001 (cursor/career-download-revoke-4932): career plan download revokes its object URL
-
-`raceEntryBytes` +351 via `ratchets.d/cursor--career-download-revoke-4932.json (folded)`. The deploy tip
-sat exactly at the 2129163 ceiling. The whole raise is the PR's own edit to `js/career/career-planning-ui.js`
-(6277 B to 6628 B: the download tries `NativeDownload.saveBlob` first, and the anchor path revokes its blob URL
-after 10 s instead of 1 s). The file ships in the race entry bundle and the change is behaviour, not comments, so it stays.
-Nothing else is stacked in the raise and no tolerance was widened.
-## 2026-11-05 — #5101 (PR #5123): raceEntryBytes +265
-Three small player-facing fixes on the race entry path: the DAILY streak reads the local calendar day (#5010), queued engineer cards age on ticked game time so a pause no longer drops them (#5068), and the ceremony podium hides a points line it has no table for (#5064). The bytes are the fixes themselves; no new module, so the boot budget is untouched.
-## 2026-11-05 — revert of PR #5077 (cursor/revert-5077-deploy-red): raceEntryBytes +144
-The deploy went red at d3c8fa33 (#5077 merge): geometry sweeps failed on props triangles (12 circuits, up to +13 % at
-sepang) and Mexico floating/unsupported scenery. This branch reverts #5077 whole; the +144 B is the pre-#5077
-frustum/tlx-chunked/hidden-faces/mesh code coming back on the race entry path, not new code. Fragment:
-`ratchets.d/cursor--revert-5077-deploy-red.json`. No tolerance widened.

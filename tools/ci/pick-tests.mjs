@@ -42,7 +42,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { changedPaths } from "../lib/changed-files.mjs";
-import { emitJsonAndExit } from "../lib/emit-json.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -372,7 +371,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
     ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_DEV || []), ...(manifest.OVERLAY_PAGE || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_RESULTS_SHEET || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }
@@ -661,7 +660,7 @@ An unknown option prints this usage and exits 2.`;
     const pkgJ = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const named = [...g.keys()].filter((n) => pkgJ.scripts[`test:${n}`]).sort();
     const specs = extraSpecs(files).map((r) => ({ spec: r.spec, kind: r.kind, because: r.module }));
-    emitJsonAndExit(JSON.stringify({
+    console.log(JSON.stringify({
       // "none" — nothing changed, run nothing. "unmatched" — files changed but
       // no rule claimed them, so the selection is NOT trustworthy and the
       // caller must fall back to a full run. "matched" — groups is the answer.
@@ -672,6 +671,7 @@ An unknown option prints this usage and exits 2.`;
       // An empty list read as "no spec needed" to a cold agent (MCP-REFINE-2026-10-30): name where the spec comes from.
       ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: for the ONE pre-push spec run select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field)` }),
     }));
+    process.exit(0);
   }
 
   if (!files.length) {

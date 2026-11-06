@@ -525,27 +525,3 @@ test("wheel state ON: full throttle on grass spins the rear and pulls slower", (
   assert.ok(v.on.spin > 0.5, `wheelspin: ${JSON.stringify(v.on)}`);
   assert.ok(v.on.speed < v.off.speed - 0.3, `spinning tyres pull slower: ${v.off.speed} → ${v.on.speed}`);
 });
-
-// BRAKE THERMAL (#1577, js/physics/wheel-state.js; opt-in, default OFF, rides on the wheel state).
-// Repeated heavy stops heat the discs; past the fade onset the pads deliver less, so the stop gets
-// LONGER. OFF is byte-identical (no temperature is ever written).
-test("brake thermal (#1577): repeated heavy stops heat the discs and lengthen the stop; OFF changes nothing", () => {
-  const w = dry.w, P = w.G.player;
-  const set = (ws, bt) => { w.apex.setPhysics({ wheelState: ws, brakeThermal: bt }); };
-  const run = (bt) => {
-    set(true, bt); P.brakeTF = P.brakeTR = undefined;
-    const rows = [];
-    for (let i = 0; i < 6; i++) { const s = stopFrom(w, 83, null); rows.push({ d: s.d, tF: P.brakeTF }); }
-    return rows;
-  };
-  const off = run(false), on = run(true);
-  set(false, false);
-  assert.equal(off[0].tF, undefined, "OFF never writes a temperature");
-  assert.ok(Math.abs(off[5].d - off[0].d) < 0.5, "OFF: stops do not drift " + JSON.stringify(off));
-  assert.ok(Math.abs(on[0].d - off[0].d) < 1, "ON, cold: the first stop matches OFF");
-  assert.ok(on[5].tF > on[0].tF + 100, "discs heat across stops " + JSON.stringify(on));
-  assert.ok(on[5].d > on[0].d + 3, "hot stop is longer than the cold one " + JSON.stringify(on));
-  assert.equal(w.apex.setPhysics({ brakeThermal: true }).brakeThermal, true);
-  assert.equal(w.apex.setPhysics({ brakeThermal: false }).brakeThermal, false);
-  assert.ok("brakeTemp" in w.apex.physState());
-});

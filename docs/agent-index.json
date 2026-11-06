@@ -752,7 +752,6 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
-        "tests/unit/driving-feel-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -772,7 +771,6 @@
         "tests/unit/mechanics-drills-vm.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
-        "tests/unit/menu-render-gate-vm.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
         "tests/unit/obs-act-edge-vm.test.mjs",
@@ -861,7 +859,6 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
-        "tests/unit/driving-feel-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
@@ -879,7 +876,6 @@
         "tests/unit/mechanics-drills-vm.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
-        "tests/unit/menu-render-gate-vm.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
         "tests/unit/obs-act-edge-vm.test.mjs",
@@ -945,7 +941,6 @@
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
-        "tests/unit/driving-feel-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
@@ -956,7 +951,6 @@
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
         "tests/unit/jump-start-vm.test.mjs",
-        "tests/unit/menu-render-gate-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
         "tests/unit/offtrack-edges-vm.test.mjs",
         "tests/unit/offtrack-vm.test.mjs",
@@ -1063,7 +1057,6 @@
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-swatch-cache.test.mjs",
-        "tests/unit/livery-wheel-paths.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
@@ -1500,7 +1493,6 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
-        "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -2494,7 +2486,7 @@
     {
       "path": "js/career/career-backup.js",
       "global": "CareerBackup",
-      "roster": "LAZY_CAREER_UI"
+      "roster": "tag"
     },
     {
       "path": "js/career/career-planning-ui.js",
@@ -3814,7 +3806,7 @@
     {
       "path": "js/overlay/render.js",
       "global": "OverlayRender",
-      "roster": "OVERLAY_PAGE"
+      "roster": "tag"
     },
     {
       "path": "js/perf/bench-capture.js",
@@ -3829,7 +3821,7 @@
     {
       "path": "js/perf/gfx-debug-overlay.js",
       "global": "GfxDebug",
-      "roster": "LAZY_DEV"
+      "roster": "tag"
     },
     {
       "path": "js/perf/gfx-escalation.js",
@@ -3909,7 +3901,7 @@
     {
       "path": "js/perf/three-inspector.js",
       "global": "ThreeInspector",
-      "roster": "LAZY_AGENT"
+      "roster": "tag"
     },
     {
       "path": "js/perf/title-warm.js",
@@ -5054,7 +5046,7 @@
     {
       "path": "js/ui/watch-transport.js",
       "global": "WatchTransport",
-      "roster": "LAZY_RACE_SESSION"
+      "roster": "tag"
     },
     {
       "path": "js/workers/bitmap-decode-client.js",

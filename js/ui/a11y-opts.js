@@ -189,9 +189,7 @@ const A11yOpts = (function () {
   apply();
 
   if (typeof document !== "undefined") {
-    // #4798: the rows wire at first Settings enter / tap / idle, not in the DCL task.
-    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI);
-    else if (document.readyState === "complete") initUI();
+    if (document.readyState === "complete") initUI();
     else document.addEventListener("DOMContentLoaded", initUI, { once: true });
   }
 

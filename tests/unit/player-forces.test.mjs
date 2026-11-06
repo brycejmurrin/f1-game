@@ -356,31 +356,3 @@ test("WheelState front-slip grip loss reaches yaw below the substep boundary", (
       `${speed} m/s: yaw retains ${yawRatio}, front force retains ${forceRatio}`);
   }
 });
-
-// The lock-up gate fires only rolling FORWARDS: brake held in reverse is a stop
-// (or the reverse pedal), never a locked front. Same hard-braking decel at +40
-// and −5 m/s; only the forward one locks (#1682 step 3: was a canary source pin).
-test("a front lock-up fires on a hard forward stop, never with the brake held in reverse", () => {
-  const { PlayerForces, TyreModel, PhysicsConsts } = load();
-  const api = PlayerForces.create({ PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0, YAW_INERTIA: 0.58, YAW_DAMP: 1.0 });
-  const tyres = TyreModel.create({ get raceTyreWear() { return "off"; }, store: { get: () => "off", set: () => {} } });
-  const L = 3.2, FW = PhysicsConsts.FRONT_WEIGHT, ar = FW * L, af = L - ar;
-  const lockAt = (speed, braking = true) => {
-    const c = {
-      human: true, isPlayer: false, speed, axEstSm: -30, aeroX: 0, wake: 0,
-      vLat: 0, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0,
-      brakeBias: null, rollBalance: 0.5, lateralAccel: 0, offroad: false, tread: 0, flatSpot: 0,
-    };
-    api.step(c, {
-      dt: DT, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 1,
-      deploy: 0, braking, surfaceMu: 1, kerbGrip: 1, bankMu: 1, modsCornering: 1,
-      loadF: FW + 0.1, loadR: 1 - FW - 0.1, vertLoad: 0, af, ar, sp: 1, steer: 0,
-      weatherGrip: 0.7, aeroDf: 1, dirtyMul: 1, coastCut: 0, vTopNow: 72, tyres,
-    });
-    return c.wheelLock;
-  };
-  assert.ok(lockAt(40) > 0, `a hard forward stop locks a front (${lockAt(40)})`);
-  assert.equal(lockAt(40, false), 0, "off the brake: no lock");
-  assert.equal(lockAt(-5), 0, "brake held rolling backwards: no lock");
-  assert.equal(lockAt(0), 0, "and none at a standstill");
-});

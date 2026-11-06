@@ -124,8 +124,7 @@ function create(G) {
   };
 }
 
-// ensureScreen stays module-local; ready() lets SettingsExport wait for the
-// bundle that carries CareerBackup before it applies a career file.
-return { create, ready: ensureScreen };
+// ensureScreen stays module-local (create / ensure only).
+return { create };
 })();
 Object.freeze(CareerUI);

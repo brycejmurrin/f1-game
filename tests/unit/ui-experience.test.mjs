@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from '../helpers/mini-dom.mjs';
-import { absSrc } from '../helpers/abs-src.mjs';
 const code = fs.readFileSync(new URL('../../js/ui/experience.js', import.meta.url), 'utf8');
 const ctx = vm.createContext({}); vm.runInContext(code + ';globalThis.api=UiExperience;', ctx);
 test('Home solo practice stays in sync with the coach and does not offer goals requiring rivals', () => {
@@ -186,47 +185,10 @@ test('narrow resize does not stopHome/beginHome; debounced settle only calls gfx
   assert.ok(listeners.resize && listeners.resize.length, 'resize listener registered');
   listeners.resize.forEach((fn) => fn());
   assert.equal(resizes, 0, 'resize is debounced');
-  assert.deepEqual(timers.map((t) => t.ms), [120, 250, 700, 1500], 'one debounce plus the iOS late-settle re-asks');
+  assert.equal(timers.length, 1);
   timers[0].fn();
   assert.equal(resizes, 1, 'settle calls gfx.resize once');
-  timers.slice(1).forEach((t) => t.fn && t.fn());
-  assert.equal(timers.length, 4, 'late re-asks at an unchanged size schedule nothing');
-  assert.equal(resizes, 1, 'late re-asks at an unchanged size do not resize again');
   assert.equal(begins, 1);
-});
-
-test('#5072 iOS rotation: an event with the stale size, then a silent settle, still resizes Home (STILL motion)', () => {
-  const dom = makeDom();
-  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
-  let resizes = 0;
-  const timers = [], listeners = {}, vvListeners = {};
-  const setupCam = { captureCamera: () => ({}), restoreCamera() {}, beginHome: () => true, endHome() {}, homeState: () => ({}), renderHome: () => true };
-  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 844, innerHeight: 390,
-    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
-    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
-    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
-    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
-    addEventListener(type, fn) { (listeners[type] || (listeners[type] = [])).push(fn); },
-    visualViewport: { addEventListener(type, fn) { (vvListeners[type] || (vvListeners[type] = [])).push(fn); } },
-    setTimeout(fn, ms) { const id = timers.length; timers.push({ fn, ms }); return id; },
-    clearTimeout(id) { if (timers[id]) timers[id].fn = null; },
-    Log: { warn() {} } };
-  sandbox.window = sandbox;
-  const local = vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local, { filename: absSrc('js/race/race-insights.js') });
-  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
-  local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false, gfx: { resize() { resizes++; } } }, { setupCam, trackReady: () => true });
-  assert.ok(vvListeners.resize && vvListeners.resize.length, 'visualViewport resize is watched');
-  // iOS: orientationchange fires while innerWidth/innerHeight still hold the landscape numbers.
-  listeners.orientationchange.forEach((fn) => fn());
-  // The sizes settle with no further event.
-  sandbox.innerWidth = 390; sandbox.innerHeight = 844;
-  const run = (ms) => timers.forEach((t) => { if (t.fn && t.ms === ms) { const f = t.fn; t.fn = null; f(); } });
-  run(250);
-  run(120);
-  assert.equal(resizes, 1, 'the 250 ms re-ask sees the settled size and gfx.resize runs');
-  run(700); run(1500);
-  assert.equal(resizes, 1, 'later re-asks at the applied size are no-ops');
 });
 
 test('previewScene skips software GL and downscales capture edges', async () => {

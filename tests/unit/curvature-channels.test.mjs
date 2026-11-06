@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { GAME_PATH } from "../helpers/game-source.mjs";
 
 // THE ARC MUST NOT REACH THE DRIVER (AGENTS.md §Physics). Nothing derived from
 // track curvature may affect the player with assists off, and every consumer
@@ -118,86 +117,7 @@ test("no table row names a file that no longer reads curvature (no ghosts)", () 
   for (const f of new Set(rows)) {
     const p = path.join(ROOT, f);
     assert.ok(fs.existsSync(p), `table row names ${f}, which does not exist`);
-    // #4950: a row may also classify a WIDE_SITES file (kTurn / TrackLine reads).
-    assert.ok(readsCurvature(fs.readFileSync(p, "utf8")) || f in WIDE_SITES,
+    assert.ok(readsCurvature(fs.readFileSync(p, "utf8")),
       `table row names ${f}, which no longer reads curvature — drop the row`);
   }
-});
-
-// ---------------------------------------------------------------------------
-// #4950 — the ledger above only sees `X.curvature(`. The arc also reaches code
-// through the per-car caches (`kCur`, `kTurn`), the baked line (`TrackLine.`),
-// the path curvature (`kPath`) and `bankAngle`. Same rule: every file that
-// reads one is pinned by count, so a new read is a red test until classified.
-const WIDE = /\bTrackLine\.|\bkCur\b|\bkTurn\b|\bkPath\b|\bbankAngle\b/g;
-// Files that carry these identifiers and the channel that makes each legitimate
-// (rows live in docs/PHYSICS.md §Curvature channels; shape-only files are noted).
-const WIDE_SITES = {
-  "js/agent/agentview-corners.js": 2, "js/agent/apex.js": 3, "js/camera/flyby-seq.js": 2,
-  "js/car/car-draw.js": 1, "js/game.js": 24, "js/physics/ai-drive.js": 7,
-  "js/physics/body-attitude.js": 1, "js/physics/collide.js": 2, "js/race/car-fields.js": 8,
-  "js/track/core/mesh.js": 2, "js/track/tracks.js": 3,
-};
-const rel = (p) => path.relative(ROOT, p).split(path.sep).join("/");
-
-test("every kCur/kTurn/kPath/TrackLine/bankAngle read is on the wide ledger", () => {
-  const found = {};
-  for (const p of walk(path.join(ROOT, "js"))) {
-    const n = (codeOnly(fs.readFileSync(p, "utf8")).match(WIDE) || []).length;
-    if (n) found[rel(p)] = n;
-  }
-  assert.deepEqual(found, WIDE_SITES,
-    "kCur/kTurn/kPath/TrackLine/bankAngle counts changed — classify the new/removed read in docs/PHYSICS.md §Curvature channels, then update WIDE_SITES");
-});
-
-test("the two ledgered cross-file reads are classified in the PHYSICS.md table", () => {
-  const rows = new Set(tableRows());
-  for (const f of ["js/camera/flyby-seq.js", "js/physics/collide.js"])
-    assert.ok(rows.has(f), `${f} reads the arc-derived line/kTurn and needs a §Curvature channels row`);
-});
-
-// Branch awareness. The human arm of the player-path functions must hold none of
-// the arc identifiers except through the two assists that default to 0.
-function humanArm(src, fn) {
-  const code = codeOnly(src);
-  const at = code.indexOf(`function ${fn}(`);
-  assert.ok(at >= 0, `${fn} not found in js/game.js`);
-  const start = code.indexOf("if (c.human) {", at);
-  assert.ok(start >= 0, `${fn} has no \`if (c.human) {\` arm`);
-  let depth = 0;
-  for (let i = code.indexOf("{", start); i < code.length; i++) {
-    if (code[i] === "{") depth++;
-    else if (code[i] === "}" && --depth === 0) return code.slice(start, i + 1);
-  }
-  throw new Error(`${fn}: unbalanced human arm`);
-}
-// Lines in the human arm that may carry an arc identifier, and why.
-const ARM_ALLOW = {
-  updateCarBrakePlan: [],
-  updateCarLateral: [],
-  // ROAD_FOLLOW (def 0) scales kPath; yawEase/rNeed only feed that product; the
-  // TrackLine read sits under `raceLineAssist !== 0` (def 0).
-  updateCarBicycle: [/const kPath =/, /const rNeed = c\.speed \* kPath/, /driveTune\.ROAD_FOLLOW[^;]*kPath/, /TrackLine\.at\(track, wrapS\(c\.s \+ look\)\)/],
-};
-const ARM_IDS = /\bTrackLine\.|\bkCur\b|\bkTurn\b|\bkPath\b|\bbankAngle\b|\.curvature\s*\(/;
-function armViolations(src) {
-  const bad = [];
-  for (const [fn, allow] of Object.entries(ARM_ALLOW))
-    for (const line of humanArm(src, fn).split("\n"))
-      if (ARM_IDS.test(line) && !allow.some((re) => re.test(line))) bad.push(`${fn}: ${line.trim()}`);
-  return bad;
-}
-
-test("js/game.js: the human arms read no arc identifier outside ROAD_FOLLOW / raceLineAssist", () => {
-  assert.deepEqual(armViolations(fs.readFileSync(GAME_PATH, "utf8")), []);
-});
-
-test("the branch-aware gate fails on a game.js with one kCur read added to a human arm", () => {
-  const src = fs.readFileSync(GAME_PATH, "utf8");
-  const needle = "steer = inp ? (inp.steer ?? 0) : Input.steer(dt);";
-  assert.ok(src.includes(needle), "mutation anchor moved — re-point this test at the updateCarLateral human arm");
-  const mutated = src.replace(needle, needle + " steer += c.kCur * 0;");
-  const bad = armViolations(mutated);
-  assert.equal(bad.length, 1, bad.join("\n"));
-  assert.match(bad[0], /updateCarLateral/);
 });

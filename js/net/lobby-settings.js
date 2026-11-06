@@ -20,8 +20,7 @@ const LobbySettings = (function () {
     ["track", "trackIdx"], ["laps", "raceLaps"], ["quali", "raceQuali"], ["grid", "raceGrid"],
     ["changeable", "raceChangeable"], ["weather", "raceWeather"], ["tod", "raceTimeOfDay"], ["difficulty", "difficulty"],
     ["tyres", "raceTyreWear", "tyreWear"], ["reliab", "raceReliability", "reliability"],
-    ["dirtyAir", "raceDirtyAir", "dirtyAir"], ["aiPace", "aiPace", "aiPace"],
-    ["damage", "raceDamage", "damageHandling"], ["seed", "seed"], ["round", "raceRound"],
+    ["dirtyAir", "raceDirtyAir", "dirtyAir"], ["aiPace", "aiPace", "aiPace"], ["seed", "seed"], ["round", "raceRound"],
   ]);
   // Sanitised design JSON on the SETTINGS event — well under a data-channel
   // frame, and the same order of magnitude as TrackCodec.MAX_BYTES (16 KiB of
@@ -143,10 +142,6 @@ const LobbySettings = (function () {
     if (own(d, "aiPace") && d.aiPace != null) {
       if (typeof d.aiPace !== "string" || (typeof AiBand !== "undefined" && !AiBand.isMode(d.aiPace))) return null;
       out.aiPace = d.aiPace;
-    }
-    if (own(d, "damage") && d.damage != null) {   // DAMAGE: HANDLING (#3971); absent from an older host: keep ours
-      if (typeof d.damage !== "boolean") return null;
-      out.damage = d.damage;
     }
     // simSeed() stores a uint32 and treats 0 as "unset" (game.js): accept
     // exactly the values the setter would keep.

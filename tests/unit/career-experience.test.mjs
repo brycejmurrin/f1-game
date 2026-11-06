@@ -49,14 +49,14 @@ test("result story uses canonical retirement verdict and preserves supplied clas
   assert.deepEqual(plain(data.podium).map((p) => p.car.code), ["AAA", "BBB", "CCC"]);
 });
 
-test("classified retirement gets paid points and keeps its podium place", () => {
+test("classified retirement gets paid points but is excluded from the podium", () => {
   const { story } = boot();
   const cars = [{ driverId: "a" }, { driverId: "b", isPlayer: true, retired: true, classified: true }];
   const data = story.summary(cars, { dnfOf: (c) => c.retired ? "engine" : null, points: [25, 18], fastestLap: "a" });
   assert.equal(data.player.points, 18);
   assert.equal(story.summary(cars, { dnfOf: (c) => c.retired ? "engine" : null,
     points: [25, 18], fastestLap: "b" }).player.points, 18, "retired fastest car receives no fastest-lap bonus");
-  assert.deepEqual(plain(data.podium).map((p) => p.pos), [1, 2]);
+  assert.deepEqual(plain(data.podium).map((p) => p.pos), [1]);
   cars[1].dsq = "compound";
   assert.equal(story.summary(cars, { dnfOf: (c) => c.dsq ? "DSQ" : null, points: [25, 18] }).player.points, 0);
 });

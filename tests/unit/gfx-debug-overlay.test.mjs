@@ -176,10 +176,9 @@ test("gfx-debug obeys the file conventions", () => {
   const manifest = read("tools/manifest.cjs");
   assert.ok(manifest.includes('"js/perf/gfx-debug-overlay.js"'),
     "new-file lockstep: the module roster must list it");
-  // #4978: flag-gated, so it is LAZY_DEV (injected by LazyBundles.bootAgentSurface), never a boot tag.
-  assert.doesNotMatch(read("index.html"), /src="js\/perf\/gfx-debug-overlay\.js/, "off the eager shell");
-  assert.match(read("js/roster.js"), /LAZY_DEV: \[\s*"js\/perf\/gfx-debug-overlay\.js"/,
-    "new-file lockstep: the generated ApexRoster carries it in LAZY_DEV");
+  const html = read("index.html");
+  assert.match(html, /src="js\/perf\/gfx-debug-overlay\.js\?v=[A-Za-z0-9._-]+"/,
+    "new-file lockstep: a script tag in the shell (gen-shell writes it from the manifest)");
 });
 
 test("on GLX the overlay prints the post chain's verdict, so a dark-frame report says whether tonemapping ran (iPhone GLX report)", async () => {

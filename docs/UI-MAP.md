@@ -324,20 +324,16 @@ Other in-race roots are:
   editor, and resume/quit close it.
 - `#garrival` — the GARAGE ARRIVAL TUNER dock (`#pm-garrival` under Display →
   Advanced Visuals; `js/garage/arrival.js`). Opens outside a race too; DONE or
-  Escape returns to Settings. Four MOMENTS, each configured on its own: RACE START
-  (the RACE! drive-out), PIT IN (WORK ON CAR), PIT OUT (the stop's release) and
-  RACE END (the next non-pit garage visit after a race, flavoured by `#ga-result`'s
-  WIN / PODIUM / POINTS / FINISHED / RETIRED). The tabs `#ga-moment-<start|pitIn|pitOut|home>`
-  (lifted into the workspace's sequence row) pick which moment every row, STYLE, the
-  BAY CAMERA (`#ga-bay-shot`), RESET and PREVIEW act on; `#ga-copy-all` gives the other
-  three its look. Rows that mean nothing for a moment hide (`GarageArrival.ROW_MOMENTS`).
+  Escape returns to Settings. Three sequences: PIT STOP (WORK ON CAR), RACE START
+  (the RACE! drive-out) and AFTER THE RACE (the next non-pit garage visit after a
+  race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS / FINISHED / RETIRED).
   GARAGE ANGLE picks a camera or a preset (DIRECTOR, or CUSTOM's `#ga-shots-row`
   per-shot pickers); CAMERA HEIGHT, CAMERA MOVE (still / push in / pull out /
   drift), HANDHELD and FINAL SHOT ZOOM shape the shots; SHUTTER SHOT, HOLD BEAT,
   CAR SPEED and END BEAT set their lengths; SEQUENCE LIGHTING (a garage lighting
   mood held while it plays; AFTER-RACE LIGHTING picks one by result), DOOR GLOW,
-  CAPTIONS and CINEMA BARS (`body[data-ga-bars]`) set the look; REAR LIGHT, SLOW-MO AT THE DOOR and ENGINE SOUND ON ARRIVAL round it off. PREVIEW
-  (`#ga-preview`, the toolbar's Preview too) plays the picked moment's saved
+  CAPTIONS and CINEMA BARS (`body[data-ga-bars]`) set the look; REAR LIGHT, SLOW-MO AT THE DOOR and ENGINE SOUND ON ARRIVAL round it off. PREVIEW PIT STOP / RACE START / AFTER RACE
+  (`#ga-preview-in` / `#ga-preview-out` / `#ga-preview-home`) play the saved
   settings once in the garage room (`js/garage/setup-camera.js`
   startArrivalPreview) with `#garrival-inner` hidden; it ends by itself, on DONE
   or on Escape, and a paused race redraws its own frame after. Refused while the

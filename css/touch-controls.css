@@ -963,7 +963,7 @@ body.hud-hidden #hud-restore::after {
   width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
   /* Every view stays reachable: on a 390 px landscape the grid ran to y 461
      and HELMET (the default cam) was offscreen (UI hunt 2026-10-29 row 1). */
-  max-height: calc(100svh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px);
+  max-height: calc(100dvh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px);
   overflow-y: auto;
   overscroll-behavior: contain;
   gap: calc(var(--gap) * 0.5);

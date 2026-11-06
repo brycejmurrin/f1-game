@@ -2,8 +2,6 @@
 const Log = (function () {
   "use strict";
 
-  try { performance.setResourceTimingBufferSize(2000); } catch (_) { /* default 250 truncates a 431-script boot */ }
-
   const LEVELS = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
   const NAMES = ["silent", "error", "warn", "info", "debug", "trace"];
   const CONSOLE_FN = [null, "error", "warn", "info", "log", "debug"];

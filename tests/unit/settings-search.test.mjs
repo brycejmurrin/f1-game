@@ -169,12 +169,3 @@ test("external owner navigation reports refusal visibly and restores search on e
   const button = h.result("tyre wear"); button.onclick(); assert.match(h.index.querySelector('[role="status"]').textContent, /before a race/); assert.equal(h.index.hidden, false);
   allowed = true; button.onclick(); assert.equal(h.dom.document.activeElement, target); h.dom.document.querySelector("#pmsettings").hidden = false; h.nav.returnToSearch(); assert.equal(h.dom.document.activeElement, button); assert.equal(target.value, "real");
 });
-test("a dependency-greyed row reports its reason, not 'unavailable', and takes focus", () => {
-  const h = boot();
-  const sheet = h.el("section", "dep-sheet"), row = h.el("div", "dep-row", sheet), target = h.el("select", "dep-map-sel", row), why = h.el("p", "dep-why", row);
-  row.setAttribute("data-dep-off", "hud"); target.disabled = true; target.setAttribute("data-dep-disabled", ""); why.setAttribute("data-dep-reason", "label"); why.textContent = "HUD is OFF";
-  h.ctx.Search.register("dep-owner", [{ id: "dep-map", label: "Track map", page: "controls", target: "dep-map-sel", aliases: "zzdepmap" }]);
-  h.result("zzdepmap").onclick();
-  const text = h.index.querySelector('[role="status"]').textContent;
-  assert.match(text, /HUD is OFF/); assert.doesNotMatch(text, /unavailable/); assert.equal(h.dom.document.activeElement, row);
-});

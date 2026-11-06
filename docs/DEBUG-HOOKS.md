@@ -3139,12 +3139,6 @@ hitch does not vanish from diagnostics because the next second was smooth.
 every few seconds" — read `p99` against `p50`, not the fps, because an average
 that a 60 Hz panel pins at 16.7 ms cannot show a spike at all. A `p99` several
 times `p50` with a healthy `p50` IS the periodic-hitch signature.
-
-**Invalid in a traced or profiled run.** `CpuProfiler::StartProfiling` / `Tracing.start` costs 600+ ms on the main
-thread; if it starts after `go()` it lands in `open.maxMs` and `frameTimes.maxMs` as a fake worst frame. `profile.mjs
---mode trace` therefore arms tracing before the race and resets `perf()` after 60 frames; any other spec that starts a
-trace/profile mid-race must do the same or ignore `open`/`frameTimes`. Likewise `__tlx.memState().calls` is
-`renderer.info.render.frameCalls` (render() passes in the last frame), not the lifetime `render.calls`.
 ```js
 __apex.renderScale();      // full governor snapshot
 __apex.renderScale(0.6);   // pin 60% 3D scale
@@ -5472,14 +5466,6 @@ lap from the next frame and stores `apex26.tlxRoadSplit = "0"`, so a reload (a
 phone A/B, say) keeps it; `__tlx.roadSplit(true)` removes the key, and
 `__tlx.roadSplit()` reads the state. The picture is identical either way (0 px on one
 frozen frame, `scratch/h15/split-pix.mjs`); only the triangle count changes.
-
-The TLX lite mirror's sub-range cull (phone rungs only: a dense scenery chunk that
-straddles the mirror's radial cap draws only its 24 m sub-ranges inside the cap,
-so the cap is the reach) is on by default. `__tlx.mirrorSub(false)` goes back to
-whole-chunk culling and stores `apex26.tlxMirrorSub = "0"`; `__tlx.mirrorSub(true)`
-removes the key; `__tlx.mirrorSub()` reads the state. Unlike the road split this
-changes the mirror's picture: scenery past the cap no longer draws there
-(PR #4886, `docs/notes/PERF-HELMET-VISOR-2026-11-04.md` §4b).
 
 The manual TLX sharpening-limit prototype uses `apex26.tlxSharpenLimit`: set
 `localStorage.setItem("apex26.tlxSharpenLimit", "1")` and reload to enable it.

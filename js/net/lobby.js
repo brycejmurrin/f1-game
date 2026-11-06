@@ -288,8 +288,7 @@ const NetLobby = (function () {
             if (G.setNetRoom) G.setNetRoom(true);
             // Only a CODE room rotates: a link/QR room never advertised one, and
             // minting it here left a public code up to expire later (H3-7).
-            const hadCode = !!(codeRoom || codeReopenTimer || fullCode);
-            fullCode = null;   // the evicted player holds that code (#4937)
+            const hadCode = !!(codeRoom || codeReopenTimer);
             stopCodeWait();
             dropPending();
             codeReopen = null;
@@ -332,9 +331,7 @@ const NetLobby = (function () {
               try { sess.sendEvent(NetPlay.EV.LEFT, { from: id }); } catch (e) { /* a dead session is its own close */ }
             }
           }
-          const evictHadCode = wasHostEvict && role === "host" && !!(codeRoom || codeReopenTimer || fullCode);
-          if (wasHostEvict && role === "host") fullCode = null;   // the evicted player still holds a full room's code (#4937)
-          if (evictHadCode && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace())) rotateRoomAfterEvict();   // a removed player must not walk back in on the reopened code
+          if (wasHostEvict && role === "host" && !friendQualifying && !(typeof UiLayers !== "undefined" && UiLayers && UiLayers.inRace && UiLayers.inRace()) && (codeRoom || codeReopenTimer)) rotateRoomAfterEvict();   // a removed player must not walk back in on the reopened code
           else if (!wasHostEvict && role === "host" && !friendQualifying && fullCode && !codeReopenTimer) {
             codeReopen = fullCode; fullCode = null; reopenRoom(true); }   // a full room consumed its reopen (#4820)
         }
@@ -385,7 +382,7 @@ const NetLobby = (function () {
       // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
       // teardowns with nobody connected — leaving the string made the next
       // unrelated onConnected quietly reopen that dead room code.
-      codeReopen = null; fullCode = null;
+      codeReopen = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear();
@@ -884,7 +881,7 @@ const NetLobby = (function () {
         // and the guest's own car could DNF under a level nobody picked.
         tyres: G.raceTyreWear, reliab: G.raceReliability,
         // DIRTY AIR and AI PACE change every AI car's grip and vmax: same argument.
-        dirtyAir: G.raceDirtyAir, aiPace: G.aiPace, damage: !!G.raceDamage,   // DAMAGE: HANDLING is a race rule too (#3971)
+        dirtyAir: G.raceDirtyAir, aiPace: G.aiPace,
         // The SIM seed and race counter every reproducible draw hashes on:
         // reliability DNFs (armReliability), the weather arc, the AI
         // restart/skill rolls and the AI qualifying times that set the grid.
@@ -980,7 +977,7 @@ const NetLobby = (function () {
       if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
       if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
       if (own(next, "dirtyAir")) roomOnly("dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
-      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; }); if (own(next, "damage")) roomOnly("damageHandling", () => { G.raceDamage = next.damage; });
+      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
       renderRoom();
