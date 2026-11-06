@@ -475,6 +475,36 @@ test.describe("UI scale", () => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
         null, { polling: 100, timeout: BOOT_MS });
+      // THIS SHAPE'S 100% BASELINE: what RACE paints at UI SIZE 100 in this very
+      // box, in screen px (own font-size × the cluster's zoom, the fit included).
+      // The fit contract below is relative to it, not to a guessed zoom floor:
+      // measured on 219157ca, 734x343 fitted to zoom 0.585 in one browser and
+      // passed 0.7 in CI run 42303256107 (the base type differs by machine), so
+      // a floor pinned the environment, not the contract. Frames, not wall
+      // clock, as in the settle below; the fit lands two frames after a change
+      // (ResizeObserver, then its rAF), and a frame that never comes is reported
+      // as starvation.
+      const baseline = await page.evaluate(async ({ frames, capMs }) => {
+        window.__apex.uiScale(100);
+        let starved = false;
+        for (let n = 0; n < frames; n++) {
+          let timer = 0;
+          const framed = await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
+          ]);
+          clearTimeout(timer);
+          if (!framed) { starved = true; break; }
+        }
+        const menu = document.getElementById("menu-buttons");
+        const zoom = +getComputedStyle(menu).zoom;
+        const raceFont = parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize);
+        return { starved, zoom, fit: menu.style.getPropertyValue("--tf") || null, raceFont, racePainted: raceFont * zoom,
+          uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
+      }, { frames: 8, capMs: BOOT_MS });
+      const baselineDump = JSON.stringify(baseline);
+      expect(baseline.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(100) ${baselineDump}`).toBe(false);
+      expect(baseline.racePainted, `${name}: RACE paints at 100% ${baselineDump}`).toBeGreaterThan(8);
       // DENSITY AND ZOOM SETTLE ARE FRAME CONTRACTS, NOT WALL-CLOCK ONES.
       //
       // Density: body[data-density] is written by SheetShape's --ui-scale
@@ -514,8 +544,11 @@ test.describe("UI scale", () => {
       // budget counted from before uiScale(200) let the synchronous relayout
       // spend it (157-335 s at loadavg 200-500), after which setTimeout(0)
       // beat every requestAnimationFrame and "starved" fired one frame in.
-      const SETTLE_FRAMES = 6;
-      const settle = await page.evaluate(async ({ frames, capMs }) => {
+      // Eight, not six: the fit (#5150) lands two frames after the zoom
+      // change (the ResizeObserver fires after the next layout and schedules
+      // one rAF), and the fit cells below settle on its outcome too.
+      const SETTLE_FRAMES = 8;
+      const settle = await page.evaluate(async ({ frames, capMs, fitted }) => {
         const t0 = performance.now();
         window.__apex.uiScale(200);
         const snap = () => {
@@ -535,8 +568,15 @@ test.describe("UI scale", () => {
           const brand = document.getElementById("menu-brand");
           const brandZoom = brand ? +getComputedStyle(brand).zoom : NaN;
           const density = document.body.dataset.density;
-          return { density, anims, brandZoom,
-            ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 };
+          // A fit cell has settled only once the fit has landed: the cluster
+          // no longer scrolls in either axis. CI run 42303256107 (de86b559)
+          // read 960x469 one frame early — zoom 1.25, no --tf, 4px of scroll.
+          const menu = document.getElementById("menu-buttons");
+          const scrollY = menu ? menu.scrollHeight - menu.clientHeight : NaN;
+          const scrollX = menu ? menu.scrollWidth - menu.clientWidth : NaN;
+          const fitLanded = !fitted || (scrollY <= 1 && scrollX <= 1);
+          return { density, anims, brandZoom, scrollY, scrollX,
+            ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 && fitLanded };
         };
         let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, s = snap();
         if (s.density === "compact") compactAt = 0;
@@ -556,7 +596,7 @@ test.describe("UI scale", () => {
         }
         return { ...s, frames: n, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
           uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
-      }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
+      }, { frames: SETTLE_FRAMES, capMs: BOOT_MS, fitted: contract === "fit" });
       const settleDump = JSON.stringify(settle);
       expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(200) `
         + "(main thread starved, not a layout answer) " + settleDump).toBe(false);
@@ -565,17 +605,23 @@ test.describe("UI scale", () => {
       expect(settle.anims, `${name}: brand/buttons zoom transitions retire within ${SETTLE_FRAMES} frames `
         + settleDump).toEqual([]);
 
-      // THE BOX IS THE LAW (#5150, UI contract 2026-11-06 §3 rule 3): the
+      // THE BOX IS THE LAW (#5150, UI contract 2026-11-06 §3 rules 2-3): the
       // compact cap (1.25) is the REQUEST, and js/ui/title-layout.js fit()
       // multiplies it by --tf, the zoom that keeps the whole cluster inside
       // the overlay's content box with no scroller. Until #5152 this pinned
-      // the cap itself (1.25) and let the column scroll; the first fit read
-      // 0.47125 at 734x343 (one door per row at 200%, CI run 42285504262 on
-      // e144a336) and the three-column rule in css/menu-destinations.css is
-      // what keeps it readable. Contract here: geometry == cap × fit, never
-      // above the cap, never below 0.7 at 200% (200% must not paint smaller
-      // than 100% by more than the fit's own margin), the cluster fits in both
-      // axes, and every destination sits inside the viewport.
+      // the cap itself (1.25) and let the column scroll. This project is
+      // Desktop Chrome (a fine pointer, body.desktop), so the cluster here is
+      // the compact DESKTOP title — 16 doors in 7 rows, height-bound in a
+      // 343px box — and the phone-only column rule in css/menu-destinations.css
+      // never reaches it: on 219157ca one browser read 734x343 fit 0.468 →
+      // zoom 0.585 with RACE at 18.7 painted px against 15.5 at 100%, and
+      // 960x469 fit 0.693 → zoom 0.866, 27.7 against 18.0. A setting that
+      // cannot fit shrinks until it does (D-029); what 200% owes the player is
+      // that it never paints SMALLER than 100% in the same box. Contract here,
+      // fit cells: geometry == cap × fit, never above the cap, RACE paints no
+      // smaller than this shape's 100% baseline, the 200% request lands in the
+      // cluster's own px, the cluster fits in both axes and every destination
+      // sits inside the viewport.
       const scale = await page.evaluate(() => {
         const menu = document.getElementById("menu-buttons");
         const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
@@ -594,6 +640,8 @@ test.describe("UI scale", () => {
           doors: doors.length, off,
         };
       });
+      scale.racePainted = scale.raceFont * +scale.geometry;
+      scale.baseline = baseline.racePainted;
       const scaleDump = JSON.stringify(scale);
       expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
       expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
@@ -601,7 +649,10 @@ test.describe("UI scale", () => {
       if (contract === "fit") {
         expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.fit, 2);
         expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 + 0.001);
-        expect(+scale.geometry, `${name}: 200% fits the box at no less than 0.7 ${scaleDump}`).toBeGreaterThanOrEqual(0.7);
+        // The fit's own margin is half a percent per pass (title-layout.js);
+        // one percent of the baseline covers two passes and nothing else.
+        expect(scale.racePainted, `${name}: 200% never paints RACE smaller than this box's 100% ${scaleDump}`)
+          .toBeGreaterThanOrEqual(baseline.racePainted * 0.99);
         // 33 painted px at the 1.25 cap = 26.4 own px: the 200% request lands in
         // the cluster's own units (text takes the residual 1.6), the fit scales
         // the paint uniformly.
@@ -649,21 +700,48 @@ test.describe("UI scale", () => {
   // save line and CONTINUE's ran past the viewport's right edge and RACE sat
   // ~950px down a 742px window. Since #5152 (#5150) the 2x is a REQUEST and the
   // fit in js/ui/title-layout.js is the law: the 2x column was ~1300px in a
-  // 742px window and fitted at zoom 1.14 (CI run 42285504262 on e144a336);
-  // 1920x1080 has the room and keeps the 2x. Contract here: one zoom
-  // (2 × --tf, never above 2, never below 1 on a desktop window), every door
-  // subtitle inside its door and the viewport, RACE on screen without scrolling,
-  // and the whole column on screen with no scroller.
+  // 742px window and fitted at zoom 1.14 (CI run 42285504262 on e144a336), and
+  // 1920x1080 has NO room either — the shipped desktop title is one 640px
+  // column of 11 rows that already fills 1080px at 1x, so 2x fits back to
+  // 0.994 (fit 0.497; CI run 42303256107 on de86b559 read the same, under a
+  // "never below 1x" pin that forgot the fit's half-percent margin). Contract
+  // here: one zoom (2 × --tf, never above 2), RACE paints no smaller than this
+  // window's 100% baseline, every door subtitle inside its door and the
+  // viewport, RACE on screen without scrolling, and the whole column on screen
+  // with no scroller.
   test("200% home doors keep subtitles inside the door and RACE on screen on desktop windows", async ({ page }) => {
-    const SETTLE_FRAMES = 6;
+    const SETTLE_FRAMES = 8;   // the fit lands two frames after the change (see the phone test)
     for (const viewport of [{ width: 1280, height: 742 }, { width: 1920, height: 1080 }]) {
       const name = `${viewport.width}x${viewport.height}`;
       await page.setViewportSize(viewport);
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
         null, { polling: 100, timeout: BOOT_MS });
+      // This window's 100% baseline (as in the phone test): RACE's painted size
+      // at UI SIZE 100, fit included, eight frames after the write.
+      const baseline = await page.evaluate(async ({ frames, capMs }) => {
+        window.__apex.uiScale(100);
+        let starved = false;
+        for (let n = 0; n < frames; n++) {
+          let timer = 0;
+          const framed = await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
+          ]);
+          clearTimeout(timer);
+          if (!framed) { starved = true; break; }
+        }
+        const menu = document.getElementById("menu-buttons");
+        const zoom = +getComputedStyle(menu).zoom;
+        const raceFont = parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize);
+        return { starved, zoom, fit: menu.style.getPropertyValue("--tf") || null, raceFont, racePainted: raceFont * zoom };
+      }, { frames: 8, capMs: BOOT_MS });
+      const baselineDump = JSON.stringify(baseline);
+      expect(baseline.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(100) ${baselineDump}`).toBe(false);
+      expect(baseline.racePainted, `${name}: RACE paints at 100% ${baselineDump}`).toBeGreaterThan(8);
       // Same frame contract as the phone test above: write, then count
-      // rendered frames until compact + no zoom transition is pending.
+      // rendered frames until compact + no zoom transition is pending and the
+      // fit has landed (the column no longer scrolls).
       // Returning-player strings (refreshCareerButton writes the same nodes)
       // so the subtitles are long enough to need their ellipsis.
       const settle = await page.evaluate(async ({ frames, capMs }) => {
@@ -686,8 +764,12 @@ test.describe("UI scale", () => {
           const zoom = +getComputedStyle(menu).zoom;
           const fit = parseFloat(menu.style.getPropertyValue("--tf")) || 1;
           const density = document.body.dataset.density;
-          // Settled: the zoom is the request times the fit the last frame wrote.
-          return { density, anims, zoom, fit, ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2 * fit) < 0.001 };
+          const scrollY = menu.scrollHeight - menu.clientHeight;
+          const raceFont = parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize);
+          // Settled: the zoom is the request times the fit the last frame
+          // wrote, and the fit has landed (no scroller left to shrink away).
+          return { density, anims, zoom, fit, scrollY, racePainted: raceFont * zoom,
+            ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2 * fit) < 0.001 && scrollY <= 1 };
         };
         let n = 0, starved = false, s = snap();
         while (!s.ok && n < frames) {
@@ -705,13 +787,15 @@ test.describe("UI scale", () => {
         if (!starved) await new Promise((resolve) => requestAnimationFrame(() => resolve(true)));
         return { ...s, frames: n, starved };
       }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
+      settle.baseline = baseline.racePainted;
       const dump = JSON.stringify(settle);
       expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms (starved, not a layout answer) ${dump}`).toBe(false);
       expect(settle.density, `${name}: compact within ${SETTLE_FRAMES} frames ${dump}`).toBe("compact");
       expect(settle.anims, `${name}: zoom transitions retire within ${SETTLE_FRAMES} frames ${dump}`).toEqual([]);
       expect(settle.zoom, `${name}: desktop geometry is the requested 2x times the fit ${dump}`).toBeCloseTo(2 * settle.fit, 2);
       expect(settle.zoom, `${name}: the fit never grows the request ${dump}`).toBeLessThanOrEqual(2.001);
-      expect(settle.zoom, `${name}: a desktop window never fits the title below 1x ${dump}`).toBeGreaterThanOrEqual(1);
+      expect(settle.racePainted, `${name}: 200% never paints RACE smaller than this window's 100% ${dump}`)
+        .toBeGreaterThanOrEqual(baseline.racePainted * 0.99);
 
       const fit = await page.evaluate(() => {
         const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
