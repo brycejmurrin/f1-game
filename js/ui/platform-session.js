@@ -367,20 +367,12 @@ function wireLifecycle() {
 // reloads once the store and ghosts are flushed.
 const updates = UpdateCheck.create({
   inRace: () => UiLayers.inRace(),
-  // IDLE = the title overlay is up and nothing is open over it: a self-reload here loses no input (#5134).
-  idle: () => { const ov = $("overlay"); return !!ov && !ov.hidden && !document.querySelector("dialog[open], .screen:not([hidden])"); },
   chip: () => $("update-chip"),
   persist: () => { Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush(); return store.mirrorFlush && store.mirrorFlush(); },
 });
 const chip = $("update-chip");
 if (chip) chip.addEventListener("click", () => { updates.apply(); });
 if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", () => updates.newerActive());
-// sw.js posts `apex-shell-newer` after it cached a shell newer than the one this page booted from (a navigation
-// that lost the 3 s race on a slow link); the `?b=` reload is then answerable from the cache (#5134).
-if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("message", (ev) => {
-  const d = ev && ev.data;
-  if (d && d.type === "apex-shell-newer") updates.staleShell(d.build);
-});
 document.addEventListener("visibilitychange", () => updates.onVisible());
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) disarmProbeOnLeave();

@@ -1,1 +1,0 @@
-Fixed: on the title screen with a button WIDTH set, LEFT/RIGHT now slides the whole button cluster from the left safe-area edge to the right one at every WIDTH and SIZE, and the logo and car drawing stay put. Saved layouts keep their place (#5126).

@@ -28,11 +28,6 @@ const UpdateCheck = (function () {
   // this — once per loader call, and never waiting longer than FRESH_WAIT_MS.
   const FRESH_MS = 60 * 1000;
   const FRESH_WAIT_MS = 1500;
-  // AUTO-APPLY WINDOW (#5134). A newer build learned of within this long of boot or of the page coming back
-  // (the iOS Home-Screen resume) reloads BY ITSELF when the player is idle — the stale title screen four fixes
-  // "did not work" on was a shell that booted old on a slow link and only ever showed the chip. Later than this
-  // the player is doing something: the chip, as before.
-  const AUTO_APPLY_MS = 90 * 1000;
 
   function bootedBuild() {
     try {
@@ -66,8 +61,6 @@ const UpdateCheck = (function () {
     const doFetch = o.fetch || ((u, init) => fetch(u, init));
     const inRace = o.inRace || (() => false);
     const chip = o.chip || (() => null);
-    const idle = o.idle || (() => false);   // not in a race, the title overlay showing, no dialog open (platform-session.js)
-    let idleSince = now();                  // boot, then every return to visibility
     let generationRequest = null, generationController = null, generation = 0;
     let lastCheck = now();
     let ready = 0;
@@ -112,25 +105,7 @@ const UpdateCheck = (function () {
         try { if (typeof Log !== "undefined") Log.info("game", "update ready: build " + build + " (running " + booted + ")"); } catch (e) { /* logging never blocks the chip */ }
       }
       render();
-      autoApply();
       return true;
-    }
-
-    // Reload by itself only in the idle window; apply() re-checks the race itself. A reload that does not
-    // happen (persist, a race starting, a denied replace) leaves the chip, which render() already painted.
-    function autoApply() {
-      if (!ready || now() - idleSince > AUTO_APPLY_MS) return false;
-      let ok = false;
-      try { ok = !inRace() && !!idle(); } catch (e) { ok = false; }
-      if (!ok) return false;
-      try { apply().catch(() => {}); } catch (e) { return false; }
-      return true;
-    }
-
-    // THE WORKER SAW A NEWER SHELL LAND after this page booted from the cache (sw.js `apex-shell-newer`,
-    // posted once the write that answers the `?b=` reload is done). Same policy as a successful check.
-    function staleShell(build) {
-      return markReady(build);
     }
 
     function check(force) {
@@ -239,7 +214,6 @@ const UpdateCheck = (function () {
 
     function onVisible() {
       if (typeof document !== "undefined" && document.hidden) return;
-      idleSince = now();
       newerActive();
       check(false);
       render();
@@ -255,8 +229,8 @@ const UpdateCheck = (function () {
     }
 
     const api = {
-      check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused, freshen, staleShell,
-      state: () => ({ booted, ready, lastCheck, checking: !!inflight, idleSince }),
+      check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused, freshen,
+      state: () => ({ booted, ready, lastCheck, checking: !!inflight }),
       stop: () => { clearInterval(follow); follow = 0; },
     };
     _active = api;

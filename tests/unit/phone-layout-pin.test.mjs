@@ -19,18 +19,19 @@ test("the blessed golden covers every screen and selector the tool pins, at Bryc
     assert.equal(row.globals.shape, "wide"); assert.equal(row.globals.standalone, true);
   }
   // The cell's own identity: the safe area the game reads is the one the tool injects.
-  // The tokens are the unresolved `calc(<inset> + 8px)` strings css/tokens.css builds from env(); the inset is in them.
-  assert.match(g.screens.title.globals["--safe-l"], new RegExp("\\b" + CELL.insets.left + "px\\b"));
-  assert.match(g.screens.title.globals["--safe-b"], new RegExp("\\b" + CELL.insets.bottom + "px\\b"));
+  // The tokens are the unresolved `calc(<inset> + 8px)` strings css/tokens.css builds from env(): the inset, then the 8 px gutter.
+  assert.equal(g.screens.title.globals["--safe-l"], `calc(${CELL.insets.left}px + 8px)`);
+  assert.equal(g.screens.title.globals["--safe-b"], `calc(${CELL.insets.bottom}px + 8px)`);
 });
 
 test("compareFingerprint: within tolerance is silent; a move, a size, a token or a vanished box is named", () => {
   const want = { globals: { fontSize: "16px", "--ui-scale": "1.09" }, boxes: { "#a": [10, 20, 100, 50], "#p@ltw": [1, 2, 3] } };
   assert.deepEqual(compareFingerprint("s", want, { globals: { fontSize: "16px", "--ui-scale": "1.09" }, boxes: { "#a": [10 + TOL, 20, 100, 50 - TOL], "#p@ltw": [1, 2, 3] } }), []);
   const lines = compareFingerprint("s", want, { globals: { fontSize: "16px", "--ui-scale": "1.2" }, boxes: { "#a": [44, 20, 100, 50], "#p@ltw": null } });
-  assert.equal(lines.length, 3, lines.join("\n"));
-  assert.match(lines[0], /--ui-scale: 1.09 -> 1.2/);
-  assert.match(lines[1], /#a: \[10,20,100,50\] -> \[44,20,100,50\] \(d \+34,0,0,0\)/);
-  assert.match(lines[2], /#p@ltw: present -> absent/);
-  assert.match(compareFingerprint("s", undefined, { globals: {}, boxes: {} })[0], /not in the golden/);
+  assert.deepEqual(lines, [
+    "s global --ui-scale: 1.09 -> 1.2",
+    "s #a: [10,20,100,50] -> [44,20,100,50] (d +34,0,0,0)",
+    "s #p@ltw: present -> absent",
+  ]);
+  assert.deepEqual(compareFingerprint("s", undefined, { globals: {}, boxes: {} }), ["s: not in the golden (re-bless with --update)"]);
 });

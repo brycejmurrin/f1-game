@@ -1,1 +1,0 @@
-New: portrait and landscape keep separate appearance values on the same device (sizes, HUD layout, pause menu and per-screen looks, including the garage panel); SETTINGS › APPEARANCE › PORTRAIT & LANDSCAPE switches between SEPARATE and SHARED. Existing settings carry over unchanged (#4529).

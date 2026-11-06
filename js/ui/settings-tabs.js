@@ -86,9 +86,10 @@ const SettingsNav = (function () {
   }
 
   // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
-  // loads on the first APPEARANCE enter or a rotation; a failed load logs, the next call retries.
+  // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
   let presetsLoad = null;
   const presetsLoaded = new Set();
+  // Exported: tests/specs/ui-redesign.spec.js awaits SettingsNav.presets() before measuring APPEARANCE (#5121).
   function presets() {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
     if (presetsLoad || typeof LayoutPresets != "undefined" || !R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return presetsLoad || Promise.resolve(typeof LayoutPresets != "undefined");
