@@ -3136,6 +3136,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/phone-layout-pin.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/ui/reach-score.mjs": {
       "action": "keep-native",
       "presentation": "native",

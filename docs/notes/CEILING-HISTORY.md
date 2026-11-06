@@ -3725,3 +3725,8 @@ The deploy went red at d3c8fa33 (#5077 merge): geometry sweeps failed on props t
 sepang) and Mexico floating/unsupported scenery. This branch reverts #5077 whole; the +144 B is the pre-#5077
 frustum/tlx-chunked/hidden-faces/mesh code coming back on the race entry path, not new code. Fragment:
 `ratchets.d/cursor--revert-5077-deploy-red.json`. No tolerance widened.
+## 2026-11-06 — #5139 (cursor/ui-regress-sweep-5139-f1a9): assertPins +2, assertPinsAll +2
+The UI regression sweep's pin: `tests/unit/phone-layout-pin.test.mjs` (the golden covers every pinned screen; the
+comparison names what moved) and `tests/specs/phone-layout-pin.spec.js` (Bryce's 852×393 standalone cell held to
+`tests/data/phone-layout-pin.json`). Two source pins for two new tests; no existing test changed, no tolerance widened.
+Fragment: `ratchets.d/cursor--ui-regress-sweep-5139-f1a9.json`.
