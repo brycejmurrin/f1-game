@@ -17974,6 +17974,9 @@
       "scene": [
         "tests/unit/ui-experience.test.mjs"
       ],
+      "stamp": [
+        "tests/specs/title-cluster.spec.js"
+      ],
       "stopHome": [
         "tests/unit/ui-experience.test.mjs"
       ],
@@ -19492,6 +19495,7 @@
     },
     "js/ui/sheet-shape.js": {
       "classify": [
+        "tests/specs/title-cluster.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -19508,6 +19512,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "reclassify": [
+        "tests/specs/title-cluster.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -19729,13 +19734,17 @@
         "tests/unit/service-worker.test.mjs"
       ],
       "onVisible": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "prepareLazyLoad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "render": [
         "tests/unit/a11y-pwa-pass.test.mjs"
+      ],
+      "staleShell": [
+        "tests/unit/followup-update-check.test.mjs"
       ]
     },
     "js/ui/watch-transport.js": {

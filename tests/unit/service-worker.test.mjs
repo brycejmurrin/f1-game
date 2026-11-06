@@ -634,6 +634,87 @@ test("a slow online navigate serves the precached shell", async () => {
   assert.equal(await res.text(), "precached shell");
 });
 
+// #5134: a late NEWER shell self-heals the page. The cached shell won the 3 s race (an installed PWA on a slow
+// link boots the old build and its version.json read fails fast on the same link), so once the network shell
+// lands it is cached under its own generation FIRST, then every window is told `apex-shell-newer` — the page's
+// `?b=` reload must be answerable from the cache (shellAtLeast). An equal build is nothing to announce, and a
+// shell whose build does not match version.json is neither cached nor announced (#3293).
+// The post rides the worker's fire-and-forget matchAll and undici's stream ticks: wait for the queue to drain.
+const settled = (ms = 50) => new Promise((r) => setTimeout(r, ms));
+function lateShellHarness({ cached, late, version = 322, windows = 2 }) {
+  const posted = [];
+  const shell = deferred();
+  const harness = createHarness({
+    immediateTimeoutMs: 3000,
+    navigator: { onLine: true },
+    posted, clientWindows: windows,
+    fetchImpl: (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return Promise.resolve(new Response(`{"build":${version}}`, { status: 200 }));
+      return shell.promise.then(() => new Response(late, { status: 200 }));
+    },
+  });
+  harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response(cached, { status: 200 })]]));
+  return { harness, posted, shell };
+}
+
+test("a slow navigate that lost the race caches the late newer shell, then tells each window once (#5134)", async () => {
+  const late = '<meta name="apex-build" content="322">late shell';
+  const { harness, posted, shell } = lateShellHarness({ cached: '<meta name="apex-build" content="321">precached shell', late });
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  assert.equal(await (await nav.responsePromise).text(), "precached shell".replace(/^/, '<meta name="apex-build" content="321">'));
+  assert.deepEqual(posted, [], "nothing is announced before the late shell lands");
+  shell.resolve();
+  await Promise.all(nav.lifetimes);
+  await settled();
+  assert.equal(await (await harness.stores.get("apex26-322").get(`${ORIGIN}/race`)).text(), late, "the late shell is cached under its own generation");
+  const newer = posted.filter((m) => m.type === "apex-shell-newer").map((m) => m.build);   // worker-realm objects: compare values
+  assert.deepEqual(newer, [322, 322], "one post per window");
+});
+
+test("a late shell of the SAME build as the one served is cached but not announced (#5134)", async () => {
+  const late = '<meta name="apex-build" content="322">late shell';
+  const { harness, posted, shell } = lateShellHarness({ cached: '<meta name="apex-build" content="322">precached shell', late });
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  await nav.responsePromise;
+  shell.resolve();
+  await Promise.all(nav.lifetimes);
+  await settled();
+  assert.ok(harness.stores.get("apex26-322").has(`${ORIGIN}/race`), "the late shell is still cached");
+  assert.deepEqual(posted.filter((m) => m.type === "apex-shell-newer"), []);
+});
+
+test("a late shell whose build does not match version.json is neither cached nor announced (#5134, #3293)", async () => {
+  const { harness, posted, shell } = lateShellHarness({ cached: "precached shell", late: '<meta name="apex-build" content="323">interstitial', version: 322 });
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  await nav.responsePromise;
+  shell.resolve();
+  await Promise.all(nav.lifetimes);
+  await settled();
+  assert.equal(harness.stores.has("apex26-323"), false);
+  assert.equal(harness.stores.has("apex26-322") && harness.stores.get("apex26-322").has(`${ORIGIN}/race`), false);
+  assert.deepEqual(posted.filter((m) => m.type === "apex-shell-newer"), []);
+});
+
+test("a navigation the network answered itself announces nothing (#5134)", async () => {
+  const posted = [];
+  const harness = createHarness({
+    posted, clientWindows: 1,
+    fetchImpl: (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) return Promise.resolve(new Response('{"build":322}', { status: 200 }));
+      return Promise.resolve(new Response('<meta name="apex-build" content="322">online shell', { status: 200 }));
+    },
+  });
+  harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response('<meta name="apex-build" content="321">precached shell', { status: 200 })]]));
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  assert.equal(await (await nav.responsePromise).text(), '<meta name="apex-build" content="322">online shell');
+  await Promise.all(nav.lifetimes);
+  await settled();
+  assert.ok(harness.stores.get("apex26-322").has(`${ORIGIN}/race`));
+  assert.deepEqual(posted.filter((m) => m.type === "apex-shell-newer"), []);
+});
+
 test("a slow online shell-bust navigate still fails fast instead of serving the stale shell", async () => {
   const harness = createHarness({
     immediateTimeoutMs: 3000,
