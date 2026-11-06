@@ -19419,6 +19419,9 @@
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "presets": [
+        "tests/unit/player-tools-ui.test.mjs"
+      ],
       "show": [
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
