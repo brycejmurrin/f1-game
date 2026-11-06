@@ -35,12 +35,17 @@ test("compact rail-on tuner actions use a readable two-column foot", () => {
   );
 });
 
-test("short phone landscape tuner rails keep action labels readable at normal scale", () => {
+test("short tuner sheets keep action labels readable at every UI scale: two columns keyed on the sheet's density", () => {
+  // UI scaling contract gap 24 (PR #5156): `[data-density="compact"]` is measured in the
+  // sheet's own px by SheetShape, so UI SIZE moves it; the old `(max-width: 900px) and
+  // (max-height: 500px)` window band could not see the zoom.
   assert.match(
     css,
-    /@media \(max-width: 900px\) and \(max-height: 500px\)[\s\S]*?:is\(#lighting-inner, #camtune-inner\)\s*>\s*\.sheet-foot\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
-    "short landscape tuner feet need two action columns regardless of rail state or UI scale",
+    /:is\(#lighting-inner, #camtune-inner\)\[data-density="compact"\]\s*>\s*\.sheet-foot\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    "short tuner feet need two action columns regardless of rail state or UI scale",
   );
+  assert.doesNotMatch(css, /@media \(max-width: 900px\) and \(max-height: 500px\)/,
+    "the zoom-blind window band is gone");
 });
 
 test("camera tuner compact preview chips and copy-from select floor at --tap-paint", () => {

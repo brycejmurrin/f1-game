@@ -131,7 +131,9 @@ test("cardVars emits parseable CSS for every input, hostile ones included", () =
     // be a percentage of the card, so the same saved number would move a scaled
     // card further than an unscaled one.
     assert.match(v["--ld-card-x"], /^-?[0-9]+(\.[0-9]+)?vw$/, JSON.stringify(v));
-    assert.match(v["--ld-card-y"], /^-?[0-9]+(\.[0-9]+)?vh$/, JSON.stringify(v));
+    // svh, not vh (UI scaling contract gap 22): 100vh is the TALL viewport under a
+    // phone's dynamic toolbar, so a vh offset moved the card further in Safari.
+    assert.match(v["--ld-card-y"], /^-?[0-9]+(\.[0-9]+)?svh$/, JSON.stringify(v));
     for (const s of Object.values(v)) assert.ok(!/NaN|undefined|Infinity/.test(s), s);
   }
 });
@@ -156,7 +158,7 @@ test("the shipped default is the card that ships TODAY: no offset, no rescale", 
   const v = cardVars(null);
   assert.equal(v["--ld-card-scale"], "1");
   assert.equal(v["--ld-card-x"], "0vw");
-  assert.equal(v["--ld-card-y"], "0vh");
+  assert.equal(v["--ld-card-y"], "0svh");
 });
 
 /* ── THE LETTERBOX ─────────────────────────────────────────────────────────
@@ -1154,4 +1156,31 @@ test("loading weather distinguishes storm from dry in normal, grid and mid-race 
     const rows = JSON.parse(JSON.stringify(LS.metaRows({ track: { lengthKm: 5 }, laps: 12, weather: "storm", tod: "day", real }, 10)));
     assert.deepEqual(rows.find(([label]) => label === "WEATHER"), ["WEATHER", "STORM"]);
   }
+});
+
+/* ── THE CARD FITS THE WINDOW (UI scaling contract gap 22, PR #5156) ──────
+ * Measured 2026-11-06 at the owner's export with a radio caption up: the card
+ * stood 374-400 px tall in 283-393 px windows and ran 68-87 px past the top
+ * edge. The cap is written against the SAFE box in svh; the body is the child
+ * that gives; the card itself never scrolls (its ::after is the skip hint). */
+test("the loading card is capped to the safe box in svh and its body is the giving child", () => {
+  const css = readCssSource("css/loading.css");
+  const rules = cssRules(css);
+  const card = rules.find((r) => r.selector === "#ld-card");
+  assert.ok(card, "#ld-card rule");
+  const cap = card.decls.get("max-height") || "";
+  assert.match(cap, /100svh/, "the cap is in svh, so the Safari toolbar shortens the card instead of sliding it: " + cap);
+  assert.match(cap, /var\(--safe-t\)/, "the cap subtracts the top safe inset: " + cap);
+  assert.match(cap, /var\(--safe-b\)/, "the cap subtracts the bottom safe inset: " + cap);
+  assert.doesNotMatch(cap, /(^|[^s])vh\b/, "no raw vh in the cap: " + cap);
+  assert.equal(card.decls.get("display"), "flex");
+  assert.equal(card.decls.get("flex-direction"), "column");
+  assert.doesNotMatch(card.decls.get("margin-bottom") || "", /(^|[^s])vh\b/, "the margin below is svh too");
+  assert.notEqual(card.decls.get("overflow"), "hidden", "the card does not clip: its ::after is the skip hint above it");
+  const body = rules.find((r) => r.selector === "#ld-body");
+  assert.ok(body, "#ld-body rule");
+  assert.equal(body.decls.get("min-height"), "0", "the body may shrink under the wordmark");
+  assert.equal(body.decls.get("overflow"), "hidden", "the body keeps the facts inside the plate");
+  const map = rules.find((r) => r.selector === "#ld-map");
+  assert.equal(map.decls.get("max-height"), "100%", "the map shrinks first: fitCanvas's inline height is a maximum");
 });

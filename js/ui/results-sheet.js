@@ -582,7 +582,7 @@ function buildTTResults() {
   // headline: your best lap this session (green if it set a new track record)
   const head = document.createElement("div");
   head.className = "res-row you";
-  head.style.fontSize = "18px";
+  head.style.fontSize = "var(--fs-5)";   // follows TEXT SIZE; a px here did not (UI contract gap 23)
   const hl = document.createElement("span"); hl.className = "res-name";
   hl.textContent = G.ttNewRecord ? tr("results.newRecord", null, "★ NEW RECORD") : tr("results.yourBest", null, "YOUR BEST");
   const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto";
@@ -856,7 +856,7 @@ function buildStandings() {
   if (round < rounds) {
     const nextTrack = SeasonCal.track(round);
     const info = document.createElement("div");
-    info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
+    info.style.cssText = "margin-top:12px;font-size:var(--fs-micro);color:#9a9aa5;text-align:center";   // TEXT SIZE reaches it (gap 23)
     // From the pause menu this round is the one being driven, not the next.
     const live = G.state === "race" || G.state === "count";
     const lead = live ? tr("results.roundInProgress", { round: trN(round + 1) }, "IN PROGRESS: ROUND {round}") : midWeekend ? tr("results.nextGrandPrixRound", { round: trN(round + 1) }, "NEXT: GRAND PRIX, ROUND {round}") : tr("results.nextRoundN", { round: trN(round + 1) }, "NEXT: ROUND {round}");

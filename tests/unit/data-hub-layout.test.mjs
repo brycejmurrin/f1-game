@@ -105,3 +105,44 @@ test("modal Data Hub over #nogl uses opaque scrim/card and stacks above recovery
   assert.equal(card.decls.get("background"), "var(--bg)", "opaque hub card over nogl");
   assert.equal(decl(rules, "body:has(> #datahub:modal) #nogl:not([hidden])", "pointer-events"), "none");
 });
+
+/* ── UI scaling contract (docs/notes, PR #5154 §4.11, §7 gaps 15, 21, 23; PR #5156) ── */
+
+test("gap 15: the compact landscape hub head is ONE row and the tab strip is its scroller", () => {
+  // The coarse `order: 1` "bottom bar" predated the tabs' move into .sheet-head: it put the
+  // strip AFTER the ✕ (close button mid-row at x 268 of 852, measured 2026-11-06). Gone.
+  const ordered = rules.filter((r) => /\.dh-tabs$/.test(r.selector.trim()) && r.decls.has("order"));
+  assert.deepEqual(ordered.map((r) => r.selector.trim()), ['body[data-width="narrow"] .dh-card > .sheet-head > .dh-tabs'],
+    "the only reordered strip is the narrow (portrait) one that drops under the title");
+  assert.ok(!rules.some((r) => r.context.some((c) => /pointer:\s*coarse/.test(c)) && /\.dh-tabs/.test(r.selector) && r.decls.has("order")),
+    "no coarse-pointer rule reorders the tab strip");
+  const strip = ruleFor(rules, 'body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs');
+  assert.ok(strip, "the compact landscape strip rule exists");
+  assert.equal(strip.decls.get("flex"), "1 1 0", "the strip takes the room the title, ⋯ and ✕ leave");
+  assert.equal(strip.decls.get("min-width"), "0");
+  assert.equal(strip.decls.get("flex-wrap"), "nowrap", "one row: the strip never wraps into a second head row");
+  assert.equal(strip.decls.get("overflow-x"), "auto", "…it scrolls sideways instead");
+  assert.equal(strip.decls.get("touch-action"), "pan-x", "the strip claims the horizontal gesture (scroll-strips contract)");
+  assert.equal(strip.decls.get("overscroll-behavior-x"), "contain");
+  assert.equal(decl(rules, ".dh-card > .sheet-head > .dh-tabs", "flex"), "1 1 0", "the head-row strip grows between the title and the buttons");
+});
+
+test("gap 21: the desktop hub card is unreachable from a phone-sized window", () => {
+  // Body flags are own-unit (inner* ÷ --ui-scale): a 852×393 phone at UI SIZE ≤ 65 % classifies
+  // normal + wide. Every desktop-card rule carries a gate no zoom can reach: a fine pointer
+  // or a raw window height of 600 CSS px (contract rule 4).
+  const desk = rules.filter((r) => /^body\[data-width="wide"\]\[data-density="normal"\]/.test(r.selector.trim()));
+  assert.ok(desk.length >= 3, "the .dh-card, .dh-content and telemetry desktop rules: " + desk.length);
+  for (const r of desk) {
+    // The ≥ 1600 px wide-desktop variant is gated by a raw window width no phone has.
+    assert.ok(r.context.some((c) => /\(pointer:\s*fine\),\s*\(min-height:\s*600px\)/.test(c) || /\(min-width:\s*1[6-9]\d\dpx\)/.test(c)),
+      `desktop rule without the fine-pointer / 600 px gate: ${r.selector.trim()} in ${JSON.stringify(r.context)}`);
+  }
+});
+
+test("gap 23: SETTINGS › HIGH CONTRAST solidifies the hub card, as the OS preference does", () => {
+  const inGame = ruleFor(rules, ':root[data-ui-contrast="high"] .dh-card');
+  assert.ok(inGame, "the in-game contrast rule exists (the :1373 block is prefers-contrast only)");
+  assert.equal(inGame.decls.get("background"), "var(--surf-1)");
+  assert.ok(!inGame.context.some((c) => /^@media/.test(c)), "unconditional: the setting, not a media query, decides: " + JSON.stringify(inGame.context));
+});

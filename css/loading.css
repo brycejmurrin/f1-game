@@ -49,7 +49,17 @@
      and would otherwise paint over the plate where they overlap it. */
   position: relative;
   z-index: 1;
-  margin-bottom: clamp(var(--gap), 6vh, calc(4 * var(--pad)));
+  margin-bottom: clamp(var(--gap), 6svh, calc(4 * var(--pad)));
+  /* FIT, NEVER CLIP (UI scaling contract gap 22). The card had no height cap:
+     MEASURED 2026-11-06 at the owner's export (TEXT large) with a radio caption
+     up, it stood 374 px tall in the 852×283 Safari window (400 with a longer
+     line at 852×393) and ran 68–87 px past the TOP edge in every phone window —
+     the wordmark and the circuit name were the part that went. The cap is the
+     safe box less the margin below; the card is a flex column whose body
+     (#ld-body) is the one child that gives, the map first. svh everywhere: the
+     Safari toolbar must shorten the card, not slide it. */
+  max-height: calc(100svh - var(--safe-t) - var(--safe-b) - clamp(var(--gap), 6svh, calc(4 * var(--pad))));
+  display: flex; flex-direction: column;
   padding: var(--gap) var(--pad);
   border: 1px solid var(--card-line);
   border-radius: var(--r-md);
@@ -217,11 +227,18 @@
 /* Map beside the text, not above it: the card is a lower third, and stacking
    the outline would push it into the middle of the screen where the flyby is.
    Wraps on a phone, where 560px of card is not available. */
-#ld-body { display: flex; align-items: center; gap: var(--pad); flex-wrap: wrap; }
+#ld-wordmark { flex: 0 0 auto; }
+/* The giving child of the capped card (gap 22): min-height 0 lets it shrink
+   under the wordmark, overflow hidden keeps the facts inside the plate. NOT on
+   #ld-card: its ::after is the skip hint, placed ABOVE the card. */
+#ld-body { display: flex; align-items: center; gap: var(--pad); flex-wrap: wrap; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 #ld-map {
   flex: 0 0 auto;
   display: block;
   max-width: 45%;
+  /* The map shrinks first: its inline height (fitCanvas) is a maximum, the
+     body's height a cap; object-fit keeps the outline's aspect either way. */
+  max-height: 100%;
   height: auto;
   /* fitCanvas pins an inline px width AND height, so when the 45% cap binds (a
      portrait phone, a big CARD SIZE) the height does not follow and the outline

@@ -104,6 +104,14 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
    inside; short ones keep a stable box.
    --wide-at / --compact-at are local (zoom-aware); the old min-width/min-height
    media query could not see UI SIZE. */
+/* A DESKTOP, NOT A PHONE AT A SMALL UI SIZE: the body flags are own-unit
+   (inner* ÷ --ui-scale), so a 852×393 phone at UI SIZE ≤ 65 % classifies
+   normal + wide and got this content-sized desktop card (UI scaling contract
+   gap 21, contract rule 4). The gate is a fine pointer or a raw window height
+   of 600 CSS px — a tablet in landscape — which no zoom can reach. The same
+   context wraps the two companion rules below (.dh-content padding, the
+   telemetry split). */
+@media (pointer: fine), (min-height: 600px) {
 body[data-width="wide"][data-density="normal"] .dh-card {
   /* Seven destinations at normal tab padding need ~900px; 760 wrapped WATCH &
      DRIVE + EXPORT onto a second row at 1280×800 (layout-audit 2026-10-06). */
@@ -112,6 +120,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   min-height: var(--dh-desk-h);
   max-height: var(--dh-desk-h);
   height: var(--dh-desk-h);
+}
 }
 
 /* The header is the canonical .sheet-head now (css/components.css) — one
@@ -323,10 +332,12 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
 .dh-content::-webkit-scrollbar { display: none; }
 body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 / 6); }
 body[data-width="wide"] .dh-content { padding-inline-end: calc(var(--gap) * 2 + 6px); }
+@media (pointer: fine), (min-height: 600px) {   /* gap 21: desktop only, see the .dh-card rule */
 body[data-width="wide"][data-density="normal"] .dh-content {
   /* Pinned desktop card height: extra bottom pad so the last schedule row is
      not half-clipped at scrollTop max (1280×800 walkthrough 2026-10-06). */
   padding-bottom: calc(var(--gap) * 2);
+}
 }
 .dh-tabbody { display: flex; flex-direction: column; gap: var(--gap); }
 
@@ -1334,6 +1345,7 @@ body[data-width="wide"][data-density="compact"] {
 }
 /* The readout labels wrap instead of colliding with their neighbour column. */
 .dh-telem-side .dh-glabel { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; letter-spacing: var(--ls-1); }
+@media (pointer: fine), (min-height: 600px) {   /* gap 21: desktop only, see the .dh-card rule */
 body[data-width="wide"][data-density="normal"] {
   .dh-telem-main { padding: var(--gap) calc(var(--gap) * 7 / 6); }
   .dh-telem-side { width: 340px; padding: var(--gap) calc(var(--gap) * 7 / 6); }
@@ -1343,6 +1355,7 @@ body[data-width="wide"][data-density="normal"] {
   .dh-telem-side .dh-canvas.dh-map { max-width: min(100%, calc(42 * var(--svhz))); }
   .dh-telem-main .dh-canvas { max-width: none; }
   .dh-tpopup-card { width: min(1280px, 96vw); max-width: none; }
+}
 }
 body[data-density="compact"] {
   .dh-tpopup-card {
@@ -1373,17 +1386,32 @@ body[data-density="compact"] {
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .dh-card { background: var(--surf-1); }
 }
+/* SETTINGS › HIGH CONTRAST is the same promise made in-game (css/tokens.css
+   :root[data-ui-contrast="high"] solidifies the HUD plates): the hub card goes
+   opaque too, instead of staying the translucent --panel over the live circuit
+   (UI scaling contract gap 23). */
+:root[data-ui-contrast="high"] .dh-card { background: var(--surf-1); }
 
 /* Active destination stays obvious when the strip scrolls: the filled plate
    plus a red rule. The underline/pill looks outrank this (higher specificity). */
 #datahub .dh-tab.active { box-shadow: inset 0 -3px 0 var(--red); }
 
-/* Short landscape: one scrolling row. Wrapped destinations ate the schedule
-   on 844×390. Tall portrait keeps the 3-column grid (data-hub-layout pin). */
+/* Short landscape: ONE CHROME ROW — title, the tab strip, ⋯, ✕ — and the strip
+   is the row's one scroller (UI scaling contract gap 15). Wrapped destinations
+   ate the schedule on 844×390; tall portrait keeps the 3-column grid
+   (data-hub-layout pin). The strip takes the room the title and the two
+   buttons leave (flex 1 1 0 on the head's rule above) and scrolls sideways
+   past it — never wraps, never clips.
+   MEASURED 2026-11-06 at 852×393 / 59 px insets / the owner's export (UI 109 %,
+   TEXT large): the strip is 536 px of tabs in a 413–450 px slot in every phone
+   window, so WATCH & DRIVE is reached by a pan, as the 3 px red rule under the
+   active tab says. A coarse-pointer `order: 1` block that used to live below
+   predated the move of the tabs into .sheet-head (two parallel 2026-10-30
+   commits): it put the strip AFTER the ✕, so the close button sat mid-row
+   (x 268 of 852) with the tabs to its right — deleted, no "bottom bar" exists. */
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
-  /* row (not wrap): one scrolling strip on a short landscape sheet. The wide
-     card keeps .dh-tabs { flex-wrap: wrap }, so EXPORT is not a clipped row. */
-  flex-flow: row;
+  flex: 1 1 0; min-width: 0;
+  flex-wrap: nowrap;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   touch-action: pan-x;
@@ -1392,24 +1420,6 @@ body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
 }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs::-webkit-scrollbar { display: none; }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tab { scroll-snap-align: start; }
-/* THUMB REACH (reach round 2026-10-30): on a phone held sideways the strip sat
-   top-centre (844x390: 4 of 7 tabs in the far reach of both thumbs). On the
-   phone band — touch plus the zoom-aware compact wide body, never a viewport
-   max-height (ui-improve-pass pin) — it becomes a BOTTOM bar: the same one
-   scrolling row, so it costs no extra height, and unlike a left rail
-   (~120 px of 734) it costs the tables no width — they already scroll
-   sideways at 36rem. Flex `order` only: DOM and Tab order (tabs, then the
-   panel they control) are unchanged; MenuNav reaches the bar with Down off
-   the panel's last row. The pill / underline / rows / stripes looks style the
-   tabs themselves and still apply. */
-@media (pointer: coarse) {
-  body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
-    order: 1;
-    border-bottom: 0;
-    border-top: 1px solid color-mix(in oklab, var(--plate-line) 50%, transparent);
-    padding-bottom: calc(var(--gap) * 0.4);
-  }
-}
 
 /* Classification tables scroll sideways on a phone instead of crushing the
    driver column. Data tables are the WCAG 1.4.10 two-dimensional exception. */

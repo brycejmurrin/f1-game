@@ -175,7 +175,10 @@ const LoadingCard = (function () {
     return {
       "--ld-card-scale": String(g.scale),
       "--ld-card-x": g.x + "vw",
-      "--ld-card-y": g.y + "vh",
+      // svh, not vh: 100vh is the TALL viewport under a phone's dynamic toolbar, so
+      // the same saved number pushed the card further down in Safari than in the
+      // Home Screen app (UI scaling contract gap 22; css/loading.css reads it).
+      "--ld-card-y": g.y + "svh",
     };
   }
 
