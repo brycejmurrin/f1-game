@@ -1,1 +1,0 @@
-Fixed: VS FRIEND: a player removed from a full code room can no longer rejoin on the old code after another guest leaves (#4937); hits on a friend's car spawn debris the same way for every contact angle (#4941).

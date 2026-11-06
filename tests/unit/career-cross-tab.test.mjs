@@ -925,43 +925,6 @@ test("freeMoney key is outside the /^apex26\\.career/ writer-locked prefix", () 
   assert.match(readSrc("js/core/save-schema-registry.js"), /"freeMoney": entry/);
 });
 
-test("retrySave under quota then recovery persists the next grant (#4823)", () => {
-  let quota = false;
-  const { Career, disk, store } = load({ setItem(key, value, target) {
-    if (quota && key.startsWith("apex26.career.")) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
-    target.set(key, value);
-  } });
-  Career.load();
-  Career.engage(true);
-  quota = true;
-  Career.grant(10);
-  // what retrySave() does while storage is still full
-  Career.save();
-  store.retryFailed();
-  assert.equal(Career.conflicted(), false, "a self-inflicted retry write is not a foreign change");
-  quota = false;
-  Career.grant(20);
-  const diskMoney = JSON.parse(disk.get("apex26.career.driver.0")).money;
-  assert.equal(diskMoney, Career.data().money, "disk follows RAM after storage frees");
-  assert.equal(Career.saveStatus().ok, true);
-});
-
-test("SeasonCal keeps its revision armed across a retryFailed rewrite (#4823)", () => {
-  let quota = false;
-  const { SeasonCal, store } = load({ setItem(key, value, target) {
-    if (quota && key.startsWith("apex26.season")) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
-    target.set(key, value);
-  } });
-  const r = SeasonCal.applyConfig ? SeasonCal.applyConfig(SeasonCal.config()) : null;
-  assert.ok(r && r.season, "season started");
-  quota = true;
-  SeasonCal.save(r.season);
-  store.retryFailed();
-  quota = false;
-  assert.equal(SeasonCal.save(r.season).ok !== false, true);
-  assert.notEqual(SeasonCal.saveStatus && SeasonCal.saveStatus().reason, "conflict");
-});
-
 function atFinale() {
   const rig = load({ disk: new Map([
     ["apex26.career.driver.0", JSON.stringify({ ...save(24, 100), deal: { salary: 0, bonusPt: 0, left: 1, years: 1 } })],

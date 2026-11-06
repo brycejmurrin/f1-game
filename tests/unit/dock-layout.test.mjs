@@ -418,26 +418,3 @@ test("a REPOSITION drag reads the pad once (pointerdown), not per pointermove, a
   docL.pointerup(ev({}));
   assert.equal(fits, f0 + 2, "pointerup settles the fit");
 });
-
-test("a SIZE step repaints the offset at the dock's new zoom (#5025)", () => {
-  const { ctx, api, els, made } = bootCreate();
-  ctx.Event = function (type) { this.type = type; };
-  assert.equal(els["dock-left"].style.transform, "translate(0.0px, -280.0px)", "zoom 1");
-  // The slider's input handler (scale.js) changes BUTTON SIZE, so the dock's zoom moves.
-  els["pm-btnscale"] = { value: "100", min: "40", max: "300", dispatchEvent() { els["dock-left"].currentCSSZoom = 2; } };
-  api.setEditing(true);
-  made[0].querySelector("[data-k=bigger]").onclick();
-  assert.equal(els["dock-left"].style.transform, "translate(0.0px, -140.0px)", "the same on-screen offset at zoom 2");
-});
-
-test("a zoom change from outside the editor (race fit, body.in-race) repaints the docks once (#5025)", () => {
-  const { ctx, els, observers } = bootCreate();
-  ctx.requestAnimationFrame = (fn) => { fn(); return 1; };
-  assert.equal(observers.length, 3, "settings watch + root style + body class");
-  els["dock-left"].currentCSSZoom = 2;
-  observers[1]();
-  assert.equal(els["dock-left"].style.transform, "translate(0.0px, -140.0px)", "root style change at a new zoom repaints");
-  els["dock-left"].style.transform = "sentinel";
-  observers[2]();
-  assert.equal(els["dock-left"].style.transform, "sentinel", "an unchanged zoom does not repaint");
-});

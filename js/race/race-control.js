@@ -192,17 +192,20 @@ const RaceControl = (function () {
   // sort: within a lap count, finishers keep the clock order, runners progress.
   // 90 % OF THE WINNER'S LAPS IS CLASSIFIED (B2.5.5(b)), RETIRED OR NOT: a last-lap
   // failure scores where it stopped, and a car still RUNNING below the line
-  // (stuck, rescued) is not classified either. c.lap is the lap a car is ON: a
-  // retirement completed lap - 1, a runner completes lap at its flag. No finisher:
-  // the leader still running, else the non-DSQ retired leader. Sets c.classified
-  // (SeasonCal.award, career, the sheet's NC); the unclassified follow by laps,
-  // then distance.
-  function classify(cars, fin, run, out, held) {
-    // A retirement keeps its pending crossing but never past the flag; `held` (B5.14.2, #4942): none past the signal lap.
+  // (stuck, rescued) is not classified either — it was paid P2 at half
+  // distance. c.lap is the lap a car is ON, so a retirement completed lap - 1
+  // and a runner completes lap at its flag. With no finisher (the only human
+  // retired) use the leader still running, or the non-DSQ retired leader if none remain. Sets c.classified for
+  // every car (SeasonCal.award, career settlement, the sheet's NC); the
+  // unclassified — runners, retirements and flagged finishers a lap or more
+  // short alike (a finisher missing from `order` had finPos 0) — follow by
+  // laps, then distance.
+  function classify(cars, fin, run, out) {
+    // A retirement keeps its pending crossing (it crossed before a lapped car
+    // flagged on the same count) but never past the flag: the leader takes it.
     const flagLap = fin.length ? Math.max(...fin.map((c) => c.lap || 0)) : Infinity;
-    const sig = held ? Math.max(0, ...run.map((c) => c.lap || 0)) : Infinity;
     const lapsAt = (c) => (c.finished ? (c.lap || 0)
-      : Math.min((c.lap || 0) + 1, sig, c.retired ? flagLap : sig));
+      : Math.min((c.lap || 0) + 1, c.retired ? flagLap : Infinity));
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
     const ref = fin.length ? fin : run.length ? run : out.filter((c) => !c.dsq);
     const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;

@@ -15,14 +15,8 @@ const DailyChallenge = (function () {
   // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
   function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
-  // LOCAL calendar day, YYYY-MM-DD: the streak is the player's own days (a 3 pm and a 6 pm
-  // lap in Los Angeles on consecutive days must not straddle a UTC midnight). prevDay and the
-  // history window do pure string/UTC-date arithmetic on the key, so they stay calendar-correct.
-  function dayKey(d) {
-    const t = d || new Date();
-    const p2 = (n) => String(n).padStart(2, "0");
-    return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate());
-  }
+  // UTC day, YYYY-MM-DD — the one calendar every player shares.
+  function dayKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
   function prevDay(day) {
     const d = new Date(day + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() - 1);
@@ -57,7 +51,7 @@ const DailyChallenge = (function () {
       e.classes[context] = cls;
     }
     if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-    // Streak: consecutive local days with at least one lap. Only a NEWER day
+    // Streak: consecutive UTC days with at least one lap. Only a NEWER day
     // moves it (ISO dates compare as strings): a tab left on yesterday's plan
     // past midnight, today already played elsewhere, reset it to 1.
     if (!d.streak.last || day > d.streak.last) {

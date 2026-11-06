@@ -953,35 +953,7 @@ async function createGame(opts) {
   }
 }
 
-/**
- * bootShell({ onSandbox, afterFile }) → { ctx, sandbox, record, timers, boot, close }
- *   The BOOT alone, for tests of what js/game.js does before a race exists
- *   (renderer pick, claim-fail reload, Graphics unavailable). Builds the same
- *   sandbox as createGame, but seeds NO storage (onSandbox writes raw keys),
- *   runs the FULL manifest through js/game.js, and returns the game IIFE's
- *   promise as `boot` WITHOUT waiting for __apex: a boot that reloads or shows
- *   Graphics unavailable returns early and never builds one.
- *   afterFile(rel, ctx) runs after each manifest file evaluates — the seam to
- *   stub a global (Gfx, ApexRoster) between its owner and game.js.
- *   tests/helpers/game-boot-vm.mjs is the caller.
- */
-function bootShell(opts) {
-  opts = opts || {};
-  const world = buildSandbox(opts);
-  const { ctx, sandbox, record, timers } = world;
-  if (typeof opts.onSandbox === "function") opts.onSandbox(sandbox, ctx);
-  let boot = null;
-  for (const f of MANIFEST.FULL) {
-    if (SKIP.has(f)) continue;
-    const r = runFile(ctx, f, record);
-    if (f === MANIFEST.PATHS.GAME) boot = r;
-    if (typeof opts.afterFile === "function") opts.afterFile(f, ctx);
-  }
-  const close = () => { timers.clear(); world.rafQueue.length = 0; };
-  return { ctx, sandbox, record, timers, boot, close };
-}
-
-module.exports = { createGame, bootShell, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
+module.exports = { createGame, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
 
 if (require.main === module) {
   (async () => {

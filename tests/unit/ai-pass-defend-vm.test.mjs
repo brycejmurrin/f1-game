@@ -55,28 +55,3 @@ test("control: with no latch the same chaser IS covered against (the probe can s
   const r = await run(false);
   assert.ok(r.anyCover > 0, "defend never fired without a latch: the scenario does not exercise defendPull");
 });
-
-test("a mid-straight queue-brake dab keeps the cover side: no second move on one straight (#4940)", async () => {
-  const A = g.apex;
-  await g.race("monza");
-  A.jump(0.1, 40, 0);
-  A.headless(true);
-  A.reset(0.3, 0, 0);
-  const sp = 60;
-  A.rivals([{ dProg: -400, dx: 0, speed: sp }, { dProg: -386, dx: 0, speed: sp }, { dProg: -405, dx: 1, speed: sp + 8 }]);
-  const [S, B] = g.G.cars.filter((c) => !c.isPlayer);
-  S.defendSide = 0;
-  for (let i = 0; i < 12 && !S.defendSide; i++) { A.act({ steer: 0, throttle: false, brake: true }, 1 / 60, 1); S.speed = sp; B.speed = sp; }
-  const side = S.defendSide;
-  assert.ok(side, "the defender committed a cover side first");
-  let braked = 0, flipped = 0;
-  for (let i = 0; i < 20; i++) {
-    B.speed = sp - 12;   // the blocker is slow: closing > 3 m/s, so the queue brake fires
-    A.act({ steer: 0, throttle: false, brake: true }, 1 / 60, 1);
-    if (S.braking) braked++;
-    if (S.defendSide !== side) flipped++;
-    S.speed = sp;
-  }
-  A.headless(false);
-  assert.equal(flipped, 0, `defendSide changed ${flipped} frames through the brake dab (braked ${braked})`);
-});

@@ -413,8 +413,6 @@ interface GameCtx {
 
   // ── Tyres: the race setting and the live wear model ───────────────────────
   raceTyreWear: TyreLevel;
-  /** DAMAGE: HANDLING opt-in (#1578); a VS FRIEND room rule (#3971). */
-  raceDamage: boolean;
   /** Dirty-air wake model: off / classic (default) / cfd. */
   raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;

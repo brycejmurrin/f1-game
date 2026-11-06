@@ -44,7 +44,6 @@ export function manifestModules(m = require("../manifest.cjs")) {
   add(m.TRACK_WORKER_EXTRA, "worker");
   add(m.CONTROLLER, "controller");
   add(m.CARVIEW, "carview");
-  add(m.OVERLAY_PAGE, "overlay");
   return out;
 }
 

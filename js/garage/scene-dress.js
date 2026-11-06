@@ -1,8 +1,8 @@
 /* Apex 26 — GarageDress: the team dress of the garage bay. The 1024 atlas painters (paintDress, paintBoards), the board data (boardInfo,
-   boardKey, seatDriverAt), the wall-quad geometry that places the atlas (buildDress) and the room LOOKS overrides. */
+   boardKey, seatDriverAt) and the wall-quad geometry that places the atlas (buildDress). Pure move out of scene.js (#1667). */
 const GarageDress = (function () {
   "use strict";
-  const { HALF_W, Z_BACK, Z_DOOR, CEIL_Y, MAT, scale, rgb, css, block, cyl, tube, tile, lookCol } = GaragePrims;
+  const { HALF_W, Z_BACK, Z_DOOR, scale, rgb, css } = GaragePrims;
 
 // ── team dress ─────────────────────────────────────────────────────────────
 // One canvas atlas, one texture, one texMesh, one drawDecal: the same shape as
@@ -11,13 +11,10 @@ const GarageDress = (function () {
 // are. The crest is the real team PNG where LiveryTex has one and its
 // hand-drawn vector crest where it does not — which is also the permanent path
 // for a custom MY TEAM entry, since those never have a PNG.
-
-// The team's two livery colours; c2 is the accent. The fallback for a missing
-// c2 differs between the atlas and the room looks, so the caller passes it.
-function livCols(liv, c2Fallback) {
-  return [rgb(liv && liv.c1, [0.30, 0.32, 0.36]), rgb(liv && (liv.accent || liv.stripe || liv.c2), c2Fallback)];
-}
-
+// Everything the boards report, gathered in one place from the SAME calls the
+// 2D panel makes. getParts is passed in rather than read from the store because
+// career mode substitutes its own fitted set (js/game.js getTeamParts), and a
+// direct store read would quietly show the wrong car.
 // The race paints Career.driverOverride (MY TEAM seat 0 is you, seat 1 is
 // the hire). The turntable, the wall board and the pit board have to name
 // the same person, not the shipped team.drivers row.
@@ -31,17 +28,10 @@ function seatDriverAt(team, idx) {
     ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
   return (seats && seats[i]) || (seats && seats[0]) || null;
 }
-
-// Everything the boards report, gathered in one place from the SAME calls the
-// 2D panel makes. getParts is passed in rather than read from the store because
-// career mode substitutes its own fitted set (js/game.js getTeamParts), and a
-// direct store read would quietly show the wrong car.
-// Cached on a cheap stamp (team, seat, store.rev, career budget) because every
-// garage draw asks for it to build the dress key.
+// boardInfo used to run Parts.resolveSetup + two .map()s on EVERY garage draw
+// (rebuild early-returns after the key check, but the key needs boardInfo first).
+// Cache on a cheap stamp: team, seat, store.rev (parts/livery), career budget.
 let _boardInfo = null, _boardInfoKey = "";
-// The spec labels of the last board paint, so a changed row can be highlighted.
-let lastSpec = null;
-
 function boardInfo(team, getParts, driverIdx, ctx) {
   if (typeof Parts === "undefined" || typeof getParts !== "function") return null;
   const rev = (typeof GameStore !== "undefined" && GameStore.store) ? GameStore.store.rev : 0;
@@ -53,11 +43,12 @@ function boardInfo(team, getParts, driverIdx, ctx) {
   const stamp = (team && team.id) + "|" + (driverIdx | 0) + "|" + rev + "|" + capStamp;
   if (_boardInfo && stamp === _boardInfoKey) return _boardInfo;
   try {
-    // ONE resolveSetup call carries the stat `mods`, the total `cost`, and
-    // `options` (the RESOLVED option per category: what a supplier-locked
-    // fallback actually fitted, not the id the save asked for). SetupTune.mods
-    // goes in the same way the DOM bars pass it (setup-sheet.js renderStatBars),
-    // so a mechanical set-up change cannot leave the wall quoting other numbers.
+    // ONE resolveSetup call carries everything: it already returns the stat
+    // `mods`, the total `cost`, and `options` (the RESOLVED option per category,
+    // which is what a supplier-locked fallback actually fitted — not the id the
+    // save asked for). Pass SetupTune.mods the same way the DOM bars do
+    // (setup-sheet.js renderStatBars → Parts.getMods(..., tune)), so a mechanical
+    // set-up change cannot leave the wall quoting different numbers.
     const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
     const r = Parts.resolveSetup(getParts(team.id), team, tune);
     const base = GarageExperience.statsOf(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
@@ -71,12 +62,16 @@ function boardInfo(team, getParts, driverIdx, ctx) {
       return { cat: String(cat.label || cat.id).toUpperCase(), label: (opt && opt.label) || "Stock" };
     });
     const drv = seatDriverAt(team, driverIdx) || {};
-    // The career cap, not the free-play Parts.BUDGET: several teams' factory
-    // builds cost more than 780 on their own, which would pin the board at 0.
-    // setup-sheet.js resolves and enforces the same cap.
+    // THE CAREER CAP, not the free-play constant. js/garage/setup-sheet.js resolves this the
+    // same way and enforces against it, but the BUDGET board on the garage wall
+    // read Parts.BUDGET (780) unconditionally — so a career at any team whose
+    // factory build costs more than that showed "0 cr OF 780 REMAINING" with an
+    // empty bar, two metres from a DOM panel reading the true figure, and it
+    // stayed at 0 however much was unfitted. Four of the seven starter teams are
+    // over 780 on the factory build alone, and MY TEAM is 900.
     const cap = owned ? Career.budget() : Parts.BUDGET;
     // FREE BUILD has no cap to spend against (the DOM sheet says so): the board
-    // prints that instead of "0 cr OF 780 REMAINING" over an empty bar.
+    // prints it instead of "0 cr OF 780 REMAINING" over an empty bar.
     _boardInfo = { stats, spec, driver: drv, budget: cap, unlimited,
              left: unlimited ? 0 : Math.max(0, cap - (r.cost || 0)) };
     _boardInfoKey = stamp;
@@ -98,71 +93,68 @@ function boardKey(info) {
   return k;
 }
 
-// ── atlas layout (1024 x 1024) ───────────────────────────────────────────────
 const DRESS = 1024;
 const D_CREST = { x: 0, y: 0, w: 512, h: 512 };
 const D_WORD  = { x: 512, y: 0, w: 512, h: 128 };
 const D_BOARD = { x: 512, y: 160, w: 256, h: 352 };
 const D_SCREEN = { x: 0, y: 512, w: 512, h: 256 };
-// The information boards: what the player is deciding on in the 2D panel, put
-// in the room on the wall they are already looking at.
+// The information boards. Everything a player is deciding on lived only in the
+// 2D panel; these put it in the room, on the wall you are already looking at.
 const D_STATS  = { x: 512, y: 512, w: 512, h: 256 };
 const D_DRIVER = { x: 768, y: 128, w: 256, h: 256 };
 const D_SPEC   = { x: 0, y: 768, w: 512, h: 256 };
 const D_BUDGET = { x: 512, y: 768, w: 512, h: 128 };
-// A wide team wordmark for the floor and the lit sign over the door, drawn
-// light-on-dark so it works on both.
+// The free 256x128 block below DRIVER: a wide team wordmark for the floor and
+// the lit sign over the door, drawn light-on-dark so it works on both.
 const D_SIGN = { x: 768, y: 384, w: 256, h: 128 };
-// The -X pit board's own graphic. Not a second copy of the driver board: two
+// The last free block, 512x128 under BUDGET. The -X pit board has existed since
+// the back wall was mirrored but no dress quad was ever placed on it, so a
+// team-branded panel rendered as a blank dark box in 41% of the FRONT frame.
+// It gets its OWN graphic rather than a second copy of the driver board: two
 // identical boards on one wall read as a copy-paste, and a real garage's second
-// board is the strategy call.
+// board is the strategy call, not the drivers again.
 const D_STRAT = { x: 512, y: 896, w: 512, h: 128 };
 
-// ONE team signature, shared by everything on the atlas that must differ
-// between bays but has no data of its own to differ by: the strategy board's
-// stint plan and the engineers' trace shapes. team.id is already in the dress
-// cache key, so nothing extra has to be folded in.
-function teamSig(team) {
-  const id = String(team && team.id || "");
-  let sig = 0;
-  for (let i = 0; i < id.length; i++) sig = (sig * 31 + id.charCodeAt(i)) & 0xffff;
-  return sig;
-}
-
 // The decal shader sees sun + ambient + uGlow only — never the point lights. So
-// everything here is painted as SIGNAGE and lit by glow: a modern garage's
-// crest wall IS a lightbox, the pit board IS an LED panel and the monitors ARE
-// emissive. Relative brightness between surfaces is baked into the canvas,
-// because glow is per-draw and there is only one draw.
+// rather than fight that, everything here is painted as SIGNAGE and lit by
+// glow: a modern garage's crest wall IS a lightbox, the pit board IS an LED
+// panel and the monitors ARE emissive. Relative brightness between surfaces is
+// baked into the canvas, because glow is per-draw and there is only one draw.
 // `into`: a previous dress canvas to repaint. Re-setting its size resets the
 // bitmap and every context state, so the paint below starts exactly as on a
 // fresh canvas, without a new 4 MB backing store per paint-drag step.
-// The painters below share one context and run in this order on purpose: each
-// inherits the text alignment and font the one before it left.
 function paintDress(team, liv, info, into) {
   const cv = into || document.createElement("canvas");
   cv.width = cv.height = DRESS;
   const ctx = cv.getContext("2d");
   ctx.clearRect(0, 0, DRESS, DRESS);
-  const [c1, c2] = livCols(liv, [0.6, 0.62, 0.66]);
-  const sig = teamSig(team);
-  paintCrest(ctx, team, liv, c1, c2);
-  paintWordStrip(ctx, team, liv, c1, c2);
-  paintPitBoard(ctx, team, c1, c2);
-  paintScreens(ctx, sig, c2);
-  paintStrategy(ctx, team, sig, c1, c2);
-  paintSign(ctx, team);
-  return { canvas: cv };
-}
-// Crest lightbox. The FIELD is chosen for contrast against the mark, and a
-// halo is added ONLY when the mark still lacks separation — the same rule
-// buildAtlas applies on the car.
-function paintCrest(ctx, team, liv, c1, c2) {
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  // ONE team signature, shared by everything on this atlas that must differ
+  // between bays but has no data of its own to differ by — the strategy board's
+  // stint plan and the engineers' trace shapes. team.id is already in the dress
+  // cache key, so nothing extra has to be folded in.
+  let sig = 0;
+  for (let i = 0; i < String(team && team.id || "").length; i++)
+    sig = (sig * 31 + String(team.id).charCodeAt(i)) & 0xffff;
+  // Crest lightbox. The FIELD is chosen for contrast against the mark, and a
+  // halo is added ONLY when the mark still lacks separation — the same rule
+  // buildAtlas applies on the car. The first version passed the team's own c1
+  // as the halo unconditionally, which put a same-hue glow behind a mark
+  // sitting on a c1-derived field and softened it instead of separating it.
   const img = LiveryTex.LOGOS && LiveryTex.LOGOS[team.id];
   // What LANDS on this field, whichever path draws the mark: the uploaded PNG's
-  // average for the custom team, else LiveryTex.markOnField, which answers with
-  // the BACKING when the mark has one (Ferrari's yellow shield, not its black
-  // horse). Asking for the mark itself chooses a field that rejects the plate.
+  // average for the custom team, else LiveryTex.markOnField — which answers
+  // with the BACKING when the mark has one. Asking markBase (the horse, the
+  // bulls) was the older question and the wrong one for a plated mark: Ferrari
+  // returned a near-black horse, the flip below chose a white lightbox, and a
+  // white field then rejected Ferrari's own yellow shield at 1.07 against the
+  // 1.6 plate floor — so the wall showed a white horse on a RED shield while
+  // the car showed the real black-on-yellow.
+  // Keying this on img._avg ALONE is what made the flip below dead code the
+  // moment the roster stopped shipping logo PNGs — it would be null for every
+  // team, the ternary would always take `tinted`, and every crest would land on
+  // a dark field whether or not that is the readable choice.
   const onField = (img && img._avg) ? [img._avg]
     : (LiveryTex.markOnField ? LiveryTex.markOnField(team.id, liv) : null);
   const tinted = scale(c1, 0.30);
@@ -184,9 +176,7 @@ function paintCrest(ctx, team, liv, c1, c2) {
     // parts tile and fin badge, scored against the field the crest lands on.
     LiveryTex.paintTeamMark(ctx, team.id, liv, inner, field, { fullLockup: true, halo });
   }
-}
-// Team wordmark strip — the same lockup as the lightbox, left of the name.
-function paintWordStrip(ctx, team, liv, c1, c2) {
+  // Team wordmark strip — the same lockup as the lightbox, left of the name.
   ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
   ctx.fillStyle = css(c2); ctx.fillRect(D_WORD.x, D_WORD.y + D_WORD.h - 9, D_WORD.w, 9);
   const wordMark = { x: D_WORD.x + 12, y: D_WORD.y + 16, w: 96, h: 96 };
@@ -198,9 +188,7 @@ function paintWordStrip(ctx, team, liv, c1, c2) {
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.fillText(String(team.name || team.short || "").toUpperCase(),
     D_WORD.x + 120, D_WORD.y + D_WORD.h / 2 - 4, D_WORD.w - 136);
-}
-// Pit board: team header, then the two drivers' numbers and codes.
-function paintPitBoard(ctx, team, c1, c2) {
+  // Pit board: team header, then the two drivers' numbers and codes.
   ctx.fillStyle = "#0a0b0d"; ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, D_BOARD.h);
   ctx.fillStyle = css(c1); ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, 56);
   ctx.fillStyle = "#f4f5f7"; ctx.font = "700 34px system-ui, sans-serif";
@@ -213,17 +201,18 @@ function paintPitBoard(ctx, team, c1, c2) {
     ctx.fillStyle = css(c2); ctx.font = "700 30px system-ui, sans-serif";
     ctx.fillText(String(d.code || ""), D_BOARD.x + D_BOARD.w / 2, top + 108);
   }
-}
-// Engineer screens: six tiles of plausible telemetry. One trace colour is the
-// livery accent and the waveform is seeded off the team signature, because the
-// SIDE preset looks straight at this bank and a shared graphic is a bay that
-// could belong to anyone.
-function paintScreens(ctx, sig, c2) {
+  // Engineer screens: six tiles of plausible telemetry.
   ctx.fillStyle = "#05070a"; ctx.fillRect(D_SCREEN.x, D_SCREEN.y, D_SCREEN.w, D_SCREEN.h);
   for (let t = 0; t < 6; t++) {
     const tx = D_SCREEN.x + (t % 3) * (D_SCREEN.w / 3), ty = D_SCREEN.y + ((t / 3) | 0) * (D_SCREEN.h / 2);
     const tw = D_SCREEN.w / 3 - 6, th = D_SCREEN.h / 2 - 6;
     ctx.fillStyle = "#0b1016"; ctx.fillRect(tx + 3, ty + 3, tw, th);
+    // Six identical sine traces in two fixed colours, for eleven teams. The
+    // engineers' bank is the -X wall's centrepiece and the SIDE preset looks
+    // straight at it, so every bay was quoting the same telemetry. One trace
+    // colour now comes from the livery accent, and the waveform is seeded off
+    // the team id: same idiom as the strategy board above, and the reason is
+    // the same — a shared graphic is a bay that could belong to anyone.
     const tSeed = (sig + t * 7) % 32;
     ctx.strokeStyle = t % 2 ? css(c2) : "#e2a33c"; ctx.lineWidth = 2;
     ctx.beginPath();
@@ -241,58 +230,60 @@ function paintScreens(ctx, sig, c2) {
       ctx.beginPath(); ctx.moveTo(tx + 6, ty + th * (gl / 4)); ctx.lineTo(tx + tw, ty + th * (gl / 4)); ctx.stroke();
     }
   }
-}
-// Strategy strip: the stint plan, in the team's own colours. Three rows of
-// compound + laps, which is what the second board in a real bay shows.
-function paintStrategy(ctx, team, sig, c1, c2) {
-  const R = D_STRAT;
-  ctx.fillStyle = "#07090c"; ctx.fillRect(R.x, R.y, R.w, R.h);
-  ctx.fillStyle = css(c1); ctx.fillRect(R.x, R.y, R.w, 26);
-  // Light-on-dark or dark-on-light by luminance: a fixed near-white header
-  // disappears on a pale livery.
-  const hi = c1[0] * 0.30 + c1[1] * 0.59 + c1[2] * 0.11 > 0.55;
-  ctx.fillStyle = hi ? "#0a0b0d" : "#f4f5f7";
-  ctx.font = "700 18px system-ui, sans-serif";
-  ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  ctx.fillText("RACE PLAN", R.x + 12, R.y + 13);
-  ctx.textAlign = "right";
-  ctx.fillText(String(team.short || team.name || "").toUpperCase(), R.x + R.w - 12, R.y + 13);
-  const COMP = [["SOFT", "#d8443c"], ["MED", "#d8b23c"], ["HARD", "#d8d8d8"]];
-  for (let r = 0; r < 3; r++) {
-    const y = R.y + 44 + r * 28, c = COMP[(sig + r * 2 + (r === 1 ? 1 : 0)) % 3];
-    ctx.fillStyle = "#101720"; ctx.fillRect(R.x + 10, y - 11, R.w - 20, 22);
-    ctx.fillStyle = c[1]; ctx.beginPath(); ctx.arc(R.x + 28, y, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#c8d4de"; ctx.font = "600 15px system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(`STINT ${r + 1}   ${c[0]}`, R.x + 46, y);
-    ctx.textAlign = "right"; ctx.fillStyle = css(c2);
-    ctx.fillText(`${12 + ((sig >> (r * 3)) & 7) * 3} LAPS`, R.x + R.w - 18, y);
+  // Strategy strip: the stint plan, in the team's own colours. Three rows of
+  // compound + laps, which is what the second board in a real bay shows.
+  {
+    const R = D_STRAT;
+    ctx.fillStyle = "#07090c"; ctx.fillRect(R.x, R.y, R.w, R.h);
+    ctx.fillStyle = css(c1); ctx.fillRect(R.x, R.y, R.w, 26);
+    // Light-on-dark or dark-on-light by luminance. The older boards here pin a
+    // fixed near-white, which disappears on a pale livery (Haas is white).
+    const hi = c1[0] * 0.30 + c1[1] * 0.59 + c1[2] * 0.11 > 0.55;
+    ctx.fillStyle = hi ? "#0a0b0d" : "#f4f5f7";
+    ctx.font = "700 18px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText("RACE PLAN", R.x + 12, R.y + 13);
+    ctx.textAlign = "right";
+    ctx.fillText(String(team.short || team.name || "").toUpperCase(), R.x + R.w - 12, R.y + 13);
+    const h = sig;
+    const COMP = [["SOFT", "#d8443c"], ["MED", "#d8b23c"], ["HARD", "#d8d8d8"]];
+    for (let r = 0; r < 3; r++) {
+      const y = R.y + 44 + r * 28, c = COMP[(h + r * 2 + (r === 1 ? 1 : 0)) % 3];
+      ctx.fillStyle = "#101720"; ctx.fillRect(R.x + 10, y - 11, R.w - 20, 22);
+      ctx.fillStyle = c[1]; ctx.beginPath(); ctx.arc(R.x + 28, y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#c8d4de"; ctx.font = "600 15px system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`STINT ${r + 1}   ${c[0]}`, R.x + 46, y);
+      ctx.textAlign = "right"; ctx.fillStyle = css(c2);
+      ctx.fillText(`${12 + ((h >> (r * 3)) & 7) * 3} LAPS`, R.x + R.w - 18, y);
+    }
   }
-}
-// SIGN — the team wordmark on its own, for the floor mark and the lit sign
-// over the door. Transparent field so it reads on whatever it is laid on.
-function paintSign(ctx, team) {
+  // SIGN — the team wordmark on its own, for the floor mark and the lit sign
+  // over the door. Transparent field so it reads on whatever it is laid on.
   ctx.clearRect(D_SIGN.x, D_SIGN.y, D_SIGN.w, D_SIGN.h);
   ctx.fillStyle = "#e9ecef"; ctx.font = "700 30px system-ui, sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(String(team.name || team.short || "").toUpperCase(),
     D_SIGN.x + D_SIGN.w / 2, D_SIGN.y + D_SIGN.h / 2, D_SIGN.w - 16);
+  return { canvas: cv };
 }
-
 // ── information boards ─────────────────────────────────────────────────────
 // `info` is what the player is actually deciding on. Null (no parts handle
 // yet, or Parts absent) leaves these regions transparent, and the quads then
 // paint nothing rather than showing a board full of zeroes.
 //
 // A SEPARATE PASS over the SAME canvas, because these four regions are the only
-// part of the atlas a part pick changes: one paintDress keyed on everything
-// would repaint the whole atlas on every brake-duct fit to arrive at the same
-// pixels, and rebuild() would throw the bay's geometry away with it. The boards
-// repaint over their own opaque panels, so no clear is needed between passes.
+// part of the atlas a part pick changes. One paintDress keyed on everything
+// would repaint the crest lightbox, the wordmarks, the pit board, six
+// telemetry screens and the strategy strip on every brake-duct fit to arrive
+// at the same pixels — and rebuild() would throw the whole bay's geometry away
+// with it. The boards repaint over their own opaque panels, so no clear
+// is needed between passes.
 function paintBoards(cv, team, liv, info) {
   if (!info) return;
   const ctx = cv.getContext("2d");
-  const [c1, c2] = livCols(liv, [0.6, 0.62, 0.66]);
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const panel = (R, title) => {
     ctx.fillStyle = "#0a0c10"; ctx.fillRect(R.x, R.y, R.w, R.h);
     ctx.fillStyle = css(scale(c1, 0.75)); ctx.fillRect(R.x, R.y, R.w, 44);
@@ -301,15 +292,8 @@ function paintBoards(cv, team, liv, info) {
     ctx.fillText(title, R.x + 18, R.y + 23);
     ctx.textAlign = "center";
   };
-  paintStatsBoard(ctx, panel, info, c2);
-  paintBudgetBoard(ctx, panel, info, c2);
-  paintDriverBoard(ctx, panel, info, c2);
-  paintSpecBoard(ctx, panel, info, c2);
-  lastSpec = info.spec.map((s) => s.label);
-}
-// STATS — the same four numbers the panel quotes, from the same curve
-// (Parts.displayStat), so the wall and the panel can never disagree.
-function paintStatsBoard(ctx, panel, info, c2) {
+  // STATS — the same four numbers the panel quotes, from the same curve
+  // (Parts.displayStat), so the wall and the panel can never disagree.
   panel(D_STATS, "CAR PERFORMANCE");
   const keys = Parts.STAT_KEYS;
   for (let i = 0; i < keys.length; i++) {
@@ -328,9 +312,7 @@ function paintStatsBoard(ctx, panel, info, c2) {
     ctx.fillText(st.delta > 0 ? "+" + st.delta : String(st.delta), D_STATS.x + D_STATS.w - 14, y);
     ctx.textAlign = "center";
   }
-}
-// BUDGET — spent against the cap, with a bar that empties as you spend.
-function paintBudgetBoard(ctx, panel, info, c2) {
+  // BUDGET — spent against the cap, with a bar that empties as you spend.
   panel(D_BUDGET, "BUDGET");
   ctx.textAlign = "left"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 40px system-ui, sans-serif";
   if (info.unlimited) {
@@ -347,9 +329,7 @@ function paintBudgetBoard(ctx, panel, info, c2) {
     ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw * Math.max(0, Math.min(1, info.left / info.budget)), 12);
   }
   ctx.textAlign = "center";
-}
-// DRIVER — the SELECTED seat, not simply the first one on the entry list.
-function paintDriverBoard(ctx, panel, info, c2) {
+  // DRIVER — the SELECTED seat, not simply the first one on the entry list.
   panel(D_DRIVER, "DRIVER");
   ctx.fillStyle = css(c2); ctx.font = "700 96px system-ui, sans-serif";
   ctx.fillText(info.driver.num == null ? "--" : String(info.driver.num),
@@ -358,12 +338,10 @@ function paintDriverBoard(ctx, panel, info, c2) {
   ctx.fillText(String(info.driver.code || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 180);
   ctx.fillStyle = "#9aa4b2"; ctx.font = "600 19px system-ui, sans-serif";
   ctx.fillText(String(info.driver.name || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 218, D_DRIVER.w - 20);
-}
-// SPEC — every fitted component, two columns of six. The row that CHANGED
-// since the last paint carries the accent, so the wall answers "what did I
-// just fit" without a glance back at the panel; the marker fades with the
-// next pick because a board full of highlights marks nothing.
-function paintSpecBoard(ctx, panel, info, c2) {
+  // SPEC — every fitted component, two columns of six. The row that CHANGED
+  // since the last paint carries the accent, so the wall answers "what did I
+  // just fit" without a glance back at the panel; the marker fades with the
+  // next pick because a board full of highlights marks nothing.
   panel(D_SPEC, "FITTED SPEC");
   for (let i = 0; i < info.spec.length && i < 12; i++) {
     const col = i < 6 ? 0 : 1, row = i % 6;
@@ -377,9 +355,10 @@ function paintSpecBoard(ctx, panel, info, c2) {
     ctx.fillText(info.spec[i].label, sx + 92, sy, D_SPEC.w / 2 - 112);
     ctx.textAlign = "center";
   }
+  lastSpec = info.spec.map((s) => s.label);
 }
+let lastSpec = null;
 
-// ── dress geometry ──────────────────────────────────────────────────────────
 // UV rect for an atlas region. v is flipped because createTexture uploads with
 // FLIP_Y, exactly as carDecalData's uvOf does — but U is NOT pre-flipped here:
 // that flip exists to un-mirror the car, which draws through MAT_REFLECT_X
@@ -408,27 +387,39 @@ function buildDress(SIDES) {
   for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = { pos: [], nrm: [], uv: [], idx: [] };
   const zb = Z_BACK + 0.03, zd = Z_DOOR - 0.03, xw = HALF_W - 0.03;
   // Back wall: the crest lightbox, the wordmark under it, and the pit board.
-  // The crest's height is MEASURED framing: the FRONT preset (eye (0, 2.08,
-  // 8.28) aimed at SP_CAR_CTR, 36 deg vertical fov) tops out at y 3.76 on the
-  // plane z = Z_BACK. A crest touching that edge reads as cut off, and a fully
-  // visible crest reads BIGGER than a taller one whose frame is sliced. 1.30 at
-  // the bottom leaves 15 cm over the wordmark (top 1.15) for the lightbox sill.
+  // Height is framing, not decoration, and the ceiling here is MEASURED, not
+  // guessed. The FRONT preset puts the eye at (0, 2.08, 8.28) looking at
+  // SP_CAR_CTR through a 36 deg vertical fov; solving NDC.y = 1 on the plane
+  // z = Z_BACK gives y = 3.76 as the exact top of the frame. A crest topped at
+  // 3.75 is therefore touching the edge — its border reads as cut off — which
+  // is what three successive "lower it a bit" passes kept rediscovering.
+  // 3.40 is the same mark with a visible margin above it, and a fully visible
+  // crest reads BIGGER than a taller one whose frame is sliced.
+  // Raised 1.20-3.40 -> 1.30-3.50 to open a gap for the lightbox sill. The
+  // wordmark below tops out at 1.15 and the FRONT frame tops out at 3.76, so
+  // this is the whole budget: 15 cm under the crest, 26 cm over it.
   dquad(g.back, [[-1.45, 1.30, zb], [1.45, 1.30, zb], [1.45, 3.50, zb], [-1.45, 3.50, zb]], [0, 0, 1], D_CREST);
   dquad(g.back, [[-2.6, 0.42, zb], [2.6, 0.42, zb], [2.6, 1.15, zb], [-2.6, 1.15, zb]], [0, 0, 1], D_WORD);
   // ON the pit-board panel (x 4.25..5.15, y 1.68..2.92, front face z -6.09).
+  // The panel moved from x 3.3 to x 4.70 and this quad did not follow it, so the
+  // graphic hung 0.29 m proud of the wall in open air AND covered the right
+  // third of the driver board next to it.
   dquad(g.back, [[4.30, 1.74, -6.085], [5.10, 1.74, -6.085], [5.10, 2.86, -6.085], [4.30, 2.86, -6.085]], [0, 0, 1], D_BOARD);
-  // The -X board, inset inside its 0.52 x 0.20 half-extent panel, front face at z -6.09.
+  // The -X board, which carried no graphic at all until now. Inset inside the
+  // 0.52 x 0.20 half-extent panel above, front face at z -6.09.
   dquad(g.back, [[-5.16, 2.26, -6.085], [-4.24, 2.26, -6.085], [-4.24, 2.58, -6.085], [-5.16, 2.58, -6.085]], [0, 0, 1], D_STRAT);
-  // Side-wall wordmarks, in the y 3.10-3.60 band that both walls have free (at
-  // y 2.42-2.92 the -X one would sit behind the monitor bank, 0.19 m proud).
-  // Corner order is built per side so the text reads the right way round from
-  // inside each wall. The deep bay (z -5.40..-2.40) is left to the data boards,
-  // so the wordmarks only take the two bays forward of it.
-  const wordZ = [[-1.1, 1.1], [2.4, 4.6]];
+  // Side walls: the wordmark repeated. Corner order is built per side so the
+  // text reads the right way round from inside each wall.
+  // Side-wall wordmarks, in the y 3.10-3.60 band that both walls have free.
+  // At y 2.42-2.92 the -X one would sit behind the monitor bank (0.19 m
+  // proud). The deep bay (z -5.40..-2.40) is left to the data boards, so the
+  // wordmarks only take the two bays forward of that.
+  const wordZ = [[-4.6, -2.4], [-1.1, 1.1], [2.4, 4.6]];
   for (let i = 0; i < wordZ.length; i++) {
     const z0 = wordZ[i][0], z1 = wordZ[i][1];
-    dquad(g.nx, [[-xw, 3.10, z1], [-xw, 3.10, z0], [-xw, 3.60, z0], [-xw, 3.60, z1]], [1, 0, 0], D_WORD);
-    dquad(g.px, [[xw, 3.10, z0], [xw, 3.10, z1], [xw, 3.60, z1], [xw, 3.60, z0]], [-1, 0, 0], D_WORD);
+    // i 0 is the deep bay, which now carries a data board on EACH wall.
+    if (i > 0) dquad(g.nx, [[-xw, 3.10, z1], [-xw, 3.10, z0], [-xw, 3.60, z0], [-xw, 3.60, z1]], [1, 0, 0], D_WORD);
+    if (i > 0) dquad(g.px, [[xw, 3.10, z0], [xw, 3.10, z1], [xw, 3.60, z1], [xw, 3.60, z0]], [-1, 0, 0], D_WORD);
   }
   // The information boards. Back-wall boards sit in the SAME y 1.3-3.8 band as
   // the crest for the same reason it does: the preview's vertical half-FOV is
@@ -463,8 +454,8 @@ function buildDress(SIDES) {
   // it is the one view where every wall mark is edge-on. D_SIGN, not D_CREST:
   // the crest carries a dark team-colour FIELD, and a dark field on a dark
   // floor lit only by sun+ambient+glow (drawDecal never sees the lamps) is
-  // invisible. D_SIGN is bright letters on transparent, so it reads as paint on
-  // concrete the way a real bay does.
+  // invisible, which is exactly how it rendered. D_SIGN is bright letters on
+  // transparent, so it reads as paint on concrete the way a real bay does.
   // y 0.004 clears the floor (0) and the expansion joints (0.002).
   dquad(g.mid, [[-2.30, 0.004, -4.15], [2.30, 0.004, -4.15], [2.30, 0.004, -5.95], [-2.30, 0.004, -5.95]],
     [0, 1, 0], D_SIGN);
@@ -472,15 +463,16 @@ function buildDress(SIDES) {
   // framing (NDC.y about +0.14, on the floor behind the car) but not in the TOP
   // one: there the camera's right axis is -Z, so negative z lands on the RIGHT
   // of the canvas, under the docked sheet. z +4.1..+5.9 maps to NDC.x about
-  // -0.57 — the open floor to the left of the car. Corner order keeps U along
-  // +X and V along -Z exactly as above, so the winding stays +Y-facing and the
-  // letters run the same way; naively translating the first quad flips both.
+  // -0.57 — the open floor to the left of the car, which is the one part of the
+  // TOP framing that was still bare grey. Corner order keeps U along +X and V
+  // along -Z exactly as above, so the winding stays +Y-facing and the letters
+  // run the same way; naively translating the first quad forward flips both.
   dquad(g.mid, [[-2.30, 0.004, 5.90], [2.30, 0.004, 5.90], [2.30, 0.004, 4.10], [-2.30, 0.004, 4.10]],
     [0, 1, 0], D_SIGN);
   // Lit team sign over the garage door, above the shutter travel (slats top at
   // y 4.77) — the first thing the REAR and door-side framings see.
-  // 5 mm in front of the lit fascia's face (the block runs z 6.21-6.31, so a
-  // quad deeper than 6.21 is inside it and draws nothing), inside the guide
+  // 5 mm in front of the lit fascia's face (z 6.21; the block runs 6.21-6.31,
+  // and at z 6.30 this quad was INSIDE it, drawn to nothing), inside the guide
   // rails (x 2.70-2.88) and above the lintel soffit (y 4.78-4.82).
   dquad(g.door, [[2.66, 4.83, 6.205], [-2.66, 4.83, 6.205], [-2.66, 4.99, 6.205], [2.66, 4.99, 6.205]], [0, 0, -1], D_SIGN);
   // Engineer screens above the desk, and the notice board by the door.
@@ -490,10 +482,12 @@ function buildDress(SIDES) {
   // A wordmark ON THE SHUTTER, not on the wall behind it. The REAR preset puts
   // the eye behind the back wall (which culls), so the door wall is the whole
   // backdrop from there — but the shutter slats stand at z 6.25..6.35 and the
-  // dress plane is z 6.37, so a quad on the wall would be depth-tested away by
-  // the slats. z 6.24 puts it on the roller door's face, which is where a real
-  // garage brands it anyway. The REAR frame tops out at y 3.62 on the plane
-  // z = Z_DOOR, so the band sits at y 2.60..3.20.
+  // dress plane is z 6.37, so a quad on the wall is depth-tested away by the
+  // slats and was never visible. z 6.24 puts it on the roller door's face,
+  // which is where a real garage brands it anyway.
+  // y 2.60..3.20, not 3.30..3.90: the REAR preset's eye is (0, 2.28, -7.95) and
+  // the same frustum solve on the plane z = Z_DOOR tops the frame out at y 3.62,
+  // so the taller band lost its upper third off the top of the canvas.
   dquad(g.shutter, [[2.3, 2.60, 6.24], [-2.3, 2.60, 6.24], [-2.3, 3.20, 6.24], [2.3, 3.20, 6.24]], [0, 0, -1], D_WORD);
   return g;
 }
@@ -504,13 +498,11 @@ function buildDress(SIDES) {
 // that wall's per-side group so it culls with it, and lit parts go in the LED
 // groups (emissive) exactly like the stock fixtures. Nothing here moves a
 // light record: the rig is the lighting lane's.
-const GREY = (v) => [v, v * 1.01, v * 1.05];
-const GREY_RAIL = [0.55, 0.56, 0.60];
-const lookCols = (liv) => livCols(liv, [0.55, 0.57, 0.62]);
-
-// The shell's wall bands and colours under a look: { bands, wallAt(y, back), ceil, mat }.
+const { block, cyl, tube, tile, lookCol, CEIL_Y, MAT } = GaragePrims;
+const livCols = (liv) => [rgb(liv && liv.c1, [0.30, 0.32, 0.36]), rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.55, 0.57, 0.62])];
+// The shell's wall bands and colours under a look: { bands, wallAt(y, back), seamed, ceil }.
 function lookWall(L, liv) {
-  const [c1, c2] = lookCols(liv), W = L.wall;
+  const [c1, c2] = livCols(liv), W = L.wall;
   const dado = lookCol(W.dado, c1, c2), stripe = lookCol(W.stripe, c1, c2), panel = lookCol(W.panel, c1, c2);
   const back = W.back ? lookCol(W.back, c1, c2) : null;
   const bands = [[0, 0.12, 1, W.skirt], [0.12, 1.50, 2], [1.50, 1.62, 1]];
@@ -525,14 +517,16 @@ function lookWall(L, liv) {
     }
   } else bands.push([1.62, CEIL_Y, 4]);
   const wallAt = (y, isBack) => (isBack && back ? (y < 0.12 ? W.skirt : back) : y < 1.4995 ? dado : y < 1.6205 ? stripe : panel);
+  // Stock battens only on the stock room; a look draws its own joints.
+  const seamed = (col) => col;
   // FLAT, not CONCRETE: the pack's concrete layer multiplies albedo by a dark
   // texel (albedo * tex * 2), which pinned every look's walls to the same
-  // ~7% grey whatever colour they were given.
-  return { bands, wallAt, ceil: L.ceil, mat: L.wall.mat != null ? L.wall.mat : MAT.FLAT };
+  // ~7% grey whatever colour they were given (round 1 captures, all ~18/255).
+  return { bands, wallAt, seamed, ceil: L.ceil, mat: L.wall.mat != null ? L.wall.mat : MAT.FLAT };
 }
 // Floor colour overrides for buildBayFloor: { SLAB, IN, PAINT, WALK, band, key }.
 function lookFloorCols(L, liv) {
-  const [c1, c2] = lookCols(liv), F = L.floor;
+  const [c1, c2] = livCols(liv), F = L.floor;
   return { SLAB: lookCol(F.slab, c1, c2), IN: lookCol(F.inner, c1, c2), PAINT: lookCol(F.paint, c1, c2),
            WALK: lookCol(F.walk, c1, c2), band: lookCol(F.band, c1, c2), key: lookCol(F.key, c1, c2) };
 }
@@ -540,7 +534,7 @@ function lookFloorCols(L, liv) {
 // where the crew stand — real geometry at +3 mm (the joints are +2 mm, the
 // keyline +1 mm), clear of the floor wordmarks at |z| > 4.1.
 function lookFloor(out, liv, L) {
-  const [c1, c2] = lookCols(liv), F = L.floor;
+  const [c1, c2] = livCols(liv), F = L.floor;
   const oc = F.outline ? lookCol(F.outline, c1, c2) : null;
   const Y = 0.003, M = MAT.ASPHALT, T = 0.05;
   if (oc) {
@@ -597,8 +591,8 @@ function lookTruss(out, L) {
   for (const x of [-3.6, -1.2, 1.2, 3.6]) block(out, x, (hi + 0.05 + CEIL_Y) / 2, 0, 0.05, (CEIL_Y - hi - 0.05) / 2, (Z_DOOR - Z_BACK) / 2, ST, MAT.METAL);
   return true;
 }
+const GREY_RAIL = [0.55, 0.56, 0.60];
 // Wall-mounted, LIT geometry: panel joints (studio). Per-side groups.
-// `liv` is unused; the signature matches lookLed for the caller.
 function lookProps(g, liv, L) {
   if (L.wall.seam !== "joint") return;
   const J = [0.10, 0.105, 0.115], p = L.wall.jointPitch || 1.35;
@@ -614,7 +608,7 @@ function lookProps(g, liv, L) {
 }
 // Emissive geometry: ceiling lighting, lit wall slats, back-wall frames and header bands.
 function lookLed(g, liv, L) {
-  const [c1, c2] = lookCols(liv), zb = Z_BACK + 0.008;   // half-depth 0.008: back face on the wall
+  const [c1, c2] = livCols(liv), zb = Z_BACK + 0.008;   // half-depth 0.008: back face on the wall
   if (L.ceilLed === "grid") {
     for (const x of [-2.0, 2.0]) for (let i = -2; i <= 2; i++) {
       const z = i * 2.4;
@@ -649,11 +643,12 @@ function lookLed(g, liv, L) {
     block(g.back, 0, 3.70, zb, HALF_W, 0.015, 0.008, scale(c2, 1.2));
   }
 }
+const GREY = (v) => [v, v * 1.01, v * 1.05];
 
-// scene.js forgets the previous spec on a rebuild (resetSpec), and drops the
-// stamped boardInfo cache too when the room is released.
-function resetSpec() { lastSpec = null; }
-function releaseDress() { lastSpec = null; _boardInfo = null; _boardInfoKey = ""; }
+  // The boards repaint a changed spec line in a highlight: scene.js forgets the previous spec on a rebuild (resetSpec) and
+  // drops the stamped boardInfo cache too when the room is released.
+  function resetSpec() { lastSpec = null; }
+  function releaseDress() { lastSpec = null; _boardInfo = null; _boardInfoKey = ""; }
 
   return { seatDriverAt, boardInfo, boardKey, paintDress, paintBoards, buildDress, resetSpec, releaseDress,
     lookWall, lookFloorCols, lookFloor, lookTruss, lookProps, lookLed };

@@ -19,10 +19,6 @@ dialog.screen {
   margin: 0;
   border: 0;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
-  /* The .screen keyboard term (--kb), restated: this (0,1,1) padding beats
-     .screen's (0,1,0) padding-bottom, so every <dialog class="screen"> lost
-     the iPhone keyboard inset (#5067). */
-  padding-bottom: max(var(--safe-b), var(--kb));
   max-width: none; max-height: none;
   width: 100%; height: 100%;
   background: transparent;

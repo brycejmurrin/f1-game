@@ -132,7 +132,6 @@ const InputHoldButtons = (function () {
         if (strongest !== painted) paint(strongest);
       }
       function release(pointerId) {
-        sibRects.delete(pointerId);
         anchors && anchors.delete(pointerId);
         levels && levels.delete(pointerId);
         live.delete(pointerId);
@@ -140,22 +139,13 @@ const InputHoldButtons = (function () {
         if (ids.size === 0) apply(false);
         paintLevel();
       }
-      // opts.handoff: the sibling arrow's id. A captured thumb never reaches the sibling's
-      // pointerdown, so sliding LEFT onto RIGHT kept steering left at PEDAL_MIN (#5016):
-      // pointermove hands the contact over once it enters the sibling's rect (read at press).
-      const handoff = opts && opts.handoff;
-      const sibRects = new Map();                 // pointerId -> sibling rect at touch-down
-      const sibling = () => holdBtns.find((h) => h.id === handoff) || null;
-      const rec = { id, ids, apply, level: paint, anchors, levels, el, live, release, press };
+      const rec = { ids, apply, level: paint, anchors, levels, el, live, release };
       holdBtns.push(rec);
       holdByEl.set(el, rec);
       el.addEventListener("pointerdown", e => {
         if (e.pointerType === "mouse" && e.button !== 0) return;   // a right-click opens a context menu and may never send pointerup
-        e.preventDefault();
-        press(e);
-      });
-      function press(e) {
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
+        e.preventDefault();
         // Only the FIRST contact is a press edge: THROTTLE = LATCH toggles on every
         // apply(true), so a second finger landing on GAS cancelled the latch while
         // the first was still down.
@@ -170,20 +160,10 @@ const InputHoldButtons = (function () {
           levels.set(e.pointerId, 1);
           paintLevel();
         }
-        const sib = handoff && sibling();
-        if (sib && sib.el.getBoundingClientRect) sibRects.set(e.pointerId, sib.el.getBoundingClientRect());
-      }
+      });
       if (level) el.addEventListener("pointermove", e => {
         const a = anchors.get(e.pointerId);
         if (a == null) return;
-        const r = sibRects.get(e.pointerId);
-        if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-          sibRects.delete(e.pointerId);
-          release(e.pointerId);
-          const sib = sibling();
-          if (sib && !sib.ids.has(e.pointerId)) sib.press(e);
-          return;
-        }
         if (axis === "x") {
           const ease = Math.max(0, (e.clientX - a) * (-dir) - PEDAL_DEAD_PX);
           levels.set(e.pointerId, clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));

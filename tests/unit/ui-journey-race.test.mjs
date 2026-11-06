@@ -115,7 +115,7 @@ test("pause owns paused navigation: #campicker stands down with the dim sheet", 
 // y 461 (HELMET, the default cam, offscreen) and clipped CINEMATIC / TRACKSIDE.
 test("#campicker fits a short landscape: scroll-bounded, wide in compact, labels never clipped", () => {
   const rules = cssRules(read("css/touch-controls.css"));
-  assert.equal(decl(rules, "#campicker", "max-height"), "calc(100svh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px)",
+  assert.equal(decl(rules, "#campicker", "max-height"), "calc(100dvh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px)",
     "bounded by the viewport, the CAM button and both safe-area edges");
   assert.equal(decl(rules, "#campicker", "overflow-y"), "auto", "the rest scrolls instead of painting offscreen");
   const compactW = /^min\((\d+)px/.exec(decl(rules, 'body[data-density="compact"] #campicker', "width") || "");

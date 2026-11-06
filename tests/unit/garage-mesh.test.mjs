@@ -915,10 +915,9 @@ test("garage wheels are available before the legacy race-session shim and retain
   assert.equal(vm.runInContext("typeof GarageDepartureWheels", h.ctx), "undefined", "first garage visit has not loaded the race-session shim");
   assert.equal(typeof h.Wheels.createGarage, "function");
   const wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
-  const liv = { rimTint: "#334455", caliperTint: "#ff3300" };
-  wheels.prepare("first", liv, tiers);
-  wheels.prepare("first", liv, tiers);
-  assert.equal(h.recipes.length, 2, "one fitted front and rear pair: same key and livery reuse it");
+  wheels.prepare("first", { rimTint: "#334455", caliperTint: "#ff3300" }, tiers);
+  wheels.prepare("first", {}, tiers);
+  assert.equal(h.recipes.length, 2, "one fitted front and rear pair");
   assert.equal(h.meshes.length, 4, "rotating and fixed geometry share the cache");
   assert.deepEqual(Array.from(h.recipes[0][2]), [1, .2, 0], "fitted wheel keeps livery caliper tint");
   const base = h.M4.ident();
@@ -931,9 +930,6 @@ test("garage wheels are available before the legacy race-session shim and retain
   assert.equal(h.recipes.length, 4, "re-entry restores released layers");
   wheels.prepare("changed", {}, tiers);
   assert.equal(h.freed.length, 8, "parts changes release the superseded fitted set");
-  wheels.prepare("changed", liv, tiers);
-  assert.equal(h.recipes.length, 8, "a livery wheel edit under the same key rebuilds the pair (#4907)");
-  assert.equal(h.freed.length, 12, "and releases the stale one");
 });
 
 test("garage wheel transforms reverse and seek exactly while calipers stay fixed", () => {

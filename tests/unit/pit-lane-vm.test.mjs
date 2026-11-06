@@ -590,13 +590,11 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   doc.getElementById("cs-arrival-skip").onclick();
   assert.equal(g.G.paused, true, "skip keeps the race paused for work");
   assert.equal(doc.getElementById("cs-inner").inert, false);
-  doc.getElementById("cs-back").onclick();         // BACK plays the pit-out beat (#4745); a second press finishes it
   doc.getElementById("cs-back").onclick();
   assert.equal(g.G.paused, false);
   assert.equal(car.pitT, heldBefore, "animation and inspection add no work charge");
   doc.getElementById("hud-work").onclick();
   doc.getElementById("cs-done").onclick();
-  doc.getElementById("cs-done").onclick();         // the second DONE skips the pit-out beat
   assert.equal(doc.getElementById("cs-arrival").hidden, true);
   assert.equal(g.G.paused, false, "early exit cleans up arrival and resumes");
   // THE PRICE, charged to the hold that is left — so the field drives past

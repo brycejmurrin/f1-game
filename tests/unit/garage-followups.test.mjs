@@ -57,7 +57,7 @@ function dirtyExitFixture(from) {
   run('js/garage/setup-sheet.js'); context.G = G;
   const ui = vm.runInContext('SetupUI.create(G)', context);
   const routes = [];
-  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {}, skipPitOut: () => false, startPitOut: (done) => done() }, garageReturn: from, soundOn: false,
+  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {} }, garageReturn: from, soundOn: false,
     loadingScreen: { phase: () => '', busy() {}, stop() {} }, setupPreviewOn: true, recomputePlayerMods() {},
     buildSelect() {}, els: G.els, netLobby: { roomChanged: () => routes.push('vsfriend') },
     careerUi: { openHub: () => routes.push('career') }, raceSettings: { openRaceSettings: () => routes.push('select') },

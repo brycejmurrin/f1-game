@@ -97,7 +97,6 @@ const TracksideCams = (function () {
    * Live pose for vantage.js. Mutates nothing on the car; caches the active
    * index on the track. `extra.carPos` (when present) aims at the subject car.
    */
-  const _res = { eye: null, tgt: null, fov: 0, index: 0, count: 0, n: 0, cut: false };   // pooled
   function pose(track, s, x, extra) {
     const cams = build(track);
     if (!cams.length) return null;
@@ -120,14 +119,15 @@ const TracksideCams = (function () {
       Tracks.sample(track, wrapS(track, c.lookS), _smp);
       _tgt[0] = _smp.p[0]; _tgt[1] = _smp.p[1] + LOOK_UP; _tgt[2] = _smp.p[2];
     }
-    // Hold ~FOV_SPAN m of circuit in frame, clamped (a fixed lens specks far, fisheyes near). `cut`: the rig snaps.
+    // A fixed 42° lens makes the car a speck once it is a straight away, and
+    // a fisheye when it passes the camera. Hold ~FOV_SPAN metres of circuit
+    // in frame and clamp so neither end blows out. `cut` is the auto-switch:
+    // the live rig snaps instead of damping across the circuit.
     const dist = Math.hypot(_tgt[0] - _eye[0], _tgt[1] - _eye[1], _tgt[2] - _eye[2]) || 1;
     let fov = 2 * Math.atan((FOV_SPAN * 0.5) / dist) * (180 / Math.PI);
     if (fov < FOV_FAR) fov = FOV_FAR;
     if (fov > FOV_NEAR) fov = FOV_NEAR;
-    const r = _res;
-    r.eye = _eye; r.tgt = _tgt; r.fov = fov; r.index = idx; r.count = cams.length; r.n = c.n; r.cut = cut;
-    return r;
+    return { eye: _eye, tgt: _tgt, fov: fov, index: idx, count: cams.length, n: c.n, cut: cut };
   }
 
   /** A restart / seek is a CUT: forget the held cam so hysteresis cannot keep the old one. */

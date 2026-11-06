@@ -1022,23 +1022,6 @@ test("memState reports the renderer's primitive resource counts and byte sizes",
   assert.equal(report({info: {}}, {}).progs, null);
 });
 
-test("memState().calls is the per-frame pass count, not three's lifetime render.calls (#4780)", () => {
-  const start = TLX.indexOf("const inf = renderer && renderer.info;", TLX.indexOf("memState()"));
-  const end = TLX.indexOf("}", TLX.indexOf("if (inf.render)", start)) + 1;
-  assert.ok(start >= 0 && end > start);
-  const report = new Function("renderer", "o", TLX.slice(start, end) + "} return o;");
-  const render = { calls: 123456, frameCalls: 7 };
-  assert.equal(report({ info: { render, memory: {} } }, {}).calls, 7, "per-frame render() passes, not the lifetime count");
-});
-
-test("log.js raises the resource-timing buffer above the 250 default before anything fetches (#4780)", async () => {
-  const { readFileSync } = await import("node:fs");
-  const src = readFileSync(new URL("../../js/core/log.js", import.meta.url), "utf8");
-  const sizes = [];
-  vm.runInNewContext(src, { performance: { setResourceTimingBufferSize: (n) => sizes.push(n) }, console }, { filename: absSrc("js/core/log.js") });
-  assert.deepEqual(sizes, [2000]);
-});
-
 test("carFinish rides the material's packB.w and its cache key (finish 60-85 block on car paint only)", async () => {
   // garage-perf-2026-10-20 finding 2: the per-draw uniform that gates the finish AA inputs + tint switch.
   const { lit } = await litGLSL();

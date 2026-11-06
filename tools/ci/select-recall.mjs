@@ -28,7 +28,6 @@ import { fileURLToPath } from "node:url";
 import { pick } from "./pick-tests.mjs";
 import { specsOf, fit, specsImporting, prioritise, TRACKED } from "./select-specs.mjs";
 import fs from "node:fs";
-import { emitJsonAndExit } from "../lib/emit-json.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -140,7 +139,7 @@ export function recall(cases = CASES) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const rows = recall();
-  if (process.argv.includes("--json")) emitJsonAndExit(JSON.stringify(rows, null, 2));
+  if (process.argv.includes("--json")) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
   const hits = rows.filter((r) => r.hit).length;
   console.log(`FAULTY-CHANGE RECALL: ${hits}/${rows.length} caught outright\n`);
   for (const r of rows) {

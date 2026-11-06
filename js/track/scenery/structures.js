@@ -173,10 +173,7 @@ const SceneryStructures = (function () {
       // AWAY from the track (Monza, Imola, Catalunya). The other styles are
       // side-independent, and the duplicate-string note above is why they keep
       // sharing one key instead of paying for a second family.
-      // Mesh colour rides the placement (NODE_COLOR); hoarding and palisade also draw a
-      // postCol strip in the model, so only those two keep it in the key.
-      const meshKey = `fence-mesh|${h}|${st}`
-        + (st === "hoarding" || st === "palisade" ? `|${postCol.join(",")}` : "")
+      const meshKey = `fence-mesh|${h}|${st}|${meshCol.join(",")}`
         + (st === "leaning" ? `|${side}` : "");
       let fi = 0;
       along(s0, s1, 5, (k, spacing) => {
@@ -206,27 +203,27 @@ const SceneryStructures = (function () {
         // Every other panel stands MIN_SEP to the side: two slabs end to end on a
         // gentle curve or slope otherwise share one side plane (coplanar-audit).
         if (fi++ & 1) place.o = vadd(place.o, p.r, TrackGeom.MIN_SEP * 2.5);
-        const span = Object.assign({ s: [1, 1, spacing], col: meshCol }, place);
+        const span = Object.assign({ s: [1, 1, spacing] }, place);
         ctx.instance(meshKey, span,
           (rec) => {
             if (st === "chainlink") {
-              rec.box([0, h * 0.95, 0], [0.07, 0.07, 1], TrackGraph.NODE_COLOR);
+              rec.box([0, h * 0.95, 0], [0.07, 0.07, 1], meshCol);
             } else if (st === "panelled") {
               for (const f of [0.30, 0.90])
-                rec.box([0, h * f, 0], [0.09, 0.14, 1], TrackGraph.NODE_COLOR);
+                rec.box([0, h * f, 0], [0.09, 0.14, 1], meshCol);
             } else if (st === "hoarding") {
               // Solid printed sheet — street circuits screen the public road.
-              rec.box([0, h * 0.52, 0], [0.09, h * 0.95, 1], TrackGraph.NODE_COLOR);
+              rec.box([0, h * 0.52, 0], [0.09, h * 0.95, 1], meshCol);
               rec.box([0, h * 1.00, 0], [0.14, 0.10, 1], postCol);
             } else if (st === "palisade") {
               for (let i = 0; i < 3; i++)
-                rec.box([0, h * 0.55, (i - 1) * 0.30], [0.06, h * 0.9, 0.09], TrackGraph.NODE_COLOR);
+                rec.box([0, h * 0.55, (i - 1) * 0.30], [0.06, h * 0.9, 0.09], meshCol);
               rec.box([0, h * 0.95, 0], [0.08, 0.07, 1], postCol);
             } else if (st === "leaning") {
-              rec.box([0, h * 0.50, 0], [0.05, h * 0.80, 1], TrackGraph.NODE_COLOR);
-              rec.box([-side * h * 0.09, h * 0.95, 0], [h * 0.20, 0.05, 1], TrackGraph.NODE_COLOR);
+              rec.box([0, h * 0.50, 0], [0.05, h * 0.80, 1], meshCol);
+              rec.box([-side * h * 0.09, h * 0.95, 0], [h * 0.20, 0.05, 1], meshCol);
             } else {
-              rec.box([0, h * 0.55, 0], [0.05, h * 0.9, 1], TrackGraph.NODE_COLOR);           // mesh (default)
+              rec.box([0, h * 0.55, 0], [0.05, h * 0.9, 1], meshCol);           // mesh (default)
             }
           },
           { kind: "fence", k, side });
@@ -306,11 +303,8 @@ const SceneryStructures = (function () {
       // `cap` and the top strip `tyre`, the plain stack the reverse. A key that
       // omitted one let the circuit's first wall colour every later one.
       const slab = st === "tecpro" || st === "airfence";
-      // The plain stack and every conveyor cap are one colour, so it rides the placement
-      // (NODE_COLOR); only the two-colour slab bodies keep both tints in the key.
-      const stackKey = slab ? `tyre-stack|${st}|${tyre.join(",")}|${cap.join(",")}` : `tyre-stack|${st}`;
-      const capKey = `tyre-cap|${st}`;
-      let capN = 0;
+      const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "");
+      const capKey = `tyre-cap|${st}|${(slab ? tyre : cap).join(",")}`;
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
@@ -319,7 +313,7 @@ const SceneryStructures = (function () {
         }
         // Same split as guardrail: fixed tyre stack, length-scaled conveyor cap.
         const place = { o: p.c, r: p.r, u: p.u, t: p.t };
-        ctx.instance(stackKey, slab ? place : Object.assign({ col: tyre }, place),                                           // base sunk
+        ctx.instance(stackKey, place,                                           // base sunk
           (rec) => {
             if (st === "tecpro") {
               rec.box([0, 0.20, 0], [1.5, 1.2, 1.6], cap);
@@ -327,20 +321,16 @@ const SceneryStructures = (function () {
             } else if (st === "airfence") {
               rec.frustum([0, -0.35, 0], 1.05, 0.72, 1.45, cap, 8);
             } else {
-              rec.cyl([0, -0.35, 0], 1.0, 1.25, TrackGraph.NODE_COLOR, 7);                       // stack (default)
+              rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);                       // stack (default)
             }
           },
           { kind: "tyreWall", k, side });
-        // Every other cap stands MIN_SEP higher: end-to-end caps never share a top plane
-        // (flat coplanar-audit, adjacent bins), nor one with a wall coping at the same height.
-        const lift = 0.04 + ((capN++ & 1) ? 2 * TrackGeom.MIN_SEP : 0);
         ctx.instance(capKey,
-          Object.assign({ s: [1, 1, spacing], col: slab ? tyre : cap }, place,
-            { o: [p.c[0] + p.u[0] * lift, p.c[1] + p.u[1] * lift, p.c[2] + p.u[2] * lift] }),
+          Object.assign({ s: [1, 1, spacing] }, place),
           (rec) => {
-            if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], TrackGraph.NODE_COLOR);
-            else if (st === "airfence") rec.box([0, 1.14, 0], [1.5, 0.14, 1], TrackGraph.NODE_COLOR);
-            else rec.box([0, 0.95, 0], [2.0, 0.3, 1], TrackGraph.NODE_COLOR);                     // stack (default)
+            if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], tyre);
+            else if (st === "airfence") rec.box([0, 1.14, 0], [1.5, 0.14, 1], tyre);
+            else rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap);                     // stack (default)
           },
           { kind: "tyreWall", k, side });
       }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}`);

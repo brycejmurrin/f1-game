@@ -79,7 +79,6 @@ var RaceCeremony = (function () {
     let phase = "idle";
     let age = 0;
     let skipped = false;
-    let seeked = false;   // a harness seek jumps the beats: no garage show
     let order = null;
     let meta = null;
     let sessionEligible = false;
@@ -98,10 +97,7 @@ var RaceCeremony = (function () {
       else el.dataset.ceremonyPhase = phase;
     }
     function showSheet() {
-      const reveal = () => { if (phase === "results" && G.els && G.els.results) G.els.results.hidden = false; };
-      // RACE END (#4745): a ceremony that was not harness-seeked brings the car home to the garage first, then the sheet.
-      if (!seeked && deps && deps.raceEndHome && deps.raceEndHome(reveal)) return;
-      reveal();
+      if (G.els && G.els.results) G.els.results.hidden = false;
     }
     function status() {
       const elig = phase === "idle" ? eligible(G, liveMeta()) : sessionEligible;
@@ -159,7 +155,7 @@ var RaceCeremony = (function () {
       order = ord || G.cars || [];
       meta = Object.assign({ duel: !!duelOn(), watch: !!isWatch() }, opts || {});
       sessionEligible = eligible(G, meta);
-      skipped = false; seeked = false;
+      skipped = false;
       age = 0;
       if (!sessionEligible) {
         phase = "idle";
@@ -177,7 +173,7 @@ var RaceCeremony = (function () {
     function seek(target) {
       if (phase === "idle" || !sessionEligible) return false;
       if (SEEKABLE.indexOf(target) < 0) return false;
-      skipped = true; seeked = true;
+      skipped = true;
       enter(target);
       return true;
     }

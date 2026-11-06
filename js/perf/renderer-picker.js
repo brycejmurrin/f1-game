@@ -218,8 +218,6 @@ const RENDERER_LS_KEYS = [
   "apex26.tlxWebKitGL",
   // __tlx.roadSplit(false) persists the road-split A/B arm (tlx.js); RESET brings the split back.
   "apex26.tlxRoadSplit",
-  // __tlx.mirrorSub(false) persists the lite mirror's whole-chunk cull arm (tlx.js); RESET brings the sub-range cull back.
-  "apex26.tlxMirrorSub",
   "apex26.wgxCapture",
 ];
 // wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that

@@ -119,8 +119,10 @@ const CarDraw = (function () {
     // Resolved tyre/brake visual tiers for the PLAYER's wheel meshes (drawPlayerWheels
     // reads these directly — cheap per-frame variable reads, not a per-frame
     // Parts.getVisualTiers() call). Refreshed whenever parts change (below).
-    // The APPEARANCE tiers (livery part styles applied); CarWheels.spec reads tyres, brakes and wheels off it.
-    let playerWheelTiers = null;
+    let playerTyreTier = 1, playerBrakesTier = 1, playerTyreId = "medium", playerBrakeId = "standard";
+    let playerTyreVisual = null, playerBrakeVisual = null;
+    // WHEELS rides along with the other two wheel-facing categories.
+    let playerWheelId = "standard", playerWheelVisual = null;
     // Full 12-char cosmetic key for the PLAYER's body/cockpit mesh caches — computed
     // once here (parts only change from the setup screen, which calls this on close)
     // so the render loop reads a cached string instead of rebuilding it via
@@ -519,14 +521,15 @@ const CarDraw = (function () {
         if (key.indexOf(prefix) === 0) dropDecalTexture(key);
       });
     }
-    // SAVE & FIT mints a fresh custom_<ts> id; drop every non-draft atlas of the team not under the
-    // CURRENT fitted id (#3609). Skipped while a draft is live (CANCEL restores the saved 2048).
-    const _sweptRev = new Map();   // team -> store rev last swept
+    // SAVE & FIT always mints a fresh custom_<ts> id (setup-sheet) and only drops
+    // draft keys (invalidateDecalTextures(team, true)). The new id cache-misses and
+    // schedulePlayerHiRes uploads another 2048×2560 (~26.7 MB) while the previous
+    // fitted id's atlas stays live (#3609). Drop every non-draft atlas for this
+    // team whose key is not under the CURRENT fitted id. Skip while a draft is
+    // live for the team so CANCEL still restores the saved 2048.
     function dropSupersededFittedAtlases(team) {
       const d = G.livDraftOverride;
-      if (d && d.teamId === team.id) { _sweptRev.delete(team.id); return; }
-      if (_sweptRev.get(team.id) === G.store.rev) return;
-      _sweptRev.set(team.id, G.store.rev);
+      if (d && d.teamId === team.id) return;
       const keep = team.id + ":" + G.getLiveryId(team.id) + ":";
       const teamColon = team.id + ":";
       const draftPrefix = teamColon + DRAFT_TAG;
@@ -791,7 +794,11 @@ const CarDraw = (function () {
     function getCarDecalTexture(team, num, isPlayer, allowHiRes) {
       if (typeof LiveryTex === "undefined" || !G.gfx.createTexture) return null;
       if (_draftSpare.length && !G.livDraftOverride) freeDraftSpares();
-      // isPlayer is part of the key (mobile: player 512², AI 256²). SAVE & FIT: free the old fitted atlas first (#3609).
+      // isPlayer is part of the key: on the mobile tier the player's atlas uploads
+      // at 512² and AI atlases at 256², so a team the player later switches to
+      // must not reuse a cached AI-resolution atlas (and vice versa).
+      // A SAVE & FIT that minted a new id: free the previous fitted atlas before
+      // this miss schedules another ~26.7 MB upload (#3609).
       if (isPlayer) dropSupersededFittedAtlases(team);
       const key = decalKeyFor(team, num, isPlayer);
       const wantHi = !!isPlayer && allowHiRes !== false;
@@ -1693,11 +1700,17 @@ const CarDraw = (function () {
       }
     }
     function getPlayerWheelMeshes(team) {
-      // ONE recipe (CarWheels.spec, #4907): its key is the option ids plus every livery wheel field
-      const ws = CarWheels.spec(playerWheelTiers || { tyres: 1, brakes: 1 }, team && deps.resolveLivery(team));
-      return putBoundedMesh(wheelMeshCache, wheelMeshOrder, ws.key, () => {
-        const front = Car3D.buildWheelLayers(0.32, ws.band, ws.cal, ws.rim, false, ws.tyre, ws.brake, ws.wheel, ws.ink, ws.surf);
-        const rear = Car3D.buildWheelLayers(0.38, ws.band, ws.cal, ws.rim, false, ws.tyre, ws.brake, ws.wheel, ws.ink, ws.surf);
+      // livery wheel tints (rimTint / caliperTint) join the key: "" when unset, so today's key is unchanged
+      const wt = CarWheels.tints(team && deps.resolveLivery(team));
+      const key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key;
+      return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
+        const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
+        const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
+        const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
+        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
+        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1728,26 +1741,33 @@ const CarDraw = (function () {
     // factory parts, so distinct fitted combos in one race are far fewer.
     const fieldWheelOrder = [];
     const FIELD_WHEEL_CACHE_MAX = 12;
-    let _fwLiv = null;
+    let _fwTints = null;
     let _fwVt = null;   // the pending build for the hoisted factory below (no closure per car per frame)
     function getFieldWheelMeshes(team, car) {
       const setup = car && car.visualSetup;
       const st = setup ? teamDecalState(team, false, setup, car.visStamp) : teamDecalState(team, false);
       const vt = st.parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
       // A pure function of the cached state's parts, so it is built once per state.
-      const liv = deps.resolveLivery(team), wt = CarWheels.tints(liv);   // every livery wheel field: part of the key ("" unset)
+      const wt = CarWheels.tints(deps.resolveLivery(team));   // rimTint / caliperTint: part of the key ("" unset)
       const base = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
       // tints() is memoised per livery, so `wt` is identity-stable: the concatenation is built once per state
       // and tint set, not per car per frame.
       let key = base;
       if (wt.key) { if (st.fwKeyWt !== wt) { st.fwKeyWt = wt; st.fwKeyFull = base + wt.key; } key = st.fwKeyFull; }
-      _fwVt = vt; _fwLiv = liv;
+      _fwVt = vt; _fwTints = wt;
       return putBoundedMesh(fieldWheelCache, fieldWheelOrder, key, buildPendingFieldWheels, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
     }
     function buildPendingFieldWheels() {
-        const ws = CarWheels.spec(_fwVt, _fwLiv);   // the same recipe as the player's wheels (#4907)
-        const front = Car3D.buildWheelLayers(0.32, ws.band, ws.cal, ws.rim, false, ws.tyre, ws.brake, ws.wheel, ws.ink, ws.surf);
-        const rear = Car3D.buildWheelLayers(0.38, ws.band, ws.cal, ws.rim, false, ws.tyre, ws.brake, ws.wheel, ws.ink, ws.surf);
+        const vt = _fwVt;
+        const tyre = vt._visual && vt._visual.tyres;
+        const brake = vt._visual && vt._visual.brakes;
+        const wheel = vt._visual && vt._visual.wheels;
+        const band = (tyre && tyre.band) || Car3D.TYRE_BAND[vt.tyres] || Car3D.TYRE_BAND[1];
+        const wt = _fwTints;
+        const caliper = wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes]);
+        const rim = wt.rim || (brake && brake.rim);
+        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
+        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
         // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
         // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
         // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and
@@ -2145,7 +2165,13 @@ const CarDraw = (function () {
       playerParts = vt;
       playerPartsTeam = team ? team.id : "";
       if (team) vt = Car3D.appearanceParts(vt, deps.resolveLivery(team));
-      playerWheelTiers = vt;
+      playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
+      playerTyreId = vt._ids ? vt._ids.tyres : "medium";
+      playerBrakeId = vt._ids ? vt._ids.brakes : "standard";
+      playerTyreVisual = vt._visual && vt._visual.tyres || null;
+      playerBrakeVisual = vt._visual && vt._visual.brakes || null;
+      playerWheelId = vt._ids ? vt._ids.wheels : "standard";
+      playerWheelVisual = vt._visual && vt._visual.wheels || null;
       playerVisualKey = visualKey;
       // Restamp the live player through the ONE carVisual helper. makeCars stamps
       // visualSetup once from getTeamParts (own:true); STANDARD Daily's body key is

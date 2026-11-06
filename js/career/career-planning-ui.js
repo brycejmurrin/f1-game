@@ -11,13 +11,9 @@ const CareerPlanningUI = (function () {
       b.onclick = action; n.appendChild(b); return b;
     };
     function download(text, name) {
-      const blob = new Blob([text], { type: "application/json" });
-      // Native path first (plain Safari lacks the click rescue); a native failure stays a failure.
-      if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable()
-          && typeof NativeDownload.saveBlob === "function") { NativeDownload.saveBlob(blob, name).catch(() => {}); return; }
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
       const a = document.createElement("a"); a.href = url; a.download = name;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
     const protection = p.protection();
     if (protection || Career.conflicted()) {

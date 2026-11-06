@@ -70,28 +70,12 @@ const readList = (rel) => fs.existsSync(path.join(ROOT, rel)) ? JSON.parse(read(
  * The filename's date, else the OLDEST commit date the clone holds for the note
  * (a shallow clone bottoms out at its boundary commit, which only makes an old
  * note look younger, never older). The last commit would re-date a note on every
- * link repoint. On a shallow clone, batched `git log -- docs/notes` re-dates
- * undated files at the boundary commit, so git dates are ignored there; a tracked
- * note with no filename date and no full-clone log hit is dated 1970-01-01 so Kind
- * enforcement does not treat the grandfathered tree as "new". Only untracked paths
- * fall through to today.
+ * link repoint. An uncommitted note is dated today.
  */
 export function dateOf(rel) {
   const m = /(\d{4}-\d{2}-\d{2})/.exec(path.basename(rel));
   if (m) return m[1];
-  let fromGit;
-  try {
-    if (git(["rev-parse", "--is-shallow-repository"], { stdio: "pipe" }).trim() !== "true") {
-      fromGit = gitDates().get(rel);
-    }
-  } catch { /* no git */ }
-  if (fromGit) return fromGit;
-  try {
-    git(["ls-files", "--error-unmatch", "--", rel], { stdio: "pipe" });
-    return "1970-01-01";
-  } catch {
-    return isoToday();
-  }
+  return gitDates().get(rel) || isoToday();
 }
 
 /** True when the note's date comes from its filename (the only date the INDEX shows: a git date differs between a
@@ -99,8 +83,6 @@ export function dateOf(rel) {
 export const datedByName = (rel) => /(\d{4}-\d{2}-\d{2})/.exec(path.basename(rel)) !== null;
 
 let gitDateCache = null;
-/** Pin the git-date map in unit tests (simulate depth-1 clone with no log entry for a note). */
-export function setGitDateCacheForTest(map) { gitDateCache = map; }
 /** Oldest commit date the clone holds per docs/notes file, from ONE `git log` (a per-note `git log --follow` took
  *  455 s on a CI runner). */
 function gitDates() {

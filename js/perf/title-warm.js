@@ -1,14 +1,16 @@
 /* Apex 26 — TitleWarm: the race world's prep and program warm on an idle TITLE (A·W50, 2026-10-25).
    The menu prep (game.js scheduleFlybyTrack -> menuFinish -> warmPrograms) ran only on the track picker, RACE
-   SETTINGS or a circuit Home, so title -> START compiled every race pipeline at the lights (iPhone 14 Pro WebGPU
-   cold Monza mirrorPrepare 32-35 s; docs/notes/MIRROR-WARM-2026-10-24.md). This poll starts that prep once idle.
+   SETTINGS or a circuit Home. So a title -> START compiled every race pipeline at the lights: iPhone 14 Pro WebGPU
+   cold Monza mirrorPrepare 32-35 s, and 45 s of title idle advanced nothing (Device Farm S5, 2026-10-24;
+   docs/notes/MIRROR-WARM-2026-10-24.md). This poll lets that same prep start once the title has been idle.
    ONCE PER UPDATE on a phone (Bryce, 2026-10-25): Safari keeps its compiled pipelines across sessions (a second
    session's warm measured 0.24 s), so a phone pays the speculative world once, in the first title session after
    a deploy. apex26.titleWarm holds the build (<meta name="apex-build">) whose title warm completed; a phone with
    that build skips it. Desktop: every session. Never under Save-Data / prefers-reduced-data, behind a hidden tab,
    under a menu sheet, during the title intro, headless, or where the title draws a 3D Home (garage / night /
    studio own the frames the warm would need; a circuit Home already preps its world). Cancellable for free: it
-   only widens the prep's current() test; leaving the title stops it, an open sheet pauses it (MenuSheetGate). */
+   only widens the prep's current() test, so leaving the title stops the prep at its next step, and an open
+   sheet pauses it (MenuSheetGate). */
 const TitleWarm = (function () {
   "use strict";
 
@@ -80,9 +82,8 @@ const TitleWarm = (function () {
         }
         return;
       }
-      if (doneBuild || G.state !== "menu") { if (!doneBuild) noisy(); return; }   // once per session
+      if (doneBuild) return;   // one per session
       const e = env(), why = blockers(e);
-      if (why.includes("done-this-build")) doneBuild = e.build;
       last = { at: Math.round(now()), why };
       // Idle counts from the title actually showing: any blocker but the quiet clock itself restarts it.
       if (why.some((w) => w !== "input-recent")) noisy();

@@ -2189,37 +2189,3 @@ test("padSession: a refused STATE send stays dirty so a pedal lift retries befor
   assert.equal(PhonePad.decodeSample(samples.at(-1)).thr, 0);
   sess.close();
 });
-
-/* #5026 (batch #5093): tilt under a menu, CENTRE TILT on TOUCH STRIP, the phone's label. */
-test("local tilt steers nothing under an open menu, like every other source (#5026)", () => {
-  const { Input, clock, sb } = bootInput();
-  clock.t = 1000;
-  Input.setSteerMode("tilt");
-  let open = false;
-  sb.UiLayers = { anyOpen: () => open, navOpen: () => open, inRace: () => true, top: () => null };
-  for (let i = 0; i < 30; i++) { clock.t += 16; Input.simTilt(20, 0.016); }
-  assert.ok(Input.steer() > 0.1, "a 20° lean steers with no menu up");
-  open = true;
-  clock.t += 16; Input.simTilt(20, 0.016);
-  assert.equal(Input.steer(), 0, "the pause card is up: the lean must not turn the car");
-});
-
-test("CENTRE TILT while the phone is on TOUCH STRIP waits for a fresh roll (#5026)", () => {
-  const { Input, clock } = bootInput();
-  clock.t = 1000;
-  for (let i = 0; i < 40; i++) { clock.t += 16; Input.remoteSample({ source: "phone", roll: 15, thr: 0, brk: 0, held: 0 }); }
-  clock.t += 16; Input.remoteSample({ source: "phone", steer: 0.3, thr: 0, brk: 0, held: 0 });   // TOUCH STRIP
-  Input.calibrate();
-  for (let i = 0; i < 60; i++) { clock.t += 16; Input.remoteSample({ source: "phone", roll: 0, thr: 0, brk: 0, held: 0 }); Input.steer(1 / 60); }
-  assert.ok(Math.abs(Input.steer()) < 0.05, "back on TILT, a level phone is straight ahead (was the 15° lean from before the switch)");
-});
-
-test("a phone on TOUCH STRIP is reported as the phone, an XR stick as a controller (#5026)", () => {
-  const { Input, clock } = bootInput();
-  clock.t = 1000;
-  Input.remoteSample({ source: "phone", steer: 0.5, thr: 1, brk: 0, held: 0 });
-  assert.equal(Input.activeInputSource(), "phone");
-  clock.t += 16;
-  Input.remoteSample({ source: "xr", steer: 0.5, thr: 1, brk: 0, held: 0 });
-  assert.equal(Input.activeInputSource(), "controller");
-});

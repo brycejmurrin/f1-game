@@ -610,14 +610,12 @@ const Collide = (() => {
         // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
         // second (collision bench S5). The flag is idempotent and stays.
         if (corr > CORR_EPS) {
-          // A net-owned (VS FRIEND) car is POSED from its owner's packets: its speed and flag are not ours to write (as the rear-end path below, #2164).
-          const nA = netPlay.owns(a), nB = netPlay.owns(b);
-          if (a.human || b.human) { if (!nA) a.contactT = 0.22; if (!nB) b.contactT = 0.22; }
+          if (a.human || b.human) a.contactT = b.contactT = 0.22;
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
           // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
-          // A static body (retired wreck, net-owned rival: inv-mass 0) can never yield — its scrub is moot — so the mover yields (#4826). A net-owned car's speed and flag are never written (#4833).
-          if (!iA ? false : !iB ? true : AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last && !nA) a.speed = scrub(a.speed, rubScrub); if (!nA) a.contactT = 0.22; }
-          else { if (last && !nB) b.speed = scrub(b.speed, rubScrub); if (!nB) b.contactT = 0.22; }
+          // A static body (retired wreck, net-owned rival: inv-mass 0) can never yield — its scrub is moot — so the mover yields (#4826).
+          if (!iA ? false : !iB ? true : AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
+          else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars
           // touching with no correction left to apply — re-fired audio, shake
@@ -681,13 +679,12 @@ const Collide = (() => {
           const fx = firstPairFx(a, b);
           if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
-          const sim = fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired;
-          if (sim && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+          if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           // Incident sim (R3/C3 + C1): a hard closing contact queues a
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (sim) incidentSim.notifyCar(a, b, relV);
+          if (fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
         }
       }
     }

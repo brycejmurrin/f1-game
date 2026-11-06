@@ -1032,7 +1032,6 @@ test("the garage's pause never drops the wake lock: the return to the tab re-hol
     assert.ok(await settle(() => h.log.length >= 3, 4000), "the re-acquire on return (the lock was never un-wanted)");
     assert.deepEqual(h.log, ["request:screen", "release", "request:screen"]);
     h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE: closePitWork's own hold coalesces with the held lock
-    h.doc.getElementById("cs-back").onclick();      // BACK plays the pit-out beat (#4745); a second press finishes it
     await h.tick();
     assert.deepEqual(h.log, ["request:screen", "release", "request:screen"], "held, not requested twice");
     assert.equal(g.G.paused, false, "racing again");
@@ -1204,8 +1203,7 @@ test("RETURN TO RACE with the phone upright keeps the race paused behind the rot
     const h = await pitGarage(g);
     assert.equal(h.garage.hidden, false, "precondition: the garage is up");
     flag.portrait = true;                           // the phone turns upright under WORK ON CAR
-    h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE (closePitWork, after the pit-out beat)
-    h.doc.getElementById("cs-back").onclick();      // the second press finishes the pit-out beat (#4745)
+    h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE (closePitWork)
     await h.tick();
     assert.equal(h.garage.hidden, true, "the garage closed");
     assert.equal(g.G.paused, true, "the race must not run on behind the rotate blocker");

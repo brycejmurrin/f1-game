@@ -316,12 +316,6 @@ const TLX = (function () {
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
       let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
-      let _warmQueued = null;   // #4958: the where of a warm() that arrived while one was in flight
-      function _promoteQueuedWarm() {
-        if (_warmPending || !_warmQueued) return false;
-        _warmWhere = _warmQueued; _warmQueued = null; _warmRequested = true; _warmAttempts = 0;
-        return true;
-      }
       // Set by onDeviceLost: abort in-flight compileAsync so warming() cannot
       // stick true forever (race-start handoff waited on !warming via afterPresent,
       // and render() returned early while warming — HUD surveys hung).
@@ -1124,7 +1118,6 @@ const TLX = (function () {
         _warmRequested = false;
         _warmPending = null;
         _warmDone = true;
-        _warmQueued = null;
         if (typeof _pinnedPipes !== "undefined") _pinnedPipes.clear();   // A·W50: the lost device's pipelines go with it (typeof: sandboxed bodies)
         try {
           if (!document.hidden && _nowMs() - _shownAt < 3000) {   // seen on the way back: reload now, uncounted, nothing latched
@@ -1542,7 +1535,7 @@ const TLX = (function () {
       // empties the list. present() hands the texture to the post chain, which
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
-      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirSub = false, _mirFlip = true;   // flip false: the broadcast PiP
+      let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
       // the chunks have never compiled for, and the node builder reads
@@ -2201,19 +2194,13 @@ const TLX = (function () {
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
       const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
-      // apex26.tlxMirrorSub=0 pins the lite mirror back to whole-chunk culling (tlx-chunked cullMirror, PR #4886).
-      let _mirSubOn = (function () { try { return localStorage.getItem("apex26.tlxMirrorSub") !== "0"; } catch (_) { return true; } })();
-      function _drawChunked(rec, order, vp, eye, cd, fog, slot, sub) {
+      function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
+        const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
         const mat = rec.mat;
-        const merge = _chunkMerge && !!chunkedSys.mergeVisible
+        if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
             && !(mat && (mat.transparent || mat.depthWrite === false))
-            && !(rec.al < 1);
-        // Sub-range entries draw only through mergeVisible: a mesh with a model matrix (world-space AABBs) or a
-        // material off the merge path keeps the whole-chunk cull.
-        const n = merge && sub && !rec.m && chunkedSys.cullMirror ? chunkedSys.cullMirror(rec.chunked, vp, eye, cd, fog)
-          : chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
-        if (merge && n > 0) {
+            && !(rec.al < 1)) {
           const g = chunkedSys.mergeVisible(rec.chunked, n, slot);
           if (g) { acquireMesh(g, rec.m, rec.mat, rec).renderOrder = order; return n; }
         }
@@ -3217,7 +3204,6 @@ const TLX = (function () {
       // does not run beside them (iPhone tab budget ~300 MB).
       function flushTexPool() {
         while (_texPool.length) disposePooled(_texPool.shift().t);
-        if (typeof unpinStalePipes === "function") unpinStalePipes();   // #4971: game.js dropTrackWorld's TLX hook
       }
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
@@ -4119,51 +4105,23 @@ const TLX = (function () {
       // once: 3 of the 4 left), so each render pipeline takes one extra use as three creates it, and the sweep (each
       // warm's end, each prune) pins any built before. Capped, and cleared on device loss with the rest.
       const PIPE_PIN_CAP = 512;
-      // #4971: pipeline -> the world epoch that last ASKED for it (_getRenderPipeline: a RenderObject wanted it; a
-      // cache sweep only adds, never refreshes). A track free (flushTexPool) unpins every pin no request touched
-      // during the world being freed, so pins span at most the last two circuits instead of the whole session; at
-      // the cap pinPipe warns once instead of going silent.
-      const _pinnedPipes = new Map();
+      const _pinnedPipes = new Set();
       let _pinArmed = null;   // the Pipelines instance whose _getRenderPipeline pins
-      let _pinEpoch = 0, _pinCapWarned = false;
-      function pinPipe(p, asked) {
-        if (!p || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
-        if (_pinnedPipes.has(p)) { if (asked) _pinnedPipes.set(p, _pinEpoch); return; }
-        if (_pinnedPipes.size >= PIPE_PIN_CAP) {
-          if (!_pinCapWarned) { _pinCapWarned = true; try { Log.warn("gfx", "TLX pipeline pin cap reached", PIPE_PIN_CAP); } catch (_) { /* logging is optional */ } }
-          return;
-        }
+      function pinPipe(p) {
+        if (!p || _pinnedPipes.size >= PIPE_PIN_CAP || _pinnedPipes.has(p) || !p.vertexProgram || !p.fragmentProgram) return;   // render pipelines only
         p.usedTimes++; p.vertexProgram.usedTimes++; p.fragmentProgram.usedTimes++;
-        _pinnedPipes.set(p, _pinEpoch);
+        _pinnedPipes.add(p);
       }
       function pinPipelines() {
         const P = renderer && renderer._pipelines, caches = P && P.caches;
         if (!caches || typeof caches.values !== "function") return _pinnedPipes.size;
         if (_pinArmed !== P && typeof P._getRenderPipeline === "function") {
           const get = P._getRenderPipeline;
-          P._getRenderPipeline = function () { const p = get.apply(this, arguments); pinPipe(p, true); return p; };
+          P._getRenderPipeline = function () { const p = get.apply(this, arguments); pinPipe(p); return p; };
           _pinArmed = P;
         }
-        for (const p of caches.values()) pinPipe(p, false);
+        for (const p of caches.values()) pinPipe(p);
         return _pinnedPipes.size;
-      }
-      // Drop the extra use pinPipe took; at 0 release exactly as three's Pipelines.delete does. Returns the unpin count.
-      function unpinStalePipes() {
-        const P = renderer && renderer._pipelines;
-        if (!P || typeof P._releasePipeline !== "function" || typeof P._releaseProgram !== "function") return 0;
-        if (typeof _warmPending !== "undefined" && _warmPending) return 0;   // never under a compile in flight (typeof: sandboxed bodies)
-        const epoch = _pinEpoch++;
-        let n = 0;
-        for (const [p, at] of _pinnedPipes) {
-          if (at >= epoch) continue;
-          _pinnedPipes.delete(p); n++;
-          if (P.caches.get(p.cacheKey) !== p) continue;   // already gone from three's cache: nothing of ours to drop
-          if (--p.usedTimes === 0) P._releasePipeline(p);
-          if (--p.vertexProgram.usedTimes === 0) P._releaseProgram(p.vertexProgram);
-          if (--p.fragmentProgram.usedTimes === 0) P._releaseProgram(p.fragmentProgram);
-        }
-        _pinCapWarned = false;
-        return n;
       }
       const PRUNE_EVERY_MS = 5000, PRUNE_IDLE_MS = 20000;
       function prunePool(now) {
@@ -4542,17 +4500,10 @@ const TLX = (function () {
           if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
           if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
-          // A ZERO-LENGTH VIEW OF THE SAME CLASS, NOT null (#4900). Pipelines
-          // recompute backend.getRenderCacheKey() on every needsRenderUpdate()
-          // (a new material or render context, not only a new RenderObject), and
-          // getVertexBufferLayout / _getVertexFormat read array.BYTES_PER_ELEMENT
-          // and array.constructor of EVERY attribute with no null guard (r187):
-          // a nulled car caster threw in present ~37 s into a race and reloaded
-          // the tab (PR #4880 census). Gpu-census 26's zero-byte buffer does not
-          // apply: that was an INDEX array (never freed here) and never-uploaded
-          // chunks; `uploaded()` above means createAttribute never runs again
-          // for this attribute (its backend data goes only with geometry.dispose).
-          a.array = new a.array.constructor(0);
+          // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
+          // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
+          // mechanism I asserted and could NOT substantiate.
+          a.array = null;
         };
         const atts = g.attributes;
         for (const k in atts) drop(atts[k]);
@@ -4589,11 +4540,19 @@ const TLX = (function () {
         // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
         // evidence from a real handset.
         if (isMobile) return;
-        // A freed attribute keeps a zero-length view of its class (#4900), so a
-        // new (geometry, material) pair — the paint ladder's dropTo -> unlitMat
-        // -> rawUnlitMat rungs included — still types its vertex layout from
-        // array.constructor / BYTES_PER_ELEMENT. A NEW attribute name on a freed
-        // geometry is a different matter: only uploaded attributes are freed.
+        // AND KNOW WHAT IT COSTS ON DESKTOP. Freeing an array disarms the
+        // two intermediate rungs of the paint-failure ladder below (dropTo ->
+        // unlitMat -> rawUnlitMat): dropTo reassigns pm.material, a new
+        // (geometry, material) pair is a new RenderObject, and building its
+        // pipeline runs _getVertexFormat, which is `e.array.constructor` with
+        // NO null guard in the shipped vendor build (three.webgpu.min.js,
+        // r185). Both rungs therefore throw and the ladder lands on
+        // refuseTab() — which reloads onto GLX only for an explicit pin or a boot
+        // already on three WebGL2 (a WebGPU AUTO boot reloads onto three WebGL2),
+        // so the player still gets a game, just never the unlit TLX degradation
+        // those rungs exist for.
+        // Verified by reading the vendored bytes, not reproduced at runtime.
+        // Do not add rungs above refuseTab() expecting them to run here.
         if (now - _mirrorSweepAt < 2000) return;
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;
@@ -5914,7 +5873,6 @@ const TLX = (function () {
           lit.updateFrame(frame, true);   // true: the forward lamp-shadow slot is off in the mirror (tsl-lit)
           if (fx) fx.updateFrame(frame);
           _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
-          _mirSub = _mirSubOn && !!frame.mirrorLite;   // the phone rungs only: the full rung's 280 m picture is unchanged
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
           _instStamp++;
@@ -5931,7 +5889,7 @@ const TLX = (function () {
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
-              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1, _mirSub); continue; }
+              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
               if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
@@ -6131,14 +6089,9 @@ const TLX = (function () {
         // Request after race setup; present() compiles the prepared race frame,
         // not the previous menu scene. Each race gets another warm opportunity.
         // opts.where: "menu" | "loading" | "race" (auto when omitted — see _resolveWarmWhere).
-        // #4958: a request while a program/mirror/rig warm is in flight is QUEUED, never dropped (game.js counts it
-        // warmed: a dark circuit's "|lit" warm lost here compiled its lamp-baked programs on the first race frames).
-        // The where is resolved now; present() promotes it once _warmPending clears (_promoteQueuedWarm).
         warm(opts) {
           if (_deviceLost) return;
-          const where = _resolveWarmWhere(opts);
-          if (_warmPending) { _warmQueued = where; return; }
-          _warmWhere = where; _warmRequested = true; _warmAttempts = 0;
+          if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
         // The in-flight program/rig/mirror compile. A track free during it only
@@ -6146,7 +6099,7 @@ const TLX = (function () {
         // warming() is true, so the caster's render object outlives the circuit.
         // Callers await this, then cancelWarmRetry(), then free.
         warmSettled() { return _warmPending || Promise.resolve(); },
-        cancelWarmRetry() { _warmRequested = false; _warmQueued = null; },
+        cancelWarmRetry() { _warmRequested = false; },
         warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
@@ -6687,7 +6640,6 @@ const TLX = (function () {
           // source line in tlx-rig-warm.test.mjs.
           if (_lite) liteOpts(opts);   // B8 lab: before the warm, so it compiles the lite pass set
           if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
-          _promoteQueuedWarm();   // #4958: a warm() that met one in flight runs now, ahead of a queued mirror/rig job
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
@@ -6935,13 +6887,6 @@ const TLX = (function () {
             }
             return _roadSplitOn;
           },
-          mirrorSub(on) {   // persists like roadSplit (apex26.tlxMirrorSub): the lite mirror's sub-range cull, PR #4886
-            if (on !== undefined) {
-              _mirSubOn = !!on;
-              try { if (_mirSubOn) localStorage.removeItem("apex26.tlxMirrorSub"); else localStorage.setItem("apex26.tlxMirrorSub", "0"); } catch (_) { /* no storage: session only */ }
-            }
-            return _mirSubOn;
-          },
           // Where the retained CPU bytes actually ARE, per attribute NAME and
           // per geometry kind. Deduped on the underlying ArrayBuffer, because a
           // chunked mesh shares ONE position/normal/colour/mat set across all
@@ -7185,7 +7130,7 @@ const TLX = (function () {
                   const ro = renderer._objects && renderer._objects._renderObjects;
                   o.rObj = ro && typeof ro.size === "number" ? ro.size : null;
                 }
-                if (inf.render) { o.calls = inf.render.frameCalls; }  // render() calls this frame; render.calls is a lifetime count three never resets
+                if (inf.render) { o.calls = inf.render.calls; }
               }
             } catch (_) { /* three's info shape is version-dependent; absent is reported as absent */ }
             // The render group's version must advance once per renderer.render():
@@ -7202,7 +7147,7 @@ const TLX = (function () {
                        draw: _warmStages.draw, drawn: _warmStages.drawn, garageScene: _warmStages.garageScene,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy, rig: _warmStages.rig,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
-                       pending: !!_warmPending, queued: _warmQueued, done: _warmDone, history: _warmHistory.slice(), pinned: _pinnedPipes.size };   // A·W50
+                       pending: !!_warmPending, done: _warmDone, history: _warmHistory.slice(), pinned: _pinnedPipes.size };   // A·W50
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

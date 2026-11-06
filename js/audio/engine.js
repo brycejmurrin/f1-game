@@ -2020,7 +2020,7 @@ var GameAudio = (function () {
     const partThr = thr > 0.1 && thr < 0.72 && deploy < 0.05 && s > 0.08;
     const packClip = packFull && deploy < 0.05 && (coastTarget > 0.04 || decelTarget > 0.08 || brkDem > 0.12);
     const cylOn = layers.ers && (partThr || packClip);
-    const cylDepth = cylOn ? Math.round(Math.min(engBase * 0.07, 0.011) * mult * 1e4) / 1e4 : 0;
+    const cylDepth = cylOn ? Math.min(engBase * 0.07, 0.011) * mult : 0;
     if (cylCutGain && cylCutGain._apexCylTgt !== cylDepth) {
       cylCutGain.gain.setTargetAtTime(cylDepth, t, 0.04);
       cylCutGain._apexCylTgt = cylDepth;

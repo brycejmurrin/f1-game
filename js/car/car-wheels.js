@@ -51,17 +51,6 @@ const CarWheels = (function () {
     _tintMemo.set(liv, t);
     return t;
   }
-  // ONE WHEEL RECIPE (#4907) for every split-wheel path (garage, arrival, race, cockpit) from the appearance
-  // tiers + livery, in Car3D.build's precedence; `key` = option ids + every livery wheel field.
-  function spec(tiers, liv) {
-    const T = tiers || {}, v = T._visual || {}, t = v.tyres || null, b = v.brakes || null, w = v.wheels || null, tint = tints(liv);
-    const C = typeof Car3D !== "undefined" ? Car3D : null;
-    const ids = T._ids ? "|i" + T._ids.tyres + ":" + T._ids.brakes + ":" + T._ids.wheels : "|t" + T.tyres + ":" + T.brakes + ":" + T.wheels;
-    return { band: t && t.band || C && (C.TYRE_BAND[T.tyres] || C.TYRE_BAND[1]),
-      cal: tint.cal || (b ? b.cal : C && C.BRAKE_CALIPER[T.brakes]),
-      rim: tint.rim || (w && w.rim) || (b && b.rim),
-      tyre: t, brake: b, wheel: w, ink: tint.ink, surf: tint.surf, key: ids + tint.key };
-  }
   // Available on the first garage visit, before the race-session bundle loads.
   // Fitted mesh layers are built once; all rolling and steering use transforms.
   function createGarage(gfx) {
@@ -72,13 +61,14 @@ const CarWheels = (function () {
       meshes = null; key = "";
     }
     function prepare(next, liv, tiers) {
-      // The livery's *Shape picks re-dress the fitted parts, as Car3D.build does (#4907).
-      const T = liv && typeof Car3D !== "undefined" && Car3D.appearanceParts ? Car3D.appearanceParts(tiers || {}, liv) : tiers || {};
-      const s = spec(T, liv), want = next + s.key;
-      if (meshes && key === want) return;
+      if (meshes && key === next) return;
       release();
-      const f = Car3D.buildWheelLayers(.32, s.band, s.cal, s.rim, false, s.tyre, s.brake, s.wheel, s.ink, s.surf);
-      const r = Car3D.buildWheelLayers(.38, s.band, s.cal, s.rim, false, s.tyre, s.brake, s.wheel, s.ink, s.surf);
+      const v = tiers._visual || {}, t = v.tyres, b = v.brakes, w = v.wheels, tint = tints(liv);
+      const band = t && t.band || Car3D.TYRE_BAND[tiers.tyres] || Car3D.TYRE_BAND[1];
+      const cal = tint.cal || (b && b.cal) || Car3D.BRAKE_CALIPER[tiers.brakes];
+      const rim = tint.rim || (b && b.rim);
+      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf);
+      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf);
       const pending = [];
       try {
         for (const data of [f.rotating, f.fixed, r.rotating, r.fixed]) pending.push(gfx.createMesh(data));
@@ -86,7 +76,7 @@ const CarWheels = (function () {
         if (gfx.freeMesh) for (const mesh of pending) gfx.freeMesh(mesh);
         throw error;
       }
-      meshes = pending; key = want;
+      meshes = pending; key = next;
     }
     const opts = { doubleSided: true };
     function draw(base, distance, steer, material) {
@@ -816,6 +806,6 @@ const CarWheels = (function () {
     return { addWheel, buildWheel, buildWheelLayers };
   }
 
-  return { create, tints, spec, createGarage, phaseStep, wrapPhase, WHEEL_R };
+  return { create, tints, createGarage, phaseStep, wrapPhase, WHEEL_R };
 })();
 Object.freeze(CarWheels);

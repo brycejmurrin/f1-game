@@ -124,25 +124,3 @@ test("red-flag grids and their first crossing preserve physical tyre age", async
     assert.equal(G.tyres.lapsOn(p), 1);
   } finally { game.close(); }
 });
-
-test("a red-flag free set stands in for the AI's next planned stop: no stop later for the same compound (#4938)", async () => {
-  const game = await createGame({ track: "monza", storage: { tyreWear: "real" } });
-  try {
-    await game.race("monza", "day", "dry", { laps: 20 });
-    const G = game.G;
-    G.tyres.setLevel("real");
-    const [c, s] = G.cars.filter((k) => !k.human && !k.retired);
-    for (const [k, scripted] of [[c, false], [s, true]]) {
-      G.tyres.fit(k, G.tyres.classRecord("medium"));
-      k.lap = 9; k.pitStops = 0; k.pitNext = null; k.pitArmed = false; k.pitState = "none";
-      k.pitPlan = { seq: ["medium", "hard"], lapsAt: [10], stints: [10, 10], stops: 1, scripted };
-      assert.ok(G.pits.redFlagFit(k));
-      assert.equal(k.tyre.code, "H", "the red fits the plan's next compound");
-      assert.equal(k.pitStops, 0, "a red fit is not a counted stop");
-      assert.deepEqual([...k.pitPlan.seq], ["hard"], "the stop it stood in for is gone (scripted=" + scripted + ")");
-      assert.deepEqual([...k.pitPlan.lapsAt], []);
-      assert.equal(k.pitPlan.stops, 0);
-      assert.deepEqual([...k.pitPlan.stints], [20]);
-    }
-  } finally { game.close(); }
-});

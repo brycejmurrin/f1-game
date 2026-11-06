@@ -266,18 +266,17 @@ test("the first full pass after a hidden or lite interval always refreshes the i
   assert.deepEqual(flags(h), [false], "back from hidden: refresh, never a freeze onto the old pack");
   h.render();
   assert.deepEqual(flags(h), [false, true], "and the alternation resumes from there");
-  // Lite: the governor drops the mirror to lite and recovers (each rung change waits out a 1.5 s clock dwell, #4959).
+  // Lite: the governor drops the mirror to lite and recovers (each rung change waits out a 90-frame dwell).
   const g = boot({ mode: "on", tier: 0 });
-  const tick = (n) => { for (let i = 0; i < n; i++) { g.clock.t += 1000 / 60; g.render(); } };
-  tick(3);
+  for (let i = 0; i < 3; i++) g.render();
   g.setTier(1);
-  tick(100);
+  for (let i = 0; i < 100; i++) g.render();
   assert.equal(g.mp.state().quality, "lite");
   g.setTier(0);
-  tick(90);
+  for (let i = 0; i < 89; i++) g.render();
   assert.equal(g.mp.state().quality, "lite", "still inside the recovery dwell");
   g.calls.length = 0;
-  g.clock.t += 20; g.render();
+  g.render();
   assert.equal(g.mp.state().quality, "full");
   g.render();
   assert.deepEqual(flags(g), [false, true], "first full pass refreshes, the next freezes");
@@ -430,41 +429,4 @@ test("GLX releaseMirror deletes the mirror FBO, texture and depth, is idempotent
   h.GLX.mirrorEnd();
   assert.deepEqual([h.count("createTexture"), h.count("createFramebuffer"), h.count("createRenderbuffer")], [1, 1, 1]);
   assert.equal(h.GLX.mirrorState().w, 256);
-});
-
-// #4959 row 1: a paused race with the CAMERA tuner open presents every rAF (RenderRate.force), and the lite/full
-// rungs (every:1) redrew the whole mirror world each time over an unchanged picture.
-test("paused: the mirror keeps its last target until the car moves or LIGHTING opens (#4959)", () => {
-  const h = boot({ mode: "on" });
-  const lighting = { hidden: true };
-  h.G.els = { lighting };
-  const passes = () => h.calls.filter((c) => c[0] === "begin").length;
-  h.render();
-  assert.equal(passes(), 1);
-  h.G.paused = true;
-  for (let i = 0; i < 10; i++) h.render();
-  assert.equal(passes(), 1, "10 paused frames, 0 mirror passes (before the fix: 10)");
-  assert.ok(h.calls.filter((c) => c[0] === "rect").length >= 11, "the last target still composites each frame");
-  h.G.player.s += 5; h.render();
-  assert.equal(passes(), 2, "a replay scrub moves the car: one pass");
-  lighting.hidden = false; h.render(); h.render();
-  assert.equal(passes(), 4, "LIGHTING open: live every frame (a slider changes the picture)");
-  lighting.hidden = true; h.G.paused = false; h.render();
-  assert.equal(passes(), 5, "unpaused: every frame again");
-});
-
-// #4959 row 2: Q_DWELL counted frames (90 = 0.75 s at 120 Hz, 3 s at 30 fps); the hold is now 1.5 s of clock.
-test("a rung change waits the same ~1.5 s at 30 and at 120 fps (#4959)", () => {
-  for (const fps of [30, 120]) {
-    const h = boot({ mode: "on" });
-    h.render();
-    assert.equal(h.mp.state().quality, "full");
-    h.setTier(2);
-    let at = null;
-    for (let i = 1; i <= fps * 3 && at === null; i++) {
-      h.clock.t += 1000 / fps; h.render();
-      if (h.mp.state().quality === "low") at = i * 1000 / fps;
-    }
-    assert.ok(at !== null && at >= 1500 && at <= 1500 + 2000 / fps + 1e-6, fps + " fps: stepped down after " + at + " ms");
-  }
 });

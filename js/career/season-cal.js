@@ -91,10 +91,6 @@ if (store.subscribe) store.subscribe((change) => {
   // here synchronously and nulled the cfg it had just built, so the very next
   // statement threw on `cfg.trackIds` — SEASON SETUP ▸ APPLY died before
   // restart(), before the save, and before the sheet could close.
-  // RETRY SAVE rewrites SAVE_KEY from the store's failed-write record: the very
-  // object held here, so that local bump must not strand seasonRevision (#4823).
-  if (change.local && !seasonConflict && activeSeason && change.key === SAVE_KEY &&
-      store.get(SAVE_KEY, null) === activeSeason) { seasonRevision = currentRevision(); return; }
   if (!change.foreign) return;
   if (change.clear || change.key === CFG_KEY) { cfg = null; resolved = null; }
   if (change.clear || change.key === SAVE_KEY) {

@@ -110,8 +110,10 @@ const CockpitPreview = (function () {
         for (const mesh of tyres) GLX.freeMesh(mesh);
         body = GLX.createMesh(Car3D.build(liv.c1,liv.c2,{ cockpitHalo:s.cockpitHalo,cockpit:true,noDriver:true,noWheels:true,
           cockpitBody:s.body,halo:s.halo,teamId:s.teamId,livery:liv,parts:s.parts })); bodyKey = key;
-        const w=CarWheels.spec(s.parts || { tyres: 1, brakes: 1 },s.livery);   // the race car's wheel recipe (#4907)
-        const layers=Car3D.buildWheelLayers(.32,w.band,w.cal,w.rim,false,w.tyre,w.brake,w.wheel,w.ink,w.surf);
+        const p=s.parts || {}, visual=p._visual || {}, tyre=visual.tyres, brake=visual.brakes;
+        const wt=CarWheels.tints(s.livery);
+        const layers=Car3D.buildWheelLayers(.32,tyre && tyre.band || Car3D.TYRE_BAND[p.tyres || 1],
+          wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[p.brakes || 1]),wt.rim || (brake && brake.rim),false,tyre,brake,visual.wheels,wt.ink,wt.surf);
         tyres=[GLX.createMesh(layers.rotating),GLX.createMesh(layers.fixed)];
       }
       const eye = [0,lay.eyeU,lay.eyeF], target = [0,lay.eyeU-.055,lay.eyeF+1];

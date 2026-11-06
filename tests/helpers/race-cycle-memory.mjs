@@ -163,36 +163,6 @@ export async function domLeakCounters(cdp) {
   catch (_) { return null; }
 }
 
-/**
- * Count of `system / Context` closure scopes in a heap snapshot (#4778). Takes one snapshot over CDP (call after a
- * forced GC, once per cycle: it is the slow census) and counts nodes by class name. Null when it cannot be taken.
- */
-export async function contextScopeCount(cdp) {
-  const chunks = [];
-  const onChunk = (e) => { chunks.push(e.chunk); };
-  try {
-    cdp.on("HeapProfiler.addHeapSnapshotChunk", onChunk);
-    await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false, captureNumericValue: false });
-    const snap = JSON.parse(chunks.join(""));
-    chunks.length = 0;
-    return countSnapshotClass(snap, "system / Context");
-  } catch (_) { return null; }
-  finally { try { cdp.off("HeapProfiler.addHeapSnapshotChunk", onChunk); } catch (_) { /* ignore */ } }
-}
-
-/** Nodes named `name` in a parsed V8 heap snapshot. */
-export function countSnapshotClass(snap, name) {
-  const f = snap.snapshot.meta.node_fields, w = f.length, ni = f.indexOf("name");
-  const strings = snap.strings, nodes = snap.nodes;
-  let n = 0;
-  for (let i = 0; i < nodes.length; i += w) if (strings[nodes[i + ni]] === name) n++;
-  return n;
-}
-
-/** Closure-scope bound between post-warm cycles: growth above this fraction (plus slack) is a leak. */
-export const CONTEXT_GROWTH_FRACTION = 0.05;
-export const CONTEXT_GROWTH_SLACK = 50;
-
 /** Per-class growth between the last two entries of `series` ([{ cycle, wrappers, dom }]): exact for GPU classes. */
 export function wrapperGrowth(series, laterCycle) {
   const a = series.find((r) => r.cycle === laterCycle - 1), b = series.find((r) => r.cycle === laterCycle);
@@ -206,8 +176,5 @@ export function wrapperGrowth(series, laterCycle) {
     const x = a.dom && a.dom[name], y = b.dom && b.dom[name];
     if (typeof x === "number" && typeof y === "number" && y > x * 1.05 + 5) issues.push(`DOM ${name} ${x} → ${y}`);
   }
-  const cx = a.contexts, cy = b.contexts;
-  if (typeof cx === "number" && typeof cy === "number" && cy > cx * (1 + CONTEXT_GROWTH_FRACTION) + CONTEXT_GROWTH_SLACK)
-    issues.push(`system / Context ${cx} → ${cy} (> +${CONTEXT_GROWTH_FRACTION * 100}%)`);
   return { ok: issues.length === 0, issues };
 }

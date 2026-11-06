@@ -156,7 +156,7 @@ test.describe("garage arrival preview touch exit", () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
   test.setTimeout(180_000);
 
-  test("PREVIEW of PIT IN and RACE START can be stopped by a visible touch control", async ({ page }) => {
+  test("PREVIEW IN and OUT can be stopped by a visible touch control", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.garageArrival", JSON.stringify({ enabled: true, speed: 0.5 }));
@@ -170,15 +170,12 @@ test.describe("garage arrival preview touch exit", () => {
     await clickId(page, "mb-settings");
     await clickId(page, "pm-open-visual");
     await page.locator("#pm-garrival").tap();
-    // The tuner edits and previews one MOMENT at a time (#4745): pick its tab, then PREVIEW.
-    for (const moment of ["pitIn", "start"]) {
-      await page.locator("#ga-moment-" + moment).tap();
-      await expect(page.locator("#ga-moment-" + moment)).toHaveAttribute("aria-pressed", "true");
-      const tools = page.locator("#garrival .ew-tools:not([data-editor-help])");
+    for (const dir of ["in", "out"]) {
+      const tools = page.locator("#garrival .ew-tools");
       if (await tools.count() && !await tools.evaluate(el => el.open)) {
         await tools.locator(":scope > summary").tap();
       }
-      await page.locator("#ga-preview").tap();
+      await page.locator("#ga-preview-" + dir).tap();
       await expect(page.locator("#garrival-inner")).toBeHidden();
       const stop = page.locator("#ga-preview-stop");
       await expect(stop).toBeVisible();
@@ -189,7 +186,7 @@ test.describe("garage arrival preview touch exit", () => {
       await stop.tap();
       await expect(stop).toBeHidden();
       await expect(page.locator("#garrival-inner")).toBeVisible();
-      await expect(page.locator("#ga-preview")).toBeFocused();
+      await expect(page.locator("#ga-preview-" + dir)).toBeFocused();
       expect(await page.evaluate(() => window.__apex.garageCam().on)).toBe(false);
     }
     await page.locator("#ga-close").tap();
