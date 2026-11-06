@@ -162,38 +162,27 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
     grid-column: 1 / -1; grid-row: auto; width: 100%;
   }
 }
-/* Explicit widths in landscape, EVERY density (#4862: the rule was compact-only, so Bryce's normal density fell back
-   to responsive.css's column-centring margin and ran off-screen from WIDTH 50). WIDTH is a share of the SCREEN
-   (20..100), not of the button column (#4816). The grid spans the WHOLE overlay and pins its outer edge (right; left
-   when swapped): WIDTH only moves the inner edge toward the art, so the slider resizes and never translates. The
-   cap is the overlay's content box (100%), which already excludes the safe areas, so 100% never runs under the
-   notch. LEFT/RIGHT is a margin clamped into the overlay, not a translate: a translate carried the pinned edge off
-   the screen (X 8 put the right edge at 1003 of 932 px). In a zoomed box the lengths are zoomed and % is not, so
-   `100% - var(--_tl-bw)` is the free room in the overlay's own px. */
-:root[data-title-btnw] :where(body[data-shape="wide"]) #overlay #menu-buttons {
+/* Explicit widths use the same independent stack. This layer also owns the
+   destination placements, so an overlay-layer fix alone cannot undo subgrid. */
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none; grid-auto-rows: max-content;
+  /* WIDTH is a share of the SCREEN (20..100), not of the button column (#4816). The grid spans the WHOLE overlay
+     and pins its outer edge (right; left when swapped): WIDTH only moves the inner edge toward the art, so the
+     slider resizes and never translates (#4862). No centring margin and no item wider than its area: the old
+     centred-then-end-aligned column item shifted sideways, and overflow alignment differs per engine. */
   grid-column: 1 / -1; justify-self: end; margin-inline: 0;
-  margin-inline-end: clamp(0%, calc(-1 * var(--tl-btns-x, 0%)), max(0%, calc(100% - var(--_tl-bw))));
-  max-width: 100%;
-  translate: 0 var(--tl-btns-y, 0);
+  max-width: calc(100 * var(--vwz) - var(--gap));
   max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
-}
-:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"]) #overlay #menu-buttons {
-  justify-self: start; margin-inline-end: 0;
-  margin-inline-start: clamp(0%, var(--tl-btns-x, 0%), max(0%, calc(100% - var(--_tl-bw))));
-}
-/* Compact density only: the single-column stack. Normal density keeps its own door grid. This layer also owns the
-   destination placements, so an overlay-layer fix alone cannot undo subgrid. */
-:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: none; grid-auto-rows: max-content;
 }
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
   grid-column: 1; grid-row: auto; width: 100%; min-width: 0;
 }
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { flex-wrap: wrap; }
+:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { justify-self: start; }
 /* A 20%-wide saved cluster cannot hold two readable destinations or three
    creation tools. Change their composition at the cluster's own width; leave
    an explicitly requested ROW layout in the player's control. */

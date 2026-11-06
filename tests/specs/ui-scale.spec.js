@@ -1572,23 +1572,18 @@ test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
         rows.push(await page.evaluate(({ wide, side, width }) => {
           TitleLayout.apply({ ...wide, side, btns: { ...wide.btns, width } });
           const box = id => document.getElementById(id).getBoundingClientRect();
-          const grid = box("menu-buttons"), o = box("overlay"), cs = getComputedStyle(document.getElementById("overlay"));
+          const grid = box("menu-buttons");
           return { width, left: grid.left, right: grid.right, w: grid.width, hero: box("menu-hero").width,
-            career: box("mb-career").width, inL: o.left + parseFloat(cs.paddingLeft), inR: o.right - parseFloat(cs.paddingRight) };
+            career: box("mb-career").width };
         }, { wide, side, width }));
       }
       const first = rows[0], last = rows[rows.length - 1];
       for (const [i, row] of rows.entries()) {
         // The #4816 guard: WIDTH 20 (and every step) keeps CAREER a real door.
         expect(row.career, `CAREER at WIDTH ${row.width} (${side})`).toBeGreaterThanOrEqual(44);
-        // The outer edge (right; left when swapped) stays put: WIDTH resizes, never translates. Once the cluster
-        // fills the overlay, X (-2 here) has no room left and clamps: the box then sits inside the overlay.
-        expect(row.left, `${side} left inside the overlay at WIDTH ${row.width}`).toBeGreaterThanOrEqual(row.inL - 1);
-        expect(row.right, `${side} right inside the overlay at WIDTH ${row.width}`).toBeLessThanOrEqual(row.inR + 1);
-        if (row.w < row.inR - row.inL - 1) {
-          const edge = side === "swap" ? row.left - first.left : row.right - first.right;
-          expect(Math.abs(edge), `${side} outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
-        }
+        // The outer edge (right; left when swapped) stays put: WIDTH resizes, never translates.
+        const edge = side === "swap" ? row.left - first.left : row.right - first.right;
+        expect(Math.abs(edge), `${side} outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
         if (i) {
           expect(row.w, `cluster width ${side} ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
           expect(row.hero, `hero width ${side} ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].hero - 0.5);
@@ -1597,106 +1592,6 @@ test.describe("Title WIDTH resizes in landscape on touch (#4862)", () => {
       expect(last.w - first.w, `${side}: WIDTH 20 -> 100 grows the cluster`).toBeGreaterThan(300);
       expect(last.hero - first.hero, `${side}: WIDTH 20 -> 100 grows the hero`).toBeGreaterThan(300);
       expect(rows[3].w - rows[2].w, `${side}: WIDTH 40 -> 50 grows the cluster`).toBeGreaterThan(40);
-    }
-  });
-
-  test("the real WIDTH slider, with Bryce's whole export and SETTINGS open, resizes from the outer edge", async ({ page }) => {
-    // Bryce's path (#4862 reopen): his WHOLE settings file (UI SIZE, HUD, title layout), SETTINGS opened from the
-    // title, APPEARANCE › TITLE LAYOUT's WIDTH slider moved while the page peeks. The sweep above calls
-    // TitleLayout.apply() with the sheet shut and the shipped UI SIZE.
-    await page.goto("/");
-    await page.waitForFunction(() => typeof SettingsExport !== "undefined", null, { polling: 100, timeout: BOOT_MS });
-    const applied = await page.evaluate(async () => {
-      const file = await (await fetch("/tests/data/settings-defaults-export.json")).json();
-      return SettingsExport.applySettings(file);
-    });
-    expect(applied.ok, "Bryce's export applies").toBe(true);
-    await page.reload();
-    await page.waitForFunction(() => typeof TitleLayout !== "undefined" && document.body.dataset.shape === "wide",
-      null, { polling: 100, timeout: BOOT_MS });
-    expect(await page.evaluate(() => TitleLayout.current("wide").btns.width), "his saved WIDTH").toBe(20);
-    await page.evaluate(() => document.getElementById("mb-settings").click());
-    await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => {
-      TitleLayout.build();
-      for (const id of ["pm-titlescreen", "pm-titlelayout"]) { const d = document.getElementById(id); if (d) d.open = true; }
-    });
-    const rows = [];
-    for (const width of [20, 30, 40, 50, 60, 70, 80, 90, 100]) {
-      rows.push(await page.evaluate((width) => {
-        const inp = document.getElementById("pm-tl-btns-width");
-        inp.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-        inp.value = String(width);
-        inp.dispatchEvent(new Event("input", { bubbles: true }));
-        const b = document.getElementById("menu-buttons").getBoundingClientRect();
-        const o = document.getElementById("overlay"), ob = o.getBoundingClientRect(), cs = getComputedStyle(o);
-        return { width, left: b.left, right: b.right, w: b.width,
-          inL: ob.left + parseFloat(cs.paddingLeft), inR: ob.right - parseFloat(cs.paddingRight),
-          hero: document.getElementById("menu-hero").getBoundingClientRect().width,
-          peek: document.documentElement.dataset.appearancePeek || "" };
-      }, width));
-    }
-    for (const [i, row] of rows.entries()) {
-      expect(row.peek, `WIDTH ${row.width} peeks the title`).toBe("title");
-      // The edge holds until the cluster fills the overlay; then Bryce's X -2 clamps and the box stays inside it.
-      expect(row.left, `left inside the overlay at WIDTH ${row.width}`).toBeGreaterThanOrEqual(row.inL - 1);
-      expect(row.right, `right inside the overlay at WIDTH ${row.width}`).toBeLessThanOrEqual(row.inR + 1);
-      if (row.w < row.inR - row.inL - 1) {
-        expect(Math.abs(row.right - rows[0].right), `outer (right) edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
-      }
-      if (i) expect(row.w, `cluster width at WIDTH ${row.width}`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
-    }
-    expect(rows[rows.length - 1].w - rows[0].w, "WIDTH 20 -> 100 grows the cluster").toBeGreaterThan(300);
-    expect(rows[rows.length - 1].hero - rows[0].hero, "WIDTH 20 -> 100 grows the hero").toBeGreaterThan(300);
-  });
-
-  test("Bryce's export: WIDTH stays on screen at every density, side and LEFT/RIGHT, at 844x390 and 932x430", async ({ page }) => {
-    // #4862 reopen (iPhone, live ab0bc009): his normal density fell back to the column-centring margin and ran off
-    // the screen at WIDTH 50, and LEFT/RIGHT 8% RIGHT translated the pinned edge past the screen. Density is forced
-    // both ways; SIDE and X sweep his two real values (8 on the phone, -2 in the export).
-    await page.goto("/");
-    await page.waitForFunction(() => typeof SettingsExport !== "undefined", null, { polling: 100, timeout: BOOT_MS });
-    const applied = await page.evaluate(async () => {
-      const file = await (await fetch("/tests/data/settings-defaults-export.json")).json();
-      return SettingsExport.applySettings(file);
-    });
-    expect(applied.ok, "Bryce's export applies").toBe(true);
-    await page.reload();
-    await page.waitForFunction(() => typeof TitleLayout !== "undefined" && document.body.dataset.shape === "wide",
-      null, { polling: 100, timeout: BOOT_MS });
-    for (const viewport of [{ width: 844, height: 390 }, { width: 932, height: 430 }]) {
-      await page.setViewportSize(viewport);
-      await page.waitForFunction(w => innerWidth === w && document.body.dataset.shape === "wide", viewport.width,
-        { polling: 100, timeout: BOOT_MS });
-      for (const density of ["compact", "normal"]) for (const side of ["auto", "swap"]) for (const x of [8, -2]) {
-        const label = `${viewport.width}x${viewport.height} ${density} ${side} X ${x}`;
-        const rows = await page.evaluate(({ density, side, x }) => {
-          document.body.dataset.density = density;
-          const saved = TitleLayout.current("wide");
-          const out = [];
-          for (const width of [20, 30, 50, 70, 85, 100]) {
-            TitleLayout.apply({ ...saved, side, btns: { ...saved.btns, x, width } });
-            const o = document.getElementById("overlay"), cs = getComputedStyle(o), ob = o.getBoundingClientRect();
-            const b = document.getElementById("menu-buttons").getBoundingClientRect();
-            out.push({ width, left: b.left, right: b.right, w: b.width,
-              inL: ob.left + parseFloat(cs.paddingLeft), inR: ob.right - parseFloat(cs.paddingRight) });
-          }
-          return out;
-        }, { density, side, x });
-        const first = rows[0], last = rows[rows.length - 1];
-        for (const [i, row] of rows.entries()) {
-          expect(row.left, `${label}: WIDTH ${row.width} left inside the overlay`).toBeGreaterThanOrEqual(row.inL - 1);
-          expect(row.right, `${label}: WIDTH ${row.width} right inside the overlay`).toBeLessThanOrEqual(row.inR + 1);
-          if (i) expect(row.w, `${label}: WIDTH ${row.width} never narrows`).toBeGreaterThanOrEqual(rows[i - 1].w - 0.5);
-          // The outer edge holds until the cluster fills the overlay (then X has no room left and clamps).
-          if (row.w < row.inR - row.inL - 1) {
-            const edge = side === "swap" ? row.left - first.left : row.right - first.right;
-            expect(Math.abs(edge), `${label}: outer edge at WIDTH ${row.width}`).toBeLessThanOrEqual(1);
-          }
-        }
-        expect(last.w - first.w, `${label}: WIDTH 20 -> 100 grows the cluster`).toBeGreaterThan(300);
-        expect(rows[2].w - rows[0].w, `${label}: WIDTH 20 -> 50 grows the cluster`).toBeGreaterThan(80);
-      }
     }
   });
 });

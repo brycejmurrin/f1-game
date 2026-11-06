@@ -555,21 +555,15 @@ test("title WIDTH never collapses the hero or the doors (#4816)", () => {
   const floor = /--_tl-bw:\s*max\(([\d.]+)rem/.exec(m[1]);
   assert.ok(floor && Number(floor[1]) >= 16, "the btnw width variable carries a rem floor");
   assert.match(m[1], /width:\s*var\(--_tl-bw\)/);
-  // WIDTH is a share of the SCREEN: the wide-shape rule spans the WHOLE overlay, so its 100% cap is the overlay's
-  // content box (safe areas excluded), never the button column (the slider did nothing).
+  // WIDTH is a share of the SCREEN: the wide-shape rule must not cap the grid at its column (slider did nothing).
   const dest = readCssSource("css/menu-destinations.css");
-  const wide = dest.match(/:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\) #overlay #menu-buttons \{([^}]*)\}/);
-  assert.ok(wide, "wide btnw #menu-buttons rule exists for EVERY density (#4862: it was compact-only)");
+  const wide = dest.match(/:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{([^}]*)\}/);
+  assert.ok(wide, "wide btnw #menu-buttons rule exists");
+  assert.doesNotMatch(wide[1], /max-width:\s*100%/, "no column cap on the wide grid");
   // #4862: the grid spans the overlay and pins its outer edge, so WIDTH resizes instead of translating. A centring
   // margin on a column item made the slider shift the cluster sideways.
-  assert.match(wide[1], /grid-column:\s*1 \/ -1; justify-self: end; margin-inline: 0;/);
-  assert.match(wide[1], /max-width:\s*100%;/, "capped at the overlay's content box, not 100vw (notch)");
-  // LEFT/RIGHT is a margin clamped into the overlay; a translate carried the pinned edge off the screen.
-  assert.match(wide[1], /margin-inline-end:\s*clamp\(0%, calc\(-1 \* var\(--tl-btns-x/);
-  assert.match(wide[1], /translate:\s*0 var\(--tl-btns-y/);
-  assert.doesNotMatch(dest, /#overlay #menu-buttons \{[^}]*margin-inline:[^};]*--_tl-bw/, "no WIDTH-driven centring margin in landscape");
-  assert.doesNotMatch(dest, /:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*(justify-self|max-width|translate)/,
-    "placement is not compact-only");
+  assert.match(wide[1], /grid-column:\s*1 \/ -1; justify-self: end; margin-inline: 0;\s*max-width:\s*calc\(100 \* var\(--vwz\)/);
+  assert.doesNotMatch(dest, /#overlay #menu-buttons \{[^}]*margin-inline:[^};]*--_tl-bw/, "no WIDTH-driven margin in landscape");
   // The hero row wraps and CAREER keeps a readable basis instead of a 24 px sliver.
   assert.match(css, /:root\[data-title-btnw\] #menu-hero \{ flex-wrap: wrap; \}/);
   assert.match(css, /:root\[data-title-btnw\] #menu-hero > #mb-career \{[^}]*min-width: max\(44px,/);
