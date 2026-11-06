@@ -157,8 +157,10 @@ const WatchTransport = (function () {
       }
       // --wt-h: the bar's PAINTED height, so #bc-tower's cap (css/watch-transport.css) follows the
       // bar that is actually there instead of a 100/150/180/260 px guess per window band.
+      const writeH = () => { if (root && root.getBoundingClientRect) document.body.style.setProperty("--wt-h", root.getBoundingClientRect().height.toFixed(1) + "px"); };
+      writeH();   // the first frame already has the right tower cap; the observer keeps it right (its first callback lands a frame later)
       if (typeof ResizeObserver === "function" && root) {
-        ro = new ResizeObserver(() => { if (root) document.body.style.setProperty("--wt-h", root.getBoundingClientRect().height.toFixed(1) + "px"); });
+        ro = new ResizeObserver(writeH);
         ro.observe(root);
       }
     }

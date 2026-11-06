@@ -42,14 +42,15 @@ for (const vp of CELLS) {
         const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
         const sar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sar")) || 0;
         return { pct: bar.height / innerHeight, rows: rows.size, left: bar.left, right: bar.right, sal, sar, bw: innerWidth,
-          more: getComputedStyle(document.querySelector('[data-wt="more"]')).display, wtH: getComputedStyle(document.body).getPropertyValue("--wt-h").trim() };
+          more: getComputedStyle(document.querySelector('[data-wt="more"]')).display };
       });
       expect(closed.rows, "every control on one row").toBe(1);
       expect(closed.pct, "closed bar ≤ 35 % of the window").toBeLessThanOrEqual(0.35);
       expect(closed.left).toBeGreaterThanOrEqual(closed.sal);
       expect(closed.right).toBeLessThanOrEqual(closed.bw - closed.sar);
       expect(closed.more).not.toBe("none");
-      expect(closed.wtH).toMatch(/^\d+(\.\d+)?px$/);
+      // --wt-h is written at start and again by a ResizeObserver, whose first callback lands a frame later: poll, never read once.
+      await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).getPropertyValue("--wt-h").trim()), { timeout: 5000 }).toMatch(/^\d+(\.\d+)?px$/);
       await page.evaluate(() => { /** @type {HTMLDetailsElement} */ (document.querySelector('[data-wt="more"]')).open = true; });
       const open = await page.evaluate(() => {
         const r = (s) => document.querySelector(s).getBoundingClientRect();
