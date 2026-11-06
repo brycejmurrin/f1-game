@@ -235,10 +235,7 @@ const LayoutPresets = (function () {
   // Nothing parked = the shapes share the current values, so a save from before
   // this key migrates as it is; boot writes nothing. Colours, text size, units
   // and the home scene stay device-wide; titleLayout carries {wide, tall} itself.
-  // SHARED ignores the park (the current values serve both shapes) but keeps it:
-  // SEPARATE again in the same shape restores it (#4921); a rotation in between
-  // drops it. A shape change also drops the LAYOUT PRESET UNDO: its snapshot is
-  // the other shape's (#4919).
+  // SHARED drops the park: the current values serve both shapes.
   const SHAPES_KEY = "appearanceShapes";
   const SHAPE_KEYS = Object.freeze(["uiScale", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudMetricsLayout", "hudMapVis", "hudGapsVis",
     "pauseLayout", "pauseSide", "pauseDim", "lookPause", "lookDatahub", "lookSelect", "lookRace", "lookCareer", "lookGarage", "lookPopups"]);
@@ -256,7 +253,6 @@ const LayoutPresets = (function () {
   /** The shape changed from `was` (the stored `live` wins): park the outgoing
    *  values, apply the parked ones. True when values were swapped. */
   function syncShape(was) {
-    if (undoSnap) { undoSnap = null; paint(); }
     const st = shapes(), now = shapeNow(), a = studio(), from = st.live || was, s = store();
     if (!a || !s || !st.split || !from || from === now) return false;
     const cur = a.snapshot(), out = pick(cur), park = st.park;
@@ -268,8 +264,7 @@ const LayoutPresets = (function () {
   function setShapeSplit(on) {
     const s = store();
     if (!s) return false;
-    const st = shapes(), now = shapeNow(), live = on ? now : st.live || now;
-    s.set("appearanceShapes", { v: 1, split: !!on, live, park: st.live === now ? st.park : null });
+    s.set("appearanceShapes", { v: 1, split: !!on, live: shapeNow(), park: null });
     return true;
   }
   const ORIENT_ROW = "pm-orientation";
@@ -335,7 +330,7 @@ const LayoutPresets = (function () {
     const orient = SettingRow.build(ORIENT_ROW, "PORTRAIT & LANDSCAPE", ORIENT_VALUES);
     const orientNote = doc.createElement("p");
     orientNote.className = "adv-help";
-    orientNote.textContent = "SEPARATE: sizes, HUD layout, pause menu and screen looks keep one value per orientation on this device. Colours and text stay shared. SHARED uses the current values in both; SEPARATE again in the same orientation brings the other one's back.";
+    orientNote.textContent = "SEPARATE: sizes, HUD layout, pause menu and screen looks keep one value per orientation on this device. Colours and text stay shared.";
     box.appendChild(orient.row);
     box.appendChild(orientNote);
     SettingRow.wire(orient.row, { values: ORIENT_VALUES, read: () => (shapes().split ? "on" : "off"), write: (v) => { setShapeSplit(v === "on"); } });

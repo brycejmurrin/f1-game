@@ -37,7 +37,7 @@ function boot(values, shape = "wide") {
   vm.runInContext(presetsSrc, context, { filename: absSrc(PRESETS) });
   vm.runInContext(studioSrc, context, { filename: absSrc(STUDIO) });
   const rotate = (next) => { attrs["data-shape"] = next; for (const o of observers) o.fn(); };
-  return { studio: context.LayoutPresets, appearance: context.AppearanceStudio, values, writes, rotate };
+  return { studio: context.LayoutPresets, values, writes, rotate };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
@@ -123,35 +123,4 @@ test("eager AppearanceStudio loads the lazy swap on a rotation, and at boot only
   const stale = run({ ...bryceStore(), appearanceShapes: { v: 1, split: true, live: "wide", park: null } }, "tall");
   await Promise.resolve(); await Promise.resolve();
   assert.equal(stale.calls.length, 1, "booting in the other shape loads it");
-});
-
-test("a rotation drops both UNDOs: their snapshots belong to the other shape (#4919)", () => {
-  const { studio, appearance, values, rotate } = boot(bryceStore(), "wide");
-  rotate("tall"); values.hudScale = 100; rotate("wide");           // portrait has its own copy
-  const wide = plain(values);
-  appearance.applyPreset("broadcast");                              // a landscape Studio edit
-  assert.notEqual(values.menuAccent, wide.menuAccent);
-  rotate("tall");
-  const tall = plain(values), parked = plain(studio.shapes().park);
-  assert.equal(appearance.undo(), false, "no cross-orientation Studio UNDO");
-  assert.deepEqual(plain(values), tall, "portrait's live values are untouched");
-  assert.deepEqual(plain(studio.shapes().park), parked, "landscape's parked copy is untouched");
-  assert.equal(studio.canUndo, false, "LAYOUT PRESET UNDO is gone after the swap too");
-});
-
-test("SHARED then SEPARATE in the same orientation keeps the other orientation's values (#4921)", () => {
-  const { studio, values, rotate } = boot(bryceStore(), "wide");
-  rotate("tall"); values.hudBtnScale = 180; values.hudScale = 100; rotate("wide");
-  assert.equal(studio.shapes().park.hudBtnScale, 180);
-  studio.setShapeSplit(false); studio.setShapeSplit(true);          // one overshoot on the wrapping row
-  rotate("tall");
-  assert.equal(values.hudBtnScale, 180, "portrait's button size survives");
-  assert.equal(values.hudScale, 100);
-  rotate("wide");
-  assert.equal(values.hudBtnScale, 245);
-  // A rotation while SHARED drops the park: both shapes then share the values.
-  studio.setShapeSplit(false); rotate("tall"); studio.setShapeSplit(true);
-  assert.equal(studio.shapes().park, null);
-  rotate("wide");
-  assert.equal(values.hudBtnScale, 245);
 });
