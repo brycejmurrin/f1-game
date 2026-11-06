@@ -6,10 +6,10 @@
 // `node tools/ui/phone-layout-pin.mjs --update`, and the PR says why.
 import { devices } from "@playwright/test";
 import { test, expect } from "../helpers/fixtures.js";
-import { contextOptions, measureAll, compareFingerprint, readGolden, SCREENS } from "../../tools/ui/phone-layout-pin.mjs";
+import { testOptions, measureAll, compareFingerprint, readGolden, SCREENS } from "../../tools/ui/phone-layout-pin.mjs";
 
 test.describe("Bryce's phone cell: every screen keeps its blessed layout", () => {
-  test.use(contextOptions(devices));
+  test.use(testOptions(devices));
   test("852x393 standalone, his export, 1 px", async ({ page }) => {
     test.setTimeout(240000);
     const golden = readGolden();

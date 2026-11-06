@@ -132,8 +132,16 @@ export async function measureAll(page, { baseUrl = "", bootMs = 60000, only = nu
   }
   return out;
 }
+/** browser.newContext options for the cell. `defaultBrowserType` is dropped: Playwright Test refuses it inside a
+ *  describe's `test.use`, and the device is always Chromium here (tools/lib/ui-device-profile.mjs does the same). */
 export function contextOptions(devices) {
-  return { ...devices["iPhone 15 Pro landscape"], viewport: { width: CELL.width, height: CELL.height }, screen: { width: CELL.width, height: CELL.height }, deviceScaleFactor: 1, hasTouch: true, isMobile: true };
+  const { defaultBrowserType, ...device } = devices["iPhone 15 Pro landscape"];
+  return { ...device, viewport: { width: CELL.width, height: CELL.height }, screen: { width: CELL.width, height: CELL.height }, deviceScaleFactor: 1, hasTouch: true, isMobile: true };
+}
+/** The same cell as Playwright Test fixtures: `screen` rides `contextOptions`, as tools/lib/ui-device-profile.mjs uiTestOptions. */
+export function testOptions(devices) {
+  const { screen, ...rest } = contextOptions(devices);
+  return { ...rest, contextOptions: { screen } };
 }
 export const readGolden = () => JSON.parse(fs.readFileSync(PIN_FILE, "utf8"));
 
