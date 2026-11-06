@@ -115,25 +115,16 @@ function currentCacheName() {
 // stale sweep) plus ONE cache-write failure per worker — never a message per
 // fetch, and a rejected network fetch (offline) is expected, so never logged.
 // Fire-and-forget: it can never reject or delay the event it reports on.
-function postWindows(message) {
+function swLog(level, msg) {
   try {
     const cl = self.clients;
     if (!cl || typeof cl.matchAll !== "function") return;
     Promise.resolve(cl.matchAll({ includeUncontrolled: true, type: "window" })).then((list) => {
       for (const c of list || []) {
-        try { c.postMessage(message); } catch (_) { /* closed client */ }
+        try { c.postMessage({ type: "apex-sw-log", level, msg: String(msg) }); } catch (_) { /* closed client */ }
       }
     }, () => {});
-  } catch (_) { /* a post must never break the worker */ }
-}
-function swLog(level, msg) { postWindows({ type: "apex-sw-log", level, msg: String(msg) }); }
-// The build stamped in a shell body, 0 when it carries none (a hand-served or
-// pre-stamp shell). Reads a CLONE: the caller keeps its own body.
-async function shellBuildOf(res) {
-  try {
-    const m = /<meta name="apex-build" content="(\d+)"/.exec(await res.clone().text());
-    return m ? Number(m[1]) : 0;
-  } catch (_) { return 0; }
+  } catch (_) { /* logging must never break the worker */ }
 }
 const errMsg = (e) => (e && e.message) || String(e);
 // Runtime cache writes fail in bulk when they fail at all (quota, a
@@ -1135,11 +1126,6 @@ self.addEventListener("fetch", (event) => {
     // are the fail-fast answers below, where the cheaper path buys nothing.
     // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
     let cacheWrite = Promise.resolve();
-    // THE BUILD THIS NAVIGATION WAS ANSWERED WITH: -1 when the network shell
-    // itself went to the page, else the build stamped in the cached shell that
-    // won the race (0 for an unstamped one). Resolved by respondWith below.
-    let servedWith;
-    const served = new Promise((resolve) => { servedWith = resolve; });
     const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then((res) => {
       if (res && res.ok && !isVersion && url.search === "") {
         // Clone before the page can consume the body. Maintenance belongs to
@@ -1155,15 +1141,6 @@ self.addEventListener("fetch", (event) => {
           if (m && CACHE_PREFIX + m[1] === name) {
             const cache = await openCache(name);
             await cache.put(req, copy);
-            // A LATE NEWER SHELL SELF-HEALS THE PAGE (#5134). When the cached
-            // shell won the race, an installed PWA on a slow link booted an
-            // OLDER build — and its version.json read fails fast at 3 s on the
-            // same link, so the boot guard never reloads. Tell every window
-            // AFTER the write: the page's `?b=<build>` reload is then
-            // answerable from this cache (shellAtLeast). UpdateCheck
-            // (js/ui/update-check.js) applies it when the player is idle.
-            const cachedBuild = await served;
-            if (cachedBuild >= 0 && Number(m[1]) > cachedBuild) postWindows({ type: "apex-shell-newer", build: Number(m[1]) });
           }
         })().catch(noteCacheWriteFail);
       }
@@ -1207,20 +1184,16 @@ self.addEventListener("fetch", (event) => {
       ownURL.search = "";
       ownURL.hash = "";
       const own = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(ownURL.href));
-      if (own) { servedWith(shellBuildOf(own)); return own; }   // resolving with the read locks the answer in
+      if (own) return own;
       // The GAME shell answers only the game's own address ("/", a directory
       // URL, "/index.html", or an extensionless deep link). Another root page
       // (controller.html — the "Phone controller" shortcut and the QR landing
       // page — bench.html, cockpit-view.html) that lost the race used to open
       // the game instead; let its late network answer win, else fail honestly.
-      if (isShellDocument(url)) {
-        const shell = await matchPreferCurrent("index.html");
-        if (shell) servedWith(shellBuildOf(shell));
-        return shell || Response.error();
-      }
+      if (isShellDocument(url)) return (await matchPreferCurrent("index.html")) || Response.error();
       try { const late = await network; if (late) return late; } catch (_) { /* offline: nothing to show */ }
       return Response.error();
-    })().finally(() => servedWith(-1)));   // a promise settles once: the network answer, or an error, announces nothing
+    })());
     return;
   }
 

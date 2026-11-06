@@ -1,30 +1,21 @@
-/* title-cluster — the title screen's two independent layers (#5126, #5134; docs/notes/TITLE-LAYERS-2026-11-05.md,
- * docs/notes/TITLE-CLUSTER-SW-2026-11-06.md).
+/* title-cluster — the title screen's two independent layers (#5126, docs/notes/TITLE-LAYERS-2026-11-05.md).
  *
- * Bryce's whole settings export, on touch, at the iPhone landscape geometries he plays — 852x393 and 852x283 (the
- * 15 Pro with a 59 / 67 px notch inset), 844x390 and 932x430 — at BOTH densities, with SETTINGS open and
- * APPEARANCE › TITLE LAYOUT's REAL sliders moved (input events on the range inputs the fold builds):
+ * Bryce's whole settings export, on touch, at the two iPhone landscape shapes he plays (844x390 and 932x430), with
+ * SETTINGS open and APPEARANCE › TITLE LAYOUT's REAL sliders moved (input events on the range inputs the fold builds):
  *  - at every WIDTH from 20 to 100, LEFT/RIGHT reaches the overlay's left AND right content edges (the safe area is
- *    the overlay's padding) on SIDE AUTO and SWAPPED, and never passes them; X 0 is the anchored edge;
- *  - WIDTH resizes the box from the anchored edge only; LEFT/RIGHT only moves it;
+ *    the overlay's padding) on SIDE AUTO and SWAPPED, and never passes them;
  *  - the title art (#menu-brand, #title-car) keeps the same box through every WIDTH and LEFT/RIGHT change;
  *  - his saved layout, stored before the buttons' X became a screen % (no `xUnit`), lands where the old zoomed
  *    translate put it, and stays there once a write stores the marker (no visible jump).
  *
  * Engine-neutral on purpose: it runs in Chromium on CI and in WebKit through `npm run test:webkit`
- * (playwright.config.js DUAL_ENGINE_SPECS). Chromium also gets the notch: CDP safe-area insets per geometry.
- * One test() per viewport keeps each under the fixture timeout. */
+ * (playwright.config.js DUAL_ENGINE_SPECS). Chromium also gets a notch: CDP safe-area insets of 59 px a side. */
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const SHAPES = [{ width: 844, height: 390 }, { width: 932, height: 430 }];
-/** The four geometries and their notch inset (a side); 852x283 is the 15 Pro with Safari's toolbar showing. */
-const CELLS = [
-  { width: 852, height: 393, inset: 59 }, { width: 852, height: 283, inset: 67 },
-  { width: 844, height: 390, inset: 59 }, { width: 932, height: 430, inset: 59 },
-];
 const WIDTHS = [20, 30, 40, 50, 60, 70, 80, 90, 100];
-const DENSITIES = ["normal", "compact"];
+
 async function loadExport(page) {
   await page.goto("/");
   await page.waitForFunction(() => typeof SettingsExport !== "undefined", null, { polling: 100, timeout: BOOT_MS });
@@ -36,12 +27,6 @@ async function loadExport(page) {
   await page.reload();
   await page.waitForFunction(() => typeof TitleLayout !== "undefined" && document.body.dataset.shape === "wide",
     null, { polling: 100, timeout: BOOT_MS });
-  // THE HOME SCENE STAMPS LATE (js/ui/experience.js `stamp()`, after the lazy bundles): `#overlay[data-home-scene]`
-  // restyles #soundbtn / #disclaimer (css/experience.css) and `html[data-home-live]` hides them in compact density
-  // (css/menus.css), so the brand box changes height once, seconds after boot on a CI worker. A baseline read before
-  // the stamp failed "title box b" by 24-31 px at the first LEFT row (CI 42178056848). Wait for the stamp first.
-  await page.waitForFunction(() => !!document.getElementById("overlay").dataset.homeScene, null, { polling: 100, timeout: BOOT_MS });
-  await settle(page);
 }
 
 /** Open SETTINGS from the title and unfold TITLE SCREEN › TITLE LAYOUT, as a player does. */
@@ -73,102 +58,58 @@ const slide = (page, id, value) => page.evaluate(({ id, value }) => {
   };
 }, { id, value });
 
-/** The two layers at rest: no running animation or transition on the brand, the drawing or the cluster (the title
- *  intro, css/title.css; the layer moves and density/side relayouts transition), and their boxes unchanged between
- *  two polls. A baseline read in the same tick as a density or SIDE change measured a box mid-transition: CI
- *  42178056848 / 42180719539 failed "title box" by 24-107 px at the first LEFT row of a pass, never on an edge. */
-const settle = (page) => page.waitForFunction(() => {
-  const ids = ["menu-brand", "title-car", "menu-buttons"], els = ids.map((id) => document.getElementById(id));
-  if (els.some((e) => !e) || document.getElementById("overlay").hasAttribute("data-intro")) return false;
-  const live = document.getAnimations().some((a) => a.playState === "running" && a.effect && a.effect.target &&
-    els.some((e) => e.contains(a.effect.target)));
-  if (live) return false;
-  const now = JSON.stringify(els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }));
-  const same = window.__tcLast === now; window.__tcLast = now;
-  return same;
-}, null, { polling: 150, timeout: BOOT_MS });
-
-/** Pin body density: --compact-at is the own-height SheetShape compares against (js/ui/sheet-shape.js classifyDensity).
- *  1px, not 0px: `parseFloat(raw) || SHORT_DEFAULT` reads 0 as unset and falls back to 380 (CI 42175959386). */
-async function forceDensity(page, want) {
-  await page.evaluate((v) => { document.body.style.setProperty("--compact-at", v); SheetShape.reclassify(); },
-    want === "compact" ? "9999px" : "1px");
-  await page.waitForFunction((d) => document.body.dataset.density === d, want, { polling: 100, timeout: BOOT_MS });
-  await settle(page);
-}
-
-/** The whole sweep at one geometry: both densities, both sides, every WIDTH, X at -100 / 100 / 0. */
-async function sweep(page, cell) {
-  await page.setViewportSize({ width: cell.width, height: cell.height });
-  await page.waitForFunction((w) => innerWidth === w && document.body.dataset.shape === "wide", cell.width,
-    { polling: 100, timeout: BOOT_MS });
-  await settle(page);
-  await openFold(page);
-  for (const density of DENSITIES) {
-    await forceDensity(page, density);
-    for (const side of ["auto", "swap"]) {
-      // SIDE is the one control that trades the two layers' sides (its documented meaning); within a side the art
-      // box is the baseline every button change is held to.
-      await page.evaluate((s) => { const l = TitleLayout.current(); l.side = s; TitleLayout.set(l); }, side);
-      await settle(page);
-      const art = await slide(page, "pm-tl-btns-width", 20);
-      expect([art.min, art.max], "the WIDTH slider").toEqual([0, 100]);
-      let prev = null;
-      for (const width of WIDTHS) {
-        const label = `${cell.width}x${cell.height} ${density} ${side} WIDTH ${width}`;
-        const w = await slide(page, "pm-tl-btns-width", width);
-        const left = await slide(page, "pm-tl-btns-x", -100);
-        const right = await slide(page, "pm-tl-btns-x", 100);
-        const mid = await slide(page, "pm-tl-btns-x", 0);
-        expect([left.min, left.max], "LEFT/RIGHT spans ±100% of the screen").toEqual([-100, 100]);
-        expect(w.inL, `${label}: the notch is padding`).toBeGreaterThan(50);
-        expect(density, `${label}: density held`).toBe(w.diag.density);
-        // FULL LEFT and FULL RIGHT: the cluster's edge on the overlay's content edge (the safe area).
-        expect(Math.abs(left.btns.l - left.inL), `${label}: LEFT reaches the left safe edge`).toBeLessThanOrEqual(1);
-        expect(Math.abs(right.btns.r - right.inR), `${label}: RIGHT reaches the right safe edge`).toBeLessThanOrEqual(1);
-        for (const [name, row] of [["left", left], ["right", right], ["centre", mid]]) {
-          expect(row.btns.l, `${label} ${name}: inside the left safe edge`).toBeGreaterThanOrEqual(row.inL - 1);
-          expect(row.btns.r, `${label} ${name}: inside the right safe edge`).toBeLessThanOrEqual(row.inR + 1);
-          // WIDTH resizes, LEFT/RIGHT only moves: the box keeps its width.
-          expect(Math.abs(row.btns.w - w.btns.w), `${label} ${name}: LEFT/RIGHT keeps the width`).toBeLessThanOrEqual(0.5);
-          // The art layer never moves when the buttons change.
-          const why = `(baseline ${JSON.stringify(art.diag)}, now ${JSON.stringify(row.diag)})`;
-          for (const k of ["l", "r", "t", "b"]) {
-            expect(Math.abs(row.brand[k] - art.brand[k]), `${label} ${name}: title box ${k} ${why}`).toBeLessThanOrEqual(0.5);
-            expect(Math.abs(row.car[k] - art.car[k]), `${label} ${name}: drawing box ${k} ${why}`).toBeLessThanOrEqual(0.5);
-          }
-        }
-        // X 0 sits on the anchored edge: right on AUTO, left when SWAPPED — and WIDTH grows from THAT edge only:
-        // the anchored edge does not move between WIDTH steps (#5134: on the phone every step moved the cluster).
-        if (side === "auto") expect(Math.abs(mid.btns.r - mid.inR), `${label}: X 0 is the right edge`).toBeLessThanOrEqual(1);
-        else expect(Math.abs(mid.btns.l - mid.inL), `${label}: X 0 is the left edge`).toBeLessThanOrEqual(1);
-        if (prev) {
-          const anchored = side === "auto" ? "r" : "l";
-          expect(Math.abs(mid.btns[anchored] - prev.btns[anchored]), `${label}: WIDTH keeps the anchored edge`).toBeLessThanOrEqual(1);
-          expect(mid.btns.w, `${label}: WIDTH grows the box (was ${prev.btns.w} at WIDTH ${prev.width})`).toBeGreaterThanOrEqual(prev.btns.w - 0.5);
-        }
-        prev = { btns: mid.btns, width };
-      }
-    }
-  }
-  await page.evaluate(() => { document.body.style.removeProperty("--compact-at"); SheetShape.reclassify(); });
-  await page.evaluate(() => document.getElementById("pm-settings-close").click());
-  await page.waitForFunction(() => document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
-}
-
-test.describe("Title layers: the button cluster reaches both safe-area edges at every WIDTH (#5126, #5134)", () => {
+test.describe("Title layers: the button cluster reaches both safe-area edges at every WIDTH (#5126)", () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: SHAPES[0], deviceScaleFactor: 1 }) });
 
-  for (const cell of CELLS) {
-    test(`Bryce's export, the real WIDTH and LEFT/RIGHT sliders, ${cell.width}x${cell.height} (inset ${cell.inset}), both densities, SIDE AUTO and SWAPPED`, async ({ page, browserName }) => {
-      await loadExport(page);
-      if (browserName === "chromium") {
-        const cdp = await page.context().newCDPSession(page);
-        await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 0, right: cell.inset, bottom: 21, left: cell.inset } });
+  test("Bryce's export, the real WIDTH and LEFT/RIGHT sliders, 844x390 and 932x430, SIDE AUTO and SWAPPED", async ({ page, browserName }) => {
+    await loadExport(page);
+    if (browserName === "chromium") {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 0, right: 59, bottom: 21, left: 59 } });
+    }
+    for (const viewport of SHAPES) {
+      await page.setViewportSize(viewport);
+      await page.waitForFunction(w => innerWidth === w && document.body.dataset.shape === "wide", viewport.width,
+        { polling: 100, timeout: BOOT_MS });
+      await openFold(page);
+      for (const side of ["auto", "swap"]) {
+        // SIDE is the one control that trades the two layers' sides (its documented meaning); within a side the art
+        // box is the baseline every button change is held to.
+        await page.evaluate(s => { const l = TitleLayout.current(); l.side = s; TitleLayout.set(l); }, side);
+        const art = await slide(page, "pm-tl-btns-width", 20);
+        expect([art.min, art.max], "the WIDTH slider").toEqual([0, 100]);
+        for (const width of WIDTHS) {
+          const label = `${viewport.width}x${viewport.height} ${side} WIDTH ${width}`;
+          const w = await slide(page, "pm-tl-btns-width", width);
+          const left = await slide(page, "pm-tl-btns-x", -100);
+          const right = await slide(page, "pm-tl-btns-x", 100);
+          const mid = await slide(page, "pm-tl-btns-x", 0);
+          expect([left.min, left.max], "LEFT/RIGHT spans ±100% of the screen").toEqual([-100, 100]);
+          expect(w.inL, `${label}: the notch is padding`).toBeGreaterThan(50);
+          // FULL LEFT and FULL RIGHT: the cluster's edge on the overlay's content edge (the safe area).
+          expect(Math.abs(left.btns.l - left.inL), `${label}: LEFT reaches the left safe edge`).toBeLessThanOrEqual(1);
+          expect(Math.abs(right.btns.r - right.inR), `${label}: RIGHT reaches the right safe edge`).toBeLessThanOrEqual(1);
+          for (const [name, row] of [["left", left], ["right", right], ["centre", mid]]) {
+            expect(row.btns.l, `${label} ${name}: inside the left safe edge`).toBeGreaterThanOrEqual(row.inL - 1);
+            expect(row.btns.r, `${label} ${name}: inside the right safe edge`).toBeLessThanOrEqual(row.inR + 1);
+            // WIDTH resizes, LEFT/RIGHT only moves: the box keeps its width.
+            expect(Math.abs(row.btns.w - w.btns.w), `${label} ${name}: LEFT/RIGHT keeps the width`).toBeLessThanOrEqual(0.5);
+            // The art layer never moves when the buttons change.
+            const why = `(baseline ${JSON.stringify(art.diag)}, now ${JSON.stringify(row.diag)})`;
+            for (const k of ["l", "r", "t", "b"]) {
+              expect(Math.abs(row.brand[k] - art.brand[k]), `${label} ${name}: title box ${k} ${why}`).toBeLessThanOrEqual(0.5);
+              expect(Math.abs(row.car[k] - art.car[k]), `${label} ${name}: drawing box ${k} ${why}`).toBeLessThanOrEqual(0.5);
+            }
+          }
+          // X 0 sits on the anchored edge: right on AUTO, left when SWAPPED.
+          if (side === "auto") expect(Math.abs(mid.btns.r - mid.inR), `${label}: X 0 is the right edge`).toBeLessThanOrEqual(1);
+          else expect(Math.abs(mid.btns.l - mid.inL), `${label}: X 0 is the left edge`).toBeLessThanOrEqual(1);
+        }
       }
-      await sweep(page, cell);
-    });
-  }
+      await page.evaluate(() => document.getElementById("pm-settings-close").click());
+      await page.waitForFunction(() => document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
+    }
+  });
 
   test("migration: his pre-#5126 save lands where the old zoomed translate put it, and stays there after a write", async ({ page }) => {
     await loadExport(page);

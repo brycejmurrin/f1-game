@@ -555,50 +555,22 @@ test("title WIDTH never collapses the hero or the doors (#4816)", () => {
   const floor = /--_tl-bw:\s*max\(([\d.]+)rem/.exec(m[1]);
   assert.ok(floor && Number(floor[1]) >= 16, "the btnw width variable carries a rem floor");
   assert.match(m[1], /width:\s*var\(--_tl-bw\)/);
-  // WIDTH is a share of the SCREEN: the wide-shape rule spans the WHOLE overlay, so its cap is the overlay's
+  // WIDTH is a share of the SCREEN: the wide-shape rule spans the WHOLE overlay, so its 100% cap is the overlay's
   // content box (safe areas excluded), never the button column (the slider did nothing).
   const dest = readCssSource("css/menu-destinations.css");
-  // A rule's declarations as a map, comments stripped (a source pin would count against the assert ratchet).
-  const decls = (css, selector) => {
-    const m = css.replace(/\/\*[\s\S]*?\*\//g, "").match(new RegExp(selector + "\\s*\\{([^}]*)\\}"));
-    return m && Object.fromEntries(m[1].split(";").map((l) => l.trim()).filter(Boolean)
-      .map((l) => { const i = l.indexOf(":"); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }));
-  };
-  const wide = decls(dest, ':root\\[data-title-btnw\\] :where\\(body\\[data-shape="wide"\\]\\) #overlay #menu-buttons');
+  const wide = dest.match(/:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\) #overlay #menu-buttons \{([^}]*)\}/);
   assert.ok(wide, "wide btnw #menu-buttons rule exists for EVERY density (#4862: it was compact-only)");
-  // #5134 (docs/notes/TITLE-CLUSTER-SW-2026-11-06.md): the grid spans the overlay and is STRETCHED into it minus two
-  // margins, so its width is --_tl-bw with no `width` declaration — four generations placed it with a `%` margin or a
-  // `width: <length>` inside the zoomed box and Bryce's iPhone moved the cluster on each while WIDTH never resized it
-  // (#4862, #5126, #5134). Every term is a LENGTH: the overlay's content width is rebuilt from 100svw and the
-  // --ov-pl/--ov-pr tokens css/title.css sets beside #overlay's padding. LEFT/RIGHT is the start margin, clamped into
-  // the overlay both ways (#5126: #4906's END margin clamped a rightward X to nothing); the end margin is the rest of
-  // the free room. Both edges' reach: tests/specs/title-cluster.spec.js.
-  const placement = ["--_tl-z", "--_tl-ovw", "--_tl-free", "--_tl-home", "--_tl-start", "grid-column", "justify-self", "width", "min-width", "max-width", "margin-inline", "translate"];
-  assert.deepEqual(Object.fromEntries(placement.map((k) => [k, wide[k]])), {
-    "--_tl-z": "calc(var(--ui-scale) * var(--tl-btns-size, 1))",
-    "--_tl-ovw": "calc((100svw - var(--ov-pl, 0px) - var(--ov-pr, 0px)) / var(--_tl-z))",
-    "--_tl-free": "max(0px, calc(var(--_tl-ovw) - var(--_tl-bw)))",
-    "--_tl-home": "var(--_tl-free)",
-    "--_tl-start": "clamp(0px, calc(var(--_tl-home) + var(--_tl-bx, 0px)), var(--_tl-free))",
-    "grid-column": "1 / -1", "justify-self": "stretch",
-    width: "auto", "min-width": "0", "max-width": "none",
-    "margin-inline": "var(--_tl-start) calc(var(--_tl-free) - var(--_tl-start))",
-    translate: "0 var(--tl-btns-y, 0)",
-  });
-  assert.deepEqual(Object.entries(wide).filter(([k, v]) => (k.startsWith("--_tl-") || k.startsWith("margin")) && v.indexOf("%") >= 0), [],
-    "no % in the zoomed box's placement");
-  assert.deepEqual(decls(dest, ':root\\[data-title-side="swap"\\]\\[data-title-btnw\\] :where\\(body\\[data-shape="wide"\\]\\) #overlay #menu-buttons'),
-    { "--_tl-home": "0px" }, "SWAPPED anchors the left edge by moving home only");
+  // #4862/#5126: the grid spans the overlay and is placed by ONE start margin from its anchored edge, so WIDTH
+  // resizes instead of translating. A centring margin on a column item made the slider shift the cluster sideways.
+  assert.match(wide[1], /grid-column:\s*1 \/ -1; justify-self: start; margin-inline: 0;/);
+  assert.match(wide[1], /max-width:\s*100%;/, "capped at the overlay's content box, not 100vw (notch)");
+  // LEFT/RIGHT is that margin, clamped into the overlay both ways (#5126: #4906's END margin clamped a rightward X to
+  // nothing); a translate carried the pinned edge off the screen. Both edges' reach: tests/specs/title-cluster.spec.js.
+  assert.match(wide[1], /margin-inline-start:\s*clamp\(0%, calc\(var\(--_tl-free\) \+ var\(--_tl-bx, 0vw\)\), var\(--_tl-free\)\);/);
+  assert.match(wide[1], /translate:\s*0 var\(--tl-btns-y/);
   assert.doesNotMatch(dest, /#overlay #menu-buttons \{[^}]*margin-inline:[^};]*--_tl-bw/, "no WIDTH-driven centring margin in landscape");
-  assert.doesNotMatch(dest, /:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*(justify-self|max-width|translate|width)/,
+  assert.doesNotMatch(dest, /:root\[data-title-btnw\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*(justify-self|max-width|translate)/,
     "placement is not compact-only");
-  // The tokens mirror the padding wherever #overlay's inline padding is set.
-  const ov = decls(readCssSource("css/title.css"), "#overlay");
-  assert.deepEqual({ pl: ov["--ov-pl"], pr: ov["--ov-pr"], padding: ov.padding },
-    { pl: "var(--safe-l)", pr: "var(--safe-r)", padding: "var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l)" });
-  const big = decls(dest.slice(dest.indexOf("@media (min-width: 1680px)")), 'body\\[data-shape="wide"\\] #overlay');
-  assert.deepEqual({ pl: big["--ov-pl"], pr: big["--ov-pr"], padding: big["padding-inline"] },
-    { pl: "max(var(--safe-l, 0rem), 3rem)", pr: "max(var(--safe-r, 0rem), 3rem)", padding: "var(--ov-pl) var(--ov-pr)" }, ">= 1680 px keeps the tokens beside its padding");
   // The hero row wraps and CAREER keeps a readable basis instead of a 24 px sliver.
   assert.match(css, /:root\[data-title-btnw\] #menu-hero \{ flex-wrap: wrap; \}/);
   assert.match(css, /:root\[data-title-btnw\] #menu-hero > #mb-career \{[^}]*min-width: max\(44px,/);
