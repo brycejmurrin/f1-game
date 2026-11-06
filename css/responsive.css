@@ -171,6 +171,19 @@
   animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
 }
+/* …BUT NEVER ON GEOMETRY THE TITLE FIT MEASURES (#5150). The brand carries
+   no transition of its own, so under the rule above its initial
+   `transition-property: all` gets the 0.01ms — and a transition returns its
+   PREVIOUS rectangle (and the previous value of every var() it reads, --tf
+   included) until the next frame, even at 0.01ms. js/ui/title-layout.js
+   fit() then read #menu-brand where the last layout had left it and pulled
+   it the wrong way (measured TITLE Y +50 % at 852x393: top 436 in a 393 box,
+   2026-11-06). css/hud.css documents the same trap for fitHud and cures it
+   the same way: paint-only properties keep their 0.01ms, geometry is instant.
+   #menu-buttons already transitions `filter` alone (css/title.css). */
+:root[data-motion="reduce"] #overlay :is(#menu-brand, #menu-buttons) {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+}
 /* #hud-restore's display:none lives in deferred touch-controls.css; until it
    lands (~19 s on Slow 4G) the bare button sat top-left over the title. */
 body:not(.hud-hidden) #hud-restore { display: none; }
@@ -233,15 +246,18 @@ body:not(.hud-hidden) #hud-restore { display: none; }
    MOVES ARE `translate`, SIZES ARE `zoom`. The individual `translate` / `scale`
    properties compose with the intro's `transform` keyframes instead of
    replacing them. Size is zoom on the two UI pieces so a bigger cluster still
-   takes up layout room and scrolls like the shipped one; the drawing is not a
-   grid item, so it scales from its foot. */
+   takes up layout room; the drawing is not a grid item, so it scales from its
+   foot. EVERY VALUE HERE IS A REQUEST, THE BOX IS THE LAW (#5150): --tf is
+   the fit js/ui/title-layout.js writes when a size would not fit the
+   overlay's content box in landscape, and --tf-dx / --tf-dy pull an offset
+   back by exactly its overrun (css/title.css documents both tokens). */
 :root[data-title-layout] #menu-buttons {
-  translate: var(--tl-btns-x, 0) var(--tl-btns-y, 0);
-  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1));
+  translate: calc(var(--tl-btns-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-btns-y, 0px) + var(--tf-dy, 0px));
+  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
 }
 :root[data-title-layout] #menu-brand {
-  translate: var(--tl-title-x, 0) var(--tl-title-y, 0);
-  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1));
+  translate: calc(var(--tl-title-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-title-y, 0px) + var(--tf-dy, 0px));
+  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1) * var(--tf, 1));
 }
 :root[data-title-layout] #title-car {
   translate: var(--tl-art-x, 0) var(--tl-art-y, 0);
@@ -249,10 +265,12 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   transform-origin: 50% 100%;
 }
 /* WIDTH: a share of the SCREEN, whatever the cluster's size. --vwz already
-   undoes --ui-scale; dividing by the size undoes the cluster's own zoom. The
-   rows then fill the cluster instead of their per-shape shipped widths. */
+   undoes --ui-scale; dividing by the size undoes the cluster's own zoom, and
+   dividing by the fit (--tf, #5150) keeps the share while the fit shrinks
+   everything else. The rows then fill the cluster instead of their per-shape
+   shipped widths. */
 :root[data-title-btnw] #menu-buttons {
-  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
+  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
   max-width: none; min-width: 0; justify-self: center;
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }

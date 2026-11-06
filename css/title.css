@@ -21,8 +21,23 @@
    would divide the notch inset by the scale and slide the brand under hardware
    — the same reason css/components.css zooms `.sheet` rather than `.screen`.
    The title screen is not a `.sheet`, so without this it is the one screen the
-   setting would never move. */
-#overlay > * { zoom: var(--ui-scale); }
+   setting would never move.
+   --tf IS THE FIT (js/ui/title-layout.js, #5150): 1 unless the piece would
+   leave the overlay's content box, else the zoom that makes it fit. The
+   viewport units are deliberately NOT re-derived against it: a fit scales
+   the piece UNIFORMLY, --vwz type included (compensated, the wordmark and
+   the door labels kept their screen size and the brand could not shrink at
+   all — measured TITLE SIZE 200 at 852x393, 2026-11-06); only the WIDTH
+   share in css/responsive.css divides it back out. Zero specificity on
+   purpose: css/menus.css's compact cap and css/responsive.css's TITLE LAYOUT
+   zoom carry the same --tf product and win on order or layer, exactly as
+   they did against the old `#overlay > *`. */
+:where(#overlay > *) { zoom: calc(var(--ui-scale) * var(--tf, 1)); }
+/* The fit's OFFSET CLAMP: an X / Y that would carry a piece past an edge of
+   the content box is pulled back by exactly the overrun (screen px over the
+   piece's zoom, js/ui/title-layout.js fit()). The TITLE LAYOUT translate in
+   css/responsive.css adds the same two tokens to the player's offset. */
+#overlay > :is(#menu-buttons, #menu-brand) { translate: var(--tf-dx, 0px) var(--tf-dy, 0px); }
 /* Title arrives once. The wordmark reuses sheet-in (css/components.css), the
    motion every modal sheet shares — one-shot, never a loop (the sheen rule in
    css/components.css documents why) — inside the title intro below, so it
@@ -40,28 +55,24 @@
      caption on the CAREER button rather than the last line of the small print. */
   gap: clamp(20px, 4vh, 40px);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
-  /* CENTRED UNTIL IT DOES NOT FIT, then top-aligned and scrollable.
-     `align-content: center` in a grid that overflows pushes content past BOTH
-     edges, and the start edge of a scroll container cannot be scrolled to — so
-     with the old `overflow: hidden` the title menu simply lost its ends. At
-     UI SIZE 130 % on a 852x393 phone the button column measured -14..407 in a
-     393px box: 14px gone off the top, 14px off the bottom, unreachable. 150 %
-     lost 45px at each end. `safe center` falls back to `start` exactly when
-     that would happen, and the pair of declarations is the progressive form —
-     a browser without `safe` drops the second and keeps plain centring.
-     Declared here rather than compensated per-scale because the overflow is a
-     function of viewport height as much as of the slider: a short enough
-     window does this at 100 %.
-     ONE AXIS, NOT TWO. This was `overflow: auto`, and the shorthand turns on
-     BOTH — but every word of the reasoning above is about height. A horizontal
-     scroll here is not a feature anybody asked for; it is the title screen
-     silently becoming draggable sideways, with `align-content: safe center`
-     centring nothing along that axis and no scrollbar on touch to hint at it.
-     css/components.css already documents this exact trap on `.pane` ("Setting
-     only overflow-y computes the other axis from `visible` to `auto`") — the
-     shorthand is the same mistake from the other direction. `pan-y` and
-     `contain` complete it, so the title screen behaves like every other scroll
-     region in the app. */
+  /* CENTRED, AND IN LANDSCAPE IT NEVER SCROLLS (#5150). `align-content:
+     center` in a grid that overflows pushes content past BOTH edges, and the
+     start edge of a scroll container cannot be scrolled to — so with a bare
+     `overflow: hidden` the title menu once lost its ends (UI SIZE 130 % on a
+     852x393 phone measured the button column at -14..407 in a 393px box, 150 %
+     lost 45px at each end). `safe center` falls back to `start` exactly then,
+     and the pair of declarations is the progressive form — a browser without
+     `safe` drops the second and keeps plain centring.
+     THE BOX IS THE LAW in landscape: js/ui/title-layout.js FITS each piece —
+     zooms it down through --tf, pulls an offset back through --tf-dx/-dy — so
+     the cluster and the brand always sit inside this content box, and the
+     wide rule after this block clips whatever a frame has not fitted yet.
+     Portrait keeps the scroll fallback: it has height to spend, and its real
+     scroller is the zoomed child (css/menus.css), never this element.
+     ONE AXIS, NOT TWO where it still scrolls. The shorthand `overflow: auto`
+     turns on BOTH, and a title screen silently draggable sideways is nobody's
+     feature — css/components.css documents the same trap on `.pane`. `pan-y`
+     and `contain` complete it. */
   align-content: center;
   align-content: safe center;
   /* in oklab so the red wash stays red through its falloff instead of
@@ -75,6 +86,13 @@
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
+/* LANDSCAPE NEVER SCROLLS. Measured on the Tuesday-night tree (b0027115) at
+   852x393 with Bryce's stored layout (WIDTH 20): #menu-buttons scrollHeight
+   569 in a 343px box, USE AS CONTROLLER below the fold (#5150). The fit in
+   js/ui/title-layout.js is what makes everything sit inside; this is the
+   guarantee for the frame before it lands and for anything it does not size.
+   tests/specs/title-fit.spec.js holds scrollHeight === clientHeight here. */
+:where(body[data-shape="wide"]) #overlay { overflow: hidden; }
 /* MENU WASH player setting (js/ui/title-fx.js → html[data-menu-wash]).
    Tokens only — both this file and css/responsive.css (overlays layer) paint
    the radial from --menu-wash-pct, so a soft/off answer wins on every
@@ -107,8 +125,17 @@
      shape the game is actually PLAYED in. With the element itself at
      1400/900, cover and fit are the SAME scale, so there is nothing left to
      choose: the art is always exactly as wide as the screen and as tall as
-     its own proportions say, sitting on the bottom edge. */
-  position: absolute;
+     its own proportions say, sitting on the bottom edge.
+     FIXED, NOT ABSOLUTE (#5150). #overlay is `fixed; inset: 0`, so the two
+     resolve to the same box — but an absolute child's box counts toward the
+     overlay's scrollable overflow, and a TITLE LAYOUT offset or SIZE on the
+     drawing then grew #overlay's scrollHeight past its clientHeight (measured:
+     a child translated 300px below the fold read 691 in a 393 box). A fixed
+     descendant is laid out against the viewport and counts toward nobody's
+     scroll area, so the art can be pushed anywhere and the title never
+     scrolls for it. tools/gen/title-art.mjs frames the drawing INSIDE the svg
+     for the same reason. */
+  position: fixed;
   left: 0; right: 0; bottom: 0; top: auto;
   width: 100%; height: auto;
   aspect-ratio: 1400 / 900;

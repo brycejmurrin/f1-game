@@ -1,0 +1,1 @@
+Fixed: the landscape title screen never scrolls — a TITLE LAYOUT size, width or offset that would not fit the screen now shrinks the buttons or the title to fit and keeps them on screen, so the bottom row (USE AS CONTROLLER, SAVES) is never below the fold on a phone.

@@ -169,7 +169,11 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: none; grid-auto-rows: max-content;
   max-width: 100%;
-  max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
+  /* 100%, not 100% minus twice the Y offset: that cap kept a MOVED cluster on
+     screen by shrinking its box and scrolling the rest, which is the scroll
+     #5150 forbids. The offset clamp in js/ui/title-layout.js keeps it on
+     screen now, and the fit sizes the content to the whole box. */
+  max-height: 100%;
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
 }
