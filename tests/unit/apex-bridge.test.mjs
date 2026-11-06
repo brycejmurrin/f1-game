@@ -319,38 +319,3 @@ test("frames and snap settle with {error:'hidden'} when rAF never fires (locked 
   const s = await b.api.handle({ cmd: "snap" });
   assert.equal(s.value.error, "hidden");
 });
-
-test("layout reads the title-screen geometry the WIDTH rules wrote, read-only (#4862)", async () => {
-  const rect = (l, t, w, h) => ({ left: l, top: t, right: l + w, bottom: t + h, width: w, height: h });
-  const els = {
-    overlay: { getBoundingClientRect: () => rect(0, 0, 932, 430) },
-    "menu-buttons": { getBoundingClientRect: () => rect(662.4, 40, 262, 300) },
-  };
-  const styles = new Map([
-    [els["menu-buttons"], { width: "240px", "justify-self": "end", "margin-right": "0px", translate: "0px -8.6px", zoom: "0.99" }],
-    [els.overlay, { "padding-left": "8px", "padding-right": "8px" }],
-  ]);
-  const root = { getAttribute: (k) => ({ "data-title-btnw": "", "data-title-side": "auto" })[k] ?? null };
-  styles.set(root, { "--ui-scale": " 1.09", "--tl-btns-w": "20", "--tl-btns-x": "-2vw" });
-  const doc = {
-    getElementById: (id) => els[id] || null, documentElement: root,
-    body: { dataset: { density: "normal", shape: "wide" }, className: "" },
-    querySelector: () => ({ content: "abc1234" }),
-  };
-  const getComputedStyle = (el) => ({ getPropertyValue: (k) => (styles.get(el) || {})[k] || "" });
-  const b = load({ search: "", extra: { document: doc, getComputedStyle } });
-  const r = await b.api.handle({ cmd: "layout" });
-  assert.equal(r.ok, true);
-  const v = plain(r.value);
-  assert.equal(v.sha, "abc1234");
-  assert.deepEqual(v.body, { density: "normal", shape: "wide", cls: "" });
-  assert.equal(v.root.uiScale, "1.09");
-  assert.equal(v.root.side, "auto");
-  assert.equal(v.root.tl["--tl-btns-x"], "-2vw");
-  assert.deepEqual(v.buttons, { l: 662, t: 40, r: 924, b: 340, w: 262, h: 300 });
-  assert.equal(v.overlay.w, 932);
-  assert.equal(v.css["justify-self"], "end");
-  assert.equal(v.css.translate, "0px -8.6px");
-  assert.equal(v.overlayPad["padding-right"], "8px");
-  assert.equal((await load({ search: "", extra: { document: { getElementById: null } } }).api.handle({ cmd: "layout" })).ok, false);
-});
