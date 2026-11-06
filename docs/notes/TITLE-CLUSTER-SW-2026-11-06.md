@@ -91,8 +91,9 @@ start margin); update those assertions with the rule.
 
 Pins to add to `tests/specs/title-cluster.spec.js` (Chromium on CI, WebKit by hand): viewports 852×393 and 852×283
 with CDP insets 59 and 67 px, 844×390 and 932×430 with 59 px, Bryce's export, SIDE auto and swap, and BOTH densities
-(force `normal` by setting `--compact-at: 0px` on `body` before SheetShape measures, or `9999px` for `compact`; see
-`js/ui/sheet-shape.js` l.245). At each cell: WIDTH 20..100 grows the box from the anchored edge only; X ±100 reaches
+(force `normal` by setting `--compact-at: 1px` on `body` and calling `SheetShape.reclassify()`, or `9999px` for
+`compact`; `0px` reads as unset — `parseFloat(raw) || SHORT_DEFAULT` — and stays compact; see `js/ui/sheet-shape.js`
+`classifyDensity`). At each cell: WIDTH 20..100 grows the box from the anchored edge only; X ±100 reaches
 both content edges; X 0 is the anchored edge; `#menu-brand` and `#title-car` boxes hold to 0.5 px. One `test()` per
 viewport keeps each under the fixture timeout.
 

@@ -67,10 +67,11 @@ const slide = (page, id, value) => page.evaluate(({ id, value }) => {
   };
 }, { id, value });
 
-/** Pin body density: --compact-at is the own-height SheetShape compares against (js/ui/sheet-shape.js classifyDensity). */
+/** Pin body density: --compact-at is the own-height SheetShape compares against (js/ui/sheet-shape.js classifyDensity).
+ *  1px, not 0px: `parseFloat(raw) || SHORT_DEFAULT` reads 0 as unset and falls back to 380 (CI 42175959386). */
 async function forceDensity(page, want) {
   await page.evaluate((v) => { document.body.style.setProperty("--compact-at", v); SheetShape.reclassify(); },
-    want === "compact" ? "9999px" : "0px");
+    want === "compact" ? "9999px" : "1px");
   await page.waitForFunction((d) => document.body.dataset.density === d, want, { polling: 100, timeout: BOOT_MS });
 }
 
