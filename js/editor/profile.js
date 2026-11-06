@@ -47,11 +47,9 @@ const DesignerProfile = (function () {
 
     function heightsShown() {
       if (!tr) return null;
-      // Read-only outside a live drag (trace, frameOf and hAt never write), so no copy per render.
-      if (!(drag && drag.moved && ticks[drag.i] != null)) return tr.py;
       const h = Float64Array.from(tr.py);
       // Live drag: lift the profile near the control tick by (cur - h0).
-      {
+      if (drag && drag.moved && ticks[drag.i] != null) {
         const cs = ticks[drag.i], half = Math.max(40, (tr.total || 1) / Math.max(8, ticks.length));
         const dy = drag.cur - drag.h0, ds = tr.total / tr.n;
         for (let k = 0; k < tr.n; k++) {
@@ -331,13 +329,7 @@ const DesignerProfile = (function () {
     }
 
     function reset() { drag = null; liveH = null; render(); }
-    // Setters inside batch() render once at the end: one designer commit called
-    // five of them back to back (setBuilt, setIssues, setHeights, setCursor,
-    // setSelection), each a full two-pass trace of the road (#4546 P6).
-    let held = 0, dirty = false;
-    function paint() { if (held) dirty = true; else render(); }
     const api = {
-      batch(fn) { held++; try { return fn(); } finally { if (!--held && dirty) { dirty = false; render(); } } },
       setBuilt(t, v, pts) {
         tr = t && t.n > 2 && t.py ? t : null;
         speed = v && tr && v.length === tr.n ? v : null;
@@ -358,7 +350,7 @@ const DesignerProfile = (function () {
             if (span >= nodeH.length) span = -1;
           }
         }
-        paint();
+        render();
       },
       /** Per-node heights (metres). Length should match the control loop. */
       setHeights(list) {
@@ -367,18 +359,18 @@ const DesignerProfile = (function () {
         if (span >= nodeH.length) span = -1;
         if (drag && drag.i >= nodeH.length) drag = null;
         liveH = null;
-        paint();
+        render();
       },
-      setCursor(sM) { cursor = Number.isFinite(sM) ? sM : null; paint(); },
+      setCursor(sM) { cursor = Number.isFinite(sM) ? sM : null; render(); },
       setIssues(list) {
         issues = (Array.isArray(list) ? list : []).filter((it) => it && Number.isFinite(it.s) && /^(grade|fia-grade|fia-crest|fia-sag)$/.test(it.code));
-        paint();
+        render();
       },
       selected() { return sel; },
       selection() { return { sel, span }; },
       // Same path as a grip tap: update sel/span and tell the screen (POINT m stepper).
-      select(i, j) { choose(i, j); paint(); },
-      setSelection(i, j) { choose(i, j); paint(); },
+      select(i, j) { choose(i, j); render(); },
+      setSelection(i, j) { choose(i, j); render(); },
       zoom(factor) {
         if (!(factor > 0)) return;
         const center = tr && sel >= 0 && ticks[sel] != null ? ticks[sel] / tr.total : viewStart + viewSpan / 2;

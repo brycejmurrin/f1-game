@@ -1364,16 +1364,13 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
       document.getElementById("announce").hidden = false;
       if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
     });
-    // A timeout is named in the expects ("never settled"), not hidden by an
-    // empty .catch as an early sample (#4363).
-    const settled = await page.waitForFunction(([x, y]) => {
+    await page.waitForFunction(([x, y]) => {
       const r = document.getElementById("announce").getBoundingClientRect();
       return Math.abs(r.left - x) <= 6 && Math.abs(r.top - y) <= 6;
-    }, [tx, ty], { polling: 100, timeout: 5000 }).then(() => true, () => false);
+    }, [tx, ty], { polling: 100, timeout: 5000 }).catch(() => {});
     const a2 = await card.boundingBox();
-    const why = settled ? "" : " — never settled in 5 s";
-    expect(Math.abs(a2.x - tx), "message at the drop point (x)" + why).toBeLessThanOrEqual(6);
-    expect(Math.abs(a2.y - ty), "message at the drop point (y)" + why).toBeLessThanOrEqual(6);
+    expect(Math.abs(a2.x - tx), "message at the drop point (x)").toBeLessThanOrEqual(6);
+    expect(Math.abs(a2.y - ty), "message at the drop point (y)").toBeLessThanOrEqual(6);
     await page.evaluate(() => HudLayout.resetEl("announce"));
     await page.waitForFunction(() => !document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
   });

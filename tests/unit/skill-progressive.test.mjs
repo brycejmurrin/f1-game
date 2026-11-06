@@ -306,31 +306,6 @@ test("verify-agent stays --fast, never starts Playwright, and carries the --base
   assert.doesNotMatch(text, /--force-push|--force\b(?!\s+scratch)/);
 });
 
-test("no live routing surface sends work to a retired subagent (B8, #4552)", () => {
-  // A retired agent name in a skill, a Cursor rule, AGENTS.md or the agent-surface routing doc makes an agent
-  // spawn an unknown subagent_type. A line may still NAME one as history (folded / retired / former / replaces).
-  const RETIRED = ["bloat-auditor", "agent-surface-reviewer", "ci-watcher", "merge-desk", "release-auditor",
-    "worktree-regression-check", "doc-drift-auditor"];
-  for (const name of RETIRED) assert.ok(!fs.existsSync(path.join(AGENTS, `${name}.md`)), `${name} is live again: drop it here`);
-  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-    e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith(".md") || e.name.endsWith(".mdc") ? [path.join(dir, e.name)] : []);
-  const files = [
-    ...walk(SKILLS), ...walk(path.join(ROOT, ".cursor/rules")),
-    ...fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md").map((f) => path.join(AGENTS, f)),
-    path.join(ROOT, "AGENTS.md"), path.join(ROOT, "docs/AGENT-SURFACE.md"),
-  ];
-  const HISTORY = /\b(folded|retired|former|formerly|replaces|replaced|deleted|renamed|re-specced)\b/i;
-  const bad = [];
-  for (const f of files) {
-    fs.readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      for (const name of RETIRED) {
-        if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(line) && !HISTORY.test(line)) bad.push(`${path.relative(ROOT, f)}:${i + 1} ${name}`);
-      }
-    });
-  }
-  assert.deepEqual(bad, [], "route to the live agent instead (code-hunter focus: dead-code, surface-reviewer, verify-agent --base, deploy-research)");
-});
-
 test("every custom subagent declares name, description, and model", () => {
   // Cursor subagent docs (https://cursor.com/docs/subagents, Context7 2026-08-17):
   // name + description required; model: inherit (or a model id) so a subagent
@@ -601,9 +576,7 @@ test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
   assert.match(fm.description, /Use when/i);
   assert.match(fm.description, /bloat|dead|extract|split/i);
   assert.ok(skill.split("\n").length <= 180, "slim-bloat SKILL.md must stay a thin index");
-  // bloat-auditor folded into code-hunter `focus: dead-code` (2026-11-03); the skill routes there (B8, #4552).
-  assert.match(skill, /code-hunter/);
-  assert.match(skill, /focus: dead-code/);
+  assert.match(skill, /bloat-auditor/);
   assert.match(skill, /bloat-scan\.mjs/);
   assert.match(skill, /extract-module\.mjs/);
   assert.match(skill, /mcp-probe|Context7|context7/i);

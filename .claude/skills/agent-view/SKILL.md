@@ -13,8 +13,7 @@ the VM has no last-drawn frame, so raster/camera evidence still needs a browser.
 (curated FIA apexes, `source` says so); `corners()` is curvature PEAKS, often about twice the
 official count, never "the corner list". Grade is `trackProfile(n).slope` (formula:
 track-geometry.md §Whole-lap recipe); `trackInfo({what:'profile'})` / CLI `track --what profile`
-is 60 points of `y`/`widthM`/`radiusM` with NO slope. Lap length, turns, sectors, corner count:
-`apex_circuit_info {track}` (CLI `tools/track/circuit-info.cjs <id> --json`, <1 s, built lap, not a comment).
+is 60 points of `y`/`widthM`/`radiusM` with NO slope.
 `node tools/shot/apex-eval.mjs spa "({c:a.trackInfo({what:'corners'}), p:a.trackProfile(200)})" --raw --vm`
 (`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays. Main session only: bash-guard refuses it in a subagent, see below.)
 MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent

@@ -58,10 +58,6 @@ def generated_paths():
         block = re.search(r"GENERATED_PATHS\s*=\s*Object\.freeze\(\[(.*?)\]\)", src, re.S)
         for p in re.findall(r'"([^"]+)"', block.group(1) if block else ""):
             out.setdefault(p, "a generator writes it (tools/lib/generated-paths.mjs; `npm run gen`)")
-        # BUILT_PATHS (B8 #4561 H7): gitignored build products; a hand edit is lost at the next ensure-built.
-        built = re.search(r"BUILT_PATHS\s*=\s*Object\.freeze\(\[(.*?)\]\)", src, re.S)
-        for p in re.findall(r'"([^"]+)"', built.group(1) if built else ""):
-            out.setdefault(p, "it is BUILT, never committed: node tools/gen/ensure-built.mjs writes it (tools/lib/generated-paths.mjs BUILT_PATHS)")
     except Exception:
         pass
     out.pop("package.json", None)          # only its test:* scripts are generated: judged below

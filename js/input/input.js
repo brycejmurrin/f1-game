@@ -1813,13 +1813,8 @@ const Input = (function () {
   }
   function steerNow() {
     if (padConnected) advanceDpad();
-    let k = keyboardSteer();
-    if (keyLeft || keyRight) return k;
-    if (Math.abs(k) > 0.001) {
-      // A RELEASED key's ramp-out must not shadow a source that is actually being driven now.
-      if (padSteerActive() || remoteSteers() || touchActive || tiltActive() || btnSteerLeft || btnSteerRight) keySteerVal = k = 0;
-      else return k;
-    }
+    const k = keyboardSteer();
+    if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, padIsWheel ? "wheel" : "pad") : padSteer;

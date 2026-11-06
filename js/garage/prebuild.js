@@ -173,24 +173,20 @@ const GaragePrebuild = (function () {
       return ov && !ov.hidden && !ov.inert ? "title" : "";
     }
     const starting = () => !!(G.loadingScreen && G.loadingScreen.active()) || !!d.studio();
-    const navNow = () => (typeof navigator !== "undefined" ? navigator : null);
-    // Prefer the live gfx façade (isMobile / mobileTier); fall back to GLX.
-    function phoneNow() {
+    function env(want) {
+      const ov = $("overlay"), st = ui(), k = homeKind(st);
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      // Prefer the live gfx façade (isMobile / mobileTier); fall back to GLX.
       const gfx = G.gfx;
       const hint = (gfx && (gfx.isMobile || gfx.mobileTier)) ? gfx
         : (typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)) ? GLX
           : (gfx || null);
-      return phoneHold(navNow(), hint);
-    }
-    function env(want) {
-      const ov = $("overlay"), st = ui(), k = homeKind(st);
-      const nav = navNow();
       return {
         want, kind: k, off: !enabled, state: G.state, setupOpen: !!G.setupPreviewOn, starting: starting(),
         tabHidden: typeof document !== "undefined" && !!document.hidden, headless: !!G.headlessMode,
         surface: surface(), intro: !!(ov && ov.hasAttribute("data-intro")),
         saveData: saveData(nav, typeof matchMedia === "function" ? matchMedia : null),
-        phoneHold: phoneNow(),
+        phoneHold: phoneHold(nav, hint),
         packSettled: packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null),
         worldReady: !!d.worldReady(), homePainted: !!(st && st.painted),
         worldWarm: gate.warm > 0, warming: !!(G.gfx && G.gfx.warming && G.gfx.warming()),
@@ -310,7 +306,7 @@ const GaragePrebuild = (function () {
       if (running || sheetOpenNow()) return;
       // Phones: never start a title prebuild, and free one already held so the
       // idle menu does not keep ~11 MB (PERF item 13). Race settings still runs.
-      if (phoneNow()) {   // not env(): the 1 s tick needs one field, not ~19 (and a matchMedia)
+      if (env("title").phoneHold) {
         if (prepped || gate.garageReady || gate.garageKey) release();
         return;
       }

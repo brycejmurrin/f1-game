@@ -298,16 +298,6 @@ test("visor tick: switching HELMET VISOR to OFF mid-race takes the oval eye-port
   assert.match(read("css/hud.css"), /body\[data-helmet-cam\]:not\(\[data-helmet-visor="off"\]\) #hud::before \{/, "the static oval frame skips visor OFF");
 });
 
-test("visor tick: a null scene read does not spend the paint interval (#4338)", () => {
-  let scene = null;
-  const { V } = load({ apex: { visorScene: () => scene } });
-  V.tick(0.07, true, 0, false);
-  assert.equal(V.stats().paints, 0, "no scene: nothing painted");
-  scene = DAY;
-  V.tick(0.01, true, 0, false);
-  assert.equal(V.stats().paints, 1, "the interval banked while the scene was null paints the moment it returns");
-});
-
 test("visor tick: falls back to camState + lightState without visorScene, and reads nothing without __apex", () => {
   const apex = { camState: () => ({ eye: DAY.eye, tgt: DAY.tgt, fov: 62 }), lightState: () => ({ skySunDir: DAY.sunDir, sunColor: DAY.sunColor, exposure: 1, ambientSky: DAY.ambientSky, floodEmit: 0 }) };
   const { V } = load({ apex });

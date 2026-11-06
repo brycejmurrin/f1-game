@@ -75,27 +75,6 @@ test("over the hard cap an Agent spawn is denied; create_session is not this hoo
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("perf P8 row 10: with no cap decide() never parses the transcript tail; an env cap never reads the brief", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ctxcap-"));
-  try {
-    const t = transcript(dir, "You are a worker. Fix the HUD.", 400);
-    // Import the hook as a module and make the expensive reader explode: a no-cap event must never reach it.
-    const py = `import importlib.util, json, sys
-spec = importlib.util.spec_from_file_location("cc", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-def boom(*a): raise AssertionError("called")
-ev = {"hook_event_name": "PostToolUse", "transcript_path": sys.argv[2], "session_id": "p8"}
-m.context_tokens = boom
-print(json.dumps(m.decide(ev, sys.argv[3], {})))
-m.context_tokens = lambda p: 400000; m.brief_text = boom
-print(json.dumps(m.decide(ev, sys.argv[3], {"APEX_CTX_SOFT": "150"})))`;
-    const r = spawnSync("python3", ["-c", py, HOOK, t, dir], { encoding: "utf8" });
-    assert.equal(r.status, 0, r.stderr);
-    const [noCap, envCap] = r.stdout.trim().split("\n").map((l) => JSON.parse(l));
-    assert.equal(noCap, "", "no STOP AT, no env cap: nothing, and context_tokens not called");
-    assert.match(envCap, /context 400k \/ cap 150k \(APEX_CTX_SOFT; hard 200k\)/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
 test("guard mode refuses malformed input while advisory mode stays silent", () => {
   for (const payload of ["not json", "[]", '{"tool_input":[]}', '{"tool_input":0}', '{"tool_input":""}']) {
     const go = (guard) => spawnSync("python3", [HOOK, ...(guard ? ["--guard"] : [])], { input: payload, encoding: "utf8",

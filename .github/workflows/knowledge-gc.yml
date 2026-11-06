@@ -56,8 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # --limit: gh lists only the 30 newest by default; an older open bot PR read as none (B3).
-          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/knowledge-gc"))] | length')"
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/knowledge-gc"))] | length')"
           echo "open gc PRs: $n"
           echo "n=$n" >> "$GITHUB_OUTPUT"
 

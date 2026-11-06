@@ -86,7 +86,7 @@
    painted 9.8px (hud-survey phoneL-chase-hud70, 9 tinyText). Re-derive it per band against the band's own
    --hud-z with the same micro/1.4 floor as .hud-label, so TEXT SIZE still lifts it; --fs-hud-micro is the
    untouched token (a custom property cannot reference itself). Identical at zoom >= 1. */
-:root { --fs-hud-micro: var(--fs-micro); --limits-drop: 15px; }
+:root { --fs-hud-micro: var(--fs-micro); }
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
 #lights, #announce, .hud-bottom, #bc-pip, #hud-rel, #hud-strat, #hud-inputs {
   --fs-micro: max(var(--fs-hud-micro), calc(var(--fs-hud-micro) / 1.4 / var(--hud-z, 1)));
@@ -151,6 +151,7 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
   #hud-pos[data-delta] { animation: pos-flash 0.5s ease-out; }
 }
 @keyframes pos-flash { from { transform: scale(1.18); } }
+:root { --hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent); }
 /* ONE TIMING STRIP (design pass 2a, docs/notes/DESIGN-PASS-2A-HUD-2026-10-30.md): one plate, hairline
    dividers, the team keyline once on POS, the one light cell (the rank you hunt). A rank change keeps its
    hue on a dark pill for the flash. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
@@ -708,7 +709,7 @@ body[data-hud-hide~="limits"] #hud-limits { display: none !important; }
   letter-spacing: 0.08em; color: var(--bg); background: var(--you);
   border: 0; border-radius: var(--r-xs);
   box-shadow: var(--lift-2);
-  animation: pulse var(--hud-pulse) infinite; will-change: opacity;   /* own layer: the shadow is not repainted per frame (#4586) */
+  animation: pulse var(--hud-pulse) infinite;
   pointer-events: auto; cursor: pointer;
 }
 @media (prefers-reduced-motion: reduce) { #hud-work { animation: none; } }
@@ -1252,7 +1253,7 @@ body:not(.desktop) #hud-sectors {
      outside the broadcast profile — left this chip hanging 77px below an empty
      corner. The var is 0 exactly when the box is gone, so the chip rides up
      into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop));
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
   /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
      that row is the BOOST pedal — so a track-limits warning painted straight
      over a tap target (reported from a phone). --dock-r-w is the right dock's
@@ -1314,7 +1315,7 @@ body[data-density="compact"] #hud-flag {
    body as a descendant of :root — the class still lives only on body. */
 :root:not([data-limits-left]) .hud-prof-broadcast[data-density="compact"]:has(#hud-flag:not([hidden])) #hud-limits:not([data-hl-user]) {
   top: max(
-    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop)),
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px),
     calc(max(72px + var(--sat) / var(--hud-z), var(--hud-gaps-b, 0px) + 8px, var(--mir-bot, 0px) + 8px) + 40px)
   );
 }
@@ -2193,8 +2194,8 @@ body[data-density="compact"] #bc-tower .bc-row:nth-child(n+11):not(.on) { displa
 /* THE PICTURE-IN-PICTURE (js/render/shared/mirror-pass.js paints the second
    camera into exactly this box; js/race/broadcast.js writes the label). Under
    the pause / camera column, where the sector box and limits strip stood —
-   neither means anything for a replayed car, so they stand down with it
-   (the `body.bc-on :is(…, #hud-sectors, #hud-limits)` hide rule above). */
+   neither means anything for a replayed car, so they stand down with it. */
+body.bc-on #hud-sectors, body.bc-on #hud-limits { display: none !important; }
 #bc-pip {
   --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
   position: absolute;
@@ -2272,7 +2273,7 @@ body[data-helmet-cam]:not([data-helmet-visor="off"]) #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop) + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px));
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px));
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   display: flex;
   align-items: center;
@@ -2356,7 +2357,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
      (sectors, limits, INPUTS, DAMAGE) reaches 346px and the home at 274px put
      RELATIVE under DAMAGE and the trace (15.6k px², hud-mock 2026-10-14). The
      stack's own bottom edge is the floor — same terms as #hud-damage above. */
-  top: max(calc(38svh / var(--hud-z)), calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + var(--limits-drop) + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px) + var(--rc-damage-h, 0px) + 4px));
+  top: max(calc(38svh / var(--hud-z)), calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px) + var(--rc-damage-h, 0px) + 4px));
   border-left: 3px solid var(--plate-line);
 }
 #hud-rel > div {
@@ -2610,7 +2611,7 @@ body.hud-prof-broadcast .hud-top[data-hl-v4] { left: calc(10px + var(--sal) / va
 .hud-gaps[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: calc(var(--hud-map-x) + var(--sal) / var(--hud-z)) !important; }
 :is(#hud-sectors, #hud-limits, #hud-damage, #hud-rel)[data-hl-v4] { right: calc(10px + var(--sar) / var(--hud-z)) !important; left: auto !important; }
 #hud-sectors[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z)) !important; }
-#hud-limits[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 4.8em + var(--limits-drop)) !important; }
+#hud-limits[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 4.8em + 15px) !important; }
 #hud-damage[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 7.4em + 18px) !important; }
 #hud-rel[data-hl-v4] { top: calc(38svh / var(--hud-z)) !important; }
 #hud-strat[data-hl-v4] { top: calc(40svh / var(--hud-z)) !important; left: calc(10px + var(--sal) / var(--hud-z)) !important; }

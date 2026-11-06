@@ -1047,7 +1047,7 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.match(game, /const off = \(real && \(real\.watch \|\| real\.startLap > 1\)\) \|\| headlessMode \|\| document\.hidden;/);
   // QUICK on purpose: RACE AGAIN / TRY AGAIN, pause RESTART. (Net / headless / hidden fall back inside startRaceFromSheet.)
   assert.match(game, /else if \(isChampionship\(\)\) startRaceFromSheet\(\);[^\n]*\n\s*else startRaceCovered\(\);/, "RACE AGAIN / TRY AGAIN stay card-only restarts");
-  assert.match(game, /\$\("pm-restart"\)\.onclick = \(\) => \{[^\n]*const rq = startRace\(\); rq\.then\(/, "pause RESTART calls startRace() directly");
+  assert.match(game, /\$\("pm-restart"\)\.onclick = \(\) => \{[^\n]*startRace\(\)\.then\(/, "pause RESTART calls startRace() directly");
   assert.doesNotMatch(game.match(/\$\("pm-restart"\)\.onclick[^\n]*/)[0], /raceIntro|startRaceFromSheet|startRaceCovered/);
   // Agent / dev starts (__apex.race()/tt(), Daily.open) keep the synchronous start the specs are written against.
   assert.match(read("js/race/daily-challenge.js"), /function open\(day, mode = "standard"\) \{[\s\S]*?G\.startRace\(\);/);
@@ -1154,9 +1154,4 @@ test("loading weather distinguishes storm from dry in normal, grid and mid-race 
     const rows = JSON.parse(JSON.stringify(LS.metaRows({ track: { lengthKm: 5 }, laps: 12, weather: "storm", tod: "day", real }, 10)));
     assert.deepEqual(rows.find(([label]) => label === "WEATHER"), ["WEATHER", "STORM"]);
   }
-});
-
-test("pause RESTART: a superseded start leaves frozen/raceRestarting to the newer start (#4364)", () => {
-  const line = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8").match(/\$\("pm-restart"\)\.onclick[^\n]*/)[0];
-  assert.match(line, /rq\.outcome\.then\(\(r\) => \{ if \(r\.kind === "canceled" && r\.reason === "superseded"\) return;/);
 });

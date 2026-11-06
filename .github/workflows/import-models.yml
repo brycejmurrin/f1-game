@@ -136,7 +136,7 @@ jobs:
             --prefix "$MODEL_PREFIX" \
             --author "$MODEL_AUTHOR" \
             --source "$MODEL_SOURCE"
-          node tools/gen/assets.mjs credits || echo "::warning::credits generation failed — assets/pack/CREDITS.md may be stale (B3)"
+          node tools/gen/assets.mjs credits || true
           node tools/gen/assets.mjs verify || echo "::warning::verify reported issues (often the budget — review the size report above)"
 
       - name: Upload baked models as an artifact

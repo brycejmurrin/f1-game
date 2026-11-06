@@ -390,36 +390,32 @@ const F1API = (function () {
     });
   }
 
-  function mapLap(l) {
-    l = l || {};
-    return {
-      lapNumber: num(l.lap_number),
-      lapDuration: num(l.lap_duration),
-      s1: num(l.duration_sector_1), s2: num(l.duration_sector_2), s3: num(l.duration_sector_3),
-      i1Speed: num(l.i1_speed), i2Speed: num(l.i2_speed), stSpeed: num(l.st_speed),
-      isPitOut: !!l.is_pit_out_lap,
-      dateStart: str(l.date_start)
-    };
+  function sessionLaps(sessionKey, driverNumber) {
+    const url = OPENF1 + "/laps?session_key=" + encodeURIComponent(sessionKey) +
+      "&driver_number=" + encodeURIComponent(driverNumber);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      return arr(list).map(function (l) {
+        l = l || {};
+        return {
+          lapNumber: num(l.lap_number),
+          lapDuration: num(l.lap_duration),
+          s1: num(l.duration_sector_1), s2: num(l.duration_sector_2), s3: num(l.duration_sector_3),
+          i1Speed: num(l.i1_speed), i2Speed: num(l.i2_speed), stSpeed: num(l.st_speed),
+          isPitOut: !!l.is_pit_out_lap,
+          dateStart: str(l.date_start)
+        };
+      });
+    });
   }
 
-  // Fastest valid (non pit-out, has a start time) lap for a driver, or null.
-  // One session-wide /laps body serves every driver (P7, #4562): a 4-lane
-  // TELEMETRY compare or an export used to spend one OpenF1 request per driver
-  // against the 28/min budget. Concurrent lanes share the one in-flight request;
-  // a body over the disk cap is kept in the memory tier by writeCache.
+  // fastest valid (non pit-out, has a start time) lap for a driver, or null
   function fastestLap(sessionKey, driverNumber) {
-    const url = OPENF1 + "/laps?session_key=" + encodeURIComponent(sessionKey);
-    const want = num(driverNumber);
-    return request(url, sessionTtl(sessionKey)).then(function (list) {
-      const rows = arr(list);
+    return sessionLaps(sessionKey, driverNumber).then(function (laps) {
       let best = null;
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        if (!r || want === null || num(r.driver_number) !== want) continue;
-        const l = mapLap(r);
+      for (let i = 0; i < laps.length; i++) {
+        const l = laps[i];
         if (l.lapDuration === null || !l.dateStart || l.isPitOut) continue;
-        if (!best || l.lapDuration < best.lapDuration ||
-          (l.lapDuration === best.lapDuration && (l.lapNumber || 0) < (best.lapNumber || 0))) best = l;
+        if (!best || l.lapDuration < best.lapDuration) best = l;
       }
       return best;
     });

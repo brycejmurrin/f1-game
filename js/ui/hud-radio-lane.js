@@ -96,7 +96,7 @@ function laneSafeInsets(root) {
 // A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
 // css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
 const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
-function announceLane(root, paintedBand, replay) {
+function announceLane(root, paintedBand) {
   if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = top() ? laneRect(top()) : null;
   const W = vpW(), H = vpH() || 0;
@@ -162,27 +162,12 @@ function announceLane(root, paintedBand, replay) {
     hStyle(root, "--announce-lane-w", "0px");
   } else for (const k of ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]) hUnstyle(root, k);
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  // A replay (announceLaneTick's same-key backstop, cached rects) never re-collapses a card that
-  // HudLayout.clearReadouts reopened in a free slot: nothing it decided from moved, and the
-  // re-collapse cost a collapsed frame plus two clearReadouts passes every ~3 s (perf hunt P5 #4545).
-  if (annEl && annEl.toggleAttribute && !(replay && collapsed && !annEl.hasAttribute("data-lane-collapsed")))
-    annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
+  if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
 }
 // Layout-free key for the lane memo. Gaps are empty/non-empty only — digit
 // rolloff used to re-key every tick and force a full rect pass (#1723).
-// Element refs the key reads, resolved once and re-resolved only when missing or detached:
-// steady 10 Hz ticks do 0 getElementById (perf hunt #4586 row 4).
-const _laneKeyEls = Object.create(null);
-function laneKeyEl(id) {
-  const c = _laneKeyEls[id];
-  if (c && c.isConnected !== false) return c;
-  const el = typeof document !== "undefined" ? document.getElementById(id) : null;
-  _laneKeyEls[id] = el;
-  return el;
-}
-const LANE_KEY_IDS = ["hud-rel", "hud-strat", "hud-inputs", "hud-damage", "hud-mirror", "hud-mirror-chip"];
 function announceLaneLayoutKey() {
-  const ann = laneKeyEl("announce");
+  const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
   const gapBit = (el) => (el && (el.textContent || "").length ? "1" : "0");
   const hid = (el) => (el && !el.hidden ? "1" : "0");
   // Announce: show/hide only. Content length does not move the clippers the
@@ -196,7 +181,10 @@ function announceLaneLayoutKey() {
     + hid(els.flag) + hid(els.hudLimits) + hid(els.tyre);
   // Delayed primary packing moves TYRES without a setting or visibility change.
   if (els.tyre && els.tyre.style) k += "|" + els.tyre.style.getPropertyValue("margin-left") + "," + els.tyre.style.getPropertyValue("margin-top");
-  for (const id of LANE_KEY_IDS) k += hid(laneKeyEl(id));
+  for (const id of ["hud-rel", "hud-strat", "hud-inputs", "hud-damage", "hud-mirror", "hud-mirror-chip"]) {
+    const el = typeof document !== "undefined" ? document.getElementById(id) : null;
+    k += hid(el);
+  }
   for (const d of docks()) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
   return k;
 }
@@ -208,10 +196,9 @@ function announceLaneTick(root, force) {
   if (!force && k === _laneKey && --_laneWait > 0) return;
   // Key change or force → drop the rect cache. Same-key 3 s backstop keeps it
   // (re-apply CSS vars from cached rects; 0 getBoundingClientRect).
-  const replay = !force && k === _laneKey && !!_laneRects;
   if (force || k !== _laneKey) { _laneRects = null; _laneSafe = null; }
   _laneKey = k; _laneWait = 30;
-  announceLane(root, undefined, replay);
+  announceLane(root);
 }
 function radioTopSlot(root, bcast) {
   // Clearance belongs to the previous lane. Measure this lane before applying

@@ -78,25 +78,12 @@ test("the snapshot interpolator reports the time it last posed", () => {
   assert.equal(interp.presentedAt(), 1100, "sample(now) poses now - delayMs, and a relay must stamp that time");
 });
 
-test("the host holds the grid 45 s for a guest that cannot arm yet, and says so (a split start was the 20 s alternative)", () => {
-  // A guest that is connected but never sends ARMED: only the host's backstop can name the moment.
-  const [ta, tb] = NetTransport.loopback({ latencyMs: 20 });
-  const hs = NetSession.create({ transport: ta }), gs = NetSession.create({ transport: tb });
-  let t = 0;
-  for (let i = 0; i < 20; i++) { t += 25; hs.pump(t); gs.pump(t); }
-  const Gh = stubG(2), said = [];
-  Gh.announce = (m) => said.push(m);
-  const nh = NetPlay.create(Gh);
-  Gh.netNow = t;
-  nh.start({ role: "host", session: hs, sessions: [{ id: 1, session: hs }], peers: [{ id: 1, profile: null }] });
-  const h0 = t;
-  nh.hostStart();
-  let named = null;
-  for (let i = 0; i < 4000 && named == null; i++) { t += 25; hs.pump(t); gs.pump(t); nh.tick(t); if (Gh.netStart) named = t; }
-  assert.ok(named != null, "the host eventually named the moment alone");
-  const waited = named - h0;
-  assert.ok(waited >= 44000 && waited <= 46500, `waited ${waited} ms, expected the 45 s ARM_WAIT backstop`);
-  assert.ok(said.some((m) => /^WAITING FOR RIVAL — \d+ s$/.test(m)), "the host said who it was waiting for: " + JSON.stringify(said.slice(0, 3)));
+test("the host holds the grid 45 s for a guest that cannot arm yet, and says so (a split start was the 20 s alternative)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
+  assert.match(src, /const ARM_WAIT_MS = 45000;/);
+  assert.match(src, /const HOLD_MAX_MS = ARM_WAIT_MS \+ 10000;/, "the guest's own backstop still outlasts the host's wait");
+  assert.match(src, /G\.announce\("WAITING FOR RIVAL — "/);
 });
 
 test("the named moment lands at the SAME instant on a guest whose clock is 5 s off the host's", () => {

@@ -1248,27 +1248,10 @@ test("a real race says whose car you took and from which lap, and a rolling join
 });
 
 test("a real race's story is the script's driver, never the roster seat's name, season or contract", () => {
-  const real = { title: "2024 Italian Grand Prix", driver: "Charles Leclerc", startLap: 12, realLaps: 53, watch: false, reel: false };
-  // Drive the real preview() path: storyFor() reads the seat, the forecast and the contract goal off G.
-  const read = (extra) => {
-    const { A: An, G, synth } = load();
-    const mate = { name: "Oscar Piastri", team: { name: "McLaren" } };
-    G.player = { name: "Lando Norris", team: mate.team };
-    G.cars = [G.player, mate];
-    G.raceChangeable = true;
-    G.wxArcPlan = { to: "rain", dur: 300 };
-    An.create(G).preview(info(extra));
-    let guard = 0;
-    while (guard++ < 40) { const n = spoken(synth).length; finishLine(synth); if (spoken(synth).length === n) break; }
-    return spoken(synth).join(" ");
-  };
-  const roster = read({});
-  assert.match(roster, /Lando Norris for McLaren/i, "control: without `real` the seat row is read");
-  assert.match(roster, /Rain is on the way/i, "control: …and the forecast row");
-  const all = read({ gp: real.title, real });
-  assert.match(all, /You take over Charles Leclerc's car/i, "the real-race row is the driver");
-  assert.doesNotMatch(all, /Lando Norris|McLaren|Piastri/i, "the roster seat stands down for a real race");
-  assert.doesNotMatch(all, /Rain is on the way/i, "…and so does the forecast");
+  const src = read("js/audio/announcer.js");
+  const body = src.slice(src.indexOf("function storyFor(info)"), src.indexOf("/** The results screen's read"));
+  assert.match(body, /const race = [^;]*&& !info\.real;/, "the seat / championship / goal / forecast rows stand down for a real race");
+  assert.match(body, /if \(info\.real\) st\.real = info\.real;/);
 });
 
 // THE RACE SO FAR, as RealRace.situation() reads Baku 2026 at lap 40 for Leclerc

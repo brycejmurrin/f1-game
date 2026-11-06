@@ -657,15 +657,15 @@ const Particles = (function () {
     for (let i = 0; i < shown; i++) {
       const s = _rspd[i] * _rainSpeedScale;
       const tx = _rox[i], ty = _roy[i], tz = _roz[i];           // eye → drop
-      const dist = Math.sqrt(tx * tx + ty * ty + tz * tz);
+      const dist = Math.hypot(tx, ty, tz);
       if (dist < 0.4) continue;                                 // inside the lens
       // apparent velocity = drop velocity − camera velocity
       const vx = s * _windX - cvx, vy = -s - cvy, vz = s * _windZ - cvz;
-      const vm = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+      const vm = Math.hypot(vx, vy, vz) || 1;
       const dx = vx / vm, dy = vy / vm, dz = vz / vm;
       // width axis: across the streak AND across the eye ray, so the quad faces the camera
       let rx = dy * tz - dz * ty, ry = dz * tx - dx * tz, rz = dx * ty - dy * tx;
-      const rl = Math.sqrt(rx * rx + ry * ry + rz * rz);
+      const rl = Math.hypot(rx, ry, rz);
       if (rl < 1e-6) continue;                                  // streak points at the eye
       rx /= rl; ry /= rl; rz /= rl;
       const halfLen = Math.min(3.0, 0.5 * RAIN_EXPO * _rlen[i] * _rainLenScale * (s + camSpeed));

@@ -373,33 +373,6 @@ test("the title poll does no work during a race; back on the title the quiet clo
   assert.ok([...h.pre.state().blockers].includes("input-recent"), "the quiet clock restarted at the return");
 });
 
-test("perf: the 1 s menu tick reads phoneHold without building env() (perf hunt P6)", async () => {
-  // matchMedia is only called by env()'s saveData field: it counts env() builds.
-  const count = async (setup) => {
-    const timers = [];
-    const h = page({ timers });
-    let mm = 0;
-    h.ctx.matchMedia = () => { mm++; return { matches: false }; };
-    setup(h);
-    h.pre.start();
-    for (let i = 0; i < 10; i++) { h.advance(1000); timers.shift()(); await h.flush(0); }
-    return { h, mm };
-  };
-  // A phone on the idle title: the tick only needs phoneHold, then returns.
-  const phone = await count((h) => { h.G.gfx.isMobile = true; });
-  assert.equal(phone.mm, 0, `10 phone menu ticks built env() ${phone.mm} times (before: 10, want 0)`);
-  assert.deepEqual(phone.h.built, [], "the phone still never starts a title prebuild");
-  const lowMem = await count((h) => { h.ctx.navigator = { deviceMemory: 2 }; });
-  assert.equal(lowMem.mm, 0, "the low-RAM hold reads navigator directly too");
-  assert.deepEqual(lowMem.h.built, []);
-  // Desktop: the first tick starts run(), which checks its blockers twice (before and
-  // after menuIdle); later ticks see it running and return before any env(). The
-  // tick's own env() was the extra one.
-  const desk = await count(() => {});
-  assert.equal(desk.mm, 2, `10 desktop menu ticks built env() ${desk.mm} times (before: 3 — the tick's plus run()'s two; want 2)`);
-  assert.deepEqual(desk.h.built, ["car"], "desktop still starts the title prebuild");
-});
-
 test("blocked runs build nothing: Save-Data on the title, a race start anywhere", async () => {
   const h = page();
   h.ctx.navigator = { connection: { saveData: true } };

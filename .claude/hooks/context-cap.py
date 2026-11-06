@@ -113,13 +113,9 @@ def decide(data, root, env):
         return ""
     if event == "PreToolUse" and data.get("tool_name") not in SPAWNS:
         return ""
-    # Cap first, transcript tail second (perf P8 row 10): context_tokens parses up to 4 MB on every PostToolUse,
-    # so a session with no cap (most of them) must return before it. An env soft cap makes the brief irrelevant.
-    cap = caps(root, "" if (env.get("APEX_CTX_SOFT") or "").isdigit() else brief_text(path), env)
-    if not cap:
-        return ""
+    cap = caps(root, brief_text(path), env)
     n = context_tokens(path)
-    if n is None:
+    if not cap or n is None:
         return ""
     soft, hard, src = cap
     k = round(n / 1000)

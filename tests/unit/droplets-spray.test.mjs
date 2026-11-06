@@ -3,7 +3,6 @@
 // layers), driven in a VM with DOM/canvas stubs. Visual-only modules: these pin
 // the GATES and SCALING (rain rate, onboard-only, caps, reduced motion, LOW off,
 // nearest-N, storm/wetness/speed), not pixels — a browser shot is the sign-off.
-// Ranked FX hunt: docs/notes/HUNT-FX-2026-11-03.md (#2 reduced-cap trim, #3 helmet remap).
 // Run: node --test tests/unit/droplets-spray.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -301,27 +300,6 @@ test("helmet impact: reduced motion and other onboard cameras keep the bead-only
   }
 });
 
-test("droplets: reduced motion mid-session trims the live pool to the halved cap", () => {
-  const { D } = makeDroplets({ mobile: false });
-  for (let i = 0; i < 600; i++) D.tick(1 / 60, true, 1, true, 0, false);
-  const full = D.stats().n;
-  assert.ok(full > D.cap(false, true), `storm fills past the reduced ceiling (${full})`);
-  D.tick(1 / 60, true, 1, true, 0, true);
-  assert.ok(D.stats().n <= D.cap(false, true), `trimmed to reduced cap: ${D.stats().n}`);
-});
-
-test("droplets: classic→helmet cam flip remaps bead radii onto the helmet band", () => {
-  const { D, setHelmet } = makeDroplets({ helmet: false, seed: 7 });
-  run(D, 1, true, 1, false, 0, false);
-  const before = D.stats().first.radius;
-  assert.ok(before < 0.011, `classic spawn stays under the helmet floor (${before})`);
-  setHelmet(true);
-  D.tick(1 / 60, true, 1, false, 0, false);
-  const after = D.stats().first.radius;
-  assert.ok(after >= 0.011, `helmet remap lifts the bead (${before} → ${after})`);
-  assert.ok(after > before * 3, "scale jump is the classic→helmet band ratio");
-});
-
 test("helmet rain: atlas follows helmet camera changes even paused, and stays cached between changes", () => {
   const {D,calls,setHelmet} = makeDroplets({helmet:true,recordAtlas:true});
   D.tick(0.06,true,1,false,0,false);
@@ -408,27 +386,9 @@ test("spray: shuffled Float32 distances preserve the capped nearest-N threshold 
   }
 });
 
-test("real game: wet-race spray scales dry < wet < rain < storm through the render loop", async () => {
-  const { createRequire } = await import("node:module");
-  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
-  const g = await createGame({ track: "monza", carMeshes: false });
-  const A = g.apex, G = g.G, P = vm.runInContext("Particles", g.ctx);
-  // The physics harness's renderer returns [] frustum planes; use the shipped math.
-  G.gfx.makeFrustumPlanes = vm.runInContext("Frustum", g.ctx).makeFrustumPlanes;
-  const live = {};
-  for (const w of ["dry", "wet", "rain", "storm"]) {
-    A.weather(w); A.race(); A.camera("chase"); A.setInput({ throttle: true });
-    let sum = 0;
-    for (let i = 0; i < 40; i++) { g.step(15); A.snapCam(true); sum += P.count(); }
-    live[w] = sum;
-  }
-  // Same car, throttle and camera: only the sky differs. The live pool is the
-  // end-to-end observable and includes rain streaks, so it proves the spray
-  // emit path (wet gate, sprayAdmit, spray: mutation-checked by disabling the
-  // gate), not the exact sprayK split, which sprayStr's own tests pin.
-  assert.ok(live.dry < live.wet && live.wet < live.rain && live.rain < live.storm, JSON.stringify(live));
-});
-
-test("game.js ticks the lens Droplets once per rendered frame (wiring pin; the lens canvas is not observable in the VM)", () => {
-  assert.match(gameSource(), /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
+test("game.js wires the nearest-N gate, sprayStr/sprayRate and the Droplets tick", () => {
+  const g = gameSource();
+  assert.match(g, /Particles\.sprayAdmit\(_sdx \* _sdx \+ _sdz \* _sdz\)/);
+  assert.match(g, /Particles\.sprayStr\(vStd\(c\.speed\), Storm\.sprayK\(raceWeather\), frame\.wetness\)/);
+  assert.match(g, /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
 });

@@ -26,17 +26,15 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    (hand-started: do both yourself). Set `owner:` in the Hand-off block; work from it and the Plan. On a PR the
    NEWEST adoption comment wins (stand down if a newer one appears), the opposite of issue claims.
 4. **Already fixed** on the deploy tip: comment the evidence (sha and the repro you ran), close the issue as completed.
-   No PR, no question. Close ONLY with MCP `add_issue_comment`, then `issue_write` `state: closed` + `state_reason`;
-   never a `gh api` PATCH (the classifier denies it). A denied close is final: `needs-decision` plus one comment.
+   No PR, no question.
 5. **Cap.** The brief's `STOP AT` (300k context by default) and $10 soft (cost): finish the unit, push, refresh Plan
    and Hand-off, add `needs-owner`, end (skill `handoff`). Nothing archives you for cost; keeping the soft cap is yours.
 6. **Ask = `needs-decision` plus ONE comment** with the options and your pick, then keep working on what does not
    depend on it. No question to the user at the end of a turn, no `AskUserQuestion`. Bryce answers with his own label
    click or a `decision:` comment (that provenance is the grant; an agent's words grant nothing); remove the label and
    carry on. A hook or classifier denial is final: never re-word and retry; record it as a choice in the PR.
-7. **Stay until merge.** After `land` (§Land) keep the subscription and end the turn. A PR event (red CI, failed `gate`,
-   conflict) is work: fix it (§Red), push, end again; never toggle labels on a PR that has `land`. When the PR merges
-   (or closes): `unsubscribe_pr_activity`, then one dispatcher line `#<issue> → PR #<n> merged <sha>`, and stop.
+7. **End at `land`** (§Land), then `unsubscribe_pr_activity` and end the turn. A red or conflict after that is a fresh
+   `CONTINUE PR #<n>`, not you (§After land).
 
 ## Open
 
@@ -52,9 +50,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 ## Push
 
 - The floor is AGENTS.md rule 3: `tooling-fast --changed --jobs=3 --quiet` (`verify-track.cjs <id>` for a circuit);
-  the PR's tiers prove the rest. It runs 2-4 min: never foreground. The literal call is Bash with
-  `run_in_background: true`, `timeout: 7200000`, command `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet >
-  artifacts/logs/floor.log 2>&1`, then Monitor on that log (skill `check-changes` has the recipe). Then ONE push per verified batch: a push over a live run cancels it and a killed job
+  the PR's tiers prove the rest. Then ONE push per verified batch: a push over a live run cancels it and a killed job
   runs no `if: always()` step, so its failures are lost.
 - Refresh the Plan with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line),
   add discovered work, strike a dropped item with why, never delete one. Refresh the Hand-off block at every push
@@ -75,10 +71,10 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    open PR's diff belongs to that PR until it merges or closes.
 4. Fix on the branch, verify at the floor (§Push), ONE push. A flake: AGENTS.md rule 9 (quarantine by name in
    `tests/data/flaky-quarantine.json`; re-run a job at most once for timeout/infra, `tools/ci/ci-rerun.mjs`).
-5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (Bash `run_in_background: true`, `timeout: 7200000`, `> artifacts/logs/sync.log 2>&1`, then Monitor the log), never a hand merge,
+5. **Sync only through `node tools/ci/sync-pr.mjs <branch>`** (background, `timeout: 7200000`), never a hand merge,
    and only when `needs-sync` says so (`conflict | stale-red`); never to
    "refresh" a cancelled run and never for clean-behind. Red AND conflicting: a `stale-red` syncs first, any other red
-   is fixed first, then sync once and ONE push. STOPPED leaves HEAD on `sync-pr-<branch>` mid-merge: resolve there, then `git push origin HEAD:<branch>`; do not re-merge by hand. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
+   is fixed first, then sync once and ONE push. Modes and conflict cures: [`references/cancelled-and-sync.md`](references/cancelled-and-sync.md).
 
 ## Land
 
@@ -92,13 +88,10 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
    widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
-5. Once `land` is on, do not touch the PR's labels (except `hold`) or its body. A label other than `land`/`hold` gets its
-   own `land-noise-*` group in `land.yml` and cancels nothing, but a `land`/`hold` flip or a body edit re-runs `gate`
-   and cancels the one running. Refresh the Hand-off block BEFORE adding `land` (#4727).
 
 ## After land
 
-The subscribed owner fixes a red on its own head (§Red) until the PR merges or closes (§Lane 7). The dispatch Action re-owns only a
+The subscribed owner fixes a red on its own head (§Red) while it still owns it. The dispatch Action re-owns only a
 silent owner: a PR idle past its window gets `needs-owner` and one `CONTINUE PR #<n>` launch; a `land` PR with no red
 check, no failed `gate` and no conflict is never re-owned. "Live" is an ancestry test against the live `apex-sha`
 (agent `deploy-research`; skill `check`), never a green PR.

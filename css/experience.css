@@ -86,9 +86,6 @@
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    /* #overlay is .grain: undo its ::before opacity and overlay blend. */
-    opacity: 1;
-    mix-blend-mode: normal;
     background:
       linear-gradient(180deg in oklab, var(--scrim-heavy) 0%, var(--scrim) 22%, transparent 42%),
       linear-gradient(90deg in oklab, color-mix(in oklab, var(--carbon) 70%, var(--scrim-heavy)) 0%, transparent 46%);

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // @doc Opt-in stdio JavaScript debugger MCP: attach, breakpoints, step, scopes; no browser launch.
 import { createInterface } from "node:readline";
-import { MODERN, versionError, discoverResult, modernize } from "./mcp-modern.mjs";
 import { pathToFileURL } from "node:url";
 import { DebugSession } from "./js-debugger-session.mjs";
 import { nodeTest } from "./js-debugger-node.mjs";
@@ -169,16 +168,7 @@ export async function callTool(session, name, args = {}) {
   }
 }
 const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
-const SUPPORTED = [MODERN, "2025-06-18"];
-const DEBUGGER_INSTRUCTIONS = "Local Chrome page debugger. ONE browser, parent-owned; attaches only, never launches. Use a dedicated debug profile. ONE-based source positions, ZERO-based frame index. Inspect pause.token after every control. debugger_run returns immediately; read operation status separately. debugger_profile start/stop/hitch for realtime CDP CPU/heap/rAF hitch on the attached page. Code evaluation can mutate the page. Detach before ending.";
 export async function handleRpc(session, msg) {
-  const bad = msg && typeof msg === "object" && !Array.isArray(msg) ? versionError(msg, SUPPORTED) : null;
-  if (bad) return bad;
-  if (msg && msg.method === "server/discover" && Object.hasOwn(msg, "id"))
-    return discoverResult(msg.id, SUPPORTED, { capabilities: { tools: {} }, info: { name: "js-debugger-mcp", version: "0.1.0" }, instructions: DEBUGGER_INSTRUCTIONS });
-  return modernize(msg, await handleRpcLegacy(session, msg));
-}
-async function handleRpcLegacy(session, msg) {
   if (!msg || Array.isArray(msg) || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return rpcError(null, -32600, "Invalid JSON-RPC request");
   if (!Object.hasOwn(msg, "id")) return null;
   const { id, method } = msg;
@@ -187,7 +177,7 @@ async function handleRpcLegacy(session, msg) {
   const result = value => ({ jsonrpc: "2.0", id, result: value });
   if (method === "initialize") return result({ protocolVersion: "2025-06-18", capabilities: { tools: {} },
     serverInfo: { name: "js-debugger-mcp", version: "0.1.0" },
-    instructions: DEBUGGER_INSTRUCTIONS });
+    instructions: "Local Chrome page debugger. ONE browser, parent-owned; attaches only, never launches. Use a dedicated debug profile. ONE-based source positions, ZERO-based frame index. Inspect pause.token after every control. debugger_run returns immediately; read operation status separately. debugger_profile start/stop/hitch for realtime CDP CPU/heap/rAF hitch on the attached page. Code evaluation can mutate the page. Detach before ending." });
   if (method === "ping") return result({});
   if (method === "tools/list") return result({ tools: TOOLS });
   if (method === "tools/call" && Object.hasOwn(msg.params ?? {}, "arguments") &&

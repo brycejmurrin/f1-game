@@ -881,26 +881,3 @@ test("AudioContext constructor throw leaves GameAudio without a context (no over
   assert.equal(A.context(), null);
   assert.ok(warns.some((w) => /AudioContext unavailable/.test(w)), "warn names the refusal");
 });
-
-test("a context rebuild mid-clip zeroes radioVoicesLive and a stale stop() cannot drive it negative (B4 #4536)", async () => {
-  // A closed context never fires onended, so a clip on air across rebuildCtx()
-  // used to keep radioVoicesLive() > 0 for the session: battle-earcon play()
-  // and race-radio battleSafe() then refused forever.
-  let now = 5000;
-  class ClockDate extends Date { static now() { return now; } }
-  const { A, contexts, fireDeviceChange } = boot({ Date: ClockDate, userActivation: { isActive: true, hasBeenActive: true } });
-  A.init(); await flush();
-  const clip = { duration: 2, length: 16000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(16000) };
-  const h = A.radioVoice([clip], 0, { channel: "radio" });
-  assert.ok(h, "precondition: the clip is on air");
-  assert.equal(A.radioVoicesLive(), 1);
-  fireDeviceChange();
-  now += DEVICE_REBUILD_DEBOUNCE_MS + 50;
-  await new Promise((r) => setTimeout(r, DEVICE_REBUILD_DEBOUNCE_MS + 40));
-  await flush();
-  assert.equal(contexts.length, 2, "precondition: the context was rebuilt");
-  assert.equal(A.radioVoicesLive(), 0, "the clip on the closed context is no longer counted");
-  h.stop();
-  await new Promise((r) => setTimeout(r, 150));
-  assert.equal(A.radioVoicesLive(), 0, "a stale stop() after the rebuild does not underflow the count");
-});

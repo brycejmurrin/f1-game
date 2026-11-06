@@ -5,10 +5,6 @@
 "use strict";
 
 (function () {
-  // Per-frame knob read + fallback colours at module scope: no closure or array is allocated in updateFrame (#4674).
-  const _kn = (T, id, def) => (T && T[id] != null ? T[id] : def);
-  const _AMB_SKY = Object.freeze([0.3, 0.32, 0.36]);
-  const _AMB_GROUND = Object.freeze([0.2, 0.19, 0.18]);
   function fx(THREE, TSL, opts) {
     const {
       Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv, varying,
@@ -272,16 +268,7 @@
     // After U: the particle graphs read its frame light and fog.
     const particleMats = [trackFx(particleMaterial(false)), trackFx(particleMaterial(true))];
 
-    const decalCache = new Map();      // "texture.id|glow" -> material (insertion order = the eviction order)
-    // The per-draw lookup: texture -> glow -> material, so a hit builds no key
-    // string (decalMaterialFor runs once per decal draw per frame, #4556).
-    // Kept in step with decalCache by _decalDrop / the set below.
-    const decalByTex = new Map();
-    function _decalDrop(k, v) {
-      decalCache.delete(k);
-      const t = v && v.map, g = t && decalByTex.get(t);
-      if (g) { g.delete(v.tlxGlow); if (!g.size) decalByTex.delete(t); }
-    }
+    const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
     // ONE GRAPH, THE GLOW A PER-MATERIAL UNIFORM (A·W14). The graph used to close
     // over `glow` as a JS constant, one graph and one program per value, so a
@@ -329,7 +316,7 @@
       if (!tex) return n;
       for (const [k, v] of decalCache) {
         if (!v || v.map !== tex) continue;
-        _decalDrop(k, v);
+        decalCache.delete(k);
         _evicted.push(v);
         const fi = _fxMats.indexOf(v);
         if (fi >= 0) _fxMats.splice(fi, 1);
@@ -339,10 +326,9 @@
       return n;
     }
     function decalMaterialFor(tex, glow) {
-      const byGlow = decalByTex.get(tex);
-      let m = byGlow && byGlow.get(glow);
+      const key = tex.id + "|" + glow;
+      let m = decalCache.get(key);
       if (!m) {
-        const key = tex.id + "|" + glow;
         if (decalCache.size >= DECAL_CACHE_CAP) {
           // Same eviction as tlx.js materialFor: dispose is DEFERRED to
           // present() (tlx.js calls flushEvicted after paint) — drawList
@@ -351,7 +337,7 @@
           // The texture itself is game-owned either way.
           for (const [k, v] of decalCache) {
             if (v && v.__tlxFrame === _decalFrame) continue;
-            _decalDrop(k, v);
+            decalCache.delete(k);
             if (v) {
               _evicted.push(v);
               // Drop it from the per-frame setSsrMrt registry too, or every
@@ -373,9 +359,6 @@
         m.opacityNode = packed.a;
         trackFx(m);
         decalCache.set(key, m);
-        let g = decalByTex.get(tex);
-        if (!g) decalByTex.set(tex, g = new Map());
-        g.set(glow, m);
       }
       if (m) m.__tlxFrame = _decalFrame;
       return m;
@@ -417,18 +400,19 @@
     function updateFrame(frame) {
       _decalFrame++;   // new frame: last frame's decal mats are evictable again
       const T = (frame && frame.tune) || null;
-      const kM = _kn(T, "keyMul", 1), aM = _kn(T, "ambientMul", 1);
+      const k = (id, def) => (T && T[id] != null ? T[id] : def);
+      const kM = k("keyMul", 1), aM = k("ambientMul", 1);
       const d = frame.sunDir;
       if (d) U.sunDir.value.set(d[0], d[1], d[2]);
       const s = frame.sunColor;
       if (s) U.sunColor.value.set(s[0] * kM, s[1] * kM, s[2] * kM);
-      const as = frame.ambientSky || _AMB_SKY;
-      const ag = frame.ambientGround || _AMB_GROUND;
+      const as = frame.ambientSky || [0.3, 0.32, 0.36];
+      const ag = frame.ambientGround || [0.2, 0.19, 0.18];
       U.ambSky.value.set(as[0] * aM, as[1] * aM, as[2] * aM);
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
       const fc = frame.fogColor;
       if (fc) U.fogColor.value.set(fc[0], fc[1], fc[2]);
-      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * _kn(T, "fogDensityMul", 1);
+      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * k("fogDensityMul", 1);
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, lineOnPace, lineLift, lineBrake, lineOpacity,

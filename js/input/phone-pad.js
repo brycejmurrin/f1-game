@@ -288,16 +288,11 @@ const PhonePad = (function () {
               },
               onClose: (why) => {
                 if (phase === "cancelled") return;
-                // Linked OR still connecting: ICE can fail before the data
-                // channel opens (transport.js shuts down on connectionState
-                // "failed" while never "connected"). The phone redials this
-                // same code on any non-"peer" close; drop to "lost" here and
-                // those retries hit an empty room (Lane 12 / HUNT-INPUT).
-                const wasLive = phase === "linked" || phase === "connecting";
+                const wasLinked = phase === "linked";
                 // A link that died before it opened (ICE failed) still holds
                 // the room's relay sockets; nothing will use them now.
                 dropRoom();
-                if (wasLive && why !== "peer" && !deps.usingPrivateRelay()) {
+                if (wasLinked && why !== "peer" && !deps.usingPrivateRelay()) {
                   relink = true; active = null; transport = null;
                   Log.info("input", "phone pad dropped (" + why + ") — hosting again");
                   if (ui.relinking) { try { ui.relinking(); } catch (e) { /* ui's problem */ } }
@@ -395,20 +390,12 @@ const PhonePad = (function () {
       // A rate-limited move is COALESCED, not dropped: the next pump() (each rAF)
       // sends the latest values once the 15 ms gap has passed (audit4 UB4).
       if (!force && t - lastSent < MIN_SAMPLE_GAP_MS) { dirty = true; return false; }
-      // Encode once; only consume seq / lastSent / dirty when the wire takes it.
-      // A refused send (buffer cap) used to clear dirty and wait for the 100 ms
-      // heartbeat — a pedal lift could sit on the desktop until REMOTE_STALE_MS.
-      const payload = encodeSample({
-        seq: seq, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(),
+      lastSent = t; dirty = false;
+      const ok = transport.send(T.STATE, encodeSample({
+        seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(),
         ...(peerSteer && src.steer && src.steer() != null ? { steer: src.steer() } : {}),
-      });
-      const ok = transport.send(T.STATE, payload);
-      if (ok) {
-        lastSent = t; dirty = false; sent++; sentTimes.set(seq, t); seq++;
-        while (sentTimes.size > 128) sentTimes.delete(sentTimes.keys().next().value);
-      } else {
-        dirty = true;
-      }
+      }));
+      if (ok) { sent++; sentTimes.set(seq - 1, t); while (sentTimes.size > 128) sentTimes.delete(sentTimes.keys().next().value); }
       return ok;
     }
     function event(k) {

@@ -935,62 +935,6 @@ test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
   assert.equal(laps, 5);
 });
 
-// #4350: an unlisted value (a custom LAPS count) on a wrap:false row left both
-// chevrons dead, and ‹ broke at j = -1 instead of stepping to the last option.
-test("SettingRow wrap:false steps off an unlisted value in both directions", () => {
-  const dom = makeDom();
-  const sb = { document: dom.document };
-  sb.window = sb;
-  const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: absSrc("js/ui/setting-row.js") });
-  const SettingRow = vm.runInContext("SettingRow", ctx);
-  const built = SettingRow.build("rs-laps", "LAPS");
-  dom.body.appendChild(built.row);
-  let laps = 12;
-  SettingRow.wire(built.row, {
-    values: [[3, "3"], [5, "5"], [57, "57 (FULL)"]],
-    read: () => laps,
-    write: (v) => { laps = +v; },
-    wrap: false,
-  });
-  assert.equal(built.prev.disabled, false, "‹ from an unlisted count is live");
-  assert.equal(built.next.disabled, false, "› from an unlisted count is live");
-  built.prev.click();
-  assert.equal(laps, 57, "‹ from an unlisted count lands on the last option");
-  laps = 12;
-  SettingRow.paint(built.row, laps);
-  built.next.click();
-  assert.equal(laps, 3, "› from an unlisted count lands on the first option");
-});
-
-// #4347: keepFocus stored the index among ALL focusables of the group but
-// restored it among the usable ones, so a hidden sibling earlier in the group
-// shifted an id-less control's focus one slot late after a rebuild.
-test("TopModal.keepFocus restores an id-less control past a hidden earlier sibling", () => {
-  const dom = makeDom({ readyState: "loading" });
-  const sb = { document: dom.document, Log: { info() {}, warn() {} } };
-  sb.window = sb;
-  const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/ui/modal.js"), ctx, { filename: absSrc("js/ui/modal.js") });
-  const TopModal = vm.runInContext("window.TopModal", ctx);
-  const scope = dom.byId("pane-scope");
-  const build = () => {
-    const group = dom.makeElement("div", "slot-group");
-    const hidden = dom.makeElement("button"); hidden.hidden = true;
-    const a = dom.makeElement("button"); a.textContent = "A";
-    const b = dom.makeElement("button"); b.textContent = "B";
-    const c = dom.makeElement("button"); c.textContent = "C";
-    group.append(hidden, a, b, c);
-    scope.replaceChildren(group);
-    return { a, b };
-  };
-  const first = build();
-  first.b.focus();
-  let fresh = null;
-  TopModal.keepFocus(scope, () => { dom.document.activeElement = dom.body; fresh = build(); });
-  assert.equal(dom.document.activeElement, fresh.b, "focus returns to B, not to C");
-});
-
 // Flow B item 4: a WATCHED real race (REAL REPLAY / HIGHLIGHTS) re-runs the replay, so its button must not say RACE AGAIN.
 test("results next-button label is pinned by mode: WATCH AGAIN for a watched real race, RACE AGAIN for a driven one", () => {
   const { cars } = tiedSeason();

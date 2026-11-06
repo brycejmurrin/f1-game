@@ -7,27 +7,8 @@ const GarageCrewService = (function () {
   const ease = GarageCrewDraw.ease;
   const place = GarageCrewDraw.place;
   const phase = (t, a, b) => ease((t-a)/(b-a));
-  // Soft-present floor z-fight: keep equipment a hair above y=0.
-  // Foot targets stay at 0.08 (boot sole is 0.08 m under the target → sole on the floor).
-  const FLOOR_Y = 0.01;
-  const FOOT_PLANT = 0.08;
-  const EXIT_HALF = 1.55;              // car half-width + margin — the exit corridor
-  const CLEAR_BY = 4.5;                // every actor is outside EXIT_HALF by this serviceTime
   const WHEELS = [[1, 1.7, .79], [-1, 1.7, .79], [1, -1.6, .76], [-1, -1.6, .76]];
   function actors() { return Array.from({ length: 7 }, () => ({ x:0, z:0, yaw:0, door:1, seconds:0, calm:true, crouch:0, lean:0, hipLean:0, handY:.85, reach:.03, walkDistance:0, feet:null, footYaw:null, stance:new Float32Array(6), stanceYaw:new Float32Array(2) })); }
-  // Push anyone still in the exit corridor out to the wall before roll-out.
-  function clearExit(out) {
-    for (let i = 0; i < out.length; i++) {
-      const a = out[i];
-      if (Math.abs(a.x) < EXIT_HALF) a.x = (a.x < 0 ? -1 : 1) * Math.max(2.8, EXIT_HALF + 0.4);
-    }
-    const j = out[4];
-    j.x = 4.05; j.z = 1.35; j.yaw = -Math.PI / 2; j.pump = 0; j.walkDistance = 4.05;
-    j.feet = null; j.footYaw = null;
-    const cable = out[5];
-    cable.x = 3; cable.connected = 0; cable.walkDistance = 0; cable.crouch = 0; cable.lean = 0;
-    cable.handY = 0.94; cable.reach = 0.34;
-  }
   // Writes into preallocated actors. Equipment crosses the lane only while
   // the car is parked; every actor and prop is back at the sides before roll-out.
   function layout(pose, out = actors()) {
@@ -36,13 +17,10 @@ const GarageCrewService = (function () {
     const approach=phase(t,leaving?0:.3,leaving?1.1:1.9);
     const slide=phase(t,leaving?1.1:2.7,leaving?1.9:3.5);
     const lower=leaving?1-phase(t,1.9,2.6):phase(t,1.9,2.7);
-    // Leave retreat finishes earlier so the corridor is empty well before roll-out.
-    const retreat=phase(t,leaving?2.2:4,leaving?4.2:5.8);
+    const retreat=phase(t,leaving?2.6:4,leaving?4.8:5.8);
     for(let i=0;i<4;i++) {
       const [side,z,wx]=WHEELS[i],a=out[i];
-      // On leave, approach less deep so handlers stay clear of the exit half-width
-      // except for the brief cover grasp, then retreat hard.
-      const distance=leaving?1.15*approach-.575*slide-.575*retreat:.675*approach+.675*slide-1.35*retreat;
+      const distance=leaving?1.35*approach-.675*slide-.675*retreat:.675*approach+.675*slide-1.35*retreat;
       a.x=side*(2.8-distance);a.z=z;a.yaw=-side*Math.PI/2;a.walkDistance=-distance;
       const grasp=leaving?phase(t,.7,1.1):1-phase(t,3.5,3.9);
       a.crouch=.16*lower*grasp;a.lean=.16*lower*grasp;a.hipLean=0;
@@ -52,13 +30,11 @@ const GarageCrewService = (function () {
       a.coverX=side*wx;a.coverZ=z;a.coverReach=1.45-wx;
       a.seconds=pose.seconds;a.calm=pose.calm;
     }
-    const j=out[4]; j.crouch=.08; j.lean=.14; j.hipLean=.14; j.handY=.92; j.reach=.52;
+    const j=out[4]; j.z=0; j.crouch=.08; j.lean=.14; j.hipLean=.14; j.handY=.92; j.reach=.52;
     if (leaving) {
-      // Sidestep to the wall BEFORE the turn so planted feet stay fixed in world
-      // space during 1.2–1.8 (old path kept x=0 on the centerline for that whole turn).
-      const side=phase(t,0,1.2), back=phase(t,0,1.2), turn=phase(t,1.2,1.8);
+      const back=phase(t,0,1.2), turn=phase(t,1.2,1.8), side=phase(t,1.8,4.8);
       j.x=4.05*side; j.z=1.35*back; j.yaw=-Math.PI+Math.PI/2*turn;
-      j.walkDistance=side>0 && turn<=0 ? 4.05*side : (turn>0 ? 0 : 1.35*back);
+      j.walkDistance=side>0 ? 4.05*side : 1.35*back;
       j.pump=0; turning(j,turn,-Math.PI,-Math.PI/2);
     } else {
       const travel=phase(t,.3,2), turn=phase(t,2,2.7), insert=phase(t,2.7,3.8);
@@ -68,8 +44,8 @@ const GarageCrewService = (function () {
     }
     j.seconds=pose.seconds; j.calm=pose.calm;
     // Side service umbilical: walk in after parking; unplug and retreat before roll-out.
-    const cable=out[5], travel=leaving?1-phase(t,0,1.8):phase(t,.5,2.4);
-    const connect=leaving?1-phase(t,0,.6):phase(t,2.4,3.2);
+    const cable=out[5], travel=leaving?1-phase(t,.8,2.5):phase(t,.5,2.4);
+    const connect=leaving?1-phase(t,0,.8):phase(t,2.4,3.2);
     cable.x=3-1.35*travel;cable.z=-.3;cable.yaw=-Math.PI/2;
     cable.walkDistance=-1.35*travel;cable.crouch=.16*connect;cable.lean=.17*connect;cable.hipLean=0;
     cable.handY=.94-.16*connect;cable.reach=.34+.24*connect;
@@ -79,10 +55,6 @@ const GarageCrewService = (function () {
     engineer.x=-4.38;engineer.z=.6;engineer.yaw=-Math.PI/2;engineer.walkDistance=0;
     engineer.crouch=.1;engineer.lean=.18;engineer.hipLean=0;engineer.handY=.95+typing;engineer.reach=.46;
     engineer.seconds=pose.seconds;engineer.calm=pose.calm;
-    // Hard gate: once the leave clear window opens (or the car is already moving),
-    // nobody remains in the exit corridor.
-    const moving = Math.abs(pose.z || 0) + Math.abs(pose.x || 0) > 0.03;
-    if (leaving && (t >= CLEAR_BY || moving)) clearExit(out);
     return out;
   }
   // Each foot lifts, turns and plants in world space in its own half-step.
@@ -97,8 +69,7 @@ const GarageCrewService = (function () {
       const ax=Math.cos(start)*x+Math.sin(start)*.03,az=-Math.sin(start)*x+Math.cos(start)*.03;
       const bx=Math.cos(end)*x+Math.sin(end)*.03,bz=-Math.sin(end)*x+Math.cos(end)*.03;
       const wx=ax+(bx-ax)*e,wz=az+(bz-az)*e;
-      // Planted sole sits on FLOOR_Y; the swing foot lifts clear of the floor.
-      actor.stance[i*3]=c*wx-s*wz;actor.stance[i*3+1]=FOOT_PLANT+.065*Math.sin(Math.PI*t)**2;actor.stance[i*3+2]=s*wx+c*wz;
+      actor.stance[i*3]=c*wx-s*wz;actor.stance[i*3+1]=.08+.065*Math.sin(Math.PI*t)**2;actor.stance[i*3+2]=s*wx+c*wz;
       actor.stanceYaw[i]=start+(end-start)*e;
     }
   }
@@ -124,13 +95,6 @@ const GarageCrewService = (function () {
     let a=acc(); const gripZ=frontJack(a,nose,false), rootZ=gripZ+.52, pivotZ=Math.max(2.72,nose.z)+.14, pivotY=nose.under-.03;
     // The existing chassis-aware jack is converted to operator-local +z.
     for(let i=0;i<a.pos.length;i+=3) { a.pos[i]=-a.pos[i];a.pos[i+2]=rootZ-a.pos[i+2];a.nrm[i]=-a.nrm[i];a.nrm[i+2]=-a.nrm[i+2]; }
-    // Lift the whole jack so its lowest vertex sits at y=0 in mesh space; draw()
-    // then places the base at FLOOR_Y so wheels never clip through the bay floor.
-    let minY = Infinity;
-    for (let i = 1; i < a.pos.length; i += 3) if (a.pos[i] < minY) minY = a.pos[i];
-    if (Number.isFinite(minY) && minY !== 0) {
-      for (let i = 1; i < a.pos.length; i += 3) a.pos[i] -= minY;
-    }
     const base=gfx.createMesh(a); a=acc();
     tube(a,[0,0,0],[0,.92-pivotY,-1.06],.03,[.62,.63,.66],8);
     block(a,0,.92-pivotY,-1.06,.27,.025,.025,[.72,.12,.08]);
@@ -143,7 +107,7 @@ const GarageCrewService = (function () {
     // Power/data service unit and a keyboard on the existing engineers' desk.
     block(a,3.95,.35,-.3,.22,.30,.25,[.12,.14,.17]);block(a,3.95,.67,-.3,.23,.02,.26,stripe);
     block(a,3.72,.48,-.3,.015,.09,.14,[.05,.4,.3]);
-    for(const x of [3.78,4.12])for(const z of [-.5,-.1])block(a,x,FLOOR_Y+.015,z,.035,.025,.035,[.06,.07,.08]);
+    for(const x of [3.78,4.12])for(const z of [-.5,-.1])block(a,x,.025,z,.035,.025,.035,[.06,.07,.08]);
     block(a,-4.87,.91,.6,.15,.02,.30,[.06,.07,.08]);
     for(let row=0;row<4;row++)for(let key=0;key<10;key++)block(a,-4.98+row*.065,.935,.35+key*.055,.022,.005,.018,[.3,.32,.34]);
     return { base,handle,cover,plug,cable,station:gfx.createMesh(a),rootZ,pivotZ:rootZ-pivotZ,pivotY,actors:actors(),m:new Float32Array(16) };
@@ -160,26 +124,22 @@ const GarageCrewService = (function () {
     for(let i=0;i<4;i++) {
       const a=people[i]; GarageCrewMotion.draw(body,gfx,a.x,a.z,a.yaw,a,i,opts);
       const cx=a.coverAttached ? a.x+Math.sin(a.yaw)*a.coverReach : a.coverX;
-      // Detached covers rest on the floor plane (tyre radius .37), never under it.
-      const coverY = a.coverAttached ? a.coverY : Math.max(0.37, FLOOR_Y + 0.36);
-      gfx.draw(rig.cover,place(m,cx,coverY,a.coverZ,a.yaw),opts);
+      gfx.draw(rig.cover,place(m,cx,a.coverAttached?a.coverY:.37,a.coverZ,a.yaw),opts);
     }
     const j=people[4], z=rig.rootZ+j.z, angle=-.16*j.pump, c=Math.cos(angle),s=Math.sin(angle), dy=.92-rig.pivotY;
     j.handY=rig.pivotY+dy*c+1.06*s; j.reach=rig.pivotZ+dy*s-1.06*c; j.crouch=.08+.12*j.pump;
     GarageCrewMotion.draw(body,gfx,j.x,z,j.yaw,j,4,opts);
-    // Jack base rides on FLOOR_Y so its wheels never clip through the bay floor.
-    gfx.draw(rig.base,place(m,j.x,FLOOR_Y,z,j.yaw),opts);
+    gfx.draw(rig.base,place(m,j.x,0,z,j.yaw),opts);
     gfx.draw(rig.handle,place(m,j.x+Math.sin(j.yaw)*rig.pivotZ,rig.pivotY,z+Math.cos(j.yaw)*rig.pivotZ,j.yaw,angle),opts);
     const a=people[5],px=a.x-a.reach;
     GarageCrewMotion.draw(body,gfx,a.x,a.z,a.yaw,a,5,opts);
     gfx.draw(rig.plug,place(m,px,a.handY,a.z,a.yaw),opts);
-    const hoseY = Math.max(0.06, FLOOR_Y + 0.05);
-    cableSpan(rig,gfx,3.72,.48,-.3,3.4,hoseY,-.65,opts);
-    cableSpan(rig,gfx,3.4,hoseY,-.65,px+.30,hoseY,-.65,opts);
-    cableSpan(rig,gfx,px+.30,hoseY,-.65,px+.08,a.handY,a.z,opts);
+    cableSpan(rig,gfx,3.72,.48,-.3,3.4,.06,-.65,opts);
+    cableSpan(rig,gfx,3.4,.06,-.65,px+.30,.06,-.65,opts);
+    cableSpan(rig,gfx,px+.30,.06,-.65,px+.08,a.handY,a.z,opts);
     const e=people[6];GarageCrewMotion.draw(body,gfx,e.x,e.z,e.yaw,e,6,opts);
     gfx.draw(rig.station,place(m,0,0,0,0),opts);
   }
   function free(rig,gfx) { if(!rig)return 0;for(const mesh of [rig.base,rig.handle,rig.cover,rig.plug,rig.cable,rig.station])gfx.freeMesh(mesh);return 6; }
-  return Object.freeze({ create,draw,free,layout,FLOOR_Y,FOOT_PLANT,EXIT_HALF,CLEAR_BY });
+  return Object.freeze({ create,draw,free,layout });
 })();

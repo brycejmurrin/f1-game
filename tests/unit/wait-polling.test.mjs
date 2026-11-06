@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lintSource, lintAll, count, mayHaveSites, stats } from "../../tools/check/wait-polling-lint.mjs";
+import { lintSource, lintAll, count } from "../../tools/check/wait-polling-lint.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -133,16 +133,6 @@ test("the tool finds real sites — anti-vacuity", () => {
   // sweep); detection itself is proven by the synthetic lintSource cases
   // above, and the walk by the file count here.
   assert.ok(count() > 20, `expected 20+ sites (tools/ backlog), got ${count()}`);
-});
-
-test("count()'s prefilter skips no site: it equals the full parse, and only files that can hold one are parsed (#4548)", () => {
-  // count() is the waitNoPolling ratchet value and parses only mayHaveSites()
-  // sources; lintAll() parses every file. Equal on the real tree = the skip is sound.
-  const rows = lintAll();
-  const all = stats.parsed;
-  assert.equal(count(), rows.reduce((a, r) => a + r.sites.length, 0));
-  assert.ok(stats.parsed < all / 2, `the prefilter parsed ${stats.parsed} of ${all} sources`);
-  for (const r of rows) if (r.sites.length) assert.ok(mayHaveSites(fs.readFileSync(path.join(ROOT, r.file), "utf8")), r.file);
 });
 
 test("check-physics.mjs does not declare a timeout without polling", () => {

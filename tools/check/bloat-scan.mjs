@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // @doc Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits.
 // @skill slim-bloat
-/* bloat-scan.mjs — size report for slim-bloat / code-hunter focus: dead-code.
+/* bloat-scan.mjs — size report for slim-bloat / bloat-auditor.
  *
  * Prints ratchet slack (from tests/data/ratchets.json `lines` ceilings),
  * SKILL.md / agent line counts, and oversized unratcheted files. Evidence

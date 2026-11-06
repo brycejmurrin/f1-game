@@ -189,17 +189,3 @@ test("bench-capture: missing frame identity is unavailable rather than a claimed
   assert.equal(h.B.step().gpuSample.state, "freshness unavailable");
   assert.equal(h.B.legEnd().gpu.passes, "freshness unavailable");
 });
-
-test("bench-capture: a WebGPU device loss after legEnd does not write the finished leg's crash crumb (#4550)", async () => {
-  let resolveLost;
-  const dev = { lost: new Promise((r) => { resolveLost = r; }), addEventListener() {}, removeEventListener() {} };
-  const gfx = { inspectorHost: () => ({ renderer: { backend: { device: dev } } }) };
-  const { B, store } = load({ requestAnimationFrame: () => 0 });
-  assert.equal(B.legStart({ label: "old leg" }, { state: "menu", gfx }), true);
-  B.legEnd();
-  assert.equal(store.has(B.CRUMB), false, "legEnd clears the crumb");
-  resolveLost({ reason: "destroyed", message: "renderer swapped for the next leg" });
-  await new Promise((r) => setImmediate(r));
-  assert.equal(store.has(B.CRUMB), false, "a late device loss must not resurrect the old leg's crumb");
-  assert.equal(B.recover(), null);
-});

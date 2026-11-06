@@ -28,7 +28,7 @@ import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 import { DEPLOY_BRANCH } from "./pick-tests.mjs";
 import { circuitsOf } from "./select-specs.mjs";
 import { ADAPTED, ADAPTED_RUNNER } from "./twinned-specs.mjs";
-import { changedPaths, untrackedPaths } from "../lib/changed-files.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -185,11 +185,7 @@ function changedFiles(argv) {
       ref = "HEAD";
     }
   }
-  const tracked = changedPaths([ref]);   // rename SOURCES too (ledger M36)
-  if (since >= 0) return tracked;      // an explicit --since names a commit range, not the working tree
-  let untracked = [];
-  try { untracked = untrackedPaths(); } catch { /* no git: the tracked list stands */ }
-  return [...new Set([...tracked, ...untracked])];   // B3: a new, un-added unit file routes to its slice
+  return changedPaths([ref]);   // rename SOURCES too (ledger M36)
 }
 
 /** Unit files that live only in tooling-fast / sweeps — not a CI node slice. */

@@ -40,11 +40,3 @@ export function changedPaths(args = [], { cwd = ROOT, run = execFileSync } = {})
   const out = run("git", ["diff", "--name-status", "-z", "-M", ...args], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return parseNameStatusZ(out);
 }
-
-/** Untracked, not-ignored paths (`git ls-files --others --exclude-standard`). `git diff` never lists a file that was
- *  never `git add`ed, so a working-tree selection that reads only changedPaths() misses a brand-new test or module
- *  (B3, 2026-11-03: tooling-fast --changed ran green without the new unit file). Throws like execFileSync. */
-export function untrackedPaths({ cwd = ROOT, run = execFileSync } = {}) {
-  const out = run("git", ["ls-files", "-z", "--others", "--exclude-standard"], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return String(out || "").split("\0").filter(Boolean);
-}

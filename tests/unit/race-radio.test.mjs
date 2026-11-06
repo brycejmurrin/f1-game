@@ -453,37 +453,6 @@ test("a nearby AI mistake triggers engineer + commentary radio lines", () => {
   assert.ok(tv.length >= 1, `commentary silent on rival mistake: ${JSON.stringify(after)}`);
 });
 
-test("a mistake by the car BEHIND is never spoken as that driver being ahead (#4328)", () => {
-  // Every eng.rivalErr line reads "{name} AHEAD"; the car behind is ~1 s back.
-  const A = car("AAA", 1060, 60);
-  const P = car("PLY", 1000, 60, { isPlayer: true, local: true });
-  const B = car("BBB", 940, 60, { errCount: 0 });
-  const r = race({ cars: [A, P, B] });
-  r.step(0.05, 400);
-  const before = r.said.length;
-  B.errCount = 1;
-  r.step(0.05, 400);
-  const wrong = r.said.slice(before).filter((s) => /BBB/i.test(s.msg) && /AHEAD/i.test(s.msg));
-  assert.deepEqual(wrong, [], "the car behind was called ahead");
-});
-
-test("a refused radio check does not burn an anti-repeat variant (#4330)", () => {
-  const r = race({ cars: [car("AAA", 1060, 60), car("PLY", 1000, 60, { isPlayer: true, local: true }), car("BBB", 940, 60)] });
-  r.step(0.05, 400);
-  let accept = true;
-  r.G.announce = () => accept;
-  let heard = null;
-  for (let i = 0; i < 40; i++) {
-    accept = true;
-    const line = r.radio.request();
-    assert.ok(line, "an accepted status request answers");
-    assert.notEqual(line, heard, "the line just heard repeated: refused requests pushed it out of the anti-repeat window");
-    heard = line;
-    accept = false;
-    for (let k = 0; k < 3; k++) assert.equal(r.radio.request(), "");
-  }
-});
-
 test("a red-flag restart does not read the bunched-up grid as the car ahead closing 6 s a lap", () => {
   const A = car("AAA", 2 * LAP + 480, 60), P = car("PLY", 2 * LAP, 60, { isPlayer: true, local: true }), B = car("BBB", 2 * LAP - 600, 60);
   const r = race({ cars: [A, P, B] });

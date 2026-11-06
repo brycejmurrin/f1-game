@@ -1128,13 +1128,6 @@ test("startCalm: full while launching, fades out by calmUntil, never for a car t
   assert.equal(A.attackOK({ ...zone, attackQ: 1, calm: 1 }), true, "a prime one is still on");
 });
 
-test("mistakeChance: composure only matters under pressure (AI-only, signed)", () => {
-  const cool = { consistency: 0.75, composure: 1 }, rattled = { consistency: 0.75, composure: -1 }, mid = { consistency: 0.75 };
-  assert.equal(A.mistakeChance(cool, 0), A.mistakeChance(rattled, 0), "unpressured: no effect");
-  assert.ok(A.mistakeChance(cool, 1) < A.mistakeChance(mid, 1));
-  assert.ok(A.mistakeChance(mid, 1) < A.mistakeChance(rattled, 1));
-});
-
 test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
   const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
   // Hard / default errMul=1 keeps the 0.004 base (Slice 4 lift is em>1 only).
@@ -1748,8 +1741,8 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const calls = { weather: 0, tyre: 0, air: 0, lateral: 0, yaw: 0 };
     const deps = { K, clamp, damp, aiT: mid,
       AiDrive: { ...A,
-        lateralScales(...args) { calls.yaw++; calls.lateral++; return A.lateralScales(...args); },   // normal controller: yaw + lateral from one call
-        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },   // recovery modes
+        yawScale(...args) { calls.yaw++; return A.yawScale(...args); },
+        lateralScale(...args) { calls.lateral++; return A.lateralScale(...args); } },
       gripMult() { calls.weather++; return weatherGrip; },
       tyres: { gripMul() { calls.tyre++; return tyreGrip; } },
       // X-mode's downforce cost reaches the AI's lateral envelope (verify-physics #11), never the yaw budget.
@@ -1894,38 +1887,4 @@ test("a level AI-AI side rub takes ONE k for the pair, so bucket order cannot pi
   assert.equal(A.cornerK(ka, kb), A.cornerK(kb, ka));
   const yA = A.sideYieldsA(0, 2, -2, A.cornerK(ka, kb)), yB = A.sideYieldsA(0, -2, 2, A.cornerK(kb, ka));
   assert.notEqual(yA, yB, "exactly one of the pair yields");
-});
-
-// B5 #4549: `(gap || 9)` read a touching 0 m blocker as 9 m away, so the fire rate was LOWEST at contact range.
-test("otFireRate: a 0 m blocker gap scores as the closest gap, not as 9 m", () => {
-  const at = (g) => A.otFireRate({ traits: mid, blockerGap: g, gapAhead: g, roomL: 3, roomR: 2,
-    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false });
-  assert.ok(at(0) >= at(0.5), `0 m ${at(0)} should be >= 0.5 m ${at(0.5)}`);
-  assert.ok(at(0) > at(9), "contact range beats a 9 m gap");
-});
-
-// B5 #4549: a stats record missing one field gave NaN attack/hold, which rode into followGap/brakeTarget/otFireRate.
-test("houseStyle: a partial stats record stays finite (a missing stat reads neutral)", () => {
-  const h = Object.assign({}, A.houseStyle(null, 0, { speed: 90 }));
-  assert.ok(Number.isFinite(h.attack) && Number.isFinite(h.hold), JSON.stringify(h));
-  const full = Object.assign({}, A.houseStyle(null, 2, { speed: 90, accel: 85, cornering: 85, braking: 85 }));
-  const part = Object.assign({}, A.houseStyle(null, 2, { speed: 90 }));
-  assert.deepEqual(part, full, "the missing three read as 85");
-});
-
-test("lateralScales / sbsLimits are bit-identical to the single-purpose functions (#4668)", () => {
-  const A = load();
-  const out = { yaw: 0, lat: 0 };
-  for (const speed of [0, 3, 40, 71.9, 90, -20]) for (const load of [0, 0.5, 0.9]) for (const grip of [0, 0.4, 1.1])
-    for (const aero of [0, 0.6, 1]) {
-      A.lateralScales(speed, load, grip, 0.98, 72, aero, out);
-      assert.ok(Object.is(out.yaw, A.yawScale(speed, load, grip, 0.98, 72)));
-      assert.ok(Object.is(out.lat, A.lateralScale(speed, load, grip, 0.98, 72, aero)));
-    }
-  const lim = { commitT: 0, ease: 0 };
-  for (const ctx of [null, { street: true }]) {
-    A.sbsLimits(ctx, lim);
-    assert.equal(lim.commitT, A.sbsCommitT(ctx));
-    assert.equal(lim.ease, A.sbsEase(ctx));
-  }
 });

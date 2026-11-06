@@ -132,11 +132,6 @@ const GLXBackend = (function () {
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let particleProg = null, particleU = null, particleVAO = [], particleVBO = [], particleCap = [0, 0];
   let _partEpochs = new WeakMap(), _partEpoch = 0, _partResident = [];
-  // Dynamic VBOs (skid batch, line, glow, particles) grow by half again, not to
-  // the exact float count: a creeping skid trail reallocated (bufferData) on
-  // every growth step (#4530). Capacity only; draws still read the live count.
-  const growCap = (need, cap) => Math.max(need, Math.ceil(cap * 1.5));
-  const PARTICLE_SUN_DEF = new Float32Array([1, 0.98, 0.9]);   // no per-call array
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -2535,7 +2530,7 @@ const GLXBackend = (function () {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       const nF = vertCount * 5;
       if (nF > markBatchCap) {
-        markBatchCap = growCap(nF, markBatchCap);
+        markBatchCap = nF;
         gl.bufferData(gl.ARRAY_BUFFER, markBatchCap * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
@@ -2570,7 +2565,7 @@ const GLXBackend = (function () {
       gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
       const nF = vertCount * 7;
       if (nF > lineCap) {
-        lineCap = growCap(nF, lineCap);
+        lineCap = nF;
         gl.bufferData(gl.ARRAY_BUFFER, lineCap * 4, gl.STATIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
@@ -2636,7 +2631,7 @@ const GLXBackend = (function () {
     bindVAO(glowVAO);
     gl.bindBuffer(gl.ARRAY_BUFFER, glowVBO);
     if (p > glowCap) {
-      glowCap = growCap(p, glowCap);
+      glowCap = p;
       gl.bufferData(gl.ARRAY_BUFFER, glowCap * 4, gl.DYNAMIC_DRAW);
     }
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, glowData, 0, p);
@@ -2676,7 +2671,7 @@ const GLXBackend = (function () {
     gl.uniform3fv(particleU.uEye, frameEye);
     gl.uniform1f(particleU.uAdditive, additive ? 1 : 0);
     // Lit + fogged (PARTICLE_FS): the decals' frame light and the lit pass's fog.
-    gl.uniform3fv(particleU.uSunColor, frameSunColor || PARTICLE_SUN_DEF);
+    gl.uniform3fv(particleU.uSunColor, frameSunColor || [1, 0.98, 0.9]);
     gl.uniform3fv(particleU.uAmbSky, frameAmbSky);
     gl.uniform3fv(particleU.uAmbGround, frameAmbGround);
     gl.uniform3fv(particleU.uFogColor, _particleFog.color);
@@ -2692,7 +2687,7 @@ const GLXBackend = (function () {
     if (needUpload) {
       if (!data) return;
       if (floatCount > particleCap[addBit]) {
-        particleCap[addBit] = growCap(floatCount, particleCap[addBit]);
+        particleCap[addBit] = floatCount;
         gl.bufferData(gl.ARRAY_BUFFER, particleCap[addBit] * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
@@ -2737,7 +2732,7 @@ const GLXBackend = (function () {
       layers: Array.from(matTexScales).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
       scales: Array.from(matTexScales),
     }),
-    freeTexture, flushTexPool() {},   // flushTexPool: TLX-only pool, no-op here
+    freeTexture,
     texCensus,                    // resident texture bytes — see the ledger above
     drawDecal,
     chunkedTrackCoords: true,

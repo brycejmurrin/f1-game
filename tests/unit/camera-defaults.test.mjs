@@ -263,13 +263,13 @@ test("the stored CORNER LEAD swings the chase aim into the bend", () => {
 
 test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.4", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8");
+  assert.match(src, /LEAD_DEFAULT\s*=\s*0\.4/,
+    "0.4 since 2026-09-08 (the owner's own setting; it was 0.35, what the old ON switch blended)");
+  assert.match(src, /KEY_LEAD\s*=\s*"apex26\.cockpitTurnChaseLead"/,
+    "the live value is a new key so a stored \"1\" is not read as 100%");
   assert.match(src, /inp\.type\s*=\s*"range"/,
     "SETTINGS > COCKPIT exposes TURN CHASING as a slider, not an ON/OFF");
   const Opts = loadCockpitOpts();
-  assert.equal(Opts.parseLead("not-a-number", null), 0.4,
-    "an unreadable stored value falls back to the shipped 0.4 (0.4 since 2026-09-08; it was 0.35)");
-  assert.equal(loadCockpitOpts({ "apex26.cockpitTurnChaseLead": "0.8" }).turnChaseLead(), 0.8,
-    "the live value is read from apex26.cockpitTurnChaseLead (a new key, so a stored \"1\" is not read as 100%)");
   assert.equal(Opts.parseLead("1", null), 1,
     "the new key stores a real 0–1; \"1\" is full look-ahead");
   assert.equal(Opts.parseLead("0", null), 0);

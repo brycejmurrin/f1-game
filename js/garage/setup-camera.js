@@ -341,13 +341,7 @@ function previewSync() {
   set(play, "textContent", p.paused ? "PLAY" : "PAUSE"); press(play, p.paused);
   press($("ga-loop"), p.loop); press($("ga-edit"), p.editing);
   set($("ga-scrub"), "value", String(Math.round(t / (len || 1) * 1000)));
-  // WALL clock (playback speed + slow-mo), not bare timeline length — otherwise
-  // SLOW/FAST still read "8.7 s" and the real length is invisible (clip review).
-  const speed = Math.max(0.25, Number(p.cfg && p.cfg.speed) || 1);
-  const wallLen = GarageArrival.wallSeconds(p.cfg, p.dir) / speed;
-  const wallLeft = GarageArrival.wallLeft(p.cfg, p.dir, t) / speed;
-  const wallT = Math.max(0, wallLen - wallLeft);
-  set($("ga-time"), "textContent", wallT.toFixed(1) + " / " + wallLen.toFixed(1) + " s \u00b7 " + previewPose(p).label);
+  set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + previewPose(p).label);
   const marks = previewPhases(p), on = phaseAt(marks, t), key = p.dir + marks.map((m) => m.id + m.t.toFixed(3)).join();
   if (p.marked !== key) {
     p.marked = key;
@@ -523,13 +517,9 @@ const SP_FIT_HALF_W = 3.10;
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
 // shot, whereas the auto fit reaching it means the fit diverged. js/garage/scene.js
 // notes a camera at 15 m "is outside the bay on at least one axis nearly
-// always"; 9.6 keeps the swing inside the side walls (±5.4) at the default
-// elevation with headroom over the 8.35 m default framing (was 11 — still
-// clipped the culled near wall on narrow viewports with the panel open).
-const SP_FIT_DIST_MAX = 9.6;
-// Manual zoom still reaches SP_DIST_MAX, but the default / auto path never does:
-// GarageCameraOptions.maxDistInside (when loaded) further caps the live eye.
-const SP_DIST_BAY_CAP = 9.6;
+// always"; 11 keeps the swing inside the door/back walls (Z +/-6.4) at the
+// default elevation with real headroom over the 8.5 m default framing.
+const SP_FIT_DIST_MAX = 11;
 // The garage environment — bay shell, truss, LED fixtures, pit equipment, team
 // dress, floor and light rig — lives in js/garage/scene.js. It owns the
 // frame clear colour too: every surface in there fades to exactly BACKDROP at
@@ -618,16 +608,11 @@ function flapAimPoint(which) {
   return Car3D.aeroFlapAim(aSt.val, which, aSt.aero);
 }
 let setupPreviewView = "hero";
-function bayViewPreset(name) {
-  return typeof GarageCameraOptions !== "undefined" && GarageCameraOptions.viewPreset
-    ? GarageCameraOptions.viewPreset(name) : null;
-}
-function setSetupView(name, pose) {
-  const bay = pose || bayViewPreset(name);
-  const v = bay || SP_VIEWS[name];
+function setSetupView(name) {
+  const v = SP_VIEWS[name];
   if (!v) return;
   setupPreviewView = name;
-  GarageScene.spot(SP_VIEWS[name] ? name : "hero");   // bay chips reuse the hero lamp
+  GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
   setupPreviewFree = false;   // a preset is the player's range again
   setupPreviewLens = null;   // and its own lens
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
@@ -642,15 +627,10 @@ function setSetupView(name, pose) {
     const p = flapAimPoint(v.aim);
     setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice();
     setupPreviewMinDist = v.minDist || 0;
-  } else if (v.orbit && v.tgt) {
-    setupPreviewOrbit = v.orbit.slice(); setupPreviewTgt = v.tgt.slice();
-    setupPreviewMinDist = v.minDist || 0;
   } else {
     setupPreviewOrbit = SP_ORBIT_DEF.slice(); setupPreviewTgt = SP_TGT_DEF.slice();
     setupPreviewMinDist = 0;
   }
-  // Bay presets publish a maxDist so auto-fit cannot walk them outside the room.
-  if (Number.isFinite(v.maxDist)) setupPreviewDist = Math.min(setupPreviewDist, v.maxDist);
   // Picking a view means "hold it there" — leaving the turntable running would
   // immediately rotate away from the angle that was just asked for.
   setSetupSpin(false);
@@ -860,8 +840,6 @@ function exteriorPick(ctx) {
 function prepareExterior(ctx, pose) {
   if (!deps.prepareExterior || ctx.studio) return false;
   const selection = exteriorPick(ctx), sequence = !!(pose && pose.active);
-  const outLooking = !!(pose && typeof GarageExterior !== "undefined" && GarageExterior.lookingOut
-    && GarageExterior.lookingOut(pose));
   if (sequence && !exteriorSequence) { exteriorHeld = selection; exteriorVisible = !!(exterior && exterior.ready(selection)); }
   if (!sequence) { exteriorHeld = null; exteriorVisible = true; }
   exteriorSequence = sequence;
@@ -877,25 +855,18 @@ function prepareExterior(ctx, pose) {
       .finally(() => { if (generation === exteriorEpoch) exteriorBoot = null; });
   }
   if (exterior && exteriorRequested !== pick) { exteriorRequested = pick; exteriorLight = null; exterior.request(pick); }
-  // Closed-shutter latch (start of a shot) OR an open look into the pit lane —
-  // doorway / facade / departure eyes need the real circuit once it is ready.
-  if (exterior && exterior.ready() && (!sequence || pose.door < .02 || outLooking || exteriorVisible))
-    exteriorVisible = true;
+  // A late result may appear behind a CLOSED shutter, never halfway through a shot.
+  if (sequence && pose.door < .02 && exterior && exterior.ready()) exteriorVisible = true;
   return !!(exterior && exterior.ready() && exteriorVisible);
 }
-function exteriorLighting(lookOut) {
-  // Recompute when look-out strength changes (indoor fill vs full pit-lane sky).
-  if (exteriorLight && exteriorLight._lookOut === !!lookOut) return exteriorLight;
+function exteriorLighting() {
+  if (exteriorLight) return exteriorLight;
   const light = exterior.lighting(), yaw = exteriorAnchor ? exteriorAnchor.yaw : 0;
   const c = Math.cos(yaw), s = Math.sin(yaw), x = light.sunDir[0], z = light.sunDir[2];
   light.sunDir[0] = x * c - z * s; light.sunDir[2] = x * s + z * c;
   light.sky.sunDir = light.sunDir;
-  // Indoor bay: lamps stay the key, exterior is a soft fill. Looking into the
-  // pit lane: let the selected weather / time of day own the sky and fog.
-  const fill = lookOut ? 0.92 : 0.55;
-  for (let i = 0; i < 3; i++) { light.sunColor[i] *= fill; light.ambientSky[i] *= fill; light.ambientGround[i] *= fill; }
-  if (lookOut) light.fogDensity = Math.max(0.00035, (light.fogDensity || 0.0008) * 0.55);
-  light._lookOut = !!lookOut;
+  // Interior lamp rig stays the key; selected exterior conditions supply daylight/fog.
+  for (let i = 0; i < 3; i++) { light.sunColor[i] *= .55; light.ambientSky[i] *= .55; light.ambientGround[i] *= .55; }
   return exteriorLight = light;
 }
 function releaseExterior() {
@@ -1078,22 +1049,6 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
-  // ENTRY/EXIT CAMERA OPTIONS (lazy): replace/clamp the arrival eye so the default
-  // never clips through a culled wall. Override layer — does not edit arrival.js.
-  if (arriving && arriving.active && typeof GarageCameraOptions !== "undefined") {
-    const camOpts = GarageCameraOptions.read(G.store);
-    const dir = driveOut ? "out" : (preview ? preview.dir : (arriving.sequence || arriving.direction || "in"));
-    const arrivalCfg = driveOut ? driveOut.cfg
-      : (preview ? preview.cfg : GarageArrival.settings(G.store.get("garageArrival", null)));
-    const end = preview ? previewLen(preview)
-      : (driveOut ? GarageArrival.duration(driveOut.cfg, "out") : GarageArrival.duration(arrivalCfg, dir === "home" ? "home" : dir));
-    const t = driveOut ? driveOut.t : (preview ? preview.t : (arriving.seconds || 0));
-    GarageCameraOptions.applyArrival(arriving, camOpts, {
-      dir: dir === "home" ? "in" : dir,
-      u: end > 0 ? t / end : 0,
-      arrival: arrivalCfg,
-    });
-  }
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
@@ -1203,26 +1158,13 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   // wide), so the horizontal axis binds everywhere. Fitting the half-WIDTH
   // against the vertical half-angle was tried and measured wrong — a constant
   // 10.31 m floor that pushed 1440x900 from 9.10 to 10.31.
-  // Stay-inside default: after the auto-fit (SP_FIT_DIST_MAX), also cap the live
-  // distance so the eye cannot sit past the bay's side wall. Manual free/dev
-  // shots keep SP_DIST_MAX. spFitD's statement shape is pinned by
-  // setup-preview-hull.test.mjs — keep it a pure Math.min(SP_FIT_DIST_MAX, …).
-  const stayInside = typeof GarageCameraOptions === "undefined" || GarageCameraOptions.read(G.store).stayInside;
-  // typeof-guard: the Home-photo VM extract in garage-panel-side.test.mjs runs this
-  // framing slice without the module's let bindings (setupPreviewFree is free there).
-  const freeOrbit = typeof setupPreviewFree !== "undefined" && !!setupPreviewFree;
-  const bayCap = stayInside && !freeOrbit && typeof GarageCameraOptions !== "undefined"
-    ? GarageCameraOptions.maxDistInside(setupPreviewAz, setupPreviewEl, setupPreviewOrbit,
-        typeof setupPreviewView !== "undefined" && (setupPreviewView === "doorway" || setupPreviewView === "pitWall"))
-    : SP_DIST_MAX;
   const spFitD = Math.min(SP_FIT_DIST_MAX,
     SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - Math.abs(panelFrac)), 0.05));
   const homeFov = homePane && gfx.aspect < 1 ? 72 : (home.lens && home.lens.fov) || 36;
   const homeFit = !photoOpen && homePane && GarageExperience.fitHome(_spHull, { az: setupPreviewAz, el: setupPreviewEl,
-    center: setupPreviewTgt, aspect: gfx.aspect, fov: homeFov, minDist: SP_DIST_MIN, maxDist: home.lens.maxDist || Math.min(SP_FIT_DIST_MAX, bayCap) }, homePane);
-  const distCap = Math.min(SP_DIST_MAX, bayCap);
+    center: setupPreviewTgt, aspect: gfx.aspect, fov: homeFov, minDist: SP_DIST_MIN, maxDist: home.lens.maxDist || SP_FIT_DIST_MAX }, homePane);
   const spDist = homeFit ? homeFit.dist : autoFrame
-    ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, distCap) : Math.min(setupPreviewDist, distCap);
+    ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, SP_DIST_MAX) : setupPreviewDist;
   // Publish what the camera USES: garageCam() reported setupPreviewDist, which
   // is the effective distance only when the turntable is off — so on the auto
   // path, the one that can misframe, it read 8.5 while the camera sat at 15.
@@ -1249,24 +1191,16 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   _spAim[0] = setupPreviewTgt[0] + setupPreviewPan[0];
   _spAim[1] = setupPreviewTgt[1] + setupPreviewPan[1];
   _spAim[2] = setupPreviewTgt[2] + setupPreviewPan[2];
-  const outLooking = !!(arriving && arriving.active && typeof GarageExterior !== "undefined"
-    && GarageExterior.lookingOut && GarageExterior.lookingOut(arriving));
   if (arriving && arriving.active) {
     eye[0] = arriving.eye[0]; eye[1] = arriving.eye[1]; eye[2] = arriving.eye[2];
     _spAim[0] = arriving.aim[0]; _spAim[1] = arriving.aim[1]; _spAim[2] = arriving.aim[2];
-    // Pit-lane look-outs need a deeper far plane so grandstands / weather read
-    // past the old 800 m cut (geometry window now reaches ~1.6 km at scale 1).
-    const far = (context.realExterior && outLooking) ? 2500 : 800;
-    M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, far);
-  } else if (stayInside && !freeOrbit && typeof GarageCameraOptions !== "undefined") {
-    // Turntable eye: clamp residual outliers (narrow viewport + pan) inside the room.
-    GarageCameraOptions.clampEye(eye, setupPreviewView === "doorway" || setupPreviewView === "pitWall");
+    M4.perspectiveTo(_spProj, (gfx.aspect < 1 ? Math.min(85, arriving.fov + 14) : arriving.fov) * Math.PI / 180, gfx.aspect, 0.1, 800);
   }
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
   GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(lens && lens.centre) && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
-  const outside = context.realExterior ? exteriorLighting(outLooking) : null;
+  const outside = context.realExterior ? exteriorLighting() : null;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
   context.swell = arriving && arriving.active && Number.isFinite(arriving.swell) ? arriving.swell : 1;   // its DOOR GLOW size
   // Its LIGHT CUE (scene.js live: { id, t } in seconds since the sequence began; null = none).
@@ -1364,7 +1298,6 @@ function renderSetupPreview(dt, holdDriveOut = false) {
 function setSetupCamPanel(open) {
   const b = $("cs-cam"), p = $("cs-cam-panel");
   if (!b || !p) return;
-  if (open) bindCameraOptionsUi();
   p.hidden = !open;
   b.setAttribute("aria-expanded", open ? "true" : "false");
 }
@@ -1404,33 +1337,6 @@ window.addEventListener("keydown", (e) => {
     e.stopPropagation();   // don't also close the GARAGE behind it
   }
 }, true);
-
-// CAMERA OPTIONS UI (entry/exit shots + BAY chips): lands with ensureGarageData
-// (CAMERA_OPTION_FILES) or the idle ScriptLoader warm below. bindUi is once.
-function bindCameraOptionsUi() {
-  if (typeof GarageCameraOptions === "undefined" || !GarageCameraOptions.bindUi) return false;
-  return GarageCameraOptions.bindUi($, G.store, {
-    onChange: () => refreshPreview(),
-    onView: (id, pose) => { setSetupView(id, pose); setSetupCamPanel(false); },
-  });
-}
-bindCameraOptionsUi();
-(function warmCameraOptions() {
-  const tryLoad = () => {
-    if (bindCameraOptionsUi()) return;
-    if (typeof ScriptLoader === "undefined" || !ScriptLoader.create) return;
-    const loader = ScriptLoader.create();
-    if (!loader || !loader.load) return;
-    loader.load(["js/data/garage-entry-camera.js", "js/data/garage-camera-options.js"], [], {
-      strict: true, transientRetry: false,
-      ready: (src) => src.indexOf("camera-options") >= 0
-        ? typeof GarageCameraOptions !== "undefined"
-        : typeof GarageEntryCameraData !== "undefined",
-    }).then(() => bindCameraOptionsUi()).catch(() => {});
-  };
-  if (typeof requestIdleCallback === "function") requestIdleCallback(tryLoad, { timeout: 4000 });
-  else setTimeout(tryLoad, 800);
-})();
 
 for (const btn of document.querySelectorAll("#cs-stack [data-cs-view]")) {
   btn.onclick = () => {

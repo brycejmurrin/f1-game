@@ -17,10 +17,9 @@
 
    Pure core (unit-tested in tests/unit/hud-relative.test.mjs): relDist,
    lapsApart, select (fixed slots, allocation-free), fmtGap. tick(G, player)
-   is the js/ui/hud.js call at the HUD tick (sampleGeo() at the tick frame's
-   top, before its writes). Rows are built at runtime inside the static
-   #hud-rel (index.html) — no shell nodes per row, no class tokens
-   (data-k / data-lap / data-self attributes; css/hud.css). */
+   is the one js/ui/hud.js call, at the HUD tick. Rows are built at runtime
+   inside the static #hud-rel (index.html) — no shell nodes per row, no class
+   tokens (data-k / data-lap / data-self attributes; css/hud.css). */
 const HudRelative = (function () {
   "use strict";
 
@@ -130,7 +129,6 @@ const HudRelative = (function () {
 
   /** js/ui/hud.js, once per HUD tick (10 Hz). Reads G; never writes a car. */
   function tick(G, player) {
-    const geo = geoSample; geoSample = null;   // one tick's sample, never a later tick's
     if (!doc || !player) return;
     if (!root && !build()) return;
     const cars = G.cars, track = G.track;
@@ -179,24 +177,11 @@ const HudRelative = (function () {
     if (key !== fitSeen) fitRows();
     // The age is a 1 Hz net for layout the key cannot see. It is READ-ONLY (audit4
     // UB6): compare the boxes fitRows decides from with the ones the last fit left;
-    // only a moved box pays fitRows' reset-then-measure passes. The boxes come from
-    // sampleGeo(), taken by js/ui/hud.js before the tick's writes: read here, after
-    // them, each rect forced a synchronous layout once a second (perf hunt P5, #4586).
-    // No sample (a caller that does not take one): read live, as before.
-    else if (++fitAge >= FIT_REFRESH) { fitAge = 0; if ((geo !== null ? geo : geoKey()) !== geoSeen) fitRows(); }
+    // only a moved box pays fitRows' reset-then-measure passes.
+    else if (++fitAge >= FIT_REFRESH) { fitAge = 0; if (geoKey() !== geoSeen) fitRows(); }
   }
-  let fitSeen = null, fitAge = 0, geoSeen = null, geoSample = null;
+  let fitSeen = null, fitAge = 0, geoSeen = null;
   const FIT_REFRESH = 10;
-  /** js/ui/hud.js, at the top of a HUD tick frame, before any DOM write (layout is
-   *  still clean): the geometry the coming tick's 1 Hz net compares. Reads only on
-   *  the tick the net is due, and only when tick() would reach it. */
-  function sampleGeo() {
-    geoSample = null;
-    if (!root || !built || root.hidden || fitAge + 1 < FIT_REFRESH || !isOn()) return;
-    const b = doc.body;
-    if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
-    geoSample = geoKey();
-  }
   /** The card's box and every visible clearance control's box, rounded: reads only. */
   function geoKey() {
     if (!root || !root.getBoundingClientRect || !doc.getElementById) return "";
@@ -387,5 +372,5 @@ const HudRelative = (function () {
 
   /** Re-fit only when something fitKey sees moved since the last fit (or when forced). */
   function refit(force) { if (isOn() && (force || fitKey() !== fitSeen)) fitRows(); }
-  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, sampleGeo, fitRows, refit, fitKey, rows });
+  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, refit, fitKey, rows });
 })();

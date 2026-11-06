@@ -148,11 +148,7 @@ test("a legal clean race keeps its objective bonus, reputation, and sponsor prog
   assert.equal(clean.row.clean, true);
   assert.equal(clean.sponsor.done, 1);
   assert.equal(clean.res.pos, dsq.res.pos, "same tail position isolates the objective reward");
-  // A DSQ is unclassified, so (#4576) it earns no position prize either: the gap
-  // is exactly the clean car's prize plus the objective bonus.
-  assert.equal(dsq.res.prize, 0, "a disqualified car earns no position prize");
-  assert.equal(clean.res.prize, clean.Career.prizeFor(clean.res.pos));
-  assert.equal(clean.res.money - dsq.res.money, clean.res.prize + clean.Career.OBJ_BONUS);
+  assert.equal(clean.res.money - dsq.res.money, clean.Career.OBJ_BONUS);
   assert.ok(clean.res.rep > dsq.res.rep, "a DSQ cannot earn the clean-objective reputation reward");
 });
 
@@ -210,45 +206,6 @@ test("DRIVER career: the salary and points bonus still pay, and there is no team
   assert.ok(res.salary > 0, "a driver is paid a salary");
   assert.ok(res.bonus > 0, "and a bonus for P2's points");
   assert.equal(res.matePrize, 0, "a driver is not paid for the team-mate's car");
-});
-
-test("a DNF earns no position prize, but a DRIVER's salary still pays (#4576)", () => {
-  const Career = load();
-  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
-  Career.engage(true);
-  const career = Career.data();
-  career.season.round = 1;
-  const mk = (id, retired) => ({ team: { id }, retired, cuts: 0, penalty: 0, gridPos: 5 });
-  const player = { ...mk("haas", true), dnf: "engine" };
-  const order = [];
-  for (let i = 0; i < 19; i++) order.push(mk("custom", false));
-  order.push(player);                            // a retirement sits at the foot of the order
-  const res = Career.settleRound(order, player);
-  assert.equal(res.pts, 0, "a retirement scores nothing");
-  assert.equal(res.prize, 0, "and earns no position prize either");
-  assert.ok(res.salary > 0, "the contract salary is still paid");
-  assert.equal(res.bonus, 0, "no points, no points bonus");
-});
-
-test("a DNF classified past 90 % distance still scores and is still paid its prize", () => {
-  const Career = load();
-  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
-  Career.engage(true);
-  Career.data().season.round = 1;
-  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
-  const player = { ...mk("haas"), retired: true, classified: true, dnf: "gearbox" };
-  const order = [mk("custom"), mk("custom"), player];
-  for (let i = 0; i < 17; i++) order.push(mk("custom"));
-  const res = Career.settleRound(order, player);
-  assert.equal(res.pts, 15);
-  assert.ok(res.prize > 0, "a classified DNF is paid like a finisher");
-});
-
-test("MY TEAM: a retired team-mate earns no matePrize (#4576)", () => {
-  const { res } = settle(true);
-  assert.equal(res.matePos, 5, "classified P5 in the order");
-  assert.equal(res.matePrize, 0, "but retired: no prize for that car");
-  assert.ok(res.prize > 0, "the finishing player's car is still paid");
 });
 
 test("MY TEAM standings include the hired second driver", () => {

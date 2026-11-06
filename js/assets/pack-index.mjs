@@ -69,16 +69,13 @@ export function rememberPayload(live) {
  */
 export function diffRoleIndex(roleIndex, live, roles = ["placed", "kit_catalog", "nature_bake"]) {
   const roleSet = new Set(roles);
-  // A null/absent manifest or index reads as empty (#4356), never a throw.
-  const indexModels = (roleIndex && roleIndex.models) || {};
-  const liveModels = (live && live.models) || {};
-  const indexIds = Object.keys(indexModels);
-  const liveIds = Object.keys(liveModels);
-  const indexOnly = indexIds.filter((id) => !Object.prototype.hasOwnProperty.call(liveModels, id));
-  const liveOnly = liveIds.filter((id) => !Object.prototype.hasOwnProperty.call(indexModels, id));
+  const indexIds = Object.keys((roleIndex && roleIndex.models) || {});
+  const liveIds = Object.keys((live && live.models) || {});
+  const indexOnly = indexIds.filter((id) => !Object.prototype.hasOwnProperty.call(live.models || {}, id));
+  const liveOnly = liveIds.filter((id) => !Object.prototype.hasOwnProperty.call(roleIndex.models || {}, id));
   const badRole = [];
   for (const id of indexIds) {
-    const role = indexModels[id] && indexModels[id].role;
+    const role = roleIndex.models[id] && roleIndex.models[id].role;
     if (!roleSet.has(role)) badRole.push(`${id}:${role}`);
   }
   return { indexOnly, liveOnly, badRole };

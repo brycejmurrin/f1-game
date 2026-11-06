@@ -20,11 +20,6 @@ const GarageExperience = (function () {
     front: Object.freeze({ az: Math.PI * 0.16, el: 0.24, dist: 6.4, fov: 54, maxDist: 6.4 }),
     side: Object.freeze({ az: Math.PI * 0.50, el: 0.15, dist: 10.2 }),
     rear: Object.freeze({ az: Math.PI * 0.92, el: 0.28, dist: 8.2 }),
-    // Bay-safe inspection shots (GarageCameraOptions chips); capped so Home
-    // ambient never walks the eye through a side wall on a narrow pane.
-    insideBay: Object.freeze({ az: Math.PI * 0.72, el: 0.28, dist: 7.2, maxDist: 7.4 }),
-    doorway: Object.freeze({ az: Math.PI * 0.08, el: 0.22, dist: 6.0, fov: 54, maxDist: 6.2 }),
-    overhead: Object.freeze({ az: Math.PI * 0.50, el: 1.15, dist: 8.5, maxDist: 8.8 }),
   });
 
   function homeShot(mode, requested) {

@@ -304,18 +304,12 @@ export function zeroRefModulesReport(corpus) {
     })(path.join(ROOT, "tests"));
     corpus = files.map((f) => fs.readFileSync(f, "utf8")).join("\n");
   }
-  // ONE pass for the path test (perf P8, #4548): `corpus.includes(f)` per module
-  // scanned the 22 MB corpus ~440 times, 1.3-1.7 s of the ratchet's measure().
-  // A single alternation finds most paths in ~20 ms. A regex match never consumes
-  // overlapping occurrences, so one it misses falls back to includes() — exact.
-  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  const seen = mods.size ? new Set(corpus.match(new RegExp([...mods].sort((a, b) => b.length - a.length).map(esc).join("|"), "g"))) : new Set();
   const out = [];
   for (const f of [...mods].sort()) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8");
     const g = (src.match(/^(?:const|var|let)\s+([A-Za-z_$][\w$]*)\s*=/m) || [])[1]
            || (src.match(/window\.([A-Za-z_$][\w$]*)\s*=/) || [])[1] || null;
-    const named = seen.has(f) || corpus.includes(f) || corpus.includes(path.basename(f))
+    const named = corpus.includes(f) || corpus.includes(path.basename(f))
       || (g && new RegExp(`\\b${g.replace(/\$/g, "\\$")}\\b`).test(corpus));
     if (!named) out.push({ file: f, global: g });
   }

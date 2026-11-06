@@ -10,14 +10,12 @@ const GarageDepartureWheels = (function () {
   function create(gfx) { return CarWheels.createGarage(gfx); }
 
   /**
-   * Overlay the Blender departure onto a poseOut base for every tuner angle.
-   * Sets pose.distance to the authored arc length so rims roll without skating.
-   * Authored follow-camera applies for CUT and calm/reduced-motion; other angles
-   * keep poseOut's eye/aim/fov (Night Shift "high", left/right, …). Returns the
-   * motion buffer, or null when the table is not loaded.
+   * Overlay the Blender CUT departure onto a poseOut base. Sets pose.distance to
+   * the authored arc length so rims roll without skating. Returns the motion
+   * buffer, or null when the table is not loaded / the angle is not CUT.
    */
   function samplePose(pose, t, cfg, buf, options) {
-    if (!pose || !cfg) return null;
+    if (!pose || !cfg || cfg.angle !== "cut") return null;
     if (typeof GarageDepartureMotion === "undefined" || typeof GarageArrival === "undefined") return null;
     const opt = options || {};
     const T = GarageArrival.timeline(cfg, "out");
@@ -29,10 +27,7 @@ const GarageDepartureWheels = (function () {
     const motion = GarageDepartureMotion.sample(u, pose.side, out);
     pose.x = motion.x; pose.z = motion.z; pose.yaw = motion.yaw;
     pose.distance = motion.distance;
-    // CUT owns the authored follow shot; other angles keep their poseOut camera.
-    // Reduced-motion always takes the calm exterior establishing view.
-    const authoredCam = opt.camera === true || (opt.camera !== false && (cfg.angle === "cut" || opt.calm));
-    if (authoredCam) {
+    if (opt.camera !== false) {
       if (opt.calm) {
         motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
         motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;

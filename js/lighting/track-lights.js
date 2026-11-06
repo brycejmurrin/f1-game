@@ -258,10 +258,7 @@ function buildTrackLights(track, onlyAlways) {
       const steps = Math.floor(span / stride);
       for (let j = 1; j < steps; j++) {
         const k = (a.k + j * stride) % n;
-        // Same side rule as applyLampDensity: alternate from the anchor's side
-        // (not a hard-coded +1/-1). An a.side === -1 anchor otherwise put the
-        // first synth on the same verge as the mast.
-        const side = (j % 2 === 0) ? a.side : -a.side;
+        const side = (j % 2 === 0) ? 1 : -1;
         const hwk = track.hw[k] || 7;
         fill.push({
           k, side, synth: true, kind: null,
@@ -299,12 +296,9 @@ function buildTrackLights(track, onlyAlways) {
       // ADDITIONAL to the mast light below — the mast lens above it still glows,
       // and a glowing lens with no pool reads as broken.
       const nc = NEON_SPILL[Math.floor(lh(i + 5) * NEON_SPILL.length) % NEON_SPILL.length];
-      // hw[k] can be 0/undefined on a partial centreline — match gap-fill /
-      // densify (`|| 7`) so the washer sits on the verge, not the racing line.
-      const hwk = track.hw[k] || 7;
-      const wx0 = track.px[k] + track.rx[k] * (hwk + 2.5) * side;
+      const wx0 = track.px[k] + track.rx[k] * (track.hw[k] + 2.5) * side;
       const wy0 = track.py[k] + 4.5;
-      const wz0 = track.pz[k] + track.rz[k] * (hwk + 2.5) * side;
+      const wz0 = track.pz[k] + track.rz[k] * (track.hw[k] + 2.5) * side;
       let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
       const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
       const we = intensity * 0.30 * (4.5 * 4.5) * LT.poolEnergy;

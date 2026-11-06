@@ -194,10 +194,7 @@ const TrackShape = (function () {
   /** Equal-spacing resample of a polyline (closed by default); the first point is kept. */
   function resample(pts, spacing, closed = true) {
     const N = pts.length, segs = closed ? N : N - 1, L = polyLen(pts, closed);
-    // A spacing that is not a positive finite number (0 → Infinity points) falls back
-    // to the minimum count instead of looping forever (#4357).
-    const want = spacing > 0 ? Math.round(L / spacing) : 0;
-    const n = Math.max(closed ? 8 : 2, Number.isFinite(want) ? want : 0), step = L / (closed ? n : n - 1), out = [];
+    const n = Math.max(closed ? 8 : 2, Math.round(L / spacing)), step = L / (closed ? n : n - 1), out = [];
     let seg = 0, acc = 0, segLen = 0;
     const segAt = (k) => { const p = pts[k % N], q = pts[(k + 1) % N]; return [p, q, hyp(q[0] - p[0], q[1] - p[1])]; };
     let [p, q, sl] = segAt(0); segLen = sl;
@@ -242,10 +239,7 @@ const TrackShape = (function () {
   }
   /** Merge control points closer than `min` to their predecessor (index 0 always
    *  kept). A `protect`ed input index (a stamp's tangent point) evicts unprotected
-   *  predecessors that crowd it instead of being dropped; spacing ≥ min always holds.
-   *  At the seam a protected last point that crowds index 0 is kept and index 0
-   *  yields instead (unless index 0 is itself protected): dropping a stamp's
-   *  tangent kinks the arc off its circle (#4355). */
+   *  predecessors that crowd it instead of being dropped; spacing ≥ min always holds. */
   function enforceSpacing(pts, min, protect) {
     const out = [pts[0]], prot = [true];
     const near = (a, b) => hyp(a[0] - b[0], a[1] - b[1]) < min;
@@ -256,11 +250,7 @@ const TrackShape = (function () {
       out.push(p); prot.push(keep);
     }
     // …and the seam back to index 0.
-    prot[0] = !!(protect && protect.has(0));
-    while (out.length > 3 && near(out[out.length - 1], out[0])) {
-      if (prot[prot.length - 1] && !prot[0]) { out.shift(); prot.shift(); }
-      else { out.pop(); prot.pop(); }
-    }
+    while (out.length > 3 && near(out[out.length - 1], out[0])) out.pop();
     return out;
   }
   function convexHull(pts) {

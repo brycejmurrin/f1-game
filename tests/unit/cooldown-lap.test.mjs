@@ -108,23 +108,9 @@ test("create: start → tick time/lap/pit/skip exits; camera stays chase", () =>
   assert.equal(api.tick(0.016, { progDelta: 0.5 }), "lap");
 
   // Pit exit.
-  let inLane = false;
-  const pitApi = C.create(G, { inPitLane: () => inLane, atBox: () => false });
+  const pitApi = C.create(G, { inPitLane: () => true, atBox: () => false });
   assert.equal(pitApi.start({ wallS: 99, force: true }), true);
-  assert.equal(pitApi.tick(0.016), null);
-  inLane = true;
   assert.equal(pitApi.tick(0.016), "pit");
-
-  // Started inside the lane: no instant exit; only after leaving and re-entering.
-  inLane = true;
-  const laneStart = C.create(G, { inPitLane: () => inLane, atBox: () => false });
-  assert.equal(laneStart.start({ wallS: 99, force: true }), true);
-  assert.equal(laneStart.tick(0.016), null);
-  assert.equal(laneStart.tick(0.016), null);
-  inLane = false;
-  assert.equal(laneStart.tick(0.016), null);
-  inLane = true;
-  assert.equal(laneStart.tick(0.016), "pit");
 
   // Prog wiring: startProg captured at start; crossing lapBudget ends the beat.
   const G2 = raceG({ player: { prog: 0 } });

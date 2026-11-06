@@ -259,17 +259,7 @@ const XrBoot = (function () {
   // button that could only fail) for every one of them. Ask whether an
   // immersive-vr session can start at all. true / false, or null when that cannot
   // be known (no isSessionSupported, a throw, a hang past the cap).
-  // Any isSessionSupported call marks the page "webxrdevice" and Chrome then never
-  // restores it from the back/forward cache (#4324). So the probe runs once, its
-  // definite answer is stored in apex26.xrCaps, and later boots read that answer;
-  // only SETTINGS re-asks (recheck below).
   const PROBE_CAP_MS = 1500;
-  const LS_XR_CAPS = "apex26.xrCaps";
-  function cachedVr() {
-    let v = null;
-    try { v = localStorage.getItem(LS_XR_CAPS); } catch (_) { /* blocked */ }
-    return v === "1" ? true : v === "0" ? false : null;
-  }
   function probeVr() {
     return (async () => {
       try {
@@ -280,9 +270,7 @@ const XrBoot = (function () {
         const cap = new Promise((resolve) => { if (typeof setTimeout === "function") timer = setTimeout(() => resolve(null), PROBE_CAP_MS); });
         try {
           const v = await Promise.race([xr.isSessionSupported("immersive-vr"), cap]);
-          if (v === null) return null;
-          try { localStorage.setItem(LS_XR_CAPS, v ? "1" : "0"); } catch (_) { /* blocked */ }
-          return !!v;
+          return v === null ? null : !!v;
         } finally { if (timer !== null) clearTimeout(timer); }
       } catch (_) { return null; }
     })();
@@ -292,49 +280,8 @@ const XrBoot = (function () {
     try { if (localStorage.getItem("apex26.xr") === "1") return true; } catch (_) { /* blocked */ }
     try { if (localStorage.getItem(LS_XR_PENDING) === "1") return true; } catch (_) { /* blocked */ }
     if (typeof navigator === "undefined" || !navigator.xr) return false;
-    const cached = cachedVr();
-    if (cached !== null) return cached;
-    // First visit: only a definite "no headset" skips the fetch; an unknown answer keeps the old one.
+    // Only a definite "no headset" skips the fetch; an unknown answer keeps the old one.
     return (await probeVr()) !== false;
-  }
-
-  let _rechecking = null;
-  /** SETTINGS re-probe: the one path that asks navigator.xr after the first visit. */
-  function recheck() {
-    if (_rechecking) return _rechecking;
-    if (typeof navigator === "undefined" || !navigator.xr) return Promise.resolve(false);
-    _rechecking = probeVr().then((vr) => {
-      if (vr === null) return cachedVr() === true;
-      if (typeof XROpts !== "undefined" && XROpts.onCaps) {
-        try { XROpts.onCaps({ vr }); } catch (_) { /* UI optional */ }
-      }
-      if (!vr) {
-        if (typeof ApexXR !== "undefined" && ApexXR.invalidate) ApexXR.invalidate();
-        if (typeof XrSession !== "undefined" && XrSession.seed) XrSession.seed(false);
-        return false;
-      }
-      return ensureXr().then((ok) => { if (ok) finish(); return !!ok; });
-    }).catch(() => false).finally(() => { _rechecking = null; });
-    return _rechecking;
-  }
-
-  function finish() {
-    // RendererBoot runs before the lazy XR bundle exists. Publish the headset
-    // capability for SETTINGS, from the stored answer when there is one (#4324).
-    if (typeof ApexXR !== "undefined" && typeof ApexXR.detect === "function") {
-      if (cachedVr() === null) Promise.resolve(ApexXR.detect()).catch(() => { /* optional capability UI */ });
-      else {
-        if (ApexXR.invalidate) ApexXR.invalidate();
-        if (typeof XROpts !== "undefined" && XROpts.onCaps) {
-          try { XROpts.onCaps(ApexXR.caps()); } catch (_) { /* UI optional */ }
-        }
-      }
-    }
-    if (typeof XrSession !== "undefined" && typeof XrSession.seed === "function" && cachedVr() !== null) XrSession.seed(cachedVr() === true);
-    // A reload loses the click's transient user activation. Let the XR UI
-    // prompt for a fresh tap instead of requesting an immersive session here.
-    const pendingEnter = consumePendingEnter();
-    if (typeof XrUi !== "undefined") XrUi.mount(document.body, pendingEnter);
   }
 
   function mountUi() {
@@ -347,6 +294,17 @@ const XrBoot = (function () {
         ensure: ensureXr,
       };
     }
+    const finish = () => {
+      // RendererBoot runs before the lazy XR bundle exists. Publish the
+      // headset capability now so SETTINGS and the next boot share the probe.
+      if (typeof ApexXR !== "undefined" && typeof ApexXR.detect === "function") {
+        Promise.resolve(ApexXR.detect()).catch(() => { /* optional capability UI */ });
+      }
+      // A reload loses the click's transient user activation. Let the XR UI
+      // prompt for a fresh tap instead of requesting an immersive session here.
+      const pendingEnter = consumePendingEnter();
+      if (typeof XrUi !== "undefined") XrUi.mount(document.body, pendingEnter);
+    };
     if (typeof XrUi !== "undefined") { finish(); return; }
     wantXrBundle().then((want) => (want ? ensureXr() : false)).then((ok) => { if (ok) finish(); }, () => { /* the VR button is optional */ });
   }
@@ -429,7 +387,7 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, recheck, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, restorePinnedBackend, applyEyes, present, afterTick, chainWindowRaf,
     diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers

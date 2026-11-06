@@ -29,18 +29,6 @@ test('authored phases join without a transform or wheel discontinuity and finish
   for (const key of ['x', 'z', 'yaw', 'steer', 'heave', 'pitch']) assert.ok(Math.abs(end[key]) < 1e-5, key + ' parked');
   assert.equal(motion.sample('out', .5), null);
 });
-test('lane coasts then brakes into the reverse mark with a nose-dive that settles at rest', () => {
-  const motion = load(source);
-  const step = (u0, u1) => motion.sample('lane', u1).x - motion.sample('lane', u0).x;
-  // Early samples share cruise speed; the final fifth decelerates into the stop.
-  assert.ok(Math.abs(step(0.1, 0.15) - step(0.2, 0.25)) < 0.02, 'early lane is near-constant speed');
-  assert.ok(step(0.85, 0.9) > step(0.9, 0.95) && step(0.9, 0.95) > step(0.95, 1), 'final fifth decelerates');
-  let dive = 0;
-  for (let u = 0; u <= 1; u += 0.02) dive = Math.min(dive, motion.sample('lane', u).pitch);
-  assert.ok(dive < -0.003, 'braking nose-dive present');
-  assert.ok(Math.abs(motion.sample('lane', 1).pitch) < 1e-6, 'pitch settles at the reverse-mark stop');
-  assert.ok(Math.abs(motion.sample('back', 1).pitch) < 1e-6, 'pitch settles when parked');
-});
 test('mirroring preserves contact and distance, while tuner timing only remaps phase', () => {
   const motion = load(source), slow = { ...T, lane: T.lane * 2, back: T.back * 2 };
   for (let u = 0; u <= 1; u += .01) {
@@ -153,14 +141,6 @@ test('wheel distance is signed metres and follows forward and reverse travel on 
     }
     assert.ok(Math.abs(motion.sample('lane', 1, side).wheelDistance - 22) < 2e-6, '22 metre lane travel, not 22 radians');
   }
-});
-test('crew hand-off finishes lowering the lollipop when the car stops', () => {
-  const { arrival } = arrivalContext();
-  const config = arrival.settings({ angle: 'left', enterCrew: 'current', sway: 0 });
-  const T = arrival.timeline(config);
-  assert.ok(arrival.pose(T.park - 0.3, config).crewClear > 0.5, 'still raised while rolling into the box');
-  assert.ok(arrival.pose(T.park, config).crewClear < 1e-6, 'fully lowered at the parked stop');
-  assert.ok(arrival.pose(T.park + 0.5, config).crewClear < 1e-6, 'stays lowered for service');
 });
 test('only authored entrance exposes articulation, with body channels separate from the grounded root', () => {
   const { ctx, arrival } = arrivalContext(), motion = vm.runInContext('GarageEntranceMotion', ctx);

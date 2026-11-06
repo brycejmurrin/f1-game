@@ -651,33 +651,3 @@ test("secondary PAUSE wires once and preserves trusted gesture metadata for the 
   block = true;
   assert.equal(registered[0].opts.beforeActivate(source), false, "an active shield can reject the activation");
 });
-
-// B2 bug hunt (#4534): pointerup disarms, sets confirmPending and fires el.click()
-// (swallowed); the browser's trusted click that follows is the confirm and clears it. When that click never comes (pointercancel,
-// a click retargeted to an ancestor) the flag must not turn the NEXT pause's
-// first QUIT tap into a one-tap quit.
-test("a pointerup whose native click never arrives leaves no one-tap QUIT on the next pause", () => {
-  const h = load();
-  h.press(h.quit, { isTrusted: true, detail: 1 });
-  h.advance(400);
-  h.pointerUp(h.quit, { isTrusted: true });          // disarms; waits for the trusted click
-  assert.deepEqual(h.handled, []);
-  // …the trusted click never follows. Pause closes and reopens later.
-  h.pausemenu.hidden = true; for (const o of h.observers) o.fn();
-  h.pausemenu.hidden = false;
-  h.advance(60_000);
-  assert.ok(h.press(h.quit, { isTrusted: true, detail: 1 }).stopped, "first tap is swallowed and arms");
-  assert.equal(h.quit.textContent, "TAP AGAIN");
-  assert.deepEqual(h.handled, [], "one tap never quits");
-});
-
-test("a stale confirmPending expires on wall age even without a pause-hidden mutation", () => {
-  const h = load();
-  h.press(h.restart, { isTrusted: true, detail: 1 });
-  h.advance(400);
-  h.pointerUp(h.restart, { isTrusted: true });
-  assert.deepEqual(h.handled, []);
-  h.advance(h.M.ARM_MAX_MS + 1);
-  assert.ok(h.press(h.restart, { isTrusted: true, detail: 1 }).stopped, "first tap arms, not restarts");
-  assert.deepEqual(h.handled, []);
-});

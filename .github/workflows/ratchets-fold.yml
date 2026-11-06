@@ -74,8 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # --limit: gh lists only the 30 newest by default; an older open bot PR read as none (B3).
-          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/ratchets-fold"))] | length')"
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/ratchets-fold"))] | length')"
           echo "open fold PRs: $n"
           echo "n=$n" >> "$GITHUB_OUTPUT"
 

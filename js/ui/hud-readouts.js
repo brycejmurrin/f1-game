@@ -269,8 +269,6 @@ const HudReadouts = (function () {
   /** yellow | vsc | sc | red | blue | "" for data-flag-cue on #hud-flag. */
   function flagCueKind(caution, blue) {
     if (blue) return "blue";
-    // Level 0 with time still owed paints flag-yellow in hud.js: keep its cue letter.
-    if (caution && !(caution.level > 0) && caution.owed > 0) return "yellow";
     if (!caution || !(caution.level > 0)) return "";
     if (caution.level === 4) return "red";
     if (caution.level === 3) return "sc";
@@ -305,8 +303,8 @@ const HudReadouts = (function () {
   }
 
   // GAP_FINE_LT stays module-local (gapDecimals only).
-  /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): only "lane" and "box"; "out" is serviced and driving away on track. */
-  function inPit(car) { const s = car && car.pitState; return s === "lane" || s === "box"; }
+  /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): any pitState but "none" (lane, box, out). */
+  function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
   return { inPit, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,

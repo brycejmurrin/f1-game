@@ -312,10 +312,7 @@ window.TopModal = (function () {
     if (scope && inside(scope, a)) {
       let g = a.parentElement;
       while (g && g !== scope && !g.id) g = g.parentElement;
-      // Index within the SAME usable-filtered list the restore reads: a
-      // hidden or aria-hidden control earlier in the group counted here but
-      // not there, so focus came back one sibling late (#4347).
-      const pool = g ? [...g.querySelectorAll(focusableSel())].filter(usable) : [];
+      const pool = g ? [...g.querySelectorAll(focusableSel())] : [];
       key = { id: a.id || null, group: g && g.id ? g.id : null, i: pool.indexOf(a) };
     }
     rebuild();

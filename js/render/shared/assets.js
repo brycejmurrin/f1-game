@@ -597,16 +597,6 @@ const Assets = (function () {
     return !!(c && (c.saveData || /2g$/.test(c.effectiveType || "")));
   }
 
-  // Phones take the 128 px tier below GRAPHICS: HIGH (#4702, #3110 F7 A); HIGH
-  // lifts them to 256 px (~+1.1 MB). Desktop never takes the low tier here.
-  // GfxQuality is read at CALL time (no load-order edge); absent => stay low.
-  function _phoneBelowHigh() {
-    if (!(_gfx.isMobile || _gfx.mobileTier)) return false;
-    try {
-      return !(typeof GfxQuality !== "undefined" && GfxQuality.current() === "high");
-    } catch (_) { return true; }
-  }
-
   // Load + upload the baked material arrays. Resolves to true only when the
   // arrays are actually live on the GPU; false (never a rejection) otherwise.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
@@ -648,7 +638,7 @@ const Assets = (function () {
     const mats = m.materials;
 
     const wantLow = opts.tier ? opts.tier === "low"
-                              : !!(_phoneBelowHigh() || _lowDataLink());
+                              : !!(_gfx.isMobile || _gfx.mobileTier || _lowDataLink());
     const variant = (wantLow && mats.low) ? mats.low : mats;
     const size = variant.size | 0;
     if (!size || !variant.albedo) { _err = "bad-materials"; _tier = "off"; return false; }
