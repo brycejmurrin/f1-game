@@ -35,9 +35,9 @@ const AppearanceStudio = (function () {
   const PRESET_PRESERVE = ["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits"];
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
-    pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
+    pause: ["lookPause"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
-    hud: ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    hud: ["hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
@@ -164,7 +164,9 @@ const AppearanceStudio = (function () {
   function group(host, title) { const box = node("section", "as-box"); box.appendChild(node("h3", "as-heading", title)); host.appendChild(box); return box; }
   function choice(host, label, key, values) {
     const row = node("div", "as-row"), text = node("span", "as-label", label), controls = node("div", "as-segment");
-    // Stable FIND A SETTING target: the studio is built lazily, after the search descriptor.
+    // Stable search target for Settings › FIND A SETTING.  The studio is
+    // built lazily, so the search descriptor is registered after this DOM
+    // exists rather than pointing at an absent static shell node.
     controls.id = "as-" + key;
     const list = []; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", label);
     for (const [id, name] of values) { const b = button(name, () => { const v = snapshot(); v[key] = id; applySnapshot(v); }); controls.appendChild(b); list.push({ id, b }); }
@@ -260,14 +262,6 @@ const AppearanceStudio = (function () {
     setScene("photo"); sceneChanged(true);
     ui.photoNote.textContent = row.title + " chosen as your menu background.";
   }
-  // #4529: lazy LayoutPresets.syncShape swaps; a rotation drops UNDO (entries are the other shape's, #4919).
-  const shapeNow = () => (typeof document != "undefined" && document.body && document.body.getAttribute("data-shape") == "tall" ? "tall" : "wide");
-  let shapeAt = shapeNow();
-  function orient(was) {
-    undoStack.length = 0; if (ui) ui.undo.disabled = true;
-    const run = () => typeof LayoutPresets !== "undefined" && LayoutPresets.syncShape(was);
-    if (!run() && typeof SettingsNav !== "undefined" && SettingsNav.presets) SettingsNav.presets().then(run);
-  }
   function initUI() {
     if (ui || typeof document === "undefined") return;
     const panel = document.getElementById("pm-panel-appearance"); if (!panel) return;
@@ -322,8 +316,9 @@ const AppearanceStudio = (function () {
     if (typeof MutationObserver !== "undefined") {
       const settings = document.getElementById("pmsettings");
       let openGen = 0;
-      // Defer render + garage preview off the click stack: a synchronous
-      // sceneChanged → previewScene froze the tab before the sheet painted.
+      // Defer render + garage preview off the click stack: sceneChanged →
+      // previewScene used to call stopHome/beginHome synchronously and freeze
+      // the tab before the Appearance sheet could paint.
       const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame
         : (fn) => setTimeout(fn, 0);
       const visible = () => {
@@ -359,13 +354,6 @@ const AppearanceStudio = (function () {
       { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
     ]);
   }
-  try {
-    const sv = store.get("appearanceShapes", null);
-    if (isObject(sv) && sv.split !== false && sv.live && sv.live != shapeAt) Promise.resolve(sv.live).then(orient);
-    if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body)
-      new MutationObserver(() => { const was = shapeAt; shapeAt = shapeNow(); if (was !== shapeAt) orient(was); })
-        .observe(document.body, { attributes: true, attributeFilter: ["data-shape"] });
-  } catch (e) { Log.warn("ui", "orientation: " + e.message); }
   // Same readyState rule as SettingsExport.mount: deferred scripts run at
   // "interactive", after DOMContentLoaded would already have missed a late listen.
   if (typeof document !== "undefined") {
@@ -373,5 +361,5 @@ const AppearanceStudio = (function () {
     else initUI();
   }
   return Object.freeze({ PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, normalizeSnapshot, snapshot, scene, homeCamera, setHomeCamera, effectiveSceneMotion, setScene, onSceneChange,
-    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, shapeNow, attach, setPreviewFrame, notify: say, initUI });
+    applySnapshot, applyPreset, undo, reset, profiles, normalizeProfiles, saveProfile, loadProfile, deleteProfile, attach, setPreviewFrame, notify: say, initUI });
 })();
