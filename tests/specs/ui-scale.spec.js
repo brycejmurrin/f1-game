@@ -557,17 +557,49 @@ test.describe("UI scale", () => {
       expect(settle.anims, `${name}: brand/buttons zoom transitions retire within ${SETTLE_FRAMES} frames `
         + settleDump).toEqual([]);
 
-      const scale = await page.evaluate(() => ({
-        requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
-        brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
-        geometry: getComputedStyle(document.getElementById("menu-buttons")).zoom,
-        raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
-      }));
+      // THE BOX IS THE LAW (#5150, UI contract 2026-11-06 §3 rule 3): the
+      // compact cap (1.25) is the REQUEST, and js/ui/title-layout.js fit()
+      // multiplies it by --tf, the zoom that keeps the whole cluster inside
+      // the overlay's content box with no scroller. Until #5152 this pinned
+      // the cap itself (1.25) and let the column scroll; the first fit read
+      // 0.47125 at 734x343 (one door per row at 200%, CI run 42285504262 on
+      // e144a336) and the three-column rule in css/menu-destinations.css is
+      // what keeps it readable. Contract here: geometry == cap × fit, never
+      // above the cap, never below 0.7 at 200% (200% must not paint smaller
+      // than 100% by more than the fit's own margin), the cluster fits in both
+      // axes, and every destination sits inside the viewport.
+      const scale = await page.evaluate(() => {
+        const menu = document.getElementById("menu-buttons");
+        const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+        const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
+        const off = doors.filter((b) => {
+          const r = b.getBoundingClientRect();
+          return r.top < -1 || r.left < -1 || r.bottom > vh + 1 || r.right > vw + 1;
+        }).map((b) => b.id);
+        return {
+          requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+          brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
+          geometry: getComputedStyle(menu).zoom,
+          fit: parseFloat(menu.style.getPropertyValue("--tf")) || 1,
+          raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
+          scrollY: menu.scrollHeight - menu.clientHeight, scrollX: menu.scrollWidth - menu.clientWidth,
+          doors: doors.length, off,
+        };
+      });
+      const scaleDump = JSON.stringify(scale);
       expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
       expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
-      expect(+scale.geometry, `${name}: compact geometry is capped`).toBeCloseTo(1.25, 2);
-      expect(scale.raceFont * +scale.geometry,
-        `${name}: control text still paints at the requested 200%`).toBeGreaterThanOrEqual(33);
+      expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.fit, 2);
+      expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 + 0.001);
+      expect(+scale.geometry, `${name}: 200% fits the box at no less than 0.7 ${scaleDump}`).toBeGreaterThanOrEqual(0.7);
+      // 33 painted px at the 1.25 cap = 26.4 own px: the 200% request lands in
+      // the cluster's own units (text takes the residual 1.6), the fit scales
+      // the paint uniformly.
+      expect(scale.raceFont, `${name}: control text carries the requested 200% in its own px ${scaleDump}`).toBeGreaterThanOrEqual(26.4);
+      expect(scale.scrollY, `${name}: the fitted cluster has no vertical scroller ${scaleDump}`).toBeLessThanOrEqual(1);
+      expect(scale.scrollX, `${name}: the fitted cluster has no horizontal scroller ${scaleDump}`).toBeLessThanOrEqual(1);
+      expect(scale.doors, `${name}: destinations are measured ${scaleDump}`).toBeGreaterThan(5);
+      expect(scale.off, `${name}: every destination is on screen without scrolling ${scaleDump}`).toEqual([]);
 
       // A real locator click asks Chromium to scroll the control into view. The
       // old nested 2x geometry timed out here in phone portrait even though the
@@ -592,13 +624,17 @@ test.describe("UI scale", () => {
   });
 
   // DESKTOP-SIZED WINDOWS AT 200% NEVER HIT THE 1.25 CAP (that media query is
-  // max-width 899 / max-height 699), so #menu-buttons zooms the full 2x - and
+  // max-width 899 / max-height 699), so #menu-buttons requests the full 2x - and
   // the compact-wide live Home used to zoom its door groups by --ui-scale AGAIN
   // on top (#1238's display:contents leftover): 4x geometry on 1280x742. CAREER's
   // save line and CONTINUE's ran past the viewport's right edge and RACE sat
-  // ~950px down a 742px window. Contract here: one zoom, every door subtitle
-  // inside its door and the viewport, RACE on screen without scrolling, and
-  // the column scrolls (never clips) to its last door.
+  // ~950px down a 742px window. Since #5152 (#5150) the 2x is a REQUEST and the
+  // fit in js/ui/title-layout.js is the law: the 2x column was ~1300px in a
+  // 742px window and fitted at zoom 1.14 (CI run 42285504262 on e144a336);
+  // 1920x1080 has the room and keeps the 2x. Contract here: one zoom
+  // (2 × --tf, never above 2, never below 1 on a desktop window), every door
+  // subtitle inside its door and the viewport, RACE on screen without scrolling,
+  // and the whole column on screen with no scroller.
   test("200% home doors keep subtitles inside the door and RACE on screen on desktop windows", async ({ page }) => {
     const SETTLE_FRAMES = 6;
     for (const viewport of [{ width: 1280, height: 742 }, { width: 1920, height: 1080 }]) {
@@ -627,9 +663,12 @@ test.describe("UI scale", () => {
               .filter((a) => !/mask/.test(a.transitionProperty || ""))   // paint-only (#3606, see the phone test)
               .map((a) => id + ":" + (a.transitionProperty || a.animationName || "?"));
           });
-          const zoom = +getComputedStyle(document.getElementById("menu-buttons")).zoom;
+          const menu = document.getElementById("menu-buttons");
+          const zoom = +getComputedStyle(menu).zoom;
+          const fit = parseFloat(menu.style.getPropertyValue("--tf")) || 1;
           const density = document.body.dataset.density;
-          return { density, anims, zoom, ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2) < 0.001 };
+          // Settled: the zoom is the request times the fit the last frame wrote.
+          return { density, anims, zoom, fit, ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2 * fit) < 0.001 };
         };
         let n = 0, starved = false, s = snap();
         while (!s.ok && n < frames) {
@@ -651,7 +690,9 @@ test.describe("UI scale", () => {
       expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms (starved, not a layout answer) ${dump}`).toBe(false);
       expect(settle.density, `${name}: compact within ${SETTLE_FRAMES} frames ${dump}`).toBe("compact");
       expect(settle.anims, `${name}: zoom transitions retire within ${SETTLE_FRAMES} frames ${dump}`).toEqual([]);
-      expect(settle.zoom, `${name}: uncapped desktop geometry is the requested 2x ${dump}`).toBeCloseTo(2, 2);
+      expect(settle.zoom, `${name}: desktop geometry is the requested 2x times the fit ${dump}`).toBeCloseTo(2 * settle.fit, 2);
+      expect(settle.zoom, `${name}: the fit never grows the request ${dump}`).toBeLessThanOrEqual(2.001);
+      expect(settle.zoom, `${name}: a desktop window never fits the title below 1x ${dump}`).toBeGreaterThanOrEqual(1);
 
       const fit = await page.evaluate(() => {
         const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
@@ -678,20 +719,18 @@ test.describe("UI scale", () => {
         }
         const race = document.getElementById("mb-race").getBoundingClientRect();
         const m = menu.getBoundingClientRect();
-        // The doors below RACE may run past the fold at 2x; the column must
-        // then scroll (not clip) and its last door must come fully on screen.
+        // The doors below RACE used to run past the fold at 2x and the column
+        // scrolled to them; the fit (#5150) now keeps the whole column inside
+        // the box, so the last door is on screen with NOTHING scrolled.
         const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
         const last = doors.reduce((a, b) => (b.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? b : a));
         const overflowY = getComputedStyle(menu).overflowY;
         const overflows = menu.scrollHeight > menu.clientHeight + 1;
-        const top0 = menu.scrollTop;
-        menu.scrollTop = menu.scrollHeight;
         const lr = last.getBoundingClientRect();
-        menu.scrollTop = top0;
         const reach = {
-          last: last.id, overflowY, overflows,
-          lastAfterScroll: [lr.top, lr.bottom].map((v) => +v.toFixed(1)),
-          ok: (!overflows || /^(auto|scroll)$/.test(overflowY)) && lr.bottom <= Math.min(vh, m.bottom) + 1 && lr.top >= -1,
+          last: last.id, overflowY, overflows, scrollTop: menu.scrollTop,
+          lastRect: [lr.top, lr.bottom].map((v) => +v.toFixed(1)),
+          ok: !overflows && menu.scrollTop === 0 && lr.bottom <= Math.min(vh, m.bottom) + 1 && lr.top >= -1,
         };
         return {
           doubled, over, subs, reach,
@@ -706,7 +745,7 @@ test.describe("UI scale", () => {
       expect(fit.subs, `${name}: the save-line subtitles are measured ${fitDump}`).toBeGreaterThan(0);
       expect(fit.over, `${name}: every door subtitle ends inside its door and the viewport ${fitDump}`).toEqual([]);
       expect(fit.raceInView, `${name}: RACE is on screen without scrolling ${fitDump}`).toBe(true);
-      expect(fit.reach.ok, `${name}: the door column scrolls to its last door ${fitDump}`).toBe(true);
+      expect(fit.reach.ok, `${name}: the whole door column is on screen with no scroller ${fitDump}`).toBe(true);
     }
   });
 

@@ -19057,12 +19057,19 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
+      "down": [
+        "tests/specs/menu-keyboard.spec.js"
+      ],
       "enter": [
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
+      ],
+      "move": [
+        "tests/specs/ui-scale.spec.js",
+        "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "normalize": [
         "tests/unit/title-layout.test.mjs"
@@ -19071,6 +19078,7 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "reset": [
+        "tests/specs/ui-scale.spec.js",
         "tests/unit/title-layout.test.mjs"
       ],
       "resetShape": [

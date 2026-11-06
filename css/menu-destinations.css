@@ -148,13 +148,20 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 }
 :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
 /* The six Play/Garage tiles on three tracks: two whole rows, never 4+2 with a
-   hole (design pass #1). Tracks grow with enlarged text; at 200% each destination receives its own row. */
+   hole (design pass #1). THE TRACKS ARE A SHARE OF THE CLUSTER'S OWN WIDTH AND
+   NOTHING ELSE (#5150, UI contract §3 rule 2: zoom scales type inside a fitted
+   box, it never decides the box). This was `30% * --ui-compact-text²`, one
+   destination per row at UI SIZE 200 %: a ~10-row column that the never-scroll
+   fit in js/ui/title-layout.js could only make fit by shrinking the cluster to
+   zoom 0.47 at 734x343 (CI run 42285504262 on e144a336), so 200 % painted the
+   doors SMALLER than 100 %. Three tracks at every size keep the cluster short
+   and the fit near 1; the enlarged labels wrap inside their doors instead. */
 @media (min-width: 700px) and (max-height: 500px) {
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay {
     grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
   }
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(30% * var(--ui-compact-text, 1) * var(--ui-compact-text, 1))), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(30%, 1fr));
     grid-template-rows: none; grid-auto-rows: max-content;
   }
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-garage) { display: contents; }
