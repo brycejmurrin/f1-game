@@ -39,10 +39,6 @@
      them read as one run-on block, which is why the disclaimer looked like a
      caption on the CAREER button rather than the last line of the small print. */
   gap: clamp(20px, 4vh, 40px);
-  /* --ov-pl / --ov-pr MIRROR THE INLINE PADDING (#5134): a zoomed grid item (TITLE LAYOUT's button cluster) cannot
-     read "100%" of this box as a length, so it rebuilds the content width from 100svw and these two tokens. Every
-     rule that changes #overlay's inline padding sets them beside it (css/menu-destinations.css, >= 1680 px). */
-  --ov-pl: var(--safe-l); --ov-pr: var(--safe-r);
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   /* CENTRED UNTIL IT DOES NOT FIT, then top-aligned and scrollable.
      `align-content: center` in a grid that overflows pushes content past BOTH

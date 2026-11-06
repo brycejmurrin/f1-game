@@ -107,7 +107,7 @@ others.
   grants every op, browser ops included.
 - **Permission rules: nothing lost.** Every project server is allowed by
   wildcard (`mcp__apex-tools__*` and the like in `.claude/settings.json`;
-  docs/archive/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md). No per-tool allow rule
+  docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md). No per-tool allow rule
   exists to lose. Codex's per-tool `tools.<tool>.approval_mode` and
   `enabled_tools` would collapse to all-or-nothing.
 - **Client-side schema validation and annotations.** The model sees
