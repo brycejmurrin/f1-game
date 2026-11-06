@@ -73,9 +73,7 @@ window.CamModes = (function () {
       const camId = CAM_MODES[G.camMode].id;
       document.body.classList.toggle("cockpit-cam", camId === "cockpit"
         && (typeof CockpitOpts === "undefined" || CockpitOpts.wheelHasScreen()));
-      // The visor follows the camera ON SCREEN: the start-light grid cuts (G.dbgCam.startLights, js/race/start-lights.js)
-      // are broadcast shots, not the player's helmet (#4527).
-      document.body.toggleAttribute("data-helmet-cam", camId === "helmet" && !(G.dbgCam && G.dbgCam.startLights));
+      document.body.toggleAttribute("data-helmet-cam", camId === "helmet");
       // MOVE & SIZE swaps its cockpit / other layout on the SAME frame: waiting
       // for the HUD's 10 Hz tick (js/ui/hud.js) left one tick of chips at the
       // cockpit offsets over the touch buttons after leaving the cockpit.
@@ -168,8 +166,6 @@ window.CamModes = (function () {
     refreshCamBtn();
     // A WHEEL change mid-race flips whether the HUD shows gear and speed.
     if (typeof CockpitOpts !== "undefined") CockpitOpts.onWheel(refreshCamBtn);
-    // A broadcast cut over the player's camera (the start-light grid shots) re-keys the visor (#4527).
-    if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("apex:cam-onscreen", refreshCamBtn);
     // The SAVED camera's mix, at boot: setCamMode is the only other caller,
     // so a session that starts in the cockpit heard the chase mix until the
     // first camera change.

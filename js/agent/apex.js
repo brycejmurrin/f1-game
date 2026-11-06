@@ -1493,9 +1493,7 @@ const api = {
     if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: null };
     const st = gfx.gpuTimer(on);
     const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
-    // byPass: per-pass ms ({main,mirror,env,shadow,post}) only with ?gpuTimer=1 on TLX with a real timestamp-query; else null.
-    const byPass = gfx.gpuByPass ? gfx.gpuByPass() : null, adapter = gfx.gpuAdapter ? gfx.gpuAdapter() : null;
-    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null, byPass, adapter };
+    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
   // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; default ON on localhost/file: (not under webdriver), OFF on the deployed site; ?inspector=0|1 overrides.
   // inspector(true|false) toggles, inspector() reads { on, supported, reason, loading }. GPU timings need WebGPU

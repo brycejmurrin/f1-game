@@ -1,1 +1,0 @@
-Fixed: a red flag now repairs damage and gives every car a free tyre change (which counts toward the two-compound rule), and a red that is never resumed classifies on the order of the lap before the signal lap.

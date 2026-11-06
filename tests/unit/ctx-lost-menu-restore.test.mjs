@@ -17,8 +17,8 @@ test("quitToMenuAfterCtxLost runs menu + preview recovery before the notice", ()
   assert.ok(fn.includes("restoreMenuAfterGraphicsReset()"));
   assert.ok(fn.includes("resetSetupCam()"));
   assert.ok(fn.includes("spMeshBust()"));
-  assert.ok(fn.includes("showCtxLostNotice({ force: true })"));
-  assert.ok(fn.indexOf("restoreMenuAfterGraphicsReset()") < fn.indexOf("showCtxLostNotice({ force: true })"));
+  assert.ok(fn.includes("showCtxLostNotice()"));
+  assert.ok(fn.indexOf("restoreMenuAfterGraphicsReset()") < fn.indexOf("showCtxLostNotice()"));
 });
 
 test("TitleMenu.repairDestinations remounts orphaned play doors", () => {

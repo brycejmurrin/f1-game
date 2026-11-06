@@ -242,13 +242,3 @@ test("GPU TEST boost phase: the session's first deploy, its worst frame and the 
   assert.deepEqual(calls, [true, false], "no other phase touches BOOST");
 });
 
-
-test("gpu-test-run passStats: per-pass percentiles from resolved samples, null when none (#4784)", () => {
-  const G = load();
-  assert.equal(G.passStats({}), null);
-  assert.equal(G.passStats(null), null);
-  assert.equal(G.passStats({ mirror: [-1] }), null);
-  const s = G.passStats({ main: [3, 1, 2], mirror: [0.5] });
-  assert.deepEqual(J(s.main), { n: 3, p50: 2, p95: 3 });
-  assert.deepEqual(J(s.mirror), { n: 1, p50: 0.5, p95: 0.5 });
-});

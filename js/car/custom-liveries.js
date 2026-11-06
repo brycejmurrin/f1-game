@@ -118,7 +118,6 @@ const CustomLiveries = (function () {
       // identity is the key (identity-keyed memos downstream, CarWheels.tints, missed on every call).
       if (livDraftOverride && livDraftOverride.teamId === team.id) {
         if (_draftResolved.src !== livDraftOverride) _draftResolved = { src: livDraftOverride, val: pickLivery(migrateLivery(livDraftOverride.liv)) };
-        _draftResolved.val.draft = true;   // garage/scene.js keeps the bay geometry on the saved paint while this is live
         return _draftResolved.val;
       }
       const owner = identityOwner(team.id), identityRev = owner ? owner.identityRevision() : 0;

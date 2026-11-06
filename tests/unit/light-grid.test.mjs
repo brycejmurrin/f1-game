@@ -287,7 +287,7 @@ test("TLX k()/gk() keys are TUNE_DEFS ids (no silent fallbacks)", () => {
 
 // Knobs a backend honestly lacks. Each entry must be admitted in the knob's own help
 // text, and goes stale (test fails) the moment the backend wires the uniform.
-const BACKEND_GAPS = {};
+const BACKEND_GAPS = { wgx: { windSpeed: /WGX has no per-vertex sway/ } };
 
 test("every TUNE_DEFS uniform is wired in executable code on GLX, WGX, and TLX", () => {
   // A new `u:` knob that ships on GLX only is the project's most persistent

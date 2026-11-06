@@ -64,14 +64,9 @@ function arrivalContext(authored = true) {
     vm.runInContext(source, ctx, { filename: absSrc('js/data/garage-entrance-motion.js') });
     vm.runInContext(moduleSource, ctx, { filename: absSrc('js/garage/entrance-motion.js') });
   }
-  if (!authored) vm.runInContext('var GarageEntranceMotion;', ctx);
   vm.runInContext(arrivalSource + '\n// isolated arrival scenario ' + (++arrivalContextId), ctx, { filename: absSrc('js/garage/arrival.js') });
   return { ctx, arrival: vm.runInContext('GarageArrival', ctx) };
 }
-// A cold arrival evaluates `typeof GarageEntranceMotion` before the module lands; under NODE_V8_COVERAGE that
-// miss stays cached for a lexical (const) global declared later. A `var` global is a property lookup, so a
-// cold context pre-declares it and the late module is evaluated with `var` (same code otherwise).
-const lateModuleSource = moduleSource.replace(/^const GarageEntranceMotion\b/m, 'var GarageEntranceMotion');
 function xyz(p) { return [p.x, p.z, p.yaw]; }
 test('real arrival delegates entrance transforms to Blender data and preserves home and exit poses', () => {
   const { ctx, arrival } = arrivalContext(), legacy = arrivalContext(false).arrival;
@@ -99,7 +94,7 @@ test('late data cannot switch an active cold arrival, and explicit recovery can 
   const run = arrival.create($, () => false, () => config, () => 0);
   run.start();
   vm.runInContext(source, ctx, { filename: absSrc('js/data/garage-entrance-motion.js') });
-  vm.runInContext(lateModuleSource, ctx, { filename: absSrc('js/garage/entrance-motion.js') });
+  vm.runInContext(moduleSource, ctx, { filename: absSrc('js/garage/entrance-motion.js') });
   let pose;
   for (let i = 0; i < 30; i++) pose = run.step(.1);
   assert.deepEqual(xyz(pose), xyz(arrival.pose(pose.seconds, { ...config, _entranceAuthored: false })), 'cold run retains procedural ownership');
@@ -129,7 +124,7 @@ test('direct preview pose latches its source before a lazy asset load and a fres
   const config = arrival.settings({ angle: 'left', enterCrew: 'current', sway: 0 });
   arrival.pose(0, config);
   vm.runInContext(source, ctx, { filename: absSrc('js/data/garage-entrance-motion.js') });
-  vm.runInContext(lateModuleSource, ctx, { filename: absSrc('js/garage/entrance-motion.js') });
+  vm.runInContext(moduleSource, ctx, { filename: absSrc('js/garage/entrance-motion.js') });
   const legacy = arrivalContext(false).arrival;
   const continued = arrival.pose(5, config), baseline = legacy.pose(5, config);
   assert.deepEqual(xyz(continued), xyz(baseline), 'in-flight preview retains the path selected at its opening');

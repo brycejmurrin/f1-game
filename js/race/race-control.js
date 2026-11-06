@@ -114,17 +114,6 @@ const RaceControl = (function () {
   // up to 16.7 ms per lap otherwise, on the leaderboard and between two cars
   // crossing in the same step. A caller that did not advance the clock this
   // step (IncidentSim's takeover) omits it and gets the step-quantised time.
-  // B5.14.2: lapLedger[n] = the cars that crossed into lap n, first first (a red never resumed classifies on the
-  // order of the lap before the signal lap). A reverse gives its crossing back. Cleared per race / trimmed by a restart.
-  const lapLedger = [];
-  const trimLedger = (n) => { lapLedger.length = Math.min(lapLedger.length, n); };
-  // The running cars in the order of the lap BEFORE the signal lap (the signal lap = the furthest lap any runner is on):
-  // those that crossed into it in crossing order, the rest (lapped) after, on the order they came in.
-  function penultimateOrder(run) {
-    const led = lapLedger[Math.max(0, ...run.map((c) => c.lap || 0)) - 1];
-    if (led && led.length) run.sort((a, b) => { const ia = led.indexOf(a), ib = led.indexOf(b); return (ia < 0) - (ib < 0) || (ia < 0 ? 0 : ia - ib); });
-    return run;
-  }
   function lineTransition(c, oldS, newS, ds, total, lapsTarget, cars, raceT, dt) {
     if (!c || c.finished || !(total > 0)) return null;
     if (ds > 0 && oldS > total * 0.5 && newS < total * 0.5) {
@@ -140,7 +129,6 @@ const RaceControl = (function () {
       const recross = !!c._recross;
       c._recross = false;
       c.lap = (c.lap || 0) + 1;
-      (lapLedger[c.lap] || (lapLedger[c.lap] = [])).push(c);
       // A red-flag restart rewinds the classification lap but burns another
       // physical lap. Backward line crossings do not refund fuel either.
       c.fuelLap = Math.max(c.fuelLap || 0, c.lap + (c.fuelRestartLaps || 0));
@@ -155,7 +143,6 @@ const RaceControl = (function () {
     }
     if (ds < 0 && oldS < total * 0.5 && newS > total * 0.5) {
       if (!(c.lap > 0)) return { direction: -1, changed: false, lapDone: null, flagged: false };
-      const lo = lapLedger[c.lap], at = lo ? lo.indexOf(c) : -1; if (at >= 0) lo.splice(at, 1);
       c.lap--;
       c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
       c._recross = true;
@@ -771,6 +758,6 @@ const RaceControl = (function () {
 
   // HOLD_M / SC_* / POST_FINISH_CAP stay module-local: holdCap, scQueueFrac and
   // finishDelay own the thresholds; no external caller reads the constants.
-  return { lapLedger, trimLedger, penultimateOrder, create, finishDelay, finishPending, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap };
+  return { create, finishDelay, finishPending, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap };
 })();
 Object.freeze(RaceControl);

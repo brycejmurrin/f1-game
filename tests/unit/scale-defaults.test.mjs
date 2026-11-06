@@ -128,7 +128,7 @@ test("--hud-scale carries no blanket touch bump, and the old size stays reachabl
 // UiScale.create(G) run for real in node:vm over stub elements: the slider
 // writes --hud-panel-a on <html> only once moved, clamps to 20-100, and its
 // revert clears it — the same contract as BUTTON OPACITY beside it.
-function bootScale(stored = {}, extra = {}) {
+function bootScale(stored = {}) {
   const rootStyle = new Map();
   const els = new Map();
   const el = (id) => {
@@ -154,11 +154,9 @@ function bootScale(stored = {}, extra = {}) {
     SettingRow: { wire() {}, paint() {}, labels: (v) => v.map((x) => [x, x]) },
     PerfGov: { setAutoRes() {} },
     requestAnimationFrame: () => 0,
-    ...extra.globals,
     window: { matchMedia: () => ({ matches: false }) },
-    document: { ...extra.doc, documentElement: { style: {
+    document: { documentElement: { style: {
       setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k),
-      getPropertyValue: (k) => rootStyle.get(k) || "",
     } } },
   });
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
@@ -255,20 +253,4 @@ test("UiScale.defaultResMode() answers from the primary pointer, without create(
   api.applyBtnScale();
   assert.equal(stored.hudBtnScale, 145);
   assert.equal(el("pm-btnscale").value, "145");
-});
-
-test("BUTTON SIZE readout: the \"fits N%\" suffix is race-only; leaving a race restores the bare label (#4772)", () => {
-  const cls = new Set(["in-race"]), observers = [], frames = [];
-  const { el, rootStyle } = bootScale({ hudBtnScale: 245 }, {
-    globals: { requestAnimationFrame: (f) => { frames.push(f); return frames.length; },
-      MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe() {} } },
-    doc: { body: { classList: { contains: (c) => cls.has(c) } } },
-  });
-  const poke = () => { observers.forEach((o) => o.cb()); frames.splice(0).forEach((f) => f()); };
-  rootStyle.set("--hud-z-dock", "1.18");
-  poke();
-  assert.match(el("pm-btnscale-v").textContent, /fits 118%/, "in a race the capped fit is named");
-  cls.delete("in-race");
-  poke();
-  assert.equal(el("pm-btnscale-v").textContent, "245%", "after the race the last cap is not shown");
 });

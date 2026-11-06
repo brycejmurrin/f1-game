@@ -305,10 +305,6 @@ export const RULES = [
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
-  [/^vendor\/three-/, ["gfx", "hooks"], "vendored three.js: the TLX backend and its probe specs are the only consumers"],
-  [/^vendor\/rapier-/, ["collisions", "game-vm"], "vendored Rapier: the collision/incident sim"],
-  [/^vendor\/jsqr-/, ["net-unit"], "vendored QR decoder (phone-as-controller scan)"],
-  [/^vendor\/gpu-capture\//, ["hooks"], "vendored GPU capture toggle; gpu-capture.spec.js"],
   [/^vendor\/trystero-[^/]+\//, ["net-unit"], "vendored action framing, payload bounds and peer cleanup — net-trystero-api.test.mjs"],
   // Same-named suite: real-race-script.test.mjs lives in state-unit. The
   // directory rule below names hooks and lifecycle-unit, which do not run it.

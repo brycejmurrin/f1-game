@@ -104,19 +104,20 @@ test("red-flag grids and their first crossing preserve physical tyre age", async
       c.lap = 6; c.fuelLap = 6; c.prog = 5 * L + 200; c.s = 200;
       c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;
     }
-    const p = G.player;
-    assert.equal(G.tyres.lapsOn(p), 4);
+    const p = G.player, age = G.tyres.lapsOn(p);
+    assert.equal(age, 4);
     for (let restart = 0; restart < 2; restart++) {
       game.apex.go();
+      const lifeBefore = G.tyres.lapsLeft(p), wearBefore = p.tyreWear;
       assert.equal(game.apex.redFlag().state, "count");
-      // B5.14.4 (vii): the red gives every car a fresh set (#4834), so the age restarts at 0 ...
-      for (const c of G.cars) assert.equal(G.tyres.lapsOn(c), 0);
-      assert.equal(p.tyreWear, 0);
+      for (const c of G.cars) assert.equal(G.tyres.lapsOn(c), age);
+      assert.equal(G.tyres.lapsLeft(p), lifeBefore);
+      assert.equal(p.tyreWear, wearBefore);
       game.apex.go(); game.apex.setInput({ throttle: true, steer: 0 });
       for (let tick = 0; tick < 600 && p.s > L / 2; tick++) game.step(1);
       game.apex.clearInput();
       assert.ok(p.s < L / 2, "actually crossed the restart line");
-      assert.equal(G.tyres.lapsOn(p), 0, "first crossing is only metres driven");
+      assert.equal(G.tyres.lapsOn(p), age, "first crossing is only metres driven");
     }
     G.tyres.fit(p, p.tyre);
     assert.equal(G.tyres.lapsOn(p), 0);

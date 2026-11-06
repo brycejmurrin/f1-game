@@ -1236,28 +1236,18 @@ function roomKeys(team, liv, info, ctx) {
   _rkKeys = roomKeyStrings(team, liv, info, ctx);
   return _rkKeys;
 }
-// While the paint editor holds an unsaved draft (resolveLivery marks it `draft`), the bay GEOMETRY stays keyed on the
-// last SAVED livery of that team: a colour drag repaints only the live/dress atlases, and SAVE or CANCEL (the next
-// non-draft frame) is the one rebuild. A draft seen before any saved frame builds from itself.
-let _savedLiv = null, _savedTeam = null;
-function geomLiv(team, liv) {
-  if (!liv || !liv.draft) { _savedLiv = liv; _savedTeam = team && team.id; return liv; }
-  return _savedLiv && _savedTeam === (team && team.id) ? _savedLiv : liv;
-}
 function roomKeyStrings(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
   const paint = `${kc(liv && liv.c1)}/${kc(liv && (liv.accent || liv.stripe || liv.c2))}/${kc(liv && liv.c2)}`;
-  const gl = geomLiv(team, liv);
-  const gpaint = gl === liv ? paint : `${kc(gl && gl.c1)}/${kc(gl && (gl.accent || gl.stripe || gl.c2))}/${kc(gl && gl.c2)}`;
   const marks = `${kc(liv && liv.logo)}/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`;
   const nums = `${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`;
   const ck = ctxKey(ctx);
   // Shell, floor, LEDs, props and the career desks. Not the crest, the sponsor
   // banners or the pit-board numbers — those are atlas texels.
-  const geom = `${team && team.id}|${(team && team.legend) || ""}|${gpaint}`
+  const geom = `${team && team.id}|${(team && team.legend) || ""}|${paint}`
                + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}|${GaragePrims.lookId()}`;
   const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
@@ -1308,7 +1298,6 @@ function rebuild(team, liv, info, ctx) {
       (dressTex || dressFail >= 3 || now < dressRetryAt ||
        !_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined")) return;
   if (geom !== geomKey || !shellMesh) {
-    const gl = geomLiv(team, liv);
     // A new team/paint/context is a fresh texture; old failed uploads must
     // not permanently remove this team's wall graphics or moving trace.
     dressFail = 0; dressRetryAt = 0; traceFail = 0;
@@ -1322,7 +1311,7 @@ function rebuild(team, liv, info, ctx) {
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
     const look = GaragePrims.look();   // design-preview room look; null = shipped
     const shell = acc();
-    buildShell(shell, gl, look);
+    buildShell(shell, liv, look);
     shellMesh = _gfx.createMesh(shell);
     // Roof geometry and wall-decal UVs never depend on paint, team or context.
     // Keep their GPU handles until release(), including across colour drags.
@@ -1335,13 +1324,13 @@ function rebuild(team, liv, info, ctx) {
     }
     const led = {};
     for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
-    buildLed(led, gl);
-    if (look) GarageDress.lookLed(led, gl, look);
+    buildLed(led, liv);
+    if (look) GarageDress.lookLed(led, liv, look);
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
-    buildBayFloor(flr, gl, look);
-    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, gl, !!(ctx && ctx.night));
+    buildBayFloor(flr, liv, look);
+    const fallback = acc(); buildApron(fallback); buildPitLane(fallback, liv, !!(ctx && ctx.night));
     exteriorFallbackMesh = _gfx.createMesh(fallback);
     // The clear colour beyond the apron rim follows the hour outside.
     const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
@@ -1350,10 +1339,10 @@ function rebuild(team, liv, info, ctx) {
     floorSrc = flr;
     const g = {};
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
-    buildProps(g, gl);
-    GarageEquipment.build(g, gl, ctx);
-    GarageExperience.buildFacility(g, gl, ctx);
-    if (look) GarageDress.lookProps(g, gl, look);
+    buildProps(g, liv);
+    GarageEquipment.build(g, liv, ctx);
+    GarageExperience.buildFacility(g, liv, ctx);
+    if (look) GarageDress.lookProps(g, liv, look);
     for (let i = 0; i < SIDES.length; i++)
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     // A new team or paint: the "what changed" marker on the spec board starts

@@ -156,21 +156,6 @@ test("a claimed hang reloads once; the reloaded tab binds GLX and keeps the hang
   assert.equal(ls.get("apex26.gfxBackendProbe"), "three", "the next cold start strikes the hang, as for an unclaimed one");
   assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick is untouched");
 });
-test("a claimed refusal reloads once, disarms the canary, and the next cold boot takes no strike (#4817)", async () => {
-  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
-  let reloads = 0;
-  const h1 = boot({ ls, ss, ownerProtocol: true, onReload: () => reloads++, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgpu"); return null; } });
-  assert.equal(await h1.rb.start(), null);
-  assert.equal(reloads, 1);
-  assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a refusal is a live tab: canary disarmed");
-  const h2 = boot({ ls, ss, gfxCreate: async () => { throw new Error("the reloaded tab must not claim again"); } });
-  assert.equal((await h2.rb.start()).bound, false);
-  assert.equal(ls.has("apex26.gfxBackendProbe"), false);
-  const h3 = boot({ ls, ss });
-  await h3.rb.start();
-  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "no strike on the next cold boot");
-  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick survives");
-});
 test("a second claimed hang does NOT reload: the latch is the only way back in", async () => {
   // The reloaded tab cannot hang again: it consumed the latch and never hands the canvas over
   // (asserted above). What is left is a hang whose latch cannot stick — storage that drops the

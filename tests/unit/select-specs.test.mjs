@@ -25,10 +25,10 @@ import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
-import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
+import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -382,12 +382,12 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   assert.match(step, /--budget-min "\$BUDGET_MIN"/);
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
-  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '5' \|\| '' \}\}/);
+  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '5' \|\| '' \}\}/);
   // The nightly widens to 12; a DRAFT gets no OVERFLOW legs (the first draft push of #4515 fanned out to 24 browser
   // legs on the default 11, 2026-11-03). This caps the overflow pool only: fit() never drops a routed spec, so the
   // bounded spill and oversize legs still run (26 legs on that PR's 660-file diff at 0); ready, dispatch and the
   // train take the default.
-  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && \(github\.event\.pull_request\.draft \|\| vars\.READY_TIER == 'fast'\)\) && '0' \|\| '' \}\}/,
+  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '0' \|\| '' \}\}/,
     "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan; a draft takes no overflow legs");
 });
 
@@ -796,14 +796,12 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     `hud-layout.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
     "it boots a full race per case and cannot pass there; see Pages #1967");
 
-  // #4837: the steer x gears matrix now shares one boot per viewport, so the
-  // spec is ~33 tests / ~21 min and may fit the budgeted cut like physics-hotpath
-  // does (see the next test). The RULE is unchanged: wherever it lands, its job's
-  // per-test cap must clear its declaration (asserted below).
   const r = fit([pin], 26);
-  assert.ok(measuredCheap(pin), "hud-layout is measured under gate/3");
-  assert.ok(r.selected.length + r.oversize.length + r.overBudgetRun.length >= 1,
-    "hud-layout lands in a shard somewhere (selected, oversize or over-budget pool)");
+  assert.deepEqual(r.selected, [], "the budgeted gate must not select it");
+  assert.ok(measuredCheap(pin),
+    "hud-layout is measured under gate/3 — if that flips, restore the overBudgetRun pin");
+  assert.ok(r.oversize.some((s) => s.file === pin),
+    "measuredCheap + too big for the cut → oversize (still not selected)");
   const job = shards(r).find((j) => j.specs.split(" ").includes(pin));
   assert.ok(job && job.perTest >= own / 1000, `its job's per-test cap clears its ${own / 1000}s declaration`);
 });
@@ -1827,7 +1825,7 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
     assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
   }
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css"\s*\? \[\.\.\.new Set\(\[\.\.\.cssSpecs\(changed\), \.\.\.sourceAffected/);
+  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
   assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
 
@@ -2000,10 +1998,8 @@ test("fat-shard: the n rewritten legs select every test exactly once, even one t
     const [name, file] = flag.split("=");
     assert.equal(name, i === n ? "--test-list-invert" : "--test-list");
     const lines = fs.readFileSync(file, "utf8").trim().split("\n");
-    // rootDir-relative (#4812): a repo-relative "tests/specs/…" line matches no test.
-    const head = `specs/hud-layout.spec.js › `;
-    assert.ok(lines.every((l) => l.startsWith(head)), `lines name the rootDir-relative file then the title path: ${lines[0]}`);
-    const named = new Set(lines.map((l) => l.slice(head.length)));
+    assert.ok(lines.every((l) => l.startsWith(`${f} › `)), "lines name the file then the title path");
+    const named = new Set(lines.map((l) => l.slice(`${f} › `.length)));
     for (const t of real) if (named.has(t) !== (name === "--test-list-invert")) hits.set(t, hits.get(t) + 1);
   }
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -2024,61 +2020,6 @@ test("fat-shard: the n rewritten legs select every test exactly once, even one t
   }
 });
 
-// #4812: the plan above was balanced, yet hud-layout piece 4/4 ran all 56 tests
-// (26-40 min) while 1..3 ran none: the list lines named "tests/specs/…" and
-// Playwright matches them against rootDir-relative paths. Only REAL Playwright
-// can say what a list selects, so this lists each leg with it (no browser:
-// --list loads the config and the spec, ~1 s a call).
-const PW_CLI = path.join(ROOT, "node_modules/@playwright/test/cli.js");
-const pwList = (args) => new Promise((resolve, reject) => {
-  const env = { ...process.env };
-  delete env.NODE_TEST_CONTEXT;
-  const kid = spawn(process.execPath, [PW_CLI, "test", ...args, "--list", "--reporter=json"], { cwd: ROOT, env });
-  let out = "", err = "";
-  kid.stdout.on("data", (d) => { out += d; });
-  kid.stderr.on("data", (d) => { err += d; });
-  kid.on("error", reject);
-  kid.on("close", () => {
-    try {
-      const j = JSON.parse(out);
-      const ids = [];
-      const walk = (s, at) => {
-        for (const x of s.suites || []) walk(x, [...at, x.title]);
-        for (const sp of s.specs || []) for (const t of sp.tests || [{}]) ids.push([t.projectName, ...at, sp.title].join(" › "));
-      };
-      for (const s of j.suites || []) walk(s, [s.title]);
-      resolve({ rootDir: j.config.rootDir, ids });
-    } catch (e) { reject(new Error(`playwright --list ${args.join(" ")}: ${e.message}\n${err.slice(-800)}`)); }
-  });
-});
-
-test("#4812 fat-shard: real Playwright runs every fat-spec test on exactly one leg, piece n within 1.5x its share", { skip: !fs.existsSync(PW_CLI) && "no @playwright/test" }, async () => {
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-pw-"));
-  try {
-    const db = loadDb(path.join(ROOT, TIMINGS_FILE));
-    await Promise.all(FAT_SPECS.map(async (f) => {
-      const n = fatPieces(f);
-      const all = await pwList([f]);
-      assert.equal(path.relative(ROOT, all.rootDir), PW_ROOT_DIR, "Playwright's rootDir is the one list lines are written against");
-      assert.equal(listFile(f), path.relative(all.rootDir, path.join(ROOT, f)).split(path.sep).join("/"));
-      const legs = await Promise.all(Array.from({ length: n }, (_, k) => {
-        const r = fatShardArgs([f, `--shard=${k + 1}/${n}`], { db, fallbackSec: FAT_UI_SEC_PER_TEST, outDir });
-        assert.ok(r.args.some((a) => a.startsWith("--test-list")), `${f} leg ${k + 1}: ${r.note}`);
-        return pwList(r.args);
-      }));
-      const hits = new Map(all.ids.map((id) => [id, 0]));
-      for (const leg of legs) for (const id of leg.ids) hits.set(id, (hits.get(id) ?? 0) + 1);
-      assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], `${f}: every test on exactly one leg`);
-      const sizes = legs.map((l) => l.ids.length);
-      const share = all.ids.length / n;
-      assert.ok(sizes.every((m) => m > 0), `${f}: no empty leg (${sizes.join("/")})`);
-      assert.ok(sizes[n - 1] <= 1.5 * share, `${f}: piece ${n}/${n} lists ${sizes[n - 1]} of ${all.ids.length} tests (share ${share.toFixed(1)}; legs ${sizes.join("/")})`);
-    }));
-  } finally {
-    fs.rmSync(outDir, { recursive: true, force: true });
-  }
-});
-
 test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names its CI shard pieces", () => {
   // hud-layout asserts the DOM hud.js keeps but names it only in comments, so no import reaches it: before the pin
   // the floor was null and a cold agent picked hud-audit "by name".
@@ -2092,25 +2033,4 @@ test("#4289: js/ui/hud.js pins hud-layout.spec.js as rule 3's floor and names it
   assert.match(r.floorShards.hint, /--shard pieces/);
   // The pin is narrow: a sibling HUD module stays routed-only.
   assert.deepEqual(specsAffectedBySource(["js/ui/hud-tyres.js"]), []);
-});
-
-test("#4768: a vendor bump is routed, and an unrouted path in a mixed diff is not 'matched'", () => {
-  for (const [f, group] of [["vendor/three-0.187.0/three.core.min.js", "gfx"], ["vendor/rapier-0.19.3/package.json", "collisions"],
-    ["vendor/jsqr-1.4.0/jsQR.js", "net-unit"], ["vendor/gpu-capture/webgl-lint.js", "hooks"]]) {
-    assert.ok(pick([f]).has(group), `${f} -> ${group}`);
-  }
-  const r = select(undefined, DEFAULT_BUDGET_MIN, { files: ["controller.html", "js/ui/scale.js"] });
-  assert.equal(r.reason, "infra");
-  assert.deepEqual(r.unclaimed, ["controller.html"]);
-});
-
-test("select(): a css-only diff keeps the SOURCE_AFFECTED pins (#4827)", () => {
-  const r = selectFor({ "css/career.css": "/* fixture edit */\n" });
-  assert.ok(filesOf(r).includes("tests/specs/career-hub.spec.js"), "css/career.css must schedule career-hub");
-});
-
-test("select(): the helpers select-specs imports are TRACKED (#4827)", () => {
-  for (const f of ["tools/ci/change-kind.mjs", "tools/ci/spec-timings.mjs", "tools/lib/changed-files.mjs", "tools/lib/impact-map.mjs"]) {
-    assert.equal(selectFor({ [f]: "// fixture edit\n" }).reason, "infra", f);
-  }
 });

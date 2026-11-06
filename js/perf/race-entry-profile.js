@@ -23,10 +23,7 @@ const RaceEntryProfile = (() => {
   let lapT0 = 0;
   let winT0 = 0, winT1 = 0;
   let observer = null;
-  let loafObserver = null;
-  let loafs = [];
   let supported = false;
-  let loafSupported = null;   // null = no long-animation-frame (Chrome 123+ only)
   let armed = false;
   let sawWarming = false;
   let sawReady = false;
@@ -109,47 +106,7 @@ const RaceEntryProfile = (() => {
     }
   }
 
-  // Long animation frames (#4777): attribution is real only at race ENTRY; in-race
-  // entries name js/xr/xr-boot.js, which owns the rAF callback.
-  function onLoaf(list) {
-    if (!armed) return;
-    for (const e of list.getEntries()) {
-      if (loafs.length >= MAX_TASKS) break;
-      const start = +e.startTime;
-      if (start + e.duration < winT0) continue;
-      const scripts = [];
-      for (const sc of e.scripts || []) {
-        scripts.push({ url: String(sc.sourceURL || ""), ms: +(+sc.duration).toFixed(2) });
-      }
-      loafs.push({
-        start: +start.toFixed(2),
-        ms: +e.duration.toFixed(2),
-        blockMs: +(+e.blockingDuration || 0).toFixed(2),
-        scripts,
-      });
-    }
-  }
-
-  function armLoaf() {
-    loafSupported = null;
-    try {
-      const types = typeof PerformanceObserver === "function" && PerformanceObserver.supportedEntryTypes;
-      if (!types || !types.indexOf || types.indexOf("long-animation-frame") < 0) return;
-      const mine = generation;
-      loafObserver = new PerformanceObserver((list) => { if (mine === generation) onLoaf(list); });
-      loafObserver.observe({ type: "long-animation-frame", buffered: true });
-      loafSupported = true;
-    } catch (_) {
-      loafObserver = null;
-      loafSupported = null;
-    }
-  }
-
   function disarmObserver() {
-    if (loafObserver) {
-      try { loafObserver.disconnect(); } catch (_) { /* already gone */ }
-      loafObserver = null;
-    }
     if (!observer) return;
     try { observer.disconnect(); } catch (_) { /* already gone */ }
     observer = null;
@@ -255,7 +212,6 @@ const RaceEntryProfile = (() => {
     legs = [];
     marks = [];
     longTasks = [];
-    loafs = [];
     sawWarming = false;
     sawReady = false;
     endAfterReady = 0;
@@ -264,7 +220,6 @@ const RaceEntryProfile = (() => {
     armed = true;
     armIntroBudget(tag);
     armObserver();
-    armLoaf();
     if (tag) pushMark("begin:" + tag);
   }
 
@@ -480,8 +435,6 @@ const RaceEntryProfile = (() => {
       blockMs: blockMs(),
       maxBlockMs: maxBlockMs(),
       supported,
-      loaf: loafs.slice(),
-      loafSupported,
       armed,
       windowMs: armed || marks.length ? +((armed ? now() : winT1) - winT0).toFixed(2) : 0,
       budgetMs: introBudgetMs,

@@ -418,14 +418,3 @@ test("robust post-warm slope outvotes one odd reading but still catches the H12 
   assert.ok(robustHeapSlope(ser([100, 112, 124, 136, 141, 163, 170, 186])).slope > HEAP_SLOPE_HARD_MB);
   assert.equal(robustHeapSlope(ser([100, 101, 102, 103])).slope, null);
 });
-
-// #4778: wrapper-object growth between the last two cycles.
-test("wrapperGrowth flags a GPU class that grew and ignores a flat pair", async () => {
-  const { wrapperGrowth } = await import("../helpers/race-cycle-memory.mjs");
-  const row = (cycle, bundles, nodes) => ({ cycle, wrappers: { GPURenderBundle: bundles, GPUBuffer: 10 }, dom: { nodes } });
-  assert.equal(wrapperGrowth([row(5, 100, 1000), row(6, 100, 1010)], 6).ok, true);
-  const bad = wrapperGrowth([row(5, 100, 1000), row(6, 181, 1000)], 6);
-  assert.equal(bad.ok, false);
-  assert.match(bad.issues[0], /GPURenderBundle 100 → 181 \(\+81\)/);
-  assert.equal(wrapperGrowth([row(6, 1, 1)], 6).ok, false);
-});

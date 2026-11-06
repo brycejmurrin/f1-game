@@ -302,13 +302,8 @@ const SaveMigrate = (function () {
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
-    // Clamp, never wrap: `3e9 | 0` goes negative and would reset every sponsor pick on load.
-    career.year = clampTo(Math.trunc(finiteNumber(career.year)) || 2026, 2026, 9999);
-    if (career.year0 !== undefined) {
-      const y0 = Math.trunc(finiteNumber(career.year0));
-      career.year0 = y0 > 0 ? Math.min(y0, career.year) : 2026;
-    }
-    career.money = Math.max(0, finiteNumber(career.money));
+    career.year = finiteNumber(career.year) | 0 || 2026;
+    career.money = finiteNumber(career.money);
     career.rep = Math.max(0, Math.min(100, finiteNumber(career.rep)));
     // Driver identity is read by title/cards and by rating lookups. Keep a
     // malformed existing slot recoverable: JSON can persist objects/functions'

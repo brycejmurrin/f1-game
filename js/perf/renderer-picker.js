@@ -634,14 +634,6 @@ function paintPresent() {
   if (envBtn) envBtn.textContent = "CAR REFLECTIONS: " + envProbeLabel(readEnvProbe());
   const st = typeof document !== "undefined" ? document.getElementById("pm-gfx-status") : null;
   if (st) st.textContent = presentStatus();
-  const why = typeof document !== "undefined" ? document.getElementById("pm-gfx-why") : null;
-  if (why) {
-    // #4824: the reason boot bound WebGL2 instead of the pick (canary strike, claim-skip, timeout), cleared by the next clean bind.
-    let r = "";
-    try { r = sessionStorage.getItem("apex26.gfxFallbackWhy") || ""; } catch (_) { /* blocked storage */ }
-    why.textContent = r ? "WebGL2 this boot: " + r : "";
-    why.hidden = !r;
-  }
 }
 function hrefFromPixels(cap) {
   if (!cap || typeof document === "undefined" || typeof document.createElement !== "function") return null;
@@ -808,11 +800,6 @@ function initPresentControls() {
   const status = document.createElement("p");
   status.id = "pm-gfx-status";
   add(status);
-  const whyLine = document.createElement("p");
-  whyLine.id = "pm-gfx-why";
-  whyLine.className = "adv-help";
-  whyLine.hidden = true;
-  add(whyLine);
 
   paintPresent();
   try { window.addEventListener("apex-gfx-live", paintPresent); } catch (_) { /* no window */ }

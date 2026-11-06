@@ -96,15 +96,17 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bo
       const ta = (zF - aZ) / (zF - zR), tb = (zF - bZ) / (zF - zR);
       const rU = (t) => u.uR + (u.uL - u.uR) * t;
       const lU = (t) => u.uL + (u.uR - u.uL) * t;
-      if (anchors && anchors.podSculpt) {   // the same flank re-mesh as car3d addPodFlankSpan (#3959)
-        const vAt = f => u.vB + (u.vT - u.vB) * (f - yBottom) / (yTop - yBottom), tz = (z) => (zF - z) / (zF - zR);
-        for (const side of [1, -1]) for (const t of anchors.flankTris(aZ, bZ, yBottom, yTop, 0.004, side)) {
-          const e1 = [0, 1, 2].map(j => t[1][j] - t[0][j]), e2 = [0, 1, 2].map(j => t[2][j] - t[0][j]);
-          const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]], l = Math.hypot(...n) || 1;
-          const i0 = out.pos.length / 3;
-          for (const v of t) { out.pos.push(v[0], v[1], v[2]); out.nrm.push(n[0] / l, n[1] / l, n[2] / l);
-            out.uv.push((side > 0 ? rU : lU)(tz(v[2])), vAt(v[3])); }
-          out.idx.push(i0, i0 + 1, i0 + 2);
+      if (anchors && anchors.podSculpt) {
+        const cuts = [yBottom, ...[0.22, 0.65].filter(f => f > yBottom && f < yTop), yTop];
+        const point = (z, f, side) => { const p = anchors.podFlank(z, f); return [side * (p[0] + 0.004), p[1], z]; };
+        const vAt = f => u.vB + (u.vT - u.vB) * (f - yBottom) / (yTop - yBottom);
+        for (let k = 0; k < cuts.length - 1; k++) {
+          const lo = cuts[k], hi = cuts[k + 1];
+          const p = point(aZ, lo, 1), q = point(aZ, hi, 1), dx = q[0] - p[0], dy = q[1] - p[1], n = Math.hypot(dx, dy);
+          quadUv([p, point(bZ, lo, 1), point(bZ, hi, 1), q], [dy / n, -dx / n, 0],
+            [[rU(ta),vAt(lo)], [rU(tb),vAt(lo)], [rU(tb),vAt(hi)], [rU(ta),vAt(hi)]]);
+          quadUv([point(bZ, lo, -1), point(aZ, lo, -1), point(aZ, hi, -1), point(bZ, hi, -1)], [-dy / n, -dx / n, 0],
+            [[lU(tb),vAt(lo)], [lU(ta),vAt(lo)], [lU(ta),vAt(hi)], [lU(tb),vAt(hi)]]);
         }
         continue;
       }

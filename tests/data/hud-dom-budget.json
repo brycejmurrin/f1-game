@@ -1,5 +1,0 @@
-{
-  "_doc": "Ceilings for tests/unit/hud-dom-budget-vm.test.mjs (issue #4782). Measured through game-vm's domProbe on a steady monza lap, 180 frames of __apex.step(1) + G.refreshHud(false, 16.7). Lower after a HUD write is removed; a raise is a deliberate edit with its reason in the commit. forcedPerTick: layout reads that land on a dirty tree within one frame. writesPerTick: DOM writes (text always, attr/style/class/hidden only on a changed value) in one frame; avgWrites is the 180-frame mean.",
-  "desktop": { "forcedPerTick": 1, "idleForcedPerFrame": 0, "maxWritesPerTick": 14, "avgWritesPerTick": 2 },
-  "phone844": { "forcedPerTick": 1, "idleForcedPerFrame": 0, "maxWritesPerTick": 14, "avgWritesPerTick": 2 }
-}

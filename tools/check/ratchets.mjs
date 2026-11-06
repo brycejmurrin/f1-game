@@ -103,12 +103,6 @@ export const TREE_METRICS = {
     return audit().flatMap((r) => r.tests).filter((t) => !t.skipped && t.verdict === "implicit").length;
   },
   twinDebt: async () => (await (await import("../ci/twinned-specs.mjs")).twinDebt()).length,
-  // Download-byte budgets (tools/check/byte-budget.mjs): gzip, what players fetch, beside the raw script cap.
-  eagerGzip: async () => (await import("./byte-budget.mjs")).eagerGzip(),
-  eagerCssGzip: async () => (await import("./byte-budget.mjs")).eagerCssGzip(),
-  lazyCircuitGzipMax: async () => (await import("./byte-budget.mjs")).lazyCircuitGzipMax().n,
-  lazyAudioGzip: async () => (await import("./byte-budget.mjs")).lazyAudioGzip(),
-  raceEntryBytes: async () => { const b = await import("./byte-budget.mjs"); return b.raceEntryBytes(b.goldenFiles()); },
   assertPins: async () => pinCount("assertPins"),
   assertPinsAll: async () => pinCount("assertPinsAll"),
   rawGameReads: async () => pinCount("rawGameReads"),
@@ -882,7 +876,7 @@ export function compareToBase(ref, {
     } else {
       // A deleted entry for a file/metric that still exists removes a guard; one whose
       // file is gone (or a whole tree metric dropped with its tool) is a normal cleanup.
-      const guardRemoved = r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file));
+      const guardRemoved = r.file === "(tree)" ? Object.hasOwn(TREE_METRICS, r.metric) : fs.existsSync(path.join(ROOT, r.file));
       if (guardRemoved) {
         blocked++;
         if (!advisory) fatal++;

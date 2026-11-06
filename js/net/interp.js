@@ -60,7 +60,6 @@ const NetInterp = (function () {
       // became the buffer's newest sample for good (nothing newer ever arrives)
       // and pinned lastTick, so every honest packet after it skipped the
       // adaptive-delay update: the rival froze and the delay stopped adapting.
-      const REWIND_RESET_MS = 1000;
       const maxAheadMs = opts.maxAheadMs != null ? opts.maxAheadMs : MAX_AHEAD_MS;
 
       // `own` (the adopt() path): `st` is a fresh object the caller hands over
@@ -96,13 +95,6 @@ const NetInterp = (function () {
             delayMs += (target - delayMs) * 0.08;
           }
           lastArrival = arrivalMs; lastTick = t;
-        }
-        // A tick far BEHIND the newest held sample is a clock step back (offset
-        // re-estimated after a suspend), not reordering: the new-domain samples
-        // would sort before the old ones and sample() would pose stale data until
-        // local time caught up. Start the buffer over in the new domain.
-        if (samples.length > head && t < samples[samples.length - 1].t - REWIND_RESET_MS) {
-          samples.length = 0; head = 0; presentedAt = -Infinity; lastTick = null; lastArrival = null;
         }
         // Fast path: the normal case is strictly newer than everything held.
         let pos = samples.length;
@@ -238,11 +230,7 @@ const NetInterp = (function () {
       function sample(nowMs, out) {
         const target = nowMs - delayMs;
         // Increasing the buffer during a burst may hold a pose, never rewind it.
-        // A clock that steps BACK (OS suspend, NTP slew) drops `target` far below
-        // presentedAt; holding forward-only would freeze the rival for the whole
-        // step. A burst-driven delay growth is a few tens of ms, so a rewind past
-        // REWIND_RESET_MS is a clock step: follow it.
-        presentedAt = opts.adaptive && target > presentedAt - REWIND_RESET_MS ? Math.max(presentedAt, target) : target;
+        presentedAt = opts.adaptive ? Math.max(presentedAt, target) : target;
         return at(presentedAt, out);
       }
 

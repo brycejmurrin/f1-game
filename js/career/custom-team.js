@@ -44,27 +44,8 @@ const CustomTeam = (function () {
     function identityGet(key, fallback) { return typeof Career !== "undefined" && Career.identityValue ? Career.identityValue(key, fallback) : fallback; }
     function identitySet(key, value) {
       if (typeof Career !== "undefined" && Career.inCareer() && Career.data().flavour === "myteam" && Career.setIdentityValue) return Career.setIdentityValue(key, value);
-      // write().ok is "usable this session" (a full disk is still ok); only a refused write (a foreign-tab owner) is false.
-      if (store.write) return store.write(key, value).ok !== false;
-      return store.set(key, value) !== false;
+      return store.set(key, value);
     }
-    // A refused write (blocked career, a foreign tab owns the save) is NOT a save: say so and keep the dialog open.
-    function czRefused() {
-      const msg = "Could not save: this career is locked or open in another tab. Your change was not kept.";
-      // Built on demand: the shell's node count is ratcheted (tests/data/ratchets.json).
-      let note = $("cz-note");
-      if (!note) {
-        const anchor = $("cz-preview");
-        if (anchor && anchor.parentNode && typeof document !== "undefined" && document.createElement) {
-          note = document.createElement("p"); note.id = "cz-note"; note.className = "adv-help"; note.setAttribute("role", "alert");
-          anchor.parentNode.insertBefore(note, anchor.nextSibling);
-        }
-      }
-      if (note) { note.textContent = msg; note.hidden = false; }
-      const live = $("announce-live"); if (live) live.textContent = msg;
-      return false;
-    }
-    function czClearNote() { const note = $("cz-note"); if (note) { note.textContent = ""; note.hidden = true; } }
     function loadCustomTeam() {
       return Teams.sanitizeCustom(identityGet("customTeam", store.get("customTeam", DEFAULT_CUSTOM)));
     }
@@ -302,7 +283,6 @@ const CustomTeam = (function () {
       czSetFinish(liv.finish);
       refreshCustomLogoUi(loadCustomLogo());
       czPreview(true);
-      czClearNote();
       getEls().customize.hidden = false;
     }
 
@@ -348,8 +328,7 @@ const CustomTeam = (function () {
           }],
         };
         ct.livery = czLivFromDialog();
-        if (!identitySet("customTeam", ct)) { czRefused(); return; }
-        czClearNote();
+        identitySet("customTeam", ct);
         syncCustomTeam();
         // Inside a career the CONTRACT picks the car: saving the design must
         // not swap a driver career's seat for MY TEAM (the contracted car
@@ -377,10 +356,7 @@ const CustomTeam = (function () {
         const current = () => generation === logoGeneration;
         readLogoFile(f, (dataUrl) => {
           if (!current() || !dataUrl) return;
-          let saved = false;
-          try { saved = identitySet(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
-          if (!saved) { czRefused(); return; }
-          czClearNote();
+          try { identitySet(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
           applyCustomLogo(dataUrl);
           refreshCustomLogoUi(dataUrl);
           invalidateDecalTextures("custom");
@@ -391,10 +367,7 @@ const CustomTeam = (function () {
       });
       $("cz-logo-clear").onclick = () => {
         ++logoGeneration;
-        let cleared = false;
-        try { cleared = identitySet(CUSTOM_LOGO_KEY, null); } catch (_) {}
-        if (!cleared) { czRefused(); return; }
-        czClearNote();
+        try { identitySet(CUSTOM_LOGO_KEY, null); } catch (_) {}
         applyCustomLogo(null);
         refreshCustomLogoUi(null);
         invalidateDecalTextures("custom");

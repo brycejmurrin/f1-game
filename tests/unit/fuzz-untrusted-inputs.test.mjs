@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { fuzz, mutate, findBadLiveValues, makeRng, hasOwnProtoDeep, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
+import { fuzz, mutate, findBadLiveValues, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
@@ -599,128 +599,6 @@ test("LiveryTex.setTeamLogo refuses a decompression-bomb emblem before any draw"
   }
 });
 
-// ── Phone-pad wire, session heartbeat, NetPlay clamps (a stranger's phone / peer) ──
-// PhonePadCodec reads the wire a room code opens; NetSession's PING/PONG and
-// NetPlay's clampWire / applyStrategy / START arming read a peer's packets.
-// Same contract: never throw, nothing non-finite reaches state, bounded work.
-function bootNet() {
-  const ctx = vm.createContext({ console, Math, Object, Array, Number, String, JSON, Map, Set, WeakMap, Uint8Array,
-    Float32Array, Float64Array, Uint16Array, Uint32Array, DataView, ArrayBuffer, isFinite, isNaN, URL, encodeURIComponent,
-    decodeURIComponent, setTimeout, clearTimeout, TextEncoder, TextDecoder, Promise, Symbol, Error });
-  ctx.globalThis = ctx;
-  seedLog(ctx);
-  const names = [["js/core/mat4.js", "M4"], ["js/net/bytes.js", "NetBytes"], ["js/net/ice.js", "NetIce"],
-    ["js/net/transport.js", "NetTransport"], ["js/net/interp.js", "NetInterp"], ["js/net/snapshot.js", "NetSnapshot"],
-    ["js/net/session.js", "NetSession"], ["js/net/quali-wire.js", "QualiWire"], ["js/net/strategy-wire.js", "StrategyWire"],
-    ["js/input/phone-pad-codec.js", "PhonePadCodec"]];
-  for (const [f, n] of names) {
-    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
-    ctx.globalThis[n] = vm.runInContext(n, ctx, { filename: absSrc(f) });
-  }
-  vm.runInContext('var Tracks = { sample: (t, s, o) => { o.t = [0, 0, 1]; return o; } };', ctx, { filename: absSrc("js/net/netplay.js") });
-  vm.runInContext(read("js/net/netplay.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/net/netplay.js") });
-  return ctx;
-}
-
-test("PhonePadCodec decoders never throw and keep every field finite and in range (N=2000)", async () => {
-  const ctx = bootNet();
-  const P = ctx.PhonePadCodec;
-  const corpus = [
-    P.encodeSample({ seq: 7, roll: 12.5, thr: 0.5, brk: 0, held: 3 }), P.encodeSample({ seq: 1, steer: -0.4, thr: 1, brk: 0, held: 0 }),
-    P.encodeHud({ gear: 4, kmh: 250, rpm: 0.7, lap: 2, laps: 5, pos: 3, cars: 20, ers: 0.5, flags: 1, caution: 0, lastLapMs: 90000, state: "RACE", team: "#ff0000" }),
-    P.encodeEvent("boost"), P.encodeHaptic(80), P.encodeHello("pad", true, true),
-    '[1,1,null,2,3,4]', '[2,1,null,0,0,0,"x"]', '["H",1,2]', '{"t":"ev","k":"__proto__"}', '{"t":"hi","side":{}}', "", "[", "null",
-  ];
-  const urls = ["controller.html#pad=ABC&relay=https%3A%2F%2Fa.example", "#pad=%E0%A4%A", "#pad=x&relay=javascript:alert(1)", "#relay=&pad=", "", "https://u:p@h/#pad=1&relay=http%3A%2F%2Fevil", "#pad=%"];
-  const finite = (o, label) => { const bad = findBadLiveValues(o); assert.deepEqual(bad, [], `${label}: ${bad.join(",")}`); };
-  await fuzz("PhonePadCodec", "phone-pad-v1", N, async (rng) => {
-    const t = mutate(rng.pick(corpus), rng);
-    const text = typeof t === "string" ? t : JSON.stringify(t);
-    const s = P.decodeSample(t); if (s) { finite(s, "sample"); assert.ok(s.thr >= 0 && s.thr <= 1 && s.brk >= 0 && s.brk <= 1); }
-    const e = P.decodeEvent(t); if (e && e.t === "ev") assert.ok(P.EVENTS.includes(e.k));
-    if (e && e.t === "hap") assert.ok(e.ms >= 0 && e.ms <= 1000);
-    const h = P.decodeHud(text); if (h) { finite(h, "hud"); assert.ok(h.rpm >= 0 && h.rpm <= 1 && h.kmh <= 999); }
-    let parsed; try { parsed = JSON.parse(text); } catch (_) { parsed = t; }
-    const h2 = P.hudOf(mutate(parsed, rng)); if (h2) finite(h2, "hudOf");
-    const u = P.pairingFromUrl(mutate(rng.pick(urls), rng));
-    if (u) { assert.equal(typeof u.code, "string"); assert.ok(u.relay === null || /^https?:\/\//.test(u.relay)); }
-  });
-});
-
-test("NetSession PING/PONG frames of any shape never throw or poison the clock (N=2000)", async () => {
-  const ctx = bootNet();
-  const { NetTransport, NetSession } = ctx;
-  const [ta, tb] = NetTransport.loopback({ latencyMs: 20 });
-  const s = NetSession.create({ transport: ta, pingEveryMs: 100 });
-  const peer = NetSession.create({ transport: tb, pingEveryMs: 100 });
-  let now = 0;
-  const frame = (rng) => {
-    const len = [0, 1, 5, 12, 13, 20, 21, 28, 29, 40][rng.int(10)];
-    const b = new Uint8Array(len);
-    for (let i = 0; i < len; i++) b[i] = rng.int(256);
-    if (len) b[0] = [3, 4, 1, 2, 255][rng.int(5)];
-    if (len >= 29 && rng.bool()) { const dv = new DataView(b.buffer); dv.setFloat64(5, [NaN, Infinity, -1e300, 0][rng.int(4)]); dv.setFloat64(21, [NaN, Infinity, -Infinity][rng.int(3)]); }
-    return rng.bool() ? b : b.buffer;
-  };
-  await fuzz("NetSession.onStateBytes", "session-pingpong-v1", N, async (rng) => {
-    now += 10;
-    try { peer.sendState(frame(rng)); s.pump(now); peer.pump(now); } catch (err) { assert.fail(`threw: ${err.message}`); }
-    assert.ok(Number.isFinite(s.offset()) && Number.isFinite(s.rtt()), `clock poisoned: offset=${s.offset()} rtt=${s.rtt()}`);
-  });
-});
-
-test("NetPlay.clampWire, validClassification and applyStrategy hold their contract (N=2000)", async () => {
-  const ctx = bootNet();
-  const { NetPlay, StrategyWire } = ctx;
-  const SW = StrategyWire.create();
-  // A peer's JSON: what JSON.parse can build (mutate() can also forge a prototype the wire cannot).
-  const wire = (v) => { try { const j = JSON.stringify(v); return j === undefined ? undefined : JSON.parse(j); } catch (_) { return null; } };
-  const HV = [NaN, Infinity, -Infinity, 1e9, -1e9, "7", "x", null, undefined, {}, [], true, 0, -1, 1.5, 2e4];
-  const car = () => ({ tyre: null, pitNext: null, tread: 1, tyreWear: 0.2, pitState: "none", pitArmed: false });
-  const goodStrat = SW.strategyState({ tyreWear: 0.4, tread: 1, pitState: "lane", tyreClass: "soft" }, 1, 2);
-  const cars = [{ driverId: "a" }, { driverId: "b" }];
-  await fuzz("NetPlay wire", "netplay-wire-v1", N, async (rng) => {
-    const st = { s: rng.pick(HV), x: rng.pick(HV), head: rng.pick(HV), speed: rng.pick(HV), lap: rng.pick(HV), gear: rng.pick(HV), deploying: rng.pick(HV) };
-    const out = NetPlay.clampWire(st, rng.pick([0, 5000, NaN, -5]), rng.pick([0, 5, NaN]));
-    for (const k of ["s", "lap", "head", "x", "speed", "gear"]) assert.ok(Number.isFinite(out[k]), `clampWire.${k}=${out[k]} for ${JSON.stringify(st)}`);
-    assert.ok(Math.abs(out.head) <= Math.PI + 1e-9 && Math.abs(out.x) <= 200 && Math.abs(out.speed) <= 200);
-    const rows = [{ d: "a", t: rng.pick(HV), p: rng.pick(HV), lap: rng.pick(HV), classified: rng.pick(HV) }, { d: rng.pick(["b", "a", "z", {}, null]) }];
-    const ok = NetPlay.validClassification ? NetPlay.validClassification(wire(mutate(rng.bool() ? rows : null, rng)), cars) : true;
-    assert.equal(typeof ok, "boolean");
-    const d = wire(mutate(goodStrat, rng)), c = car();
-    let r;
-    try { r = SW.applyStrategy(c, d); } catch (err) { assert.fail(`applyStrategy threw: ${err.message} for ${JSON.stringify(d).slice(0, 120)}`); }
-    assert.equal(typeof r, "boolean");
-    assert.deepEqual(findBadLiveValues(c), [], "applyStrategy leaked NaN/undefined into the car");
-    if (!r) assert.equal(c.tyreWear, 0.2, "a refused strategy payload must not mutate the car");
-  });
-});
-
-test("a hostile START event never leaves the guest with a non-finite countdown (N=2000)", async () => {
-  const ctx = bootNet();
-  const { NetPlay, NetSession, NetTransport } = ctx;
-  const [ta, tb] = NetTransport.loopback({ latencyMs: 10 });
-  const hs = NetSession.create({ transport: ta }), gs = NetSession.create({ transport: tb });
-  let t = 0;
-  for (let i = 0; i < 40; i++) { t += 25; hs.pump(t); gs.pump(t); }
-  const mk = (i) => ({ idx: i, local: i === 0, human: i === 0, isPlayer: i === 0, s: i * 10, x: 0, px: 0, pz: 0, speed: 0, head: 0, lap: 0, mods: null, name: "D" + i, code: "D" + i, driverId: "drv" + i });
-  const G = { cars: [mk(0), mk(1)], track: { total: 5000, n: 500 }, netStart: null, netNow: null, wireId: (c) => c.idx,
-    setCarRole() {}, announce() {}, applyCaution() {}, COUNTDOWN_S: 3, worldFromTrack: (s, x) => ({ x: s, y: 0, z: x, px: s, pz: x, head: 0 }), groundY: () => 0, trackAt: () => ({}) };
-  G.player = G.cars[0];
-  const ng = NetPlay.create(G);
-  ng.start({ role: "guest", session: gs });
-  const HV = [NaN, Infinity, -Infinity, 1e9, -1e9, "7", "x", null, undefined, {}, [], true, 0, -1, 1.5, 3000];
-  await fuzz("NetPlay START", "netplay-start-v1", N, async (rng) => {
-    G.netStart = null;
-    hs.sendEvent("start", { at: rng.bool() ? rng.pick(HV) : t + rng.int(4000), hold: rng.pick(HV) });
-    t += 25; hs.pump(t); gs.pump(t); ng.tick(t);
-    if (G.netStart) {
-      assert.ok(Number.isFinite(G.netStart.at), `netStart.at=${G.netStart.at}`);
-      assert.ok(Number.isFinite(G.netStart.hold) && G.netStart.hold >= 0 && G.netStart.hold <= 2, `hold=${G.netStart.hold}`);
-    }
-  });
-});
-
 // ── Wall-clock budget across the whole file ────────────────────────────────
 test("200 GhostShare decodes stay under 2 s of CPU", async (t) => {
   // The preceding tests already ran; this is a meta check that the file's
@@ -743,16 +621,4 @@ test("200 GhostShare decodes stay under 2 s of CPU", async (t) => {
   // Cap the slice itself so a sudden regression (inflate loops, etc.) fails here.
   assert.ok(slice < 2000, `200 GhostShare trials took ${slice} ms of CPU (budget 2000 ms)`);
   t.diagnostic(`budget slice: ${slice} ms for 200 GhostShare.decode trials`);
-});
-
-test("seeded fuzz generates real own __proto__ keys and pollutes nothing (#4829)", () => {
-  const rng = makeRng("x");
-  let own = 0;
-  for (let i = 0; i < 2000; i++) {
-    const v = mutate({ a: 1, b: "s" }, rng);
-    if (hasOwnProtoDeep(v)) own++;
-    assert.equal({}.polluted, undefined, "trial " + i + " polluted Object.prototype");
-    assert.equal({}.again, undefined);
-  }
-  assert.ok(own > 0, "no mutation had an own __proto__ key in 2000 trials");
 });

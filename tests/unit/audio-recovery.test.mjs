@@ -532,19 +532,6 @@ test("devicechange without sticky user activation defers rebuild until the next 
   assert.equal(contexts.length, 2, "gesture performs the deferred rebuild");
 });
 
-test("devicechange after an earlier tap (hasBeenActive, no live gesture) waits for the next gesture (#4830)", async () => {
-  const ua = { isActive: false, hasBeenActive: true };
-  const { A, contexts, listeners, fireDeviceChange } = boot({ userActivation: ua });
-  A.init(); await flush();
-  fireDeviceChange();
-  await new Promise((r) => setTimeout(r, DEVICE_REBUILD_DEBOUNCE_MS + 60));
-  await flush();
-  assert.equal(contexts.length, 1, "the timer must not create a context outside a gesture");
-  ua.isActive = true;
-  listeners.touchend({ isTrusted: true }); await flush();
-  assert.equal(contexts.length, 2, "the next gesture performs the deferred rebuild");
-});
-
 test("init does not throw when navigator.mediaDevices is absent", async () => {
   const { A } = boot({ mediaDevices: false });
   assert.doesNotThrow(() => A.init());

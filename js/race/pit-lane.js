@@ -1133,20 +1133,6 @@ var PitLane = (function () {
       // of the hold was a lie for the whole of it. The release says it (release).
     }
 
-    /** FIA 2026 SR B5.14.4 (vii): tyres may be changed under a red flag. One free set for this car, fitted by the
-     *  SAME path as a stop (serviceCar) but without a stop: pitStops is untouched, so the plan keeps its numbering and
-     *  replan's `made` fallback reads the longer log. The player's set is their pitNext or AUTO; an AI's is the
-     *  plan's next compound (aiClassFor: the weather's tread when the road wants one). */
-    function redFlagFit(c) {
-      if (!c || !G.tyres || !G.tyres.on()) return false;
-      if (!c.human && !c.local && c.pitPlan && !c.pitNext) {
-        const want = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
-        setNext(c, G.tyres.classRecord(aiClassFor(c, want, !!c.tyre && (c.tyre.tread || 0) !== want)));
-      }
-      serviceCar(c);
-      return true;
-    }
-
     /** The compound this car will fit at its next stop (a TyreModel record). */
     function setNext(c, record) { if (c) c.pitNext = record || null; }
 
@@ -1805,7 +1791,7 @@ var PitLane = (function () {
     // local (create internals + tests via PitLane.inWindow); nothing outside
     // reads them on the instance. session-stub may still stub extras.
     return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, held,
-             arm, update, reset, clearArm, info, serviceCar, redFlagFit, planFor, think, stepBegin, stepEnd,
+             arm, update, reset, clearArm, info, serviceCar, planFor, think, stepBegin, stepEnd,
              pickFor, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,

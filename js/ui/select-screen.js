@@ -202,12 +202,12 @@ const hideCtxLostNotice = () => {
   }
   ctxLostSpoken = false;
 };
-const showCtxLostNotice = (opts) => {
+const showCtxLostNotice = () => {
   let pending = false;
   try {
     pending = sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1";
     if (pending) sessionStorage.removeItem(CTX_LOST_NOTICE_KEY);
-  } catch (_) { /* blocked storage: show only when the caller knows a real loss happened */ pending = !!(opts && opts.force); }
+  } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
   if (!pending || !ctxLostNotice || G.state !== "menu") return;
   ctxLostNotice.hidden = false;
   let exhausted = false;

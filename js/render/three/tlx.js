@@ -310,7 +310,6 @@ const TLX = (function () {
       const _phoneHw = isMobile && (/iPhone|iPad|iPod|Android/i.test(ua)
         || ((navigator.maxTouchPoints || 0) > 1 && /Mac/.test(ua)));
       let _softAdapter = false;
-      let _adapterFacts = null;   // adapter.info + isFallbackAdapter for perf records (gpuAdapter())
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
       const _gpuRecentErrors = [];
@@ -376,7 +375,6 @@ const TLX = (function () {
             const arch = info && info.architecture;
             const desc = info && info.description;
             const infoBlob = [dev, ven, arch, desc].filter(Boolean).join(" ").toLowerCase();
-            _adapterFacts = { vendor: ven || "", architecture: arch || "", device: dev || "", description: desc || "", isFallbackAdapter: !!(ad.isFallbackAdapter || (info && info.isFallbackAdapter)) };
             // An EMPTY adapter.info is UNKNOWN, not software. Browsers trim
             // these fields to limit fingerprinting — Chrome already reports
             // architecture and device as "" on the Apple adapter, so an empty
@@ -1272,50 +1270,7 @@ const TLX = (function () {
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
-      // Per-pass GPU split (issue #4784), ONLY with ?gpuTimer=1 — the default path never wraps render().
-      // three r187 keys every render() call's query by a uid in pool.queryOffsets and, after a resolve, in
-      // pool.timestamps (uid -> ms), so each call's uids are noted at call time and summed per label at resolve.
-      // No timestamp-query / software adapter: gpuByPass() stays null, nothing throws.
-      let _passFlag = false, _passWrapped = false, _passMarks = [], _passMs = null, _passAt = -1;
-      try { _passFlag = new URLSearchParams(location.search).get("gpuTimer") === "1"; } catch (_) { /* no location */ }
-      const _renderPool = () => { try { return renderer.backend.timestampQueryPool.render || null; } catch (_) { return null; } };
-      function _passLabel(sc, cam) {
-        if (cam === camera) return "main";
-        if (cam === mirCam) return "mirror";
-        if (envCubeCam && envCubeCam.children.indexOf(cam) >= 0) return "env";
-        return sc && sc.isMesh ? "post" : "shadow";   // post quads are QuadMesh; the other private cameras are shadow casters
-      }
-      function _installPassWrap() {
-        if (!_passFlag || _passWrapped || typeof renderer.render !== "function") return;
-        _passWrapped = true;
-        const orig = renderer.render;
-        renderer.render = function (sc, cam) {
-          if (!_gpuTimerOn) return orig.apply(this, arguments);
-          const pool = _renderPool(), n0 = pool ? pool.queryOffsets.size : 0;
-          try { return orig.apply(this, arguments); } finally {
-            try {
-              if (pool && pool.queryOffsets.size) {
-                const ks = Array.from(pool.queryOffsets.keys()), uids = ks.slice(ks.length >= n0 ? n0 : 0);
-                if (uids.length) _passMarks.push({ label: _passLabel(sc, cam), uids });
-              }
-            } catch (_) { /* optional */ }
-          }
-        };
-      }
-      function _passCollect(pool, marks) {
-        if (!marks.length || !pool || !pool.timestamps) return;
-        const out = {};
-        for (const m of marks) for (const u of m.uids) {
-          const v = pool.timestamps.get(u);
-          if (typeof v === "number" && isFinite(v) && v >= 0) out[m.label] = (out[m.label] || 0) + v;
-        }
-        const ks = Object.keys(out);
-        if (!ks.length) return;
-        for (const k of ks) out[k] = Math.round(out[k] * 1000) / 1000;
-        _passMs = out; _passAt = _nowMs();
-      }
       function resolveGpuTimer() {
-        const marks = _passMarks; _passMarks = [];
         if (!_gpuTimerOn || _deviceLost || _gpuResolvePending) return;
         const epoch = _gpuTimerEpoch, be = renderer.backend;
         const pool = be && be.timestampQueryPool && be.timestampQueryPool.render;
@@ -1340,7 +1295,6 @@ const TLX = (function () {
             }
             if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
             _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
-            if (marks.length) _passCollect(pool, marks);
           }).catch((e) => {
             // Per-frame call: note the first rejection only.
             if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
@@ -5210,8 +5164,7 @@ const TLX = (function () {
           const sup = _gpuSupported();
           if (on !== undefined) {
             const next = !!on && sup && !_inspectorHold;
-            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; _gpuSampleAt = -1; _passMs = null; _passMarks = []; }
-            if (next) _installPassWrap();
+            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; _gpuSampleAt = -1; }
             _gpuTimerOn = next;
             if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) { _gpuMs = -1; _gpuSampleAt = -1; }
@@ -5222,10 +5175,6 @@ const TLX = (function () {
             sampleAgeMs: _gpuSampleAt < 0 ? -1 : Math.max(0, _nowMs() - _gpuSampleAt) };
         },
         gpuMs() { return _deviceLost ? -1 : _gpuMs; },
-        // Per-pass GPU ms of the last resolved frame ({main, mirror, env, shadow, post}), only under ?gpuTimer=1;
-        // null when off, unsupported or software. Adapter facts for the record: gpuAdapter().
-        gpuAdapter() { return _adapterFacts ? Object.assign({ software: !!_softAdapter }, _adapterFacts) : null; },
-                gpuByPass() { return _deviceLost || !_passFlag || !_gpuTimerOn || !_passMs ? null : Object.assign({}, _passMs); },
         // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
         // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
         inspectorHost() {
@@ -7210,9 +7159,9 @@ const TLX = (function () {
   // Dispose a three renderer WITHOUT losing the WebGL2 context it rendered to.
   // r186 WebGLBackend.dispose() ends with WEBGL_lose_context.loseContext(), and
   // on the forceWebGL path that context is #game's own (bootRenderer hands it
-  // to three): a same-load GLX fallback would call
-  // getContext("webgl2") on the same canvas and get the SAME object back,
-  // dead or about to die (today a claimed refusal reloads into GLX instead, #4817). Lost before GLX.init → link fails → claim-fail
+  // to three): the GLX fallback that _fail() boots next calls
+  // getContext("webgl2") on the same canvas and gets the SAME object back,
+  // dead or about to die. Lost before GLX.init → link fails → claim-fail
   // reload; lost after → GLX's webglcontextlost handler latches
   // apex26.envProbeOff / perChunkOff for good and counts a reload strike.
   // Neutering the extension lookup keeps the rest of the dispose (three frees

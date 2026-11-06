@@ -200,7 +200,6 @@
       // WIND (knobs windDir / windSpeed): xy = unit direction in world xz, z =
       // speed scale. Read by vertexMotionNode — the foliage sway. GLX uWind.
       wind:        uniform(new THREE.Vector3(0.819, 0.574, 1.0)),
-      windDetail:  uniform(1.0),   // knob windDetail: per-vertex stiffness / branch phase / leaf flutter (GLX uWindDetail)
       cloudCover:  uniform(0.0),
       cloudSpeed:  uniform(1.0),
       // LIGHTING TUNER knobs (TUNE_DEFS defs in comments)
@@ -377,7 +376,6 @@
       {
         const wd = k("windDir", 35) * (Math.PI / 180);
         U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed", 1.0));
-        U.windDetail.value = k("windDetail", 1);
       }
       U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
       U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
@@ -2624,21 +2622,14 @@
         const w = clamp(mfr.div(0.45), 0.0, 1.0);
         const spd = U.wind.z;
         const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
-        // Per-vertex detail, constant for constant with GLX LIT_VS (see there).
-        const colA = vec3(attribute("color", "vec3"));
-        const det = U.windDetail;
-        const leaf = clamp(colA.g.sub(colA.r).mul(5.0), 0.0, 1.0);
-        const bph = sin(p.y.mul(1.9).add(p.x.mul(0.8))).add(sin(p.z.mul(1.4).sub(p.y.mul(1.1)))).mul(0.5);
-        const stiff = mix(float(1.0), leaf.mul(0.45).add(0.55), det);
-        const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07)).add(bph.mul(0.9).mul(w).mul(det));
+        const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
         const bend = sin(gust).mul(0.55)
           .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
           .add(0.45);                                                      // downwind lean bias
-        const amp = spd.mul(0.32).mul(w).mul(w).mul(stiff);
+        const amp = spd.mul(0.32).mul(w).mul(w);
         const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
-        const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7)).add(bph.mul(2.0).mul(det));
-        const flAmp = mix(float(1.0), leaf.mul(2.0), det);
-        const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w).mul(flAmp);   // scalar, along the normal
+        const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
+        const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
         off.assign(nL.mul(flutter).add(sway));
       });
       return p.add(off);

@@ -2639,16 +2639,6 @@ test("‹ from WEBGL2 jumps to WEBGPU without opening THREE", () => {
   assert.equal(reloaded(), 1);
 });
 
-test("SETTINGS shows why this boot bound WebGL2 (apex26.gfxFallbackWhy), hidden when unset (#4824)", () => {
-  const a = bootPicker({ ls: { "apex26.gfxBackend": "three" }, ss: { "apex26.gfxFallbackWhy": "boot canary: three never presented a frame last load" } });
-  assert.ok(a.byId["pm-gfx-why"], "why line injected");
-  assert.match(a.byId["pm-gfx-why"].textContent, /^WebGL2 this boot: boot canary: three never presented/);
-  assert.equal(a.byId["pm-gfx-why"].hidden, false);
-  const b = bootPicker({ ls: { "apex26.gfxBackend": "three" } });
-  assert.equal(b.byId["pm-gfx-why"].textContent, "");
-  assert.equal(b.byId["pm-gfx-why"].hidden, true);
-});
-
 test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () => {
   const a = bootPicker({
     ls: { "apex26.gfxBackend": "webgl2" },
@@ -5997,8 +5987,8 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
-  let _gpuSampleAt = -1, _gpuSamples = 0, _passMs = null, _passMarks = [];
-  const _deviceLost = false, _nowMs = () => 100, _gpuSupported = () => true, _installPassWrap = () => {};
+  let _gpuSampleAt = -1, _gpuSamples = 0;
+  const _deviceLost = false, _nowMs = () => 100, _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
   assert.equal(timer(true).on, true);

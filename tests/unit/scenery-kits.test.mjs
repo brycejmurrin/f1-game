@@ -662,7 +662,7 @@ test("fence footings reach terrain or the universal floor without moving tilted 
   function fenceFixture(terrain, floorY) {
     const Geom = load("js/track/core/geom.js", "TrackGeom");
     const Structures = load("js/track/scenery/structures.js", "SceneryStructures", {
-      TrackSceneryData: {}, Tracks: { terrainY: () => terrain }, M4: { vadd: Geom.vadd }, TrackGraph: { NODE_COLOR: "@node" },
+      TrackSceneryData: {}, Tracks: { terrainY: () => terrain }, M4: { vadd: Geom.vadd },
     });
     const u = [0.08, Math.sqrt(1 - 0.08 ** 2), 0], r = [u[1], -u[0], 0], t = [0, 0, 1];
     const records = [];

@@ -38,12 +38,3 @@ Ready-made reading, in order:
 3. `mirrorMs` decides whether the mirror cost matters.
 4. Any `links`/`pipes` > 0 is a warm bug to file with the phase id.
 5. `driftMs` tells you whether to trust 2–4.
-
-## Per-pass GPU split (#4784, 2026-11-04)
-`?gpuTimer=1` on TLX wraps `renderer.render` while the timer is on; `__apex.gpuTimer().byPass` is
-`{main, mirror, env, shadow, post}` ms of the last resolved frame (sums of three r187 `pool.timestamps` per call
-uid), `.adapter` is `adapter.info` + `isFallbackAdapter` + `software`. PHONE TEST › GPU TEST rows gain
-`phases[].gpuByPass` (`{label:{n,p50,p95}}`) and the result gains `adapter`; `gpu-game-check` records `gpuByPass`
-(the census sets `?gpuTimer=1`). Null everywhere without `timestamp-query` or on a software adapter, never an error.
-Real-hardware numbers: PHONE TEST on Bryce's iPhone (skill `phone-bridge`) — not measurable in this container.
-Re-measure-by: 2026-12-04. Gating (mirror share ≤ X %, env ≤ Y %) waits for that record.

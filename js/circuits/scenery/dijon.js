@@ -137,7 +137,7 @@
       // 0.06 (coplanar-audit vineyard earth×row, #3348).
       const vineyard = (s, side, gap, rows, len, step) => {
         if (!spotClear(s, side, gap + (rows * step) / 2, len * 0.5 + 10)) return;
-        drapeRun(s, side, gap - 2, [rows * step + 4, 0.12, len + 8], VINE_E, 0.11);
+        drapeRun(s, side, gap - 3, [rows * step + 6, 0.12, len + 8], VINE_E, 0.11);
         for (let i = 0; i < rows; i++)
           drapeRun(s, side, gap + i * step, [2.6, 0.3, len], VINE, 0.06, len + 8, { h: 0.9 });
       };

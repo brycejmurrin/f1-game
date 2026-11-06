@@ -1374,7 +1374,7 @@ const NetPlay = (function () {
   // PUBLISH_HZ / INTERP_DELAY_MS / STRATEGY_VERSION / validQualiLive / QUALI_MIN_S /
   // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
   return { create, EV, strategyState, applyStrategy,
-    clampWire, validClassification, validQuali, bindQuali, qualiReporters,
+    clampWire, validQuali, bindQuali, qualiReporters,
     QUALI_RATE, EVENT_WINDOW_MS };
 })();
 Object.freeze(NetPlay);
