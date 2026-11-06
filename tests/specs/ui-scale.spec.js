@@ -454,15 +454,23 @@ test.describe("UI scale", () => {
   });
 
   test("200% keeps title navigation reachable on phones and browser-zoom equivalents", async ({ page }) => {
+    // Each cell names its contract. The never-scroll fit (#5150, UI contract
+    // 2026-11-06 §3 rule 3, §4.1) is written for phone LANDSCAPE: js/ui/
+    // title-layout.js fit() runs on wide shapes only, and the portrait band in
+    // css/menu-destinations.css keeps its scroll fallback on purpose (the
+    // portrait column is one door per row and scrolls to SETTINGS). So the
+    // portrait cell keeps the ORIGINAL reachability contract (the 1.25 cap, text
+    // at the requested 200%, the column scrolls RACE into view) and the two
+    // landscape cells carry the fit contract (no scroller, every door on screen).
     const shapes = [
-      ["phone portrait", { width: 393, height: 659 }],
-      ["phone landscape", { width: 734, height: 343 }],
+      ["phone portrait", { width: 393, height: 659 }, "scroll"],
+      ["phone landscape", { width: 734, height: 343 }, "fit"],
       // 1920x937 content area at 200% browser zoom is approximately 960x469
       // CSS pixels. Browser zoom changes this viewport; DPR/render resolution do not.
-      ["desktop at 200% browser zoom", { width: 960, height: 469 }],
+      ["desktop at 200% browser zoom", { width: 960, height: 469 }, "fit"],
     ];
 
-    for (const [name, viewport] of shapes) {
+    for (const [name, viewport, contract] of shapes) {
       await page.setViewportSize(viewport);
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
@@ -589,17 +597,28 @@ test.describe("UI scale", () => {
       const scaleDump = JSON.stringify(scale);
       expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
       expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
-      expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.fit, 2);
-      expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 + 0.001);
-      expect(+scale.geometry, `${name}: 200% fits the box at no less than 0.7 ${scaleDump}`).toBeGreaterThanOrEqual(0.7);
-      // 33 painted px at the 1.25 cap = 26.4 own px: the 200% request lands in
-      // the cluster's own units (text takes the residual 1.6), the fit scales
-      // the paint uniformly.
-      expect(scale.raceFont, `${name}: control text carries the requested 200% in its own px ${scaleDump}`).toBeGreaterThanOrEqual(26.4);
-      expect(scale.scrollY, `${name}: the fitted cluster has no vertical scroller ${scaleDump}`).toBeLessThanOrEqual(1);
-      expect(scale.scrollX, `${name}: the fitted cluster has no horizontal scroller ${scaleDump}`).toBeLessThanOrEqual(1);
       expect(scale.doors, `${name}: destinations are measured ${scaleDump}`).toBeGreaterThan(5);
-      expect(scale.off, `${name}: every destination is on screen without scrolling ${scaleDump}`).toEqual([]);
+      if (contract === "fit") {
+        expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.fit, 2);
+        expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 + 0.001);
+        expect(+scale.geometry, `${name}: 200% fits the box at no less than 0.7 ${scaleDump}`).toBeGreaterThanOrEqual(0.7);
+        // 33 painted px at the 1.25 cap = 26.4 own px: the 200% request lands in
+        // the cluster's own units (text takes the residual 1.6), the fit scales
+        // the paint uniformly.
+        expect(scale.raceFont, `${name}: control text carries the requested 200% in its own px ${scaleDump}`).toBeGreaterThanOrEqual(26.4);
+        expect(scale.scrollY, `${name}: the fitted cluster has no vertical scroller ${scaleDump}`).toBeLessThanOrEqual(1);
+        expect(scale.scrollX, `${name}: the fitted cluster has no horizontal scroller ${scaleDump}`).toBeLessThanOrEqual(1);
+        expect(scale.off, `${name}: every destination is on screen without scrolling ${scaleDump}`).toEqual([]);
+      } else {
+        // Portrait: no fit runs (--tf stays 1), the cap is the geometry, the
+        // text paints at the requested 200%, and the column scrolls (the click
+        // below proves RACE reachable).
+        expect(scale.fit, `${name}: portrait is not fitted ${scaleDump}`).toBe(1);
+        expect(+scale.geometry, `${name}: compact geometry is capped ${scaleDump}`).toBeCloseTo(1.25, 2);
+        expect(scale.raceFont * +scale.geometry,
+          `${name}: control text still paints at the requested 200% ${scaleDump}`).toBeGreaterThanOrEqual(33);
+        expect(scale.scrollX, `${name}: the column never scrolls sideways ${scaleDump}`).toBeLessThanOrEqual(1);
+      }
 
       // A real locator click asks Chromium to scroll the control into view. The
       // old nested 2x geometry timed out here in phone portrait even though the
@@ -735,7 +754,7 @@ test.describe("UI scale", () => {
         return {
           doubled, over, subs, reach,
           race: [race.top, race.bottom, race.left, race.right].map((v) => +v.toFixed(1)),
-          menu: [m.top, m.bottom, top0, menu.scrollHeight, menu.clientHeight].map((v) => +v.toFixed(1)),
+          menu: [m.top, m.bottom, menu.scrollTop, menu.scrollHeight, menu.clientHeight].map((v) => +v.toFixed(1)),
           raceInView: race.top >= Math.max(0, m.top) - 1 && race.bottom <= Math.min(vh, m.bottom) + 1
             && race.left >= -1 && race.right <= vw + 1,
         };
