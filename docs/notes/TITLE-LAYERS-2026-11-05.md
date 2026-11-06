@@ -83,3 +83,5 @@ of 2000 px; the safe area accounts for ~150 px). This change does not explain it
 end margin with a start margin that both directions move, and the spec pins full reach to both edges. Check on the
 phone: WIDTH 20, LEFT/RIGHT to 100% RIGHT, then to 100% LEFT. If a gap remains, read it with the phone bridge's
 `layout` command (`.claude/skills/phone-bridge/references/commands.md`).
+
+Follow-up (2026-11-06, #5134): [TITLE-CLUSTER-SW-2026-11-06.md](TITLE-CLUSTER-SW-2026-11-06.md) — the stale Home-Screen shell path and a length-only cluster placement.
