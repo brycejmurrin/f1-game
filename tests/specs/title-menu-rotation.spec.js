@@ -256,6 +256,20 @@ test.describe("title rotation late-iOS size settle", () => {
         configurable: true,
         get() { return window.__fakeIH != null ? window.__fakeIH : 932; },
       });
+      // The LAYOUT viewport too (UI contract 2026-11-06 rule 1): body shape and density
+      // classify from documentElement.clientWidth/Height, never from inner*, which iOS
+      // can leave on the old pair. The keyboard band alone still reads inner* (by design).
+      const de = document.documentElement, ep = Element.prototype;
+      const gcw = Object.getOwnPropertyDescriptor(ep, "clientWidth").get;
+      const gch = Object.getOwnPropertyDescriptor(ep, "clientHeight").get;
+      Object.defineProperty(de, "clientWidth", {
+        configurable: true,
+        get() { return window.__fakeCW != null ? window.__fakeCW : gcw.call(this); },
+      });
+      Object.defineProperty(de, "clientHeight", {
+        configurable: true,
+        get() { return window.__fakeCH != null ? window.__fakeCH : gch.call(this); },
+      });
     });
 
     // Portrait keyboard. The band is applied by the viewport handler on its own
@@ -295,6 +309,7 @@ test.describe("title rotation late-iOS size settle", () => {
     // just no longer the box's speed.
     await page.evaluate(() => {
       window.__fakeIW = 932; window.__fakeIH = 430;
+      window.__fakeCW = 932; window.__fakeCH = 430;   // the layout viewport lands with it
       window.__fakeVvH = 430;
     });
     await page.waitForFunction(() =>
