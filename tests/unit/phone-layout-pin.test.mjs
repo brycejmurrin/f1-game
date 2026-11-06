@@ -13,7 +13,8 @@ test("the blessed golden covers every screen and selector the tool pins, at Bryc
   for (const s of SCREENS) {
     const row = g.screens[s.id];
     assert.ok(row, `${s.id} is blessed in ${GOLDEN}`);
-    for (const sel of s.sel) assert.ok(Array.isArray(row.boxes[sel]) && row.boxes[sel].length === (sel.endsWith("@ltw") ? 3 : 4), `${s.id} ${sel} has a box`);
+    const width = (sel) => (sel.endsWith("@ltw") ? 3 : sel.endsWith("@wh") ? 2 : 4);
+    for (const sel of s.sel) assert.ok(Array.isArray(row.boxes[sel]) && row.boxes[sel].length === width(sel), `${s.id} ${sel} has a box`);
     for (const v of GLOBAL_VARS) assert.ok(typeof row.globals[v] === "string" && row.globals[v] !== "", `${s.id} pins ${v}`);
     assert.equal(row.globals.shape, "wide"); assert.equal(row.globals.standalone, true);
   }

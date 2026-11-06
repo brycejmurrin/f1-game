@@ -27,7 +27,10 @@ export const GLOBAL_VARS = Object.freeze(["--ui-scale", "--tap", "--tap-hud", "-
 
 /** Screen → the structural boxes pinned there. `@ltw` pins left/top/width only
  *  (a panel whose HEIGHT grows with every row added would otherwise re-bless
- *  on every appearance change). Each screen's `open` leaves the page on it. */
+ *  on every appearance change); `@wh` pins the size only (a row deep in a panel
+ *  whose rows above depend on the machine: the DISPLAY panel's GPU and backend
+ *  rows put the HUD sample 119 px lower on CI than here). Each screen's `open`
+ *  leaves the page on it. */
 export const SCREENS = Object.freeze([
   { id: "title", sel: ["#overlay", "#menu-brand", "#title", "#tc-frame", "#menu-buttons", "#mb-career", "#mb-race", "#mb-settings", "#menu-secondary"],
     open: async () => {} },
@@ -45,7 +48,7 @@ export const SCREENS = Object.freeze([
     open: async (p) => { await click(p, "mb-settings"); await shown(p, "pmsettings"); } },
   { id: "settingsappearance", sel: ["#pmsettings-inner", "#pm-panel-appearance@ltw", "#appearance-studio@ltw"],
     open: async (p) => { await click(p, "mb-settings"); await shown(p, "pmsettings"); await click(p, "pm-open-appearance"); await shown(p, "pm-panel-appearance"); await p.waitForSelector("#appearance-studio", { state: "attached", timeout: 30000 }); } },
-  { id: "settingsdisplay", sel: ["#pm-panel-display@ltw", "#pm-hud-sample"],
+  { id: "settingsdisplay", sel: ["#pm-panel-display@ltw", "#pm-hud-sample@wh"],
     open: async (p) => { await click(p, "mb-settings"); await shown(p, "pmsettings"); await click(p, "pm-open-display"); await shown(p, "pm-panel-display"); } },
   { id: "racesettings", sel: ["#race-settings", "#rs-body", "#rs-presets", "#rs-go"],
     open: async (p) => { await click(p, "mb-race"); await shown(p, "select"); await click(p, "sel-go"); await shown(p, "race-settings"); } },
@@ -84,7 +87,7 @@ export function readFingerprint({ sels, vars }) {
     const e = document.querySelector(q);
     if (!e || e.closest("[hidden]")) { boxes[s] = null; continue; }
     const r = e.getBoundingClientRect();
-    boxes[s] = mode === "ltw" ? [r2(r.left), r2(r.top), r2(r.width)] : [r2(r.left), r2(r.top), r2(r.width), r2(r.height)];
+    boxes[s] = mode === "ltw" ? [r2(r.left), r2(r.top), r2(r.width)] : mode === "wh" ? [r2(r.width), r2(r.height)] : [r2(r.left), r2(r.top), r2(r.width), r2(r.height)];
   }
   return { globals, boxes };
 }
