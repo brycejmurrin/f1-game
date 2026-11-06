@@ -1549,26 +1549,54 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
 
 test.describe("Arrange map clearance handoff", () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
-  test("first keyboard move and resize keep an automatically cleared map at its painted origin", async ({ page }) => {
-    await page.addInitScript(() => {
-      for (const [key,value] of Object.entries({hudProfile:"broadcast",steerMode:"tilt",hudScale:70,hudBtnScale:300})) localStorage.setItem("apex26."+key,JSON.stringify(value));
+  // A BROADCAST tilt race (the pedals are the left dock) at HUD SIZE `hud` / BUTTON SIZE `btn` with the arranger open
+  // on the shipped map. `sat` is the top inset: it pushes the broadcast column (tower, map) down the screen.
+  async function openMapArranger(page, { hud, btn, sat }) {
+    await page.addInitScript(([hud, btn]) => {
+      for (const [key,value] of Object.entries({hudProfile:"broadcast",steerMode:"tilt",hudScale:hud,hudBtnScale:btn})) localStorage.setItem("apex26."+key,JSON.stringify(value));
       localStorage.removeItem("apex26.hudLayout");
-    });
+    }, [hud, btn]);
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.headless(true)); await openPauseSettings(page);
     await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
-    await page.evaluate(() => {
-      for (const [key,value] of [["--sal","47px"],["--sar","0px"],["--sab","21px"]]) document.documentElement.style.setProperty(key,value);
+    await page.evaluate((sat) => {
+      for (const [key,value] of [["--sal","47px"],["--sar","0px"],["--sab","21px"],["--sat",sat+"px"]]) document.documentElement.style.setProperty(key,value);
       __apex.camera("chase"); __apex.jump(.18,60,0);
-    });
+    }, sat);
     await page.locator("#pm-hud-arrange").click(); await page.locator("#hud-arrange-element").selectOption("map");
-    const snap = () => page.evaluate(() => {
-      const e=document.getElementById("minimap"),r=e.getBoundingClientRect();
-      return {x:r.x,y:r.y,w:r.width,h:r.height,value:HudLayout.get("map"),clearX:parseFloat(e.style.getPropertyValue("--hud-clear-x"))||0,clearY:parseFloat(e.style.getPropertyValue("--hud-clear-y"))||0,user:e.hasAttribute("data-hl-user")};
-    });
-    const before=await snap(); expect(before.user).toBe(false); expect(Math.abs(before.clearX)+Math.abs(before.clearY)).toBeGreaterThan(1);
+  }
+  const snap = (page) => page.evaluate(() => {
+    const e=document.getElementById("minimap"),r=e.getBoundingClientRect();
+    // Touch buttons the map's painted box meets (clearControls' half-pixel slack).
+    const hits=[...document.querySelectorAll(".touchbtn")].filter(b=>!b.hidden).map(b=>[b.id,b.getBoundingClientRect()])
+      .filter(([,b])=>b.width&&r.left<b.right-.5&&b.left<r.right-.5&&r.top<b.bottom-.5&&b.top<r.bottom-.5).map(([id])=>id);
+    return {x:r.x,y:r.y,w:r.width,h:r.height,value:HudLayout.get("map"),clearX:parseFloat(e.style.getPropertyValue("--hud-clear-x"))||0,clearY:parseFloat(e.style.getPropertyValue("--hud-clear-y"))||0,user:e.hasAttribute("data-hl-user"),
+      hits,zDockL:document.documentElement.style.getPropertyValue("--hud-z-dock-l")};
+  });
+
+  // UI contract 2026-11-06 gap 7: the left dock is capped to clear the left column (js/ui/hud.js fitHud, capCol), so at
+  // HUD 70 / BUTTON 300 the pedals stop above the map and clearReadouts has nothing to move — this cell used to be the
+  // "cleared map" fixture below (CI 42299937787: clearance 0).
+  test("the pedal column's cap clears the shipped map at HUD 70 BUTTON 300: no clearance, no overlap", async ({ page }) => {
+    await openMapArranger(page, { hud: 70, btn: 300, sat: 0 });
+    const before=await snap(page);
+    expect(before.user).toBe(false);
+    expect(Math.abs(before.clearX)+Math.abs(before.clearY), "nothing to clear: " + JSON.stringify(before)).toBe(0);
+    expect(before.hits, "the map meets no touch button: " + JSON.stringify(before)).toEqual([]);
+  });
+
+  test("first keyboard move and resize keep an automatically cleared map at its painted origin", async ({ page }) => {
+    // THE PRECONDITION IS THE SETTING: the column cap only shrinks the pedals to DOCK_MIN_Z (0.5), so the map is still
+    // cleared when the column reaches below that line. capCol = max(0.5, (dockBottom - columnBottom - FIT_AIR) /
+    // pedalsHeight) bottoms out once the column's bottom is within half the pedal stack of the dock's bottom; the
+    // broadcast column fit floors --hud-z-top at 11/14, so HUD 200 under a 100 px top inset paints tower + map past
+    // it (controlsRoom 390 - 100 - 21 - 40 = 229). Derived from the code, not measured here (no browser in the
+    // worktree): CI measures it, and the named expectation below is the first thing to read if it fails.
+    await openMapArranger(page, { hud: 200, btn: 300, sat: 100 });
+    const before=await snap(page); expect(before.user).toBe(false);
+    expect(Math.abs(before.clearX)+Math.abs(before.clearY), "PRECONDITION: the shipped map was moved off the pedals " + JSON.stringify(before)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
-    const moved=await snap();
+    const moved=await snap(page);
     // First edit adopts the painted box; ArrowRight then moves exactly 1% of the viewport.
     expect(moved.user).toBe(true);
     expect(Math.abs(moved.x-before.x-8.44)).toBeLessThanOrEqual(1);
@@ -1576,8 +1604,8 @@ test.describe("Arrange map clearance handoff", () => {
     expect(Math.abs(moved.w-before.w)).toBeLessThanOrEqual(1);
     expect(Math.abs(moved.h-before.h)).toBeLessThanOrEqual(1);
     await page.locator("#hud-arrange-reset").click();
-    const reset=await snap(); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY)).toBeGreaterThan(1);
-    await page.locator("#hud-arrange-larger").click(); const resized=await snap();
+    const reset=await snap(page); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY), "PRECONDITION after RESET " + JSON.stringify(reset)).toBeGreaterThan(1);
+    await page.locator("#hud-arrange-larger").click(); const resized=await snap(page);
     expect(resized.value.s).toBeCloseTo(moved.value.s+10, 8); expect(resized.user).toBe(true);
     expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1);

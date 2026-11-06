@@ -465,8 +465,8 @@ const HudLayout = (function () {
     }
     // READOUT-ON-CONTROL: a MOVE & SIZE offset chosen on a wide desktop can
     // land RELATIVE / INPUTS / SECTORS on a phone's touch discs. After the
-    // edge clamp, nudge those three left/up off any visible .touchbtn (and
-    // INPUTS off SPEED & GEAR) so a placed chip cannot cover a tap target.
+    // edge clamp, nudge those three off any visible .touchbtn (and INPUTS off
+    // SPEED & GEAR) so a placed chip cannot cover a tap target, then re-clamp.
     clearControls(W, H);
     // Pack primary instruments first, then place secondary readouts around them.
     // Both corrections reset before measurement and never enter saved settings.
@@ -723,7 +723,14 @@ const HudLayout = (function () {
       btns.push(r);
     }
     if (!btns.length) return;
-    const a = all()[shown()];
+    const a = all()[shown()], bounds = screenBounds(W, H);
+    // The painted share of the screen for a stored offset plus a px correction. A nudge rounds OUTWARD, away
+    // from the button it escapes: toFixed(2) could round a 4.98 px step back under the 4 px of air (0.01vw is
+    // 0.085 px at 852 wide; the hit test's own slack is 0.5 px). dir 0 keeps the clamp's nearest rounding.
+    const share = (base, px, dim, dir) => {
+      const v = base + px / dim * 100;
+      return String(dir > 0 ? +(Math.ceil(v * 100 - 1e-9) / 100).toFixed(2) : dir < 0 ? +(Math.floor(v * 100 + 1e-9) / 100).toFixed(2) : +v.toFixed(2));
+    };
     for (const [id, , sel] of ELEMENTS) {
       if (!CLEAR_CTRL[id]) continue;
       const e = a[id];
@@ -736,6 +743,8 @@ const HudLayout = (function () {
       const px = el.style.getPropertyValue ? parseFloat(el.style.getPropertyValue("--hl-x")) : NaN;
       const py = el.style.getPropertyValue ? parseFloat(el.style.getPropertyValue("--hl-y")) : NaN;
       let dx = isFinite(px) ? (px - e.x) * W / 100 : 0, dy = isFinite(py) ? (py - e.y) * H / 100 : 0;
+      const user = manuallyPlaced(el);
+      let nudged = false;
       for (let n = 0; n < 4; n++) {
         let hit = null;
         for (let i = 0; i < btns.length; i++) {
@@ -743,16 +752,33 @@ const HudLayout = (function () {
           if (r.left < b.right - 0.5 && b.left < r.right - 0.5 && r.top < b.bottom - 0.5 && b.top < r.bottom - 0.5) { hit = b; break; }
         }
         if (!hit) break;
-        // Prefer sliding left (away from the right dock) or up (away from the
-        // pedal row); fall back to the smaller of the two escapes.
-        const left = r.right - hit.left;
-        const up = r.bottom - hit.top;
-        if (left <= up) dx -= left + 4;
-        else dy -= up + 4;
-        el.style.setProperty("--hl-x", String(+(e.x + dx / W * 100).toFixed(2)));
-        el.style.setProperty("--hl-y", String(+(e.y + dy / H * 100).toFixed(2)));
+        nudged = true;
+        // The four escapes, each with EDGE px of air past the button.
+        const left = r.right - hit.left + EDGE, up = r.bottom - hit.top + EDGE;
+        const right = hit.right - r.left + EDGE, down = hit.bottom - r.top + EDGE;
+        let sx = 0, sy = 0;
+        if (user) {
+          // A PLACED piece takes the SMALLEST escape that keeps it inside the safe box. The plate Bryce drags to
+          // BOOST's right (iPhone 15, BUTTON SIZE 237) met the button by 1 px after the paint clamp, and left-or-up
+          // threw it 58 px above the button it was put beside; right moves it 5 px and it stays there. Nothing
+          // inside: the smallest of the four, and the re-clamp below keeps it in the box.
+          const cands = [[-left, 0], [0, -up], [right, 0], [0, down]];
+          const inside = (c) => r.left + c[0] >= bounds.left - 0.5 && r.right + c[0] <= bounds.right + 0.5
+            && r.top + c[1] >= bounds.top - 0.5 && r.bottom + c[1] <= bounds.bottom + 0.5;
+          const ok = cands.filter(inside);
+          [sx, sy] = (ok.length ? ok : cands).reduce((p, c) => (Math.abs(c[0] + c[1]) < Math.abs(p[0] + p[1]) ? c : p));
+        } else if (left <= up) sx = -left;   // a preset's piece slides left (off the right dock) or up (off the pedal row)
+        else sy = -up;
+        dx += sx; dy += sy;
+        el.style.setProperty("--hl-x", share(e.x, dx, W, sx));
+        el.style.setProperty("--hl-y", share(e.y, dy, H, sy));
         r = el.getBoundingClientRect();
       }
+      // RE-CLAMP: a nudge (or the no-escape fallback) must not leave the safe box fit() just put the piece in.
+      if (!nudged) continue;
+      const cx = clampAxis(r.left, r.right, bounds.left, bounds.right), cy = clampAxis(r.top, r.bottom, bounds.top, bounds.bottom);
+      if (cx) el.style.setProperty("--hl-x", share(e.x, dx + cx, W, 0));
+      if (cy) el.style.setProperty("--hl-y", share(e.y, dy + cy, H, 0));
     }
   }
 

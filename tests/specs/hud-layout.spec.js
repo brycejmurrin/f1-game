@@ -1047,18 +1047,39 @@ for (const v of CONTRACT_WINDOWS) {
       await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(() => { window.__apex.go(); window.__apex.headless(true); window.__apex.freeze(true); });
       await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; }, null, { polling: 100, timeout: BOOT_MS });
+      // Cell 1 alone starts from the boot state at BUTTON 245, and CI (run 42299937787) read it mid-fit: --hud-z-bot
+      // unwritten, the tyre 80 px low, the cluster on TYRES. Like the neighbours: fonts in, the sector rows built and
+      // the cluster laid out before the first knob.
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => {
+        const sec = document.getElementById("hud-sectors"), bot = document.querySelector(".hud-bottom");
+        return !!(sec && sec.children.length && bot && [...bot.children].some((c) => !c.hidden && c.getBoundingClientRect().width > 0));
+      }, null, { polling: 100, timeout: BOOT_MS });
       const safe = { l: v.sal, t: v.sat, r: v.w - v.sar, b: v.h - v.sab };
       const bad = [], cells = {};
+      const snapshot = () => page.evaluate(() => window.__apex.hudFit());
       for (const textSize of ["normal", "large"]) for (const ui of [100, 130]) for (const btn of [100, 245]) {
         const cell = `${v.name} text=${textSize} ui=${ui} btn=${btn}`;
+        // The stamp BEFORE the knob: without it the wait accepts the previous fit (the race start's, for cell 1) at once.
+        const prevStamp = await page.evaluate(() => document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
         await page.evaluate(([t, u, b]) => {
           if (t === "normal") delete document.documentElement.dataset.textSize; else document.documentElement.dataset.textSize = t;
           window.__apex.uiScale(u); window.__apex.btnScale(b);
           GameHud.invalidateFit();
         }, [textSize, ui, btn]);
-        await waitPhoneHudFitClearance(page);
-        const fit = await page.evaluate(() => window.__apex.hudFit());
+        await waitPhoneHudFitClearance(page, { prevStamp });
+        // Under freeze the follow-up fits (the steer refit, the tyre restack, the ResizeObserver) run only when a
+        // jump forces them: force fits until two consecutive snapshots agree and assert on the settled one. Not a
+        // retry: a fit that never settles is the two-state loop the contract forbids, and is reported as one.
+        let fit = await snapshot(), settled = false;
+        for (let pass = 0; pass < 6 && !settled; pass++) {
+          await forceHudFit(page); await settlePaint(page);
+          const next = await snapshot();
+          settled = JSON.stringify(next) === JSON.stringify(fit);
+          fit = next;
+        }
         cells[cell] = fit;
+        if (!settled) bad.push(`${cell}: the fit never settled in six forced passes`);
         if (fit.clash.length) bad.push(`${cell}: clash ${fit.clash.join(" ")}`);
         for (const [k, r] of Object.entries(fit.rects)) {
           if (!r) continue;
@@ -1916,7 +1937,13 @@ test.describe("unrestricted manual widgets", () => {
     expect(Math.abs(moved.map.t - (10 + 390 * 0.1))).toBeLessThan(8);
   });
 
-  test("all widgets keep offscreen geometry through Done, Resume and rotation", async ({ page }) => {
+  // Re-blessed 2026-11-06 (UI contract gap 8): the STORED geometry is kept whole — HudLayout.get() and localStorage
+  // never change — while the PAINTED offsets are that request clamped into the safe box (fit()) and, for RELATIVE /
+  // INPUTS / SECTORS, nudged off the tap targets and re-clamped (clearControls). Every widget here shares ONE offset,
+  // so fit() clamps them as one block by the union of their boxes: the union sits inside the box on an axis it fits
+  // and is pinned at the box's left / top where it is bigger (the 3.5x map). A widget with no box keeps the stored
+  // values painted. The old contract ("--hl-x 125.25 painted, off screen") is what put a saved plate on the dock.
+  test("all widgets keep their stored geometry through Done, Resume and rotation, painted inside the safe box", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { __apex.headless(true); __apex.race("monza"); });
@@ -1955,23 +1982,54 @@ test.describe("unrestricted manual widgets", () => {
     });
     expect(mapSizes).toEqual([["128px", "128px"], ["128px", "128px"]]);
     const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+    const NUDGED = ["rel", "inputs", "sectors"];   // clearControls moves these off the tap targets on their own
     const check = async () => {
-      const rows = await page.evaluate(async () => {
+      const { rows, bounds, W, H } = await page.evaluate(async () => {
         GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         HudLayout.fit();
-        return HudLayout.ELEMENTS.map(([id, , sel]) => {
-          const el = document.querySelector(sel), cs = getComputedStyle(el);
-          return { id, x: el.style.getPropertyValue("--hl-x"), y: el.style.getPropertyValue("--hl-y"),
+        const sb = HudLayout.screenBounds(), bounds = { left: sb.left, top: sb.top, right: sb.right, bottom: sb.bottom };
+        const rows = HudLayout.ELEMENTS.map(([id, , sel]) => {
+          const el = document.querySelector(sel), cs = getComputedStyle(el), b = el.getBoundingClientRect();
+          return { id, stored: HudLayout.get(id), x: el.style.getPropertyValue("--hl-x"), y: el.style.getPropertyValue("--hl-y"),
             s: el.style.getPropertyValue("--hl-s"), clear: ["--hud-clear-x", "--hud-clear-y"].map(k => el.style.getPropertyValue(k)),
-            dropped: el.hasAttribute("data-col-drop"), capped: [cs.maxWidth, cs.maxHeight] };
+            dropped: el.hasAttribute("data-col-drop"), capped: [cs.maxWidth, cs.maxHeight],
+            box: b.width && b.height ? { l: b.left, t: b.top, r: b.right, b: b.bottom } : null };
         });
+        return { rows, bounds, W: innerWidth, H: innerHeight };
       });
+      const block = rows.filter(r => r.box && !NUDGED.includes(r.id));
+      // Inside the box on an axis it fits; where it is bigger than the box, its leading edge is pinned there.
+      const fitsBox = (lo, hi, min, max, ctx) => {
+        if (hi - lo <= max - min) { expect(lo, ctx).toBeGreaterThanOrEqual(min - 0.5); expect(hi, ctx).toBeLessThanOrEqual(max + 0.5); }
+        else expect(Math.abs(lo - min), ctx).toBeLessThanOrEqual(0.5);
+      };
+      const union = { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity };
       for (const r of rows) {
-        expect(r.x, r.id).toBe("125.25"); expect(r.y, r.id).toBe("-110.5");
+        expect(r.stored, r.id).toEqual({ x: 125.25, y: -110.5, s: r.id === "map" ? 350 : 20 });
         expect(r.s, r.id).toBe(r.id === "map" ? "3.5" : "0.2");
         expect(r.clear, r.id).toEqual(["", ""]); expect(r.dropped, r.id).toBe(false);
         expect(r.capped, r.id).toEqual(["none", "none"]);
+        if (!r.box) { expect(r.x, r.id).toBe("125.25"); expect(r.y, r.id).toBe("-110.5"); continue; }
+        const ctx = `${r.id} ${JSON.stringify({ painted: [r.x, r.y], box: r.box, bounds })}`;
+        // The paint pulls the request back toward the screen, never further out.
+        expect(+r.x, ctx).toBeLessThanOrEqual(125.25); expect(+r.y, ctx).toBeGreaterThanOrEqual(-110.5);
+        if (NUDGED.includes(r.id)) {
+          fitsBox(r.box.l, r.box.r, bounds.left, bounds.right, "x " + ctx); fitsBox(r.box.t, r.box.b, bounds.top, bounds.bottom, "y " + ctx);
+          if (!block.length) continue;
+          // Its share of the block's clamp is the block's; the rest is its own nudge. Undo that for the union.
+          const nx = (+r.x - +block[0].x) * W / 100, ny = (+r.y - +block[0].y) * H / 100;
+          union.l = Math.min(union.l, r.box.l - nx); union.r = Math.max(union.r, r.box.r - nx);
+          union.t = Math.min(union.t, r.box.t - ny); union.b = Math.max(union.b, r.box.b - ny);
+          continue;
+        }
+        expect([r.x, r.y], `one block, one correction: ${ctx}`).toEqual([block[0].x, block[0].y]);
+        union.l = Math.min(union.l, r.box.l); union.r = Math.max(union.r, r.box.r);
+        union.t = Math.min(union.t, r.box.t); union.b = Math.max(union.b, r.box.b);
+      }
+      if (block.length) {
+        const ctx = JSON.stringify({ union, bounds, block: block.map(r => [r.id, r.box]) });
+        fitsBox(union.l, union.r, bounds.left, bounds.right, "block x " + ctx); fitsBox(union.t, union.b, bounds.top, bounds.bottom, "block y " + ctx);
       }
       expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
     };

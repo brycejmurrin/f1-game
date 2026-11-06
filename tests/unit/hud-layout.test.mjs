@@ -720,8 +720,10 @@ test("clearControls nudges a placed readout off a touch button, adds to the edge
     // 100 wide at 800 + --hl-x vw: stored +30vw is 204 px past the right edge before the clamp.
     getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W + parseFloat(props["--hud-clear-x"] || 0); return { left: x, right: x + 100, top: 500, bottom: 530, width: 100, height: 30 }; },
   };
+  // The button runs to the bottom edge: the right and down escapes would leave the screen, up is 134 px, so left
+  // (100 px) is the smallest escape that stays inside (the four-way pick below).
   const btn = { hidden: false, classList: { contains: () => false },
-    getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 540, width: 100, height: 140 }) };
+    getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 600, width: 100, height: 200 }) };
   const blank = { style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
   const written = { hudLayout: { v: 4, standard: { cockpit: {}, other: { rel: { x: 30, y: 0, s: 100 } } } } };
   const ctx = {
@@ -748,6 +750,59 @@ test("clearControls nudges a placed readout off a touch button, adds to the edge
   ctx.HudLayout.fit();
   assert.deepEqual(rel.getBoundingClientRect(), stable, "repeated user placement stays stable");
   assert.equal(JSON.stringify(written), saved, "temporary correction never writes settings");
+});
+
+// The plate Bryce drags beside BOOST (iPhone 15, BUTTON SIZE 237): the painted clamp left it 1 px on the button, and
+// a left-or-up nudge (CI 42299937787) threw it 58 px ABOVE the button it was put beside. A placed piece takes the
+// smallest of the four escapes that keeps it inside the safe box, rounded away from the button, then re-clamped.
+test("clearControls takes the smallest in-bounds escape for a placed piece, rounds it outward and re-clamps", () => {
+  const W = 852, H = 393, sal = 59, sar = 59, sab = 21;
+  const load = (left, top, w, h, stored, btnRect) => {
+    const props = {}, attrs = {};
+    const el = { props,
+      style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() {
+        const x = left + parseFloat(props["--hl-x"] || 0) / 100 * W, y = top + parseFloat(props["--hl-y"] || 0) / 100 * H;
+        return { left: x, right: x + w, top: y, bottom: y + h, width: w, height: h };
+      } };
+    const btn = { hidden: false, classList: { contains: () => false }, getBoundingClientRect: () => btnRect };
+    const blank = { style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+    const written = { hudLayout: { v: 4, standard: { cockpit: {}, other: { sectors: stored } } } }, root = {};
+    const ctx = {
+      console, window: { innerWidth: W, innerHeight: H },
+      getComputedStyle: (q) => (q === root ? { getPropertyValue: (k) => ({ "--sal": sal + "px", "--sar": sar + "px", "--sat": "0px", "--sab": sab + "px" }[k] || "") } : { display: "block", visibility: "visible" }),
+      document: { readyState: "complete", documentElement: root, getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => false } },
+        querySelectorAll: () => [btn], querySelector: (sel) => (sel === "#hud-sectors" ? el : blank) },
+      GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set() { throw new Error("fit must not persist"); } } },
+    };
+    vm.createContext(ctx);
+    vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+    assert.ok(el.hasAttribute("data-hl-user"), "a stored entry is a placed piece");
+    ctx.HudLayout.fit();
+    const b = plain(ctx.HudLayout.screenBounds());
+    assert.deepEqual(b, { left: sal + 4, top: 4, right: W - sar - 4, bottom: H - sab - 4 });
+    return { r: el.getBoundingClientRect(), props, b, stored: plain(ctx.HudLayout.get("sectors", "other")) };
+  };
+  const boost = { left: 640, right: 714, top: 85, bottom: 225, width: 74, height: 140 };
+  // 1. The plate at x+25vw lands at 713..773, 1 px onto BOOST (right edge 714): right (5 px) beats up (59), down
+  //    (129) and left (137), and the plate stays beside the button, 4 px clear of it. Ceil, so never 3.9x px.
+  let t = load(500, 100, 60, 40, { x: 25, y: 0, s: 60 }, boost);
+  assert.ok(t.r.left >= boost.right + 4, `right escape, 4 px of air: ${JSON.stringify(t.r)}`);
+  assert.ok(t.r.left < boost.right + 5, `and no more than a vw hundredth past it: ${JSON.stringify(t.r)}`);
+  assert.equal(t.r.top, 100, "its row is untouched: it is still beside BOOST");
+  assert.equal(t.props["--hl-x"], "25.59", "25 + 5/852*100 = 25.587, rounded OUTWARD to 25.59");
+  assert.deepEqual(t.stored, { x: 25, y: 0, s: 60 }, "the stored request is untouched");
+  // 2. A wider plate (713..785): the 5 px right escape would cross the right inset (789), so it is not taken; up (59)
+  //    is the smallest that stays inside, and the plate ends 4 px above BOOST, inside the box.
+  t = load(500, 100, 72, 40, { x: 25, y: 0, s: 60 }, boost);
+  assert.equal(t.r.left, 713, "no right escape past the inset");
+  assert.ok(t.r.bottom <= boost.top - 4 && t.r.top >= t.b.top - 0.5, `up, inside the box: ${JSON.stringify(t.r)}`);
+  // 3. Nothing clear of the control fits (one disc covers the safe box): the smallest escape is taken and the
+  //    re-clamp keeps the plate inside the box instead of past its bottom edge.
+  t = load(400, 300, 60, 40, { x: 0, y: 0, s: 50 }, { left: 63, right: 789, top: 4, bottom: 368, width: 726, height: 364 });
+  assert.ok(t.r.left >= t.b.left - 0.5 && t.r.right <= t.b.right + 0.5 && t.r.top >= t.b.top - 0.5 && t.r.bottom <= t.b.bottom + 0.5,
+    `re-clamped into the safe box: ${JSON.stringify(t.r)} in ${JSON.stringify(t.b)}`);
 });
 
 test("a layout saved on a 844x390 phone, opened in a 852x283 Safari tab, stays on screen and off the docks (UI contract gap 8)", () => {
