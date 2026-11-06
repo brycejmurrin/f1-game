@@ -392,7 +392,13 @@ const UiExperience = (function () {
     const HOME_RESIZE_MS = 120;
     const PREVIEW_MAX_EDGE = 512;
     let homeViewGen = 0, resizeTimer = 0;
-    let lastViewportW = window.innerWidth | 0, lastViewportH = window.innerHeight | 0;
+    // The layout viewport (UI contract 2026-11-06 rule 1): innerWidth/Height is the
+    // visual viewport on iOS and can hold the portrait pair at a landscape launch.
+    const icb = () => {
+      const r = document.documentElement;
+      return (r && r.clientWidth > 0 && r.clientHeight > 0) ? [r.clientWidth, r.clientHeight] : [window.innerWidth | 0, window.innerHeight | 0];
+    };
+    let [lastViewportW, lastViewportH] = icb();
     function settleHomeViewport() {
       resizeTimer = 0;
       homeViewGen++;
@@ -401,7 +407,7 @@ const UiExperience = (function () {
       try { if (G.gfx && typeof G.gfx.resize === "function") G.gfx.resize(); } catch (_) { /* harness / pre-boot */ }
     }
     function onHomeViewportChange() {
-      const w = window.innerWidth | 0, h = window.innerHeight | 0;
+      const [w, h] = icb();
       if (w === lastViewportW && h === lastViewportH) return;
       lastViewportW = w; lastViewportH = h;
       if (resizeTimer) clearTimeout(resizeTimer);
@@ -476,8 +482,9 @@ const UiExperience = (function () {
         if (paneKey !== _paneKey) {
           _paneKey = paneKey;
           const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
-          _hostRect.right = innerWidth; _hostRect.bottom = innerHeight;
-          _hostRect.width = innerWidth; _hostRect.height = innerHeight;
+          const [hw, hh] = icb();
+          _hostRect.right = hw; _hostRect.bottom = hh;
+          _hostRect.width = hw; _hostRect.height = hh;
           _worldView.pane = rect ? GarageExperience.freePane(rect, _hostRect) : null;
         }
         trackView = _worldView;

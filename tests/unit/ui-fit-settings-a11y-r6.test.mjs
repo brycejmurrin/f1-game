@@ -47,12 +47,13 @@ test("layout-audit SCREENS opens #pm-panel-a11y", () => {
   );
 });
 
-test("wide sheets let cycle rows shrink at UI 200%", () => {
+test("wide (≥ 52rem own, not compact) sheets let cycle rows shrink at UI 200%", () => {
   const controls = fs.readFileSync(path.join(ROOT, "css/settings-controls.css"), "utf8");
   const rules = cssRules(controls);
-  const SEL = "#pmsettings-inner[data-shape=\"wide\"] .pm-group .set-row > div > select";
-  assert.equal(decl(rules, SEL, "max-width"), "100%");
-  assert.equal(decl(rules, SEL, "min-width"), "3.25rem");
+  const SEL = "#pmsettings-inner:not([data-density=\"compact\"]) .pm-group .set-row > div > select";
+  const opts = { context: /@container sheet \(min-width: 52rem\)/ };
+  assert.equal(decl(rules, SEL, "max-width", opts), "100%");
+  assert.equal(decl(rules, SEL, "min-width", opts), "3.25rem");
 });
 
 test("r6 carve stays Settings ACCESSIBILITY (no foreign selectors)", () => {

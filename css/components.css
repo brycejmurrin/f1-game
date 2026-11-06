@@ -104,6 +104,12 @@ dialog.screen {
   margin: 0;
   border: 0;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  /* The shorthand above re-declares every side, so without this line the
+     `.screen` keyboard rule never reaches a <dialog>: the iOS keyboard covered
+     Settings search and the share-code inputs (#5067; fixed by #5097, rolled
+     back with #5151, re-landed alone — UI contract 2026-11-06 gap 5). Same
+     restatement in css/dialog-platform.css. */
+  padding-bottom: max(var(--safe-b), var(--kb));
   max-width: none; max-height: none;
   width: 100%; height: 100%;
   background: transparent;

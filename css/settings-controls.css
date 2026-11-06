@@ -212,12 +212,6 @@
     grid-auto-rows: 1fr;
     align-items: stretch;
   }
-  /* Wide shape turns a page into two columns; action labels (REPOSITION
-     TOUCH CONTROLS) then wrap inside a half-width --tap plate. Span the row. */
-  #pmsettings-inner[data-shape="wide"] .pm-group > button {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
 }
 /* MOVE & SIZE (js/ui/hud-layout.js): an element the current mode does not draw
    greys its sliders and RESET ELEMENT — they would move nothing; #pm-hl-why says why. */
@@ -309,13 +303,19 @@
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label { font-size: 0; gap: 0; }
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label > input { font-size: var(--fs-3); }
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search]:has(input:placeholder-shown) > p { display: none; }
-/* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
-   have to scroll through a single full-width column of buttons.
-   Each option button shrinks from full-sheet width (~717px) to half-width
-   (~350px). Sliders (.tune-row) and the renderer picker (#pm-renderer-row)
-   span both columns — they need the width.
-   Uses data-shape="wide" (sheetshape.js, zoom-corrected) not @media orientation. */
-#pmsettings-inner[data-shape="wide"] .pm-group {
+/* TWO-COLUMN SETTINGS PAGES — BY WIDTH, NOT BY ASPECT (UI contract 2026-11-06
+   §4.2, gap 3). This grid used to key on data-shape="wide", which is the
+   sheet's ASPECT: every landscape phone is wide, so every phone settings page
+   was a 2-column grid of ~320-own-px half-width plates with large-text labels
+   wrapping to three lines (measured 852x393 / 852x283 / 844x390, all
+   2-col). A phone page is ONE reading column; columns are for a sheet that
+   is wide IN ITS OWN PX (52rem = 832 own, the same cliff as the 3-up door
+   index above) and not compact. Container units are zoom-corrected, so UI
+   SIZE 150% on a laptop sheet correctly drops back to one column.
+   Sliders (.tune-row), setting rows and the renderer picker span both
+   columns — they need the width. */
+@container sheet (min-width: 52rem) {
+#pmsettings-inner:not([data-density="compact"]) .pm-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   /* max-content: Chromium sizes an `auto` track from a wrapping setting row's
@@ -327,34 +327,35 @@
 /* Two rules, not one :is() — :is() takes its HIGHEST argument's specificity,
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
-#pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-appearance > details { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance > details { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: HUD / METRICS / RENDERER each on their own row (UI SIZE moved to
    APPEARANCE › READABILITY). Named areas so an open fold cannot steal the hole. */
-#pmsettings-inner[data-shape="wide"] #pm-panel-display {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display {
   grid-template-areas:
     "hudopts hudopts"
     "metrics metrics"
     "cockpit cockpit";
   grid-auto-flow: dense;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
   margin: 0;
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-hud-details {
   grid-area: hudopts;
   margin: 0;
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
+}
 /* DISPLAY sliders (and APPEARANCE's UI SIZE) are settings rows, not tuner
    rows: steel label, text value (tuner red is the loud bit), no extra
    tap-height padding around a track that is already --slider. */
@@ -617,19 +618,29 @@ button:has(> [data-fold]) {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body),
 #pmsettings-inner[data-density="compact"] :is(#pm-display-adv-body, #pm-visual-tuners-body) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) > button,
 #pmsettings-inner[data-density="compact"] :is(#pm-display-adv-body, #pm-visual-tuners-body) > button {
   width: auto;
 }
 #pm-visual-tuners-body > .adv-help { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners-body {
+/* The same fold plates on a wide (≥ 52rem own, not compact) sheet — gap 3's
+   gate, never the aspect. */
+@container sheet (min-width: 52rem) {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
+}
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) > button {
+  width: auto;
+}
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-visual-tuners-body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 }
 /* Capture / diag sit under RESET | THREE PATH as secondary rows, not
    a third pair of equally loud plates. They always span — when
@@ -696,41 +707,43 @@ button:has(> [data-fold]) {
    Range controls own Left/Right for adjustment. Keep one reading column so
    Up/Down and the controller D-pad reach every input, including short rows
    whose neighbours have longer help text. Section headings retain the groups. */
-#pmsettings-inner[data-shape="wide"] #advanced-inner,
-#pmsettings-inner[data-shape="wide"] #audioset-inner {
+@container sheet (min-width: 52rem) {
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner,
+#pmsettings-inner:not([data-density="compact"]) #audioset-inner {
   grid-column: 1 / -1;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #advanced-inner,
-#pmsettings-inner[data-shape="wide"] #advanced-inner #adv-extra {
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner,
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner #adv-extra {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
   align-content: start;
 }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-driving .preset-row,
-#pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #advanced-inner details,
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .adv-item { margin: 0; min-width: 0; grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-driving .preset-row,
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .preset-row { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner details,
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .adv-sec { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 /* UI SIZE 200% on wide sheets: ‹ select › clusters must shrink inside their
    grid cell instead of painting past the pane (fit-audit #3254 / #3255). */
-#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div {
+#pmsettings-inner:not([data-density="compact"]) .pm-group .set-row > div {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
 }
-#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div > select {
+#pmsettings-inner:not([data-density="compact"]) .pm-group .set-row > div > select {
   flex: 1 1 6rem;
   width: auto;
   min-width: 3.25rem;
   max-width: 100%;
 }
-#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div > button {
+#pmsettings-inner:not([data-density="compact"]) .pm-group .set-row > div > button {
   flex: 0 0 var(--chip-h);
   width: var(--chip-h);
   min-width: var(--tap-min);
+}
 }
 /* MY TEAM logo upload: the file input itself is hidden (its native button is
    unstyleable), so the <label> is the visible control.
