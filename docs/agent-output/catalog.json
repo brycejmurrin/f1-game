@@ -4309,6 +4309,12 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/probe-sheets-contract.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ui/reach-score.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

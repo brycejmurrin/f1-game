@@ -528,6 +528,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
+| **ui/probe-sheets-contract.mjs** | UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the | — |
 | **ui/reach-score.mjs** | Offline two-thumb reach + dead-space score per menu screen from layout-audit DOM dumps or explorer inspections. | survey-ui-matrix |
 | **ui/review-captures.mjs** | Build a portable offline screenshot review from a bounded local evidence manifest. | css-play |
 | **ui/tap-floor.mjs** | Shared tap floors (WCAG 24 + body `--tap`) and in-page measure (label union, ÷ zoom) for the layout tools. | survey-ui-matrix |

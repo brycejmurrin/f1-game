@@ -1,0 +1,1 @@
+Fixed: on a landscape phone the pause card, results list, career hub, circuit picker and race settings keep every button on screen without scrolling the card itself (in progress — PR D of the UI rebuild).
