@@ -27,10 +27,7 @@ const CustomLiveries = (function () {
     const nextSuffix = new Map();
     const remap = new Map();
     let repaired = 0;
-    // Holes and non-objects (a MY TEAM null slot, a share-code kept null) must
-    // not reach `liv.id` — getCustomLiveries already filters them on read, but
-    // this door is also the import path for share-code / garage files.
-    const liveries = (Array.isArray(rows) ? rows : []).filter((liv) => liv && typeof liv === "object").map((liv) => {
+    const liveries = (Array.isArray(rows) ? rows : []).map((liv) => {
       const original = liv.id;
       if (!catalogIds.has(original) && !claimed.has(original)) { claimed.add(original); return liv; }
       const stem = ((original || "custom") + "_imported").slice(0, 64);

@@ -712,11 +712,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (tNow - _lampLastT > 1.0) {
     const lit = rt === null || track !== prevTrack || !(rt - _lampLastRT <= 1.0);   // a new world, or render ran dark
     if (!_lampHid && lit) _lampWarmT0 = tNow;
-    // Drop BOTH rank caches: a standstill after a pause still passes withinAge
-    // (age is skipped when the eye is still), so leaving _S_VIEW.rankSrc set let
-    // the mirror reuse a pre-pause membership while the forward set rebuilt.
     _S_MAIN.rankSrc = null;
-    _S_VIEW.rankSrc = null;
   }
   _lampHid = false;
   _lampLastT = tNow; _lampLastRT = rt === null ? -1e9 : rt;

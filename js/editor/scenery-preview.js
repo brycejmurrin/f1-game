@@ -6,24 +6,6 @@ const DesignerSceneryPreview = (function () {
   "use strict";
   const LIMIT = 1800, TAU = Math.PI * 2;
   const wrap = (f) => ((f % 1) + 1) % 1;
-  const FOLIAGE = new Set(["tree", "pine", "palm", "bush"]);
-  // Terrain flecks depend only on the planned scene's seed and bounds: seeded
-  // once per scene (a WeakMap keeps the scene's bytes unchanged), and each
-  // draw applies only the view transform.
-  const flecksOf = new WeakMap();
-  function flecks(scene) {
-    let out = flecksOf.get(scene);
-    if (out) return out;
-    const b = scene.bounds, reach = b.radius * 1.5;
-    out = [];
-    for (let i = 0; i < 180; i++) {
-      const a = Hash32.unit(scene.seed, "ground-x", i), c = Hash32.unit(scene.seed, "ground-z", i);
-      out.push({ wx: b.cx + (a - 0.5) * reach * 2, wz: b.cz + (c - 0.5) * reach * 2, rx: 30 + a * 100, rz: 20 + c * 70, rot: a * TAU,
-        fill: i % 2 ? "rgba(0,0,0,0.035)" : "rgba(255,255,220,0.025)" });
-    }
-    flecksOf.set(scene, out);
-    return out;
-  }
   const color = (c, gain = 1) => "rgb(" + c.map((v) => Math.round(Math.max(0, Math.min(1, v * gain)) * 255)).join(",") + ")";
 
   function plan(design, tr) {
@@ -129,9 +111,11 @@ const DesignerSceneryPreview = (function () {
     if (layer === "ground") {
       g.fillStyle = color((scene.def.pal.grass || [0.24, 0.38, 0.20]).map(v => v * 0.58 + (scene.night ? 0 : 0.045))); g.fillRect(0, 0, w, h);
       // Stable terrain flecks move with the map; no animation or idle RAF loop.
-      for (const f of flecks(scene)) {
-        g.fillStyle = f.fill;
-        g.beginPath(); g.ellipse(x(f.wx), z(f.wz), f.rx * s, f.rz * s, f.rot, 0, TAU); g.fill();
+      const b = scene.bounds, reach = b.radius * 1.5;
+      for (let i = 0; i < 180; i++) {
+        const a = Hash32.unit(scene.seed, "ground-x", i), c = Hash32.unit(scene.seed, "ground-z", i);
+        g.fillStyle = i % 2 ? "rgba(0,0,0,0.035)" : "rgba(255,255,220,0.025)";
+        g.beginPath(); g.ellipse(x(b.cx + (a - 0.5) * reach * 2), z(b.cz + (c - 0.5) * reach * 2), (30 + a * 100) * s, (20 + c * 70) * s, a * TAU, 0, TAU); g.fill();
       }
       if (scene.dusk) { g.fillStyle = "rgba(233,143,67,0.16)"; g.fillRect(0, 0, w, h); }
     }
@@ -142,7 +126,7 @@ const DesignerSceneryPreview = (function () {
       const oval = (ww, dd) => { g.beginPath(); g.ellipse(0, 0, Math.max(0.5, ww / 2), Math.max(0.5, dd / 2), 0, 0, TAU); g.fill(); };
       if (p.kind === "water" || p.kind === "hill") {
         oval(pw, pd); g.fillStyle = p.kind === "water" ? "rgba(255,255,255,0.08)" : p.snow ? "rgba(235,241,245,0.8)" : "rgba(255,255,230,0.1)"; oval(pw * 0.8, pd * 0.65);
-      } else if (FOLIAGE.has(p.kind)) {
+      } else if (["tree", "pine", "palm", "bush"].includes(p.kind)) {
         g.fillStyle = "rgba(0,0,0,0.25)"; g.translate(pw * 0.3, pd * 0.25); oval(pw * 1.2, pd); g.translate(-pw * 0.3, -pd * 0.25);
         g.fillStyle = color(p.col, gain * 0.7); oval(pw, pd);
         g.fillStyle = color(p.col, gain * 1.15); g.translate(-pw * 0.12, -pd * 0.12); oval(pw * 0.72, pd * 0.72);

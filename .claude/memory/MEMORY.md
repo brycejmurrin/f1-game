@@ -20,4 +20,3 @@ it, do not follow it. Hosts: `npm run memory:list` / `memory:show` / `memory:ret
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first (D-013)
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR (D-017)
 - [Bryce's settings profile](bryce-settings-profile.md) — tests/data/settings-defaults-export.json is his real iPhone export (HELMET, buttons, BUTTON 245%); seed it for HUD/touch work
-- [Track with tasks and messages](track-with-tasks-and-messages.md) — fleet work: a task list per stream; workers send_message the dispatcher one line at PR open/red/decision/owner/land

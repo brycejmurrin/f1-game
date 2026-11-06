@@ -19,8 +19,7 @@ import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, schedule
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
-  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope, closingLine, workflowFailureAnnotations,
-  recordRefusal, recordedTimings, RECORD_MAX_EXTERNAL_LOAD, changedVsDeploy }
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope, closingLine, workflowFailureAnnotations }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -194,40 +193,6 @@ test("local measurements override the committed table", () => {
     fs.writeFileSync(local, JSON.stringify({ ms: { y: 9 } }));
     assert.deepEqual(loadTimings([committed, local]), { x: 1, y: 9 });
     assert.deepEqual(loadTimings([path.join(dir, "absent.json")]), {}, "a missing table is no hint, never an error");
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("--record refuses a busy box at the start or the end, net of its own workers (#4548)", () => {
-  assert.equal(recordRefusal({ startLoad: 0.4, endLoad: 3.2, cpus: 4, jobs: 3 }), null, "the end load is mostly this run's 3 workers");
-  assert.equal(recordRefusal({ startLoad: 1.9, endLoad: 0, cpus: 4, jobs: 3 }), null, "0.475 per CPU at start is under the 0.5 line");
-  assert.notEqual(recordRefusal({ startLoad: 2.1, endLoad: 0, cpus: 4, jobs: 3 }), null, "0.525 per CPU at start is busy");
-  assert.notEqual(recordRefusal({ startLoad: 0.2, endLoad: 9.2, cpus: 4, jobs: 3 }), null, "6.2 of other work at the end is busy");
-  assert.notEqual(recordRefusal({ startLoad: Number.NaN, endLoad: 0, cpus: 4, jobs: 1 }), null, "an unknown load never records");
-  assert.equal(RECORD_MAX_EXTERNAL_LOAD, 0.5);
-});
-
-test("--record keeps only tooling-fast floor files: a stale key is pruned, a new measurement wins (#4548)", () => {
-  const [a, b] = TOOLING_FAST_FILES;
-  const out = recordedTimings({ [a]: 100, [["tests", "unit", "deleted-long-ago.test.mjs"].join("/")]: 5, [b]: 7 }, { [b]: 9, "/tmp/x.test.mjs": 1 });
-  assert.deepEqual(out, Object.fromEntries([[a, 100], [b, 9]].sort(([x], [y]) => x.localeCompare(y))));
-  assert.deepEqual(recordedTimings({ z: 1 }, { y: 2 }, ["y"]), { y: 2 });
-});
-
-test("runToolingFast --record writes nothing on a busy box and a pruned table on a quiet one (#4548)", async () => {
-  const dir = tmp();
-  try {
-    const f = path.join(dir, "ok.test.mjs");
-    fs.writeFileSync(f, `import test from "node:test"; test("ok", () => {});\n`);
-    const timingsPath = path.join(dir, "timings.json");
-    const logPath = path.join(dir, "suite.log");
-    const busy = await runToolingFast([f], { jobs: 1, logPath, localTimingsPath: null, record: true, timingsPath, cpus: 4, loadavg: () => 8 });
-    assert.equal(busy.ok, true);
-    assert.equal(fs.existsSync(timingsPath), false, "a busy run records nothing");
-    const [keep] = TOOLING_FAST_FILES;
-    fs.writeFileSync(timingsPath, JSON.stringify({ ms: { [keep]: 1234, [["tests", "unit", "gone.test.mjs"].join("/")]: 99 } }));
-    const quiet = await runToolingFast([f], { jobs: 1, logPath, localTimingsPath: null, record: true, timingsPath, cpus: 4, loadavg: () => 0.1 });
-    assert.equal(quiet.ok, true);
-    assert.deepEqual(JSON.parse(fs.readFileSync(timingsPath, "utf8")).ms, { [keep]: 1234 }, "the stale key went; a non-floor file is not added");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -980,32 +945,4 @@ test("closingLine: the verdict is the LAST output line of a CLI run, red or gree
     assert.equal(r.status, 1);
     assert.equal(r.stdout.trimEnd().split("\n").pop(), "= tooling-fast failed (1 files, 1 failed)");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-// B3 (2026-11-03): `--changed` read `git diff` only, so a new, un-added unit file was never selected.
-test("changedVsDeploy lists untracked files beside the tracked diff", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tf-untracked-"));
-  try {
-    const git = (...a) => { const r = spawnSync("git", a, { cwd: dir, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); return r.stdout; };
-    git("init", "-q", "-b", "base");
-    fs.writeFileSync(path.join(dir, ".gitignore"), "ignored/\n");
-    fs.writeFileSync(path.join(dir, "a.js"), "1\n");
-    git("add", "."); git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "base");   // CI runners have no git identity
-    git("checkout", "-q", "-b", "topic");
-    fs.writeFileSync(path.join(dir, "a.js"), "2\n");
-    fs.mkdirSync(path.join(dir, "fresh"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "fresh/new.test.mjs"), "\n");
-    fs.mkdirSync(path.join(dir, "ignored"));
-    fs.writeFileSync(path.join(dir, "ignored/x.js"), "\n");
-    assert.deepEqual(changedVsDeploy("base", dir).sort(), ["a.js", "fresh/new.test.mjs"]);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("a changelog fragment in the diff runs gen:check, so a prefix-less one fails the floor (#4718)", () => {
-  const all = ["tests/unit/docs-integrity.test.mjs"];
-  for (const changed of [["docs/changelog.d/" + "x.md"], ["docs/changelog.d/" + "x.md", "tools/ci/test-bg.mjs"]]) {
-    const r = selectToolingFastChanged(changed, { allFiles: all, pinIndex: new Map() });
-    assert.equal(r.genCheck, true, changed.join());
-  }
-  assert.notEqual(selectToolingFastChanged(["docs/changelog.d/" + "README.md"], { allFiles: all, pinIndex: new Map() }).genCheck, true);
 });

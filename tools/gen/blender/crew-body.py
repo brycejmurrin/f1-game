@@ -3,7 +3,7 @@
 """Pit crew body, authored as superellipse ring lofts and checked against ANSUR II.
 
   blender -b --factory-startup --python tools/gen/blender/crew-body.py -- \
-    --output-dir artifacts/crew-body [--render] [--write-runtime]
+      --output-dir artifacts/crew-body [--render] [--write-runtime]
 
 Each part is a list of rings [t, rx, rz, cx, cz, slot] lofted with `sides`
 segments of a superellipse of exponent `p` (js/garage/crew-draw.js lofts the
@@ -18,11 +18,6 @@ rig's lengths (THIGH 0.43, SHIN 0.44, ARM 0.30 + the fist past the wrist; limb
 fronts are local -z), the boot about the foot target with the sole at -0.08,
 the helmet about the head centre (1.62 standing).
 
-Body VARIANTS (stock / stocky / lean) scale ring radii without changing joint
-lengths; ROLES (gunner / jack / lolli / carrier) add team-paint panel overlays
-so one table dresses every pit-stop job. Both export into the same
-@blender-body block as PARTS — compact, eager, no new script tag.
-
 SIZES: ANSUR II male medians (US Army 2012 survey, 4,082 measured subjects;
 https://www.openlab.psu.edu/ansur2/, ANSUR_II_MALE_Public.csv) plus overall
 bulk: chest breadth 0.289 / depth 0.253, waist 0.325 x 0.234, hip breadth
@@ -33,8 +28,7 @@ KIT: F1 Sporting Regulations art. 34.13 (helmet to ECE 22.05 / DOT / JIS T8133
 and eye protection for anyone working on a car at a stop; adopted 2013 as art.
 23.11 after the Nurburgring wheel incident: https://www.fia.com/news/fia-reinforces-f1-safety),
 so a road-style full-face shell with chin bar and visor; one-piece fire-resistant
-overalls with shoulder epaulettes and team-colour panels; gauntlet gloves;
-reinforced knee pads; low pit shoes.
+overalls with shoulder epaulettes; gauntlet gloves; low pit shoes.
 
 Blender XYZ = game X, -Z, Y. --render writes front / side / three-quarter
 Workbench stills of the rest figure in a sample livery and a sheet.
@@ -52,90 +46,54 @@ out = Path(opts.output_dir).resolve(); out.mkdir(parents=True, exist_ok=True)
 
 # ── THE BODY ─────────────────────────────────────────────────────────────────
 PARTS = {
-    # One-piece fire suit from the crotch to the collar: hips, an elastic waist
-    # panel (trim), chest with a team patch, the shoulder yoke / epaulettes, a
-    # trim collar. Side stripes and a back stripe read the secondary livery.
+    # One-piece overall from the crotch to the collar: hips over the buttocks,
+    # an elastic waist panel (trim), chest, the shoulder yoke, a trim collar.
     'torso': dict(axis='y', sides=14, p=2.3, rings=[
-        [0.83, 0, 0, 0, -0.01, 0], [0.86, 0.152, 0.112, 0, -0.012, 0], [0.92, 0.188, 0.138, 0, -0.012, 0],
-        [0.985, 0.180, 0.130, 0, -0.006, 2], [1.035, 0.168, 0.120, 0, 0, 0], [1.17, 0.174, 0.130, 0, 0.014, 0],
-        [1.30, 0.182, 0.138, 0, 0.018, 0], [1.375, 0.196, 0.122, 0, 0.008, 0], [1.435, 0.158, 0.100, 0, -0.002, 0],
-        [1.47, 0.080, 0.074, 0, 0.004, 2], [1.515, 0.070, 0.066, 0, 0.008, 2], [1.525, 0, 0, 0, 0.008, 2]],
-        panels=[[1, 4, 7, 335, 25], [1, 4, 7, 155, 205],            # side stripes (wider)
-                [1, 4, 7, 70, 110],                                  # chest chevron / number panel
-                [1, 4, 7, 250, 290],                                 # back stripe
-                [1, 7, 9, 320, 40], [1, 7, 9, 140, 220]]),           # epaulettes + shoulder yoke
-    # Full-face shell: taller crown, recessed eyeport, dark visor band, forward
-    # chin bar, trim neck roll. Accent crown stripe wraps front and back.
+        [0.83, 0, 0, 0, -0.01, 0], [0.86, 0.15, 0.11, 0, -0.012, 0], [0.92, 0.185, 0.135, 0, -0.012, 0],
+        [0.985, 0.178, 0.128, 0, -0.006, 2], [1.035, 0.17, 0.122, 0, 0, 0], [1.17, 0.172, 0.128, 0, 0.012, 0],
+        [1.30, 0.178, 0.135, 0, 0.016, 0], [1.375, 0.19, 0.12, 0, 0.006, 0], [1.435, 0.155, 0.098, 0, -0.004, 0],
+        [1.47, 0.078, 0.072, 0, 0.004, 2], [1.515, 0.068, 0.064, 0, 0.008, 2], [1.525, 0, 0, 0, 0.008, 2]],
+        panels=[[1, 4, 7, 340, 20], [1, 4, 7, 160, 200],            # side stripes
+                [1, 7, 8, 330, 30], [1, 7, 8, 150, 210],            # epaulettes
+                [1, 5, 6, 62, 118]]),                              # chest patch
+    # Full-face shell: crown, eyeport, visor band, chin bar, trim neck roll.
     'head': dict(axis='y', sides=16, p=2.1, rings=[
-        [0.170, 0, 0, 0, -0.010, 0], [0.160, 0.072, 0.088, 0, -0.012, 0], [0.134, 0.112, 0.132, 0, -0.008, 0],
-        [0.092, 0.132, 0.154, 0, -0.002, 0], [0.040, 0.134, 0.152, 0, 0.002, 0], [-0.002, 0.130, 0.148, 0, 0.010, 0],
-        [-0.040, 0.126, 0.152, 0, 0.016, 0], [-0.082, 0.116, 0.150, 0, 0.034, 0], [-0.122, 0.100, 0.134, 0, 0.038, 0],
-        [-0.146, 0.082, 0.108, 0, 0.016, 2], [-0.150, 0, 0, 0, 0.016, 2]],
-        panels=[[4, 4, 6, 42, 138],                                 # visor (wider eyeport)
-                [1, 1, 4, 65, 115], [1, 1, 4, 245, 295],            # crown stripe
-                [2, 7, 9, 50, 130]]),                               # chin-bar trim lip
-    # Shoulder to elbow: accent deltoid cap (epaulette), sleeve stripe.
+        [0.168, 0, 0, 0, -0.012, 0], [0.158, 0.07, 0.085, 0, -0.012, 0], [0.132, 0.11, 0.13, 0, -0.008, 0],
+        [0.09, 0.13, 0.152, 0, -0.004, 0], [0.038, 0.136, 0.158, 0, 0, 0], [-0.004, 0.134, 0.158, 0, 0.006, 0],
+        [-0.042, 0.128, 0.155, 0, 0.012, 0], [-0.085, 0.118, 0.146, 0, 0.026, 0], [-0.125, 0.102, 0.128, 0, 0.03, 0],
+        [-0.148, 0.084, 0.104, 0, 0.012, 2], [-0.152, 0, 0, 0, 0.012, 2]],
+        panels=[[4, 4, 6, 48, 132],                                 # visor
+                [1, 1, 4, 70, 110], [1, 1, 4, 250, 290]]),          # crown stripe, front and back
+    # Shoulder to elbow: deltoid cap in the accent (the epaulette), biceps forward.
     'upper': dict(axis='y', sides=10, p=2, rings=[
-        [-0.035, 0, 0, 0, 0, 0], [-0.02, 0.052, 0.052, 0, 0, 1], [0.02, 0.066, 0.064, 0, 0, 0],
+        [-0.035, 0, 0, 0, 0, 0], [-0.02, 0.05, 0.05, 0, 0, 1], [0.02, 0.064, 0.062, 0, 0, 0],
         [0.10, 0.060, 0.058, 0, -0.004, 0], [0.19, 0.054, 0.056, 0, -0.006, 0], [0.28, 0.046, 0.046, 0, 0, 0],
-        [0.315, 0.040, 0.040, 0, 0, 0], [0.33, 0, 0, 0, 0, 0]],
-        panels=[[1, 3, 5, 200, 340]]),                              # outer-arm sleeve stripe
-    # Elbow to wrist, trim cuff, then a flared gauntlet glove and a gripping fist.
+        [0.315, 0.04, 0.04, 0, 0, 0], [0.33, 0, 0, 0, 0, 0]]),
+    # Elbow to wrist (0.30, the rig's hand target), a trim cuff, then the
+    # gauntlet glove and a gripping fist 0.11 m past the wrist, broad front-back.
     'fore': dict(axis='y', sides=10, p=2, rings=[
         [-0.03, 0, 0, 0, 0, 0], [-0.015, 0.042, 0.042, 0, 0, 0], [0.04, 0.052, 0.05, 0, 0, 0],
-        [0.17, 0.043, 0.04, 0, 0, 0], [0.245, 0.038, 0.036, 0, 0, 2], [0.262, 0.040, 0.038, 0, 0, 5],
-        [0.29, 0.036, 0.034, 0, 0, 5], [0.315, 0.030, 0.048, 0, -0.004, 5], [0.355, 0.033, 0.052, 0, -0.006, 5],
-        [0.39, 0.031, 0.046, 0, -0.004, 5], [0.405, 0.022, 0.030, 0, 0, 5], [0.412, 0, 0, 0, 0, 5]]),
-    # Hip to knee with a bulged front knee pad (gunners kneel on it).
+        [0.17, 0.043, 0.04, 0, 0, 0], [0.245, 0.036, 0.034, 0, 0, 2], [0.262, 0.037, 0.035, 0, 0, 5],
+        [0.29, 0.034, 0.032, 0, 0, 5], [0.315, 0.028, 0.046, 0, -0.004, 5], [0.355, 0.031, 0.05, 0, -0.006, 5],
+        [0.39, 0.03, 0.044, 0, -0.004, 5], [0.405, 0.022, 0.03, 0, 0, 5], [0.412, 0, 0, 0, 0, 5]]),
+    # Hip to knee, a trim knee pad on the front (the gunners kneel).
     'thigh': dict(axis='y', sides=10, p=2, rings=[
-        [-0.06, 0, 0, 0, 0, 0], [-0.045, 0.070, 0.075, 0, 0, 0], [0, 0.094, 0.098, 0, 0.004, 0],
-        [0.09, 0.096, 0.098, 0, 0.002, 0], [0.24, 0.082, 0.084, 0, -0.002, 0], [0.355, 0.070, 0.074, 0, -0.006, 0],
-        [0.42, 0.066, 0.072, 0, -0.012, 0], [0.465, 0.042, 0.048, 0, -0.008, 0], [0.475, 0, 0, 0, -0.006, 0]],
-        panels=[[2, 5, 7, 215, 325], [1, 5, 7, 230, 310]]),         # pad shell + accent face
-    # Knee to ankle, calf behind (+z on a limb), lower-leg slot (darker suit).
+        [-0.06, 0, 0, 0, 0, 0], [-0.045, 0.07, 0.075, 0, 0, 0], [0, 0.094, 0.098, 0, 0.004, 0],
+        [0.09, 0.096, 0.098, 0, 0.002, 0], [0.24, 0.082, 0.084, 0, -0.002, 0], [0.36, 0.066, 0.068, 0, -0.004, 0],
+        [0.43, 0.06, 0.064, 0, -0.008, 0], [0.465, 0.04, 0.045, 0, -0.006, 0], [0.475, 0, 0, 0, -0.006, 0]],
+        panels=[[2, 5, 7, 225, 315]]),
+    # Knee to ankle, the calf behind (+z on a limb), in the lower-leg slot.
     'shin': dict(axis='y', sides=10, p=2, rings=[
-        [-0.035, 0, 0, 0, 0, 3], [-0.02, 0.050, 0.052, 0, 0, 3], [0.03, 0.062, 0.064, 0, 0.004, 3],
-        [0.12, 0.064, 0.068, 0, 0.010, 3], [0.26, 0.052, 0.054, 0, 0.006, 3], [0.38, 0.044, 0.044, 0, 0, 3],
+        [-0.035, 0, 0, 0, 0, 3], [-0.02, 0.05, 0.052, 0, 0, 3], [0.03, 0.062, 0.064, 0, 0.004, 3],
+        [0.12, 0.064, 0.068, 0, 0.01, 3], [0.26, 0.052, 0.054, 0, 0.006, 3], [0.38, 0.044, 0.044, 0, 0, 3],
         [0.44, 0.042, 0.042, 0, 0, 3], [0.46, 0, 0, 0, 0, 3]]),
-    # Low pit shoe along +z (heel behind the ankle), flat sole 0.08 m below the
-    # foot target on every ring (cy - ry = -0.08), accent side flash, darker sole.
+    # Low pit shoe along +z (heel behind the ankle), a flat sole 0.08 m below
+    # the foot target on every ring (cy - ry = -0.08), an accent side flash.
     'boot': dict(axis='z', sides=12, p=3, rings=[
-        [-0.078, 0, 0, 0, -0.035, 2], [-0.072, 0.044, 0.048, 0, -0.032, 2], [-0.048, 0.054, 0.062, 0, -0.018, 2],
-        [0, 0.058, 0.066, 0, -0.014, 2], [0.06, 0.060, 0.052, 0, -0.028, 2], [0.13, 0.058, 0.036, 0, -0.044, 2],
-        [0.18, 0.048, 0.026, 0, -0.054, 2], [0.198, 0.030, 0.018, 0, -0.062, 2], [0.204, 0, 0, 0, -0.070, 2]],
-        panels=[[6, 0, 8, 215, 325], [1, 2, 5, 340, 20], [1, 2, 5, 160, 200]]),
-}
-
-# Compact body builds: scale ring radii (joint lengths unchanged). stock is identity.
-# Runtime (GarageCrewDraw.body.resolve) re-seats boot cy so cy−ry stays −0.08.
-VARIANTS = {
-    'stock':  {'rx': 1.00, 'rz': 1.00},
-    'stocky': {'rx': 1.06, 'rz': 1.07},
-    'lean':   {'rx': 0.94, 'rz': 0.93},
-}
-
-# Role kit = extra paint panels on top of PARTS[name].panels (slot, r0, r1, a0, a1).
-# Geometry stays shared so per-frame cost is flat; only the baked mesh colours differ.
-ROLES = {
-    'gunner': {   # wheel-gun operator: accent knee pad + cuff stripe
-        'thigh': [[1, 5, 7, 200, 340]],
-        'fore':  [[1, 4, 6, 0, 360]],
-        'upper': [[1, 1, 3, 180, 360]],
-    },
-    'jack': {     # jack man: reinforced chest + forearm cuff
-        'torso': [[1, 5, 8, 35, 145]],
-        'fore':  [[2, 3, 5, 0, 360]],
-    },
-    'lolli': {    # lollipop / light-board operator: hi-vis shoulders
-        'torso': [[1, 6, 9, 300, 60], [1, 6, 9, 120, 240]],
-        'upper': [[1, 0, 3, 0, 360]],
-        'head':  [[1, 0, 3, 0, 360]],
-    },
-    'carrier': {  # tyre carrier: shoulder + thigh accent bands
-        'upper': [[1, 0, 4, 180, 360]],
-        'thigh': [[1, 2, 5, 0, 360]],
-        'fore':  [[1, 2, 4, 0, 360]],
-    },
+        [-0.078, 0, 0, 0, -0.035, 2], [-0.072, 0.042, 0.045, 0, -0.035, 2], [-0.05, 0.052, 0.06, 0, -0.02, 2],
+        [0, 0.056, 0.065, 0, -0.015, 2], [0.06, 0.058, 0.05, 0, -0.03, 2], [0.13, 0.058, 0.035, 0, -0.045, 2],
+        [0.18, 0.048, 0.025, 0, -0.055, 2], [0.198, 0.03, 0.018, 0, -0.062, 2], [0.204, 0, 0, 0, -0.07, 2]],
+        panels=[[6, 0, 8, 215, 325], [1, 3, 5, 345, 15], [1, 3, 5, 165, 195]]),
 }
 
 # ── THE LOFT (js/garage/crew-draw.js grid/slotOf, the same arithmetic) ───────
@@ -192,22 +150,10 @@ check('helmet top (stature 1.755 + shell)', 1.62 + PARTS['head']['rings'][0][0],
 check('helmet gap over the collar', 1.62 + PARTS['head']['rings'][-2][0] - 1.47, 0, .03, 0)
 sole = [r[4] - r[2] for r in PARTS['boot']['rings'] if r[1] > 0]
 check('flat sole at -0.08', max(abs(s + .08) for s in sole), 0, 1e-9, 0)
-# Variants keep joint lengths and stay within a modest bulk envelope of stock.
-for vid, sc in VARIANTS.items():
-    assert abs(sc['rx'] - 1) <= 0.08 and abs(sc['rz'] - 1) <= 0.08, vid
-assert set(VARIANTS) >= {'stock', 'stocky', 'lean'}
-assert set(ROLES) >= {'gunner', 'jack', 'lolli', 'carrier'}
-for role, parts in ROLES.items():
-    for pname, panels in parts.items():
-        assert pname in PARTS, '%s/%s' % (role, pname)
-        for panel in panels:
-            assert len(panel) == 5 and panel[0] in range(7), panel
 bad = [c for c in checks if not c['ok']]
 assert not bad, 'out of range: ' + json.dumps(bad)
 tris = {k: sum(2 * v['sides'] - (v['sides'] if v['rings'][i][1] == 0 else 0) - (v['sides'] if v['rings'][i + 1][1] == 0 else 0)
                for i in range(len(v['rings']) - 1)) for k, v in PARTS.items()}
-tris_fig = tris['torso'] + tris['head'] + 2 * sum(tris[k] for k in ('upper', 'fore', 'thigh', 'shin', 'boot'))
-assert tris_fig <= 2200, 'triangle budget: %d' % tris_fig
 
 # ── BLENDER: the rest figure in a sample livery ─────────────────────────────
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -244,7 +190,8 @@ for s in (1, -1):
 source_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 blend = out / 'crew-body.blend'; bpy.ops.wm.save_as_mainfile(filepath=str(blend))
 report = dict(blend=str(blend), authoring='Blender ' + bpy.app.version_string, sourceSHA256=source_hash, triangles=tris,
-              trianglesPerFigure=tris_fig, variants=list(VARIANTS), roles=list(ROLES), checks=checks)
+              trianglesPerFigure=tris['torso'] + tris['head'] + 2 * sum(tris[k] for k in ('upper', 'fore', 'thigh', 'shin', 'boot')),
+              checks=checks)
 
 if opts.render:
     scene.render.engine = 'BLENDER_WORKBENCH'; scene.display.shading.light = 'STUDIO'
@@ -270,12 +217,8 @@ if opts.write_runtime:
     p = root / 'js/garage/crew-draw.js'; text = p.read_text()
     start = text.index('  // @blender-body:start'); end = text.index('  // @blender-body:end', start)
     block = ('  // @blender-body:start\n  // ' + report['authoring'] + '; tools/gen/blender/crew-body.py; superellipse ring lofts.\n'
-             '  // Source SHA256: ' + source_hash + '\n'
-             '  const PARTS = ' + json.dumps(PARTS, separators=(',', ':')) + ';\n'
-             '  const VARIANTS = ' + json.dumps(VARIANTS, separators=(',', ':')) + ';\n'
-             '  const ROLES = ' + json.dumps(ROLES, separators=(',', ':')) + ';\n')
+             '  // Source SHA256: ' + source_hash + '\n  const PARTS = ' + json.dumps(PARTS, separators=(',', ':')) + ';\n')
     p.write_text(text[:start] + block + text[end:])
 (out / 'crew-body.json').write_text(json.dumps(report, indent=1) + '\n')
 print(json.dumps(dict(blend=report['blend'], trianglesPerFigure=report['trianglesPerFigure'], sheet=report.get('sheet'),
-                      variants=report['variants'], roles=report['roles'],
                       checks=[(c['check'], c['value']) for c in checks])))

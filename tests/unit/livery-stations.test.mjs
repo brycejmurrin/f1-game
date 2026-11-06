@@ -163,9 +163,6 @@ test("driver code comes from the race number, else the team short name", () => {
   assert.equal(M.S.driverCode("mercedes", 63), "RUS");
   assert.equal(M.S.driverCode("ferrari", 44), "HAM");
   assert.ok(/^[A-Z]{3}$/.test(M.S.driverCode("ferrari", 999)), "falls back to a 3-letter short name");
-  // resolveRaceNumber returns numberOverride as-is; a string must still resolve.
-  assert.equal(M.S.driverCode("mercedes", "63"), "RUS");
-  assert.equal(M.T.driverCode("ferrari", "44"), "HAM");
 });
 
 test("each station has a livery ON / OFF, and OFF paints nothing in its region", () => {

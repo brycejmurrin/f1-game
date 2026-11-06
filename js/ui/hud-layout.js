@@ -464,84 +464,28 @@ const HudLayout = (function () {
     clearControls(W, H);
     // Pack primary instruments first, then place secondary readouts around them.
     // Both corrections reset before measurement and never enter saved settings.
-    // Coalesce packPhone's clear into the following public clearReadouts
-    // (fitHud tail / invalidateFit) without editing hud.js. RO only notes WH
-    // while suppressed. Public clearReadouts always flushes (arrange RESET).
-    // Do not hold suppress across the later 120 ms idle.
-    beginPackClearCoalesce();
     packPhone(W, H);
     // HudRelative / HudStrategy / tyre paint AFTER fitHud in the same tick
     // (js/ui/hud.js), so the first pack often misses them. One double-rAF
-    // follow-up re-packs once they have boxes, and one more 120 ms later.
+    // follow-up re-packs once they have boxes — without editing hud.js
+    // (open PRs own that file).
     schedulePackFollowUp();
   }
-  // FOLLOW-UP SKIP (#4586): each follow-up pack is ~35 style + rect reads with a
-  // forced layout. It is skipped only when (a) a clearReadouts ran after it was
-  // scheduled (fitHud's tail, the ResizeObserver) and (b) nothing packPhone
-  // measures changed since the pack: packSig is layout-free (viewport, body
-  // class + layout set, root inline style, each readout/dock piece's hidden
-  // flag, text length and class). A first-race unhide or a text change re-packs.
-  // Coalesce (this PR): packPhone during fit defers its clear; public
-  // clearReadouts flushes. Do not hold suppress across the 120 ms idle.
-  let _packFollow = 0, _clearSeq = 0, _followSeq = 0, _followSig = "";
-  let _clearSuppress = 0;
-  let _clearWH = null;
-  let _clearing = 0;
-  function packSig() {
-    try {
-      const b = doc.body, rs = doc.documentElement && doc.documentElement.style;
-      let s = window.innerWidth + "x" + window.innerHeight + "|" + (b ? b.className + "|" + b.getAttribute("data-hl-set") : "")
-        + "|" + String((rs && rs.cssText) || "").replace(/--hud-fit-stamp:[^;]*;?/, "");
-      for (const [id, , sel] of ELEMENTS) {
-        if (CLEAR_READOUTS.indexOf(id) < 0 && !PACK_DOCK[id]) continue;
-        const el = doc.querySelector(sel);
-        s += el ? "|" + (el.hidden ? "h" : "v") + String(el.textContent || "").length + el.className : "|-";
-      }
-      return s;
-    } catch (_) { return "?" + _clearSeq; }   // unreadable: never matches, so the follow-up runs
-  }
-  function followUpRedundant() { return _clearSeq > _followSeq && packSig() === _followSig; }
-  function beginPackClearCoalesce() {
-    if (_clearSuppress) return;
-    _clearSuppress = 1;
-    _clearWH = null;
-  }
-  function endPackClearCoalesce() {
-    if (!_clearSuppress) return;
-    _clearSuppress = 0;
-    const W = _clearWH ? _clearWH[0] : (typeof window !== "undefined" ? window.innerWidth : 0);
-    const H = _clearWH ? _clearWH[1] : (typeof window !== "undefined" ? window.innerHeight : 0);
-    _clearWH = null;
-    if (W) clearReadoutsBody(W, H);
-  }
+  let _packFollow = 0;
   function schedulePackFollowUp() {
-    _followSeq = _clearSeq; _followSig = packSig();   // a re-fit while pending re-arms against its own pack
     if (_packFollow) return;
     _packFollow = 1;
     const run = () => {
       _packFollow = 0;
-      if (!doc || typeof window === "undefined" || !window.innerWidth) {
-        // Flush fit coalesce even when the follow-up cannot pack.
-        endPackClearCoalesce();
-        return;
-      }
-      if (!followUpRedundant()) {
-        packPhone(window.innerWidth, window.innerHeight);
-        _followSeq = _clearSeq - 1; _followSig = packSig();   // this pack is the 120 ms check's baseline
-      }
-      // Flush fit + same-tick hud.js/RO clears + this pack now. Holding
-      // suppress through the 120 ms wait made HudLayout.clearReadouts() a
-      // no-op for callers (ui-scale map vs tall pedals).
-      endPackClearCoalesce();
+      if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+      packPhone(window.innerWidth, window.innerHeight);
       // Strat/rel paint on the 10 Hz HUD tick after fitHud; one more pack a
       // beat later catches the unhide the MutationObserver may miss when the
       // hidden flag never flipped (first race tick already showed them).
       if (typeof setTimeout === "function") {
         setTimeout(() => {
-          if (!doc || typeof window === "undefined" || !window.innerWidth || followUpRedundant()) return;
-          beginPackClearCoalesce();
+          if (!doc || typeof window === "undefined" || !window.innerWidth) return;
           packPhone(window.innerWidth, window.innerHeight);
-          endPackClearCoalesce();
         }, 120);
       }
     };
@@ -551,7 +495,6 @@ const HudLayout = (function () {
       setTimeout(run, 32);
     } else {
       _packFollow = 0;
-      endPackClearCoalesce();
     }
   }
 
@@ -675,16 +618,7 @@ const HudLayout = (function () {
     resetClearance();
     clearPackMarks();
     packPhonePrimary(W, H);
-    // During an open coalesce, only note WH — public clearReadouts flushes
-    // (invalidateFit / arrange RESET need a sync body).
-    notePackClear(W, H);
-  }
-  function notePackClear(W, H) {
-    if (_clearSuppress) {
-      _clearWH = [W, H];
-      return;
-    }
-    clearReadoutsBody(W, H);
+    clearReadouts(W, H);
   }
   function packPhonePrimary(W, H) { /* PACK_MARK_Q2_4159 */
     if (!doc || !doc.body || !doc.body.classList || doc.body.classList.contains("desktop")) return;
@@ -834,30 +768,8 @@ const HudLayout = (function () {
   }
   let _blkBounds = new Float64Array(128);
   function clearReadouts(W = window.innerWidth, H = window.innerHeight) {
-    // Public API stays sync: invalidateFit and arrange RESET call this and
-    // expect --hud-clear-* in the same turn. Pack-internal defers via notePackClear.
-    if (_clearSuppress) {
-      _clearWH = [W, H];
-      endPackClearCoalesce();
-      return;
-    }
-    clearReadoutsBody(W, H);
-  }
-  function clearReadoutsBody(W = window.innerWidth, H = window.innerHeight) {
     if (!doc.querySelectorAll) return;
-    _clearSeq++;
-    _clearing = 1;
-    try {
-      clearReadoutsWork(W, H);
-    } finally {
-      _clearing = 0;
-    }
-  }
-  function clearReadoutsWork(W = window.innerWidth, H = window.innerHeight, precise = false) {
     resetClearance();
-    // Fast path batches the --hud-clear-* writes after every read (no forced layout per block); the
-    // corrected slot stands in for the painted box and one batched read verifies it afterwards.
-    const pending = [];
     const rows = ELEMENTS.filter((e) => CLEAR_READOUTS.indexOf(e[0]) >= 0);
     const box = (el) => {
       if (!el || el.hidden || !el.getBoundingClientRect) return null;
@@ -982,9 +894,6 @@ const HudLayout = (function () {
         // No correction was needed: retain this measured obstacle without
         // writing zero offsets and forcing another painted-box read.
         blocks.push(r);
-      } else if (best && !precise) {
-        pending.push([el, best, r]);
-        blocks.push(best);
       } else if (best) {
         el.style.setProperty("--hud-clear-x", (best.left - r.left).toFixed(2) + "px");
         el.style.setProperty("--hud-clear-y", (best.top - r.top).toFixed(2) + "px");
@@ -994,19 +903,6 @@ const HudLayout = (function () {
         if (painted) blocks.push(painted);
       } else blocks.push(r);
     }
-    if (!pending.length) return;
-    for (const [el, best, r] of pending) {
-      el.style.setProperty("--hud-clear-x", (best.left - r.left).toFixed(2) + "px");
-      el.style.setProperty("--hud-clear-y", (best.top - r.top).toFixed(2) + "px");
-    }
-    // One batched read. A painted box that misses the slot (zoom, scale) redoes the pass the exact way.
-    for (const [el, best] of pending) {
-      const painted = box(el);
-      if (painted && (Math.abs(painted.left - best.left) > 1 || Math.abs(painted.top - best.top) > 1)) {
-        clearReadoutsWork(W, H, true);
-        return;
-      }
-    }
   }
 
   let clearanceObserver = null;
@@ -1015,14 +911,6 @@ const HudLayout = (function () {
     // Text, late fonts and radio wrapping can change a box after the HUD tick.
     // Placement must use those final dimensions, including while the race is paused.
     clearanceObserver = new ResizeObserver(() => {
-      // Skip while a body run is painting corrections (sync RO) or while a
-      // pack follow-up is coalescing — those end with one clearReadoutsBody.
-      if (_clearing || _clearSuppress) {
-        if (_clearSuppress && typeof window !== "undefined" && window.innerWidth) {
-          _clearWH = [window.innerWidth, window.innerHeight];
-        }
-        return;
-      }
       if (typeof window !== "undefined" && window.innerWidth) clearReadouts();
     });
     for (const [id, , sel] of ELEMENTS) {
@@ -1371,7 +1259,6 @@ const HudLayout = (function () {
         inp.value = String(e[k]);
         out.textContent = txt(k, e[k]); paintSum(); paintPreset();
         previewPending = true;
-        setTimeout(paintTap, 0);   // after the preview applied
       };
       // Drafts stay in the native field. In particular, a minus sign or an
       // exponent halfway through typing must neither save nor fade the form.
@@ -1405,31 +1292,6 @@ const HudLayout = (function () {
     why.id = "pm-hl-why";
     body.appendChild(why);
 
-    // Non-blocking (#4704): a piece the player placed wins, so this only NAMES the tap targets it covers.
-    const tap = el("p", { className: "adv-help", attrs: { "aria-live": "polite" } });
-    tap.id = "pm-hl-tap";
-    body.appendChild(tap);
-    const TAP_SEL = [["PAUSE", "#pausebtn"], ["CAMERA", "#btn-cam"], ["BOOST", "#btn-boost"], ["STEER", "#btn-steer-left"],
-      ["STEER", "#btn-steer-right"], ["BRAKE", "#btn-brake"], ["THROTTLE", "#btn-throttle"]];
-    function tapOverlaps(id) {
-      const found = [], row = ELEMENTS.find((e) => e[0] === id), piece = row && doc.querySelector(row[2]);
-      if (!piece || piece.hidden) return found;
-      const a = piece.getBoundingClientRect();
-      if (!(a.width && a.height)) return found;
-      for (const [name, s] of TAP_SEL) {
-        const t = doc.querySelector(s);
-        if (!t || t.hidden || found.includes(name)) continue;
-        const b = t.getBoundingClientRect();
-        if (b.width && b.height && Math.min(a.right, b.right) - Math.max(a.left, b.left) > 3 &&
-          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 3) found.push(name);
-      }
-      return found;
-    }
-    function paintTap() {
-      const hit = tapOverlaps(sel);
-      tap.textContent = hit.length ? "Heads up: this overlaps the " + hit.join(", ") + " button" + (hit.length > 1 ? "s" : "") + ". It stays where you put it." : "";
-    }
-
     const resetOne = el("button", { type: "button", className: "opt-btn", textContent: "RESET ELEMENT" });
     resetOne.id = "pm-hl-reset-el";
     resetOne.addEventListener("click", () => { resetEl(sel, editing, editingProf); paintAll(); peek(true, 900); });
@@ -1460,7 +1322,7 @@ const HudLayout = (function () {
       if (setPick.value !== editing) setPick.value = editing;
       if (pick.value !== sel) pick.value = sel;
       for (const p of painters) p();
-      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden(); paintTap();
+      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden();
     }
     // Open: preview the layout being edited and outline the selected element.
     // Closed: the race shows the camera's layout again.

@@ -100,13 +100,3 @@ test("gap chip is monotonic and fixed-width across the 9.95 s boundary (#2978)",
   assert.equal(R.fmtGap(9.95, true, "standard"), "-9.95");
   assert.equal(R.fmtGap(9.951, false, "standard"), "+9.95");
 });
-
-// #4349: inPit counts only lane and box; "out" is driving away on track.
-test("inPit: lane and box count, out and none do not", () => {
-  assert.equal(load().inPit({ pitState: "lane" }), true);
-  assert.equal(load().inPit({ pitState: "box" }), true);
-  assert.equal(load().inPit({ pitState: "out" }), false);
-  assert.equal(load().inPit({ pitState: "none" }), false);
-  assert.equal(load().inPit({}), false);
-  assert.equal(load().inPit(null), false);
-});

@@ -73,25 +73,6 @@ const Frustum = (function () {
     return !(lift > 0 && h > 0) || Math.sqrt(d2) * Math.exp(-lift * h) > r;
   }
 
-  // THE HARD RADIUS game.js writes to frame.cullDist each frame (0 = none).
-  //   free  debug/photo camera or the cinematic: phones 700 m (a pushed-out
-  //         photo far plane frames a ~5 M-vert city and jetsam-kills the tab),
-  //         desktop the full vista;
-  //   else  tier 3+ the far plane, below it the sphere that contains the
-  //         frustum (farCull, ~1.4x farPlane: far-plane corners sit farther);
-  //   phones additionally PHONE_CULL_M x RENDER DISTANCE at every tier
-  //         (#4530 A1, #4575): 15-30 % fewer prop draws/verts on Spa,
-  //         Silverstone and Fuji, scenery past 800 m is deep in the fog anyway.
-  //         Desktop is unchanged.
-  const PHONE_CULL_M = 800;
-  function sceneryCullDist(o) {
-    if (o.free) return o.mobile ? 700 : 0;
-    const cd = o.tier >= 3 ? o.farPlane : o.farCull;
-    if (!o.mobile) return cd;
-    const mul = o.renderDistMul != null ? o.renderDistMul : 1;
-    return Math.min(cd, PHONE_CULL_M * mul);
-  }
-
   // Six planes per call. Pass `out` (6×Float32Array(4)) to reuse a caller pool —
   // the race prop-batch path must not allocate every frame. Without `out`, allocate
   // fresh so a held agentview result cannot be rewritten.
@@ -173,6 +154,6 @@ const Frustum = (function () {
 
   // FOG_CULL_FD stays local — radialCulled is the shared API; the constant is
   // an implementation detail of the fog-wall radius (dens > 0 → r = 3 / dens).
-  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, sceneryCullDist, PHONE_CULL_M, bucketInstances };
+  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, bucketInstances };
 })();
 Object.freeze(Frustum);

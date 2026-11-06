@@ -138,20 +138,8 @@ function _writeWx(s) {
   }
   G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
   _writeLt(s);
-  // Re-base the lightning in place: this runs every frame of the 25 s fade, and
-  // the base's arrays are private copies (applyRaceSettings slices them), so
-  // nothing else holds them (#3115 F9).
-  const lb = G._ltBase;
-  if (lb) {
-    _copy3(lb, "ambientSky", G.frame.ambientSky);
-    _copy3(lb, "ambientGround", G.frame.ambientGround);
-    lb.exposure = G.frame.exposure != null ? G.frame.exposure : 1.0;
-  }
-}
-function _copy3(lb, k, src) {
-  const dst = lb[k];
-  if (!Array.isArray(dst) || dst === src || dst.length !== src.length) { lb[k] = src.slice(); return; }
-  for (let i = 0; i < src.length; i++) dst[i] = src[i];
+  if (G._ltBase) G._ltBase = { ambientSky: G.frame.ambientSky.slice(), ambientGround: G.frame.ambientGround.slice(),
+                               exposure: G.frame.exposure != null ? G.frame.exposure : 1.0 };
 }
 // The knobs that differ between the two ends, resolved once per fade: per frame
 // the walk visits only those (84 of 192 for dawn dry -> wet) by index, not the

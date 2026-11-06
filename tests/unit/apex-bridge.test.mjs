@@ -114,8 +114,7 @@ test("a poll runs the owner's command once and answers with its comment id", asy
   assert.equal(gh.thread.filter((c) => c.body.includes('"re":77')).length, 1, "answered exactly once");
 });
 
-// A thread like GitHub's: oldest first, `since` (inclusive, on updated_at) and per_page honoured; the ETag is the
-// page's content, so an unchanged page answers If-None-Match with 304 as api.github.com does.
+// A thread like GitHub's: oldest first, `since` (inclusive, on updated_at) and per_page honoured.
 function pagedGitHub() {
   const thread = [];
   const calls = [];
@@ -123,7 +122,7 @@ function pagedGitHub() {
   const at = (s) => new Date(Date.parse(HELLO_AT) + s * 1000).toISOString().replace(".000Z", "Z");
   const fetch = async (url, opts) => {
     calls.push({ url, opts });
-    const json = (status, body, etag = null) => ({ status, ok: status < 300, json: async () => body, headers: { get: (k) => (k.toLowerCase() === "etag" ? etag : null) } });
+    const json = (status, body) => ({ status, ok: status < 300, json: async () => body, headers: { get: () => null } });
     if (opts.method === "POST") {
       const c = { id: 5000 + thread.length, created_at: at(n), updated_at: at(n++), author_association: "OWNER", body: JSON.parse(opts.body).body };
       thread.push(c);
@@ -131,10 +130,7 @@ function pagedGitHub() {
     }
     const q = new URL(url).searchParams;
     const since = q.get("since");
-    const page = thread.filter((c) => c.updated_at >= since).slice(0, +q.get("per_page"));
-    const etag = 'W/"' + page.map((c) => c.id + "@" + c.updated_at).join(",") + '"';
-    if (opts.headers["If-None-Match"] === etag) return json(304, null);
-    return json(200, page, etag);
+    return json(200, thread.filter((c) => c.updated_at >= since).slice(0, +q.get("per_page")));
   };
   const add = (c) => { const t = at(n++); thread.push({ created_at: t, updated_at: t, author_association: "OWNER", ...c }); };
   return { fetch, calls, thread, add };
@@ -308,14 +304,4 @@ test("a failing reply post does not skip the queued commands behind it (HUNT-202
   await assert.rejects(b.api.pollOnce());
   for (let i = 0; i < 3; i++) await b.api.pollOnce();
   assert.deepEqual([...new Set(ran)].sort(), [1, 2, 3], "commands 2 and 3 still ran after command 1's reply failed");
-});
-
-test("frames and snap settle with {error:'hidden'} when rAF never fires (locked phone, B5 #4696)", async () => {
-  const extra = { requestAnimationFrame: () => 0, setTimeout: (fn) => { setImmediate(fn); return 1; }, clearTimeout() {},
-    document: { getElementById: () => null, hidden: true } };
-  const b = load({ search: "", extra });
-  const f = await b.api.handle({ cmd: "frames", args: { seconds: 1 } });
-  assert.equal(f.value.error, "hidden");
-  const s = await b.api.handle({ cmd: "snap" });
-  assert.equal(s.value.error, "hidden");
 });

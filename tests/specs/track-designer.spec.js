@@ -218,21 +218,6 @@ async function bootClean(page) {
   await page.evaluate(() => window.__apex.headless(true));
 }
 
-/** A cold worker claims the page mid-test (controllerchange) and steals focus / stalls the file chooser (#4728).
- *  Settle that first, in the import test only: a controlled page bypasses page.route, so the START FROM route-gate test must not wait for control; a blocked or absent worker resolves at once, a slow install is bounded, never widened. */
-async function settleServiceWorker(page) {
-  await page.evaluate(async () => {
-    const sw = navigator.serviceWorker;
-    if (!sw) return;
-    const t = (ms) => new Promise((r) => setTimeout(r, ms));
-    if (sw.controller) return;
-    const reg = await Promise.race([sw.ready, t(3000)]);
-    if (!reg || sw.controller) return;
-    await Promise.race([new Promise((r) => sw.addEventListener("controllerchange", r, { once: true })), t(20000)]);
-  });
-  await page.waitForTimeout(250);
-}
-
 async function openDesigner(page) {
   await page.locator("#mb-designer").click();
   await page.waitForSelector("#trackdesigner:not([hidden])", { timeout: BOOT_MS });
@@ -289,7 +274,7 @@ for (const viewport of [{ width: 844, height: 390 }, { width: 390, height: 844 }
   });
 
   test(`invalid native file import keeps its status readable and focus in place at ${viewport.width}x${viewport.height}`, async ({ page }) => {
-    await bootClean(page); await settleServiceWorker(page); await openDesigner(page); await page.setViewportSize(viewport);
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
     const root = page.locator("#trackdesigner"), trigger = root.locator('[data-role="file-menu"] > summary');
     await trigger.press("Enter");
     const chooser = page.waitForEvent("filechooser");

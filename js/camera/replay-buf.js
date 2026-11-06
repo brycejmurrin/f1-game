@@ -83,7 +83,7 @@ const ReplayBuf = (function () {
     const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
     let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
     let times = null, data = null, status = null, brk = null, breakPending = false;
-    let tags = [], tagPicker = null, tagOptionsKey = null, tagRev = 0;
+    let tags = [], tagPicker = null, tagOptionsKey = null;
     let scrubbing = false, liveSnap = null;
     let scrubT = 0, scrubRate = 1, scrubPlaying = true;
     let prevStatus = null, sheetBusy = false, sheetGeneration = 0, sheetCancelled = false;
@@ -95,12 +95,12 @@ const ReplayBuf = (function () {
       data = new Float32Array(cap * nCars * FLOATS);
       status = new Uint8Array(cap * nCars);
       brk = new Uint8Array(cap);   // brk[f] = 1: frame f opens a new segment, never blended from the one before
-      head = 0; count = 0; lastSlot = -1; tags = []; tagRev++;
+      head = 0; count = 0; lastSlot = -1; tags = [];
       prevStatus = new Uint8Array(nCars);
     }
     function clear() {
       sheetGeneration++; sheetBusy = false;
-      head = 0; count = 0; lastSlot = -1; tags = []; tagRev++; breakPending = false;
+      head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
       scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
       // prevStatus survives: a car already out when the timeline is discarded is not a fresh retirement (alloc() zeroes it).
       audioOwner.release();
@@ -125,11 +125,15 @@ const ReplayBuf = (function () {
     }
     function writeCar(frame, i, c) {
       const o = (frame * nCars + i) * FLOATS;
-      // A non-finite field keeps the previous sample's value (0 only with no history): storing 0 would park the car at the origin.
-      const po = count > 0 ? (((head + count - 1) % cap) * nCars + i) * FLOATS : -1;
-      const put = (k, v) => { data[o + k] = Number.isFinite(v) ? v : (v == null || v === false ? 0 : (po >= 0 ? data[po + k] : 0)); };
-      put(0, c.s); put(1, c.x); put(2, c.head); put(3, c.speed);
-      put(4, c.px); put(5, c.py); put(6, c.pz); put(7, c.steer); put(8, c.yawVis);
+      data[o] = c.s || 0;
+      data[o + 1] = c.x || 0;
+      data[o + 2] = c.head || 0;
+      data[o + 3] = c.speed || 0;
+      data[o + 4] = c.px || 0;
+      data[o + 5] = c.py || 0;
+      data[o + 6] = c.pz || 0;
+      data[o + 7] = c.steer || 0;
+      data[o + 8] = c.yawVis || 0;
       status[frame * nCars + i] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
     }
     function readCar(out, frame, i) {
@@ -165,7 +169,6 @@ const ReplayBuf = (function () {
     }
     function pushTag(kind, t, carIdx) {
       if (tags.length >= TAG_CAP) tags.shift();
-      tagRev++;
       tags.push({ kind: String(kind || ""), t: +t || 0, car: carIdx | 0 });
     }
     function windowInfo() {
@@ -300,25 +303,16 @@ const ReplayBuf = (function () {
       return true;
     }
     // Pick recorded timestamps, not +/-1/HZ: a slow frame may skip samples.
-    // The ring is chronological (sample() clears on a clock rewind), so this is a
-    // binary search like frameIndexAt, not a scan: paintDock asks twice per frame.
     function adjacentFrame(t, direction) {
       if (!count || (direction !== -1 && direction !== 1)) return null;
-      let lo = 0, hi = count - 1, k = -1;
-      if (direction < 0) {
-        const lim = t - 1e-9;   // the latest sample strictly before t
-        while (lo <= hi) {
-          const mid = (lo + hi) >> 1;
-          if (times[(head + mid) % cap] < lim) { k = mid; lo = mid + 1; } else hi = mid - 1;
-        }
-      } else {
-        const lim = t + 1e-9;   // the earliest sample strictly after t
-        while (lo <= hi) {
-          const mid = (lo + hi) >> 1;
-          if (times[(head + mid) % cap] > lim) { k = mid; hi = mid - 1; } else lo = mid + 1;
+      let found = null;
+      for (let k = 0; k < count; k++) {
+        const time = times[(head + k) % cap];
+        if (direction < 0 ? time < t - 1e-9 : time > t + 1e-9) {
+          if (found === null || (direction < 0 ? time > found : time < found)) found = time;
         }
       }
-      return k < 0 ? null : times[(head + k) % cap];
+      return found;
     }
     function stepFrame(direction) {
       if (!scrubbing || sheetBusy || !allowed() || (direction !== -1 && direction !== 1)) return false;
@@ -364,7 +358,7 @@ const ReplayBuf = (function () {
         apply(scrubT, true);   // playback retains normal rig damping
         if (scrubT >= w.t1) scrubPlaying = false;
       }
-      paintDock(true);
+      paintDock();
       return true;
     }
     function statusOf() {
@@ -407,12 +401,10 @@ const ReplayBuf = (function () {
       try { const ok = await PhotoStudio.contactSheet(times, seek, cancelled); if (cancelled()) return false; say("Contact sheet PNG download requested."); return ok; }
       catch (e) { say(sheetCancelled ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
       finally {
-        try {
-          if (owns()) {
-            seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
-          }
-        } catch (e) { Log.warn("ui", "Contact sheet restore failed", e); }
-        finally { if (generation === sheetGeneration) { sheetBusy = false; paintDock(); } }
+        if (owns()) {
+          seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
+        }
+        if (generation === sheetGeneration) { sheetBusy = false; paintDock(); }
       }
     }
 
@@ -504,21 +496,8 @@ const ReplayBuf = (function () {
       const d = document.getElementById("pm-replay-dock");
       if (d) d.hidden = true;
     }
-    // Everything paintDock reads. tickScrub repaints every frame, so a paused
-    // replay (or a stopped one) re-wrote ten controls 60x a second for nothing.
-    const dockSeen = [NaN, null, NaN, null, NaN, NaN, NaN, null, null];
-    function dockUnchanged() {
-      const v0 = scrubT, v1 = scrubPlaying, v2 = scrubRate, v3 = sheetBusy, v4 = count, v5 = head, v6 = tagRev,
-        v7 = !!G.paused, v8 = allowed(), d = dockSeen;
-      if (d[0] === v0 && d[1] === v1 && d[2] === v2 && d[3] === v3 && d[4] === v4 && d[5] === v5 && d[6] === v6
-        && d[7] === v7 && d[8] === v8) return true;
-      d[0] = v0; d[1] = v1; d[2] = v2; d[3] = v3; d[4] = v4; d[5] = v5; d[6] = v6; d[7] = v7; d[8] = v8;
-      return false;
-    }
-    function paintDock(tick) {
+    function paintDock() {
       if (typeof document === "undefined" || !scrubbing) return;
-      const same = dockUnchanged();   // always refresh the record; a user action repaints regardless
-      if (tick === true && same) return;
       const w = windowInfo();
       const play = document.getElementById("pm-replay-play");
       const rate = document.getElementById("pm-replay-rate");

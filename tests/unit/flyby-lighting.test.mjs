@@ -141,7 +141,7 @@ test("one flag decides the whole lens, and the preview carries it", () => {
   assert.match(body, /const _fogMul = cine \? FlybySeq\.FOG/,
     "cine must be asked BEFORE dbgCam: a plain debug free camera keeps its own fog default, and photo " +
     "mode passes 1.0 explicitly");
-  assert.match(body, /frame\.cullDist = Frustum\.sceneryCullDist\(\{ free: !!\(dbgCam \|\| cine\)/,
+  assert.match(body, /frame\.cullDist = \(dbgCam \|\| cine\)/,
     "thinning the fog while culling scenery at the unthinned fog wall trades haze for a hard edge of " +
     "missing world");
 

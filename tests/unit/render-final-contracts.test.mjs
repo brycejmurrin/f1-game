@@ -150,7 +150,6 @@ test('GLX particle buffers retain independent stream payloads and refresh cross-
   let uploads = 0; const c = ctx({
     ctxGone:()=>false, particleProg:{}, particleU:{}, frameEye:[0,0,0], frameViewProj:[], frameSunColor:null, frameAmbSky:[], frameAmbGround:[],
     _particleFog:{color:[],density:0}, _partEpochs:new WeakMap(), _partEpoch:0, _partResident:[], particleVAO:[{},{}],particleVBO:[{},{}],particleCap:[0,0],
-    PARTICLE_SUN_DEF:[1,0.98,0.9], growCap:(n,c)=>Math.max(n,Math.ceil(c*1.5)),
     useProg(){},bindVAO(){},setBlend(){},setDepthMask(){},setCull(){},setAlphaWrite(){},
     gl:{uniformMatrix4fv(){},uniform3fv(){},uniform1f(){},bindBuffer(){},bufferData(){},bufferSubData(){uploads++;},blendFunc(){},drawArrays(){}},
   }, fn(read('js/render/glx/glx.js'),'drawParticles'));

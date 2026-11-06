@@ -12,7 +12,7 @@ const AiDrive = (function () {
   // aggression / optimism are signed style traits (−1..+1), default neutral.
   const _traits = {
     craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97, consistency: 0.75,
-    aggression: 0, optimism: 0, composure: 0,
+    aggression: 0, optimism: 0,
   };
   function traits(c) {
     _traits.craft = c.craft != null ? c.craft : 0.75;
@@ -22,7 +22,6 @@ const AiDrive = (function () {
     _traits.consistency = c.consistency != null ? c.consistency : 0.75;
     _traits.aggression = c.aggression != null ? c.aggression : 0;
     _traits.optimism = c.optimism != null ? c.optimism : 0;
-    _traits.composure = c.composure != null ? c.composure : 0;
     return _traits;
   }
 
@@ -30,10 +29,8 @@ const AiDrive = (function () {
   function houseStyle(team, seat, stats) {
     const s = stats || (team && team.stats);
     if (!s) { _house.attack = 0; _house.hold = 0; return _house; }
-    // A stat a partial record lacks reads as the neutral 85, not NaN (NaN rode into followGap/brakeTarget/otFireRate).
-    const st = (v) => (Number.isFinite(v) ? v : 85);
-    _house.attack = clamp(((st(s.speed) + st(s.accel)) * 0.5 - 85) / 25, -1, 1);
-    _house.hold = clamp(((st(s.cornering) + st(s.braking)) * 0.5 - 85) / 25, -1, 1);
+    _house.attack = clamp(((s.speed + s.accel) * 0.5 - 85) / 25, -1, 1);
+    _house.hold = clamp(((s.cornering + s.braking) * 0.5 - 85) / 25, -1, 1);
     if (seat === 0) {
       _house.attack = clamp(_house.attack + 0.10, -1, 1);
       _house.hold = clamp(_house.hold - 0.06, -1, 1);
@@ -449,7 +446,7 @@ const AiDrive = (function () {
     const closing = (ctx.speed || 0) - (ctx.aheadSpeed != null ? ctx.aheadSpeed : ctx.speed || 0);
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;   // closing rates ride the pace scale (as otWant)
     // 0..1 pieces
-    const gapScore = clamp(1 - (Number.isFinite(gap) ? gap : 9) / 9, 0, 1);   // closer = better (a 0 m gap is the closest, not 9 m)
+    const gapScore = clamp(1 - (gap || 9) / 9, 0, 1);           // closer = better
     const roomScore = clamp(room / 3.2, 0, 1);
     const closeScore = clamp(0.45 + closing / (8 * ref / 72), 0, 1);
     const straight = clamp(1 - Math.abs(ctx.kAhead || 0) / 0.012, 0, 1);
@@ -543,18 +540,6 @@ const AiDrive = (function () {
   // as it was measured to be.
   const YAW_AERO = -0.28 / AI_DF;
   function yawScale(speed, load, grip, pace, vmax) { return lateralScale(speed, load, grip, pace, vmax, YAW_AERO); }
-  // Both scales of one AI car-step from one q and one prefix (game.js asks for
-  // yawScale and lateralScale with the same inputs). Same operator order as
-  // lateralScale, so out.yaw === yawScale(...) and out.lat === lateralScale(..., aero) bit for bit.
-  // AI_DF*aero stays per scale: AI_DF*YAW_AERO is NOT folded.
-  const _lsOut = { yaw: 1, lat: 1 };   // pooled: the caller reads it before the next call
-  function lateralScales(speed, load, grip, pace, vmax, aero, out = _lsOut) {
-    const q = Math.min(1, Math.abs(speed) / (Math.max(0.05, pace) * Math.max(1, vmax)));
-    const pre = (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip);
-    out.yaw = pre * (1 + AI_DF * YAW_AERO * q * q);
-    out.lat = pre * (1 + AI_DF * aero * q * q);
-    return out;
-  }
   // Solve k*v² = lat*(1 + D*(v/V)²) analytically: v² = lat / (k - lat*D/V²)
   // below the top speed V, and the flat (1 + D) envelope past it.
   // No iterative solver in the per-car, per-node brake lookahead.
@@ -1082,14 +1067,6 @@ const AiDrive = (function () {
   }
   function sbsCommitT(ctx) { return sbsConcedes(ctx) ? SBS_COMMIT_MIN : 2; }
   function sbsEase(ctx) { return sbsConcedes(ctx) ? 0.94 : 0.97; }
-  // Commit time and ease from ONE sbsConcedes (game.js used sbsCommitT then sbsEase = two coverConcede runs).
-  const _slOut = { commitT: 2, ease: 0.97 };   // pooled
-  function sbsLimits(ctx, out = _slOut) {
-    const c = sbsConcedes(ctx);
-    out.commitT = c ? SBS_COMMIT_MIN : 2;
-    out.ease = c ? 0.94 : 0.97;
-    return out;
-  }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -1257,10 +1234,7 @@ const AiDrive = (function () {
     const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
     const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
     const optMul = 1 + 0.25 * opt * press;
-    // Composure (AI-only, zero-mean): a cool head blunts how much pressure
-    // inflates the error rate; a rattled one amplifies it. Unpressured: no effect.
-    const comp = clamp(t && t.composure != null ? t.composure : 0, -1, 1);
-    return base * (1 + 2 * press * (1 - 0.5 * comp)) * (1.3 - cons) * em * optMul;
+    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
@@ -1646,7 +1620,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
+    lateralScale, yawScale, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, hungerOf, coverConcede, pairEdgeN, softPairEdgeN, pullReachM,

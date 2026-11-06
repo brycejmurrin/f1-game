@@ -77,26 +77,3 @@ test("the face scrub is per second, not per call, and marks the car on a wall (a
   const b = hit(1 / 30);
   assert.ok(Math.abs(b.speed - 50 * 0.2 * 0.2) < 1e-9, "one 1/30 step scrubs what two 1/60 ticks do: " + b.speed);
 });
-
-test("reversing into a wall end that tightens as s decreases is held at the face too (#4335)", () => {
-  const tr = g.G.track;
-  const CG = vm.runInContext("ContactGeometry", g.ctx), WEF = vm.runInContext("WallEndFace", g.ctx);
-  const out = { r: 0, l: 0, laneMin: 0, side: 0 }, post = { r: 99, l: 99, minOut: 0, side: 0 };
-  let best = { drop: 0 };
-  for (const side of [1, -1]) {
-    let prev = null;
-    for (let s = tr.total - 0.5; s > 0; s -= 0.5) {
-      CG.wallLimits(tr, s, 0, out, post);
-      const lim = side > 0 ? out.r : out.l;
-      if (prev !== null && prev - lim > best.drop) best = { drop: prev - lim, s, side, prev };
-      prev = lim;
-    }
-  }
-  assert.ok(best.drop > 4, "anti-vacuity: a reverse face of " + best.drop.toFixed(1) + " m");
-  const x0 = best.side * (best.prev - 0.5);
-  const c = { human: true, _prevS: best.s + 0.5, s: best.s, x: x0, speed: -10, wasOnWall: false };
-  const lim = CG.wallLimits(tr, c.s, c.x, { r: 0, l: 0, laneMin: 0, side: 0 }, { r: 99, l: 99, minOut: 0, side: 0 });
-  assert.equal(WEF.apply(c, tr, lim, 1 / 60), true, "the reverse face holds the car");
-  assert.equal(c.s, best.s + 0.5, "s restored");
-  assert.equal(c.x, x0, "lateral position kept");
-});

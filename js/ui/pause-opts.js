@@ -134,8 +134,6 @@ const PauseOpts = (function () {
   let armed = null;   // { btn, text, aria, wallAt, evAt } — wallAt from performance.now()
   let armTimer = 0;
   let confirmPending = null;   // btn.id while a pointerup-driven el.click() is in flight
-  let confirmPendingAt = 0;    // wallNow() when it was set: the trusted click that clears it may never come
-  function clearPending() { confirmPending = null; confirmPendingAt = 0; }
   function wallNow() {
     try { return performance.now(); } catch (_) { return Date.now(); }
   }
@@ -202,16 +200,13 @@ const PauseOpts = (function () {
     expireIfStale(e);
     const t = e && e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
-    // A pointerup whose native click never arrived (pointercancel, a click
-    // retargeted to an ancestor) must not leave a one-tap QUIT for later.
-    if (confirmPending && wallNow() - confirmPendingAt >= ARM_MAX_MS) clearPending();
     if (confirmPending && btn && confirmPending === btn.id) {
       if (!e.isTrusted) {
         e.stopImmediatePropagation();
         if (e.preventDefault) e.preventDefault();
         return;
       }
-      clearPending();
+      confirmPending = null;
       return;
     }
     if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); return; }
@@ -234,7 +229,6 @@ const PauseOpts = (function () {
     if (!armed || armed.btn !== btn || !e.isTrusted) return;
     if (youngTap(e)) return;
     confirmPending = btn.id;
-    confirmPendingAt = wallNow();
     disarm();
     btn.click();
   }
@@ -279,7 +273,7 @@ const PauseOpts = (function () {
     pm.addEventListener("pointerup", onPausePointerUp, true);
     document.addEventListener("keydown", onPauseKey, true);
     if (typeof MutationObserver !== "undefined") {
-      const mo = new MutationObserver(() => { if (pm.hidden) { disarm(); clearPending(); } });
+      const mo = new MutationObserver(() => { if (pm.hidden) disarm(); });
       mo.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
     }
   }

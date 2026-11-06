@@ -1032,15 +1032,15 @@ function finishExterior(builder, def = { id: 'fixture' }) {
 }
 test('circuit exterior clips triangles at all six bounds, rotates normals and preserves material columns', () => {
   const points = [
-    [-910, 0, 20], [-890, 0, 18], [-890, 2, 22], [910, 0, 20], [890, 0, 18], [890, 2, 22],
-    [0, -170, 20], [2, -150, 18], [-2, -150, 22], [0, 440, 20], [2, 410, 18], [-2, 410, 22],
-    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 1650], [2, 0, 1550], [-2, 2, 1550],
+    [-660, 0, 20], [-640, 0, 18], [-640, 2, 22], [660, 0, 20], [640, 0, 18], [640, 2, 22],
+    [0, -122, 20], [2, -118, 18], [-2, -118, 22], [0, 305, 20], [2, 295, 18], [-2, 295, 22],
+    [0, 0, 4], [2, 0, 10], [-2, 2, 10], [0, 0, 1005], [2, 0, 995], [-2, 2, 995],
   ];
   const h = exteriorFixture(points), { result: r, yields } = finishExterior(h.builder);
   assert.equal(r.supported, true); assert.ok(yields > 5);
   assert.ok(Math.abs(r.anchor.yaw - h.yaw) < 1e-10);
   r.anchor.position.forEach((v, i) => assert.ok(Math.abs(v - h.origin[i]) < 1e-10));
-  const b = [-900, 900, -160, 420, 6.4, 1600], seen = new Set(), geo = r.road;
+  const b = [-650, 650, -120, 300, 6.4, 1000], seen = new Set(), geo = r.road;
   assert.ok(geo.idx.length > 18, 'crossing triangles survive as clipped polygons');
   assert.equal(geo.nrm.length, geo.pos.length); assert.equal(geo.col.length, geo.pos.length);
   assert.equal(geo.mat.length, geo.pos.length / 3);
@@ -1056,39 +1056,10 @@ test('circuit exterior clips triangles at all six bounds, rotates normals and pr
   const ramp = geo.pos.slice(-12);
   assert.deepEqual(Array.from(ramp), [-2.7, 0, 6.4, 2.7, 0, 6.4, -2.7, .03, 6.7, 2.7, .03, 6.7]);
   assert.ok(Math.abs(Math.hypot(...geo.nrm.slice(-3)) - 1) < 1e-8);
-  assert.deepEqual(Array.from(r.stats.groundBounds), [-1200, 1200, -10000, 10000, 6.4, 2200]);
+  assert.deepEqual(Array.from(r.stats.groundBounds), [-900, 900, -10000, 10000, 6.4, 1300]);
   assert.equal(seen.size, 6); assert.ok(geo.mat.every(m => m === 16));
   assert.ok(geo.idx.every(i => i >= 0 && i < geo.pos.length / 3));
 });
-test('lookingOut detects pit-lane cameras and open shutter; lighting follows weather/TOD', () => {
-  const ctx = vm.createContext({
-    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array,
-    isFinite, parseFloat, parseInt, Date, performance: { now: () => 0 },
-    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
-  });
-  vm.runInContext(read('js/garage/exterior.js'), ctx, { filename: absSrc('js/garage/exterior.js') });
-  const Exterior = vm.runInContext('GarageExterior', ctx);
-  const cams = ['doorway', 'facade', 'pitWall', 'dolly', 'door', 'lowFront'];
-  // One deepEqual per contract keeps assertPins under the tree ceiling.
-  assert.deepEqual({
-    none: Exterior.lookingOut(null),
-    inside: Exterior.lookingOut({ door: 0, eye: [0, 1.2, 0], cameraOption: 'insideBay' }),
-    door: Exterior.lookingOut({ door: 0.2 }),
-    eyeOut: Exterior.lookingOut({ door: 0, eye: [0, 1.4, 6.0] }),
-    cams: cams.map((cam) => Exterior.lookingOut({ door: 0, eye: [0, 1, 0], cameraOption: cam })),
-  }, { none: false, inside: false, door: true, eyeOut: true, cams: cams.map(() => true) });
-  const dry = Exterior.lighting({ weather: 'dry', tod: 'day' });
-  const rain = Exterior.lighting({ weather: 'rain', tod: 'day' });
-  const storm = Exterior.lighting({ weather: 'storm', tod: 'day' });
-  const night = Exterior.lighting({ weather: 'dry', tod: 'night' });
-  assert.deepEqual({
-    dryWet: dry.wet, rainWet: rain.wet, stormWet: storm.wet, night: night.night,
-    fogOrder: rain.fogDensity > dry.fogDensity && storm.fogDensity > rain.fogDensity,
-    cloud: rain.sky.cloud >= 0.9 && dry.sky.cloud < rain.sky.cloud,
-    stars: night.sky.stars > 0,
-  }, { dryWet: false, rainWet: true, stormWet: true, night: true, fogOrder: true, cloud: true, stars: true });
-});
-
 test('circuit exterior refuses unavailable bay and invalid/budget-breaking geometry', () => {
   const tri = [[0, 0, 20], [2, 0, 20], [0, 2, 20]];
   for (const [opts, reason] of [[{ hasBays: false }, 'circuit-has-no-bays'], [{ row: -1 }, 'team-has-no-bay']]) {
@@ -1288,61 +1259,4 @@ test('circuit exterior retains distant rendered road while tyre lookup remains a
     const [x, z] = key.split(',').map(Number);
     assert.ok(x >= -28 && x <= 27 && z >= 3 && z <= 55, 'all cell references remain in contact bounds');
   }
-});
-
-// #4546 P6: a paint-drag step (a new c1) is a geometry rebuild and a new dressId.
-// It used to build the bay floor twice (rebuild + ensureMirrorFade) and allocate a
-// fresh 1024² dress canvas; now the fade copies the rebuilt floor and the dress
-// canvas is repainted in place.
-function paintStepHarness() {
-  const c2d = new Proxy(function () {}, {
-    get: (_, k) => (k === Symbol.toPrimitive ? () => 0 : c2d),
-    set: () => true, apply: () => c2d,
-  });
-  const meshes = [], canvases = [], floorCols = { n: 0 };
-  const gfx = {
-    createMesh(data) { meshes.push(data); return { id: meshes.length }; }, createTexMesh: () => ({ tex: true }), freeMesh() {},
-    createTexture: (src) => ({ w: src.width }), refillTexture: () => true, freeTexture() {},
-    draw() {}, drawDecal() {}, drawGlow() {},
-  };
-  const ctx = vm.createContext({
-    console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array,
-    Uint32Array, isFinite, parseFloat, parseInt, Date,
-    performance: { now: () => 0 },
-    document: { createElement: () => { const c = { width: 0, height: 0, getContext: () => c2d }; canvases.push(c); return c; } },
-    LiveryTex: {},
-    Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
-  });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"]) {
-    let src = read(f);
-    if (f === "js/garage/scene-dress.js") src = src.replace("Object.freeze(GarageDress);", "");   // let the test count floor builds
-    vm.runInContext(src, ctx, { filename: absSrc(f) });
-  }
-  const GD = vm.runInContext("GarageDress", ctx), base = GD.lookFloorCols;
-  GD.lookFloorCols = (...a) => { floorCols.n++; return base(...a); };
-  vm.runInContext("GaragePrims", ctx).setLook("flood");   // a look routes buildBayFloor through lookFloorCols
-  const GarageScene = vm.runInContext("GarageScene", ctx);
-  GarageScene.init(gfx);
-  return { GarageScene, meshes, canvases, floorCols };
-}
-
-test("a paint-drag step builds the bay floor once and reuses the dress canvas (#4546 P6)", () => {
-  const { GarageScene, meshes, canvases, floorCols } = paintStepHarness();
-  const car = { car: true };
-  const step = (r) => GarageScene.draw(TEAM, { ...LIV, c1: [r, 0.45, 0.05] }, [0, 1.4, 3.2], null, 0, null, car);
-  step(0.95);
-  const canvasesAfterFirst = canvases.length;
-  for (const r of [0.80, 0.65, 0.50, 0.35, 0.20]) {
-    const builds = floorCols.n, made = meshes.length;
-    step(r);
-    assert.equal(floorCols.n - builds, 1, "one buildBayFloor per rebuild (the mirror fade copies it)");
-    const fresh = meshes.slice(made);
-    const floor = fresh.find((m) => fresh.some((o) => o !== m && o.pos.length === m.pos.length && o.pos[1] === m.pos[1] + 0.002));
-    assert.ok(floor, "the mirror fade is the rebuilt floor lifted 2 mm");
-    const fade = fresh.find((o) => o !== floor && o.pos.length === floor.pos.length && o.pos[1] === floor.pos[1] + 0.002);
-    for (let i = 0; i < floor.pos.length; i++) assert.equal(fade.pos[i], floor.pos[i] + (i % 3 === 1 ? 0.002 : 0));
-    assert.deepEqual(fade.col, floor.col); assert.deepEqual(fade.idx, floor.idx); assert.deepEqual(fade.mat, floor.mat);
-  }
-  assert.equal(canvases.length, canvasesAfterFirst, "five paint steps allocate no new canvas (was one 1024² dress canvas each)");
 });

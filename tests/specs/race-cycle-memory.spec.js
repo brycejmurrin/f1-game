@@ -100,12 +100,6 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
   await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
 
-  // COLD BOOT: __apex exists before the deferred TLX renderer installs (llvmpipe, #4730). A race started in that
-  // window ran on the fallback and the first census saw no three renderer (title menu, no counters). Observe the
-  // installed three renderer and a live renderer.info BEFORE racing; never infer it from the stored preference.
-  await page.waitForFunction(() => { try { return !!(window.renderer && window.renderer.info) && GLX.backend === "three" && !!GLX.backendState().api; } catch (_) { return false; } },
-    null, { polling: 250, timeout: 240000 });
-
   const readings = [];
   /** @type {Map<number, { heapMB: number|null, audioMB: number|null }>} */
   const menuByCycle = new Map();

@@ -55,25 +55,6 @@ test("fromDaily defaults to anonymous DRIVER and rejects dishonest values", () =
   assert.doesNotMatch(JSON.stringify(model), /FORMULA 1/i);
 });
 
-// HUNT-SHARE-2026-11-03.md #2: share links are QR payloads — keep the URL intact and accept HTTPS.
-test("fromDaily keeps share links intact (no trademark rewrite) and accepts HTTPS", () => {
-  const data = load();
-  const plan = { day: "2026-10-17", trackId: "spa", trackName: "Spa", weather: "wet", tod: "dusk" };
-  const entry = { best: 81.345 };
-  const rewritten = data.fromDaily(plan, entry, "gold", 1, {
-    link: "https://example.test/formula1/daily?q=formula1",
-  });
-  assert.equal(rewritten.link, "https://example.test/formula1/daily?q=formula1");
-  const https = data.fromDaily(plan, entry, "gold", 1, { link: "HTTPS://Example.TEST/card" });
-  assert.equal(https.link, "HTTPS://Example.TEST/card");
-  const host = data.fromDaily(plan, entry, "gold", 1, { link: "http://formula1.example.test/x" });
-  assert.equal(host.link, "http://formula1.example.test/x");
-  assert.equal(data.fromDaily(plan, entry, "gold", 1, { link: "javascript:alert(1)" }).link, null);
-  assert.equal(data.fromDaily(plan, entry, "gold", 1, { link: "ftp://example.test/x" }).link, null);
-  // Titles still rewrite the mark; only the link path is exempt.
-  assert.doesNotMatch(data.fromDaily({ ...plan, trackName: "FORMULA 1" }, entry, "gold", 1, {}).trackName, /FORMULA\s*1/i);
-});
-
 const car = (code, extra) => Object.assign({ code, name: code + " Driver", driverId: code.toLowerCase(),
   team: { name: "Team " + code, color: [1, 0, 0] } }, extra);
 const plain = (v) => JSON.parse(JSON.stringify(v));

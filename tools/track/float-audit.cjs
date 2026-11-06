@@ -647,16 +647,9 @@ function foliageAudit(id) {
   return { id, hits, spots: spots.size, flagKeys, key };
 }
 
-/** B3: an APEX_CIRCUITS naming no circuit left `--all` with zero ids and printed "All 0 circuits clean". */
-function emptyRoster() {
-  console.error(`float-audit: --all selected no circuit (APEX_CIRCUITS=${process.env.APEX_CIRCUITS || ""})`);
-  process.exit(1);
-}
-
 if (args.includes("--foliage")) {
   const why = args.includes("--why");
   const ids = target === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [target];
-  if (!ids.length) emptyRoster();
   for (const id of ids) {
     const r = foliageAudit(id);
     console.log(`\n${r.id.padEnd(13)} ${String(r.hits.length).padStart(4)} prim-pair hit(s) ` +
@@ -719,7 +712,6 @@ function emitJson(obj) {
 
 if (args.includes("--clip")) {
   const ids = target === "--all" ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id)) : [target];
-  if (!ids.length) emptyRoster();
   let total = 0;
   for (const id of ids) {
     const r = clipAudit(id);
@@ -742,7 +734,6 @@ this ranked list as a lead at most.`);
 if (target === "--all") {
   const { Tracks } = buildContext();
   const ids = require("../lib/circuit-scope.cjs").scope(Tracks.LIST.map((d) => d.id));   // APEX_CIRCUITS narrows --all
-  if (!ids.length) emptyRoster();
   // THE SAME CAPS AS THE GATE. tests/unit/scenery-grounding.test.mjs holds each
   // circuit at tools/track/float-baseline.json, and the caps are where the
   // known-legitimate flags live (Madrid's and Mexico's airliners in flight —

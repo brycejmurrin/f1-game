@@ -61,9 +61,7 @@ const PaceMath = (function () {
       const cars = getCars();
       const track = getTrack();
       let r = paceRef.r;
-      // Keyed on the field AND the track length: the same cars array on a
-      // longer track must not keep a short buffer (#4342).
-      if (!r || r.cars !== cars || r.length !== track.n) {
+      if (!r || r.cars !== cars) {
         r = paceRef.r = new Float32Array(track.n);
         r.cars = cars;
       }

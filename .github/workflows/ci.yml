@@ -386,9 +386,7 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
-          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -399,11 +397,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: |
-          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
-          h="$(node tools/ci/inputs-hash.mjs guards)"
-          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
-          echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
+        run: echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -472,19 +466,13 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
-          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: |
-          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
-          h="$(node tools/ci/inputs-hash.mjs guards)"
-          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
-          echo "key=guards-b-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
+        run: echo "key=guards-b-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -606,9 +594,7 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
-          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -619,11 +605,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: |
-          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
-          h="$(node tools/ci/inputs-hash.mjs guards)"
-          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
-          echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
+        run: echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -692,19 +674,13 @@ jobs:
       - name: Guards scope
         id: scope
         if: steps.reuse.outputs.reuse != 'true'
-        run: |
-          set -o pipefail   # B3: tee's exit 0 hid a crash of the scope script
-          node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
         env:
           GUARDS_MODE: ${{ steps.scope.outputs.mode }}
-        run: |
-          # B3: a failing $(…) inside echo does not fail the step; an empty hash would key every such run alike.
-          h="$(node tools/ci/inputs-hash.mjs guards)"
-          [ -n "$h" ] || { echo "::error::inputs-hash.mjs guards printed nothing"; exit 1; }
-          echo "key=guards-d-${{ runner.os }}-${GUARDS_MODE}-$h" >> "$GITHUB_OUTPUT"
+        run: echo "key=guards-d-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -1815,7 +1791,7 @@ jobs:
   # yes. A step-level skip inside the macOS job — the sweeps pattern — would
   # still pay for the macOS checkout and npm ci on every push.
   renderer-macos:
-    name: Renderer specs on a real GPU (macos-latest, Metal) ${{ matrix.shard }}/2
+    name: Renderer specs on a real GPU (macos-latest, Metal)
     needs: select
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
     # comment forbids it, because the selector owns the path decision.
@@ -1833,15 +1809,6 @@ jobs:
     # 11-33 s; the census measured a ~4 s boot on this image's Metal adapter.
     # Re-time on the first green run and replace this number and the header's.
     timeout-minutes: 30
-    # TWO legs, each ONE worker on its own Metal runner (perf hunt P8, #4548):
-    # the one-leg job ran 17 min 19 s on pages run 41599337245 while every
-    # other dependency of the aggregate had finished ~7 min earlier, so a
-    # renderer release waited on this job alone. A second runner is a second
-    # GPU, so the one-worker rule below (no two Chromiums on one GPU) holds.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1898,7 +1865,7 @@ jobs:
         env:
           APEX_WORKERS: 1
           APEX_FAIL_ON_FLAKY: 1
-        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000 --shard=${{ matrix.shard }}/2
+        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
       # ALWAYS, not failure(): a spec that fails its first attempt and passes
       # the retry leaves the job green and its report — the attached frames
       # image-grade "shadows" compares, the retry's diag — unretrievable. Run
@@ -1908,7 +1875,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-artifacts-renderer-macos-${{ matrix.shard }}
+          name: playwright-artifacts-renderer-macos
           path: |
             census-macos.json
             artifacts/test-results-*/
@@ -1980,28 +1947,18 @@ jobs:
           TWINS: ${{ needs.select.outputs.twins }}
           ADAPTED: ${{ needs.select.outputs.adapted }}
           APEX_CIRCUITS: ${{ needs.select.outputs.twin_circuits }}
-        # The two runs are independent processes, so they run AT ONCE (perf
-        # hunt P8, #4548): one after the other they took 10 min 45 s on pages
-        # run 41599337245. Each keeps its own output prefix and exit status.
-        shell: bash
         run: |
-          set -euo pipefail
-          pids=()
+          set -eu
           if [ -n "$TWINS" ]; then
             echo "hand twins: $TWINS"
             # shellcheck disable=SC2086 # a space-separated file list
-            ( node --test --test-timeout=900000 $TWINS 2>&1 | sed -u 's/^/[twins] /' ) &
-            pids+=($!)
+            node --test --test-timeout=900000 $TWINS
           fi
           if [ -n "$ADAPTED" ]; then
             echo "adapted specs under APEX_VM_PAGE=1: $ADAPTED"
             # shellcheck disable=SC2086
-            ( APEX_VM_PAGE=1 node --test --test-timeout=900000 $ADAPTED 2>&1 | sed -u 's/^/[adapted] /' ) &
-            pids+=($!)
+            APEX_VM_PAGE=1 node --test --test-timeout=900000 $ADAPTED
           fi
-          rc=0
-          for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
-          exit "$rc"
 
   # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
   # runs the plan as a matrix. It used to be one job that ran on branch pushes

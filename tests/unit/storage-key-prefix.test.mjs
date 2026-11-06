@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { ROOT, jsFiles } from "../helpers/store-key-scan.mjs";
+import { fileURLToPath } from "node:url";
 
 // AGENTS.md: localStorage keys are prefixed `apex26.` — a rule stated for the
 // whole tree and, until round 6, enforced nowhere (a census found all ~185
@@ -13,6 +13,8 @@ import { ROOT, jsFiles } from "../helpers/store-key-scan.mjs";
 // "seasonCfg" are that shape and never reach the raw API), so only direct
 // literal calls are in scope, which is exactly where a wrong key can land.
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 // Allowlist: repo-relative file -> { key -> reason }. A new entry REQUIRES a
 // reason string; an empty reason fails the test.
 const ALLOW = {
@@ -21,10 +23,20 @@ const ALLOW = {
   },
 };
 
+function walk(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p, out);
+    else if (e.name.endsWith(".js")) out.push(p);
+  }
+  return out;
+}
+
 test("every literal localStorage/sessionStorage key is apex26.-prefixed (or allowlisted with a reason)", () => {
   const bad = [];
-  for (const rel of jsFiles()) {
-    const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+  for (const p of walk(path.join(ROOT, "js"))) {
+    const rel = path.relative(ROOT, p).split(path.sep).join("/");
+    const src = fs.readFileSync(p, "utf8");
     for (const m of src.matchAll(
       /(?:localStorage|sessionStorage)\s*\.\s*(?:getItem|setItem|removeItem)\s*\(\s*["']([^"']+)["']/g)) {
       const key = m[1];

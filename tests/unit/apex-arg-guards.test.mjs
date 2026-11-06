@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { absSrc } from "../helpers/abs-src.mjs";
 
 // Live js-debugger sweep (#2586): non-finite hook arguments wrote NaN into the player / camera / career.
 function loadApex(G, extra) {
@@ -91,53 +90,4 @@ test("go() still starts a built race", () => {
   const api = loadApex(G);
   assert.equal(api.go(), "race");
   assert.equal(G.raceT, 0.5);
-});
-
-// B5 #4549: netLoopback / netStop / lobbyFake(false) dropped the far loopback end without close().
-function loadNetHooks(G) {
-  const ends = [];
-  const endpoint = () => { const ep = { closed: 0, pump() {}, close() { ep.closed++; } }; ends.push(ep); return ep; };
-  const context = vm.createContext({
-    NetTransport: { loopback: () => [endpoint(), endpoint()], seededRnd: () => () => 0 },
-    NetSession: { autoPong() {} },
-    setInterval: () => 1, clearInterval() {},
-  });
-  vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-net.js", import.meta.url), "utf8"), context,
-    { filename: absSrc("js/agent/apex-net.js") });
-  return { hooks: vm.runInContext("ApexNet", context).hooks(G, { resetStartLights() {} }), ends };
-}
-
-test("netLoopback closes the stale far end it replaces; netStop closes it after the local stop", () => {
-  const order = [];
-  let active = false;
-  const G = { netPlay: {
-    start() { if (active) return { ok: false, error: "already_active" }; active = true; return { ok: true }; },
-    stop(why) { order.push("stop:" + why); active = false; return true; },
-    tick() {}, status: () => ({}),
-  } };
-  const { hooks, ends } = loadNetHooks(G);
-  assert.equal(hooks.netLoopback({ nowMs: 0 }).ok, true);
-  const firstPeer = ends[1];
-  // A refused start keeps the live peer and closes only the unused pair.
-  assert.equal(hooks.netLoopback({ nowMs: 0 }).ok, false);
-  assert.equal(firstPeer.closed, 0);
-  assert.equal(ends[2].closed, 1); assert.equal(ends[3].closed, 1);
-  active = false; // the first session ended without netStop
-  assert.equal(hooks.netLoopback({ nowMs: 0 }).ok, true);
-  assert.equal(firstPeer.closed, 1, "the replaced far end is closed");
-  ends[5].close = () => { order.push("close"); };
-  hooks.netStop();
-  assert.deepEqual(order, ["stop:local", "close"]);
-});
-
-test("lobbyFake(false) closes the fake lobby peer", () => {
-  let factory = null;
-  const G = { netLobby: { setTransportFactory(f) { factory = f; } } };
-  const { hooks, ends } = loadNetHooks(G);
-  assert.equal(hooks.lobbyFake(true), true);
-  factory({ role: "host" });
-  assert.equal(ends[1].closed, 0);
-  hooks.lobbyFake(false);
-  assert.equal(ends[1].closed, 1);
-  assert.equal(factory, null);
 });

@@ -9,9 +9,6 @@
  * steers through the same One-Euro filter, dead zone and slew" is asserted by
  * driving it, not by reading it.
  *
- * Lane 12 findings: docs/notes/HUNT-INPUT-2026-11-03.md (cited so knowledge-gc
- * keeps the HUNT- prefix note).
- *
  * Run: node --test tests/unit/phone-pad.test.mjs   (npm run test:steering-unit)
  */
 import { test } from "node:test";
@@ -2090,102 +2087,4 @@ test("touch steering: strip width read once per gesture, aria-valuenow an intege
     steer.dispatch("pointerup", { pointerId: 5 });
     assert.equal(aria[aria.length - 1], "0");
   } finally { ctl.cancel(); }
-});
-
-// ── Lane 12 / HUNT-INPUT-2026-11-03 ──────────────────────────────────────────
-
-test("host(): ICE failing while still connecting re-hosts the SAME code (phone redials it)", async () => {
-  // Transport stays "connecting" until we fail it — loopback would open at once
-  // and skip the phase the bug lived in.
-  const pairs = [];
-  const rtc = () => {
-    const cb = {};
-    const t = {
-      status: "connecting",
-      onMessage(f) { cb.message = f; },
-      onOpen(f) { cb.open = f; },
-      onClose(f) { cb.close = f; },
-      send() { return true; },
-      pump() { return 0; },
-      close(why = "local") { this.status = "closed"; cb.close?.(why); },
-      fail(why = "failed") { this.status = "closed"; cb.close?.(why); },
-      _cb: cb,
-    };
-    pairs.push(t);
-    return t;
-  };
-  const h = hostHarness({ rtc, makeCode: () => "ABC234" });
-  h.ui.relinkN = 0; h.ui.relinking = () => h.ui.relinkN++;
-  await settle();
-  assert.equal(h.ctl.state().phase, "waiting");
-  const answer = h.room.onJoiner(null, "ANSWER");
-  await settle();
-  assert.equal(h.ctl.state().phase, "connecting", "acceptAnswer done, data channel not open yet");
-  pairs[0].fail("failed");
-  await answer;
-  await settle();
-  assert.equal(h.ctl.state().phase, "waiting", "public relay re-hosts — not lost");
-  assert.equal(h.ctl.state().code, "ABC234");
-  assert.equal(h.ui.relinkN, 1);
-  assert.equal(h.ui.lostN, 0);
-  assert.equal(pairs.length, 2, "a fresh transport for the same code");
-  h.ctl.cancel();
-});
-
-test("pad(): orientationchange releases GAS so a rotate cannot latch the pedal", () => {
-  const previous = { document: globalThis.document, window: globalThis.window };
-  const docListeners = {}, winListeners = {};
-  globalThis.document = { hidden: false, addEventListener(t, f) { (docListeners[t] ||= []).push(f); } };
-  globalThis.window = { addEventListener(t, f) { (winListeners[t] ||= []).push(f); } };
-  let ctl;
-  try {
-    const gas = fakeEl();
-    ctl = PhonePad.pad({ gas });
-    gas.dispatch("pointerdown", { pointerId: 7, clientY: 200 });
-    assert.equal(ctl.state().thr, 1);
-    for (const f of winListeners.orientationchange || []) f();
-    assert.equal(ctl.state().thr, 0, "orientationchange clears the hold");
-    gas.dispatch("pointerdown", { pointerId: 7, clientY: 200 });
-    assert.equal(ctl.state().thr, 1, "the same pointer id can take the pedal again");
-  } finally {
-    if (ctl) ctl.cancel();
-    for (const [key, old] of Object.entries(previous)) {
-      if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
-    }
-  }
-});
-
-test("padSession: a refused STATE send stays dirty so a pedal lift retries before the heartbeat", () => {
-  const clock = { t: 1000 };
-  let allow = true;
-  const samples = [];
-  const transport = {
-    status: "open",
-    onMessage() {}, onOpen() {}, onClose() {},
-    send(ch, data) {
-      if (ch === NetTransport.STATE) {
-        if (!allow) return false;
-        samples.push(data);
-      }
-      return true;
-    },
-    pump() { return 0; },
-    close() {},
-  };
-  let thr = 1;
-  const sess = PhonePad.padSession(transport, {
-    roll: () => null, thr: () => thr, brk: () => 0, held: () => 0,
-  }, { now: () => clock.t, heartbeat: false });
-  assert.equal(sess.sample(true), true);
-  assert.equal(PhonePad.decodeSample(samples.at(-1)).thr, 1);
-  thr = 0;
-  allow = false;
-  assert.equal(sess.sample(true), false, "buffer refusal");
-  assert.equal(samples.length, 1, "the lift did not go out");
-  allow = true;
-  clock.t += 20;
-  sess.pump();
-  assert.equal(samples.length, 2, "pump retries the coalesced lift");
-  assert.equal(PhonePad.decodeSample(samples.at(-1)).thr, 0);
-  sess.close();
 });

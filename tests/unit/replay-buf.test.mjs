@@ -1,7 +1,6 @@
 /* replay-buf.test.mjs — instant-replay ring (js/camera/replay-buf.js).
  * Budget, wrap, interpolate, restore equality, solo/net scrub gates,
  * career-settle / endRace source pins, pause-menu scrub audio (game-vm).
- * Dock repaint gate and frame-step search: docs/notes/PERF-HUNT-P6-2026-11-03.md row 3.
  * Run: node --test tests/unit/replay-buf.test.mjs
  */
 import { test } from "node:test";
@@ -658,57 +657,6 @@ test("paused replay keeps unchanged contact-sheet options and refreshes changed 
   api.endScrub();
 });
 
-test("a paused or stopped replay does not repaint the dock every frame (#4546 P6)", () => {
-  let lookups = 0;
-  const els = {};
-  const doc = { getElementById: (id) => { lookups++; return (els[id] ||= { id, hidden: false, disabled: false, textContent: "", value: "", children: [],
-    replaceChildren() { this.children = []; }, appendChild(o) { this.children.push(o); } }); },
-    createElement: () => ({}) };
-  const R = boot(doc), field = cars(1), G = { cars: field, paused: true, raceT: 4 };
-  const api = R.create(G);
-  for (let i = 0; i <= R.HZ * 4; i++) api.sample(i / R.HZ, field);
-  assert.equal(api.beginScrub(), true);
-  api.stepFrame(-1);
-  const label = els["pm-replay-label"].textContent;
-  lookups = 0;
-  for (let i = 0; i < 60; i++) api.tickScrub(1 / 60);
-  assert.equal(lookups, 0, "stopped: 60 frames, no DOM reads (was 13 per frame)");
-  api.pushTag("pass", 3, 0); api.tickScrub(0);
-  assert.ok(lookups > 0, "new tag metadata still repaints");
-  lookups = 0; G.paused = false; api.tickScrub(0);
-  assert.ok(lookups > 0, "a pause flip still repaints (contact-sheet button)");
-  lookups = 0;
-  api.stepFrame(1);
-  assert.ok(lookups > 0, "a user action always repaints");
-  assert.equal(els["pm-replay-label"].textContent, api.status().scrubT.toFixed(3) + "s", "the label tracks the stepped frame");
-  assert.notEqual(els["pm-replay-label"].textContent, label);
-  api.endScrub();
-});
-
-test("frame step lands on recorded timestamps across uneven spacing and the ring wrap", () => {
-  const R = boot(), field = cars(1), G = { cars: field, paused: true, raceT: 0 };
-  const api = R.create(G);
-  // uneven spacing: skip slots now and then, as a slow frame would
-  const recorded = [];
-  let t = 0;
-  for (let i = 0; i < R.HZ * 40; i++) { t += (i % 7 === 3 ? 3 : 1) / R.HZ; G.raceT = t; if (api.sample(t, field)) recorded.push(t); }
-  const w = api.status();
-  const kept = recorded.filter((x) => x >= w.t0 - 1e-12);
-  assert.ok(kept.length === w.frames, "the window holds the newest samples (wrapped)");
-  assert.equal(api.beginScrub(), true);
-  for (const k of [1, 5, Math.floor(kept.length / 2), kept.length - 2]) {
-    api.apply(kept[k]);
-    api.stepFrame(-1); assert.equal(api.status().scrubT, kept[k - 1], "previous recorded frame");
-    api.apply(kept[k]);
-    api.stepFrame(1); assert.equal(api.status().scrubT, kept[k + 1], "next recorded frame");
-    api.apply((kept[k] + kept[k + 1]) / 2);
-    api.stepFrame(-1); assert.equal(api.status().scrubT, kept[k], "between frames: back to the earlier one");
-  }
-  api.apply(kept[0]); assert.equal(api.stepFrame(-1), false, "nothing before the oldest frame");
-  api.apply(kept[kept.length - 1]); assert.equal(api.stepFrame(1), false, "nothing after the newest frame");
-  api.endScrub();
-});
-
 test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport cap", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/dialogs.css"), "utf8");
   const m = css.match(/#pm-replay-dock \{([^}]*)\}/);
@@ -871,33 +819,4 @@ test("at() on a wrapped ring picks the same bracket as a linear scan; the pooled
     assert.notEqual(a.cars, b.cars, "the public at() returns fresh arrays");
     assert.ok(Math.abs(a.cars[0].s - (field[0].s - 0.5 * (w.t1 - a.t) * R.HZ)) < 0.51, "frame near t=" + t);
   }
-});
-
-test("a NaN pose sample keeps the previous sample, not the origin (#4339)", () => {
-  const R = boot(), field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false } });
-  api.reset(field);
-  Object.assign(field[0], { s: 50, px: 7, pz: 9, head: 1.5 });
-  api.sample(0, field);
-  Object.assign(field[0], { s: NaN, px: NaN, pz: Infinity, head: NaN });
-  api.sample(1, field);
-  const p = api.at(1).cars[0];
-  assert.equal(p.px, 7); assert.equal(p.pz, 9); assert.equal(p.head, 1.5); assert.equal(p.s, 50);
-});
-
-test("contact sheet restore seek that throws still clears sheetBusy (B5 #4696)", async () => {
-  let calls = 0, G;
-  const R = boot(undefined, { PhotoStudio: { async contactSheet(_ts, seek) {
-    calls++;
-    if (calls === 1) { seek(1); G.cars = cars(1); }   // field replaced mid-capture: the restore seek throws "frame unavailable"
-    return true;
-  } } });
-  const field = cars(1);
-  G = { cars: field, player: field[0], paused: true, camMode: 3, dbgCam: { eye: [1, 2, 3] }, photoCam: { pos: [4, 5, 6], yaw: 1, pitch: 2, fov: 50 } };
-  const api = R.create(G); api.reset(field);
-  for (let t = 0; t <= 4; t++) { field[0].px = t; api.sample(t, field); }
-  api.pushTag("spin", 2, 0); api.beginScrub(false); api.apply(3);
-  await api.contactSheet(0);
-  assert.equal(calls, 1);
-  await api.contactSheet(0);
-  assert.equal(calls, 2, "sheetBusy was released: a second capture is allowed to start");
 });

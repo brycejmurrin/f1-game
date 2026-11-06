@@ -3,18 +3,7 @@ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
 import { resolveChromium, normalizeBrowserFlavor } from "../../tools/lib/chromium-path.mjs";
-
-test("--both answers --path and --cache-path in one spawn (perf P8: session-start's two node spawns)", () => {
-  const cli = path.resolve(import.meta.dirname, "../../tools/lib/chromium-path.mjs");
-  const one = (flag) => spawnSync(process.execPath, [cli, flag], { encoding: "utf8" });
-  const both = one("--both");
-  assert.equal(both.status, 0, both.stderr);
-  const lines = both.stdout.split("\n");
-  assert.equal(lines.length, 3, "two lines then the trailing newline");
-  assert.deepEqual(lines.slice(0, 2), [one("--path").stdout.trim(), one("--cache-path").stdout.trim()]);
-});
 
 test("a headless shell answers when the full Chromium archive was never unpacked", () => {
   const root = mkdtempSync(path.join(tmpdir(), "pw-shell-"));

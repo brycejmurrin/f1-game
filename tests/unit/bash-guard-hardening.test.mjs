@@ -101,35 +101,6 @@ test("4. gh run cancel, the REST cancel, gh pr merge and gh pr ready are refused
   assert.equal(run("gh run cancel 1", {}, { APEX_RUN_CANCEL_OK: "1" }).status, 2);
 });
 
-test("perf P8 row 11: no grep/sed for a command no rule can match, one quote scan, groups.json read only for test:", (t) => {
-  // Shim grep/sed/python3 on PATH: each logs its name, then execs the real one, so the rules still run for real.
-  const bin = fs.mkdtempSync(path.join(ROOT, "artifacts", "guard-shim-"));
-  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
-  const log = path.join(bin, "calls");
-  for (const tool of ["grep", "sed", "python3"]) {
-    const real = spawnSync("bash", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
-    fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\necho ${tool} >>"${log}"\nexec "${real}" "$@"\n`);
-    fs.chmodSync(path.join(bin, tool), 0o755);
-  }
-  const count = (command, extra = {}) => {
-    fs.rmSync(log, { force: true });
-    const r = run(command, extra, { PATH: bin + path.delimiter + process.env.PATH });
-    const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
-    const n = (tool) => calls.filter((c) => c === tool).length;
-    return { status: r.status, grep: n("grep"), sed: n("sed"), python3: n("python3") };
-  };
-  const sub = { agent_id: "a1" };
-  assert.deepEqual(count("git status --short"), { status: 0, grep: 0, sed: 0, python3: 1 }, "main: only the payload read");
-  assert.deepEqual(count("ls -la js/", sub), { status: 0, grep: 0, sed: 0, python3: 1 }, "subagent: only the payload read");
-  const commit = count("git commit -m 'x'", sub);
-  assert.equal(commit.status, 0);
-  assert.equal(commit.sed, 0, "the quote scan is one python3 pass, no sed");
-  assert.equal(commit.python3, 2, "payload read + one scan; no test: in the command, so groups.json is not read");
-  const group = count("npm run test:smoke", sub);
-  assert.equal(group.status, 2, "a browser group stays refused");
-  assert.equal(group.python3, 3, "a test: command still reads groups.json (payload + scan + groups)");
-});
-
 test("fail closed on a payload it cannot read; an empty command passes; the header states the limits", () => {
   for (const input of ["not json", "[]", '{"tool_input":[]}', '{"tool_input":{"command":5}}']) {
     const r = spawnSync("bash", [HOOK], { input, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT } });
@@ -161,27 +132,4 @@ test("settings.json wires the guard on Bash with onFailure block, and the deny/a
   for (const dead of ["mcp__MDN", "mcp__mcp_browserstack_com"]) assert.ok(!s.permissions.allow.includes(dead), `${dead} names no server`);
   assert.equal(s.enabledPlugins, undefined, "the ten false enabledPlugins entries did nothing");
   for (const t of [...s.permissions.deny, ...s.permissions.ask]) assert.ok(!s.permissions.allow.includes(t), `${t} is both allowed and gated`);
-});
-test("B8 #4561: H1 npm run test, H2 gh global flags, H3 wrapper options, H5 hatches, H6 --stop, H4 prose passes", () => {
-  const sub = { agent_id: "a1" };
-  for (const cmd of ["npm run test", "npm run test --silent", "npm run-script test", "npm run -s test -- x"]) refused(cmd, /subagent never starts a browser run/, sub);
-  allowed("node tools/ci/test-bg.mjs --stop", sub);                                         // H6
-  for (const cmd of ["touch .claude/allow-protected", ": > .claude/allow-context-cap", "touch '.claude/allow-protected'"])
-    refused(cmd, /cannot lift a guard/, sub);                                                 // H5
-  allowed("touch .claude/allow-protected");                                                 // the main session keeps its hatch
-  for (const cmd of ["gh -R a/b pr merge 5", "gh --repo a/b pr merge 5 --merge", "gh --repo=a/b pr merge 5", "gh api -X PUT repos/a/b/pulls/5/merge",
-    "gh api graphql -f query='mutation { mergePullRequest(input:{}) { clientMutationId } }'"]) refused(cmd, /merges or arms/);   // H2
-  for (const cmd of ["gh -R a/b pr ready 5", "gh --repo a/b pr ready"]) refused(cmd, /ready/);
-  refused("gh -R a/b run cancel 1", /cancel/);
-  for (const cmd of ["env -i pkill -f x", "env FOO=1 pkill -f x", "sudo -E pkill -f x", "sudo -u root pkill -f x", "timeout -s KILL 5 pkill -f x",
-    "nice pkill -f x", "nice -n 5 pkill -f x", "command pkill -f x", "time pkill -f x", "if true; then pkill -f x; fi", "{ pkill -f x; }",
-    "! pkill -f x", 'echo "$(pkill -f x)"', "pkill '-f' x", "while true; do pkill -f x; done"]) refused(cmd, /pkill -f/);          // H3
-  for (const cmd of ["command npm test", "time npm test", "if true; then npm test; fi"]) refused(cmd, /subagent never starts/, sub);
-  for (const cmd of ["command git commit -n -m x", "time git commit --no-verify -m x"]) refused(cmd, /pre-commit/);
-  const HP = "core." + "hooksPath";
-  for (const cmd of [`git commit -m "docs: explain ${HP} setup"`, `git config --get ${HP}`, "echo 'see actions/runs/12/cancel'",
-    "git commit -m \"$(cat <<'X'\nfix\n\ngh pr merge is banned\nX\n)\"", 'git commit -m "x\n\ngh run cancel mention"',
-    "cat > notes.md <<'EOF'\ngh pr merge 5\npkill -f chrome\nEOF", "gh api repos/a/b/pulls/5/merge", "gh pr view 5 -R a/b"]) allowed(cmd);   // H4
-  refused("bash <<'EOF'\npkill -f chrome\nEOF", /pkill -f/);                                 // a heredoc a shell reads still runs
-  refused(`git config ${HP} /x`, /hooksPath/);
 });

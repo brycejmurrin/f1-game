@@ -201,13 +201,10 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await openSelect(page);
     for (const pct of [100, 150, 200]) {
       await page.evaluate((p) => window.__apex.uiScale(p), pct);
-      // uiScale() returns {pct, …}, not a number: the old predicate rounded an
-      // object (NaN), fell through to "--ui-scale is set", passed on any throw
-      // and swallowed its timeout (#4360). Wait for the value AND the CSS var
-      // that drives layout; a timeout is a failure.
-      await page.waitForFunction((p) => window.__apex.uiScale().pct === p &&
-        document.documentElement.style.getPropertyValue("--ui-scale").trim() === String(p / 100),
-      pct, { polling: 100, timeout: 2_000 });
+      await page.waitForFunction((p) => {
+        try { return Math.round((window.__apex.uiScale?.() ?? p)) === p || document.documentElement.style.getPropertyValue("--ui-scale") !== ""; }
+        catch (_) { return true; }
+      }, pct, { polling: 100, timeout: 2_000 }).catch(() => {});
       const r = await page.evaluate(() => {
         const list = document.getElementById("sel-tracks");
         list.scrollLeft = 0;

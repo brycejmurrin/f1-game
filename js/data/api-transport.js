@@ -373,11 +373,7 @@ const F1Transport = (function () {
       const cache = cachePolicy !== "network";
       const quiet = ttl <= 0 || (options && options.cache === false);
       const name = endpointName(url);
-      // ttl <= 0 never serves a hit as fresh: the cached copy is only the failure
-      // fallback, so a LIVE refresh that succeeds (every 30 s under AUTO) must not
-      // read and JSON.parse up to 256 KB just to discard it. Read it in the catch.
-      const lazyStale = cache && ttl <= 0;
-      let hit = cache && !lazyStale ? readCache(url) : null;
+      const hit = cache ? readCache(url) : null;
       // age < 0 is an entry stamped by a clock that has since been stepped back:
       // it would read as fresh for as long as the skew lasts, so refetch instead.
       const age = hit ? effects.now() - hit.t : 0;
@@ -458,7 +454,6 @@ const F1Transport = (function () {
           // makes LIVE look "updated" while silently serving old classification.
           const msg = (err && err.message) || "";
           const status = err && err.status;
-          if (lazyStale) hit = readCache(url);
           if (hit && status !== 401 && status !== 403 && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
             warnFetchFail(name, "stale");
             staleLog.push({ seq: ++staleSeq, t: hit.t });

@@ -847,17 +847,11 @@ function mirrorSheen(eye, carMat) {
 }
 function ensureMirrorFade(liv) {
   if (mirrorFadeMesh || !_gfx) return;
+  const out = acc();
   // Restore the authored bay surface over the resolved reflection. A plain
   // grey quad repainted the whole box, then popped away as the car moved out.
   // Preserve every room colour, joint and marking; apron / lane stay opaque.
-  // rebuild() just built this exact floor (same liv, same look): copy it rather
-  // than run buildBayFloor a second time per geometry rebuild (#4546 P6).
-  let out;
-  if (floorSrc) {
-    out = acc();
-    for (const k in out) out[k] = floorSrc[k].slice();
-    floorSrc = null;
-  } else { out = acc(); buildBayFloor(out, liv, GaragePrims.look()); }
+  buildBayFloor(out, liv, GaragePrims.look());
   for (let i = 1; i < out.pos.length; i += 3) out.pos[i] += 0.002;
   mirrorFadeMesh = _gfx.createMesh(out);
 }
@@ -1134,10 +1128,6 @@ let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // floor and every prop — the turntable hitch. Geometry survives a logo,
 // sponsor or number edit; only the atlas that reads those pixels repaints.
 let geomKey = "", liveKey = "", dressIdKey = "", dressFullKey = "", dressCanvas = null;
-// dressSpare: the one 1024² dress canvas, repainted in place on a dressId change
-// (a paint-drag step) instead of a fresh canvas per step for the GC (#4546 P6).
-// floorSrc: the bay floor rebuild() built, until ensureMirrorFade copies it.
-let dressSpare = null, floorSrc = null;
 const propMesh = {};
 // `mat` is a PER-VERTEX MATERIAL ID, and its absence is why this whole room was
 // untextured. GLX wires the attribute only when `data.mat.length === vCount`
@@ -1336,7 +1326,6 @@ function rebuild(team, liv, info, ctx) {
     const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
     BACKDROP[0] = _bdBase[0] = bd[0]; BACKDROP[1] = _bdBase[1] = bd[1]; BACKDROP[2] = _bdBase[2] = bd[2];
     floorMesh = _gfx.createMesh(flr);
-    floorSrc = flr;
     const g = {};
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
     buildProps(g, liv);
@@ -1368,7 +1357,7 @@ function rebuild(team, liv, info, ctx) {
       prevDress && _gfx.freeTexture) _gfx.freeTexture(prevDress);
   if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
     try {
-      if (!dressCanvas) dressCanvas = dressSpare = paintDress(team, liv, undefined, dressSpare).canvas;
+      if (!dressCanvas) dressCanvas = paintDress(team, liv).canvas;
       paintBoards(dressCanvas, team, liv, info);
       dressTex = reuploadTex(prevDress, dressCanvas);
       if (!dressMesh.back) {
@@ -1704,7 +1693,7 @@ function release() {
   dressTex = ft(dressTex); liveTex = ft(liveTex);
   for (const ent of previewMeshes.values()) fm(ent.mesh);
   previewMeshes.clear(); previewHulls.clear();
-  dressCanvas = null; dressSpare = null; floorSrc = null; liveCanvas = null; releaseDress();
+  dressCanvas = null; liveCanvas = null; releaseDress();
   cacheKey = ""; geomKey = ""; liveKey = ""; dressIdKey = ""; dressFullKey = ""; dressFail = 0; dressRetryAt = 0; liveFail = 0; liveRetryAt = 0; traceFail = 0; lastTrace = -1e9;
   _rigK0 = NaN; _rigK1 = NaN; _rigK2 = NaN; _rigMood = ""; _rig.length = 0; _chase.length = 0;
   return n;

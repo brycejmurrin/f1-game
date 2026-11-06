@@ -5,15 +5,6 @@ const GarageExterior = (function () {
   const MESHES = ["ground", "terrain", "road", "props", "scenery", "sceneryLights", "glass", "water"];
   const wetWeather = weather => /^(wet|rain|storm)$/.test(weather || "");
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
-  /** True when the arrival eye / shutter is looking into the pit lane (not the indoor bay). */
-  function lookingOut(pose) {
-    if (!pose) return false;
-    if (Number.isFinite(pose.door) && pose.door > 0.12) return true;
-    if (pose.eye && Number.isFinite(pose.eye[2]) && pose.eye[2] > 5.4) return true;
-    const cam = pose.cameraOption || pose.camera;
-    return cam === "doorway" || cam === "facade" || cam === "pitWall" || cam === "dolly"
-      || cam === "door" || cam === "lowFront";
-  }
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
   function lighting(selection) {
     const s = selection || {}, tod = s.tod || "default", weather = s.weather || "dry";
@@ -143,16 +134,15 @@ const GarageExterior = (function () {
     function freeWeather() { if (rainMesh) gfx.freeMesh(rainMesh); rainMesh = null; }
     function weatherMesh() {
       if (!ready() || !/^(rain|storm)$/.test(selected.weather)) { freeWeather(); return; }
-      rainOpts.alpha = selected.weather === "storm" ? .48 : .34;
+      rainOpts.alpha = selected.weather === "storm" ? .42 : .30;
       if (rainMesh) return;
       const data = { pos: [], nrm: [], col: [], idx: [] };
-      // Wider / deeper streak field so a doorway look-out reads rain across the
-      // pit straight, not a cut-off curtain at ~90 m. Cap stays 96 quads
-      // (docs/notes/GARAGE-WORLD-EXTERIOR.md); stretch spacing instead of count.
+      // 12 columns x 8 repeated vertical bands. All z remain beyond the shutter;
+      // translating only Y cannot bring precipitation into the dry service box.
       for (let column = 0; column < 12; column++) for (let layer = 0; layer < 8; layer++) {
-        const x = -52 + ((column * 37) % 105), z = 7.1 + (column * 53) % 240;
-        const y = .4 + layer * 2.6 + ((column * 7) % 11) / 11, at = data.pos.length / 3;
-        data.pos.push(x-.025,y,z, x+.025,y,z, x+.115,y+.7,z, x+.065,y+.7,z);
+        const x = -19 + ((column * 17) % 39), z = 7.1 + (column * 23) % 86;
+        const y = .4 + layer * 2 + ((column * 7) % 11) / 11, at = data.pos.length / 3;
+        data.pos.push(x-.025,y,z, x+.025,y,z, x+.115,y+.65,z, x+.065,y+.65,z);
         for (let i=0;i<4;i++) { data.nrm.push(0,0,-1); data.col.push(.58,.67,.76); }
         data.idx.push(at,at+1,at+2,at,at+2,at+3);
       }
@@ -267,5 +257,5 @@ const GarageExterior = (function () {
     }
     return { request, ready, draw, drawWeather, lighting: viewLighting, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
   }
-  return Object.freeze({ create, lighting, lookingOut, fitPose, groundPose, poseMatrix });
+  return Object.freeze({ create, lighting, fitPose, groundPose, poseMatrix });
 })();

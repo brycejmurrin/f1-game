@@ -29,19 +29,13 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
 
 test("TLX WebGPU: BOOST presses 2..N re-mint no BOOST pipelines and add no background ones", async ({ page }, testInfo) => {
   test.setTimeout(900000);
-  // The rig draw follows the draw warm, off by default on a software adapter; apex26.tlxDrawWarm="rig" forces it alone on here so the
-  // race-entry rig job DRAWS the boost pairs as it does on a phone (#4514 step 2). APEX_BOOST_DRAW_WARM=0 is the A/B arm
-  // (compile-only, the old warm).
-  const drawWarm = process.env.APEX_BOOST_DRAW_WARM === "0" ? "0" : "rig";
-  const { hook, presses, warmRig } = await measureBoostPresses(page, { forceGL: false, bootMs: BOOT_MS * 2, ls: { "apex26.tlxDrawWarm": drawWarm },
+  const { hook, presses } = await measureBoostPresses(page, { forceGL: false, bootMs: BOOT_MS * 2,
     gas: (on) => (on ? page.keyboard.down("ArrowUp") : page.keyboard.up("ArrowUp")) });
   expect(hook, "three's backend must be reachable to count pipelines").toMatch(/^ok /);
   testInfo.annotations.push({ type: "backend", description: hook });
   if (!/webgpu/i.test(hook)) testInfo.annotations.push({ type: "fallback", description: "no WebGPU adapter on this runner: the WebGPU leg ran on three's WebGL2 backend" });
   testInfo.annotations.push({ type: "press 1", description: `${presses[0].pipelines} pipelines on the first press (lit ones fail the run, #4514)` });
   testInfo.annotations.push({ type: "control windows", description: presses.map((p) => p.control).join(",") + " pipelines in the equal no-BOOST windows" });
-  testInfo.annotations.push({ type: "rig warm", description: `tlxDrawWarm=${drawWarm} ${JSON.stringify(warmRig && warmRig.rig && { pairs: warmRig.rig.pairs, drawn: warmRig.rig.drawn, ok: warmRig.rig.ok })}` });
-  testInfo.annotations.push({ type: "device objects", description: presses.map((p) => `press ${p.press} ${JSON.stringify(p.res)} vs control ${JSON.stringify(p.controlRes)}`).join("; ") });
   for (const p of presses) expect(p.deployed, `press ${p.press} never deployed ERS: the count would pass vacuously`).toBe(true);
   const v = boostVerdict(presses);
   testInfo.annotations.push({ type: "fx streams", description: `${v.fxPress} in presses 2..N vs ${v.fxCtrl} in their control windows (background, #3713)` });

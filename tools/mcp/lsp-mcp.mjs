@@ -30,7 +30,6 @@ import { parse } from "espree";
 import { analyze } from "eslint-scope";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { MODERN, versionError, discoverResult, modernize } from "./mcp-modern.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1354,16 +1353,7 @@ export async function callTool(lsp, name, a = {}) {
 }
 
 const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
-const LSP_INSTRUCTIONS = "TypeScript-checker code intelligence for js/ (script-global IIFEs). Prefer lsp_definition / lsp_references over grep for a named symbol: `Name`, `Head.member` or `G.member`. Rows are tagged [def|export|alias|use]. ONE-based positions. First call ~1-2 s (project load), then tens of ms; tsc exits after 10 idle minutes and restarts on demand.";
-const SUPPORTED = [MODERN, "2025-06-18", "2025-03-26", "2024-11-05"];
 export async function handleRpc(lsp, msg) {
-  const bad = msg && typeof msg === "object" && !Array.isArray(msg) ? versionError(msg, SUPPORTED) : null;
-  if (bad) return bad;
-  if (msg && msg.method === "server/discover" && Object.hasOwn(msg, "id"))
-    return discoverResult(msg.id, SUPPORTED, { capabilities: { tools: {} }, info: { name: "apex-lsp", version: "0.1.0" }, instructions: LSP_INSTRUCTIONS });
-  return modernize(msg, await handleRpcLegacy(lsp, msg));
-}
-async function handleRpcLegacy(lsp, msg) {
   if (!msg || Array.isArray(msg) || msg.jsonrpc !== "2.0" || typeof msg.method !== "string" ||
     (Object.hasOwn(msg, "id") && !(msg.id === null || typeof msg.id === "string" || (typeof msg.id === "number" && Number.isFinite(msg.id)))) ||
     (msg.params !== undefined && (!msg.params || typeof msg.params !== "object" || Array.isArray(msg.params)))) return rpcError(null, -32600, "Invalid JSON-RPC request");
@@ -1372,7 +1362,7 @@ async function handleRpcLegacy(lsp, msg) {
   if (method === "initialize" && (msg.params?.protocolVersion !== undefined && typeof msg.params.protocolVersion !== "string")) return rpcError(id, -32602, "protocolVersion must be a string");
   if (method === "initialize") return result({ protocolVersion: ["2024-11-05", "2025-03-26", "2025-06-18"].includes(msg.params?.protocolVersion) ? msg.params.protocolVersion : "2025-06-18", capabilities: { tools: {} },
     serverInfo: { name: "apex-lsp", version: "0.1.0" },
-    instructions: LSP_INSTRUCTIONS });
+    instructions: "TypeScript-checker code intelligence for js/ (script-global IIFEs). Prefer lsp_definition / lsp_references over grep for a named symbol: `Name`, `Head.member` or `G.member`. Rows are tagged [def|export|alias|use]. ONE-based positions. First call ~1-2 s (project load), then tens of ms; tsc exits after 10 idle minutes and restarts on demand." });
   if (method === "ping") return result({});
   if (method === "tools/list") return result({ tools: TOOLS });
   if (method === "tools/call") {

@@ -1523,19 +1523,8 @@ const CarDraw = (function () {
     const _rigWarmBase = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     function warmCockpitRig(c, paint, mirrorKey) {
       if (!c || carModelBuf || typeof G.gfx.warmDraws !== "function") return Promise.resolve(false);
-      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); warmBoostDraws(c, paint); },
-        { mirror: mirrorKey || null, draw: true });
-    }
-    // THE FIRST BOOST'S DRAWS (#4514 step 2): the rig with ERS deploying and OVERTAKE active (the ERS bar's and
-    // the OT lamp's _rigFxA pass) and the player's ERS strip, captured with the state forced on and restored at
-    // once, so TLX compiles AND draws each pair under the cover (tlx.js drawRigPairs) instead of the first press.
-    function warmBoostDraws(c, paint) {
-      const d0 = c.deploying, ot0 = c.otT, en0 = c.energy;
-      try {
-        c.deploying = true; c.otT = 1; c.energy = 1;
-        drawCockpitRig(c, _rigWarmBase, 0, paint, false);
-        drawExhaustFx(c, _rigWarmBase, true, false);
-      } finally { c.deploying = d0; c.otT = ot0; c.energy = en0; }
+      return G.gfx.warmDraws(() => { drawCockpitRig(c, _rigWarmBase, 0, paint, false); drawCockpitRig(c, _rigWarmBase, 0, paint, true); },
+        { mirror: mirrorKey || null });
     }
     // THE WHEEL TELEMETRY, BEFORE ANY CAR (A·W56, #3673). Its material (_rigFx: double-sided, no alpha write) is the
     // same for every car, and no menu draw uses it, so race entry built its pipeline: one createRenderPipelineAsync of

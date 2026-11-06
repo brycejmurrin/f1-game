@@ -10,9 +10,6 @@ const ApexNet = (function () {
     let _lobbyPeerTimer = null;   // keeps the fake lobby peer pumping (see lobbyFake)
     // The far end of a faked lobby connection — see lobbyFake().
     let _lobbyPeer = null;
-    // A dropped far end must be CLOSED, not just forgotten: an open loopback
-    // endpoint keeps its queue, autoPong handler and pump alive for nothing.
-    const closeEnd = (ep) => { if (ep) { try { ep.close(); } catch (e) { /* already gone */ } } };
 
     return {
       net() {
@@ -31,7 +28,7 @@ const ApexNet = (function () {
           // the defect it is meant to catch.
           rnd: o.seed != null ? NetTransport.seededRnd(o.seed) : undefined,
         });
-        const peer = pair[1];
+        _netPeer = pair[1];
         // THE FAR END MUST ANSWER PINGS. A bare transport endpoint is not a peer:
         // in a real connection the other browser runs NetSession too, so the near
         // end reaches synced() inside one round trip and starts handing snapshots
@@ -39,23 +36,19 @@ const ApexNet = (function () {
         // packet lands in heldState, and net().buffered stays 0 while the session
         // reports itself alive — which is precisely what the multiplayer-session
         // specs were failing on (14 reds, six of them this).
-        NetSession.autoPong(peer);
+        NetSession.autoPong(_netPeer);
         // Both endpoints must be pumped from the same moment for the loopback's
         // wire clock to line up (see js/net/transport.js). A test passes its own
         // t0 so the whole session runs on a virtual clock it controls.
         const t0 = o.nowMs != null ? o.nowMs : performance.now();
-        pair[0].pump(t0); peer.pump(t0);
+        pair[0].pump(t0); _netPeer.pump(t0);
         const res = G.netPlay.start({
           transport: pair[0],
           role: o.role === "guest" ? "guest" : "host",
           peerProfile: o.peer || null,
           interpDelayMs: o.interpDelayMs,
         });
-        // A refused start (already_active, no_track) leaves the live peer alone
-        // and closes the unused pair; a started one replaces a stale far end.
-        if (!res.ok) { closeEnd(peer); closeEnd(pair[0]); return res; }
-        if (_netPeer !== peer) closeEnd(_netPeer);
-        _netPeer = peer;
+        if (!res.ok) { _netPeer = null; return res; }
         // ...and the near end must PING at t0, not on the caller's first netTick.
         // start() does not pump, so without this the first PING and the first
         // snapshot ride the same pump: the snapshot arrives while synced() is
@@ -119,7 +112,7 @@ const ApexNet = (function () {
         if (!G.netLobby) return false;
         if (!on) {
           if (_lobbyPeerTimer != null) { clearInterval(_lobbyPeerTimer); _lobbyPeerTimer = null; }
-          closeEnd(_lobbyPeer); _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false;
+          _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false;
         }
         G.netLobby.setTransportFactory((o) => {
           const pair = NetTransport.loopback({ latencyMs: 0 });
@@ -308,12 +301,8 @@ const ApexNet = (function () {
       },
 
       netStop() {
-        // Stop first so the session ends "local"; closing the far end first would
-        // reach the near end as a peer drop.
-        const res = G.netPlay ? G.netPlay.stop("local") : false;
-        closeEnd(_netPeer);
         _netPeer = null;
-        return res;
+        return G.netPlay ? G.netPlay.stop("local") : false;
       },
     };
   }

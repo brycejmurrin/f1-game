@@ -777,9 +777,6 @@ function trackFilterBar() {
 // spec that names it work on it. data-kind carries night/street/classic for the
 // stylesheet; the .trb badges stay in the DOM (hidden in the strip) because the
 // SEASON filter's "no classics shown" contract is asserted on them.
-/** Pick-mode tile cache — see buildSelect (#4671). */
-const tileCache = { sig: "", rows: null };
-
 function trackTile(t, i, opts) {
   const row = document.createElement(opts && opts.readOnly ? "div" : "button");
   if (!(opts && opts.readOnly)) row.type = "button";
@@ -934,32 +931,8 @@ function buildSelect(opts) {
     snapTrackToFilter();
     const favs = favList();
     const filter = visibleTrackFilter();
-    // Tiles are cached per roster signature (circuit ids, favourites, filter,
-    // lap-record text, flag cues): re-opening the screen re-attaches the same
-    // nodes and only flips .active/aria-pressed — no flag SVG re-parse (#4671).
-    const ttc = ttChrome(), cues = !!(typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn());
-    const shown = [];
     Tracks.LIST.forEach((t, i) => {
       if (!trackInFilter(t, filter, favs) && !(i === G.trackIdx && pinnedActive(t))) return;
-      shown.push(i);
-    });
-    const recOf = (t) => { if (!ttc) return ""; const bd = ttBoard(t.id); return bd.length ? String(bd[0].t) : "-"; };
-    const sig = [ttc ? 1 : 0, cues ? 1 : 0, shown.map((i) => {
-      const t = Tracks.LIST[i];
-      return i + ":" + t.id + ":" + t.name + ":" + (favs.includes(t.id) ? 1 : 0) + ":" + recOf(t);
-    }).join("|")].join("#");
-    if (tileCache.sig === sig && tileCache.rows) {
-      tileCache.rows.forEach((row) => {
-        const on = row.dataset.trackIdx === String(G.trackIdx);
-        row.classList.toggle("active", on);
-        row.setAttribute("aria-pressed", on ? "true" : "false");
-        row.hidden = false;
-        els.selTracks.appendChild(row);
-      });
-    } else {
-    const built = [];
-    shown.forEach((i) => {
-      const t = Tracks.LIST[i];
       const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       // Filter chips name the view. A vertical CLASSICS/SEASON divider squeezed
       // the ~500 strip, ate end slack, and clipped the last flag (apex7/11).
@@ -969,7 +942,7 @@ function buildSelect(opts) {
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
-      if (ttc) {
+      if (ttChrome()) {
         const board = ttBoard(t.id);
         const rec = board.length ? board[0].t : Infinity;
         const recEl = document.createElement("span");
@@ -1009,11 +982,8 @@ function buildSelect(opts) {
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
         scheduleFlybyTrack(true);
       };
-      built.push(row);
       els.selTracks.appendChild(row);
     });
-    tileCache.sig = sig; tileCache.rows = built;
-    }
     const empty = document.createElement("p");
     empty.id = "sel-track-empty";
     empty.className = "season-upcoming-head";

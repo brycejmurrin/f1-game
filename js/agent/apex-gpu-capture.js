@@ -18,7 +18,6 @@ const ApexGpuCapture = (function () {
   let loadGeneration = 0;
   let scriptErrHook = null;
   let captureToken = null;  // current captureOnce identity; late events ignore a stale token
-  let capturePending = null; // the in-flight captureOnce promise; a second call shares it
 
   function say(msg) {
     try { Log.info("apex", "[gpuCapture] " + msg); } catch (_) { /* Log may not be up */ }
@@ -128,18 +127,11 @@ const ApexGpuCapture = (function () {
     const want = next === "webgl-lint" || next === "lint" ? "webgl-lint" : "spector";
     if (mode === want && (want !== "spector" || spector)) return status();
     const generation = ++loadGeneration;
-    // Switching modes drops the other mode's state: a stale Spector instance
-    // kept status().spector true under webgl-lint, and a lint collector kept
-    // collecting under Spector.
-    if (want === "spector") detachLintCollector();
-    else spector = null;
+    store(want);
     mode = want;
     const src = want === "webgl-lint" ? LINT_SRC : SPECTOR_SRC;
     const pending = loadScript(src).then(function () {
       if (generation !== loadGeneration) return; // disabled or replaced while the script loaded
-      // Persist only a mode that actually loaded, so a failing load is not
-      // retried on every later boot.
-      store(want);
       if (want === "spector") {
         // Bracket read: SPECTOR is injected by the vendored bundle, not a
         // manifest global (same pattern as jsQR / Spotify SDK).
@@ -158,7 +150,6 @@ const ApexGpuCapture = (function () {
       if (generation !== loadGeneration) return;
       mode = null;
       spector = null;
-      store(null);
       say("enable failed: " + ((e && e.message) || e));
       throw e;
     }).finally(function () { if (loadPromise === pending) loadPromise = null; });
@@ -195,12 +186,7 @@ const ApexGpuCapture = (function () {
     }
     const canvas = gameCanvas();
     if (!canvas) return Promise.resolve({ ok: false, reason: "no_canvas", status: status() });
-    // One capture at a time: a second call while one is pending used to take
-    // over captureToken, so the first call's real capture was ignored and it
-    // resolved capture_timeout 8 s later. Share the in-flight promise instead.
-    if (capturePending) return capturePending;
-    let pending = null;
-    pending = new Promise(function (resolve) {
+    return new Promise(function (resolve) {
       let settled = false;
       const token = {};
       const onCap = function (cap) {
@@ -215,7 +201,6 @@ const ApexGpuCapture = (function () {
         if (settled) return;
         settled = true;
         if (captureToken === token) captureToken = null;
-        if (pending && capturePending === pending) capturePending = null;
         try {
           if (spector.onCapture && typeof spector.onCapture.remove === "function") {
             spector.onCapture.remove(onCap);
@@ -252,10 +237,6 @@ const ApexGpuCapture = (function () {
         done({ ok: false, reason: "capture_timeout", status: status() });
       }, 8000);
     });
-    // done() can settle synchronously (no_capture_api, capture_threw): only
-    // keep the promise while it is still pending.
-    if (captureToken) capturePending = pending;
-    return pending;
   }
 
   function lintReport() {

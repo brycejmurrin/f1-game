@@ -19,8 +19,7 @@
   body[data-side="right"] #overlay { transform-origin: right top; }
   .ov-tower { position: absolute; left: 2.2vw; top: 7vh; width: 250px; height: 680px; }
   body[data-side="right"] .ov-tower { left: auto; right: 2.2vw; }
-  /* height matches OverlayRender's 34px translate step (was 31 → drifted ~3px/slot). */
-  .ov-row { position: absolute; inset: 0 auto auto 0; width: 250px; height: 34px; display: grid;
+  .ov-row { position: absolute; inset: 0 auto auto 0; width: 250px; height: 31px; display: grid;
     grid-template-columns: 31px 5px 1fr 70px 24px; align-items: center; gap: 7px; padding: 0 8px 0 0;
     background: linear-gradient(90deg, rgba(7,8,13,.97), rgba(7,8,13,.82)); border-bottom: 1px solid var(--ov-line);
     transition: transform 220ms cubic-bezier(.2,.8,.2,1), opacity 160ms; font-variant-numeric: tabular-nums; }
@@ -64,12 +63,8 @@
     .ov-row { transition: none; }
     .ov-sectors span[data-flash="1"] { animation: none; outline: 2px solid currentColor; outline-offset: -2px; }
   }
-  @media (max-width: 700px) {
-    .ov-tower { top: 12px; left: 12px; } .ov-sectors { top: 12px; right: 12px; }
-    body[data-side="right"] .ov-tower { left: auto; right: 12px; }
-    body[data-side="right"] .ov-sectors { right: auto; left: 12px; }
-    .ov-caption { bottom: 12px; } .ov-battle { top: 12px; }
-  }
+  @media (max-width: 700px) { .ov-tower { top: 12px; left: 12px; } .ov-sectors { top: 12px; right: 12px; }
+    .ov-caption { bottom: 12px; } .ov-battle { top: 12px; } }
   /* Narrow broadcasts use a second row for the battle card, below the sectors
      and opposite the timing tower. Keep the centered desktop composition. */
   @media (max-width: 1100px) {

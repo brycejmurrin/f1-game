@@ -89,9 +89,8 @@ const XrSession = (function () {
 
   async function probe() {
     _probed = true;
-    // Keep any known-good _supported until the await resolves (#4354).
+    _supported = false;
     if (typeof navigator === "undefined" || !navigator.xr || !navigator.xr.isSessionSupported) {
-      _supported = false;
       emit("capability", { supported: false, reason: "no-navigator-xr" });
       return false;
     }
@@ -103,17 +102,7 @@ const XrSession = (function () {
       emit("capability", { supported: false, reason: "isSessionSupported-threw", error: String(e && e.message || e) });
       return false;
     }
-    // Store the answer so the next boot seeds it instead of asking (#4324).
-    try { localStorage.setItem("apex26.xrCaps", _supported ? "1" : "0"); } catch (_) { /* blocked */ }
     emit("capability", { supported: _supported });
-    return _supported;
-  }
-
-  /** Adopt a stored capability answer without asking navigator.xr (#4324: bfcache). */
-  function seed(supported) {
-    _probed = true;
-    _supported = !!supported;
-    emit("capability", { supported: _supported, cached: true });
     return _supported;
   }
 
@@ -492,7 +481,7 @@ const XrSession = (function () {
   }
 
   return {
-    probe, seed, isSupported, isProbed, isPresenting, isVisible,
+    probe, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
     getFrame, getSession, getRefSpace, backend, lastError,
     frameCount, enabledFeatures, featureGranted, sessionInit,

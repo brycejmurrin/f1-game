@@ -1,1 +1,0 @@
-Fixed: lighter TLX shaders on the phone — tree and flag sway maths now runs only on swaying vertices, hammered-finish derivatives only on car paint, and the post dither/vignette constants are worked out once per frame; fewer per-frame decal lookups and rain-overlay clears (#4556).

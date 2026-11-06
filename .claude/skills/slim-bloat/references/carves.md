@@ -1,6 +1,6 @@
 # Carve recipes
 
-Parent applies **one** carve after `code-hunter` (`focus: dead-code`) returns rows. Record
+Parent applies **one** carve after `bloat-auditor` returns rows. Record
 before/after counts (`bloat-scan.mjs --json`).
 
 ## 1. Extract from `game.js` / a ratchet file

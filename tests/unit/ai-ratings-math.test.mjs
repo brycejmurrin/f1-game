@@ -68,10 +68,9 @@ test("ai-ratings.mjs --json: craft/awareness/consistency are decorrelated", () =
   assert.equal(j.decorrelated, true);
   // Slice 3+: style axes are present and zero-mean by construction.
   assert.equal(j.style.present, true);
-  assert.deepEqual(j.styleAxes, ["aggression", "optimism", "composure"]);
+  assert.deepEqual(j.styleAxes, ["aggression", "optimism"]);
   assert.equal(j.style.sums.aggression, 0);
   assert.equal(j.style.sums.optimism, 0);
-  assert.equal(j.style.sums.composure, 0);
   // Column means stay near the pre-decorrelation tip (±1.5).
   assert.ok(Math.abs(j.stats.craft.mean - 82.9) <= 1.5, `craft mean ${j.stats.craft.mean}`);
   assert.ok(Math.abs(j.stats.awareness.mean - 80.0) <= 1.5, `awareness mean ${j.stats.awareness.mean}`);

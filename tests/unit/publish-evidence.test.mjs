@@ -126,15 +126,6 @@ test("authentication errors are not treated as missing releases", (t) => {
   assert.throws(() => publishEvidence(bundle.receiptPath, () => { throw Object.assign(new Error("unauthorized"), { stderr: "HTTP 401" }); }), /unauthorized/);
 });
 
-test("a 403 on release creation points at the archive-evidence workflow", (t) => {
-  const bundle = prepareEvidence(fixture(t));
-  const run = (_cmd, args) => {
-    if (args[0] === "release") throw Object.assign(new Error("failed"), { stderr: "HTTP 403: Resource not accessible by integration" });
-    throw Object.assign(new Error("not found"), { stderr: "HTTP 404" });
-  };
-  assert.throws(() => publishEvidence(bundle.receiptPath, run), /archive-evidence\.yml/);
-});
-
 test("existing conflicting tags and draft releases require inspection instead of replacement", (t) => {
   const bundle = prepareEvidence(fixture(t));
   assert.throws(() => publishEvidence(bundle.receiptPath, (_cmd, args) => {

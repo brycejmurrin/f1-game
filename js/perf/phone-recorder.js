@@ -204,15 +204,12 @@ const PhoneRecorder = (function () {
     let lastFrameAt = 0; let deltas = [];
     let lastGateSample = null, lastRateKey = null;
 
-    // Called on every rAF callback while recording: compare the four fields in
-    // place instead of building and stringifying a key each frame (P7 row 6).
     function observeRate(rate) {
       if (!rate) return;
-      const k = lastRateKey;
-      if (k !== null && k.mode === rate.mode && k.tier === rate.tier && k.half === rate.half && k.active === rate.active) return;
       const state = { mode: rate.mode, tier: rate.tier, half: rate.half, active: rate.active };
-      if (k !== null) event("render-rate", state);
-      lastRateKey = state;
+      const key = JSON.stringify(state);
+      if (lastRateKey !== null && key !== lastRateKey) event("render-rate", state);
+      lastRateKey = key;
     }
 
     function event(kind, extra) {

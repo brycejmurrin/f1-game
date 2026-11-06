@@ -206,8 +206,6 @@
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",
-    "js/data/garage-entry-camera.js",
-    "js/data/garage-camera-options.js",
     "js/lighting/presets.js",
     "js/garage/garage-data.js"
   ],

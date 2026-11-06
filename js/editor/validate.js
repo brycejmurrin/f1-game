@@ -156,10 +156,6 @@ const TrackValidate = (function () {
     const add = (code, level, msg, extra) => issues.push(Object.assign({ code, level, msg }, extra || {}));
     const stats = emptyStats();
     let turns = [];
-    // TrackPit.window is pure in (tr, curvature): the pit-reach gate and the
-    // informational stats share one evaluation.
-    let pitWin = null;
-    const pitWindow = () => pitWin || (pitWin = TrackPit.window(tr, Tracks.curvature));
     {
       const n = tr.n, ds = tr.total / n, px = tr.px, pz = tr.pz, py = tr.py, curv = tr.curv, hwA = tr.hw;
       stats.lengthM = Math.round(tr.total);
@@ -229,7 +225,7 @@ const TrackValidate = (function () {
           pitSide = pr.side === -1 ? -1 : 1;
           // The complex stands only across the limiter window round s = 0 plus
           // its entry / exit roads: a close pair elsewhere has no pit between.
-          const pw = pitWindow();
+          const pw = TrackPit.window(tr, Tracks.curvature);
           const back = pw.entryM + (TrackPit.ENTRY_ROAD || 0), fwd = pw.exitM + (TrackPit.EXIT_ROAD || 0);
           pitIn = (k) => { const s = k * ds; return s <= fwd || s >= tr.total - back; };
         } catch (_) { pitReach = 0; }
@@ -293,7 +289,7 @@ const TrackValidate = (function () {
       if (stats.startFwdM < LIMITS.startFwdRed) add("start", "red", "Only " + stats.startFwdM + " m of straight after the start line — the pit exit needs " + LIMITS.startFwdRed + " m", { s: 0, fix: "start" });
       else if (noBays(tr, def)) add("start", "red", "The pit lane has no room for its garages — move the start line earlier on the straight (only " + stats.startFwdM + " m after it)", { s: 0, fix: "start" });
       else if (stats.startFwdM < LIMITS.startFwdAmber) add("start", "amber", stats.startFwdM + " m of straight after the line — " + LIMITS.startFwdAmber + " m lets the pit exit merge cleanly", { s: 0, fix: "start" });
-      try { if (typeof TrackPit !== "undefined" && TrackPit.window) { const w = pitWindow(); stats.pitEntryM = Math.round(w.entryM); stats.pitExitM = Math.round(w.exitM); } } catch (_) { /* informational */ }
+      try { if (typeof TrackPit !== "undefined" && TrackPit.window) { const w = TrackPit.window(tr, Tracks.curvature); stats.pitEntryM = Math.round(w.entryM); stats.pitExitM = Math.round(w.exitM); } } catch (_) { /* informational */ }
       turns = bakeTurns(tr);
       stats.turns = turns.length;
       const v = speedProfile(tr);

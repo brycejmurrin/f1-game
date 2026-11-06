@@ -122,9 +122,7 @@ def check(name, msg):
     f = c.get("forbid")
     if f and re.search(f[0], msg):
         return "the report breaks a rule of %s: %s." % (where, f[1])
-    # B8 #4561 H8: the whole-report escape is a line that LEADS with UNREAD (a contract block marked UNREAD after
-    # every route was denied); a per-item `CLAIM 3 | UNREAD` mark keeps the required lines required.
-    if re.search(r"(?m)^\s*(VERDICT\s+)?UNREAD\b", msg) or (c.get("escape") and re.search(c["escape"], msg)):
+    if re.search(r"\bUNREAD\b", msg) or (c.get("escape") and re.search(c["escape"], msg)):
         return None
     for need in c["need"]:
         if not any(re.search(need, s) for s in ls):

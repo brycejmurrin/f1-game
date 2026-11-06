@@ -24,12 +24,11 @@ const ApexLifecycle = (function () {
       document.addEventListener("visibilitychange", () => note("visibilitychange", { hidden: document.hidden }));
       window.addEventListener("pageshow", (e) => { note("pageshow", { persisted: !!e.persisted }); if (e.persisted) note("persistedShow"); });
       window.addEventListener("pagehide", (e) => note("pagehide", { persisted: !!e.persisted }));
-      // Capture on window, not on #game: create() can run before the canvas
-      // exists (#4367), and the context events do not bubble but every
-      // ancestor still sees them in the capture phase.
-      const isGame = (e) => !!(e && e.target && e.target.id === "game");
-      window.addEventListener("webglcontextlost", (e) => { if (isGame(e)) note("contextlost"); }, true);
-      window.addEventListener("webglcontextrestored", (e) => { if (isGame(e)) note("contextrestored"); }, true);
+      const cv = canvas();
+      if (cv) {
+        cv.addEventListener("webglcontextlost", () => note("contextlost"));
+        cv.addEventListener("webglcontextrestored", () => note("contextrestored"));
+      }
     } catch (_) { /* no window (harness): counters stay 0 */ }
 
     const gfx = () => { try { return getGfx(); } catch (_) { return null; } };

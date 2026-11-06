@@ -56,7 +56,7 @@ const DesignerCanvas = (function () {
     let base = [];                   // the design's control loop (read-only here)
     let work = null;                 // a drag's copy, until it is committed
     let built = null;                // TrackValidate's centreline { px, pz, n, hw, total }
-    let scenery = null, sceneryOn = false, sceneryKey = "", sceneryTrack = null, sceneryRefs = null;
+    let scenery = null, sceneryOn = false, sceneryKey = "", sceneryTrack = null;
     let stale = false;               // the built road no longer matches the loop being dragged
     let issues = [];
     let sel = -1, span = -1, hover = -1, tool = "select";
@@ -125,7 +125,6 @@ const DesignerCanvas = (function () {
     let destroyed = false;
     function resize() {
       if (destroyed) return;
-      gestureRect = null;
       const r = canvas.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
       /* Flex/grid can report a 0–2px box before the stage row earns height (layout-audit 2026-10-07). */
@@ -174,18 +173,7 @@ const DesignerCanvas = (function () {
     }
 
     // ── pointer ─────────────────────────────────────────────────────────────
-    // The canvas box is read once per gesture (refreshed on every pointerdown,
-    // dropped on resize, scroll and when the last pointer lifts): a drag, pan
-    // or pinch otherwise forces a layout read on every move. Hover without a
-    // gesture keeps reading it live.
-    let gestureRect = null;
-    function local(ev) {
-      const r = !pointers.size ? canvas.getBoundingClientRect() : (gestureRect || (gestureRect = canvas.getBoundingClientRect()));
-      return { x: ev.clientX - r.left, y: ev.clientY - r.top };
-    }
-    function dropRect() { gestureRect = null; }
-    const scrollHost = typeof window !== "undefined" && window.addEventListener ? window : null;
-    if (scrollHost) scrollHost.addEventListener("scroll", dropRect, { capture: true, passive: true });
+    function local(ev) { const r = canvas.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
     function dragThresh() { return (ptype === "touch" || (press && press.touch)) ? DRAG_TOUCH : DRAG_MOUSE; }
     function beginDrag(i, isInsert) {
       work = base.map((p) => [p[0], p[1]]);
@@ -258,7 +246,7 @@ const DesignerCanvas = (function () {
       ev.preventDefault();
       try { canvas.focus({ preventScroll: true }); } catch (_) { canvas.focus(); }
       try { canvas.setPointerCapture(ev.pointerId); } catch (_) { /* a synthetic event */ }
-      const r = gestureRect = canvas.getBoundingClientRect(), p = { x: ev.clientX - r.left, y: ev.clientY - r.top };
+      const p = local(ev);
       pointers.set(ev.pointerId, p); last = p;
       if (pointers.size >= 2) cancelHold();
       if (pointers.size === 2) {
@@ -375,7 +363,6 @@ const DesignerCanvas = (function () {
       if (!pointers.has(ev.pointerId)) return;
       cancelHold();
       pointers.delete(ev.pointerId);
-      if (!pointers.size) gestureRect = null;
       try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
       if (mode === "held") { mode = "none"; press = null; render(); return; }
       if (mode === "pinch") { if (pointers.size < 2) { mode = pointers.size === 1 ? "pan" : "none"; pinch0 = null; if (hooks.onView) hooks.onView(view()); } return; }
@@ -415,12 +402,12 @@ const DesignerCanvas = (function () {
       if (!pointers.has(ev.pointerId)) return;
       cancelHold();
       pointers.delete(ev.pointerId);
-      if (pointers.size === 0) { gestureRect = null; reset(); }
+      if (pointers.size === 0) reset();
       else if (mode === "pinch" && pointers.size < 2) { mode = "pan"; pinch0 = null; }
     }
     function reset() {
       cancelHold();
-      pointers.clear(); taps = []; last = null; press = null; gestureRect = null;
+      pointers.clear(); taps = []; last = null; press = null;
       work = null; path = null; pinch0 = null; mode = "none"; dragI = -1; inserted = false; moved = false; stale = false; hover = -1;
       dragGroup = null; dragOrigins = null; drag0 = null;
       render();
@@ -757,16 +744,9 @@ const DesignerCanvas = (function () {
       setScenery(design, on) {
         sceneryOn = !!on && typeof DesignerSceneryPreview !== "undefined";
         if (sceneryOn) {
-          // The designer replaces look/props on edit (never mutates them), so
-          // unchanged references skip the stringify; a changed reference still
-          // compares by value, as before.
-          const refs = sceneryRefs, same = refs && refs[0] === design.theme && refs[1] === design.look && refs[2] === design.props && refs[3] === design.seed;
-          if (!same || sceneryTrack !== built) {
-            const key = same ? sceneryKey : JSON.stringify([design.theme, design.look, design.props, design.seed]);
-            sceneryRefs = [design.theme, design.look, design.props, design.seed];
-            if (key !== sceneryKey || sceneryTrack !== built) {
-              scenery = DesignerSceneryPreview.plan(design, built); sceneryKey = key; sceneryTrack = built;
-            }
+          const key = JSON.stringify([design.theme, design.look, design.props, design.seed]);
+          if (key !== sceneryKey || sceneryTrack !== built) {
+            scenery = DesignerSceneryPreview.plan(design, built); sceneryKey = key; sceneryTrack = built;
           }
         }
         if (canvas.dataset) canvas.dataset.mapView = sceneryOn ? "scenery" : "outline";
@@ -809,7 +789,6 @@ const DesignerCanvas = (function () {
         destroyed = true;
         for (const [type, fn] of [["pointerdown", onDown], ["pointermove", onMove], ["pointerup", onUp], ["pointercancel", onCancel], ["lostpointercapture", onCancel], ["wheel", onWheel], ["dblclick", onDblClick], ["keydown", onKey], ["pointerleave", onLeave]]) canvas.removeEventListener(type, fn);
         if (ro) ro.disconnect();
-        if (scrollHost) scrollHost.removeEventListener("scroll", dropRect, { capture: true });
         reset();
       },
     };

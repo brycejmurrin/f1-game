@@ -212,30 +212,6 @@ test("the rail's edits: stamp, undo/redo, reverse, start, delete floor, theme, w
   assert.equal(b.D.deletePoint(0), false, "the point floor holds");
 });
 
-test("one edit renders the map once and the elevation strip once per pass, not 6 + 11 times (#4546 P6)", () => {
-  const b = bootScreen();
-  const counts = { map: 0, profile: 0 };
-  const mk = b.dom.document.createElement;
-  b.dom.document.createElement = (tag) => {
-    const el = mk(tag);
-    if (String(tag).toLowerCase() === "canvas") {
-      const base = el.getContext();
-      el.getContext = () => new Proxy(base, { get: (t, k) => k === "clearRect"
-        ? () => { counts[el.getAttribute("data-role") === "profile" ? "profile" : "map"]++; } : t[k] });
-    }
-    return el;
-  };
-  b.D.init(b.G, { custom: b.C, root: b.root });
-  b.D.open(); b.D.randomise(7); b.D.preview();
-  b.D.setTool("corner");
-  counts.map = counts.profile = 0;
-  assert.equal(b.D.applyStamp(3, 3), true);
-  assert.deepEqual({ ...counts }, { map: 1, profile: 1 }, "the commit: one map render, one strip render (was 4 + 6)");
-  counts.map = counts.profile = 0;
-  b.D.preview();
-  assert.deepEqual({ ...counts }, { map: 1, profile: 1 }, "the debounced preview: one each (was 2 + 5)");
-});
-
 test("SAVE lands in CustomTracks + Tracks.LIST (same geometry updates, never duplicates); RACE presses the title door", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });
@@ -3140,26 +3116,5 @@ test("terrain library search filters without editing; landscapes place, undo and
   const saved = b.D.save(); assert.equal(saved.ok, true); assert.equal(b.C.get(saved.id).props[0].kind, "snowpeak");
   b.D.undo(); assert.equal(b.D.state().design.props, undefined);
   for (const theme of ["fjord", "badlands", "redwood"]) { by("theme", theme).click(); assert.equal(b.D.state().design.theme, theme); }
-  b.D.close();
-});
-
-test("a resize that tucks the foot under the rail keeps keyboard focus on SHARE & FILES (#4600)", () => {
-  // The browser blurs a focused node that is moved; the mini DOM does not, so the move is modelled here.
-  const b = bootScreen(), { ctx } = b, doc = b.dom.document;
-  let onResize = null;
-  ctx.addEventListener = (type, fn) => { if (type === "resize") onResize = fn; };
-  ctx.getComputedStyle = () => ({ getPropertyValue: () => "" });
-  ctx.innerWidth = 390; ctx.innerHeight = 844;                   // portrait: the foot stays under the body
-  openGreen(b);
-  assert.equal(b.root.dataset.foot, "out");
-  const body = b.root.querySelector(".td-body"), add = body.appendChild;
-  body.appendChild = (c) => { if (c.contains && c.contains(doc.activeElement)) doc.activeElement = doc.body; return add(c); };
-  const trigger = walk(b.root).find((e) => e.dataset.role === "file-menu").children[0];
-  trigger.focus();
-  ctx.innerWidth = 844; ctx.innerHeight = 390;                   // the late resize lands after the IMPORT press focused it
-  assert.equal(typeof onResize, "function", "seatFoot listens for resize");
-  onResize();
-  assert.equal(b.root.dataset.foot, "in", "844x390 tucks the foot into the body");
-  assert.equal(doc.activeElement, trigger, "the move hands focus back to the chip that had it");
   b.D.close();
 });

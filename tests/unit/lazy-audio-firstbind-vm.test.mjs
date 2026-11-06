@@ -84,14 +84,13 @@ test("the first SOUND click while the bundle loads starts the title music (H22)"
   // stub used to flip soundOn + init() and stop there: the real panel's setSound (title
   // music, MUSIC/SFX control sync) never ran, so SOUND read ON over silence.
   let fa = null;
-  const music = [];
-  let real;
-  // The real AudioPanel is a `var` the bundle assigns on load: wrap its create() so
-  // GameAudio.startMusic (the real engine's, by then) is recorded. The accessor goes on
-  // BEFORE any script runs (onSandbox): the game VM's global is an ordinary one, where a
-  // script's `var` is non-configurable, so it cannot be redefined afterwards.
-  const g = await createGame({ carMeshes: false, storage: { sound: false }, onSandbox: (sb) => {
-    fa = install(sb);
+  const g = await createGame({ carMeshes: false, storage: { sound: false }, onSandbox: (sb) => { fa = install(sb); } });
+  const sb = g.sandbox;
+  try {
+    const music = [];
+    let real = sb.AudioPanel;
+    // The real AudioPanel is a `var` the bundle assigns on load: wrap its create() so
+    // GameAudio.startMusic (the real engine's, by then) is recorded.
     Object.defineProperty(sb, "AudioPanel", {
       configurable: true, get() { return real; },
       set(v) {
@@ -102,9 +101,6 @@ test("the first SOUND click while the bundle loads starts the title music (H22)"
         } }) : v;
       },
     });
-  } });
-  const sb = g.sandbox;
-  try {
     const pd = { type: "pointerdown", pointerType: "mouse", target: sb.document.body };
     sb.dispatchEvent(pd); sb.document.dispatchEvent(pd);
     assert.equal(g.G.soundOn, false, "precondition: saved SOUND OFF");

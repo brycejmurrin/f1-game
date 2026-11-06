@@ -18,10 +18,8 @@ status=()
 
 # node_modules is stale when the lockfile is newer than npm's own stamp.
 if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
-  # artifacts/ exists (mkdir above). One retry, only for a transient network error: an identical blind re-run
-  # of a failed install doubled the slowest step of a bad boot and fixed nothing (perf P8 row 12).
-  npm_install() { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund >artifacts/session-install.log 2>&1; }
-  if npm_install || { grep -Eq 'ECONNRESET|ETIMEDOUT|EAI_AGAIN' artifacts/session-install.log 2>/dev/null && npm_install; }; then
+  if PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund >artifacts/session-install.log 2>&1 \
+     || { mkdir -p artifacts && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-audit --no-fund >artifacts/session-install.log 2>&1; }; then
     status+=("npm install: done")
   else
     status+=("npm install: FAILED (artifacts/session-install.log)")
@@ -56,9 +54,8 @@ fi
 
 # Reuse the same executable as the harness and MCP wrapper, including system
 # Chromium on PATH. The installer chooses a writable cache if none is present.
-# One node spawn answers both (--both: executable line, then cache line; either may be empty).
-{ IFS= read -r CHROMIUM; IFS= read -r PW_CACHE; } < <(node "$ROOT/tools/lib/chromium-path.mjs" --both 2>/dev/null || true)
-CHROMIUM="${CHROMIUM:-}"; PW_CACHE="${PW_CACHE:-}"
+CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+PW_CACHE="$(node "$ROOT/tools/lib/chromium-path.mjs" --cache-path 2>/dev/null || true)"
 if [ -n "$PW_CACHE" ]; then
   export PLAYWRIGHT_BROWSERS_PATH="$PW_CACHE"
 fi
