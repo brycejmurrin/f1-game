@@ -533,7 +533,10 @@ test("module has no Tracks / curvature reads", () => {
   assert.doesNotMatch(SRC, /\bTracks\b|\bcurvature\b/);
 });
 
-test("fit retains a moved piece beyond the screen at its stored offset", () => {
+// Re-blessed 2026-11-06 (UI contract rule 7 / gap 8): a stored MOVE & SIZE entry is a request clamped by the box at
+// paint time, like a shipped one. The seven tests below pinned the opposite (an edited widget could leave the screen
+// or sit on a tap target); each now asserts the clamp, the untouched store, and a stable repeat.
+test("fit clamps a stored move back into the screen; the stored offset is the request, untouched", () => {
   const src = SRC;
   const props = {}, attrs = { "data-hl": "" };
   const el = {
@@ -553,11 +556,14 @@ test("fit retains a moved piece beyond the screen at its stored offset", () => {
   vm.runInContext(src + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = el.getBoundingClientRect();
-  assert.equal(r.right, 1060, "the player can leave the right edge outside the screen");
+  assert.equal(r.right, 996, "the painted right edge stops at the screen's edge gap (1000 - 4)");
+  assert.notEqual(props["--hl-x"], "5", "the element carries the clamped offset");
   assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
+  ctx.HudLayout.fit();
+  assert.deepEqual(el.getBoundingClientRect(), r, "a repeated fit does not drift");
 });
 
-test("fit preserves manual geometry across safe-area and visual-viewport changes", () => {
+test("fit clamps a stored piece into the safe box and re-clamps as the visual viewport moves, never persisting", () => {
   const props = {}, root = {}, attrs = { 'data-hl': '' };
   const viewport = { innerWidth: 1000, innerHeight: 600,
     visualViewport: { width: 500, height: 300, offsetLeft: 200, offsetTop: 100 } };
@@ -575,17 +581,21 @@ test("fit preserves manual geometry across safe-area and visual-viewport changes
     GameStore:{store:{get:(k,d)=>k==='hudLayout'?saved:d,set(){throw new Error('fit must not persist');}}} };
   vm.createContext(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
   ctx.HudLayout.apply();
+  const inside = (r, b, tag) => assert.ok(r.left >= b.left - .5 && r.top >= b.top - .5 && r.right <= b.right + .5 && r.bottom <= b.bottom + .5,
+    `${tag}: ${JSON.stringify(r)} inside ${JSON.stringify(b)}`);
   const initial = map.getBoundingClientRect();
+  inside(initial, ctx.HudLayout.screenBounds(), "apply() already clamps the stored +5vw into the 500 px visual viewport");
   for (const vv of [viewport.visualViewport, {width:250,height:200,offsetLeft:50,offsetTop:40}, null]) {
     viewport.visualViewport = vv;
     ctx.HudLayout.fit();
-    assert.deepEqual(map.getBoundingClientRect(), initial, "safe bounds do not clamp an edited widget");
+    inside(map.getBoundingClientRect(), ctx.HudLayout.screenBounds(), vv ? `visual viewport ${vv.width}x${vv.height}` : "the layout viewport less the insets");
     const before = { ...props };ctx.HudLayout.fit();assert.deepEqual(props,before,'repeated fits do not drift');
     assert.equal(JSON.stringify(saved),original);
+    assert.equal(ctx.HudLayout.get("map", "other").x, 5, "the stored request is untouched");
   }
 });
 
-test("fit preserves independently edited pieces sharing an offset", () => {
+test("fit clamps two edited pieces sharing an offset as ONE block: the neighbour keeps its spacing", () => {
   // OT and AERO both ship +30vw in the cockpit; at 1000 wide only AERO overruns
   // the right edge. Clamped one by one, AERO landed on top of OT.
   const mk = (left, w) => {
@@ -612,16 +622,19 @@ test("fit preserves independently edited pieces sharing an offset", () => {
   assert.ok(ot.hasAttribute("data-hl-user") && aero.hasAttribute("data-hl-user"), "stored STANDARD cockpit edits own both widgets");
   ctx.HudLayout.fit();
   const o = ot.getBoundingClientRect(), r = aero.getBoundingClientRect();
-  assert.equal(r.right, 1060, "AERO keeps the requested offscreen edge");
+  assert.equal(r.right, 996, "AERO is brought back to the screen's edge gap");
   assert.ok(o.right <= r.left, `OT (${o.left}-${o.right}) still left of AERO (${r.left}-${r.right})`);
-  assert.equal(ot.props["--hl-x"], "30");
-  assert.equal(aero.props["--hl-x"], "30");
+  assert.equal(r.left - o.right, 10, "the pair moved as one block: their spacing is what the layout shipped");
+  assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for both");
+  assert.notEqual(ot.props["--hl-x"], "30");
+  assert.equal(ctx.HudLayout.get("ot", "cockpit").x, 30, "stored offsets unchanged");
+  assert.equal(ctx.HudLayout.get("aero", "cockpit").x, 30);
 });
 
-test("fit never brings an edited block on screen or pushes its edited neighbour", () => {
+test("fit brings an edited block on screen and pushes its edited neighbour clear, like a shipped one", () => {
   // Desktop cockpit, HUD 150 % at 1440x900 (hud-mock 2026-10-14): ENERGY + TYRES ship at -30,-4 and TYRES runs
-  // off the left edge; the clamp brought it back onto BRAKE BIAS (-18,0, its own block). At 100 % the clamp
-  // leaves TYRES short of BRAKE BIAS, so BRAKE BIAS must keep its own offset.
+  // off the left edge; the clamp brings it back onto BRAKE BIAS (-18,0, its own block), which steps right of it.
+  // At 100 % the clamped TYRES stops short of BRAKE BIAS, so BRAKE BIAS keeps its own offset.
   const run = (tyreW) => {
     const mk = (left, w, top, h, ship) => {
       const props = {}, attrs = {};
@@ -648,18 +661,19 @@ test("fit never brings an edited block on screen or pushes its edited neighbour"
     return { tyre: tyre.getBoundingClientRect(), bb: bb.getBoundingClientRect(), bbX: bb.props["--hl-x"] };
   };
   const at150 = run(195);
-  assert.equal(at150.tyre.left, -197, "TYRES keeps the chosen offscreen position");
-  assert.equal(at150.bbX, "-18", "BRAKE BIAS receives no neighbour correction");
+  assert.ok(Math.abs(at150.tyre.left - 4) < 0.1, "TYRES is clamped to the left edge gap: " + at150.tyre.left);
+  assert.notEqual(at150.bbX, "-18", "BRAKE BIAS receives the neighbour correction");
+  assert.ok(at150.bb.left >= at150.tyre.right + 4 - 0.5, `BRAKE BIAS (${at150.bb.left}) steps clear of TYRES (${at150.tyre.right})`);
   const at100 = run(120);
-  assert.ok(at100.tyre.right < 129, "at 100 % the clamped TYRES stops short of BRAKE BIAS: " + at100.tyre.right);
+  assert.ok(Math.abs(at100.tyre.left - 4) < 0.1 && at100.tyre.right < 129, "at 100 % the clamped TYRES stops short of BRAKE BIAS: " + at100.tyre.right);
   assert.equal(at100.bbX, "-18", "BRAKE BIAS keeps its own offset when nothing lands on it");
 });
 
-test("fit leaves size-only edited pieces at their requested positions", () => {
+test("fit clamps size-only edited pieces on their own: the grown tower comes back, the map stays put", () => {
   // BIG + TOWER SIZE 200 at 844 wide: the tower (centred, grown to 640) and the
   // map (top-left, grown) both carry offset 0,0. Grouped as one "0,0" block their
   // union outgrew the screen and was pinned to the map's left edge, leaving the
-  // tower's right end ~170 px past the right edge.
+  // tower's right end ~170 px past the right edge. Solo clamps: the tower alone moves.
   const W = 844, H = 390;
   const mk = (left, top, w, h) => {
     const props = {}, attrs = { "data-hl": "" };
@@ -687,8 +701,8 @@ test("fit leaves size-only edited pieces at their requested positions", () => {
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const t = tower.getBoundingClientRect(), m = map.getBoundingClientRect();
-  assert.equal(t.left, 432);
-  assert.equal(t.right, 1072, "the enlarged tower may extend beyond the screen");
+  assert.ok(Math.abs(t.right - 840) < 0.1, "the enlarged tower is brought back to the screen's edge gap: " + t.right);
+  assert.ok(t.left >= 4 - 0.1, "and fits: 640 of 836");
   assert.equal(m.left, 10, "the map, already on screen, is not dragged with the tower");
   assert.equal(map.props["--hl-x"], "0");
   assert.equal(ctx.HudLayout.get("tower", "other").s, 200, "stored size unchanged");
@@ -697,7 +711,7 @@ test("fit leaves size-only edited pieces at their requested positions", () => {
 // Bug hunt 2 H17: clearControls rewrote --hl-x/--hl-y from the STORED offset plus only its
 // own nudge, so the edge-clamp fit() had just applied was thrown away the moment a touch
 // button forced a nudge, and the chip landed back off screen.
-test("clearControls preserves manual placement and discards stale automatic clearance", () => {
+test("clearControls nudges a placed readout off a touch button, adds to the edge clamp, discards stale clearance and never saves", () => {
   const W = 1000, H = 600;
   const props = {}, attrs = { "data-hl": "" };
   const rel = {
@@ -721,8 +735,9 @@ test("clearControls preserves manual placement and discards stale automatic clea
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
-  assert.equal(r.right, 1200, "an edited widget is not brought back on screen");
-  assert.equal(props["--hl-x"], "30", "control clearance cannot change the saved geometry");
+  // The edge clamp lands it at 896..996, on the button (900..1000 x, 400..540 y); the nudge adds to the clamp.
+  assert.equal(r.right, 896, "clamped on screen, then nudged left off the touch button (900 - 4)");
+  assert.notEqual(props["--hl-x"], "30", "the element carries the painted correction");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
   // A prior terminal placement must not bias the next edge clamp. Simulate a
   // correction from a denser viewport before re-fitting the same saved move.
@@ -733,6 +748,50 @@ test("clearControls preserves manual placement and discards stale automatic clea
   ctx.HudLayout.fit();
   assert.deepEqual(rel.getBoundingClientRect(), stable, "repeated user placement stays stable");
   assert.equal(JSON.stringify(written), saved, "temporary correction never writes settings");
+});
+
+test("a layout saved on a 844x390 phone, opened in a 852x283 Safari tab, stays on screen and off the docks (UI contract gap 8)", () => {
+  // SECTORS dragged right and down on the phone (x 25, y 10): on the shorter, notched Safari window the same shares
+  // of the viewport put the plate past the right inset and onto BRAKE. RELATIVE (x 1) stays where it was.
+  const W = 852, H = 283, sal = 59, sar = 59;
+  const mk = (left, top, w, h) => {
+    const props = {}, attrs = {};
+    return { props,
+      style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
+      setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() {
+        const x = left + parseFloat(props["--hl-x"] || 0) / 100 * W, y = top + parseFloat(props["--hl-y"] || 0) / 100 * H;
+        return { left: x, right: x + w, top: y, bottom: y + h, width: w, height: h };
+      } };
+  };
+  const sectors = mk(W - sar - 10 - 90, 70, 90, 72), rel = mk(sal + 10, 130, 150, 60);
+  const brake = { hidden: false, classList: { contains: () => false }, getBoundingClientRect: () => ({ left: 700, right: 770, top: 150, bottom: 283, width: 70, height: 133 }) };
+  const blank = { style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+  const written = { hudLayout: { v: 4, standard: { cockpit: {}, other: { sectors: { x: 25, y: 10, s: 100 }, rel: { x: 1, y: 0, s: 100 } } } } };
+  const saved = JSON.stringify(written), root = {};
+  const ctx = {
+    console, window: { innerWidth: W, innerHeight: H },
+    getComputedStyle: (el) => (el === root ? { getPropertyValue: (k) => ({ "--sal": sal + "px", "--sar": sar + "px", "--sat": "0px", "--sab": "0px" }[k] || "") } : { display: "block", visibility: "visible" }),
+    document: { readyState: "complete", documentElement: root, getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => false } },
+      querySelectorAll: () => [brake],
+      querySelector: (sel) => (sel === "#hud-sectors" ? sectors : sel === "#hud-rel" ? rel : blank) },
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set() { throw new Error("fit must not persist"); } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
+  assert.ok(sectors.hasAttribute("data-hl-user") && rel.hasAttribute("data-hl-user"), "both are stored entries");
+  const hit = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.HudLayout.fit();
+    const s = sectors.getBoundingClientRect(), b = plain(ctx.HudLayout.screenBounds());
+    assert.deepEqual(b, { left: sal + 4, top: 4, right: W - sar - 4, bottom: H - 4 }, "the safe box less the edge gap");
+    assert.ok(s.left >= b.left - .5 && s.right <= b.right + .5 && s.top >= b.top - .5 && s.bottom <= b.bottom + .5, `SECTORS inside the safe box: ${JSON.stringify(s)}`);
+    assert.ok(!hit(s, brake.getBoundingClientRect()), `SECTORS off BRAKE: ${JSON.stringify(s)}`);
+    const r = rel.getBoundingClientRect();
+    assert.equal(r.left, sal + 10 + W / 100, "RELATIVE, already inside, keeps its stored share");
+  }
+  assert.equal(JSON.stringify(written), saved, "the phone's layout is untouched: it returns whole on the phone");
+  assert.deepEqual(plain(ctx.HudLayout.get("sectors", "other")), { x: 25, y: 10, s: 100 });
 });
 
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
@@ -1119,12 +1178,14 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
   assert.match(ms, /toggleAttribute\("data-helmet-cam", camId === "helmet"\)/, "the visor frame stays");
 });
 
-test("every edited widget retains geometry through clearance and high-scale packing", () => {
+test("every edited widget keeps its SIZE and ends on screen through clearance and high-scale packing; nothing is saved", () => {
+  // Re-blessed 2026-11-06 (gap 8): the offscreen requests (x 150 / y -150) are clamped into the screen at paint
+  // time; sizes, pack marks and the store are as before. The control is a corner button, not the whole screen.
   const W = 844, H = 390, elements = {}, body = fakeEl(), root = fakeEl();
   body.classList = { contains: () => false };
   body.toggleAttribute = (k, on) => on ? body.setAttribute(k, "") : body.removeAttribute(k);
   const control = { hidden: false, classList: { contains: () => false },
-    getBoundingClientRect: () => ({ left: 0, top: 0, right: W, bottom: H, width: W, height: H }) };
+    getBoundingClientRect: () => ({ left: W - 110, top: H - 110, right: W - 10, bottom: H - 10, width: 100, height: 100 }) };
   const saved = { v: 4, standard: { other: {} } };
   const ctx = { window: { innerWidth: W, innerHeight: H },
     getComputedStyle: () => ({ display: "block", visibility: "visible", getPropertyValue: k => k === "--hud-scale" ? "2" : "" }),
@@ -1154,12 +1215,17 @@ test("every edited widget retains geometry through clearance and high-scale pack
   const before = Object.fromEntries(Object.entries(elements).map(([sel, el]) => [sel, el.getBoundingClientRect()]));
   const storedBefore = JSON.stringify(saved);
   for (let pass = 0; pass < 3; pass++) { ctx.HudLayout.fit(); ctx.HudLayout.clearReadouts(); }
+  const bounds = ctx.HudLayout.screenBounds();
   for (const [id, , sel] of ctx.HudLayout.ELEMENTS) {
-    const el = elements[sel], wanted = saved.standard.other[id];
-    assert.equal(el.props["--hl-x"], String(wanted.x), id);
-    assert.equal(el.props["--hl-y"], String(wanted.y), id);
+    const el = elements[sel], wanted = saved.standard.other[id], r = el.getBoundingClientRect();
     assert.equal(el.props["--hl-s"], String(wanted.s / 100), id);
-    assert.deepEqual(el.getBoundingClientRect(), before[sel], id + " stays where the player put it");
+    assert.deepEqual([r.width, r.height], [before[sel].width, before[sel].height], id + " keeps the size the player chose");
+    // A shipped-equal entry (0, 0, 100: the tower here) is automatic layout, not a request: no clamp runs on it.
+    if (wanted.x || wanted.y || wanted.s !== 100) {
+      assert.ok(r.left >= bounds.left - .5 && r.top >= bounds.top - .5 && r.right <= bounds.right + .5 && r.bottom <= bounds.bottom + .5,
+        `${id} ends on screen: ${JSON.stringify(r)}`);
+    }
+    if (wanted.x) assert.notEqual(el.props["--hl-x"], String(wanted.x), id + " carries the painted clamp");
     for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) assert.equal(el.hasAttribute(a), false, id + " " + a);
     for (const p of ["translate", "margin-left", "margin-top", "--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
   }

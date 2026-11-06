@@ -13,6 +13,7 @@
 // Safe-area insets are injected rather than emulated: headless Chromium reports
 // env(safe-area-inset-*) as 0, so a notched phone is otherwise untestable, and
 // the notch is exactly where a 59px inset eats the width these rules assume.
+import fs from "node:fs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { awaitApexBoot } from "../helpers/await-track-build.js";
@@ -820,7 +821,13 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
       bounds: HudLayout.screenBounds(),
     }));
-    expect(before.rect.x > before.bounds.right || before.rect.y + before.rect.height < before.bounds.top).toBe(true);
+    // Re-blessed 2026-11-06 (UI contract gap 8): the stored request (x 250, y -250) is off screen, but the paint-time
+    // clamp keeps the plate inside the safe box, so "offscreen" is a stored fact, not a painted one.
+    expect(before.value).toEqual({ x: 250, y: -250, s: 30 });
+    expect(before.rect.x).toBeGreaterThanOrEqual(before.bounds.left - .5);
+    expect(before.rect.y).toBeGreaterThanOrEqual(before.bounds.top - .5);
+    expect(before.rect.x + before.rect.width).toBeLessThanOrEqual(before.bounds.right + .5);
+    expect(before.rect.y + before.rect.height).toBeLessThanOrEqual(before.bounds.bottom + .5);
     await page.locator("#hud-arrange-recover").tap();
     const recovered = await page.evaluate(() => ({
       value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
@@ -1011,6 +1018,65 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
   });
 }
 
+// THE UI CONTRACT'S HUD CELLS (the UI-CONTRACT-2026-11-06 note, PR A of #5153, §8 row C): the owner's three windows — A the
+// Home Screen app (852x393, insets 59/21/59), C the same phone as a Safari tab (852x283, 59/0/59), D the spec phone
+// (844x390, no insets) — × TEXT SIZE normal/large × UI SIZE 100/130 × BUTTON 100/245, seeded from his LOAD SETTINGS
+// export (HUD 155, HIGH CONTRAST, BUTTONS steer). `__apex.hudFit()` is the assertion: no clash pair, every painted
+// rect inside the safe box, the gear/speed cluster never under its shipped size (contract 7, gaps 6-8); a screenshot
+// is sign-off only. One boot per window; the eight knob cells are applied live and re-fitted.
+const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+const CONTRACT_WINDOWS = [
+  { name: "A-home-screen-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
+  { name: "D-spec-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
+];
+for (const v of CONTRACT_WINDOWS) {
+  test.describe(`UI contract HUD cells (${v.name})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("text normal/large x UI 100/130 x BUTTON 100/245 on the export: no clash, nothing outside the safe box, the cluster never under shipped", async ({ page }) => {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), OWNER_EXPORT);
+      expect(imp.ok && !imp.failed, "the export seeds the store " + JSON.stringify(imp)).toBe(true);
+      await page.evaluate(() => { for (const [k, val] of Object.entries({ steerMode: "buttons", radioChat: "off", commentary: "off" })) localStorage.setItem("apex26." + k, JSON.stringify(val)); });
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.addStyleTag({ content: `:root{--sal:${v.sal}px;--sar:${v.sar}px;--sat:${v.sat}px;--sab:${v.sab}px;}` });
+      await page.evaluate(() => window.__apex.race("monza"));
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => { window.__apex.go(); window.__apex.headless(true); window.__apex.freeze(true); });
+      await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; }, null, { polling: 100, timeout: BOOT_MS });
+      const safe = { l: v.sal, t: v.sat, r: v.w - v.sar, b: v.h - v.sab };
+      const bad = [], cells = {};
+      for (const textSize of ["normal", "large"]) for (const ui of [100, 130]) for (const btn of [100, 245]) {
+        const cell = `${v.name} text=${textSize} ui=${ui} btn=${btn}`;
+        await page.evaluate(([t, u, b]) => {
+          if (t === "normal") delete document.documentElement.dataset.textSize; else document.documentElement.dataset.textSize = t;
+          window.__apex.uiScale(u); window.__apex.btnScale(b);
+          GameHud.invalidateFit();
+        }, [textSize, ui, btn]);
+        await waitPhoneHudFitClearance(page);
+        const fit = await page.evaluate(() => window.__apex.hudFit());
+        cells[cell] = fit;
+        if (fit.clash.length) bad.push(`${cell}: clash ${fit.clash.join(" ")}`);
+        for (const [k, r] of Object.entries(fit.rects)) {
+          if (!r) continue;
+          // 1 px: fractional zoom edges; the docks' own CSS insets them by --sal / --sar.
+          if (r.x < safe.l - 1 || r.y < safe.t - 1 || r.x + r.w > safe.r + 1 || r.y + r.h > safe.b + 1) bad.push(`${cell}: ${k} outside the safe box ${JSON.stringify(r)}`);
+        }
+        if (fit.z.bot != null && +fit.z.bot < 1 - 1e-9) bad.push(`${cell}: the cluster paints under shipped (--hud-z-bot ${fit.z.bot})`);
+        if (fit.z.dock != null && +fit.z.dock < 0.82 - 1e-9 && btn === 245) bad.push(`${cell}: the dock paints under its floor (--hud-z-dock ${fit.z.dock})`);
+      }
+      expect(bad, JSON.stringify(cells)).toEqual([]);
+      // Gap 6, the contract's own cell: on the export at BUTTON 245 HUD 155 reaches the cluster — --hud-z-bot is
+      // either unwritten (HUD 155 fits) or a cap above 1, never the old min(scale, 1) plateau at exactly 1.
+      const owner = cells[`${v.name} text=large ui=100 btn=245`];
+      expect(owner.z.bot == null || +owner.z.bot > 1, "HUD SIZE reaches GEAR / SPEED " + JSON.stringify(owner)).toBe(true);
+    });
+  });
+}
+
 // A plate the player DRAGS beside BOOST, above the pedals (iPhone 15, BUTTON SIZE 237 %): the dock pass
 // tested columns only, squeezed it to 48 px every fit, clearControls restored it, and the HUD flickered
 // larger <-> smaller (Bryce, 2026-10-17). It shares the pedals' columns, not their rows, so it must keep its
@@ -1063,8 +1129,14 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     });
     expect(st.mw, JSON.stringify(st)).toBe("");
     expect(st.w, JSON.stringify(st)).toBeGreaterThan(52);
+    // Re-blessed 2026-11-06 (UI contract gap 8): the stored request stays 25 / 10; the PAINTED offsets are that
+    // request clamped into the safe box and nudged off any tap target, so the plate never covers a button.
+    const stored = await page.evaluate(() => HudLayout.get("sectors"));
+    expect([stored.x, stored.y], "the stored request is untouched").toEqual([25, 10]);
     const offsets = await page.evaluate(() => { const e = document.getElementById("hud-sectors"); return [e.style.getPropertyValue("--hl-x"), e.style.getPropertyValue("--hl-y")]; });
-    expect(offsets, "manual positions are never corrected to clear a control").toEqual(["25", "10"]);
+    expect(+offsets[0], "the painted x is the request or its clamp, never further out").toBeLessThanOrEqual(25);
+    expect(+offsets[1]).toBeLessThanOrEqual(10);
+    expect(st.hits, "a placed plate is nudged off every tap target " + JSON.stringify(st)).toEqual([]);
   });
 
   test("small sectors right of Boost survive arranger Done and Resume", async ({ page }) => {

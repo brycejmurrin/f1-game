@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
-import { REPAINT_FRAMES, applyCell, bootStore, chromiumArgs, hudFitState, parseArgs, probeWithTransients, repaintFrames, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
+import { REPAINT_FRAMES, applyCell, bootStore, chromiumArgs, groupSettings, hudFitState, parseArgs, probeWithTransients, repaintFrames, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
 import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -377,6 +377,32 @@ test("desktop-1440x900: a named 16:10 device, its own short id, not a matrix axi
   const E = M.expectedVisibility(c, { desktop: true, cockpitCam: true });
   assert.equal(E["btn-ot"].want, false, "a desktop: no touch stack");
   assert.equal(E.rotateDevice.want, false);
+});
+
+test("the owner's windows are cells: 852x393 with insets and the 852x283 Safari tab, seeded from his export (UI contract gap 9)", () => {
+  assert.deepEqual(M.DEVICES["phone-pro-852x393"], { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 } });
+  assert.deepEqual(M.DEVICES["phone-safari-852x283"], { w: 852, h: 283, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 0 } }, "the toolbar: shorter, no bottom inset");
+  for (const d of ["phone-pro-852x393", "phone-safari-852x283"]) {
+    assert.equal(M.deviceSettings(d), "tests/data/settings-defaults-export.json", `${d} boots from the export by default`);
+    assert.equal(JSON.parse(read(M.deviceSettings(d))).format, "apex26-settings-v1");
+    assert.ok(!M.MATRIX_DEVICES.includes(d), `${d}: a named cell, not a matrix axis`);
+    assert.equal(parseArgs(["--device", d]).cells[0].device, d);
+  }
+  assert.equal(M.deviceSettings("phone-landscape-844x390"), null, "every other device keeps the shipped store");
+  assert.equal(M.cellId(M.normalizeCell({ device: "phone-safari-852x283", cam: "cockpit" })), "phoneSafari-cockpit");
+  const L = M.expandMatrix("leads").cells;
+  for (const n of ["lead15-pro-buttons", "lead15-pro-tilt", "lead15-safari-buttons", "lead15-safari-tilt"]) assert.ok(L.some((c) => c.id === n), n);
+  const safari = L.find((c) => c.id === "lead15-safari-buttons");
+  assert.ok(safari.checks.some((ch) => ch.type === "varWritten" && ch.var === "--hud-z-dock-l"), "the Safari cell expects the steer's column cap");
+  assert.ok(safari.checks.some((ch) => ch.type === "noOverlap" && ch.a === "map"), "and the map clear of the steer arrows");
+  // The runner: a boot group on one of the two phones seeds the export when --settings is absent; an explicit
+  // --settings wins; every other device keeps the shipped store.
+  const seeded = groupSettings("phone-pro-852x393", null);
+  assert.equal(seeded.settings.display.hudBtnScale, 245, "the owner's export, read whole");
+  const mine = { format: "apex26-settings-v1", settings: { display: { hudBtnScale: 100 } } };
+  assert.equal(groupSettings("phone-safari-852x283", mine), mine, "an explicit --settings overrides the device default");
+  assert.equal(groupSettings("phone-landscape-844x390", null, () => { throw new Error("must not read"); }), null);
+  assert.match(read("tools/shot/hud-survey.mjs"), /const seed = groupSettings\(c0\.device, plan\.settings\);\s*\n\s*if \(seed\) \{/, "runGroup seeds from groupSettings");
 });
 
 test("--settings: a LOAD SETTINGS export seeds every boot; anything else is refused before a browser", () => {

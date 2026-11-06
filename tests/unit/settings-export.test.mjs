@@ -558,6 +558,20 @@ test("unset gfxBackend exports as null on touch and desktop alike", () => {
 // `store.get("<key>", <default>)` in the owning file must agree with SPEC, and
 // every source path must exist. A default moved in the source without the
 // table following would make the file report a change that is none.
+test("SPEC: the BUTTON SIZE row says it is its own slider, not a follower of HUD SIZE (UI contract gap 25)", () => {
+  // BUTTON SIZE has been independent since f185834d (css/tokens.css: --hud-btn-scale defaults to --hud-btn-mult on
+  // a coarse pointer, 1 elsewhere); "null = follows hudScale" described the one-knob era.
+  const { SettingsExport } = boot();
+  const row = SettingsExport.SPEC.find((r) => r.k === "hudBtnScale");
+  assert.ok(row, "hudBtnScale is in SPEC");
+  assert.doesNotMatch(row.src, /follows hudScale/);
+  assert.match(row.src, /independent of hudScale/);
+  assert.match(row.src, /125% on touch/);
+  const tokens = read("css/tokens.css");
+  assert.match(tokens, /--hud-btn-scale: var\(--hud-btn-mult\)/, "the coarse default is a constant multiplier");
+  assert.doesNotMatch(tokens, /--hud-btn-scale: var\(--hud-scale\)/, "nothing ties the dock to HUD SIZE");
+});
+
 test("SPEC's defaults agree with the store.get reads in their source files", () => {
   const { SettingsExport } = boot();
   const authoritative = readDefaults().obj;

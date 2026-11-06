@@ -368,8 +368,15 @@ const HudLayout = (function () {
     }
   }
 
-  /* Keep automatic shipped offsets on screen. Explicit user entries bypass
-     every placement correction, including viewport and safe-area bounds. */
+  /* Keep every painted offset on screen — shipped AND stored. A stored MOVE &
+     SIZE entry is a request clamped by the box at paint time, like a shipped
+     one (UI contract 2026-11-06 rule 7 / gap 8): a layout saved on a 844x390
+     phone used to land a plate on the dock, or off the edge, of a 852x283
+     Safari tab, because explicit entries skipped the bounds clamp and the
+     control nudge. The clamp writes --hl-x / --hl-y on the element only; the
+     saved value is never touched (fit must not persist), so the request
+     returns whole on a roomier window. Packing (packPhone) still leaves a
+     placed piece alone: a deliberate overlap of two readouts is the player's. */
   const EDGE = 4;
   // Intersect the visible viewport with hardware insets. Browser zoom and
   // keyboards can expose only part of the layout viewport; never save this fit.
@@ -418,7 +425,6 @@ const HudLayout = (function () {
       if (!e || isDefEl(e)) continue;
       const el = doc.querySelector(sel);
       if (!el || !el.getBoundingClientRect || !el.hasAttribute("data-hl")) continue;
-      if (manuallyPlaced(el)) continue;
       el.style.setProperty("--hl-x", String(e.x));
       el.style.setProperty("--hl-y", String(e.y));
       // fitHud may have crossed TRACK LIMITS to the other column since apply().
@@ -724,7 +730,6 @@ const HudLayout = (function () {
       if (!e || isDefEl(e)) continue;
       const el = doc.querySelector(sel);
       if (!el || !el.hasAttribute("data-hl")) continue;
-      if (manuallyPlaced(el)) continue;
       let r = el.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
       // Seed from what fit()'s edge clamp already painted, so the nudge adds to it instead of replacing it.

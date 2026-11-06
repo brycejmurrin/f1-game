@@ -1317,17 +1317,17 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const hudDockEl = _dockL ? _dockL.parentNode : null;
   const steerDock = _dockMir ? _dockR : _dockL;   // #dock-left wherever MIRROR paints it
   const groups = (d) => {
-    if (!d) return { h: 0, w: 0, stack: 0 };
+    if (!d) return { h: 0, w: 0, stack: 0, b: 0 };
     const z = zoomDiv(d, d === steerDock ? zDockPubS : zDockPub);
-    let h = 0, w = 0, stack = 0, n = 0;
+    let h = 0, w = 0, stack = 0, n = 0, b = 0;   // b: the groups' painted bottom edge, screen px (the column cap below)
     for (const g of d.children) {
       const r = g.getBoundingClientRect();
       if (!r.width) continue;
-      h = Math.max(h, r.height / z); w += r.width / z; stack += r.height / z; n++;
+      h = Math.max(h, r.height / z); w += r.width / z; stack += r.height / z; n++; b = Math.max(b, r.bottom);
     }
     const cs = getComputedStyle(d);
     const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;
-    return { h, w: w + Math.max(0, n - 1) * gx, stack: stack + Math.max(0, n - 1) * gy };
+    return { h, w: w + Math.max(0, n - 1) * gx, stack: stack + Math.max(0, n - 1) * gy, b };
   };
   const gL = groups(_dockL), gR = groups(_dockR);
   const dockH = Math.max(gL.h, gR.h);
@@ -1410,16 +1410,29 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     const controlsW = gL.w + gR.w;
     capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
       controlsW ? (barW - 2 * barGap - 2 * FIT_AIR) / controlsW : Infinity);
+    // THE LEFT DOCK CLEARS THE LEFT COLUMN (map / gaps / the broadcast tower). The caps above budget the bar's
+    // width and the viewport's height, never the band ABOVE the dock, so on a 852x283 Safari tab a 1.84 steer
+    // met the 110 px map (UI contract 2026-11-06 gap 7). Screen px: the column's painted bottom against the
+    // group's painted bottom over its intrinsic height; the dock painted LEFT takes it (the pedals under MIRROR).
+    const gpR = gapsEl && !manualHud(gapsEl) ? layoutRect(gapsEl) : null;
+    const colBot = Math.max(mmR && mmR.width ? mmR.bottom : 0, gpR && gpR.width ? gpR.bottom : 0, bcast && _hudTop ? layoutRect(_hudTop).bottom : 0);
+    const capCol = colBot > 0 && gL.h && gL.b > colBot ? Math.max(DOCK_MIN_Z, (gL.b - colBot - FIT_AIR) / gL.h) : Infinity;
+    if (steerDock !== _dockL) capDock = Math.min(capDock, capCol);
     const want = Math.max(btnFloor, btnScale), dockZ = Math.min(want, Math.max(DOCK_MIN_Z, capDock));
     // THE STEER DOCK (#dock-left) FOLLOWS BUTTON SIZE PAST THE PEDAL COLUMN'S CAP: budgeted against the other
-    // dock and its top button at their CAPS (never the slider: monotonic), >= capDock, and the gear/speed
-    // cluster keeps its SHIPPED size (or a smaller HUD SIZE): budgeting it at the 10 px floor let BUTTON 245
-    // paint SPEED at 10.1 px whatever HUD SIZE said (UI hunt #3, owner's export). Portrait: the shared cap.
+    // dock and its top button at their CAPS (never the slider: monotonic), >= capDock. THE SPARE WIDTH IS SPLIT
+    // (UI contract gap 6): the bar beyond the pedals, the shipped cluster (or a smaller HUD SIZE) and the steer at
+    // the pedals' cap is shared half and half — the steer takes its half here, the cluster the other through roomW
+    // below, so --hud-z-bot = min(HUD SIZE, cap) and HUD SIZE reaches GEAR / SPEED again. Budgeting the cluster at
+    // min(scale, 1) handed the steer every spare px: HUD 155 painted the cluster at 100 % (owner's export, 852x393).
+    // Never below shipped (UI hunt #3: the 10 px floor painted SPEED at 10.1 px); the dock still ignores HUD SIZE.
     if (window.innerWidth > window.innerHeight) {
       const left = steerDock === _dockL, gS = left ? gL : gR, gO = left ? gR : gL;
-      const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock));
-      const roomS = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, 1) * 100) / 100;   // set() ceils --hud-z-bot
+      const zO = Math.min(3, Math.max(DOCK_MIN_Z, capDock)), topZ = Math.min(left ? 1.5 : 2, Math.max(1, capDock)), zC = Math.max(DOCK_MIN_Z, capDock);
+      const spare = barW - gO.w * zO - 2 * barGap - 2 * FIT_AIR - bottom * Math.ceil(Math.min(scale, 1) * 100) / 100 - gS.w * zC;   // set() ceils --hud-z-bot
+      const roomS = gS.w * zC + Math.max(0, spare) / 2;
       capDockS = Math.max(capDock, Math.min(gS.h ? (controlsRoom - 44 * topZ) / gS.h : Infinity, gS.w ? roomS / gS.w : Infinity));
+      if (left) capDockS = Math.min(capDockS, capCol);
     } else capDockS = capDock;
     const zS = Math.min(want, Math.max(DOCK_MIN_Z, capDockS)), zDL = steerDock === _dockL ? zS : dockZ, zDR = zS + dockZ - zDL;
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
@@ -1515,9 +1528,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // The steer cap rides WITH the shared one (set()'s test): absent together, else explicit (never a fall-back
   // to --hud-z-dock). A changed steer zoom refits once so TYRES / LIMITS read the new dock top.
   const wantDock = Math.max(btnFloor, btnScale), zSteer = Math.round(Math.min(wantDock, Math.max(DOCK_MIN_Z, capDockS)) * 1000) / 1000;
-  if (capDock < wantDock) root.style.setProperty("--hud-z-dock-l", String(zSteer));
+  const steerCapped = Math.min(capDock, capDockS) < wantDock;   // the column cap (gap 7) can bind the steer alone
+  if (steerCapped) root.style.setProperty("--hud-z-dock-l", String(zSteer));
   else root.style.removeProperty("--hud-z-dock-l");
-  if (Math.abs(zSteer - zDockPubS) > 1e-6 && capDock < wantDock) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
+  if (Math.abs(zSteer - zDockPubS) > 1e-6 && steerCapped) { _fitKey = ""; _fitWait = 0; _fitPending = true; }
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));

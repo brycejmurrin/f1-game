@@ -1,0 +1,16 @@
+{
+  "files": {
+    "css/hud.css": {
+      "codeLines": 5,
+      "lines": 6
+    },
+    "js/agent/apex.js": {
+      "codeLines": 16,
+      "lines": 20
+    },
+    "js/ui/hud.js": {
+      "codeLines": 7,
+      "lines": 14
+    }
+  }
+}
