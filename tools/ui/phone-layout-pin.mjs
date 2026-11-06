@@ -68,6 +68,10 @@ const click = (p, id) => p.evaluate((id) => { const e = document.getElementById(
 async function garageTab(p, tab) {
   await click(p, "mb-garage");
   await p.waitForSelector('#carsetup:not([hidden]):not([aria-busy="true"])', { timeout: 30000 });
+  // tests/helpers/garage-sheet.js waitGarageSheet: the sheet shows BEFORE buildSetup fills it (openSetup yields two
+  // rAF frames) and re-mounts after the identity settle; the budget line painting is the settled sign. CI (run
+  // 42239904725) measured the garage mid-remount: tabs 0 px tall, the options list 1680 px.
+  await p.waitForFunction(() => { const cs = document.getElementById("carsetup"), b = document.getElementById("cs-budget"); return !!cs && !cs.hidden && !cs.hasAttribute("aria-busy") && !!(b && b.textContent && b.textContent.trim()); }, null, { polling: 100, timeout: 30000 });
   await p.waitForSelector(`#cs-tab-${tab}`, { state: "attached", timeout: 30000 });
   await click(p, `cs-tab-${tab}`);
   await p.waitForSelector(`#cs-tab-${tab}[aria-selected="true"]`, { timeout: 30000 });
@@ -131,7 +135,16 @@ export async function measureAll(page, { baseUrl = "", bootMs = 60000, only = nu
     await page.waitForTimeout(500);
     await scr.open(page);
     await page.waitForTimeout(500);
-    out[scr.id] = await page.evaluate(readFingerprint, { sels: scr.sel, vars: GLOBAL_VARS });
+    // Settled, not merely open: two consecutive reads 400 ms apart must agree (a late re-mount or a lazy row moves the
+    // first read on a slow runner). Up to ~12 s, then the last read stands and the comparison says what moved.
+    let got = await page.evaluate(readFingerprint, { sels: scr.sel, vars: GLOBAL_VARS });
+    for (let i = 0; i < 30; i++) {
+      await page.waitForTimeout(400);
+      const again = await page.evaluate(readFingerprint, { sels: scr.sel, vars: GLOBAL_VARS });
+      if (JSON.stringify(again) === JSON.stringify(got)) break;
+      got = again;
+    }
+    out[scr.id] = got;
   }
   return out;
 }
