@@ -178,7 +178,7 @@ test("no physics / AI / race-control module reads Damage", () => {
 test("game.js only FEEDS Damage (contact / observe / reset) and its physics paths never read it", () => {
   const g = read("js/game.js");
   const uses = [...g.matchAll(/\bDamage\.(\w+)/g)].map((m) => m[1]).sort();
-  assert.deepEqual(uses, ["contact", "observe", "reset", "reset"]);   // …the second reset is the red-flag repair (B5.14.4 viii, redFlagRestart)
+  assert.deepEqual(uses, ["contact", "observe", "reset"]);
   // damage.js writes no field on a car: state lives in its own WeakMap.
   assert.doesNotMatch(SRC.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""), /\b(c|a|b)\.\w+\s*[+\-*/]?=(?!=)/);
 });

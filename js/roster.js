@@ -529,8 +529,7 @@
     "js/net/lobby.js",
     "js/input/phone-pad-codec.js",
     "js/input/phone-pad-page.js",
-    "js/input/phone-pad.js",
-    "js/net/overlay-net.js"
+    "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
     [

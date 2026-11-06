@@ -10,10 +10,7 @@ const CareerPlanning = (function () {
   }
   function protect(c, list) {
     if (!c) return false;
-    if (typeof SaveMigrate !== "undefined" && SaveMigrate.careerVersion) {
-      const v = SaveMigrate.careerVersion(c.v);
-      if (v == null || v > SaveMigrate.CAREER_V) return true;
-    }
+    if (typeof SaveMigrate !== "undefined" && c.v > SaveMigrate.CAREER_V) return true;
     const ids = c.season && c.season.calIds;
     if (!Object.prototype.hasOwnProperty.call(c.season || {}, "calIds")) return false; // Genuine older unstamped saves keep the legacy migration.
     return !Array.isArray(ids) || !ids.length || ids.length > 64 ||

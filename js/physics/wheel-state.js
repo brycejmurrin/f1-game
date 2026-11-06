@@ -42,29 +42,10 @@ const WheelState = (function () {
     medium: Object.freeze({ abs: 0.20, tc: 0.22, cut: 0.55 }),
     full: Object.freeze({ abs: 0.12, tc: 0.14, cut: 0.45 }),
   });
-  let _level = "off", _levelResolved = false;
-  /** "off" | "medium" | "full"; anything else reads as off. Stored as apex26.wheelAssist. */
-  function assistLevel() {
-    if (!_levelResolved) {
-      _levelResolved = true;
-      try { const r = typeof localStorage !== "undefined" && localStorage.getItem("apex26.wheelAssist"); if (r === "medium" || r === "full") _level = r; } catch (_) { /* blocked storage */ }
-    }
-    return _level;
-  }
-  /** `persist` false = this session only. */
-  function setAssistLevel(v, persist = true) {
-    _levelResolved = true;
-    _level = (v === "medium" || v === "full") ? v : "off";
-    if (persist) { try { if (typeof localStorage !== "undefined") localStorage.setItem("apex26.wheelAssist", _level); } catch (_) { /* blocked storage */ } }
-    return _level;
-  }
-  /** The settings row's one value: "off" (classic model) | "on" (wheel state) | "medium" | "full" (wheel state + ABS/TC). */
-  function mode() { return !resolveEnabled() ? "off" : assistLevel() === "off" ? "on" : assistLevel(); }
-  function setMode(m) {
-    setEnabled(m !== "off");
-    if (m !== "off") setAssistLevel(m === "medium" || m === "full" ? m : "off");
-    return mode();
-  }
+  let _level = "off";
+  /** "off" | "medium" | "full"; anything else reads as off. Session state, not persisted yet. */
+  function assistLevel() { return _level; }
+  function setAssistLevel(v) { _level = (v === "medium" || v === "full") ? v : "off"; return _level; }
 
   /** One clamp: returns the demand to use; `latch` is { on, t } mutated in place. */
   function clampDemand(latch, k, dirOk, aReq, thr, cut, dt, cap) {
@@ -277,7 +258,7 @@ const WheelState = (function () {
     sync(c, dt);
     const vx = c.speed || 0;
     let aReqF = +opts.aReqF || 0, aReqR = +opts.aReqR || 0;
-    if (assistLevel() !== "off") {
+    if (_level !== "off") {
       const A = ASSIST[_level];
       const lf = c._absF || (c._absF = { on: 0, t: 0 });
       const lr = c._tcR || (c._tcR = { on: 0, t: 0 });
@@ -331,6 +312,6 @@ const WheelState = (function () {
   // ensure/sync/kappaOf + the KAPPA_*/WHEEL_J/LOCK_*/SPIN_*/RESYNC_* knobs are
   // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
-    enabled, setEnabled, axleStep, stepPlayer, assistLevel, setAssistLevel, mode, setMode,
+    enabled, setEnabled, axleStep, stepPlayer, assistLevel, setAssistLevel,
   });
 })();

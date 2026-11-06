@@ -168,10 +168,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   grid-column: 2; grid-row: 1;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: none; grid-auto-rows: max-content;
-  /* WIDTH is a share of the SCREEN (20..100), not of this column: the old column cap pinned the grid at the
-     column's ~381 px from WIDTH ~45 up, so the slider did nothing (#4816). Narrower than the column it stays centred;
-     wider, it grows toward the art (right-anchored, left-anchored when swapped), never off the screen edge. */
-  max-width: calc(100 * var(--vwz) - var(--gap)); justify-self: end; margin-inline: 0 max(0%, calc((100% - var(--_tl-bw)) / 2));
+  max-width: 100%;
   max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
@@ -180,7 +177,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   grid-column: 1; grid-row: auto; width: 100%; min-width: 0;
 }
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { flex-wrap: wrap; }
-:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-column: 1; justify-self: start; margin-inline: max(0%, calc((100% - var(--_tl-bw)) / 2)) 0; }
+:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-column: 1; }
 /* A 20%-wide saved cluster cannot hold two readable destinations or three
    creation tools. Change their composition at the cluster's own width; leave
    an explicitly requested ROW layout in the player's control. */
@@ -274,12 +271,11 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 }
 #overlay #menu-buttons .bigbtn > span { transform: none; }
 #overlay #menu-buttons #mb-career {
-  background: var(--grad-primary);
-  color: var(--menu-accent-ink, var(--text)); border-color: transparent;
+  background: color-mix(in oklab, var(--red) 45%, var(--carbon));
+  color: var(--hud-ink-light); border-color: transparent;
 }
 #overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
 #overlay #menu-buttons .bigbtn::before { background: none; }
-#overlay #menu-buttons #mb-career::before { background: var(--grad-primary-hot); }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
 /* At comfortable heights the destinations retain their groups instead of
    dissolving into a field of equal tiles. DOM order is the reading order. */

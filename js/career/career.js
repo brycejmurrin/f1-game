@@ -159,10 +159,7 @@ function migrateSlots() {
   for (const item of found) {
     const c = item.value;
     if (typeof CareerPlanning !== "undefined" && CareerPlanning.protect(c, Tracks.LIST || [])) continue;
-    if (c && typeof c === "object") {
-      const cv = typeof SaveMigrate !== "undefined" && SaveMigrate.careerVersion ? SaveMigrate.careerVersion(c.v) : Number(c.v);
-      if (cv == null || Number.isNaN(cv) || cv > GameStore.CAREER_V) continue; // leave the legacy key untouched
-    }
+    if (c && Number(c.v) > GameStore.CAREER_V) continue;
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
@@ -978,18 +975,9 @@ function budgetUpgradeCost() {
 }
 
 const GRANT = 5000;
-// Stored OUTSIDE the career prefix: a `career*` key is refused without the
-// writer lock and mirrored like a save. "career.freeMoney" is the legacy key,
-// read once as a fallback.
 function freeMoney(on) {
-  if (on !== undefined) store.set("freeMoney", !!on);
-  const v = store.get("freeMoney", null);
-  if (v != null) return !!v;
-  const old = store.get("career.freeMoney", null);
-  if (old == null) return false;
-  store.set("freeMoney", !!old); // one-time copy; the clear is best-effort (refused without the writer lock)
-  store.set("career.freeMoney", null);
-  return !!old;
+  if (on !== undefined) store.set("career.freeMoney", !!on);
+  return !!store.get("career.freeMoney", false);
 }
 // Hand yourself credits. Returns the new balance, or null with no career loaded.
 function grant(n) {
@@ -1736,37 +1724,8 @@ function tallyOf(c) {
   return t;
 }
 
-// A season rollover edits ~140 lines of the career in place, so it is guarded like
-// scoreRound: refuse a stale revision up front, snapshot, and if the save is
-// refused restore in place (the `season` object stays game.js's live alias) so
-// RAM never shows a year that is not on disk.
 function rollover() {
-  if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) {
-    if (career && careerRevision != null && currentRevision() !== careerRevision) {
-      careerConflict = true;
-      lastSave = { ok: false, durable: false, reason: "conflict" };
-    }
-    return null;
-  }
-  const original = JSON.parse(JSON.stringify(career));
-  const seasonRef = career.season;
-  const result = rolloverApply();
-  if (lastSave && lastSave.ok) return result;
-  const reason = (lastSave && lastSave.reason) || "conflict";
-  const replace = (target, source) => {
-    for (const key of Object.keys(target)) if (!Object.prototype.hasOwnProperty.call(source, key)) delete target[key];
-    Object.assign(target, source);
-  };
-  const restoredSeason = original.season;
-  replace(career, original);
-  career.season = seasonRef;
-  replace(seasonRef, restoredSeason);
-  careerConflict = true;
-  lastSave = { ok: false, durable: false, reason };
-  return null;
-}
-
-function rolloverApply() {
+  if (!career || blocked()) return null;
   const dStand = driverStandings();
   const tStand = teamStandings();
   // Dice and the expected order belong to the year that just ended. year++

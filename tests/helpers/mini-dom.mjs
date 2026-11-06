@@ -117,11 +117,11 @@ export function makeDom(opts = {}) {
       // descendants, so closest("details") from a button answered its layer
       // whenever a fold sat anywhere under that layer.
       closest: (sel) => { for (let n = el; n; n = n.parentNode) if (n.nodeType === 1 && sel.split(",").some((part) => matchesSimple(n, part.trim()))) return n; return null; },
-      matches: (sel) => sel.split(",").some((part) => matchesSimple(el, part.trim())),
+      matches: (sel) => query({ children: [el] }, sel, false).length > 0,
       querySelector: (sel) => query(el, sel, false)[0] || null,
       querySelectorAll: (sel) => query(el, sel, true),
       addEventListener: (t, fn) => { if (!listeners.has(t)) listeners.set(t, []); listeners.get(t).push(fn); },
-      removeEventListener: (t, fn) => { const l = listeners.get(t); if (l) { const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } },
+      removeEventListener: (t, fn) => { const l = listeners.get(t); if (l) l.splice(l.indexOf(fn), 1); },
       dispatchEvent: (ev) => dispatch(el, ev),
       focus: () => { activeElement = el; },
       blur: () => { if (activeElement === el) activeElement = null; },
@@ -172,7 +172,7 @@ export function makeDom(opts = {}) {
     querySelector: (sel) => query(documentElement, sel, false)[0] || null,
     querySelectorAll: (sel) => query(documentElement, sel, true),
     addEventListener: (t, fn) => { if (!docListeners.has(t)) docListeners.set(t, []); docListeners.get(t).push(fn); },
-    removeEventListener: (t, fn) => { const l = docListeners.get(t); if (l) { const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); } },
+    removeEventListener: (t, fn) => { const l = docListeners.get(t); if (l) l.splice(l.indexOf(fn), 1); },
     dispatchEvent: (ev) => { const l = docListeners.get(ev.type); if (l) for (const fn of [...l]) fn.call(document, ev); return true; },
     execCommand: () => false,
   });

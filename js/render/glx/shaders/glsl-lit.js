@@ -53,7 +53,6 @@ uniform float uInstanced;   // 0 = use uModel (default), 1 = use the instance co
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave + foliage sway
-uniform float uWindDetail; // per-vertex wind detail 0/1 (knob windDetail): stiffness, branch phase, leaf flutter
 uniform vec3 uWind;    // xy = unit wind direction in world xz, z = speed scale (knobs windDir / windSpeed)
 out vec3 vNrm;
 out vec3 vCol;
@@ -93,21 +92,12 @@ void main() {
     float w = clamp(mfr / 0.45, 0.0, 1.0);
     float spd = uWind.z;
     float along = wp.x * uWind.x + wp.z * uWind.y;
-    // Crysis-style per-vertex detail (GPU Gems 3 ch.16), derived from the data
-    // every backend already carries: LEAF = how green the vertex colour is,
-    // STIFFNESS = bark stays stiffer than leaves, BRANCH PHASE = a smooth
-    // position phase so neighbouring branches gust out of step. windDetail 0 is
-    // the exact legacy height-only sway. Mirrored in tsl-lit.js and wgsl-chunks.js.
-    float leaf = clamp((aCol.g - aCol.r) * 5.0, 0.0, 1.0);
-    float bph = (sin(wp.y * 1.9 + wp.x * 0.8) + sin(wp.z * 1.4 - wp.y * 1.1)) * 0.5;
-    float stiff = mix(1.0, 0.55 + 0.45 * leaf, uWindDetail);
-    float gust = uTime * (spd * 1.1 + 0.6) - along * 0.07 + bph * 0.9 * w * uWindDetail;
+    float gust = uTime * (spd * 1.1 + 0.6) - along * 0.07;
     float bend = sin(gust) * 0.55 + sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
-    float amp = spd * 0.32 * w * w * stiff;
+    float amp = spd * 0.32 * w * w;
     vec3 wn = mat3(M) * aNrm;
-    float flPh = uTime * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7 + bph * 2.0 * uWindDetail;
-    float flAmp = mix(1.0, leaf * 2.0, uWindDetail);
-    wp.xyz += vec3(uWind.x, 0.0, uWind.y) * (bend * amp) + wn * (sin(flPh) * spd * 0.05 * w * flAmp);
+    float flPh = uTime * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7;
+    wp.xyz += vec3(uWind.x, 0.0, uWind.y) * (bend * amp) + wn * (sin(flPh) * spd * 0.05 * w);
   }
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern

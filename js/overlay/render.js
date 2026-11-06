@@ -218,11 +218,6 @@ const OverlayRender = (function () {
       }));
       // Same-browser feed: a game tab of this origin publishes once it hears us.
       if (typeof OverlayBridge !== "undefined") OverlayBridge.subscribe((frame) => painter.paint(frame));
-      // Cross-browser feed (OBS Browser Source): #ov=CODE dials the game's room as a passive viewer.
-      const room = typeof OverlayNet !== "undefined" && typeof location !== "undefined" ? OverlayNet.codeFromHash(location.hash) : null;
-      if (room) OverlayNet.join(room, (frame) => painter.paint(frame), {
-        onState: (s) => { document.body.dataset.link = s; },
-      });
       return painter;
     }
     const started = performance.now();

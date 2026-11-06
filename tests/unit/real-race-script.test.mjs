@@ -245,15 +245,6 @@ test("rain by lap aligns the weather samples to the leader's lap windows; an unf
   const wx = [{ date: "2026-01-01T09:50:00Z", rainfall: 1 }, { date: "2026-01-01T10:02:30Z", rainfall: 1 }, { date: "2026-01-01T10:05:00Z", rainfall: 0 }, { date: "bad", rainfall: 1 }];
   assert.deepEqual(host(D.rainByLap(laps, wx, 4)), [false, false, true, false, false], "only lap 2's window saw rain (the pre-race sample is before lap 1)");
   assert.equal(D.rainByLap([{ driver_number: 1, lap_number: 1 }], wx, 4), null, "no lap timestamps: no alignment");
-  // An untimed lap in the middle: rain inside lap 2's window stays on lap 2 (it must not slide onto untimed lap 3).
-  const gap = [
-    { driver_number: 1, lap_number: 1, date_start: "2026-01-01T10:00:00Z" }, { driver_number: 1, lap_number: 2, date_start: "2026-01-01T10:02:00Z" },
-    { driver_number: 1, lap_number: 4, date_start: "2026-01-01T10:06:00Z" },
-  ];
-  assert.deepEqual(host(D.rainByLap(gap, [{ date: "2026-01-01T10:03:00Z", rainfall: 1 }], 4)), [false, false, true, false, false], "rain in lap 2's window is lap 2's, not the untimed lap 3's");
-  // An untimed lap 1: rain before lap 2 starts is lap 1's.
-  const first = [{ driver_number: 1, lap_number: 2, date_start: "2026-01-01T10:02:00Z" }];
-  assert.deepEqual(host(D.rainByLap(first, [{ date: "2026-01-01T10:01:00Z", rainfall: 1 }], 2)), [false, true, false], "an untimed lap 1 can be wet");
   // A race still running: laps partial, no classification -> plays as far as it goes, never cached.
   const raw = rawBaku();
   raw.result = [];

@@ -25,10 +25,6 @@
 // stub could not see, or whose title it got wrong, matches no list and so
 // lands in piece n — it can be mis-balanced, never skipped or doubled. When
 // the spec cannot be listed at all, the leg keeps Playwright's count shard.
-// THE FILE PART of a list line is matched against the test's path relative to
-// Playwright's rootDir (playwright.config.js testDir "./tests"), NOT the repo:
-// "specs/x.spec.js › …". A repo-relative "tests/specs/…" line matches nothing,
-// so pieces 1..n-1 ran 0 tests green and piece n ran the whole spec (#4812).
 //
 // CLI: node tools/ci/fat-shard.mjs <spec> [n] [rate]   — the n-piece plan vs the count split.
 
@@ -45,12 +41,6 @@ const SELF = fileURLToPath(import.meta.url);
 export const FAT_UI_SPEC = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/;
 /** Playwright's title-path delimiter in a --test-list line. */
 const SEP = " › ";
-/** Playwright's rootDir (playwright.config.js testDir), repo-relative. A list
- *  line's file is relative to it; select-specs.test.mjs pins it against a real
- *  `playwright test --list` run. */
-export const PW_ROOT_DIR = "tests";
-/** A repo-relative spec path as a --test-list line names it. */
-export const listFile = (file) => path.posix.relative(PW_ROOT_DIR, file.replace(/\\/g, "/").replace(/^\.\//, ""));
 
 // A stand-in for `@playwright/test` that records declarations, in order, as
 // Playwright's title path minus project and file ("describe › test").
@@ -217,9 +207,7 @@ export function fatShardArgs(args, { db, fallbackSec, outDir, titlesOf = specTit
   const file = specs[0].replace(/^\.\//, "");
   const plan = n >= 2 && i >= 1 && i <= n ? fatShardPlan(file, n, db, fallbackSec, titlesOf(file)) : null;
   if (!plan) return { args, note: `fat-shard: no plan for ${file} (${n} pieces) — keeping Playwright's count shard` };
-  const head = listFile(file);
-  if (head.startsWith("..")) return { args, note: `fat-shard: ${file} is outside ${PW_ROOT_DIR}/ — keeping Playwright's count shard` };
-  const lines = (pieces) => pieces.flatMap((p) => p.titles.map((t) => `${head}${SEP}${t}`)).join("\n") + "\n";
+  const lines = (pieces) => pieces.flatMap((p) => p.titles.map((t) => `${file}${SEP}${t}`)).join("\n") + "\n";
   const last = i === n;
   const list = path.join(outDir, `${path.basename(file, ".spec.js")}-${i}of${n}.txt`);
   fs.mkdirSync(outDir, { recursive: true });

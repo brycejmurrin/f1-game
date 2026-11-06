@@ -7,12 +7,6 @@ const RUBBER = [0.045, 0.045, 0.050];
 const HOSE = [0.12, 0.14, 0.20];   // module-local paint colour (hoseReel / serviceRig)
 const FAN = [4.5, 3.32];
 const SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
-// Monitor gantry anchor (lockstep with scene.js buildProps: monitorGantry(g.nx, …)).
-// Live atlas quads and the hung-screen mesh share this so a move stays one edit.
-const GANTRY = { x: -4.70, z: -1.85, dz: [-1.15, 0, 1.15] };
-// Above-white LCD / lamp colours: the lit shader's glow gate needs >1.0 albedo.
-const LCD = [1.28, 1.38, 1.55];
-const LAMP_FACE = [1.42, 1.34, 1.16];
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
                   [0.10, 0.60, 0.25], [0.15, 0.35, 0.85]];   // S M H, inter, wet
 // Castors roll along Z, with horizontal axles and forks joining the chassis.
@@ -257,20 +251,14 @@ function serviceRig(out, x, z, c1) {
   hose(out, [[x - 0.08, 1.50, z], [x - 0.30, 1.25, z + 0.10], [x - 0.30, 0.90, z + 0.10], [x - 0.25, 0.65, z + 0.10]], 0.02, HOSE, 6);
 }
 // Engineers' monitor gantry (Blender monitor-gantry-nx): rail + three hung screens.
-// Screen faces are above-white so the lit glow gate reads them as LCDs even
-// before the live atlas quads land (GarageLive.build paints the faces).
 function monitorGantry(out, x, z, c1) {
   const s = x < 0 ? 1 : -1;
-  const drops = (z === GANTRY.z && Math.abs(x - GANTRY.x) < 1e-6) ? GANTRY.dz : [-1.15, 0, 1.15];
   block(out, x, 2.55, z, 0.04, 0.055, 1.70, STEEL, MAT.METAL);
-  for (let i = 0; i < drops.length; i++) {
-    const dz = drops[i];
+  for (const dz of [-1.15, 0, 1.15]) {
     // Drop as a thin block (tube hangers blew the bay trophy budget by a few tris).
     block(out, x, 2.36, z + dz, 0.015, 0.19, 0.015, STEEL, MAT.METAL);
     block(out, x + s * 0.09, 1.92, z + dz, 0.03, 0.26, 0.40, DARK);
-    block(out, x + s * 0.11, 1.92, z + dz, 0.01, 0.22, 0.34, LCD);
-    // Thin glass lip: a cooler specular rim so the housing is not a flat slab.
-    block(out, x + s * 0.116, 1.92, z + dz, 0.004, 0.20, 0.32, [1.55, 1.62, 1.78]);
+    block(out, x + s * 0.11, 1.92, z + dz, 0.01, 0.22, 0.34, scale(STEEL, 0.42));
   }
 }
 // Floor work lamp (Blender work-lamp-rig): stand + head aimed at the car.
@@ -278,13 +266,13 @@ function workLamp(out, x, z, c1) {
   cyl(out, x, 0, z, 0.15, 0.05, DARK, 8);
   tube(out, [x, 0.05, z], [x, 1.52, z], 0.022, STEEL, 6, MAT.METAL);
   block(out, x, 1.66, z, 0.16, 0.07, 0.16, scale(c1, 0.45));
-  block(out, x, 1.64, z + 0.11, 0.12, 0.045, 0.018, LAMP_FACE);
+  block(out, x, 1.64, z + 0.11, 0.12, 0.045, 0.018, [1.16, 1.12, 1.02]);
   tube(out, [x, 1.58, z], [x + 0.18, 1.40, z + 0.22], 0.012, STEEL, 5, MAT.METAL);
 }
 // LED light boom under a side-wall service shelf (Blender lighting-rig-*).
 function lightBoom(out, x, z, halfLen, c1) {
   block(out, x, 3.72, z, 0.035, 0.018, halfLen, scale(STEEL, 0.55));
-  block(out, x, 3.695, z, 0.025, 0.006, halfLen - 0.12, [1.22, 1.28, 1.40]);
+  block(out, x, 3.695, z, 0.025, 0.006, halfLen - 0.12, [1.06, 1.09, 1.16]);
   for (const dz of [-halfLen + 0.35, 0, halfLen - 0.35])
     block(out, x, 3.78, z + dz, 0.04, 0.04, 0.04, scale(c1, 0.5));
 }
@@ -409,18 +397,12 @@ function buildEquipment(g, liv, ctx) {
   // frame tops out at y 3.62 on the door wall.
   block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2], 0.92, 0.72, 0.05, DARK);
   block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2] + 0.04, 0.96, 0.76, 0.02, scale(STEEL, 0.5));   // bezel
-  // Cool emissive lip behind the live timing face — Night Shift reads the
-  // housing as a lit panel instead of a dark slab when the atlas is still settling.
-  block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2] - 0.01, 0.84, 0.64, 0.008, LCD);
   for (const hx of [-0.7, 0.7]) tube(g.mid, [SCREEN[0] + hx, SCREEN[1] + 0.72, SCREEN[2]], [SCREEN[0] + hx, 4.98, SCREEN[2]], 0.02, STEEL, 6, MAT.METAL);
-  // workLamp / lightBoom stay exported builders (garage-mesh envelopes) but are
-  // not parked here: two lamps blow the 18k-tri workshop budget once trophies
-  // are earned. Lamp pools come from the LIVE atlas (GarageLive.build) instead.
 }
 
 
   // HOSE stays module-local (hoseReel / serviceRig paint). COMPOUND + starterCart /
   // tyreTrolley / rearJack stay exported — garage-mesh unit seams.
-  return { RUBBER, FAN, SCREEN, GANTRY, LCD, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, lightBoom, wheelDolly, build: buildEquipment };
+  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, monitorGantry, workLamp, lightBoom, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;

@@ -68,7 +68,7 @@
    Readouts clear their measured rectangles independently of HUD scale. */
 :root {
   --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
-  --tap-hud: calc(44px * var(--hud-btn-z)); /* HUD-only base: no --ui-scale in the chain (#4819) */
+  --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
    and PAUSE paint 44px on a phone. Restating it on body:not(.desktop) was tried
@@ -137,7 +137,7 @@
    top band at ~0.95 and dropped the gap chip on every phone (hud-mock
    2026-10-14); fitHud's key carries the flip, so the tower re-centres once. */
 #hud-delta[data-pending] #hud-delta-n { visibility: hidden; }
-body:not(.desktop) #hud-delta[data-pending] { display: none; }
+body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
 /* THE LAP JUST DRIVEN: in a race the TIME box holds it for 3 s after the line
    (js/ui/hud.js, data-hold) — green when it is a personal best. Same digits,
    same slot: colour only, no width. */
@@ -152,13 +152,17 @@ body:not(.desktop) #hud-delta[data-pending] { display: none; }
 }
 @keyframes pos-flash { from { transform: scale(1.18); } }
 /* ONE TIMING STRIP (design pass 2a, docs/notes/DESIGN-PASS-2A-HUD-2026-10-30.md): one plate, hairline
-   dividers, the team keyline once on POS. A rank change recolours the POS text only. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
+   dividers, the team keyline once on POS, the one light cell (the rank you hunt). A rank change keeps its
+   hue on a dark pill for the flash. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
 body:not(.hud-prof-broadcast) .hud-top { gap: 0; background: var(--hud-strip-bg); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) .hud-top > .hud-box { --hud-box-stripe: 0px; background: none; border-radius: 0; box-shadow: inset 1px 0 0 var(--plate-line); }
-body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-strip-bg); box-shadow: inset 3px 0 0 var(--accent);
+body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-ink-light); box-shadow: inset 3px 0 0 var(--accent);
   border-radius: var(--r-xs) 0 0 var(--r-xs); }
-body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-light); text-shadow: none; }
-/* POS is dark like the rest of the strip, white text. A pass changes the TEXT colour only (no pill). */
+body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-dark); text-shadow: none; }
+/* HIGH CONTRAST (the shipped default) gives every .hud-box its dark plate at (1,2,0), which turned the light POS
+   cell dark under its dark ink: "22/22" at ~1.06:1 (UI hunt #3). The hero cell keeps its light plate. */
+:root[data-ui-contrast="high"]:has(> body:not(.hud-prof-broadcast)) #hud-box-pos { background: var(--hud-ink-light); }
+body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower-ink); }
 /* Progress first, timing second. LAP closes the progress group with an inset
@@ -584,7 +588,7 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-delta .hud-value { font-variant-numeric: tabular-nums; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
 #hud-delta[data-sign="slow"] .hud-value { color: var(--slower-ink); }
-#hud-delta[hidden] { display: none; }
+#hud-delta[hidden] { display: none !important; }
 /* Ghost reference is a hollow ring, not only the faster/slower ink. */
 #hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
 /* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
@@ -2117,7 +2121,11 @@ body.lt-open .touchbtn { display: none !important; }
   background: var(--hc-hud-plate);
   outline: 1px solid var(--hc-hud-line);   /* outline leaves the inset team stripe intact */
 }
-/* The POS cell takes the same dark plate as every .hud-box (white ink, #4526): no light-cell exception. */
+/* …except the timing strip's POS cell, which keeps its light plate: its ink is --hud-ink-dark
+   (design pass 2a), and the solid dark plate above (#announce in :is() outranks the POS rule)
+   painted the player's rank dark on dark (Bryce, iPhone, 2026-10-30). */
+/* (1,3,0) over the plate's (1,2,0); outside BROADCAST, whose tower has its own POS. */
+:root[data-ui-contrast="high"] #hud-box-pos:not(.hud-prof-broadcast *) { background: var(--hud-ink-light); }
 @media (forced-colors: active) { .hud-box { --hud-box-stripe: 0px; } } /* tokens.css supplies the system border */
 /* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
    A REAL RACE WATCH / HIGHLIGHTS run (body.bc-on). The picture is a

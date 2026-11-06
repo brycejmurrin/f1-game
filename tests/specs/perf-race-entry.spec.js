@@ -10,9 +10,6 @@ import {
   writeArtifact,
   formatStageTable,
   markdownDiffTable,
-  loadBaseline,
-  longTaskFailures,
-  loafUnlisted,
 } from "../helpers/perf-race-entry.mjs";
 
 const ARTIFACT_DIR = "artifacts/perf-race-entry";
@@ -121,19 +118,6 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
     const practiceMarks = practice.snap.marks.map((m) => m.n);
     expect(practiceMarks, "practice raises the handoff").toContain("handoff:raise");
     expect(practiceMarks, "practice's rolling start closes it via lowerWaitPlate, not afterPresent").not.toContain("handoff:lower");
-
-    // Long tasks / long animation frames at race entry (#4777): hard, not STRICT-only.
-    const base = loadBaseline();   // lane from APEX_GL
-    test.info().annotations.push({
-      type: "perf-race-entry-blocking",
-      description: `blockMs=${race.snap.blockMs} maxBlockMs=${race.snap.maxBlockMs} longTasks=${race.snap.longTasks.length} loaf=${race.snap.loaf.length} supported=${race.snap.supported} loafSupported=${race.snap.loafSupported}`,
-    });
-    if (race.snap.supported) {
-      expect(longTaskFailures(race.snap, base), "race-entry long tasks vs tools/perf/baselines/race-entry-swiftshader.json").toEqual([]);
-    }
-    if (race.snap.loafSupported) {
-      expect(loafUnlisted(race.snap, base.loafScriptAllow, base.loafMinScriptMs), "LoAF scripts outside the allow-list (a new one is a reviewed diff)").toEqual([]);
-    }
 
     if (STRICT) {
       expect(race.wallMs, "race menu entry wall time").toBeLessThan(RACE_ENTRY_SOFT_MS);

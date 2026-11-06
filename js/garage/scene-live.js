@@ -2,7 +2,7 @@
 const GarageLive = (function () {
   "use strict";
   const { HALF_W, Z_DOOR, scale, rgb, css } = GaragePrims;
-  const { SCREEN, GANTRY } = GarageEquipment;
+  const { SCREEN } = GarageEquipment;
 
 // ── the LIVE atlas ─────────────────────────────────────────────────────────
 // A SECOND, smaller atlas for everything that follows the game rather than
@@ -11,8 +11,6 @@ const GarageLive = (function () {
 // Separate from the 1024 dress on purpose — that one repaints on a team or
 // paint change and is full; this one is 512 and can be repainted per circuit
 // or per career round for a quarter of the upload.
-// Extra cells (gantry LCDs, desk spill, floor reflection) live in the free
-// 512×64 strip under the flag/race row — no new eager script, same 512 canvas.
 const LIVE = 512;
 const L_MAP    = { x: 0,   y: 0,   w: 256, h: 200 };
 const L_TRACE  = { x: 256, y: 0,   w: 256, h: 128 };
@@ -21,9 +19,6 @@ const L_POOL   = { x: 384, y: 128, w: 128, h: 128 };
 const L_BANNER = [{ x: 0, y: 256, w: 512, h: 64 }, { x: 0, y: 320, w: 512, h: 64 }];
 const L_FLAG   = { x: 0,   y: 384, w: 128, h: 64 };
 const L_RACE   = { x: 128, y: 384, w: 384, h: 64 };
-const L_GANTRY = { x: 0,   y: 448, w: 256, h: 64 };   // three hung LCD faces
-const L_SPILL  = { x: 256, y: 448, w: 128, h: 64 };   // soft screen spill onto the desk
-const L_REFLECT = { x: 384, y: 448, w: 128, h: 64 };  // subtle epoxy reflection sheen
 // Flags as stripes: [orientation, colours...]; "h" stacks top to bottom, "v"
 // runs left to right. Enough to read as the country at 0.4 m on a wall.
 const FLAGS = {
@@ -53,8 +48,7 @@ function paintLive(cv, team, liv, ctx) {
   // control points, with the round and the last result under it.
   {
     const R = L_MAP;
-    // Night: a slightly lifted panel so LIVE_OPTS.glow reads as an LCD, not a poster.
-    ctx2.fillStyle = (ctx && ctx.night) ? "#0c1218" : "#070a0e"; ctx2.fillRect(R.x, R.y, R.w, R.h);
+    ctx2.fillStyle = "#070a0e"; ctx2.fillRect(R.x, R.y, R.w, R.h);
     ctx2.fillStyle = css(scale(c1, 0.75)); ctx2.fillRect(R.x, R.y, R.w, 30);
     ctx2.fillStyle = "#f2f3f5"; ctx2.font = "700 18px system-ui, sans-serif";
     ctx2.textAlign = "left"; ctx2.textBaseline = "middle";
@@ -88,56 +82,10 @@ function paintLive(cv, team, liv, ctx) {
     ctx2.textAlign = "left";
   }
   // Soft gradients: the contact shadow under the car and the lamp pools.
-  // Night Shift / endurance (ctx.night) cools and lifts the pools so the bay
-  // reads as lit epoxy instead of a flat grey slab under dark keys.
-  const night = !!(ctx && ctx.night);
-  const poolInner = night ? "rgba(190,220,255,0.52)" : "rgba(255,238,205,0.34)";
-  const poolOuter = night ? "rgba(140,180,230,0)" : "rgba(255,238,205,0)";
   for (const [R, inner, outer] of [[L_SHADOW, "rgba(0,0,0,0.78)", "rgba(0,0,0,0)"],
-                                   [L_POOL, poolInner, poolOuter]]) {
+                                   [L_POOL, "rgba(255,238,205,0.34)", "rgba(255,238,205,0)"]]) {
     const gr = ctx2.createRadialGradient(R.x + R.w / 2, R.y + R.h / 2, 4, R.x + R.w / 2, R.y + R.h / 2, R.w / 2);
     gr.addColorStop(0, inner); gr.addColorStop(1, outer);
-    ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
-  }
-  // Gantry LCDs + desk spill + floor reflection — painted once into the free
-  // strip so drawDecal at LIVE_OPTS.glow makes the hung screens and the desk
-  // read as emissive without a second atlas or a new eager module.
-  {
-    // Fill-only (no stroke): scene-live.test.mjs counts stroke() as a map draw,
-    // so a stroked waveform here would fail the unhydrated-stub gate.
-    const R = L_GANTRY;
-    ctx2.fillStyle = "#05070a"; ctx2.fillRect(R.x, R.y, R.w, R.h);
-    for (let k = 0; k < 3; k++) {
-      const x0 = R.x + k * (R.w / 3) + 2, w = R.w / 3 - 4, y0 = R.y + 2, h = R.h - 4;
-      ctx2.fillStyle = night ? "#0e1620" : "#0b1016"; ctx2.fillRect(x0, y0, w, h);
-      ctx2.fillStyle = k === 1 ? css(scale(c2, night ? 1.35 : 1.1)) : (night ? "#9ad0ff" : "#ffc45a");
-      for (let i = 0; i <= 14; i++) {
-        const u = i / 14, px = x0 + 3 + (w - 6) * u;
-        const py = y0 + h * 0.55 - Math.sin(u * 8 + k * 1.7) * h * 0.22 - Math.sin(u * 19) * h * 0.07;
-        ctx2.fillRect(px - 1, py - 1.2, 2.2, 2.4);
-      }
-      // Bright status chip so the glow gate (>0.5 luma) fires on the face.
-      ctx2.fillRect(x0 + 3, y0 + 3, 10, 4);
-    }
-  }
-  {
-    const R = L_SPILL;
-    const cx = R.x + R.w / 2, cy = R.y + R.h * 0.35;
-    const gr = ctx2.createRadialGradient(cx, cy, 2, cx, cy, R.w * 0.55);
-    gr.addColorStop(0, night ? "rgba(170,210,255,0.55)" : "rgba(180,210,240,0.32)");
-    gr.addColorStop(0.55, night ? "rgba(120,160,210,0.18)" : "rgba(140,170,200,0.10)");
-    gr.addColorStop(1, "rgba(100,140,180,0)");
-    ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
-  }
-  {
-    // Radial (not linear): the scene-live unit fake canvas only stubs
-    // createRadialGradient; a linear fill would throw out of paintLive there.
-    const R = L_REFLECT;
-    const cx = R.x + R.w / 2, cy = R.y + R.h * 0.2;
-    const gr = ctx2.createRadialGradient(cx, cy, 2, cx, cy, R.h * 0.95);
-    gr.addColorStop(0, night ? "rgba(160,200,255,0.28)" : "rgba(220,230,240,0.16)");
-    gr.addColorStop(0.55, night ? "rgba(110,150,200,0.10)" : "rgba(180,190,200,0.06)");
-    gr.addColorStop(1, "rgba(80,100,120,0)");
     ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
   }
   // SPONSOR BANNERS: the career's backer leads, the team's own partners fill.
@@ -209,11 +157,10 @@ function paintTrace(cv, liv, now) {
     const w = R.w / 2 - 6;
     const y0 = R.y + 3;
     const h = R.h - 6;
-    c.fillStyle = "#0d141c"; c.fillRect(x0, y0, w, h);
-    c.strokeStyle = "rgba(140,175,210,0.28)"; c.lineWidth = 1;
+    c.fillStyle = "#0b1016"; c.fillRect(x0, y0, w, h);
+    c.strokeStyle = "rgba(120,150,175,0.22)"; c.lineWidth = 1;
     for (let g = 1; g < 4; g++) { c.beginPath(); c.moveTo(x0 + 4, y0 + h * g / 4); c.lineTo(x0 + w - 4, y0 + h * g / 4); c.stroke(); }
-    // Bright traces: the glow gate needs luma; a dim amber line looked painted-on.
-    c.strokeStyle = k ? css(scale(c2, 1.25)) : "#ffc45a"; c.lineWidth = 2.2; c.beginPath();
+    c.strokeStyle = k ? css(c2) : "#e2a33c"; c.lineWidth = 2; c.beginPath();
     for (let i = 0; i <= 28; i++) {
       const u = i / 28, px = x0 + 6 + (w - 12) * u;
       const py = y0 + h * 0.55 - Math.sin(u * 9 + t * (k ? 1.7 : 2.3)) * h * 0.22
@@ -221,16 +168,15 @@ function paintTrace(cv, liv, now) {
       if (i) c.lineTo(px, py); else c.moveTo(px, py);
     }
     c.stroke();
-    c.fillStyle = "#b6c2d2"; c.font = "700 11px system-ui, sans-serif"; c.textAlign = "left"; c.textBaseline = "top";
+    c.fillStyle = "#9aa4b2"; c.font = "700 11px system-ui, sans-serif"; c.textAlign = "left"; c.textBaseline = "top";
     c.fillText(k ? "BRAKE TEMP" : "ERS SOC", x0 + 6, y0 + 4);
-    c.textAlign = "right"; c.fillStyle = k ? css(scale(c2, 1.2)) : "#ffc45a";
+    c.textAlign = "right"; c.fillStyle = k ? css(c2) : "#e2a33c";
     c.fillText(k ? `${410 + Math.round(Math.sin(t * 0.7) * 35)}°C` : `${Math.round(62 + Math.sin(t * 0.4) * 30)}%`, x0 + w - 6, y0 + 4);
   }
 }
 // The quads the live atlas lands on. `floor` is its own group: the shadow and
 // pools draw with no glow (they are not signage), everything else at the
-// dress's 0.62. Gantry LCDs, desk spill and a thin epoxy reflection share the
-// same draw — still one createTexMesh per side, no new eager script.
+// dress's 0.62.
 function buildLive(FIXTURES) {
   const g = {};
   for (const k of ["mid", "floor", "nx", "px", "door"]) g[k] = { pos: [], nrm: [], uv: [], idx: [] };
@@ -245,15 +191,6 @@ function buildLive(FIXTURES) {
     const F = FIXTURES[i], r = F[13] ? 2.2 : 1.6, x = F[0] + F[6] * 1.2, z = F[2] + F[8] * 1.2;
     dquadR(g.floor, [[x - r, 0.005, z - r], [x + r, 0.005, z - r], [x + r, 0.005, z + r], [x - r, 0.005, z + r]], [0, 1, 0], L_POOL);
   }
-  // Soft pools near the nose / rear-jack corners (no mesh lamps — 18k-tri cap).
-  for (const [lx, lz] of [[-2.85, 3.35], [3.05, -3.55]]) {
-    const r = 1.35;
-    dquadR(g.floor, [[lx - r, 0.005, lz - r], [lx + r, 0.005, lz - r], [lx + r, 0.005, lz + r], [lx - r, 0.005, lz + r]], [0, 1, 0], L_POOL);
-  }
-  // Subtle epoxy reflection under the timing screen and along the -X desk —
-  // a thin sheen, not a second car mirror (that stays in scene.js).
-  dquadR(g.floor, [[sx - 1.2, 0.007, sz - 1.6], [sx + 1.2, 0.007, sz - 1.6], [sx + 1.2, 0.007, sz + 0.4], [sx - 1.2, 0.007, sz + 0.4]], [0, 1, 0], L_REFLECT);
-  dquadR(g.floor, [[-5.4, 0.007, GANTRY.z - 1.6], [-3.6, 0.007, GANTRY.z - 1.6], [-3.6, 0.007, GANTRY.z + 1.6], [-5.4, 0.007, GANTRY.z + 1.6]], [0, 1, 0], L_REFLECT);
   // Two live trace tiles over the dress screen bank (D_SCREEN spans z 2.15..
   // -0.95, y 1.10..2.65 on -X; each tile is a third by a half of it), 5 mm
   // proud of THAT quad — which stands 0.19 m off the wall on the monitor bank
@@ -262,21 +199,6 @@ function buildLive(FIXTURES) {
   // and the screens showed only the dress paint.
   const xt = -xw + 0.195;
   dquadR(g.nx, [[xt, 1.10, 2.15], [xt, 1.10, 0.08], [xt, 1.875, 0.08], [xt, 1.875, 2.15]], [1, 0, 0], L_TRACE);
-  // Lower bank row: same live atlas cell so four of six dress tiles carry glow.
-  dquadR(g.nx, [[xt, 1.875, 2.15], [xt, 1.875, 0.08], [xt, 2.65, 0.08], [xt, 2.65, 2.15]], [1, 0, 0], L_TRACE);
-  // Hung gantry LCDs (GarageEquipment.monitorGantry): housing centre at x+0.11
-  // with half-depth 0.01, so the bay-facing face is at x+0.12; sit 6 mm proud
-  // of THAT face (into the bay, less-negative x) so the depth test keeps the
-  // atlas over the LCD mesh instead of burying it inside the bezel.
-  const gx = GANTRY.x + 0.126;
-  for (let i = 0; i < GANTRY.dz.length; i++) {
-    const cz = GANTRY.z + GANTRY.dz[i], hy = 0.105, hz = 0.16;
-    const cell = { x: L_GANTRY.x + i * (L_GANTRY.w / 3), y: L_GANTRY.y, w: L_GANTRY.w / 3, h: L_GANTRY.h };
-    dquadR(g.nx, [[gx, 1.92 - hy, cz + hz], [gx, 1.92 - hy, cz - hz], [gx, 1.92 + hy, cz - hz], [gx, 1.92 + hy, cz + hz]], [1, 0, 0], cell);
-  }
-  // Desk spill under the gantry (worktop at y 0.86 in buildProps): soft glow
-  // pooled on the bench so Night Shift stops reading as a flat grey slab.
-  dquadR(g.nx, [[-5.35, 0.872, GANTRY.z - 1.35], [-4.55, 0.872, GANTRY.z - 1.35], [-4.55, 0.872, GANTRY.z + 1.35], [-5.35, 0.872, GANTRY.z + 1.35]], [0, 1, 0], L_SPILL);
   // Banners on the side walls, in the y 1.72-2.12 band both walls have free
   // forward of the data boards.
   dquadR(g.nx, [[-xw, 1.72, 4.6], [-xw, 1.72, 2.4], [-xw, 2.12, 2.4], [-xw, 2.12, 4.6]], [1, 0, 0], L_BANNER[0]);
@@ -303,8 +225,6 @@ function dquadR(out, c, n, region) {
 
   // Atlas rects / FLAGS / z2z / dquadR stay module-local (paint + build use them).
   // LIVE stays public — GarageScene.uploadLive sizes the canvas from it.
-  // L_GANTRY / L_SPILL / L_REFLECT stay local; garage-live unit tests read them
-  // through build() vertex counts and paintLive pixel probes.
   return { LIVE, paintLive, paintTrace, build: buildLive };
 })();
 if (typeof window !== "undefined") window.GarageLive = GarageLive;

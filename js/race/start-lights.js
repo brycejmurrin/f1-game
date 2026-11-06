@@ -114,17 +114,10 @@ var StartLights = (function () {
         if (!_countCam) _countCam = { eye: [0, 0, 0], target: [0, 0, 0], fov: 50, far: FlybySeq.FAR, fog: FlybySeq.FOG, cine: true, startLights: true };
         for (let i = 0; i < 3; i++) { _countCam.eye[i] = fb.eye[i]; _countCam.target[i] = fb.tgt[i]; }
         _countCam.fov = fb.fov;
-        if (G.dbgCam !== _countCam) { G.dbgCam = _countCam; syncOnboardDressing(); }
+        G.dbgCam = _countCam;
       } else if (_countCam && G.dbgCam === _countCam) {
         G.dbgCam = null;
-        syncOnboardDressing();
       }
-    }
-
-    // Onboard-only dressing (the helmet visor, body[data-helmet-cam]) follows the camera on screen, so the grid cuts
-    // drop it and the hand-back to the player's camera restores it (#4527). CamModes (js/camera/mode-switch.js) owns the rule and listens for this event.
-    function syncOnboardDressing() {
-      if (typeof document !== "undefined" && document.dispatchEvent && typeof Event === "function") document.dispatchEvent(new Event("apex:cam-onscreen"));
     }
 
     function update() {

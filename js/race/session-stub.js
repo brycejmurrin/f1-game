@@ -85,7 +85,7 @@ var PitLane = {
     cue: () => null, windowOf: () => null, worthStopping: () => false,
     estimate: () => ({ lossS: 0, gapS: null, marginS: null, caution: false, estimated: true }),
     status: () => ({}), info: () => ({}), arm: function () {}, setNext: function () {},
-    serviceCar: function () {}, redFlagFit: () => false, boxSquare: () => false, boxThroughFor: () => -1,
+    serviceCar: function () {}, boxSquare: () => false, boxThroughFor: () => -1,
     cueM: 0, boxCueM: 0, moveM: 0, boxTol: 0, squareByM: 0, squareLat: 0,
     servedS: 0, mergeS: 0,
     // hud.js (tyre chip every frame, minimap cue) and the driving-coach pit

@@ -44,15 +44,6 @@ const GpuTestRun = (function () {
       gpu: gp.length ? { n: gp.length, p50: r2(pct(gp, 0.5)), p95: r2(pct(gp, 0.95)) } : null,
       links: counts.links, pipes: counts.pipes };
   }
-  // Per-pass GPU ms (?gpuTimer=1): { label: { n, p50, p95 } } from the samples resolved in a window; null when none. Pure.
-  function passStats(pass) {
-    const out = {};
-    for (const k of Object.keys(pass || {})) {
-      const a = pass[k].filter((x) => x >= 0).sort((x, y) => x - y);
-      if (a.length) out[k] = { n: a.length, p50: r2(pct(a, 0.5)), p95: r2(pct(a, 0.95)) };
-    }
-    return Object.keys(out).length ? out : null;
-  }
   // Least-squares fit of frame p50 (ms) against the scaled pixel fraction (scale²) over the sweep phases:
   // slope = ms a full-resolution frame spends on pixels, intercept = everything else. Pure.
   function fillSlope(rows) {
@@ -142,11 +133,7 @@ const GpuTestRun = (function () {
         if (ph.boost) { soakBoost(true); r.boost = { at: now, maxMs: 0, deployed: false, links: null, pipes: null }; }
       } else if (sample.key && sample.key !== r.gpuSeen) {
         r.gpuSeen = sample.key;
-        if (sample.sampleAt >= r.measureAt) {
-          r.gpu.push(sample.ms);
-          const bp = B && B.gpuByPass ? (() => { try { return B.gpuByPass(); } catch (_) { return null; } })() : null;
-          if (bp) for (const k of Object.keys(bp)) if (Number.isFinite(bp[k])) (r.pass[k] || (r.pass[k] = [])).push(bp[k]);
-        }
+        if (sample.sampleAt >= r.measureAt) r.gpu.push(sample.ms);
       }
     }
     if (r.boost && r.boost.links === null && r.measuring) {
@@ -164,14 +151,13 @@ const GpuTestRun = (function () {
       const row = Object.assign({ id: ph.id, scale: r2(B && B.getRenderScale ? B.getRenderScale() : null),
         mirror: ph.mirror || r.saved.mirror, tier: (() => { try { return PerfGov.tier(); } catch (_) { return null; } })(),
         gpuSampling: { state: r.gpu.length ? "fresh" : r.gpuState || "no fresh sample", basis: "resolved-during-window" } },
-      phaseStats(r.deltas, r.gpu, { links: r.counts.links - (r.c0 ? r.c0.links : 0), pipes: r.counts.pipes - (r.c0 ? r.c0.pipes : 0) }),
-        { gpuByPass: passStats(r.pass) });
+      phaseStats(r.deltas, r.gpu, { links: r.counts.links - (r.c0 ? r.c0.links : 0), pipes: r.counts.pipes - (r.c0 ? r.c0.pipes : 0) }));
       if (r.boost) {
         row.boost = { deployed: r.boost.deployed, firstMaxMs: r2(r.boost.maxMs), windowMs: BOOST_WINDOW_MS, links: r.boost.links, pipes: r.boost.pipes };
         r.boost = null; soakBoost(false);
       }
       r.rows.push(row);
-      r.deltas = []; r.gpu = []; r.pass = {}; r.measuring = false; r.c0 = null;
+      r.deltas = []; r.gpu = []; r.measuring = false; r.c0 = null;
       r.i++;
       if (r.i >= PHASES.length) { finish("complete"); return; }
       r.phaseAt = now; r.prev = 0;
@@ -190,7 +176,7 @@ const GpuTestRun = (function () {
     const B = backend();
     try { if (B && B.gpuTimer) B.gpuTimer(r.saved.gpuOn); } catch (_) { /* no timer */ }
     const sweep = r.rows.filter((x) => /^s\d+$/.test(x.id));
-    const result = { schema: "apex26.gpu-test/1", reason, settleMs: SETTLE_MS, measureMs: MEASURE_MS, gpuTimer: r.timer, adapter: (() => { try { return B && B.gpuAdapter ? B.gpuAdapter() : null; } catch (_) { return null; } })(),
+    const result = { schema: "apex26.gpu-test/1", reason, settleMs: SETTLE_MS, measureMs: MEASURE_MS, gpuTimer: r.timer,
       phases: r.rows, fill: fillSlope(sweep),
       mirrorMs: (() => { const a = r.rows.find((x) => x.id === "default"), b = r.rows.find((x) => x.id === "mirrorOff");
         return a && b && a.p50 != null && b.p50 != null ? r2(a.p50 - b.p50) : null; })(),
@@ -216,7 +202,7 @@ const GpuTestRun = (function () {
     let timer = null;
     try { timer = B && B.gpuTimer ? B.gpuTimer(true) : null; } catch (_) { timer = null; }
     const counts = { links: 0, pipes: 0 };
-    const run = _run = { raf: 0, i: -1, phaseAt: 0, prev: 0, deltas: [], gpu: [], pass: {}, rows: [], measuring: false, c0: null, saved, counts,
+    const run = _run = { raf: 0, i: -1, phaseAt: 0, prev: 0, deltas: [], gpu: [], rows: [], measuring: false, c0: null, saved, counts,
       timer: timer ? { supported: !!timer.supported } : { supported: false }, unhook: hookCounts(counts), onDone: opts.onDone || null };
     _last = { state: "starting" };
     log("start " + PHASES.length + " phases");
@@ -232,7 +218,7 @@ const GpuTestRun = (function () {
   }
 
   return {
-    PHASES, SETTLE_MS, MEASURE_MS, BOOST_WINDOW_MS, TOTAL_MIN, phaseStats, passStats, fillSlope, hookCounts,
+    PHASES, SETTLE_MS, MEASURE_MS, BOOST_WINDOW_MS, TOTAL_MIN, phaseStats, fillSlope, hookCounts,
     start, stop: () => finish("stopped"), active: () => !!_run,
     status: () => Object.assign({}, _last, _run ? { state: _run.i < 0 ? "starting" : "phase " + (_run.i + 1) + "/" + PHASES.length + " " + PHASES[_run.i].id } : null),
   };

@@ -1615,8 +1615,7 @@ function gridOrderFor(base) {
 // procedure once the track is clear — keeping laps, the race clock, best laps,
 // grid positions and penalties. Lapped cars keep their lap count and grid
 // behind (prog is cumulative). A race already at its flag stands as it is.
-// B5.14.4: every car is repaired and gets one free tyre change (pits.redFlagFit); a red never resumed classifies
-// on the penultimate lap's order (B5.14.2, endRace). Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
+// Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
 // race never goes red (RaceControl holds a safety car instead).
 // STREAM: the restart re-runs the countdown, so it draws one extra simRnd()
 // for the new startHold. Deliberate — the lights are a real second start.
@@ -1629,7 +1628,7 @@ function redFlagRestart() {
   // car 150 m behind a leader that had just crossed (one lap number lower, not
   // lapped) a full lap down after the restart. The leader re-runs its lap; every
   // other car keeps the laps it was actually down at the flag, by distance.
-  const lead = order[0]; RaceControl.trimLedger(lead ? Math.max(0, lead.lap - 1) + 1 : 0);   // the laps the leader re-runs are not in the ledger twice
+  const lead = order[0];
   const leadProg = lead ? lead.prog : 0, leadLap = lead ? Math.max(0, lead.lap - 1) : 0;
   order.forEach((c, i) => {
     const slot = TrackMesh.gridSlot(track, i);
@@ -1678,9 +1677,7 @@ function redFlagRestart() {
     // pit window on most circuits, so a car holding the lane when the flag flew
     // would restart still reading inLane() — pinned at the pit limiter for ~12 s
     // on Monza. pitStops/pitNext/pitPlan are untouched: same race. Ledger 2026-09-22.
-    // B5.14.4 (vii, viii): a suspension allows a tyre change and repair of accident damage, free of the pit lane.
-    // pitStops is not counted, so a red satisfies the two-compound rule the way the regs let it (#4834).
-    pits.clearArm(c); Damage.reset(c); pits.redFlagFit(c);
+    pits.clearArm(c);
     // AND IT IS A STANDING START: re-plan the launch. gridUp arms this once,
     // launchDone disarms it when the first getaway ends, and nothing re-armed
     // it — so the restart the countdown calls "a real second start" was the
@@ -1710,7 +1707,7 @@ function redFlagRestart() {
   Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
   return true;
 }
-function gridUp(preOrder) { RaceControl.trimLedger(0);
+function gridUp(preOrder) {
   // WHERE THIS GRID CAME FROM, and the reason it is worth a variable: the
   // else-branch below SPLICES THE LOCAL PLAYER TO P12, which is a per-peer
   // adjustment — car X ends up at a different gridPos on each machine. A
@@ -2927,7 +2924,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // Qualifying ends in its own sheet: the player's flying lap is measured
   // against the simulated field and becomes the grid. Mirrors the TT return
   // below — first branch out, before any race classification is built.
-  if (isQuali()) { RaceCeremony.want(false);   // a natural flag armed it but only afterClassify consumes it: no leak into the next race's SKIP TO RESULTS
+  if (isQuali()) {
     cars = qualiField || cars; qualiField = null;   // handed back: left set, quitToMenu's mid-quali swap later replaced the RACE's field with this one
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
@@ -2942,7 +2939,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
     qualiNet.refreshQualiGate();
     return;
   }
-  if (isTimeTrial()) { RaceCeremony.want(false); buildTTResults(); els.results.hidden = false; return; }   // same leak as quali above
+  if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   careerSettlement = null;   // whatever the last career round paid is not this race's news
   // The only human RETIRED and the race ended early (RaceControl.finishDelay
   // counts a retired human as done). An AI whose drawn failure it had already
@@ -2970,7 +2967,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // race's average speed, come off its progress (RaceControl.runOrder).
   const run = cars.filter((c) => !c.finished && !c.retired && !c.dsq);
   const leadProg = Math.max(0, ...fin.concat(run).map((c) => c.prog || 0));
-  run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT)))); if (suspended) RaceControl.penultimateOrder(run);   // B5.14.2: a red never resumed takes the order of the lap before the signal lap
+  run.sort(RaceControl.runOrder(Math.max(0.25 * vTop(), leadProg / Math.max(1, raceT))));
   const out = cars.filter((c) => c.retired).sort((a, b) => b.prog - a.prog);
   // LAPS FIRST, then the 90 % line for every car, running or retired (RaceControl.classify).
   // THE CLASSIFICATION IS THE HOST'S — see netOrder().
@@ -3414,7 +3411,6 @@ const G = {
   onPeerQuali: (...a) => qualiNet.onPeerQuali(...a),
   onPeerQualiLive: (...a) => qualiNet.onPeerQualiLive(...a),
   openQualiForNet: (...a) => qualiNet.openQualiForNet(...a),
-  leaveQualiSheet: () => { qualiSheet.close(); quali.clear(); session = "race"; qualiNet.resetOnBackWithAbort(); },
   refreshQualiGate: (...a) => qualiNet.refreshQualiGate(...a),
   // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
   // older peer's boolean meaningful: it only moves the rule across the
@@ -4333,7 +4329,7 @@ function quitToMenuAfterCtxLost() {
     if (_softEl) _softEl.style.visibility = "";
   } catch (_) { /* harness: recovery must not throw over teardown */ }
   if (typeof restoreMenuAfterGraphicsReset === "function") restoreMenuAfterGraphicsReset();
-  if (typeof showCtxLostNotice === "function") showCtxLostNotice({ force: true });
+  if (typeof showCtxLostNotice === "function") showCtxLostNotice();
   else if (typeof announce === "function") announce(CTX_LOST_NOTICE_MSG, 5, "info");
 }
 if (typeof GfxEscalation !== "undefined" && GfxEscalation.registerMenuRecover) {
@@ -5080,11 +5076,23 @@ function updateCar(c, dt, ranked) {
 
 
   // --- overtake mode --- (FIA 2026 B7.2.3(c), js/race/overtake-mode.js)
-  // Under 1 s behind the car ahead AT THE DETECTION LINE earns 0.5 MJ, granted at the timing line and spent
-  // over that lap. The car ahead ON THE ROAD (docs/PHYSICS.md), not ranked[rank-2] (a leader has none; a
-  // lapped or finished car could count). Only a car inside OT_GAP·speed (+1 m) can earn. The O(n) ahead walk
-  // runs only when a detection crossing can earn or the car holds allowance (it was ~17 % of updateCar on
-  // Monza 22-car). Search radius stays non-negative while reversing (a negative reach skips a bucket).
+  // Under 1 s behind the car ahead AT THE DETECTION LINE earns a 0.5 MJ
+  // allowance, granted at the timing line and spent at will over that lap.
+  // The car ahead ON THE ROAD (docs/PHYSICS.md), not ranked[rank-2]: that is the
+  // classification neighbour — a leader has none, it can sit a lap away, and a
+  // finished car coasting right ahead would count.
+  // Only a car inside OT_GAP·speed can earn (`ahead` is read only then): the traffic scan's cheap reject, +1 m margin.
+  //
+  // The O(n) ahead walk is only needed when a detection-line crossing can earn
+  // OT (otDetectOpen + crossed since last tick), or the car already holds
+  // allowance (AI fire / spend). Seed the crossing trackers the same way
+  // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
+  // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
+  // Keep the ahead-search radius meaningful while reversing. A held allowance
+  // can outlive a forward pass, so c.speed may be negative even though this
+  // scan is still requested; a negative arc reach makes the bucket walker skip
+  // the adjacent bucket and can hide the car ahead. Reverse has no closing
+  // speed for OT timing, but it still needs a finite, non-negative search.
   const otSpeed = Math.max(0, c.speed);
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * otSpeed + 1;
   if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
@@ -6077,11 +6085,24 @@ function updateCarBicycle(c, dt, ranked, S) {
     // accel so it eases in rather than toggling: trail-braking still rotates the
     // car, but the hard-braking turn-in spike is gone.
     const brakeFade = 1 - 0.8 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1);
-    // Over-rotation: ease the assist by how far the yaw rate exceeds the rate that follows the road
-    // (rNeed = v·k), same sign only, so it bites only on the transient overshoot (not steady state, straights
-    // or a countersteer) — tied to over-rotation, not raw speed (a speed taper just understeers wide).
-    // Off-track the road-following assist fades to zero ~3 m past the road edge so the driver can recover
-    // (on grass it shoves toward the turn); CONTINUOUS in |x|, not gated on c.offroad, so the kerb has no snap.
+    // Curb entry over-rotation generally (not just under braking): the assist
+    // tracks curvature k, but if the car is ALREADY yawing into the corner
+    // faster than k needs, adding more lock just cuts it to the apex. Ease the
+    // assist by how far the current yaw rate exceeds the rate that follows the
+    // road (rNeed = v·k). Same-sign only, so it does nothing at steady state
+    // (yaw ≈ rNeed), on straights (k ≈ 0), or while countersteering a slide —
+    // it only bites on the transient overshoot. This is the right answer to
+    // "taper the assist at speed": tie it to actual over-rotation, not raw speed
+    // (a blanket speed taper would just make the car understeer wide).
+    // Off-track, fade out the road-following assist so the driver keeps full
+    // manual authority to recover. On grass the car isn't on the racing line, so
+    // steering toward the track's curvature just shoves it one way ("pushed
+    // right / toward the turn"). Full assist on tarmac, tapering to zero ~3 m
+    // past the road edge. CONTINUOUS in |x|, not gated on c.offroad (which
+    // excludes the kerb and would drop ~kerbWidth/3 of the help in one tick at
+    // the kerb's outer edge — a snap). The ramp begins at the road edge and
+    // crosses the kerb smoothly (slightly less assist ON the kerb — more
+    // manual authority there, which kerb-riding wants anyway).
     const offAssistFade = Math.max(0, 1 - Math.max(0, Math.abs(c.x) - hw) / 3);
     // --- the car drives ITS OWN line, not the centreline (see frenetH).
     // Everything below reads kPath, not the centreline's curvature k: the
@@ -6386,24 +6407,59 @@ function updateCarAdvance(c, dt, ranked, S) {
       if (c.local) announce("WRONG WAY", 1.0, "warning");
       c.wrongCueT = 1.0;
     }
-    // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or stopped on-track too long. The last
-    // clause catches a car WEDGED against a barrier at |x| < hw (no wallT, not offroad), and fires only
-    // while the DRIVER presses gas (not onThrottle: tilt's autoThrottle() is always on); a parked car is
-    // never rescued. Touch steering has no gas pedal (the GAS button hides under auto-throttle), so there
-    // auto gas counts as asking — but only with no car contact (a pack shuffle is not a wedge) and below
-    // 3 m/s on the vStd scale, so a slow OVERALL SPEED is not "stopped" (the 3 m/s gate itself is
-    // deliberately absolute, per the vstd-lint reason).
+    // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or simply
+    // crawling/stopped on-track for too long. The last clause is the catch-all
+    // for being WEDGED against a corner barrier (e.g. an inside tyre wall on an
+    // incline): on open circuits wall contact doesn't set wallT and a car pinned
+    // at |x| < hw isn't "offroad", so without it the car could sit at 0 forever.
+    // Only rescue if throttle is actively pressed but the car isn't moving —
+    // that's the wedged-against-a-wall case. A player who deliberately parks
+    // (lets off gas) is never rescued, regardless of how long they sit still.
+    // The DRIVER's pedal, not onThrottle: on tilt that is autoThrottle() (always
+    // true), which teleported a phone player who parked or was boxed in a pile-up
+    // to x = 0 after 3 s — auto gas is not a driver asking.
+    //
+    // EXCEPT IN TOUCH STEERING, where the player has no pedal to release. The GAS
+    // button is hidden exactly when auto-throttle is on (see els.btnThrottle.hidden
+    // above), so on a phone in touch mode there is no key, no button and no pad for
+    // Input.throttle() to read: gasPressed was permanently false and this rescue —
+    // the ONLY one that covers being wedged against a barrier with |x| < hw, where
+    // beached/wrongWay/wallT all stay false — became unreachable on exactly the
+    // devices most likely to need it. There, auto gas IS the driver asking.
+    // Two narrowings keep the original fix intact. contactT excludes a pile-up
+    // shuffle: a car rubbing another car is not wedged against a barrier and must
+    // not be teleported out of the pack. And the auto-gas branch tests the
+    // driveTune.PACE-NORMALISED speed, because the 3 m/s gate below is deliberately absolute
+    // (a stopped detector on the scale REVERSE_MAX sets, per the vstd-lint reason)
+    // — at a low OVERALL SPEED a car driving perfectly well sits under it, and a
+    // driver who never touched a pedal must not be teleported for driving slowly.
+    // vStd divides by driveTune.PACE, so this reads "stopped for its own pace", which is the
+    // question actually being asked.
     const autoGas = autoThrottle() && (c.contactT || 0) === 0 && vStd(c.speed) < 3;
     const gasPressed = inp ? !!inp.throttle : (autoGas || Input.throttle());
     const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);
     // Under a RED flag the whole field is HELD below that gate on purpose (the
     // red cap is ~2 % of vTop): stopped is the instruction, not being stuck.
     const redHeld = raceCtl.level >= 4;
-    // Off-track is not stuck: the boundary sits ~9 m past the road edge, so a driver in a wide run-off may
-    // be in full control. Beached needs the car going nowhere, just ABOVE the grass-drag floor
-    // (GRASS_V * 0.6 * max(PACE, 0.05) = 10.8 m/s at pace 1; a stuck car idles at the floor) and PACE-scaled
-    // like it — a bare `GRASS_V * 0.6 + 1.5` holds only at PACE 1 (above ~1.14 never rescues, below ~0.57
-    // teleports a driver in control).
+    // Being OFF-TRACK is not the same as being stuck. The driving boundary sits
+    // ~9 m beyond the road edge, so a driver can be metres into a wide run-off,
+    // fully in control and steering back to the track; a bare c.offroad clause
+    // would teleport them after 3 s (x = 0, heading force-aligned, speed RAISED
+    // to 16 m/s). Rescue is for being beached, so it needs the car to actually
+    // be going nowhere — the principle stoppedOnTrack applies to a parked car.
+    // Threshold sits just ABOVE the off-track speed floor, not below it. Grass drag
+    // bottoms the car out at GRASS_V * 0.6 = 10.8 m/s, so a `< 8` gate could never
+    // be reached by a car stuck in the run-off — it idles along at the floor
+    // forever, above the gate, and never counts as beached. Measured: a wrong-way
+    // car sat at 10.8 m/s and x = -10.9 while its rescue timer decayed back to 0.
+    //
+    // driveTune.PACE-SCALED, exactly like the floor it sits above. The floor itself is
+    // `GRASS_V * 0.6 * max(driveTune.PACE, 0.05)` (see the grass-drag clause), so a bare
+    // `GRASS_V * 0.6 + 1.5` only clears it at driveTune.PACE = 1 — the one setting the
+    // invariant above was measured at. Above ~1.14 the floor climbs past the
+    // gate and a beached car is never rescued; below ~0.57 the gate climbs past
+    // ordinary run-off speeds and a driver in full control is teleported to
+    // x = 0 after 3 s — both bugs above, through the OVERALL SPEED slider.
     const beached = beachedAt(c);
     // A car serving a stop is not stuck: it is held in its box at 0 with the
     // throttle down (touch auto-gas holds it for you), and creep-in plus the
@@ -6422,12 +6478,29 @@ function updateCarAdvance(c, dt, ranked, S) {
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
   } else if (!c.human && state === "race" && !c.finished) {
-    // AI rescue: an AI beached or pinned (barrier or car) is clamped back onto the track with some speed
-    // after a few seconds. contactT is a PATIENCE knob (AiDrive.aiRescueDelay), not a veto: car-on-car is
-    // the commonest real stuck. Past AiDrive.digOutBudget, rescue may arm while dig-out is still on (a
-    // sandwich otherwise crawls forever), and escalation stays HELD while it is (AiDrive.digOutHeld). A car
-    // HELD in its box, or QUEUED behind a stop (capBlocks), is not stuck — unless dig-out already failed,
-    // when the escalate path below still fires onto laneX.
+    // Lightweight AI rescue: an AI beached in the grass or pinned against a
+    // barrier or another car gets put back on the drivable surface after a few
+    // seconds, so it can't crawl in a run-off — or stay welded to the player —
+    // for the rest of the race. AI is kinematic, so the reset just clamps
+    // lateral position onto the track and restores some speed.
+    //
+    // contactT is a PATIENCE knob (AiDrive.aiRescueDelay), not a veto: a veto
+    // leaves a car wedged against another — the commonest real stuck — never
+    // rescued, while a pack shuffle clears in well under a second and never
+    // reaches the longer contact timer.
+    // Dig-out is the first recovery; when it fails (wall both sides, sandwich),
+    // unstuckActive used to permanently veto rescue — cars crawled at 0 m/s
+    // with stuckT climbing forever (monaco field: 7.6 s, rescueT = 0). Past
+    // AiDrive.digOutBudget, rescue may arm even while dig-out is still on.
+    // A car HELD in its box is parked on purpose, not stuck (every AI stop was
+    // being rescued onto the racing line 1.5-2 s after the tyres went on).
+    // A car QUEUED in the lane behind a stop (capBlocks, the crawl floor) is
+    // held by a car, not stuck: rescuing it fired it at 8 m/s into the parked
+    // car it was waiting for — unless dig-out has already failed (laneX
+    // overwrite makes lateral dig-out useless in the pit), in which case the
+    // escalate path still fires onto laneX below.
+    // Escalation is HELD while dig-out stays on (AiDrive.digOutHeld): a partial
+    // yank that dips stuckT under the line must not re-veto the rescue.
     c.digEscHeld = AiDrive.digOutHeld(c.digEscHeld, AiDrive.digOutEscalated(c.stuckT, aiT, !!track.street), unstuckActive);
     const digEsc = c.digEscHeld;
     const laneQueueOk = !(queued && pits.inLane(c)) || digEsc;
@@ -7011,12 +7084,23 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
     // centreline finished is empty; retry until it yields lights. Tracks always
     // produce a full set once complete, so this self-heals in a frame.
     if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
-    // Time-dependent lamps: dim and WARM at twilight, full and neutral by deep night, no hard step. Dusk
-    // holds the sun at ~10-20° all session, so dusk/dawn ramp by elevation only, and a real night session
-    // (sunY kept slightly positive for sky glow) stays full — the same branching as _floodEmit. (A fixed
-    // sunY ramp pinned dusk lamps bright enough to blow out the wet-road SSR.)
-    // LAMP TEMPERATURE: signed white balance over each lamp's colour and the twilight ramp, −1 warm
-    // (~2700K) to +1 cool (~6500K); green held, red↑/blue↓ warm. Shared by the night and daytime-flood paths.
+    // Time-dependent lamps: brightness + COLOUR ramp with sun elevation.
+    // At twilight (sun near/just below horizon) the lamps are dim and WARM, as if
+    // freshly switched on / still warming up; by deep night they reach full
+    // brightness and cool to their neutral tint. Smooth, no hard dusk/night step.
+    // The dusk sky sits at a near-constant ~10-20 degree sun elevation for the
+    // WHOLE session (see the dusk sunDir above) — a (0.07-sy)/0.22 ramp pins
+    // at nightF=0 the entire time, stuck at a fixed 0.34 floor no matter how
+    // bright that golden-hour sky still is. Lamps that bright, fed
+    // through the wet-road SSR mirror, blew out the whole reflected scene.
+    // Full "night" sessions deliberately keep sunY slightly positive for the sky
+    // glow (see _floodEmit below) — ramp by elevation ONLY for dusk/dawn, and
+    // stay at full brightness for a real night session, same branching as
+    // _floodEmit uses.
+    // LAMP TEMPERATURE: a signed white-balance layered over each lamp's own
+    // colour + the automatic twilight warmth ramp. −1 warm (sodium ~2700K),
+    // +1 cool (LED/broadcast ~6500K). Green held near-constant; red↑/blue↓ warm.
+    // Shared by the night and daytime-flood paths.
     const _lt = LT.lampTemp || 0;
     const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
     const _ltg = 1 - Math.abs(_lt) * 0.02;
@@ -7088,12 +7172,39 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
     // setFrameLights fills allLights with the SCALED full set when per-chunk is
     // on; off, nothing consumes it, so leave it null rather than the raw list.
     if (!(frame.perChunkLights > 0)) { frame.allLights = null; frame.allLightsGen = 0; }
-    // Pass the knob's VALUE, not a flag: PER-CHUNK LAMPS (0..1) > 0 turns per-chunk lamp sets on and doubles
-    // as the track-lamp intensity scale (each chunk's up-to-24 lamps all reach it, so it needs a dimmer).
-    // SHEDS AT TIER 1, the earliest rung (SSR 2, car shadows 3, SSAO/god-rays/bloom/lampVol 4): its cost is
-    // per-fragment and unbounded — every filled lamp slot runs the full lighting path — and cockpit + night +
-    // perChunkLights=1 once held 380% CPU for 22 minutes on 40 frames, which on real hardware is a GPU
-    // watchdog reset (context lost). The floored tier after a crash (js/perf/governor.js sentinel) has it off.
+    // Pass the knob's VALUE, not a flag. PER-CHUNK LAMPS is a 0..1 amount: > 0
+    // turns per-chunk lamp sets on and doubles as the track-lamp intensity
+    // scale, because the feature genuinely delivers more light per fragment
+    // (each chunk gets up to 24 lamps that actually reach it instead of sharing
+    // one global cull) and needs a dimmer to be usable at the shipped LAMP LEVEL.
+    // SHEDS AT TIER 1 — the ladder every other expensive feature is already on
+    // (SSR at 2, car shadows at 3, SSAO/god-rays/bloom/lampVol at 4). PER-CHUNK
+    // LAMPS was the one discretionary renderer feature with NO tier gate at
+    // all, so a device that could not afford it had no way out except the
+    // player noticing.
+    //
+    // It needs the EARLIEST rung, not the latest, because its cost is
+    // per-fragment and unbounded rather than a fixed pass. The lit shader loops
+    // the bound lamp slots per fragment; without per-chunk most slots hold lamps
+    // nowhere near it, so the range reject fires at once and they cost almost
+    // nothing. Per-chunk deliberately fills those slots with lamps that DO
+    // reach — the whole point of the feature — so far more iterations run the
+    // full lighting path. Cockpit view compounds it: the camera sits against
+    // near geometry and now carries reflective mirror surfaces.
+    //
+    // MEASURED, by accident: every camera mode rendered 20 frames
+    // in seconds, then cockpit + night + perChunkLights=1 held 380% CPU for 22
+    // MINUTES on 40 frames in the same harness. On real hardware a frame that
+    // cannot finish inside the driver's watchdog is a GPU reset — context lost,
+    // page dead, which a player reports as a crash rather than as slowness.
+    // (Distinct from the merged-draw watchdog theory considered and dismissed
+    // earlier: that was ONE large draw, single-digit ms. This is sustained
+    // per-fragment cost across the whole frame.)
+    //
+    // Composes with the crash sentinel in js/perf/governor.js: a player who has
+    // already hit a hard failure comes back at a floored tier, which now has
+    // the feature off, so the sentinel can actually rescue this case instead of
+    // watching it repeat.
     // (both resolved above, before setFrameLights.)
     // Car tail-lights are an after-dark cue only — skip them under daytime floods.
     // They are appended to frame.lights AFTER the static cull, so they sit
@@ -7726,10 +7837,23 @@ function render(dt) {
   const _fxCullR = 110 / (1 + ((typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0));
   const _fxCullR2 = _fxCullR * _fxCullR;
   for (const c of cars) {
-    // The title-screen flyby draws the WORLD, not the last race's grid: quitToMenu() leaves `cars` in place
-    // and the 550 m cull passes every grid car, so the menu paid the whole per-car path x22 for nothing (the
-    // shadow producers above already gate on menu). Except the pre-race flyby, whose closing shot is the
-    // grid menuGridCars() seats on purpose. The setup preview returns from render() before this loop.
+    // The title-screen flyby draws the WORLD, not the last race's grid.
+    // quitToMenu() resets state to "menu" but never clears `cars`/`player` —
+    // both are rebuilt only by makeCars() at the next race start — and the
+    // only guard below is a 550 m cull against `player`, which every car
+    // parked on the grid beside it passes. So after one race the menu was
+    // paying the whole per-car path (body + wheels + rings + decal + flaps +
+    // blob shadow, x22) for cars nobody can see. The tell that this was an
+    // oversight rather than a choice: the car/lamp SHADOW producers a few
+    // hundred lines up all gate on `state !== "menu"` already, and a FIRST
+    // boot renders the same screen with cars === [] — the asymmetry.
+    // The setup/garage preview is not affected: renderSetupPreview() returns
+    // out of render() well before this loop.
+    // …EXCEPT for the pre-race flyby, whose closing shot is the grid itself.
+    // menuGridCars() seats the field deliberately for that shot, so here the
+    // field is the SUBJECT rather than the leftovers the guard above describes.
+    // Still nothing after quitToMenu: that leaves the loading screen inactive,
+    // which is the same break as before.
     if (state === "menu" && !loadingScreen.active() && !(photoStudio && photoStudio.hasCar())) break;
     if (!c.isPlayer && player && !dbgCam) {
       const ds = Math.abs(c.s - player.s);
@@ -8224,11 +8348,27 @@ function render(dt) {
   // switches the pass off from 2.26x its own midday strength, so one 0.1-deg
   // notch of SUN ELEVATION deletes full shafts in a frame. Still 0 below.
   let _gr = (_grBase + _grLowBoost * _grLow) * clamp(_grSunY / 0.02, 0, 1) * (1 + 0.25 * _mist) * _sunGateGR * LT.grMul;
-  // No sun-off-screen gate: one was reverted because it also cut shafts streaking across from a sun beside
-  // the frame. Night lamp volumetrics: per-lamp coloured beams whenever lamps are on, subtle in clear air
-  // and swelling with haze/rain (additive, mist-gated). Dark sessions only (key < 0.45: DAYTIME LAMPS also
-  // sets frame.lights). Mobile tier sheds them up front (march + lamp loop + 4 blurs is a top night GPU
-  // cost on phones), the same hard gate as the exhaust haze.
+  // NOTE: a sun-off-screen gate (project sunDir through the view-proj, zero _gr
+  // when the sun is behind the camera or outside a 1.7-NDC margin) was reverted.
+  // It saved the volumetric march when facing away from the sun, but it also
+  // cut the world-space light shafts that legitimately streak ACROSS the scene
+  // from a sun off to the side — so god-rays "only showed when the sun was in
+  // frame". The march now runs by orientation-independent strength again.
+  // Night lamp volumetrics: visible light beams in the air from the lamps when
+  // floodlights are on (frame.lights) and there's haze to catch them. Scales with
+  // haze — subtle on a near-dry night, dramatic in fog/rain. Additive + mist-gated
+  // in the shader, so it never greys out the dark night.
+  // Always a subtle beam glow whenever lamps are on (clear night air still
+  // scatters a little), swelling with haze/rain into full volumetric shafts —
+  // and coloured per lamp, so neon-spill lights throw coloured beams.
+  // Gated to dark sessions (key below ~0.45): visible lamp beams in daylight (the
+  // DAYTIME LAMPS knob also sets frame.lights) would read as odd haze shafts.
+  // Mobile tier sheds the beams entirely: any non-zero value keeps the whole
+  // god-ray block alive every night frame (volumetric march with a per-step
+  // lamp loop + 4 blur passes + a nearest-lamp re-sort) — a top GPU cost on
+  // the phones that overheat/jetsam at night. Shedding it up-front beats
+  // waiting for the perf governor to watch the device struggle to tier 4.
+  // Same hard gate as the exhaust haze (gfx.mobileTier, at present).
   const _lampVol = (frame.lights && _sunLumGR < 0.45 && !gfx.mobileTier)
     ? clamp(LT.lampVolBase + LT.lampVolHaze * _mist, 0, LT.lampVolCap) : 0;
   // Resolve the HDR scene (bloom + tonemap + grade + vignette) to the screen.

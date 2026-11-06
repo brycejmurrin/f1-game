@@ -530,39 +530,13 @@ for (const v of VIEWS) {
     // whether it can afford it.
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
-    // ONE BOOT PER VIEWPORT (#4837). The six steer x gears cases used to be six
-    // tests, each paying the ~33 s page + race boot for a ~2 s measurement (the
-    // spec-timings medians: 33-43 s per case). Boot once in the first mode and
-    // switch the other five LIVE through the pause menu's own rows (#pm-steer-sel,
-    // #pm-gears-sel -> setSteerMode / manualMode, which relayout the docks the
-    // way a player's tap does). measure() re-invalidates the fit and waits for it,
-    // so every case still gets a fresh fit + the same three assertions. Failures
-    // are soft and name the case, so one bad mode no longer hides the others.
-    const MODES = [["tilt", false], ["tilt", true], ["buttons", false], ["buttons", true], ["touch", false], ["touch", true]];
-    test("steer x gears: controls, readouts and safe area", async ({ page }) => {
-      await race(page, MODES[0][0], MODES[0][1], v);
-      // TILT FALLS BACK TO BUTTONS 1.5 s after it is picked when no motion sensor
-      // reads (game.js enableTilt) unless headlessMode is set; on a slow runner that
-      // timer fires mid-matrix and the "tilt" case silently measures buttons.
-      // headless(true) only skips render(), the HUD DOM is untouched (freeze is
-      // already on). The fallback may have fired during boot, so tilt is re-entered
-      // below through another mode, now under headless.
-      await page.evaluate(() => window.__apex.headless(true));
-      for (const [steer, manual] of MODES) {
-        const label = `[${v.name} ${steer}/${manual ? "manual" : "auto"}] `;
-        {
-          await page.evaluate(([s, m]) => {
-            const set = (id, val) => { const el = document.getElementById(id); el.value = val; el.dispatchEvent(new Event("change", { bubbles: true })); };
-            if (s === "tilt") set("pm-steer-sel", "buttons");   // re-enter tilt under headless (see above)
-            set("pm-steer-sel", s);
-            set("pm-gears-sel", m ? "manual" : "auto");
-          }, [steer, manual]);
-          const mode = await page.evaluate(() => ({ b: document.body.classList.contains("steer-buttons"), t: document.body.classList.contains("steer-touch") }));
-          expect.soft(mode.b, label + "steer-buttons class follows the mode").toBe(steer === "buttons");
-          expect.soft(mode.t, label + "steer-touch class follows the mode").toBe(steer === "touch");
+    for (const steer of ["tilt", "buttons", "touch"]) {
+      for (const manual of [false, true]) {
+        test(`${steer} / ${manual ? "manual" : "auto"} gears`, async ({ page }) => {
+          await race(page, steer, manual, v);
           const hud = v.name.includes("landscape") ? [...HUD, ...HUD_LANDSCAPE_ONLY] : HUD;
           const r = await measure(page, CTRL, hud, v.w, v.h, v);
-          expect.soft(r.count, label + "controls are on screen at all").toBeGreaterThan(3);
+          expect(r.count, "controls are on screen at all").toBeGreaterThan(3);
           // NAME THE BOXES IN THE MESSAGE. These three assert an EMPTY list, so
           // a failure prints "Received + 4" and the reporter truncates the
           // contents — which says a collision happened and nothing about what
@@ -598,17 +572,17 @@ for (const v of VIEWS) {
             dump += " geo=" + JSON.stringify(geo);
           }
           // No control may sit on another — every one of these is a tap target.
-          expect.soft(r.overlaps, label + "controls must not sit on each other" + dump).toEqual([]);
+          expect(r.overlaps, "controls must not sit on each other" + dump).toEqual([]);
           // And no READOUT may sit on a tap target, which is the failure that
           // shipped: you cannot read what your thumb is covering, and you
           // cannot press what a number is drawn over.
           expect(r.hudClash, "no HUD readout may sit on another" + dump).toEqual([]);
           // Everything inside the safe box, not merely inside the viewport —
           // a notch does not politely render behind a button.
-          expect.soft(r.unsafe, label + "nothing may leave the safe area" + dump).toEqual([]);
-        }
+          expect(r.unsafe, "nothing may leave the safe area" + dump).toEqual([]);
+        });
       }
-    });
+    }
   });
 }
 
@@ -621,6 +595,7 @@ for (const v of VIEWS) {
 for (const c of [
   { name: "broadcast + cockpit", profile: "broadcast", cam: "cockpit" },
   { name: "broadcast + heli",    profile: "broadcast", cam: "heli" },
+  { name: "minimal + cockpit",   profile: "minimal",   cam: "cockpit" },
 ]) {
   test.describe(c.name, () => {
     test.setTimeout(300_000);
@@ -662,15 +637,6 @@ test.describe("minimal profile", () => {
   test("hiding the sector box does not shrink every other cluster", async ({ page }) => {
     const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
     await race(page, "buttons", false, v, { profile: "minimal" });
-    // "minimal + cockpit" clash check, folded in (#4837): same boot (profile
-    // minimal, default camera = cockpit), measured BEFORE the sector box is forced back.
-    {
-      const r = await measure(page, CTRL, [...HUD, ...HUD_LANDSCAPE_ONLY], v.w, v.h, v);
-      const dump2 = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash, unsafe: r.unsafe, diagnostics: r.diagnostics });
-      expect.soft(r.overlaps, "minimal + cockpit: controls must not sit on each other" + dump2).toEqual([]);
-      expect.soft(r.hudClash, "minimal + cockpit: no HUD readout may sit on another HUD readout" + dump2).toEqual([]);
-      expect.soft(r.unsafe, "minimal + cockpit: nothing may sit under the notch or the home indicator" + dump2).toEqual([]);
-    }
     const zoomNow = () => page.evaluate(() => {
       const r = document.documentElement;
       const s = +r.style.getPropertyValue("--hud-z-top");
@@ -1597,10 +1563,11 @@ test.describe("track-limits chip", () => {
   });
 });
 
-// THE POS CELL (#4526): a dark plate with white ink (it was a light cell in design pass 2a). HIGH CONTRAST
+// THE POS LIGHT CELL (design pass 2a): a light plate with dark ink. HIGH CONTRAST
 // (the shipped default, and Bryce's own export) once repainted the plate with
 // `:root[data-ui-contrast="high"] :is(.hud-box, #announce)`, whose :is() took
-// #announce's id specificity and beat the cell's own rule (#4300); the ink must still clear the plate it paints on. This file pins contrast "off" for geometry, so the
+// #announce's id specificity and beat the light-cell rule, leaving dark ink on
+// a dark plate (#4300). This file pins contrast "off" for geometry, so the
 // probe flips it live and reads the computed ink against the computed plate.
 test.describe("POS cell ink follows its plate", () => {
   test.setTimeout(300_000);

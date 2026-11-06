@@ -2174,9 +2174,6 @@ const Input = (function () {
     dragFilterClear(); hideDragAnchor();
     // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
     _viewLong = 0;
-    // An orientationchange can arrive with no pointerup/pointercancel for a held HUD button;
-    // release them like blur does (true also drops a THROTTLE=LATCH) so RESUME never inherits GAS.
-    holdReleaseAll(true);
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.

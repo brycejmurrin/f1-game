@@ -216,25 +216,3 @@ test("setAssistLevel rejects junk to off", () => {
   assert.equal(WheelState.setAssistLevel("full"), "full");
   assert.equal(WheelState.setAssistLevel("bogus"), "off");
 });
-
-test("settings row (#3983): mode off|on|medium|full round-trips and persists, default OFF", () => {
-  const mem = {};
-  const ctx = vm.createContext({
-    Math, JSON, Object, Array, Number, isNaN, isFinite, console,
-    localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem() {} },
-  });
-  ctx.window = ctx; seedLog(ctx);
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/physics/wheel-state.js"]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
-  }
-  const W = vm.runInContext("WheelState", ctx);
-  assert.equal(W.mode(), "off", "default OFF: classic feel");
-  for (const m of ["on", "medium", "full", "off"]) {
-    assert.equal(W.setMode(m), m);
-    assert.equal(W.enabled(), m !== "off");
-  }
-  W.setMode("full");
-  assert.deepEqual([mem["apex26.wheelState"], mem["apex26.wheelAssist"]], ["1", "full"]);
-  assert.equal(W.setMode("on"), "on");
-  assert.equal(mem["apex26.wheelAssist"], "off", "plain WHEELS clears the ABS/TC level");
-});

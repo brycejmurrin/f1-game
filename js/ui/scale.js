@@ -166,12 +166,9 @@ const UiScale = (() => {
     // "fits N%" suffix is rebuilt from the base label whenever that var moves, not only when the slider does.
     function refreshBtnFit() {
       const out = $("pm-btnscale-v"), body = document.body;
-      if (!out || !body) return;
+      if (!out || !body || !body.classList.contains("in-race")) return;
       const pct = scalePct("hudBtnScale");
-      // --hud-z-dock is a race measurement (fitHud): outside a race it is the LAST race's cap, so the title
-      // screen's Settings shows the bare label (capZ "") rather than a stale "fits N%".
-      const capZ = body.classList.contains("in-race") ? document.documentElement.style.getPropertyValue("--hud-z-dock") : "";
-      const next = btnFitLabel(scaleLabel(pct, "hudBtnScale"), pct, capZ);
+      const next = btnFitLabel(scaleLabel(pct, "hudBtnScale"), pct, document.documentElement.style.getPropertyValue("--hud-z-dock"));
       if (out.textContent !== next) out.textContent = next;
     }
     // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
@@ -267,11 +264,6 @@ const UiScale = (() => {
         if (fitRaf || typeof requestAnimationFrame !== "function") return;
         fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshBtnFit(); });
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
-      // leaving a race drops `in-race` without touching the style: re-derive the label then too
-      if (document.body) new MutationObserver(() => {
-        if (fitRaf || typeof requestAnimationFrame !== "function") return;
-        fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshBtnFit(); });
-      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
     function setScale(key, prop, v) {
       if (v !== undefined) {

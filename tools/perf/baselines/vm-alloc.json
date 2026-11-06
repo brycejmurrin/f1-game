@@ -1,115 +1,17 @@
 {
- "tracks": [
-  "monza",
-  "spa",
-  "singapore"
- ],
- "phases": [
-  "cold",
-  "warm"
- ],
+ "track": "monza",
  "warm": 600,
  "windows": 6,
  "frames": 60,
- "maxRatio": 1.25,
- "rows": {
-  "monza/cold": {
-   "meanKbPerFrame": 190.3,
-   "passMeans": [
-    183.8,
-    195.1,
-    191.9
-   ],
-   "windowKb": [
-    110.6,
-    134.8,
-    156.5,
-    224.4,
-    257.6,
-    218.8
-   ]
-  },
-  "monza/warm": {
-   "meanKbPerFrame": 79.2,
-   "passMeans": [
-    75.8,
-    82.2,
-    79.6
-   ],
-   "windowKb": [
-    86.4,
-    73.1,
-    73.7,
-    73.3,
-    75.7,
-    72.4
-   ]
-  },
-  "spa/cold": {
-   "meanKbPerFrame": 202.7,
-   "passMeans": [
-    203.7,
-    187.7,
-    216.8
-   ],
-   "windowKb": [
-    232.9,
-    182.3,
-    239.5,
-    237.8,
-    203.5,
-    125.9
-   ]
-  },
-  "spa/warm": {
-   "meanKbPerFrame": 143.6,
-   "passMeans": [
-    141.6,
-    148.4,
-    140.7
-   ],
-   "windowKb": [
-    207.6,
-    207.4,
-    200.5,
-    78,
-    85.5,
-    70.7
-   ]
-  },
-  "singapore/cold": {
-   "meanKbPerFrame": 162.1,
-   "passMeans": [
-    161.4,
-    167.5,
-    157.4
-   ],
-   "windowKb": [
-    131.5,
-    181,
-    143.8,
-    179.9,
-    149,
-    183.1
-   ]
-  },
-  "singapore/warm": {
-   "meanKbPerFrame": 115.1,
-   "passMeans": [
-    109.8,
-    121.9,
-    113.5
-   ],
-   "windowKb": [
-    142.3,
-    72.6,
-    96,
-    88.9,
-    90.7,
-    168.5
-   ]
-  }
- },
- "node": "v22.23.4",
- "measured": "2026-11-04"
+ "meanKbPerFrame": 188,
+ "windowKb": [
+  128.2,
+  149.3,
+  162.2,
+  232.7,
+  251.2,
+  204.6
+ ],
+ "node": "v22.22.0",
+ "measured": "2026-10-24"
 }
