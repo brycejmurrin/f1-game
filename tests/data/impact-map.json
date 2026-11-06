@@ -17974,6 +17974,9 @@
       "scene": [
         "tests/unit/ui-experience.test.mjs"
       ],
+      "stamp": [
+        "tests/specs/title-cluster.spec.js"
+      ],
       "stopHome": [
         "tests/unit/ui-experience.test.mjs"
       ],

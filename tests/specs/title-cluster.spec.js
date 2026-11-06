@@ -36,6 +36,11 @@ async function loadExport(page) {
   await page.reload();
   await page.waitForFunction(() => typeof TitleLayout !== "undefined" && document.body.dataset.shape === "wide",
     null, { polling: 100, timeout: BOOT_MS });
+  // THE HOME SCENE STAMPS LATE (js/ui/experience.js `stamp()`, after the lazy bundles): `#overlay[data-home-scene]`
+  // restyles #soundbtn / #disclaimer (css/experience.css) and `html[data-home-live]` hides them in compact density
+  // (css/menus.css), so the brand box changes height once, seconds after boot on a CI worker. A baseline read before
+  // the stamp failed "title box b" by 24-31 px at the first LEFT row (CI 42178056848). Wait for the stamp first.
+  await page.waitForFunction(() => !!document.getElementById("overlay").dataset.homeScene, null, { polling: 100, timeout: BOOT_MS });
 }
 
 /** Open SETTINGS from the title and unfold TITLE SCREEN › TITLE LAYOUT, as a player does. */
