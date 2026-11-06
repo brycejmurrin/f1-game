@@ -186,6 +186,7 @@ function fakes() {
     if (p === "pulls/7") return { json: pull };
     if (p.startsWith("issues/7/events")) return { json: events };
     if (p.startsWith("pulls/7/files")) return { json: files };
+    if (p === "branches/deploy-x") return { json: { commit: { sha: TIP } } };
     if (p.startsWith("commits/")) return { json: { check_runs: checks, total_count: checks.length } };
     if (p.startsWith(`actions/workflows/ci.yml/runs?head_sha=${HEAD}`)) return { json: { workflow_runs: runs, total_count: runs.length } };
     return { error: `unexpected ${p}` };
@@ -495,7 +496,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   const v = evaluate({ pr: 7, ...f.deps, trusted: true });
   assert.equal(v.ok, true, JSON.stringify(v.rows));
   assert.deepEqual(Object.keys(v.rows), TRUSTED_ROWS);
-  assert.equal(v.tip, "", "no git at all: the tip is land.yml's business at post time");
+  assert.equal(v.tip, TIP, "the base tip from GitHub (no git): land.yml post requires it to equal the land-gate leg's tip (#4592)");
   assert.deepEqual(f.calls, [], "localMerge (the PR's scripts) never runs");
   f.pull.body = "## Plan\n- [ ] still open\n";
   assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["plan"]);
@@ -505,7 +506,7 @@ test("--trusted: only the rows no PR code decides (GitHub reads only), no throw-
   f.files.pop();
   const logs = [];
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 0);
-  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=`);
+  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok config=ok pr=#7 sha=${HEAD} tip=${TIP}`);
   f.checks[1].status = "in_progress";
   assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: () => {} }), 3, "CI running is waiting");
 });
@@ -949,13 +950,28 @@ test("land.yml arm: clean-status auto-merge refusal re-checks vetoes and tip, th
   assert.equal(r.calls.filter((c) => c.includes("pr merge ")).length, 2);
 });
 
+test("--trusted: an empty deploy tip is an error, never a row that passes (#4625)", () => {
+  const f = fakes();
+  const req = (p) => (p === "branches/deploy-x" ? { json: { commit: { sha: "" } } } : f.deps.request(p));
+  const v = evaluate({ pr: 7, ...f.deps, request: req, trusted: true });
+  assert.match(v.error || "", /no tip sha/);
+  assert.equal(v.ok, undefined);
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, request: req, log: () => {} }) !== 0, true, "the CLI exits non-zero");
+});
+
+test("land.yml post: an empty tip on either leg is refused and re-gated, not equal to another empty tip (#4625)", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  assert.match(run, /\[ -z "\$ttip" \] \|\| \[ -z "\$tip" \][^\n]*\n[^\n]*\n\s*code=1; line="a gate leg returned no deploy tip[^\n]*\n\s*want_retry "\$n" "\$head"/);
+  assert.ok(run.indexOf('-z "$ttip"') < run.indexOf('"$ttip" != "$tip"'), "the empty check runs before the equality check");
+});
+
 test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry; other errors are not", () => {
   const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
   assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "the trusted-rows/land-gate tip split asks for a re-gate");
   assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "a verdict whose tip is no longer the deploy tip asks for a re-gate");
-  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 3, "no other branch asks for a re-gate");
+  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 4, "no other branch asks for a re-gate");
   assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
 });
