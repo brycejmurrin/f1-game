@@ -876,7 +876,7 @@ export function compareToBase(ref, {
     } else {
       // A deleted entry for a file/metric that still exists removes a guard; one whose
       // file is gone (or a whole tree metric dropped with its tool) is a normal cleanup.
-      const guardRemoved = r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file));
+      const guardRemoved = r.file === "(tree)" ? Object.hasOwn(TREE_METRICS, r.metric) : fs.existsSync(path.join(ROOT, r.file));
       if (guardRemoved) {
         blocked++;
         if (!advisory) fatal++;
