@@ -124,13 +124,99 @@ const TitleLayout = (function () {
     const l = normalize(v);
     for (const k of ALL_VARS) root.style.removeProperty(k);
     delete root.dataset.titleLayout; delete root.dataset.titleSide; delete root.dataset.titleBtns; delete root.dataset.titleBtnw;
-    if (isDefault(l)) return;
-    const t = vars(l);
-    for (const k in t) root.style.setProperty(k, t[k]);
-    root.dataset.titleLayout = "on";
-    if (l.side === "swap") root.dataset.titleSide = "swap";
-    if (l.layout !== "grid") root.dataset.titleBtns = l.layout;
-    if (l.btns.width) root.dataset.titleBtnw = "on";
+    if (!isDefault(l)) {
+      const t = vars(l);
+      for (const k in t) root.style.setProperty(k, t[k]);
+      root.dataset.titleLayout = "on";
+      if (l.side === "swap") root.dataset.titleSide = "swap";
+      if (l.layout !== "grid") root.dataset.titleBtns = l.layout;
+      if (l.btns.width) root.dataset.titleBtnw = "on";
+    }
+    scheduleFit();   // a request landed; the box decides what fits (#5150)
+  }
+
+  // ---- FIT: in landscape the title screen never scrolls (#5150) -----------
+  // Every SIZE, WIDTH, X and Y above is a REQUEST; the overlay's content box is
+  // the law. A piece (the button cluster, the brand) taller or wider than the
+  // box is zoomed down to fit through --tf, which css/title.css, css/menus.css
+  // and css/responsive.css multiply into every zoom the piece carries; an
+  // offset that would carry it past an edge is pulled back through --tf-dx /
+  // --tf-dy, added to its translate. Wide shapes only: the portrait title has
+  // height to spend and keeps its scroll fallback (css/menus.css).
+  // MEASURED, NOT DERIVED: CSS cannot know a cluster's content height (the
+  // doors wrap, hide and re-flow with --ui-scale, text size and the scene), so
+  // this runs after every apply() and on every size change the overlay or a
+  // piece reports (ResizeObserver), starting each time from an unfitted piece
+  // and shrinking until the content fits — monotone, so a layout that changes
+  // column count under the shrink cannot oscillate — then writing the result
+  // once. A re-run that lands on the same numbers changes no size, so the
+  // observer goes quiet by itself. Chromium zooms a translate with the
+  // element (20px under zoom 1.09 moved 21.8px, measured 2026-11-06), so a
+  // screen overrun divides by the piece's effective zoom before it lands.
+  const FIT_IDS = ["menu-buttons", "menu-brand"];
+  const FIT_MIN = 0.1;       // a setting that cannot fit shrinks until it does (#5150 §5); the clip only shows below this
+  const FIT_PASSES = 6;
+  const FIT_TOKENS = ["--tf", "--tf-dx", "--tf-dy"];
+  let fitRaf = 0;
+  function fitClear(el) { for (const k of FIT_TOKENS) el.style.removeProperty(k); }
+  function fit() {
+    if (!doc || typeof getComputedStyle !== "function") return;
+    const ov = doc.getElementById("overlay");
+    if (!ov || !ov.getBoundingClientRect) return;
+    const pieces = FIT_IDS.map((id) => doc.getElementById(id)).filter((el) => el && el.style);
+    if (ov.hidden || shape() !== "wide") { pieces.forEach(fitClear); return; }
+    const o = ov.getBoundingClientRect();
+    if (!(o.height > 0)) return;
+    const cs = getComputedStyle(ov), px = (v) => parseFloat(v) || 0;
+    const box = { l: o.left + px(cs.paddingLeft), t: o.top + px(cs.paddingTop), r: o.right - px(cs.paddingRight), b: o.bottom - px(cs.paddingBottom) };
+    const availW = box.r - box.l, availH = box.b - box.t;
+    if (!(availW > 0 && availH > 0)) return;
+    for (const el of pieces) {
+      fitClear(el);
+      let tf = 1, r = el.getBoundingClientRect();
+      for (let pass = 0; pass < FIT_PASSES && r.height > 0 && tf > FIT_MIN; pass++) {
+        // A scroller's rect is its clipped box; scrollHeight / clientHeight (both
+        // in the piece's own zoomed units) says how much content hides behind it.
+        const needH = r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1));
+        const needW = r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1));
+        const over = Math.max(needH / availH, needW / availW);
+        if (over <= 1) break;
+        // Shrink only, half a percent past the measured ratio so a rounded
+        // zoomed row never lands one px over (ScrollFade would call that a
+        // scroller), and a little more once the first pass has not closed
+        // it: a cluster re-flowing into fewer columns is not linear in its zoom.
+        tf = Math.max(FIT_MIN, tf / over * (pass ? 0.98 : 0.995));
+        el.style.setProperty("--tf", tf.toFixed(3));
+        r = el.getBoundingClientRect();
+      }
+      if (!(r.height > 0)) continue;
+      // The offset clamp: the overrun past an edge, the near edge winning.
+      const z = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1;
+      let dx = 0, dy = 0;
+      if (r.right > box.r) dx = box.r - r.right;
+      if (r.left + dx < box.l) dx = box.l - r.left;
+      if (r.bottom > box.b) dy = box.b - r.bottom;
+      if (r.top + dy < box.t) dy = box.t - r.top;
+      if (Math.abs(dx) >= 0.5) el.style.setProperty("--tf-dx", (dx / z).toFixed(1) + "px");
+      if (Math.abs(dy) >= 0.5) el.style.setProperty("--tf-dy", (dy / z).toFixed(1) + "px");
+    }
+  }
+  /** One fit per frame, however many requests land in it. */
+  function scheduleFit() {
+    if (typeof requestAnimationFrame !== "function") { fit(); return; }
+    if (fitRaf) return;
+    fitRaf = requestAnimationFrame(() => { fitRaf = 0; fit(); });
+  }
+  if (doc && typeof ResizeObserver === "function") {
+    // The overlay's box (viewport, insets, zoom) and each piece's own (its
+    // doors wrap, hide, re-flow). A door toggled [hidden] inside a full-height
+    // cluster changes no border box, so the cluster's subtree is watched too.
+    const ro = new ResizeObserver(scheduleFit);
+    for (const id of ["overlay", ...FIT_IDS]) { const el = doc.getElementById(id); if (el) ro.observe(el); }
+    const mb = doc.getElementById("menu-buttons");
+    if (mb && typeof MutationObserver !== "undefined") {
+      new MutationObserver(scheduleFit).observe(mb, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+    }
   }
   /** Store `v` as one shape's layout (default: the current shape). */
   function set(v, sh) {
@@ -541,5 +627,5 @@ const TitleLayout = (function () {
   }
 
   return Object.freeze({ KEY, DEFAULT, LIM, LAYOUTS, SIDES, SHAPES, normalize, isDefault, vars, shape, all, current, apply,
-    set, reset, resetShape, copyTo, build, enter, exit, screenShipped, get editing() { return ed.on; } });
+    fit, set, reset, resetShape, copyTo, build, enter, exit, screenShipped, get editing() { return ed.on; } });
 })();

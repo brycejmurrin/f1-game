@@ -617,7 +617,24 @@ window.MenuNav = (function () {
       const page = pane &&
         sign * (strip ? pane.clientWidth : pane.clientHeight) * PAGE_FRAC *
           ((window.CssZoom && CssZoom.of(pane)) || 1);
-      if (!pane || !(strip ? scrollStrip(pane, page) : scrollPane(pane, page))) return;
+      if (!pane || !(strip ? scrollStrip(pane, page) : scrollPane(pane, page))) {
+        // NOTHING TO SCROLL: THE PANE IS ONE PAGE, SO A PAGE KEY REACHES ITS END.
+        // The landscape title cluster never scrolls (#5150, js/ui/title-layout.js
+        // fit()), and a pane that fits whole has the same shape. Returning here
+        // let the key fall through to the document and left focus where it was;
+        // now PageDown lands on the last destination of the region focus is in
+        // (the layer when it is in none) and PageUp on the first, like End/Home,
+        // and the key is consumed so the document never scrolls under a menu.
+        if (!inLayer) return;
+        // The region is the nearest pane focus is in whether or not it scrolls
+        // (the title cluster is one), else the layer.
+        const home = region || (active.closest && active.closest(SCROLLERS));
+        const scope = home && layer.contains(home) ? list.filter((el) => home.contains(el)) : list;
+        if (!scope.length) return;
+        focusItem(sign > 0 ? scope[scope.length - 1] : scope[0], layer);
+        e.preventDefault();
+        return;
+      }
       e.preventDefault();
       // FOCUS TRAVELS WITH THE PAGE. Paging moved the pane and left focus behind,
       // stranded off the top or bottom of it — so the row the keyboard was on was

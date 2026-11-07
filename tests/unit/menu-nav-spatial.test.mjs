@@ -383,3 +383,42 @@ test("MenuNav: a focused range keeps physical PageUp/PageDown, synthetic pad pag
     assert.equal(ownsArrows(range, key, { isTrusted: false }), false, key + " from the pad pages the pane");
   }
 });
+
+// #5150: the landscape title cluster never scrolls (js/ui/title-layout.js fit()),
+// so a page key over it has nothing to page. The pane is then one page: PageDown
+// lands on its LAST destination, PageUp on its FIRST, the key is consumed, and a
+// button outside the pane (the brand's sound toggle) is never the target.
+test("page keys over a pane that does not scroll reach its ends and stay inside it", () => {
+  const dom = makeDom({ readyState: "loading" });
+  const layer = dom.byId("overlay"), pane = dom.makeElement("div");
+  pane.className = "pane";
+  layer.appendChild(pane);
+  Object.defineProperty(pane, "clientWidth", { value: 400 });
+  Object.defineProperty(pane, "clientHeight", { value: 300 });
+  pane.scrollWidth = 400; pane.scrollHeight = 300; pane.scrollTop = 0;
+  const box = (top, height = 40) => ({ left: 20, top, right: 320, bottom: top + height, width: 300, height });
+  pane.getBoundingClientRect = () => box(0, 300);
+  const doors = Array.from({ length: 5 }, (_, i) => {
+    const b = dom.makeElement("button"); b.id = `door-${i}`; pane.appendChild(b);
+    b.getBoundingClientRect = () => box(10 + i * 55);
+    return b;
+  });
+  const sound = dom.makeElement("button"); sound.id = "soundbtn"; layer.appendChild(sound);
+  sound.getBoundingClientRect = () => ({ left: 500, top: 10, right: 540, bottom: 50, width: 40, height: 40 });
+  const nav = loadMenuNav({ document: dom.document, layer });
+  const key = (name) => {
+    const event = { key: name, preventDefault() { this.defaultPrevented = true; } };
+    nav.onKeyDown(event);
+    return event.defaultPrevented === true;
+  };
+  doors[1].focus({ preventScroll: true });
+  assert.equal(key("PageDown"), true, "PageDown is consumed over a pane that does not scroll");
+  assert.equal(dom.document.activeElement, doors[4], "PageDown lands on the pane's last destination");
+  assert.equal(pane.scrollTop, 0, "nothing scrolled");
+  assert.equal(key("PageUp"), true, "PageUp is consumed too");
+  assert.equal(dom.document.activeElement, doors[0], "PageUp returns to the pane's first destination");
+  // Focus outside every pane (the brand button): the layer is the page.
+  sound.focus({ preventScroll: true });
+  assert.equal(key("PageUp"), true);
+  assert.equal(dom.document.activeElement, doors[0], "from the layer, PageUp reaches the layer's first item");
+});
