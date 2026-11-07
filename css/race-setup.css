@@ -238,17 +238,26 @@
 }
 
 /* ---------- race settings ---------- */
-/* Race Setup owns its bounds and composition: it never shrinks the player's
-   requested UI size around fixed chrome (--fit-at 0). Compact at 480 like its
-   siblings (UI contract 2026-11-06 §4.5, #5153 gap 16): a private 260 kept
-   normal-density chrome on a phone whose neighbours were compact. */
+/* Race Setup owns its bounds and composition. Compact at 480 like its siblings
+   (UI contract 2026-11-06 §4.5, #5153 gap 16): a private 260 kept
+   normal-density chrome on a phone whose neighbours were compact. It opts out
+   of the compact zoom cap (--ui-compact-scale, css/menus.css): UI SIZE paints
+   as asked. But gap 16 fixed the head and START RACE around #rs-body on a
+   compact WIDE sheet, so it now declares the sibling wide-shape fit floor
+   (--fit-at 220, as #ss-inner / #cr-inner): measured 667x320 at UI 200 %, TEXT
+   large (2026-11-07), --fit-at 0 left #rs-body 36 own px (71 painted) under
+   56 own of head and 58 of foot; the cap paints 1.38 there. In the owner's
+   windows at 109 % it never bites (the first capped scale: A 1.62, C 1.21,
+   D 1.70). A TALL sheet scrolls as one page (below) and keeps --fit-at 0: it
+   has no fixed chrome for a cap to protect. */
 #race-settings { --sheet-w: 760px; }
 #race-settings > .sheet {
-  --fit-at: 0px;
+  --fit-at: 220px;
   --compact-at: 480px;
-  --_sheet-z: var(--ui-scale);
-  zoom: var(--ui-scale);
+  --_sheet-z: var(--sheet-scale, var(--ui-scale));
+  zoom: var(--_sheet-z);
 }
+#race-settings > .sheet[data-shape="tall"] { --fit-at: 0px; }
 /* A TALL task (an upright phone) reads as one page: wrapped context and
    stacked actions must not reserve most of its viewport outside the settings
    scroller. A compact WIDE sheet (a landscape phone) keeps the sheet grid —

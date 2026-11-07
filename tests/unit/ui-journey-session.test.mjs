@@ -56,7 +56,13 @@ test("landscape --fit-at uses zoom-correct data-shape selector (not @media orien
 
 test("Race Setup preserves requested size and scrolls the focused task", () => {
   const css = read("css/race-setup.css");
-  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--fit-at:\s*0px/);
+  // #5153 gap 16 (PR D): a compact WIDE sheet has fixed chrome around #rs-body, so it declares the sibling wide-shape
+  // fit floor (220, as #ss-inner / #cr-inner): measured 667x320 at UI 200 %, --fit-at 0 left #rs-body 36 own px.
+  // A TALL sheet is the one page-scroller and keeps the requested size (--fit-at 0). The cap never paints under 1.0.
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--fit-at:\s*220px/);
+  assert.match(css, /#race-settings > \.sheet\[data-shape="tall"\]\s*\{[^}]*--fit-at:\s*0px/);
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*zoom:\s*var\(--_sheet-z\)/, "the race sheet zooms through the fit cap");
+  assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--_sheet-z:\s*var\(--sheet-scale, var\(--ui-scale\)\)/);
   // #5153 gap 16: only a TALL sheet is the one page-scroller; a compact WIDE sheet (a landscape phone) keeps
   // head and START RACE fixed and scrolls #rs-body (UI contract 2026-11-06 rule 3).
   assert.match(css, /#race-settings > \.sheet\[data-shape="tall"\]\s*\{[^}]*overflow-y:\s*auto/);

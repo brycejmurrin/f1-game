@@ -135,3 +135,26 @@ from the export with a `__apex`/DOM probe as the assertion; `tests/groups.json` 
 `ui-redesign.spec.js` (select, race settings), `career-hub.spec.js`, `results-flow.spec.js`, and the pause cells in
 `ui-resize.spec.js` (check `pick-tests` for the group each lands in). After the edits re-run
 `node tools/ui/probe-sheets-contract.mjs A,C,D full artifacts/pr-d-probe-after.json` and put before/after in the PR body.
+
+## After (2026-11-07, the PR D tree at the re-bless commit — `artifacts/pr-d-probe-after.json`, regenerable)
+
+Same probe, same windows, same export seed (`node tools/ui/probe-sheets-contract.mjs A,C,D full artifacts/pr-d-probe-after.json`
+on a quiet box). `exp` = the export's own UI SIZE (109 %) re-applied per cell (the first run's results/pause cells had leaked a
+130 % — see the PR body). Figures are OWN px unless marked painted.
+
+| gap | measure | before (A / C / D, large/exp) | after (A / C / D, large/exp) | at UI 130 (A / C / D) |
+|---|---|---|---|---|
+| 10 pause | sheet h · body scroll · QUIT past the sheet | stored layouts: QUIT +221…+420 | 192 · 0 · −4.5 for grid, list, compact, wide, sidebar | 192 · 0 · −5.1 |
+| 11 career | density · pair · `--pair-at` · head h | normal · ON at 657/757 · 620 · A 116 stacked | compact · off · 99999 · **87** with cols `181 441` (D `181 542`) | compact · off · head 105/105/84 (C capped 1.214) |
+| 12 results | pane h / rows → pins → scrolling rows | 1.85 / **−0.33** / 2.27 | 240/5.95 → 2 → **3.95** · 158/3.91 → 1 → **2.91** · 256/6.34 → 4 → **2.34** | 3.85 · 2.67 · 2.27 |
+| 13 select | hero h · section scroll · filter row | section scrolls 74 / 141 / 58 | hero **140.8 / 73.9 / 157.3** · scroll **0** · filter in the title row (head 48) | hero 99 / 74 / 114 · scroll 0 |
+| 16 race | density · display · body h / content · cols · GO | normal/normal/compact-block · 1 col · C GO **under the fold** | compact · grid · **236/492 · 154/492 · 253/492** · 2 cols · GO on screen | 184/542 · 130/553 (C capped 1.214) · 198/542 · 2 cols |
+
+Notes. (a) `careerAuto.clipped` lists `#cr-body`'s own content past the pane (cr-nextrace+272 …): that is the one scroller's
+content, not a child past the sheet — the sheet bottom equals the foot bottom in A/C/D. (b) Race settings now declares the sibling
+wide-shape fit floor `--fit-at: 220px` (css/race-setup.css; `0` only on the TALL page-scroller): measured 667×320 at UI 200 %, TEXT
+large (ui-scale.spec.js cell 4), `--fit-at 0` left `#rs-body` **36 own px** (71 painted) under 56 own of head (the summary line
+wrapped below the title) and 58 of foot; with the floor the sheet paints 1.382, head 31 (the summary beside the title), body 130 own
+/ 180 painted, and the spec's 32 half-box swipes reach the scroller's end in 28 (both text sizes; `scratch/probe/pr-d-race-swipe.cjs`).
+It never bites in the owner's windows at 109 % (the first capped scale: A 1.62, C 1.21, D 1.70); at UI 130 in C it caps to 1.214 —
+exactly where career and results (same 220) already cap there. (c) The cap never paints under 1.0 (`classifyFit` floor).
