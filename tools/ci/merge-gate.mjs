@@ -337,7 +337,13 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   let tip = "";
   if (!rows.open.ok) {
     for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
-  } else if (!trusted) {
+  } else if (trusted) {
+    // GitHub only (no git, no PR code): land.yml post requires this tip to equal the land-gate leg's (#4592).
+    const b = request(`branches/${encodeURIComponent(base)}`);
+    if (b.error) return { error: `branch ${base}: ${b.error}` };
+    tip = String(b.json?.commit?.sha || "").toLowerCase();
+    if (!tip) return { error: `branch ${base}: no tip sha` };
+  } else {
     const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
     if (g.error) return { error: g.evidence };
     tip = g.tip || "";

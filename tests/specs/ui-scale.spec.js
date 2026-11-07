@@ -616,7 +616,7 @@ test.describe("UI scale", () => {
       // never reaches it: on 219157ca one browser read 734x343 fit 0.468 →
       // zoom 0.585 with RACE at 18.7 painted px against 15.5 at 100%, and
       // 960x469 fit 0.693 → zoom 0.866, 27.7 against 18.0. A setting that
-      // cannot fit shrinks until it does (D-029); what 200% owes the player is
+      // cannot fit shrinks until it does (D-030); what 200% owes the player is
       // that it never paints SMALLER than 100% in the same box. Contract here,
       // fit cells: geometry == cap × fit, never above the cap, RACE paints no
       // smaller than this shape's 100% baseline, the 200% request lands in the
@@ -717,7 +717,7 @@ test.describe("UI scale", () => {
   // in ONE pass with the box filled to 1.000. A "200% paints no smaller than
   // 100%" pin at these windows measures the environment, not the code (the
   // fourth such pin on this spec). Contract here, the one the code promises
-  // (D-029: a request that cannot fit shrinks UNTIL it fits, not further): one
+  // (D-030: a request that cannot fit shrinks UNTIL it fits, not further): one
   // zoom (2 × --tf, never above 2); the text carries the 200% request in its
   // own px, no smaller than at 100%; a fitted cluster FILLS the box — painted
   // content height or width ≥ 95 % of the overlay's content box (fit() shrinks
