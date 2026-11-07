@@ -236,6 +236,7 @@
         "tests/specs/smoke.spec.js",
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
+        "tests/specs/ui-resize.spec.js",
         "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -18939,6 +18940,9 @@
       ],
       "init": [
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "layoutProbe": [
+        "tests/specs/ui-resize.spec.js"
       ],
       "observe": [
         "tests/unit/ui-improve-pass.test.mjs"

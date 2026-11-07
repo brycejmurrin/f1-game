@@ -191,11 +191,18 @@ const LookAvail = (function () {
   }
   /** The live env, from the window and the declared UI SIZE. */
   function liveEnv() {
-    if (typeof window === "undefined" || !(window.innerWidth > 0)) return null;
+    if (typeof window === "undefined") return null;
+    // The layout viewport (UI contract 2026-11-06 rule 1): a stale innerWidth at a
+    // Home Screen landscape launch marked the wrong knobs DEAD; inner* only when
+    // there is no layout (the unit harness).
+    const r = typeof document !== "undefined" ? document.documentElement : null;
+    const vw = r && r.clientWidth > 0 ? r.clientWidth : window.innerWidth;
+    const vh = r && r.clientHeight > 0 ? r.clientHeight : window.innerHeight;
+    if (!(vw > 0)) return null;
     let z = 1, fine = false;
     try { z = parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { /* no CSSOM */ }
     try { fine = !!(window.matchMedia && window.matchMedia("(pointer: fine)").matches); } catch (_) { /* no matchMedia */ }
-    return env(window.innerWidth, window.innerHeight, z, fine);
+    return env(vw, vh, z, fine);
   }
 
   const STAND_INS = Object.freeze({
