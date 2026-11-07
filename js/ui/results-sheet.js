@@ -159,6 +159,48 @@ function sayCards(sheet, table, key) {
 
 function create(G) {
 Log.info("ui", "GameResults.create");
+// PIN COUNT FROM THE PANE (UI contract #5153 gap 12, PR D). The compact wide
+// sheet pins P1 P2 P3 and YOU as 44-painted-px rows (css/overlays.css PINNED
+// PODIUM); in the owner's Safari tab (852x283) the pane is 3.3 rows tall, so
+// four pins left nothing to scroll. data-pins on #results-table says how many
+// rows pin: 4 at >= 6.25 pane rows, 2 (P1 + YOU) at >= 4.25, else YOU alone,
+// with a quarter-row hysteresis so a zoom or inset flicker never toggles it; the
+// thresholds sit a quarter row above pins + 2 so a dip inside the band (the
+// Home Screen window opens at 6.1 rows and settles at 5.95) still leaves two
+// full scrolling rows. Units are the sheet's own px on both sides (clientHeight,
+// and a row's painted height over its zoom), so the count holds at every UI
+// SIZE and fit cap.
+const PIN_AT = { 4: 6.25, 2: 4.25 }, PIN_BAND = 0.25;
+function pinCountFor(rows, prev) {
+  const want = rows >= PIN_AT[4] ? 4 : rows >= PIN_AT[2] ? 2 : 1;
+  if (prev && prev !== want) {
+    const edge = PIN_AT[Math.max(prev, want)];
+    if (Math.abs(rows - edge) < PIN_BAND) return prev;
+  }
+  return want;
+}
+function fitPins() {
+  const table = G.els && G.els.resultsTable;
+  if (!table || !table.dataset || typeof table.querySelectorAll !== "function") return;
+  const ch = table.clientHeight || 0;
+  if (!(ch > 0)) return;   // hidden: the observer fires again when the sheet shows
+  const rows = Array.from(table.querySelectorAll('[data-results-part="ranking"] > .res-row[role="listitem"]'));
+  const row = rows.find((r) => !r.querySelector("[data-stint-details][open]"));   // an open fold is height: auto
+  const rowH = row ? row.getBoundingClientRect().height / (row.currentCSSZoom || 1) : 0;
+  if (!(rowH > 0)) return;
+  const prev = parseInt(table.dataset.pins, 10) || 0;
+  const next = pinCountFor(ch / rowH, prev);
+  if (next !== prev) table.dataset.pins = String(next);
+}
+// After a build the rows exist but the sheet may still be hidden; the observer covers the show.
+function fitPinsSoon() {
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(fitPins));
+  else fitPins();
+}
+if (typeof ResizeObserver === "function" && G.els && G.els.resultsTable
+    && typeof G.els.resultsTable.getBoundingClientRect === "function") {
+  new ResizeObserver(fitPins).observe(G.els.resultsTable);
+}
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
 if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
   G.announce && G.announce((labels.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED")) + " — " + labels.join(" · "), 3, "race"));
@@ -564,6 +606,7 @@ function buildResults(order, race) {
   }
   winnerChip(els, order.length && !dnfOf(order[0]) ? order[0].code || "" : "");
   resultsAtTop(els.resultsTable);
+  fitPinsSoon();
   sayCards(els.results, els.resultsTable, order);
 }
 
@@ -789,6 +832,7 @@ function buildTTResults() {
   }
 
   els.resNext.textContent = tr("results.tryAgain", null, "TRY AGAIN");
+  fitPinsSoon();
 }
 
 function buildStandings() {
@@ -902,6 +946,7 @@ function buildChampion() {
   }
   els.resNext.textContent = tr("results.mainMenu", null, "MAIN MENU");
   G.announce(tr("results.championAnnouncement", { code: champ.code }, "{code} IS WORLD CHAMPION!"), 4);
+  fitPinsSoon();
   // endRace already played the finish fanfare; a second finish() here stacked blips on the season finale.
 }
 

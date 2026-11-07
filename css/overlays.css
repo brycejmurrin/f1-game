@@ -1145,9 +1145,15 @@ body[data-density="compact"][data-shape="wide"] #pm-race-context > small { displ
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); position: static; height: auto; margin: 0; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-restart { grid-area: restart; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-settings { grid-area: settings; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; container-type: inline-size; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
+/* The tile label scales with the TRAY (an inline-size container, no named query reads it): in the Home Screen and
+   Safari windows the 59 px insets leave a 393 own px tray, and MESSAGES at TEXT large (74 px) is still 3 px wider
+   than a 5-up tile's 71 px text box. 3.75cqi is 14.7 px there (MESSAGES 68); from a 427 px tray (D: 456) the label
+   is the full --fs-micro. The contract lets type scale, never a label overflow (UI contract #5153 §3 rule 3). */
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details { font-size: min(var(--fs-micro), 3.75cqi); }
 body[data-density="compact"][data-shape="wide"] #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quit::before { content: none; }
 body[data-density="compact"][data-shape="wide"] #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
@@ -1522,23 +1528,34 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
    with your row under them, so "me against the front" is on screen at every
    scroll position without leaving rank order. An opened stints row unpins
    and grows, so its text is never clipped under a pinned row. */
-/* 44 PAINTED px (the sheet is zoomed, so bare --tap painted 57): four pinned
-   rows then leave two and a half scrolling rows on a 390px screen. */
-:where(body[data-density="compact"][data-shape="wide"]) #results-table { --rr-h: calc(44px / var(--sheet-scale, var(--ui-scale, 1))); }
+/* Keyed on the SHEET's density and shape (UI contract #5153 gap 12, PR D): the
+   body flags said "compact wide" for a desktop window at a small UI SIZE too,
+   and the sheet is the box these rows live in. 44 PAINTED px per row (the sheet
+   is zoomed, so bare --tap painted 57). HOW MANY rows pin comes from the pane:
+   results-sheet.js writes data-pins on #results-table from its own height in
+   rows — 4 (P1 P2 P3 YOU) at >= 6.25 rows, 2 (P1 + YOU) at >= 4.25, else YOU
+   alone — so the shortest window (Safari 852x283 at the owner's knobs: 3.9 rows)
+   still scrolls >= 2 rows of the classification instead of nothing but pins. */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table { --rr-h: calc(44px / var(--sheet-scale, var(--ui-scale, 1))); }
 /* No gap between rows: a pinned row's neighbour scrolls UNDER it, and a gap let its text peek through. */
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] { height: var(--rr-h); padding-block: 0; margin-block: 0; align-items: center; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] { height: var(--rr-h); padding-block: 0; margin-block: 0; align-items: center; }
 /* One line box at the row height: the name, the gap and the stints disclosure share it, so every cell centres alike. */
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] .res-name:has([data-stint-details]) { display: block; height: var(--rr-h); line-height: var(--rr-h); white-space: nowrap; text-overflow: ellipsis; }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] .res-name [data-stint-details] { display: inline-block; vertical-align: top; margin-left: var(--gap); }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] .res-name > .q-time { display: inline; }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] [data-stint-details] > summary { color: var(--dim); min-height: var(--rr-h); line-height: var(--rr-h); align-content: normal; }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"]:is(.p1, .p2, .p3) { position: sticky; z-index: 2; }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].p1 { top: 0; background: color-mix(in oklab, var(--gold) 10%, var(--surf-1)); }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].p2 { top: var(--rr-h); background: color-mix(in oklab, var(--silver) 7%, var(--surf-1)); }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].p3 { top: calc(2 * var(--rr-h)); background: color-mix(in oklab, var(--bronze) 7%, var(--surf-1)); box-shadow: 0 6px 8px -6px var(--bg); }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { top: calc(3 * var(--rr-h)); }
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].you:is(.p1, .p2, .p3) { background: color-mix(in oklab, var(--you) 8%, var(--surf-1)); }   /* you still win the row on the podium */
-:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"]:has([data-stint-details][open]) { height: auto; position: static; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] .res-name:has([data-stint-details]) { display: block; height: var(--rr-h); line-height: var(--rr-h); white-space: nowrap; text-overflow: ellipsis; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] .res-name [data-stint-details] { display: inline-block; vertical-align: top; margin-left: var(--gap); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] .res-name > .q-time { display: inline; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"] [data-stint-details] > summary { color: var(--dim); min-height: var(--rr-h); line-height: var(--rr-h); align-content: normal; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:is(.p1, .p2, .p3) { position: sticky; z-index: 2; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p1 { top: 0; background: color-mix(in oklab, var(--gold) 10%, var(--surf-1)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p2 { top: var(--rr-h); background: color-mix(in oklab, var(--silver) 7%, var(--surf-1)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].p3 { top: calc(2 * var(--rr-h)); background: color-mix(in oklab, var(--bronze) 7%, var(--surf-1)); box-shadow: 0 6px 8px -6px var(--bg); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { top: calc(3 * var(--rr-h)); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"].you:is(.p1, .p2, .p3) { background: color-mix(in oklab, var(--you) 8%, var(--surf-1)); }   /* you still win the row on the podium */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table .res-row[role="listitem"]:has([data-stint-details][open]) { height: auto; position: static; }
+/* Fewer pins: an unpinned podium row keeps its metal and scrolls with the list; YOU moves up under what is left. */
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"]:is(.p2, .p3):not(.you) { position: static; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }
+:where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table[data-pins="1"] .res-row[role="listitem"].you { top: 0; }
 
 /* ---------- section label ---------- */
 .sel-label {

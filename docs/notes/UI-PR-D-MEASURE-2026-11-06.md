@@ -78,6 +78,12 @@ MESSAGES, REVIEW INPUTS) → 4 rows at 3-up.
 | D large/exp | 299 | compact | 212 | 42.3 | 4 | 2.27 |
 In C the pins are taller than the pane: zero scrolling rows, the list cannot be read. (The `--rr-h` 44 painted holds; 42.3 at 109 % is
 the zoom rounding.)
+**Correction (2026-11-07, PR D gap 12):** the probe's results cells (and the pause cells after the first) ran at the LAST knob of the
+previous sheet's loop — `knob(…, null)` only removed the stored UI SIZE and left the live scale at 130 %, so every "large/exp" row above
+for results is really UI 130 (sheet zoom 1.25, fit-capped). At the export's true 109 % the panes are A 240 / C 158 / D 256 own px
+(5.95 / 3.91 / 6.34 rows of 40.4 own). The probe now re-applies the export's own UI SIZE for `exp`. After the fix (pins from the pane:
+4 at ≥ 6.25 rows, 2 at ≥ 4.25, else 1): A pins 2 → 3.95 scrolling rows, C pins 1 → 2.91, D pins 4 → 2.34; at the leftover 130 % cells
+A 3.85, C 2.67, D 2.27 (`artifacts/pr-d-probe-gap12.json`).
 
 ## The fix plan (file · mechanism · fix · test) — decided from the numbers above
 

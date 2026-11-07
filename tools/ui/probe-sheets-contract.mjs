@@ -6,6 +6,7 @@ import fs from "node:fs";
 
 const ROOT = "/home/user/f1-game";
 const EXPORT = JSON.parse(fs.readFileSync(ROOT + "/tests/data/settings-defaults-export.json", "utf8"));
+const EXPORT_UI = EXPORT.uiScale == null ? null : Math.round(100 * EXPORT.uiScale);   // percent for __apex.uiScale; null = the export's default
 const WINDOWS = [
   { name: "A", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
   { name: "C", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
@@ -28,15 +29,17 @@ function common() {
 }
 
 async function knob(page, text, ui) {
-  await page.evaluate(async ([t, u]) => {
+  await page.evaluate(async ([t, u, exp]) => {
     if (window.AppearanceOpts && typeof AppearanceOpts.setTextSize === "function") { try { AppearanceOpts.setTextSize(t); } catch (_) {} }
     if (t === "normal") delete document.documentElement.dataset.textSize; else document.documentElement.dataset.textSize = t;
-    if (u != null) window.__apex.uiScale(u); else { try { localStorage.removeItem("apex26.uiScale"); } catch (_) {} }
+    // `exp` = the export's own UI SIZE, re-applied: a previous sheet's knob loop leaves the live scale at its last
+    // value (130), and the first results/pause cells of the 2026-11-06 run were measured there (sheet zoom 1.25).
+    if (u != null) window.__apex.uiScale(u); else window.__apex.uiScale(exp);   // null = the stored default (109 % on touch)
     window.SheetShape && SheetShape.reclassify();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     window.SheetShape && SheetShape.reclassify();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  }, [text, ui]);
+  }, [text, ui, EXPORT_UI]);
 }
 
 const SEL = `(() => {

@@ -1012,6 +1012,17 @@ test("RESULTS opens at the top with the winner in the head; your row sticks insi
   assert.deepEqual([pinned.get("position"), pinned.get("top"), pinned.get("bottom")], ["sticky", "0", "0"], "pinned at whichever edge, within its list");
   assert.equal(decl(css, "#results-table .res-row.you:has([data-stint-details][open])", "position"), "relative",
     "an open TYRE STINTS fold drops the row into flow instead of covering the rows after it");
+  // UI contract #5153 gap 12 (PR D): the PINNED PODIUM is keyed on the SHEET's density and shape, never the body's, and
+  // the pin count comes from the pane through data-pins (results-sheet.js): 2 keeps P1 + YOU, 1 keeps YOU alone.
+  const raw = readCssSource("css/overlays.css");
+  assert.doesNotMatch(raw, /body\[data-density="compact"\]\[data-shape="wide"\]\) #results-table/,
+    "the podium pins read the sheet's flags, not the body's (a desktop window at a small UI SIZE is a compact wide BODY too)");
+  const KEY = ':where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table';
+  assert.ok(raw.includes(KEY + ' .res-row[role="listitem"]:is(.p1, .p2, .p3) { position: sticky;'), "P1-P3 stick under the sheet key");
+  assert.ok(raw.includes(KEY + '[data-pins="2"] .res-row[role="listitem"]:is(.p2, .p3):not(.you) { position: static; }'), "two pins: P2 and P3 scroll");
+  assert.ok(raw.includes(KEY + '[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }'), "two pins: YOU sits under P1");
+  assert.ok(raw.includes(KEY + '[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }'), "one pin: the podium scrolls");
+  assert.ok(raw.includes(KEY + '[data-pins="1"] .res-row[role="listitem"].you { top: 0; }'), "one pin: YOU at the top edge");
 });
 
 test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis", () => {
