@@ -37,13 +37,17 @@ function bootScreen(stored = {}) {
   ctx.queueMicrotask = (fn) => Promise.resolve().then(fn);
   ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
   ctx.devicePixelRatio = 1;
+  // The window listeners the screen registers (the foot's `resize` re-seat); fired by `fire(type)`.
+  const listeners = new Map();
+  ctx.addEventListener = (type, fn) => { (listeners.get(type) || listeners.set(type, []).get(type)).push(fn); };
+  const fire = (type, ev = { type }) => { for (const fn of listeners.get(type) || []) fn(ev); };
   for (const f of SCREEN_FILES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const G = { soundOn: false, trackIdx: 0 };
   const clicks = [];
   for (const id of ["mb-race", "mb-tt"]) dom.byId(id).addEventListener("click", () => clicks.push(id));
   dom.byId("mb-race").click = () => clicks.push("mb-race");
   dom.byId("mb-tt").click = () => clicks.push("mb-tt");
-  return Object.assign(vmx, { dom, G, clicks, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
+  return Object.assign(vmx, { dom, G, clicks, fire, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
 }
 
 // The normal editor store keeps object references; SAVE mutating a cached draft
@@ -3117,4 +3121,44 @@ test("terrain library search filters without editing; landscapes place, undo and
   b.D.undo(); assert.equal(b.D.state().design.props, undefined);
   for (const theme of ["fjord", "badlands", "redwood"]) { by("theme", theme).click(); assert.equal(b.D.state().design.theme, theme); }
   b.D.close();
+});
+
+// Deploy red b852807e (Pages run 42337166562): at 844x390 the foot re-seats under the rail
+// on the resize that follows the open; moving the foot moved the SHARE & FILES summary
+// Playwright had just focused, the platform dropped focus on <body>, and the Enter then
+// seeded MenuNav's landing (the pressed EDIT chip) instead of opening the menu.
+test("re-seating the foot on a short-landscape resize keeps focus on the control that had it", () => {
+  const b = bootScreen();
+  const { document } = b.dom;
+  b.ctx.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  b.ctx.innerWidth = 1280; b.ctx.innerHeight = 720;
+  b.D.open();
+  // What the mini DOM does not do and the platform does: a focused node that moves
+  // between parents loses focus to <body>. (Element identity is asserted with ===:
+  // assert.equal's diff of two mini-DOM trees is what OOM-killed the runner.)
+  for (const host of [b.root, b.root.querySelector(".td-body")]) {
+    const append = host.appendChild;
+    host.appendChild = (c) => { const had = document.activeElement; const r = append(c); if (had && c.contains(had)) document.activeElement = document.body; return r; };
+  }
+  const foot = b.root.querySelector(".td-foot"), menu = walk(b.root).find((e) => e.dataset.role === "file-menu"), summary = menu && menu.children[0];
+  assert.ok(foot && summary, "the foot and its SHARE & FILES summary exist");
+  assert.equal(b.root.dataset.foot, "out", "a landscape desktop keeps the foot under the body");
+  summary.focus();
+  b.ctx.innerWidth = 844; b.ctx.innerHeight = 390;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "in", "844x390 seats the foot inside the body");
+  assert.ok(foot.parentNode === b.root.querySelector(".td-body"), "the foot moved under the rail");
+  assert.ok(document.activeElement === summary, "the summary keeps focus across the move");
+  // ...and back out again on the way to portrait, still without dropping it.
+  b.ctx.innerWidth = 390; b.ctx.innerHeight = 844;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "out");
+  assert.ok(document.activeElement === summary, "the summary keeps focus when the foot returns to the dialog");
+  // Nothing focused inside the foot: the re-seat touches focus nowhere else.
+  const draw = walk(b.root).find((e) => e.dataset.role === "mode-bar").querySelector("button");
+  draw.focus();
+  b.ctx.innerWidth = 844; b.ctx.innerHeight = 390;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "in");
+  assert.ok(document.activeElement === draw, "focus outside the foot is left alone");
 });
