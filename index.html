@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-AeLreRKLyHmzWVUwCsEdK9LF4XrDWEj5IOeI0xAa2jo=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-U2BhFAb5Lprg2tN5VFT545beilzilFpnqF7K9seadX0=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -581,7 +581,16 @@
         .getPropertyValue("--ui-scale")) || 1;
       var at = parseFloat(getComputedStyle(b)
         .getPropertyValue("--compact-at")) || 380;
-      var hOwn = window.innerHeight / scale, wOwn = window.innerWidth / scale;
+      // THE LAYOUT VIEWPORT, not innerWidth/innerHeight: on a Home Screen
+      // landscape launch iOS can still report the portrait pair here while
+      // CSS already lays out landscape (#5152), which stamped body tall +
+      // normal and put every screen on the wrong tier. The ICB is what the
+      // media queries see (UI contract 2026-11-06 rule 1); inner* only when
+      // there is no layout yet. js/ui/sheet-shape.js viewportPx() is the twin.
+      var de0 = document.documentElement;
+      var vw = de0.clientWidth > 0 ? de0.clientWidth : window.innerWidth;
+      var vh = de0.clientHeight > 0 ? de0.clientHeight : window.innerHeight;
+      var hOwn = vh / scale, wOwn = vw / scale;
       b.setAttribute("data-density", hOwn < at ? "compact" : "normal");
       // data-shape, for the same reason and from the same place. It was the
       // half of this pair that stayed on the far side of first paint: measured

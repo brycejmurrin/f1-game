@@ -21,10 +21,7 @@ const TALL_CTRL = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [da
 const TALL_PREV = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [data-as=\"preview-side\"]";
 const TALL_LIST = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [data-as=\"preset-list\"]";
 const TALL_TILE = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [data-as=\"preset-list\"] button";
-const WIDE = "#pmsettings-inner[data-shape=\"wide\"] #appearance-studio";
-const WIDE_COMPACT_LIST = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"]";
-const WIDE_COMPACT_TILE = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"] button";
-const WIDE_COMPACT_SHORT_LIST = WIDE_COMPACT_LIST;
+const WIDE = { context: /@container sheet \(min-width: 52rem\)/ };   // UI contract 2026-11-06 gap 4: width in own px, never aspect
 
 test("APPEARANCE panel pads so the last studio tile can scroll above BACK", () => {
   assert.equal(decl(rules, PANEL, "padding-bottom"), PAD,
@@ -52,32 +49,25 @@ test("tall studio puts presets first and uses a 2-col tile track", () => {
   assert.equal(decl(rules, TALL_TILE, "min-width"), "var(--tap-paint)");
 });
 
-test("wide studio keeps two columns (scale 200 landscape still uses data-shape)", () => {
-  assert.equal(decl(rules, WIDE, "grid-template-columns"), "minmax(0, 1.15fr) minmax(0, 0.95fr)");
+test("the studio is one column with the preview on top; two columns only from 52rem of sheet (gap 4)", () => {
+  assert.equal(decl(rules, "#appearance-studio", "grid-template-columns"), "minmax(0, 1fr)");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preview-side\"]", "order"), "-1", "preview first in the stack");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preview-side\"]", "position"), "static");
+  assert.equal(decl(rules, "#appearance-studio", "grid-template-columns", WIDE), "minmax(0, 1.15fr) minmax(0, 0.95fr)");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preview-side\"]", "position", WIDE), "sticky");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preset-list\"]", "grid-template-columns", WIDE), "repeat(5, minmax(0, 1fr))",
+    "a laptop sheet: one row of five");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preset-list\"] button", "min-height", WIDE), "var(--tap-paint)");
+  const src = css.replace(/\/\*[\s\S]*?\*\//g, "");   // comments name the old switches on purpose
+  assert.doesNotMatch(src, /@media \(max-width: 9[06]0px\)|min-width: 641px|data-shape="wide"/,
+    "no media-query or aspect switch may give a phone the tablet split again");
 });
 
-test("wide compact studio keeps a 5-tile desktop row at --tap-paint", () => {
-  assert.equal(decl(rules, WIDE_COMPACT_LIST, "grid-template-columns"), "repeat(5, minmax(0, 1fr))",
-    "short landscape: one row of five, not a 3-row stack under BACK");
-  assert.equal(decl(rules, WIDE_COMPACT_TILE, "min-height"), "var(--tap-paint)");
-  assert.equal(decl(rules, WIDE_COMPACT_TILE, "min-width"), "var(--tap-paint)");
-});
-
-test("short wide compact studio widens preset tiles at high-scale phone landscape", () => {
-  assert.equal(
-    decl(rules, WIDE_COMPACT_SHORT_LIST, "grid-template-columns", {
-      context: /@media \(max-width: 960px\) and \(max-height: 500px\)/,
-    }),
-    "repeat(3, minmax(0, 1fr))",
-    "short phone landscapes need readable preset names at 130–200% UI scale",
-  );
-});
-
-test("short wide compact studio keeps preset words intact", () => {
-  const context = /@media \(max-width: 960px\) and \(max-height: 500px\)/;
-  assert.equal(decl(rules, WIDE_COMPACT_SHORT_LIST + " strong", "overflow-wrap", { context }), "normal");
-  assert.equal(decl(rules, WIDE_COMPACT_SHORT_LIST + " strong", "word-break", { context }), "normal");
-  assert.equal(decl(rules, WIDE_COMPACT_SHORT_LIST + " strong", "hyphens", { context }), "none");
+test("phone preset tiles are at least three taps wide and name at --fs-micro (gap 4)", () => {
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preset-list\"]", "grid-template-columns"),
+    "repeat(auto-fit, minmax(min(100%, calc(var(--tap) * 3)), 1fr))");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"preset-list\"] strong", "font-size"), "var(--fs-micro)",
+    "measured 852x393 large text: 16 own / 17.4 painted px, was 10.9 / 11.9");
 });
 
 test("studio buttons keep the --tap / --tap-paint floors", () => {

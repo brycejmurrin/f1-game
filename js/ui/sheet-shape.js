@@ -139,6 +139,23 @@ window.SheetShape = (function () {
    * the fixed footer fixed. */
   const SHORT_DEFAULT = 380;
   const SHORT_HYST = 40;   // hysteresis, same reason as the others
+  /* Fit-cap band (UI contract 2026-11-06 gap 14). A Safari toolbar show/hide
+     or a keyboard settle moves the host by a few px; without a band every one
+     re-zoomed the sheet (C: select 1.027 ↔ off across the toolbar). */
+  const FIT_HYST = 0.03;
+
+  /* THE ONE INPUT (UI contract 2026-11-06 rule 1): the layout viewport —
+     documentElement.clientWidth/Height — never innerWidth/innerHeight, which
+     on iOS is the VISUAL viewport (pinch, keyboard) and on a Home Screen
+     landscape launch can still hold the portrait pair while CSS already lays
+     out landscape (#5152: body classified tall + normal, every screen on the
+     wrong tier until a resize that never came). The unit harness has no layout
+     (clientWidth 0): inner* is the fallback there only. */
+  function viewportPx() {
+    const r = document.documentElement;
+    const w = r ? r.clientWidth : 0, h = r ? r.clientHeight : 0;
+    return (w > 0 && h > 0) ? [w, h] : [window.innerWidth, window.innerHeight];
+  }
 
   /* THE FOURTH ANSWER: can this sheet afford the requested UI zoom and still
    * have a functional content row? Most sheets can simply scroll, but dense
@@ -171,7 +188,17 @@ window.SheetShape = (function () {
     if (!available) return;
     const desired = parseFloat(getComputedStyle(document.documentElement)
       .getPropertyValue("--ui-scale")) || 1;
-    const fitted = Math.max(0.4, Math.min(desired, available / at));
+    /* NEVER BELOW 100 %. A cap under the shipped size made type smaller than
+       the player never asked for (circuit detail painted 0.954 in an 852x283
+       Safari tab); a sheet that cannot fit at 1.0 scrolls its list instead
+       (contract rule 3). A UI SIZE under 100 % is the player's own floor. */
+    const floor = Math.min(1, desired);
+    let fitted = Math.max(floor, Math.min(desired, available / at));
+    /* ±FIT_HYST: keep the cap already painted while the new answer is within
+       the band and the sheet is still capped; a release (fitted reaches the
+       preference) is never held back. */
+    const prev = parseFloat(el.style.getPropertyValue("--sheet-scale"));
+    if (prev >= floor && fitted < desired - 0.001 && Math.abs(fitted - prev) <= FIT_HYST) fitted = prev;
     const capped = fitted < desired - 0.001;
     const next = capped ? String(Math.round(fitted * 1000) / 1000) : "";
     if (el.style.getPropertyValue("--sheet-scale") !== next) {
@@ -404,8 +431,9 @@ window.SheetShape = (function () {
     if (!b) return;
     const scale = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
-    const wOwn = window.innerWidth / scale;
-    const hOwn = window.innerHeight / scale;
+    const [vw, vh] = viewportPx();
+    const wOwn = vw / scale;
+    const hOwn = vh / scale;
     classifyDensity(b, hOwn);
     classifyFlag(b, wOwn, "--wide-at", "width", WIDE_HYST, "wide", "narrow");
     /* ZOOM-CORRECT BODY ORIENTATION. `@media (orientation: portrait)` reads the
@@ -653,7 +681,7 @@ window.SheetShape = (function () {
      fought that scroll (photo-studio-conditions retried on exactly this). */
   let focusKeptAt = "";
   function keepFocusVisible() {
-    const size = innerWidth + "x" + innerHeight;
+    const size = viewportPx().join("x");
     if (size === focusKeptAt) return;
     focusKeptAt = size;
     const el = document.activeElement, UL = window.UiLayers;
@@ -822,5 +850,31 @@ window.SheetShape = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, observe, reclassify };
+  /* THE MEASURED LAYOUT, AS NUMBERS (UI contract 2026-11-06 rule 8): the
+     spec matrix asserts this, a screenshot is sign-off only. `sheet` is the
+     sheet element; the viewport pair is the ICB (what every tier reads),
+     `inner` is kept beside it so a stale-launch disagreement is visible. */
+  function layoutProbe(sheet) {
+    if (!sheet || !sheet.getBoundingClientRect) return null;
+    const cs = getComputedStyle(sheet), host = sheet.parentElement;
+    const hs = host ? getComputedStyle(host) : null;
+    const r = sheet.getBoundingClientRect();
+    const zoom = parseFloat(sheet.style.getPropertyValue("--sheet-scale"))
+      || parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+    const b = document.body.dataset;
+    return {
+      id: sheet.id, density: sheet.dataset.density || null, shape: sheet.dataset.shape || null,
+      pair: sheet.dataset.pair || null, fit: sheet.dataset.fit || null,
+      sheetScale: sheet.style.getPropertyValue("--sheet-scale") || null, zoom,
+      own: { w: sheet.clientWidth, h: sheet.clientHeight },
+      painted: { x: r.left, y: r.top, w: r.width, h: r.height },
+      host: host ? { h: host.clientHeight, padTop: parseFloat(hs.paddingTop) || 0, padBottom: parseFloat(hs.paddingBottom) || 0 } : null,
+      kb: document.documentElement.style.getPropertyValue("--kb") || null,
+      container: cs.containerType || null,
+      viewport: viewportPx(), inner: [window.innerWidth, window.innerHeight],
+      body: { density: b.density || null, shape: b.shape || null, width: b.width || null },
+    };
+  }
+
+  return { scan, observe, reclassify, layoutProbe };
 })();

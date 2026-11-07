@@ -52,17 +52,21 @@ function dockEl() {
   };
 }
 
-test("usablePad prefers a positive visual viewport over the layout viewport", () => {
+test("usablePad reads the layout viewport (documentElement.client*), never the visual viewport (UI contract rule 1)", () => {
   lastWin.visualViewport.width = 320;
   lastWin.visualViewport.height = 500;
+  DL.__doc.documentElement.clientWidth = 852;
+  DL.__doc.documentElement.clientHeight = 393;
   const pad = DL.usablePad({ });
-  assert.equal(pad.w, 320);
-  assert.equal(pad.h, 500);
+  assert.equal(pad.w, 852, "a pinch (visual 320) must not move a dock");
+  assert.equal(pad.h, 393);
+  DL.__doc.documentElement.clientWidth = 0;
+  DL.__doc.documentElement.clientHeight = 0;
+  const layout = DL.usablePad({ });
+  assert.equal(layout.w, 400, "no layout yet (the unit harness) falls back to innerWidth");
+  assert.equal(layout.h, 800);
   lastWin.visualViewport.width = 0;
   lastWin.visualViewport.height = 0;
-  const layout = DL.usablePad({ });
-  assert.equal(layout.w, 400, "a zero visual viewport falls back to innerWidth");
-  assert.equal(layout.h, 800);
 });
 
 test("clampXY keeps a dock between its safe-area home and MAX (a negative share would park it off screen)", () => {

@@ -82,18 +82,21 @@ const DockLayout = (function () {
     return true;
   }
 
-  /** Usable pad size in CSS px (visible viewport minus safe-area insets).
-      visualViewport is the area not covered by browser chrome; innerWidth
-      stays the layout viewport and overstates the pad while a toolbar is up. */
+  /** Usable pad size in CSS px: the LAYOUT viewport (documentElement.client*)
+      minus the safe-area insets — UI contract 2026-11-06 rule 1. The ICB is
+      the small viewport on iOS, so a shown toolbar already shrinks it; the
+      visual viewport this used to prefer also shrinks under a pinch, which
+      must never move a dock. inner* only when there is no layout (the unit
+      harness). */
   function usablePad(root) {
     const cs = root ? getComputedStyle(root) : null;
     const sal = parseFloat(cs && cs.getPropertyValue("--sal")) || 0;
     const sar = parseFloat(cs && cs.getPropertyValue("--sar")) || 0;
     const sat = parseFloat(cs && cs.getPropertyValue("--sat")) || 0;
     const sab = parseFloat(cs && cs.getPropertyValue("--sab")) || 0;
-    const vv = (typeof window !== "undefined" && window.visualViewport) || null;
-    const vw = (vv && +vv.width > 0) ? +vv.width : (typeof window !== "undefined" ? window.innerWidth : 390);
-    const vh = (vv && +vv.height > 0) ? +vv.height : (typeof window !== "undefined" ? window.innerHeight : 844);
+    const de = (typeof document !== "undefined" && document.documentElement) || null;
+    const vw = (de && de.clientWidth > 0) ? de.clientWidth : (typeof window !== "undefined" ? window.innerWidth : 390);
+    const vh = (de && de.clientHeight > 0) ? de.clientHeight : (typeof window !== "undefined" ? window.innerHeight : 844);
     return { w: Math.max(1, vw - sal - sar), h: Math.max(1, vh - sat - sab) };
   }
 
