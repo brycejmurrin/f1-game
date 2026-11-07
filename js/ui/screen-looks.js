@@ -526,7 +526,7 @@ const ScreenLooks = (function () {
     // The status line belongs under the buttons, not inside the balanced row.
     if (peekUi[s.id].status) body.appendChild(peekUi[s.id].status);
     paintSum();
-    onChange(s.id, paintSum);
+    onChange(s.id, () => { paintRows(); paintSum(); });
     built[s.id] = { fold, paintRows, paintSum, paintAvail };
     if (!s.host && fold) {
       if (after && after.parentNode) after.parentNode.insertBefore(fold, after.nextSibling);

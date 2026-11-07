@@ -112,6 +112,15 @@ test("without the studio the row still lands at the top, after the help line", (
   assert.equal(panel.children[1], dom.byId("pm-layoutpreset-box"));
 });
 
+test("THUMB repaints the built CAREER density select (ScreenLooks folds mounted)", () => {
+  const { M, S, dom } = boot();
+  S.build();
+  assert.equal(dom.byId("pm-look-career-density-sel").value, "auto");
+  M.apply("thumb");
+  assert.equal(S.read("career").density, "roomy");
+  assert.equal(dom.byId("pm-look-career-density-sel").value, "roomy", "preset path matches storage without reload");
+});
+
 test("THUMB applies live through the owners: stores, <html> stamps and the row", () => {
   const { M, S, P, data, html, dom } = boot();
   const r = M.apply("thumb");

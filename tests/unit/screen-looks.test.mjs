@@ -523,6 +523,31 @@ test("lazy LookAvail: before it loads a peek shows the real screen and no line s
   assert.ok(b.dom.byId("sel-tracks").children.length >= 6, "stand-ins once loaded");
 });
 
+test("external ScreenLooks.set repaints built cycle controls (layout preset path)", () => {
+  const { dom, M, data } = boot({ win: { innerWidth: 844, innerHeight: 390 } });
+  const sel = () => dom.byId("pm-look-career-density-sel");
+  assert.equal(sel().value, "auto", "starts at shipped default");
+  M.set("career", "density", "roomy");
+  assert.deepEqual(plain(data.lookCareer), { density: "roomy" }, "stored off-default");
+  assert.equal(M.read("career").density, "roomy");
+  assert.equal(sel().value, "roomy", "the row matches storage without a reload");
+});
+
+test("external onChange repaint does not overwrite a focused range slider value", () => {
+  const { dom, M } = boot();
+  const slider = dom.byId("pm-look-popups-w");
+  slider.focus();
+  slider.value = "115";
+  dom.dispatch(slider, { type: "input" });
+  assert.equal(M.read("popups").w, 115);
+  M.set("popups", "w", 80);
+  assert.equal(M.read("popups").w, 80, "storage updates from an external set");
+  assert.equal(slider.value, "115", "paintRows keeps the focused thumb");
+  slider.blur();
+  M.set("popups", "corners", "pill");
+  assert.equal(slider.value, "80", "after blur the row follows storage again");
+});
+
 test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height; stored ids are unchanged", () => {
   const { M } = boot({ stored: { lookCareer: { side: "swapped" }, lookGarage: { side: "left" } } });
   const knob = (id, k) => M.SCREENS.find((s) => s.id === id).knobs.find((n) => n.k === k);
