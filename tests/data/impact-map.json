@@ -19240,6 +19240,9 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
+      ],
+      "*": [
+        "tests/specs/real-race.spec.js"
       ]
     },
     "js/workers/bitmap-decode-client.js": {
