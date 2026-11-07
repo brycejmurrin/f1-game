@@ -15,6 +15,17 @@
      <dialog> screens are in the top layer where z-index is not consulted. */
   z-index: 36;
   place-items: end center;
+  /* ONE DEFINITE ROW, and the card may overflow it. The card's LAYOUT box can
+     stand taller than the screen (its paint scale, --ld-fit, is what brings it
+     inside the window — gap 22); with the implicit `auto` row the row simply
+     GREW to the card and started at the top, which put the shrunk card's
+     bottom 16 px below a 283 px window (measured 2026-11-07). minmax(0, 1fr)
+     pins the row to the safe box, and `unsafe` keeps an overflowing card
+     end-aligned instead of the start fallback: the bottom edge is the anchor
+     whatever the box's height. An engine without the keyword keeps the line
+     above. */
+  grid-template-rows: minmax(0, 1fr);
+  align-items: unsafe end;
   pointer-events: auto;      /* swallow the click that skips the flyby */
   background: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%);
 }
@@ -34,13 +45,15 @@
      right-hand edge with no scrollbar to show it. Dividing the cap gives the
      scaled card the same "never wider than the screen" guarantee the plain one
      has, while --sheet-w still caps it on a desktop. */
-  width: min(calc(100% / var(--ld-card-scale, 1)), var(--sheet-w, 560px));
+  width: min(calc(100% / (var(--ld-card-scale, 1) * var(--ld-fit, 1))), var(--sheet-w, 560px));
   /* Individual transform properties, NOT `transform`: the reveal below animates
      `transform` and would otherwise overwrite the player's placement the frame
      the card faded in. These compose with it (translate, then scale, then
      transform) and animate independently. */
   translate: var(--ld-card-x, 0px) var(--ld-card-y, 0px);
-  scale: var(--ld-card-scale, 1);
+  /* The player's CARD SIZE times the window's FIT (gap 22, below): one paint-time
+     scale, about the bottom edge the card is anchored to. */
+  scale: calc(var(--ld-card-scale, 1) * var(--ld-fit, 1));
   /* Bottom centre, because that is where the card is ANCHORED (#loading's
      place-items: end center). Scaling about the default 50% 50% pushed the
      plate's bottom edge down past its own margin and off the screen. */
@@ -49,7 +62,29 @@
      and would otherwise paint over the plate where they overlap it. */
   position: relative;
   z-index: 1;
-  margin-bottom: clamp(var(--gap), 6vh, calc(4 * var(--pad)));
+  margin-bottom: clamp(var(--gap), 6svh, calc(4 * var(--pad)));
+  /* FIT, NEVER CLIP (UI scaling contract gap 22). The card had no height cap:
+     MEASURED 2026-11-06 at the owner's export (TEXT large) with a radio caption
+     up, it stood 374 px tall in the 852×283 Safari window (400 with a longer
+     line at 852×393) and ran 68–87 px past the TOP edge in every phone window —
+     the wordmark and the circuit name were the part that went. The cap is the
+     safe box less the margin below, IN THE CARD'S OWN LAYOUT PX: `scale` is a
+     paint-time transform about the bottom edge, so the painted card is the
+     layout box times the scale and a cap on the layout box alone left the
+     painted one 14 % taller than the window (MEASURED 2026-11-07 at the owner's
+     export: CARD SIZE 1.14, CARD Y -14 — box 373.7 vs cap 332.4 in A, top at
+     -83). The player's CARD Y, when it lifts the card, costs the same room above
+     the top edge, so a negative --ld-card-y comes off the box too (a positive one
+     moves the card down past its margin and buys nothing: min(…, 0px)).
+     --ld-fit is js/ui/loading-screen.js fitCard(): 1 when the content fits
+     this box, otherwise the ratio that makes it, written inline AFTER paint —
+     so the card SHRINKS TO FIT, never clips (the body alone cannot give enough
+     room on a 283 px window with TEXT large and a radio caption: the text
+     column is 251 px tall). The card is a flex column whose body (#ld-body) is
+     the one child that gives while the fit is measured, the map first. svh
+     everywhere: the Safari toolbar must shorten the card, not slide it. */
+  max-height: calc((100svh - var(--safe-t) - var(--safe-b) - clamp(var(--gap), 6svh, calc(4 * var(--pad))) + min(var(--ld-card-y, 0px), 0px)) / (var(--ld-card-scale, 1) * var(--ld-fit, 1)));
+  display: flex; flex-direction: column;
   padding: var(--gap) var(--pad);
   border: 1px solid var(--card-line);
   border-radius: var(--r-md);
@@ -217,11 +252,18 @@
 /* Map beside the text, not above it: the card is a lower third, and stacking
    the outline would push it into the middle of the screen where the flyby is.
    Wraps on a phone, where 560px of card is not available. */
-#ld-body { display: flex; align-items: center; gap: var(--pad); flex-wrap: wrap; }
+#ld-wordmark { flex: 0 0 auto; }
+/* The giving child of the capped card (gap 22): min-height 0 lets it shrink
+   under the wordmark, overflow hidden keeps the facts inside the plate. NOT on
+   #ld-card: its ::after is the skip hint, placed ABOVE the card. */
+#ld-body { display: flex; align-items: center; gap: var(--pad); flex-wrap: wrap; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 #ld-map {
   flex: 0 0 auto;
   display: block;
   max-width: 45%;
+  /* The map shrinks first: its inline height (fitCanvas) is a maximum, the
+     body's height a cap; object-fit keeps the outline's aspect either way. */
+  max-height: 100%;
   height: auto;
   /* fitCanvas pins an inline px width AND height, so when the 45% cap binds (a
      portrait phone, a big CARD SIZE) the height does not follow and the outline

@@ -112,18 +112,22 @@
   background: currentColor;
 }
 #track-detail-legend [data-leg="sector"] { color: var(--silver); }
-/* Landscape: the legend is a KEY on the map, not a row under it (design pass #2d,
+/* Wide sheet: the legend is a KEY on the map, not a row under it (design pass #2d,
    #4241). The map is height-limited in its wrap, so a row under it cost map
    height and overran the wrap by 2px at 844x390 (UI-HUNT-2026-10-29 L2), while
-   the wrap's side margins sat empty. */
-@media (orientation: landscape) {
-  #track-detail-canvas-wrap { position: relative; }
-  #track-detail-legend {
-    position: absolute; left: 0; bottom: 0; align-self: auto;
-    flex-direction: column; gap: calc(var(--gap) / 6); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
-    background: var(--look-hud-bg); border: 1px solid var(--hairline); border-radius: var(--r-sm);
-    font-size: var(--fs-micro);
-  }
+   the wrap's side margins sat empty.
+   KEYED ON THE SHEET'S OWN SHAPE, NOT `@media (orientation)` (UI scaling contract
+   gap 24): `#td-inner[data-shape]` is what SheetShape measures in the sheet's own
+   px (height ÷ width against --tall-at, zoom-aware), and a row-or-column flip is
+   an aspect question — `data-density` (room height) is the wrong key for it. The
+   media query read the raw window, so a UI SIZE that made a landscape sheet
+   taller than wide still laid it out side by side. */
+#td-inner[data-shape="wide"] #track-detail-canvas-wrap { position: relative; }
+#td-inner[data-shape="wide"] #track-detail-legend {
+  position: absolute; left: 0; bottom: 0; align-self: auto;
+  flex-direction: column; gap: calc(var(--gap) / 6); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
+  background: var(--look-hud-bg); border: 1px solid var(--hairline); border-radius: var(--r-sm);
+  font-size: var(--fs-micro);
 }
 /* ☆ FAVOURITE (js/ui/select-screen.js openTrackDetail builds it): a chip, not a
    full-width bar, in the panel's column. */
@@ -142,41 +146,41 @@
 .tdf-banked { background: rgba(129,140,248,0.08); }
 #sel-preview-map { cursor: pointer; }
 
-/* Portrait: map on top, facts scroll under it. The sheet owns height now, so
+/* Tall sheet: map on top, facts scroll under it. The sheet owns height now, so
    the dialog itself does not scroll (that was the full-bleed leftover). */
-@media (orientation: portrait) {
-  #track-detail-canvas-wrap {
-    flex: none;
-    height: min(calc(40 * var(--svhz)), 420px);
-  }
-  #track-detail-panel {
-    flex: 1 1 auto;
-    padding-top: calc(var(--gap) * 0.5);
-    border-top: 1px solid var(--card-line);
-  }
+#td-inner[data-shape="tall"] #track-detail-canvas-wrap {
+  flex: none;
+  height: min(calc(40 * var(--svhz)), 420px);
+}
+#td-inner[data-shape="tall"] #track-detail-panel {
+  flex: 1 1 auto;
+  padding-top: calc(var(--gap) * 0.5);
+  border-top: 1px solid var(--card-line);
 }
 
-/* Landscape: map + a WIDER facts rail so unused wrap width is not empty black.
-   Both row branches keep `(orientation: landscape)` — css-media-disjoint. */
-@media (orientation: landscape) {
-  #track-detail-body { flex-direction: row; align-items: stretch; gap: var(--gap); }
-  #track-detail-canvas-wrap { flex: 1 1 0; min-width: 0; }
-  #track-detail-panel {
-    flex: 1 1 18rem;
-    max-width: min(24rem, 44%);
-  }
+/* Wide sheet: map + a WIDER facts rail so unused wrap width is not empty black. */
+#td-inner[data-shape="wide"] #track-detail-body { flex-direction: row; align-items: stretch; gap: var(--gap); }
+#td-inner[data-shape="wide"] #track-detail-canvas-wrap { flex: 1 1 0; min-width: 0; }
+#td-inner[data-shape="wide"] #track-detail-panel {
+  flex: 1 1 18rem;
+  max-width: min(24rem, 44%);
 }
 
+/* The one media branch left: a LARGE landscape window (a desktop, a tablet) gets
+   the roomier rail. It is a window-size upgrade, so the viewport is the right
+   input here; it still carries `(orientation: landscape)` (css-media-disjoint),
+   and the same `#td-inner[data-shape="wide"]` prefix so it outranks the base
+   wide rule above instead of losing to its specificity. */
 @media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
-  #track-detail-body { flex-direction: row; align-items: stretch; gap: calc(var(--gap) * 1.1); }
-  #track-detail-canvas-wrap { flex: 1 1 auto; min-width: 0; }
-  #track-detail-panel {
+  #td-inner[data-shape="wide"] #track-detail-body { flex-direction: row; align-items: stretch; gap: calc(var(--gap) * 1.1); }
+  #td-inner[data-shape="wide"] #track-detail-canvas-wrap { flex: 1 1 auto; min-width: 0; }
+  #td-inner[data-shape="wide"] #track-detail-panel {
     flex: 1 1 20rem;
     max-width: min(26rem, 40%);
     padding-left: var(--pad);
     border-left: 1px solid var(--card-line);
   }
-  #track-detail[data-map-tall="1"] #track-detail-panel {
+  #track-detail[data-map-tall="1"] #td-inner[data-shape="wide"] #track-detail-panel {
     flex-basis: clamp(20rem, 38%, 28rem);
     max-width: clamp(20rem, 38%, 28rem);
   }

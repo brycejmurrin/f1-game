@@ -17261,15 +17261,28 @@
       ]
     },
     "js/ui/captions.js": {
+      "announcerDone": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "applyDom": [
+        "tests/unit/loading-card.test.mjs"
+      ],
       "clear": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "onAnnouncerLine": [
         "tests/unit/captions.test.mjs"
       ],
       "onSpotter": [
         "tests/unit/captions.test.mjs"
       ],
+      "paintLoading": [
+        "tests/unit/loading-card.test.mjs"
+      ],
       "push": [
         "tests/unit/announcer.test.mjs",
-        "tests/unit/captions.test.mjs"
+        "tests/unit/captions.test.mjs",
+        "tests/unit/loading-card.test.mjs"
       ],
       "radioWho": [
         "tests/unit/captions.test.mjs"
@@ -18147,6 +18160,9 @@
       ]
     },
     "js/ui/loading-screen.js": {
+      "applyCard": [
+        "tests/unit/loading-card.test.mjs"
+      ],
       "building": [
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -18170,6 +18186,9 @@
       "failed": [
         "tests/unit/race-session-lazy.test.mjs"
       ],
+      "fitCard": [
+        "tests/unit/loading-card.test.mjs"
+      ],
       "garage": [
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -18192,10 +18211,19 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/loading-wipe.test.mjs"
       ],
+      "root": [
+        "tests/unit/loading-card.test.mjs"
+      ],
+      "setPhase": [
+        "tests/unit/loading-card.test.mjs"
+      ],
       "stop": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
+        "tests/unit/loading-card.test.mjs"
+      ],
+      "teamWipe": [
         "tests/unit/loading-card.test.mjs"
       ]
     },
@@ -19215,6 +19243,9 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/watch-transport-scrub.test.mjs"
+      ],
+      "*": [
+        "tests/specs/real-race.spec.js"
       ]
     },
     "js/workers/bitmap-decode-client.js": {

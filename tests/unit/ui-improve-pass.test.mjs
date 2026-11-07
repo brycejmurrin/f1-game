@@ -2248,6 +2248,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
   assert.doesNotMatch(resultsJs, /#e10600/, "results/standings heads use .sel-label, not leftover red ink");
   assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
+  // UI scaling contract gap 23 (PR #5156): inline px type does not follow TEXT SIZE.
+  assert.doesNotMatch(resultsJs, /fontSize\s*=\s*"\d+px"|font-size:\s*\d+px/,
+    "results-sheet inline type reads a --fs-* token, never a px");
   const shell = read("index.html");
   assert.doesNotMatch(shell, /id="sel-inner"[^>]*pane-pair/,
     "SELECT is one column (strip over hero); its foot spans the sheet by default");

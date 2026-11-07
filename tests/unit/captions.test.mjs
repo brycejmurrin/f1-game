@@ -141,3 +141,14 @@ test("clear() hides the strip and drops a pending hold (race reset / quit to men
   assert.equal(C.__strip.hidden, true);
   assert.equal(timers.size, 0);
 });
+
+test("the loading caption re-fits the loading card on show and on hide (UI scaling contract gap 22)", () => {
+  let fits = 0;
+  const C = loadCaptions(memStore({ captions: "on" }), { LoadingScreen: { fitCard() { fits++; } } });
+  C.onAnnouncerLine("Radio check.");
+  assert.equal(fits, 1, "shown: the card measures itself around the caption");
+  C.announcerDone();
+  assert.equal(fits, 2, "hidden: and grows back");
+  const bare = loadCaptions(memStore({ captions: "on" }));
+  bare.onAnnouncerLine("Radio check.");   // no LoadingScreen global (a page without the screen): no throw
+});

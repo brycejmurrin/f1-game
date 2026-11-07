@@ -77,15 +77,33 @@ function selectors(body) {
   return found;
 }
 
-test("every row-layout branch in track-detail.css requires landscape", () => {
+test("track-detail.css keys its row layout on the sheet's own shape; the one media row branch requires landscape", () => {
   const css = stripComments(fs.readFileSync(path.join(ROOT, "css", "track-detail.css"), "utf8"));
+  // UI scaling contract gap 24 (PR #5156): the phone rail is `#td-inner[data-shape="wide"]`
+  // (SheetShape's zoom-aware aspect, in the sheet's own px), not `@media (orientation)`,
+  // which read the raw window and could not see UI SIZE. Only the large-window upgrade
+  // (a desktop or tablet) stays a media branch, and it still requires landscape.
   const rowBranches = mediaBlocks(css).filter((b) =>
     /#track-detail-body\s*\{[^}]*flex-direction:\s*row/.test(b.body));
-  assert.ok(rowBranches.length >= 2,
-    `expected the landscape rail AND its wide upgrade — found ${rowBranches.length} row branch(es); the layout moved, update this test`);
+  assert.equal(rowBranches.length, 1,
+    `expected ONE media row branch (the ≥900×600 upgrade) — found ${rowBranches.length}; the layout moved, update this test`);
   for (const b of rowBranches) {
     assert.match(b.condition, /orientation:\s*landscape/,
       `a row-layout branch matches without landscape — large portrait gets the side-by-side squeeze back: @media ${b.condition}`);
+    assert.match(b.condition, /min-width:\s*900px/);
+    assert.match(b.body, /#td-inner\[data-shape="wide"\]\s+#track-detail-body\s*\{[^}]*flex-direction:\s*row/,
+      "the upgrade carries the shape prefix, so it outranks the base wide rule instead of losing to its specificity");
+  }
+  const flat = css.replace(/@media[^{]*\{[\s\S]*?\n\}/g, "");
+  assert.match(flat, /#td-inner\[data-shape="wide"\]\s+#track-detail-body\s*\{[^}]*flex-direction:\s*row/,
+    "the phone rail is keyed on the sheet's wide shape");
+  assert.match(flat, /#td-inner\[data-shape="tall"\]\s+#track-detail-panel\s*\{[^}]*border-top/,
+    "the stacked layout is keyed on the sheet's tall shape");
+  for (const b of mediaBlocks(css)) {
+    if (/orientation:\s*portrait/.test(b.condition)) {
+      assert.doesNotMatch(b.body, /#track-detail-(body|panel|canvas-wrap|legend)/,
+        `a portrait media branch still lays out the circuit detail sheet: @media ${b.condition}`);
+    }
   }
 });
 

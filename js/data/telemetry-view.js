@@ -12,24 +12,41 @@ const DataTelemetryView = (function () {
     const { buildTransport, buildGauges, attachScrub, pauseAnim, paintFrame, updateTextSummary } = player;
     const fmtLap = (sec) => Dom.fmtLap(sec, "—");
 
+    // THE WINDOW IN THE CARD'S OWN PX (UI scaling contract gap 23). These canvases
+    // live inside the zoomed .dh-card, so a raw innerHeight * 0.38 painted 38 % of
+    // the SCREEN, not of the box the chart is drawn in — at UI SIZE 150 % the trace
+    // overran its card. The layout viewport (documentElement.client*, never the
+    // stale-on-launch inner*) divided by the host's zoom is the right box; the
+    // mini-dom tests (telemetry-view-resize, telemetry-trace) have only inner*.
+    let host = null;   // the detail pane being filled; CssZoom.of(host) is the card's zoom
+    function view() {
+      const d = typeof document !== "undefined" ? document.documentElement : null;
+      const win = typeof window !== "undefined" ? window : null;
+      const w = (d && d.clientWidth) || (win && win.innerWidth) || 0;
+      const h = (d && d.clientHeight) || (win && win.innerHeight) || 0;
+      const z = (host && typeof CssZoom !== "undefined" && CssZoom.of) ? CssZoom.of(host) : 1;
+      return { w: w / z, h: h / z };
+    }
     function shortLS() {
-      return typeof window !== "undefined" && window.innerHeight < 520 && window.innerWidth > window.innerHeight;
+      const v = view();
+      return v.h > 0 && v.h < 520 && v.w > v.h;
     }
     // A PORTRAIT PHONE has height to spare and no width. At the landscape
     // 190/600 a 336 px trace was 106 px tall: seven channels in a strip, the
     // two left axes printed over each other and the gap chart's title under
     // its own line. It scrolls anyway, so it gets a taller trace instead.
     function tallNarrow(w) {
-      return w < 480 && typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.2;
+      const v = view();
+      return w < 480 && v.h > v.w * 1.2;
     }
     function chartH(w, compact) {
       const base = Math.round(w * (tallNarrow(w) ? 0.56 : w < 480 ? 190 / 600 : 220 / 600));
-      if (compact && shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.38));
+      if (compact && shortLS()) return Math.min(base, Math.round(view().h * 0.38));
       return base;
     }
     function deltaH(w) {
       const base = Math.round(tallNarrow(w) ? Math.max(64, w * 0.2) : w * (72 / 600));
-      if (shortLS()) return Math.min(base, Math.round(window.innerHeight * 0.12));
+      if (shortLS()) return Math.min(base, Math.round(view().h * 0.12));
       return base;
     }
 
@@ -49,6 +66,7 @@ const DataTelemetryView = (function () {
     }
 
     function buildTelemetryView(detail, tels) {
+      host = detail;
       lifecycle.stop();
       const laps = tels.filter(function (t) { return t.car && t.car.length; });
       if (!laps[0]) {

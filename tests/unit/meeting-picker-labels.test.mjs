@@ -61,8 +61,10 @@ test("duplicate meeting names get a date; unique names stay short", () => {
 
 test("data hub tabs can shrink to scroll and wrap when height allows", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/data.css"), "utf8");
-  assert.match(css, /\.dh-tabs\s*\{[^}]*min-width:\s*0/, "tab strip shrinks inside the overflow-hidden card");
-  assert.match(css, /\.dh-tabs\s*\{[^}]*flex-wrap:\s*wrap/, "tabs wrap so EXPORT stays a destination");
-  assert.doesNotMatch(css, /\.dh-tabs\s*\{[^}]*flex-wrap:\s*nowrap/, "a nowrap strip clips EXPORT on the 760px card");
+  // Anchored to the BASE rule (line start): the compact landscape strip is a nowrap
+  // scroller by design (UI scaling contract gap 15, data-hub-layout.test.mjs).
+  assert.match(css, /^\.dh-tabs\s*\{[^}]*min-width:\s*0/m, "tab strip shrinks inside the overflow-hidden card");
+  assert.match(css, /^\.dh-tabs\s*\{[^}]*flex-wrap:\s*wrap/m, "tabs wrap so EXPORT stays a destination");
+  assert.doesNotMatch(css, /^\.dh-tabs\s*\{[^}]*flex-wrap:\s*nowrap/m, "a nowrap strip clips EXPORT on the 760px card");
   assert.match(css, /\.dh-pick-fields\s*\{[^}]*flex-direction:\s*column/, "GP + session stack so the meeting label is not clipped");
 });

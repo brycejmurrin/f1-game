@@ -56,13 +56,20 @@
      Same ladder, same numbers, three different answers depending on a zoom it
      could not see.
 
-     Measured with this formula (viewport, scale -> car px): 1440/1.0 -> 1020,
+     THE RESERVE IS MEASURED FROM THE SAFE BOX, NOT THE VIEWPORT (UI contract
+     2026-11-06 gap 17): `--safe-w` is 100svw minus both side insets, so on a
+     notched phone the car's 320 px are 320 px of ROOM, not 320 px that the
+     Dynamic Island eats half of. Measured 2026-11-06 at 852x393 with 59 px
+     insets (67 with --gut) and PANEL WIDTH 135 %: the old `100 * --vwz` form
+     gave the panel 488 own px (532 painted) and left the car 194 px clear of
+     the notch; this form hits the 410 floor and leaves it 279.
+     Measured with the old formula (viewport, scale -> car px): 1440/1.0 -> 1020,
      1440/1.5 -> 810, 1000/1.15 -> 517, 1000/1.5 -> 370, 852/1.15 -> 369. The
      410px floor is what keeps `--pair-at` (400 + 2px border) satisfied so the
      rail never collapses into the stacked grid; `min(100%)` hands a portrait
      phone the full width, which is the right answer there and what it already
      did. */
-  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), 420px));
+  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 320px) / var(--ui-scale)), 420px));
 }
 /* Livery editor: the player is judging spine / logo paint on the car. Give the
    crown more of the left gap (420 visual px reserved instead of 320) and thin
@@ -70,7 +77,7 @@
    Floor stays at 410 so `--pair-at` (400 + 2px border) still holds — a 360–380
    clamp collapsed the rail into the stacked grid on mid-width landscape. */
 #carsetup:has(.cs-liv-editor) {
-  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), 420px));
+  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 420px) / var(--ui-scale)), 420px));
 }
 #carsetup:has(.cs-liv-editor) #cs-inner {
   background: color-mix(in oklab, var(--panel) 78%, transparent);
@@ -1972,10 +1979,10 @@ body[data-ga-bars]::after { bottom: 0; }
    wider panel can never take the car below what it already keeps: on a narrow
    screen the reserve binds first and 150% simply changes nothing. */
 :root[data-look-garage-pw] #carsetup {
-  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 320px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
 }
 :root[data-look-garage-pw] #carsetup:has(.cs-liv-editor) {
-  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
+  --cs-sheet-w: min(100%, clamp(410px, calc((var(--safe-w) - 420px) / var(--ui-scale)), calc(420px * var(--look-garage-pw, 1))));
 }
 
 /* PANEL SIDE: LEFT. The dock is `place-items` alone, so mirroring it is one
