@@ -18624,6 +18624,7 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "build": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -18734,6 +18735,7 @@
       "build": [
         "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
@@ -18776,7 +18778,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
-        "tests/unit/layout-presets.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ]
     },
@@ -19085,6 +19086,7 @@
       ],
       "build": [
         "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "current": [
