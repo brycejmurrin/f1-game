@@ -113,11 +113,11 @@ const LookAvail = (function () {
        cap        the sheet's --sheet-w (card width at WIDTH 100 %)
        compactAt  the sheet's --compact-at (js/ui/sheet-shape.js density)
        pairAt     CAREER's --pair-at (two columns once the sheet is that wide)
-       twoColAt   RACE SETTINGS' @container sheet (min-width: 640px) */
+       twoColAt   RACE SETTINGS' @container sheet (min-width: 500px) */
   const FIT = Object.freeze({
     datahub: Object.freeze({ cap: 760 }),                                   // css/data.css .dh-card
     select: Object.freeze({ cap: 1020, compactAt: 480 }),                   // css/select.css #sel-inner
-    race: Object.freeze({ cap: 760, compactAt: 260, twoColAt: 640 }),       // css/race-setup.css
+    race: Object.freeze({ cap: 760, compactAt: 480, twoColAt: 500 }),       // css/race-setup.css
     career: Object.freeze({ cap: 1020, compactAt: 480, pairAt: 620 }),      // css/career.css #cr-inner
     garage: Object.freeze({ compactAt: 480 }),                              // css/carsetup.css #cs-inner
     popups: Object.freeze({ cap: 760, compactAt: 380 }),                    // css/dialogs.css #standings; @property default

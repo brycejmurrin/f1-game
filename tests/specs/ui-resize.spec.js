@@ -761,12 +761,12 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
 // UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
 // card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
 // LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.
-const PAUSE_WINDOWS = [
+const PHONE_WINDOWS = [
   { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
   { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
   { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
 ];
-for (const win of PAUSE_WINDOWS) test.describe("UI contract pause cells — " + win.name, () => {
+for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + win.name, () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
   test("one phone card for every stored layout: no scroll, every door on screen, labels fit", async ({ page }) => {
     await page.goto("/?inspector=0");
@@ -827,5 +827,75 @@ for (const win of PAUSE_WINDOWS) test.describe("UI contract pause cells — " + 
     // The five layouts share ONE box: the card's own height is the same within a door's worth.
     const heights = Object.values(seen).map((c) => c.sheetOwnH);
     expect(Math.max(...heights) - Math.min(...heights), "every layout keeps the one phone card's box (" + heights.join("/") + ")").toBeLessThanOrEqual(40);
+  });
+});
+
+// UI contract cells for the circuit picker and race settings (#5153 gaps 13 and 16, UI contract 2026-11-06 §4.5;
+// measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): on the owner's three windows and export, the picker is
+// ONE four-row card — the filter chips share the title row, the flag strip, the hero still (never a scroller, the
+// two key numbers riding on it), the foot — and race settings are compact like their siblings with head and START
+// RACE fixed around the one body scroller and two columns on both phones. Before: the hero section scrolled 58-155
+// own px in every window; race settings were normal-density with ONE column at the export's 109 %, and in C the whole
+// sheet scrolled with START RACE under the fold.
+for (const win of PHONE_WINDOWS) test.describe("UI contract select + race cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("the picker's hero never scrolls and race settings keep START RACE fixed", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await waitReady(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await waitReady(page);
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.evaluate(() => document.getElementById("mb-race").click());
+    await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.SheetShape?.reclassify());
+    await twoFrames(page);
+    const sel = await page.evaluate(() => {
+      const $ = (id) => document.getElementById(id), z = (el) => el.currentCSSZoom || 1;
+      const inner = $("sel-inner"), sec = $("sel-track-section"), hero = $("sel-hero"), head = inner.querySelector(":scope > .sheet-head"), filt = $("sel-track-filter"), go = $("sel-go");
+      const hr = hero.getBoundingClientRect(), gr = go.getBoundingClientRect(), ir = inner.getBoundingClientRect();
+      const scrollers = [...inner.querySelectorAll("*")].filter((el) => { const o = getComputedStyle(el).overflowY; return (o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1; }).map((el) => el.id || el.className);
+      return { density: inner.dataset.density, shape: inner.dataset.shape, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        sectionScroll: sec.scrollHeight - sec.clientHeight, heroOwnH: +(hr.height / z(hero)).toFixed(1), verticalScrollers: scrollers,
+        filterInTitleRow: !!filt && Math.abs(filt.getBoundingClientRect().top - head.getBoundingClientRect().top) < 12,
+        headOverflow: head.scrollWidth - head.clientWidth,
+        nameClipped: $("sel-preview-name").scrollWidth > $("sel-preview-name").clientWidth + 1,
+        goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - ir.bottom).toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5 };
+    });
+    const tag = win.name + " select: ";
+    expect(sel, tag + "a compact wide picker at the export's UI SIZE").toMatchObject({ density: "compact", shape: "wide", ui: "1.09" });
+    expect(sel.sectionScroll, tag + "the hero section never scrolls").toBeLessThanOrEqual(1);
+    expect(sel.verticalScrollers, tag + "no vertical scroller anywhere in the picker").toEqual([]);
+    expect(sel.heroOwnH, tag + "the still keeps a real slot (C gets what 283 px leave)").toBeGreaterThanOrEqual(60);
+    expect(sel.filterInTitleRow, tag + "the filter chips share the title row").toBe(true);
+    expect(sel.headOverflow, tag + "the title fits its column").toBeLessThanOrEqual(0);
+    expect(sel.nameClipped, tag + "the circuit name reads whole").toBe(false);
+    expect(sel.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
+    expect(sel.goPastSheet, tag + "RACE SETUP ends inside the sheet").toBeLessThanOrEqual(0.5);
+    expect(sel.goOnScreen, tag + "RACE SETUP is on screen").toBe(true);
+    // RACE SETTINGS
+    await page.evaluate(() => document.getElementById("sel-go").click());
+    await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 50, timeout: BOOT_MS });
+    await page.evaluate(() => window.SheetShape?.reclassify());
+    await twoFrames(page);
+    const rs = await page.evaluate(() => {
+      const sheet = document.querySelector("#race-settings > .sheet"), body = document.getElementById("rs-body"), go = document.getElementById("rs-go");
+      const sr = sheet.getBoundingClientRect(), gr = go.getBoundingClientRect();
+      const scrollers = [...sheet.querySelectorAll("*")].concat([sheet]).filter((el) => { const o = getComputedStyle(el).overflowY; return (o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1; }).map((el) => el.id || el.className);
+      return { density: sheet.dataset.density, shape: sheet.dataset.shape, compactAt: getComputedStyle(sheet).getPropertyValue("--compact-at").trim(), display: getComputedStyle(sheet).display,
+        sheetScroll: sheet.scrollHeight - sheet.clientHeight, scrollers, columns: getComputedStyle(body).gridTemplateColumns.split(" ").length,
+        goOnScreen: gr.top >= 0 && gr.bottom <= innerHeight + 0.5, goPastSheet: +(gr.bottom - sr.bottom).toFixed(1), goPaintedH: +gr.height.toFixed(1), sheetInScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 };
+    });
+    const rtag = win.name + " race settings: ";
+    expect(rs, rtag + "compact like its siblings, the sheet grid kept").toMatchObject({ density: "compact", shape: "wide", compactAt: "480px", display: "grid" });
+    expect(rs.sheetScroll, rtag + "the sheet itself never scrolls").toBeLessThanOrEqual(1);
+    expect(rs.scrollers, rtag + "#rs-body is the ONE scroller").toEqual(["rs-body"]);
+    expect(rs.columns, rtag + "two columns on a phone").toBe(2);
+    expect(rs.sheetInScreen, rtag + "the sheet sits inside the window").toBe(true);
+    expect(rs.goPastSheet, rtag + "START RACE ends inside the sheet").toBeLessThanOrEqual(0.5);
+    expect(rs.goOnScreen, rtag + "START RACE is on screen").toBe(true);
+    expect(rs.goPaintedH, rtag + "START RACE paints the WCAG floor").toBeGreaterThanOrEqual(44);
   });
 });

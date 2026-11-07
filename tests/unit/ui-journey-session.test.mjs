@@ -57,8 +57,10 @@ test("landscape --fit-at uses zoom-correct data-shape selector (not @media orien
 test("Race Setup preserves requested size and scrolls the focused task", () => {
   const css = read("css/race-setup.css");
   assert.match(css, /#race-settings > \.sheet\s*\{[^}]*--fit-at:\s*0px/);
-  assert.match(css, /#race-settings > \.sheet:is\(\[data-density="compact"\], \[data-shape="tall"\]\)\s*\{[^}]*overflow-y:\s*auto/);
-  assert.match(css, /#race-settings > \.sheet:is\(\[data-density="compact"\], \[data-shape="tall"\]\) > #rs-body\s*\{[^}]*overflow:\s*visible/);
+  // #5153 gap 16: only a TALL sheet is the one page-scroller; a compact WIDE sheet (a landscape phone) keeps
+  // head and START RACE fixed and scrolls #rs-body (UI contract 2026-11-06 rule 3).
+  assert.match(css, /#race-settings > \.sheet\[data-shape="tall"\]\s*\{[^}]*overflow-y:\s*auto/);
+  assert.match(css, /#race-settings > \.sheet\[data-shape="tall"\] > #rs-body\s*\{[^}]*overflow:\s*visible/);
 });
 
 test("standings body uses local leftover height, not a viewport svh cap", () => {

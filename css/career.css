@@ -68,7 +68,9 @@
 /* The three numbers that describe a career at a glance. They push to the right of
    the title and wrap under it rather than squeezing the team name. */
 #cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); grid-column: 2; margin-left: 0; }
-@container sheet (max-width: 640px) {
+/* Stacked header only under 480 own px: 640 straddled the 640-760 phone band
+   (UI contract 2026-11-06 rule 6, #5153 gap 16). */
+@container sheet (max-width: 480px) {
   #cr-header { grid-template-columns: minmax(0, 1fr); }
   #cr-meters {
     grid-column: 1; width: 100%;
@@ -302,9 +304,11 @@
 }
 /* THE BROADCAST LINE (design pass 2b, 844x390): title, team and the three
    numbers share one row, split by hairlines; the header drops 127 -> 95 px and
-   all five jump chips fit (CAREER RECORD was clipped). The sheet is 672 px at
-   844 under UI zoom 1.09; narrower compact sheets keep the stacked header. */
-@container sheet (min-width: 660px) {
+   all five jump chips fit (CAREER RECORD was clipped). From 500 own px, not
+   660: the owner's Home Screen window is 552 own wide at his UI 109 % and the
+   660 never fired there (head 116 own vs 87 on the spec phone — #5153 gap 16,
+   UI contract rule 6: no threshold inside the 640-760 phone band). */
+@container sheet (min-width: 500px) {
   #cr-inner[data-density="compact"] #cr-header { grid-template-columns: auto minmax(0, 1fr); }
   #cr-inner[data-density="compact"] #cr-titlebar { flex-wrap: nowrap; white-space: nowrap; }
   #cr-inner[data-density="compact"] #cr-sub { flex: 0 1 auto; font-size: var(--label); white-space: nowrap; letter-spacing: var(--ls-2); }

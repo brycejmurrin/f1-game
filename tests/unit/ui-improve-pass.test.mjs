@@ -873,8 +873,10 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
     r.context.includes("@container sheet (max-width: 520px)") && r.decls.get("display") === "none"),
     "~500 width hides the vertical CLASSICS divider even when density is still normal");
   const lowerThirdDd = rulesFor(sel, /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-preview-meta dd/)[0];
-  assert.ok(lowerThirdDd, "lower-third stats keep a wrap rule");
-  assert.equal(lowerThirdDd.decls.get("white-space"), "normal");
+  assert.ok(lowerThirdDd, "the phone card's stats carry their own white-space rule");
+  // #5153 gap 13: the two numbers ride on the still as ONE band, so they stay on one line (the values are
+  // "5.793 km" / "11"; a wrapped value would grow the band over the outline). Was `normal` in the scrolling lower third.
+  assert.equal(lowerThirdDd.decls.get("white-space"), "nowrap");
   assert.ok(rulesFor(sel, /#sel-inner > \.sheet-foot/).some((r) =>
     r.context.includes("@container sheet (max-width: 520px)")),
     "foot wraps team names from ~500, not only a tall 480 phone");
@@ -1645,12 +1647,17 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   // whole task to a single scroller rather than pinning chrome around it.
   assert.equal(decl(menus, /#rs-body$/, "display"), "grid");
   assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "roomy race settings scroll within the body");
-  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 640px\)/ }).some((r) =>
+  // #5153 gap 16 (UI contract 2026-11-06 rule 6): two columns from 500 own px, away from the 640-760 phone band.
+  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 500px\)/ }).some((r) =>
     /1fr\) minmax\(0, 1fr\)$/.test(r.decls.get("grid-template-columns") || "")), "two columns once the sheet is wide");
+  assert.equal(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 640px\)/ }).length, 0, "no column flip inside the phone band");
   assert.equal(rulesFor(menus, /#rs-/).filter((r) => r.decls.has("grid-row")).length, 0, "no per-section grid-row placement");
-  assert.equal(decl(menus, '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"])', "overflow-y"), "auto");
-  assert.equal(decl(menus, '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > #rs-body', "overflow"), "visible");
-  assert.equal(decl(menus, "#race-settings > .sheet", "--compact-at"), "260px");
+  // Only a TALL sheet is one page-scroller; a compact wide sheet keeps head and START RACE fixed and scrolls #rs-body.
+  assert.equal(decl(menus, '#race-settings > .sheet[data-shape="tall"]', "overflow-y"), "auto");
+  assert.equal(decl(menus, '#race-settings > .sheet[data-shape="tall"] > #rs-body', "overflow"), "visible");
+  assert.equal(rulesFor(menus, /#race-settings > \.sheet.*data-density="compact"/).filter((r) => r.decls.get("display") === "block").length, 0,
+    "compact race settings keep the sheet grid (gap 16)");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--compact-at"), "480px", "compact at 480 like its siblings");
   assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
   assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
 });
@@ -1812,6 +1819,16 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   const wideSel = css("css/menus.css").find((r) => r.selector === '#sel-inner:not([data-shape="tall"]) #sel-track-preview' && r.context.includes("@container sheet (min-width: 620px)"));
   assert.ok(wideSel, "wide SELECT arranges the hero grid in a container query");
   assert.equal(wideSel.decls.get("grid-template-columns"), "minmax(0, 3fr) minmax(0, 2fr)");
+  // #5153 gap 13 (UI contract 2026-11-06 rule 4): BESIDE is gated off a phone-sized window; the phone card is
+  // one four-row sheet grid with the body and shelf dissolved, the hero never a scroller, the numbers on the still.
+  assert.ok(wideSel.context.some((c) => /@media \(pointer: fine\), \(\(min-width: 900px\) and \(min-height: 600px\)\)/.test(c)),
+    "BESIDE needs a fine pointer or a tablet-sized window");
+  const phoneSel = '#sel-inner[data-density="compact"]:not([data-shape="tall"])';
+  assert.equal(decl(css("css/menus.css"), phoneSel, "grid-template-rows"), "auto auto minmax(0, 1fr) auto");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} :is(#sel-body, #sel-shelf)`, "display"), "contents");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} #sel-track-section`, "overflow"), "hidden", "the hero section never scrolls");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} #sel-track-filter`, "grid-row"), "1", "the filter chips share the title row");
+  assert.equal(decl(css("css/menus.css"), `${phoneSel} #sel-preview-info`, "position"), "absolute", "the numbers ride on the still");
   assert.equal(decl(css("css/menus.css"), "#sel-track-preview", "grid-template-columns"), "minmax(0, 1fr)",
     "narrow SELECT stacks the still over the numbers");
   assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");

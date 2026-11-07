@@ -1653,8 +1653,10 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 #ceremony-podium {
   position: fixed; inset: 0; z-index: 38;
   display: flex; flex-direction: column; justify-content: flex-end;
-  padding: calc(var(--pad) * 1.2);
-  padding-bottom: max(calc(var(--pad) * 1.2), env(safe-area-inset-bottom, 0));
+  /* Unzoomed and full-bleed, so the safe insets apply raw on all FOUR sides —
+     the notch sits at the side in landscape (UI contract 2026-11-06 §7 gap 23,
+     handed to #5153 PR D); it had the bottom inset only. */
+  padding: max(calc(var(--pad) * 1.2), var(--sat)) max(calc(var(--pad) * 1.2), var(--sar)) max(calc(var(--pad) * 1.2), var(--sab)) max(calc(var(--pad) * 1.2), var(--sal));
   pointer-events: none;
   background: linear-gradient(to top, color-mix(in oklab, var(--surf-0) 78%, transparent) 0%, transparent 55%);
 }
@@ -1670,7 +1672,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   margin: var(--pad) auto 0; max-width: min(720px, 100%); width: 100%;
 }
 #ceremony-podium .bigbtn { min-height: var(--tap); min-width: min(240px, 100%); }
-body[data-density="compact"] #ceremony-podium { padding: calc(var(--pad) * 0.55); }
+body[data-density="compact"] #ceremony-podium { padding: max(calc(var(--pad) * 0.55), var(--sat)) max(calc(var(--pad) * 0.55), var(--sar)) max(calc(var(--pad) * 0.55), var(--sab)) max(calc(var(--pad) * 0.55), var(--sal)); }
 body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var(--pad) * 0.45); }
 
 /* A FINGER GRABS THE TITLE-LAYOUT HANDLE: 22px is the dot, not the target. On

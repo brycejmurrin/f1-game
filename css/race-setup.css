@@ -238,26 +238,30 @@
 }
 
 /* ---------- race settings ---------- */
-/* Race Setup owns its bounds and composition. A short task scrolls as one
-   surface instead of shrinking the player's requested UI size around fixed
-   chrome. Other sheets retain the shared compact cap during this pilot. */
+/* Race Setup owns its bounds and composition: it never shrinks the player's
+   requested UI size around fixed chrome (--fit-at 0). Compact at 480 like its
+   siblings (UI contract 2026-11-06 §4.5, #5153 gap 16): a private 260 kept
+   normal-density chrome on a phone whose neighbours were compact. */
 #race-settings { --sheet-w: 760px; }
 #race-settings > .sheet {
   --fit-at: 0px;
-  --compact-at: 260px;
+  --compact-at: 480px;
   --_sheet-z: var(--ui-scale);
   zoom: var(--ui-scale);
 }
-/* A tall task reads as one page: wrapped context and stacked actions must
-   not reserve most of its viewport outside the settings scroller. */
-#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) {
+/* A TALL task (an upright phone) reads as one page: wrapped context and
+   stacked actions must not reserve most of its viewport outside the settings
+   scroller. A compact WIDE sheet (a landscape phone) keeps the sheet grid —
+   head and START RACE fixed, #rs-body the one scroller (contract rule 3;
+   measured in C the whole sheet scrolled and GO sat under the fold). */
+#race-settings > .sheet[data-shape="tall"] {
   display: block;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--plate-line) transparent;
 }
-#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > #rs-body { overflow: visible; }
+#race-settings > .sheet[data-shape="tall"] > #rs-body { overflow: visible; }
 /* Context stays one glanceable line; its full text remains available to
    assistive technology. Editable values take priority over repeated context. */
 #rs-body #rs-preset-options > summary,
@@ -498,12 +502,15 @@
     line-height: 1.3; padding-block: calc(var(--gap) * .25);
   }
 }
-@container sheet (min-width: 640px) {
+/* Two columns from 500 own px (the quali sheet's threshold, css/career.css):
+   both phones at UI 100-130 % get two; 640 straddled the 640-760 phone band
+   (A 552 own at the export's 109 % got ONE column — contract rule 6). */
+@container sheet (min-width: 500px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
   #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
 /* SCREEN LOOKS — RACE SETTINGS (js/ui/screen-looks.js; core knobs in
-   css/responsive.css). COLUMNS overrides the 440px container query above in
+   css/responsive.css). COLUMNS overrides the 500px container query above in
    both directions: the body and its folds share one lattice, so both are
    forced together or a fold's rows would start a new rhythm. TWO on a narrow
    sheet wraps each row's ‹ select › under its label — the player's call; the

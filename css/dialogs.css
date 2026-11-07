@@ -249,21 +249,23 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
    iPhone (734x343, layout-audit 2026-10-05) RESUME painted 39 tall and
    RESTART / SETTINGS / QUIT 36 — under the 52 touch floor. The body already
    scrolls, so the taller doors scroll; RESUME stays the first button. */
-@media (orientation: landscape) and (max-height: 500px) {
-  #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
-    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
-    padding-block: 3px;
-  }
-  #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
-  #pm-race-context { padding-block: 1px; }
-  #pm-race-context :is(span, small) { display: none; }
-  /* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
-     the tray's own (overlays-layer) base rules: written here they lost to them. */
-  #pm-now-card, #pm-build { display: none; }
-  #pausemenu .sheet-body {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+/* Keyed on the body tier (compact + wide in own px, the phone card's own key in
+   css/overlays.css) rather than the raw `(orientation: landscape) and
+   (max-height: 500px)`: that band was zoom-blind (UI contract 2026-11-06 §7
+   gap 24, handed to #5153 PR D). */
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  padding-block: 3px;
+}
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
+body[data-density="compact"][data-shape="wide"] #pm-race-context { padding-block: 1px; }
+body[data-density="compact"][data-shape="wide"] #pm-race-context :is(span, small) { display: none; }
+/* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
+   the tray's own (overlays-layer) base rules: written here they lost to them. */
+body[data-density="compact"][data-shape="wide"] :is(#pm-now-card, #pm-build) { display: none; }
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 /* Short phone landscape (≤400px tall — 844×390 / 852×344): the sheet was
    nearly full-bleed and the RACE TOOLS tray's 3-col last row left a hole

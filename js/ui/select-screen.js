@@ -1202,6 +1202,21 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
+/** The outline's slot inside the hero: 62 % of its width, ~60 % of its height —
+    capped at the map button's CONTENT box, which the phone card (css/select.css,
+    compact + wide) pads so the lower-third numbers band stays clear of the
+    outline (#5153 gap 13). */
+function previewMapSlot(hero, sheet, map) {
+  const compact = !!(sheet && sheet.dataset.density === "compact");
+  let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const btn = map && map.parentElement;
+  if (compact && btn && btn.clientHeight > 0) {
+    const bs = getComputedStyle(btn);
+    const room = btn.clientHeight - (parseFloat(bs.paddingTop) || 0) - (parseFloat(bs.paddingBottom) || 0);
+    if (room > 0) slotH = Math.min(slotH, room);
+  }
+  return { slotW: hero.clientWidth * 0.62, slotH };
+}
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
   if (!els.selPreviewMap || !t) return;
@@ -1209,8 +1224,7 @@ function sizePreviewMapBox(t) {
   const sheet = hero && hero.closest(".sheet");
   if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   const map = els.selPreviewMap;
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const { slotW, slotH } = previewMapSlot(hero, sheet, map);
   let a = 520 / 300;
   if (previewMapsCached(t) && typeof TrackMaps !== "undefined" && TrackMaps.aspect) {
     try { a = TrackMaps.aspect(t) || a; } catch (_) { /* keep default */ }
@@ -1241,8 +1255,7 @@ function paintTrackPreviewMaps(t) {
   if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   drawElevProfile(document.getElementById("sel-preview-elev"), t);
   const map = els.selPreviewMap;
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const { slotW, slotH } = previewMapSlot(hero, sheet, map);
   const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, true);
   const ratio = Math.min(3, Math.max(1, (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   if (ratio > 1.01) {

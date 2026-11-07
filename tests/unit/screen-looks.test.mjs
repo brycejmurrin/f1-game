@@ -448,9 +448,9 @@ test("availability: the pure checks answer the measured phone no-ops, and only t
   const look = (id, o) => Object.assign(M.normalize(id, {}), o || {});
   // [env, screen, knob, value, overrides, expected reason substring, or "" ]
   const ROWS = [
-    ...["select", "career", "garage", "popups"].flatMap((id) => [[P, id, "density", "tight", null, "Already tight"],
+    // RACE joined its siblings at --compact-at 480 (#5153 gap 16), so the phone rows read the same.
+    ...["select", "race", "career", "garage", "popups"].flatMap((id) => [[P, id, "density", "tight", null, "Already tight"],
       [P, id, "density", "roomy", null, "phone-sized window keeps the compact"], [Mo, id, "density", "roomy", null, ""], [D, id, "density", "tight", null, ""]]),
-    [P, "race", "density", "roomy", null, "Already roomy"], [P, "race", "density", "tight", null, ""],
     [P, "pause", "music", "hide", null, "Short landscape"], [P, "pause", "build", "hide", null, "Short landscape"],
     [D, "pause", "music", "hide", null, ""],
     [P, "select", "names", "hide", null, "flags only"], [P, "select", "names", "hide", { density: "roomy" }, "flags only"], [Mo, "select", "names", "hide", { density: "roomy" }, ""],

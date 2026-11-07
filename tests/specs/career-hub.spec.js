@@ -742,6 +742,11 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
         bodyOverflowY: getComputedStyle(body).overflowY, bodyDisplay: getComputedStyle(body).display, scrollers,
         footPastSheet: +(fr.bottom - ir.bottom).toFixed(1), footOnScreen: fr.top >= 0 && fr.bottom <= innerHeight + 0.5, footOwnH: +(fr.height / z(inner)).toFixed(1),
         goPaintedH: +gr.height.toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5,
+        head: (() => { const h = $("cr-header"), tb = $("cr-titlebar"), m = $("cr-meters"); const hr = h.getBoundingClientRect();
+          return { ownH: +(hr.height / z(inner)).toFixed(1), cols: getComputedStyle(h).gridTemplateColumns.split(" ").length,
+            overflow: Math.max(h.scrollWidth - h.clientWidth, tb.scrollWidth - tb.clientWidth, m.scrollWidth - m.clientWidth),
+            metersBesideTitle: m.getBoundingClientRect().left >= tb.getBoundingClientRect().right - 1,
+            clippedChips: [...h.querySelectorAll(".sel-chip")].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent.trim()) }; })(),
       };
     });
     const tag = win.name + ": ";
@@ -759,5 +764,12 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — 
     expect(cell.footOnScreen, tag + "the foot is on screen").toBe(true);
     expect(cell.footOwnH, tag + "a one-row foot").toBeLessThanOrEqual(60);
     expect(cell.goPaintedH, tag + "GO RACING paints the WCAG floor").toBeGreaterThanOrEqual(44);
+    // #5153 gap 16: the BROADCAST LINE (title, team, three meters on one row) fires on every owner window — it keyed on
+    // 660 own px and never fired in A (head 116 own); now from 500, away from the 640-760 phone band (contract rule 6).
+    expect(cell.head.cols, tag + "title | meters on one row").toBe(2);
+    expect(cell.head.metersBesideTitle, tag + "the meters sit beside the title").toBe(true);
+    expect(cell.head.overflow, tag + "the broadcast line fits its row (no horizontal overflow)").toBeLessThanOrEqual(0);
+    expect(cell.head.clippedChips, tag + "every jump chip reads whole").toEqual([]);
+    expect(cell.head.ownH, tag + "a thin head (measured 87 own; was 116 in A)").toBeLessThanOrEqual(100);
   });
 });
