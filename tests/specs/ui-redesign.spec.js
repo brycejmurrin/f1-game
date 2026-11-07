@@ -207,9 +207,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden, "empty hidden").toBe(true);
 
-  // Short landscape select: the body is not a scroller; the strip stays a
-  // sideways strip; the hero section is the ONLY vertical scroll region and the
-  // foot spans the sheet.
+  // Short landscape select (the phone card, #5153 gap 13): the body is not a
+  // scroller; the strip stays a sideways strip; the hero section is clipped and
+  // NEVER scrolls (the numbers ride on the still), so nothing in the sheet
+  // scrolls vertically; the foot spans the sheet.
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -252,10 +253,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
   expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOX);
   expect(stackedSel.listOY).toBe("hidden");
-  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.sectionOY);
-  // Whatever scrolls vertically here is the hero section (or its numbers
-  // column) — never the body, never the strip.
-  expect(stackedSel.vertical.every((id) => id === "sel-track-section" || id === "sel-preview-info"), JSON.stringify(stackedSel.vertical)).toBe(true);
+  expect(stackedSel.sectionOY, "the hero section is clipped, not a scroller (UI contract 2026-11-06 rule 3)").toBe("hidden");
+  // Nothing scrolls vertically on the phone card — not the body, not the strip,
+  // not the hero.
+  expect(stackedSel.vertical, "no vertical scroller anywhere in the picker").toEqual([]);
   expect(stackedSel.stripTop).toBeLessThan(stackedSel.heroTop);
   expect(stackedSel.footW / stackedSel.innerW).toBeGreaterThan(0.95);
   expect(stackedSel.active).toBe(true);
