@@ -389,6 +389,9 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
       const sticky = rows.filter((r) => getComputedStyle(r).position === "sticky").map((r) => r.className.replace("res-row", "").trim());
       const rowOwnH = rows[0] ? rows[0].getBoundingClientRect().height / z(rows[0]) : 0;
       const sr = sheet.getBoundingClientRect(), you = rows.find((r) => r.classList.contains("you"));
+      // The story cards sit above the ranking list at open; the pins hold once the list is in the pane.
+      const list = table.querySelector('[data-results-part="ranking"]');
+      if (list) table.scrollTop = list.offsetTop;
       const yr = you ? you.getBoundingClientRect() : null, tr = table.getBoundingClientRect();
       return { ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize,
         sheet: { density: sheet.dataset.density, shape: sheet.dataset.shape, inScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 },
@@ -406,7 +409,7 @@ for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells —
     expect(cell.sticky, tag + "YOU is always pinned").toContain("you");
     if (cell.pins !== "1") expect(cell.sticky, tag + "P1 pins whenever more than YOU does").toContain("p1");
     expect(cell.scrollingRows, tag + "the classification keeps >= 2 scrolling rows under the pins").toBeGreaterThanOrEqual(2);
-    expect(cell.youInPane, tag + "your row is on screen inside the pane at open").toBe(true);
+    expect(cell.youInPane, tag + "your row is pinned inside the pane once the list is in view").toBe(true);
     expect(cell.tableScrolls, tag + "the classification is the one scroller").toBe(true);
   });
 });

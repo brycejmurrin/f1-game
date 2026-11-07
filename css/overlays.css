@@ -1145,15 +1145,16 @@ body[data-density="compact"][data-shape="wide"] #pm-race-context > small { displ
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); position: static; height: auto; margin: 0; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-restart { grid-area: restart; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-settings { grid-area: settings; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; container-type: inline-size; }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
-/* The tile label scales with the TRAY (an inline-size container, no named query reads it): in the Home Screen and
-   Safari windows the 59 px insets leave a 393 own px tray, and MESSAGES at TEXT large (74 px) is still 3 px wider
-   than a 5-up tile's 71 px text box. 3.75cqi is 14.7 px there (MESSAGES 68); from a 427 px tray (D: 456) the label
-   is the full --fs-micro. The contract lets type scale, never a label overflow (UI contract #5153 §3 rule 3). */
+/* The 5-up tile label steps down one notch: in the Home Screen and Safari windows the 59 px insets leave a 393 own px
+   tray, and MESSAGES at TEXT large (74 px) is 3 px wider than a 5-up tile's 71 px text box (CI on ec39facd and
+   354334ed, A and C; D's 456 px tray fits at full size). 0.92 x --fs-micro is 14.7 px at TEXT large (MESSAGES 68).
+   A flat step, not a container unit: `min(--fs-micro, 3.75cqi)` fit here but CI's Chromium kept the full size after a
+   layout switch (the SIDEBAR cell). The contract lets type scale, never a label overflow (#5153 §3 rule 3). */
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details { font-size: min(var(--fs-micro), 3.75cqi); }
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
 body[data-density="compact"][data-shape="wide"] #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
 body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quit::before { content: none; }
 body[data-density="compact"][data-shape="wide"] #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }

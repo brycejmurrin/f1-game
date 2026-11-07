@@ -104,10 +104,10 @@ test("the phone pause card (#5153 gap 10) is keyed on the body's own density + s
   assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu \.sheet-body \{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto`));
   // 5-up tray: ten tiles are two rows in the ~137 own px tools track of Safari 852x283 at 109 %.
   assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors \{[^}]*--tray-cols: 5`));
-  // The tile label scales with the tray (CI on ec39facd: MESSAGES 74 px in a 71 px text box in the 852-wide windows
-  // with 59 px insets; D's 456 own px tray keeps the full --fs-micro).
-  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors \{[^}]*container-type: inline-size`));
-  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: min\(var\(--fs-micro\), 3\.75cqi\); \}`));
+  // The tile label steps down one notch (CI on ec39facd / 354334ed: MESSAGES 74 px in a 71 px text box in the
+  // 852-wide windows with 59 px insets). A flat step: a container unit fit locally but not on CI's Chromium.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: calc\(var\(--fs-micro\) \* 0\.92\); \}`));
+  assert.doesNotMatch(overlays, /#pm-quick-doors[^{]*\{[^}]*container-type/, "no container unit decides the tray's type");
   // The race line never grows the doors' row.
   assert.match(overlays, new RegExp(PHONE + String.raw` #pm-race-context \{[^}]*max-height: var\(--pm-door\)`));
   // Layouts rearrange doors inside the card: WIDE puts the doors along the bottom, SIDE RIGHT mirrors.
