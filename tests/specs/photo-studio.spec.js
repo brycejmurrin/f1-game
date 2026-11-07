@@ -1,6 +1,14 @@
 // @ts-check
 import { writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
+
+// The owner's LOAD SETTINGS export (TEXT large, UI 109 %, the garage look): the
+// UI scaling contract (PR #5154, on the deploy tip) measures at it.
+const OWNER = JSON.parse(readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+// Window A of the contract: an iPhone 15 Pro held sideways, notch left, home
+// indicator below. Headless reports env(safe-area-inset-*) as 0, so inject it.
+const NOTCH_A = ":root{--sal:59px!important;--sar:59px!important;--sat:0px!important;--sab:21px!important}";
 
 const LANDSCAPE = { width: 852, height: 393 };
 const PORTRAIT = { width: 393, height: 852 };
@@ -229,6 +237,45 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   await expect(page.locator("#pausemenu")).toBeVisible();
   await expect(page.locator("#rotate-device")).toBeHidden();
   expect(await page.evaluate(() => __apex.freeCam().open)).toBe(false);
+  expect(pageErrors).toEqual([]);
+});
+
+test("Paused race photo at the owner's export on a notched phone keeps the LOOK stick clear of the side panel (UI contract gap 18)", async ({ page, pageErrors }, info) => {
+  // One race boot plus a settings import and reload: ~60-90 s on SwiftShader.
+  test.setTimeout(180000);
+  await boot(page);
+  const imp = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER);
+  expect(imp.ok, "owner export imports: " + JSON.stringify(imp)).toBe(true);
+  await page.reload();
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await page.addStyleTag({ content: NOTCH_A });
+  await page.evaluate(async () => {
+    __apex.headless(true);
+    await __apex.race("bahrain", "day", "dry");
+    __apex.go(); __apex.park(0.1);
+  });
+  await clickLive(page, "pausebtn");
+  await clickLive(page, "pm-photo");
+  await expect(page.locator("#photo-studio")).toBeVisible();
+  // The dock is `--ps-dock-px: min(300px * UI, 38vw)` (css/photo-studio.css) and
+  // the LOOK stick parks left of it: measured 2026-11-06 at this export, panel
+  // 297 px wide at x 461, stick right edge 353 — 108 px clear. SheetShape may
+  // still be fitting the panel for a few frames under software GL.
+  const geom = () => page.evaluate(() => {
+    const r = (s) => CssZoom.viewportRect(document.querySelector(s));
+    const look = r(".pc-look-wrap"), panel = r("#ps-panel"), move = r(".pc-move-wrap");
+    return { lookLeft: look.x, lookRight: look.x + look.width, lookBottom: look.y + look.height,
+      panelLeft: panel.x, panelRight: panel.x + panel.width, moveLeft: move ? move.x : null, vw: innerWidth, vh: innerHeight };
+  });
+  await expect.poll(async () => { const g = await geom(); return g.lookRight <= g.panelLeft + 0.5; }, { timeout: 30000 }).toBe(true);
+  const g = await geom();
+  expect(g.lookRight, `LOOK stick (right ${g.lookRight}) clears the panel (left ${g.panelLeft})`).toBeLessThanOrEqual(g.panelLeft + 0.5);
+  expect(g.panelRight, "panel inside the right safe inset").toBeLessThanOrEqual(g.vw - 59 + 1);
+  expect(g.lookBottom, "stick above the home indicator").toBeLessThanOrEqual(g.vh - 21 + 1);
+  if (g.moveLeft != null) expect(g.moveLeft, "MOVE stick inside the notch inset").toBeGreaterThanOrEqual(59 - 1);
+  await controls(page, ["ps-capture", "ps-close", "pc-move", "pc-look"]);
+  await nativeClick(page, "ps-close");
+  await expect(page.locator("#photo-studio")).toBeHidden();
   expect(pageErrors).toEqual([]);
 });
 

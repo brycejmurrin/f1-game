@@ -1173,6 +1173,18 @@ test("the loading card is capped to the safe box in svh and its body is the givi
   assert.match(cap, /var\(--safe-t\)/, "the cap subtracts the top safe inset: " + cap);
   assert.match(cap, /var\(--safe-b\)/, "the cap subtracts the bottom safe inset: " + cap);
   assert.doesNotMatch(cap, /(^|[^s])vh\b/, "no raw vh in the cap: " + cap);
+  // The cap is in the card's OWN layout px: `scale` paints the layout box times
+  // the player's CARD SIZE times the window's fit, so both divide the cap, and a
+  // CARD Y that lifts the card costs the same room above the top edge (measured
+  // 2026-11-07 at the owner's export, CARD SIZE 1.14 / CARD Y -14: the capped
+  // layout box painted 373.7 px into a 332.4 px cap and the top sat at -83).
+  assert.match(cap, /\/ \(var\(--ld-card-scale, 1\) \* var\(--ld-fit, 1\)\)/, "the cap divides by CARD SIZE x fit: " + cap);
+  assert.match(cap, /\+ min\(var\(--ld-card-y, 0px\), 0px\)/, "a lift (negative CARD Y) comes off the cap, a drop buys nothing: " + cap);
+  assert.equal(card.decls.get("scale"), "calc(var(--ld-card-scale, 1) * var(--ld-fit, 1))", "one paint scale: CARD SIZE x fit");
+  assert.match(card.decls.get("width") || "", /100% \/ \(var\(--ld-card-scale, 1\) \* var\(--ld-fit, 1\)\)/, "the width cap divides by the same product");
+  const screen = rules.find((r) => r.selector === "#loading");
+  assert.equal(screen.decls.get("grid-template-rows"), "minmax(0, 1fr)", "the row is the safe box, not the card: an auto row grew to a tall layout box and started at the top");
+  assert.equal(screen.decls.get("align-items"), "unsafe end", "an overflowing layout box stays anchored at the bottom instead of the start fallback");
   assert.equal(card.decls.get("display"), "flex");
   assert.equal(card.decls.get("flex-direction"), "column");
   assert.doesNotMatch(card.decls.get("margin-bottom") || "", /(^|[^s])vh\b/, "the margin below is svh too");
@@ -1183,4 +1195,51 @@ test("the loading card is capped to the safe box in svh and its body is the givi
   assert.equal(body.decls.get("overflow"), "hidden", "the body keeps the facts inside the plate");
   const map = rules.find((r) => r.selector === "#ld-map");
   assert.equal(map.decls.get("max-height"), "100%", "the map shrinks first: fitCanvas's inline height is a maximum");
+});
+
+/* ── fitCard: the ratio that brings the painted card inside the window ─────
+ * The stylesheet's cap is read at fit 1 (computed max-height, px), the natural
+ * height with the cap lifted, and their ratio is written as --ld-fit. Measured
+ * 2026-11-07 at the owner's export: C 852x283 cap 184.6 / natural 328 -> 0.563
+ * (the card paints 210 px tall, top at 13); A 393 -> 0.742; D 390 -> 0.735. */
+function fitHarness({ cap, natural, hidden = false }) {
+  const writes = [];
+  const card = {
+    style: { props: {}, maxHeight: "", setProperty(k, v) { this.props[k] = v; writes.push([k, v, card.style.maxHeight]); } },
+    get offsetHeight() { return card.style.maxHeight === "none" ? natural : Math.min(natural, cap); },
+  };
+  const els = { "ld-card": card, loading: { hidden } };
+  const sb = { Math, Object, Array, Number, String, JSON, isFinite, parseFloat, console, Log: { warn() {} },
+    getComputedStyle: (el) => ({ maxHeight: el === card ? cap + "px" : "" }), document: { createElement: () => ({}) } };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
+  vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
+  sb.LoadingScreen.fitCard((id) => els[id]);
+  return { card, writes };
+}
+
+test("fitCard writes the cap/natural ratio when the content is taller than the window leaves, and 1 when it fits (gap 22)", () => {
+  const tall = fitHarness({ cap: 184.6, natural: 328 });
+  assert.equal(tall.card.style.props["--ld-fit"], "0.563", "C at the owner's export: 184.6 / 328");
+  assert.equal(tall.card.style.maxHeight, "", "the inline max-height override is lifted only for the measurement");
+  assert.deepEqual(tall.writes.map(([k, v]) => [k, v]), [["--ld-fit", "1"], ["--ld-fit", "0.563"]], "fit 1 first, so the cap is read at the player's own size");
+  const fits = fitHarness({ cap: 356, natural: 328 });
+  assert.equal(fits.card.style.props["--ld-fit"], "1", "nothing to shrink: the player's CARD SIZE paints as authored");
+  const edge = fitHarness({ cap: 328, natural: 328.4 });
+  assert.equal(edge.card.style.props["--ld-fit"], "1", "half a pixel is not a clip");
+  const hid = fitHarness({ cap: 184.6, natural: 328, hidden: true });
+  assert.equal(hid.card.style.props["--ld-fit"], undefined, "a hidden screen has no box to measure: left alone");
+});
+
+test("fitCard runs after every reveal and whenever the card's geometry or the window changes; the mini-DOM harness has no layout and is left alone", () => {
+  const src = read("js/ui/loading-screen.js");
+  assert.match(src.slice(src.indexOf("function applyCard()"), src.indexOf("function root()")), /fitCard\(\$\);/, "applyCard: the editor's sliders re-fit");
+  assert.match(src.slice(src.indexOf("function setPhase(p)"), src.indexOf("function teamWipe()")), /fitCard\(\$\);/, "setPhase: after the screen is unhidden");
+  assert.match(src, /addEventListener\("resize", \(\) => \{ if \(phase\) fitCard\(\$\); \}\)/, "the window changed under a card that is up (Safari's toolbar)");
+  assert.match(src, /typeof getComputedStyle !== "function" \|\| typeof c\.offsetHeight !== "number"\) return;/, "no layout engine, no fit");
+  const h = harness();
+  h.run();
+  assert.equal(h.els["ld-card"].style.props["--ld-fit"], undefined, "the stub card is never scaled by a guessed fit");
+  const cap = read("js/ui/captions.js");
+  assert.match(cap.slice(cap.indexOf("function paintLoading("), cap.indexOf("function applyDom()")), /el\.hidden = false;\n\s*refitCard\(\);[\s\S]*if \(el\) el\.hidden = true;\n\s*refitCard\(\);/, "the radio caption is the card's tallest late arrival: captions.js re-fits on show and hide");
 });

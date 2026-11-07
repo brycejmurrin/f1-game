@@ -137,11 +137,18 @@ const Captions = (function () {
     if (w) w.textContent = who || WHO.announcer;
     if (t) t.textContent = text;
     el.hidden = false;
+    refitCard();
   }
 
   function clearLoading() {
     const el = byId("ld-caption");
     if (el) el.hidden = true;
+    refitCard();
+  }
+  /** The caption is the loading card's tallest late arrival: the card re-fits
+   *  the window around it (LoadingScreen.fitCard, UI scaling contract gap 22). */
+  function refitCard() {
+    if (typeof LoadingScreen !== "undefined" && LoadingScreen && typeof LoadingScreen.fitCard === "function") LoadingScreen.fitCard(byId);
   }
 
   function applyDom() {

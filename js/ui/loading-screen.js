@@ -32,6 +32,35 @@ const LoadingScreen = (function () {
     isGridShot, gridField, gridLayout, gridColour, gridInk, GRID_ROW_MIN,
   } = LoadingCard;
 
+  /** FIT, NEVER CLIP (UI scaling contract gap 22). css/loading.css caps the
+   *  card's layout box to what the window leaves at the player's CARD SIZE and
+   *  CARD Y; when the painted content is taller than that box the card is
+   *  scaled down by `--ld-fit` until it fits, about the bottom edge it is
+   *  anchored to. Measured 2026-11-07 at the owner's export (TEXT large, a radio
+   *  caption up): the text column alone is 251 px, so on a 283 px window the
+   *  body could never give enough and the caption was cut.
+   *  One forced layout, after paint and whenever the geometry, the window or
+   *  the content changes while the screen is up (an instance's applyCard and
+   *  setPhase, its resize listener; js/ui/captions.js when the radio caption
+   *  shows or hides, which is why this is module-level): the cap is read at
+   *  fit 1, the natural height with the cap lifted, and their ratio is the fit.
+   *  Nothing to measure (a hidden screen, the mini-DOM tests) leaves the fit
+   *  alone. `byId` is the caller's own id lookup (the instance's `$`,
+   *  captions.js's byId): no document read of its own. */
+  function fitCard(byId) {
+    if (typeof byId !== "function") return;
+    const c = byId("ld-card"), r = byId("loading");
+    if (!c || !c.style || typeof c.style.setProperty !== "function" || !r || r.hidden) return;
+    if (typeof getComputedStyle !== "function" || typeof c.offsetHeight !== "number") return;
+    c.style.setProperty("--ld-fit", "1");
+    const cap = parseFloat(getComputedStyle(c).maxHeight);
+    c.style.maxHeight = "none";
+    const natural = c.offsetHeight;
+    c.style.maxHeight = "";
+    if (!(cap > 0) || !(natural > cap + 0.5)) return;
+    c.style.setProperty("--ld-fit", (cap / natural).toFixed(3));
+  }
+
   function create(hooks) {
     const { $, Tracks, TrackMaps, Flags, store } = hooks;
     /* The announcer may arrive as a THUNK rather than an instance, and js/game.js
@@ -103,9 +132,12 @@ const LoadingScreen = (function () {
       if (!c || !c.style || typeof c.style.setProperty !== "function") return;
       const vars = cardVars(cardGeom());
       for (const k in vars) c.style.setProperty(k, vars[k]);
+      fitCard($);
     }
 
     function root() { return el || (el = $("loading")); }
+    // The window changed under a card that is up (Safari's toolbar, a rotation): re-fit.
+    if (typeof addEventListener === "function") addEventListener("resize", () => { if (phase) fitCard($); });
 
     function paint(info) {
       const t = info.track;
@@ -328,6 +360,7 @@ const LoadingScreen = (function () {
       phase = p;
       const r = root();
       if (r) r.dataset.phase = p;
+      fitCard($);   // the screen is unhidden by now: the card's one layout read (gap 22)
       // THE HAND-OFF: the first phase after the garage shot (stop() set the flag)
       // opens on a sweep in the player's team colour, so the garage and the
       // flyby read as one sequence rather than a hard cut (css/loading.css).
@@ -727,7 +760,7 @@ const LoadingScreen = (function () {
     });
   }
 
-  return { create, slowNotice, failed, SLOW_TEXT, FAIL_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  return { create, slowNotice, failed, SLOW_TEXT, FAIL_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars, fitCard,
     packSettled, warmPresentReady,
     gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();
