@@ -828,7 +828,17 @@ const TrackDesigner = (function () {
         tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
       const home = tuck ? body : root;
-      if (foot.parentNode !== home) home.appendChild(foot);   // a no-op re-append can drop focus from SAVE/RACE
+      if (foot.parentNode !== home) {   // a no-op re-append can drop focus from SAVE/RACE
+        // Moving the foot moves the control focused inside it, and the platform
+        // drops that focus on <body>: the Enter already on its way then seeds
+        // MenuNav's landing (the pressed mode chip) instead of opening SHARE &
+        // FILES (deploy red b852807e, 844x390 right after the designer opened).
+        const had = document.activeElement;
+        home.appendChild(foot);
+        if (had && had !== document.body && foot.contains(had) && document.activeElement !== had) {
+          try { had.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+        }
+      }
       root.dataset.foot = tuck ? "in" : "out";
     };
     if (typeof addEventListener === "function") addEventListener("resize", seatFoot);

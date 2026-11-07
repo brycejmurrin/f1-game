@@ -1,0 +1,1 @@
+Fixed: the Track Designer keeps keyboard or pad focus on its foot control (SAVE, RACE, SHARE & FILES) when a rotation or resize re-seats the foot under the rail; the next Enter opens what was focused instead of jumping to the mode bar.
