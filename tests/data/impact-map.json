@@ -17657,7 +17657,8 @@
       ],
       "screenBounds": [
         "tests/specs/hud-layout.spec.js",
-        "tests/unit/hud-dock-pack.test.mjs"
+        "tests/unit/hud-dock-pack.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
       ],
       "setCam": [
         "tests/specs/hud-layout.spec.js",
@@ -17896,6 +17897,7 @@
     },
     "js/ui/hud.js": {
       "create": [
+        "tests/specs/ui-button-touch.spec.js",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
@@ -17944,6 +17946,7 @@
       ],
       "invalidateFit": [
         "tests/specs/hud-layout.spec.js",
+        "tests/specs/ui-button-touch.spec.js",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
