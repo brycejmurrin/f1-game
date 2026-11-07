@@ -839,14 +839,18 @@ html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"]
    while they paint at 125%. The requested --ui-scale remains untouched for the
    slider, sheet layouts and density classifier. */
 @media (max-width: 899px), (max-height: 699px) {
+  /* `* var(--tf, 1)` on both: the FIT (css/title.css, js/ui/title-layout.js,
+     #5150) rides on whatever zoom a piece carries. The viewport units below
+     stay keyed on the cap alone, so the fit scales a piece uniformly, --vwz
+     type included (css/title.css says why). */
   :where(body[data-density="compact"]) #menu-brand {
-    zoom: var(--ui-compact-brand-scale);
+    zoom: calc(var(--ui-compact-brand-scale) * var(--tf, 1));
     --vwz: calc(1vw / var(--ui-compact-brand-scale));
     --vhz: calc(1vh / var(--ui-compact-brand-scale));
     --svhz: calc(1svh / var(--ui-compact-brand-scale));
   }
   :where(body[data-density="compact"]) #menu-buttons {
-    zoom: var(--ui-compact-scale);
+    zoom: calc(var(--ui-compact-scale) * var(--tf, 1));
     /* Keep the skewed button tips inside the menu's clipping box. */
     padding-inline: calc(var(--gap) + var(--gap) * 0.25 / var(--ui-compact-scale));
     --vwz: calc(1vw / var(--ui-compact-scale));

@@ -371,8 +371,10 @@ test("CSS: every TITLE LAYOUT rule is gated on a custom layout (or the peek) and
   // Gated at the front, or (inside the large-landscape block, whose selectors
   // must START with the density guard) by a :where(:root[data-title-side]) clause.
   for (const s of sels) assert.match(s, /^(:root\[data-title-(layout|btnw|btns|side)|:root\[data-tl-edit\]|:root\[data-appearance-peek(="title")?\]|:where\(body:not\(\[data-density="compact"\]\)\):where\(:root\[data-title-side="swap"\] \*\))/, `gated: ${s}`);
-  assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: var\(--tl-btns-x, 0\) var\(--tl-btns-y, 0\)/);
-  assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\)\)/);
+  // The player's offset plus the fit's clamp, the player's size times the fit (#5150).
+  assert.match(block, /:root\[data-title-layout\] #menu-buttons \{[^}]*translate: calc\(var\(--tl-btns-x, 0px\) \+ var\(--tf-dx, 0px\)\) calc\(var\(--tl-btns-y, 0px\) \+ var\(--tf-dy, 0px\)\)/);
+  assert.match(block, /zoom: calc\(var\(--ui-scale\) \* var\(--tl-btns-size, 1\) \* var\(--tf, 1\)\)/);
+  assert.match(block, /:root\[data-title-layout\] #menu-brand \{[^}]*zoom: calc\(var\(--ui-scale\) \* var\(--tl-title-size, 1\) \* var\(--tf, 1\)\)/);
   assert.match(block, /#title-car \{[^}]*scale: var\(--tl-art-size, 1\)/);
 });
 

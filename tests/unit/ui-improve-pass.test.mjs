@@ -1211,7 +1211,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.match(html, /id="pm-feel" class="set-row" role="group"/);
   assert.match(html, /id="pm-helplevel" class="set-row" role="group"/);
   assert.match(html, /id="pm-linemode" class="set-row" role="group"/);
-  assert.ok(rulesFor(components, /#pmsettings-inner\[data-shape="wide"\] #advanced-inner \.adv-sec/).some((r) =>
+  assert.ok(rulesFor(components, /#pmsettings-inner:not\(\[data-density="compact"\]\) #advanced-inner \.adv-sec/).some((r) =>
     r.decls.get("grid-column") === "1 / -1"),
     "advanced section headings still span the wide body grid");
   const all = [html, readCssSource("css/components.css"), readCssSource("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
@@ -1576,6 +1576,26 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   const nofit = h.sheet("plain", { w: 800, h: 400, hostHeight: 100, vars: {} });
   h.SS.observe(nofit.el);
   assert.equal(nofit.el.dataset.fit, undefined, "a sheet without --fit-at is never fit-managed");
+  // UI contract 2026-11-06 gap 14: ±0.03 band — a toolbar or keyboard twitch of a few px keeps the painted cap.
+  s.host._client = 400; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.333");
+  s.host._client = 406; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.333", "406/300 = 1.353 is inside the band: no re-zoom");
+  s.host._client = 430; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.433", "430/300 = 1.433 leaves the band");
+  s.host._client = 700; h.SS.reclassify();
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "", "a release is never held back by the band");
+  // Gap 14: never below 100 % — a sheet that cannot fit at 1.0 scrolls its list instead (circuit detail painted 0.954
+  // in an 852x283 Safari tab); a UI SIZE under 100 % is the player's own floor.
+  const h2 = bootSheetShape({ uiScale: 1.09 });
+  const low = h2.sheet("td-inner", { w: 700, h: 230, hostHeight: 230, vars: { "--fit-at": "280px" } });
+  h2.SS.observe(low.el);
+  assert.equal(low.el.dataset.fit, "on");
+  assert.equal(low.el.style.getPropertyValue("--sheet-scale"), "1", "230/280 = 0.82 is floored at 1.0, not 0.4");
+  const h3 = bootSheetShape({ uiScale: 0.8 });
+  const pref = h3.sheet("td-inner", { w: 700, h: 230, hostHeight: 230, vars: { "--fit-at": "280px" } });
+  h3.SS.observe(pref.el);
+  assert.equal(pref.el.style.getPropertyValue("--sheet-scale"), "", "UI SIZE 80 % is the player's floor: 0.82 ≥ 0.8 fits, no cap");
 
   const components = css("css/components.css");
   const garage = css("css/carsetup.css");
@@ -1795,11 +1815,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/menus.css"), "#sel-track-preview", "grid-template-columns"), "minmax(0, 1fr)",
     "narrow SELECT stacks the still over the numbers");
   assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");
-  const dispAreas = decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas");
+  const dispAreas = decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display', "grid-template-areas");
   assert.match(dispAreas, /^"hudopts hudopts"[\s\S]*"metrics metrics"/,
     "DISPLAY opens on HUD, then METRICS and RENDERER (UI SIZE moved to APPEARANCE › READABILITY)");
   assert.doesNotMatch(dispAreas, /uih|uis/, "no hole left for UI SIZE");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.doesNotMatch(dispAreas, /renopts|visual/, "Graphics and Visual Studio no longer reserve empty HUD grid rows");
   assert.match(read("index.html"), /id="pm-visual-tuners" class="pm-renderer-sub"/,
@@ -1817,7 +1837,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
   assert.match(read("index.html"), /id="pm-display-adv-body"[\s\S]*id="pm-res"/);
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "METRICS sits on its own DISPLAY row, not beside HUD");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /SIZE PREVIEW/,
@@ -1855,9 +1875,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
     "the RENDERER fold is the shell host; RESET / shots still inject into its body");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display > details', "grid-column"), "1 / -1",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details', "grid-column"), "1 / -1",
     "every present and future Display disclosure spans the wide grid");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   // ONE RULE NOW, not three (2026-09-18). DISPLAY's summary chrome and
   // STEERING/DRIVING's were byte-identical blocks, so race settings' folds
@@ -1962,10 +1982,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(presetGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
   assert.equal(presetGrid.decls.get("grid-auto-rows"), "1fr");
   assert.equal(presetGrid.decls.get("align-items"), "stretch");
-  const fullRow = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner\[data-shape="wide"\] \.pm-group > button/).find((r) =>
-    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
-  assert.equal(fullRow && fullRow.decls.get("grid-column"), "1 / -1",
-    "narrow wide-shape action buttons take the full row");
+  // UI contract 2026-11-06 gap 3: a sheet under 52rem is never a column grid, so the
+  // old "narrow wide-shape action buttons take the full row" carve has nothing to span.
+  assert.equal(rulesFor(css("css/settings-controls.css"), /\.pm-group > button$/).filter((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c))).length, 0,
+    "no aspect-keyed full-row carve inside the ≤ 620 container block");
   assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
     "NEW CAREER columns keep the themed .sf-scroll thumb only");
   assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
@@ -2017,7 +2038,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "UI SIZE heading is a section break under READABILITY");
   assert.match(code("js/camera/cockpit-opts.js"), /fold\.id = "pm-cockpit"[\s\S]*?getElementById\("pm-visual-tuners"\)[\s\S]*?insertBefore\(fold, tools\)/,
     "COCKPIT is its own fold, just above ADVANCED VISUALS — never inside the RENDERER backend list");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
     "and on a wide sheet it has its own named row above the tools");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");

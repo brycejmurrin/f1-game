@@ -236,6 +236,7 @@
         "tests/specs/smoke.spec.js",
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/tlx-probes.spec.js",
+        "tests/specs/ui-resize.spec.js",
         "tests/unit/capture-tools-regressions.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
@@ -18968,6 +18969,9 @@
       "init": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "layoutProbe": [
+        "tests/specs/ui-resize.spec.js"
+      ],
       "observe": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -19085,12 +19089,19 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
+      "down": [
+        "tests/specs/menu-keyboard.spec.js"
+      ],
       "enter": [
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
+      ],
+      "move": [
+        "tests/specs/ui-scale.spec.js",
+        "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "normalize": [
         "tests/unit/title-layout.test.mjs"
@@ -19099,6 +19110,7 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "reset": [
+        "tests/specs/ui-scale.spec.js",
         "tests/unit/title-layout.test.mjs"
       ],
       "resetShape": [
@@ -19112,6 +19124,9 @@
       ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
+      ],
+      "*": [
+        "tests/specs/title-fit.spec.js"
       ]
     },
     "js/ui/title-menu.js": {

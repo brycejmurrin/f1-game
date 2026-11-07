@@ -7,6 +7,8 @@ description: "Use when reviewing every screen across phone landscape (844x390), 
 
 A layout bug is never "on a screen": it is a **cell** of screen × viewport × scale × pointer.
 One CLI owns the menu matrix: `tools/ui/layout-audit.mjs`. The race HUD has its own (`apex_hud_survey`, below).
+The phone-landscape contract (the ONE layout per screen, the windows to test, the ranked gaps) is
+`docs/notes/UI-CONTRACT-2026-11-06.md`; how the scaling system got here is `docs/notes/UI-HISTORY-2026-11-06.md`.
 
 ## Gotchas
 

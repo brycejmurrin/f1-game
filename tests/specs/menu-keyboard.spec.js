@@ -221,28 +221,44 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.evaluate(() => window.__apex.uiScale(null));
   });
 
-  test("synthetic page keys scroll enlarged Home destinations and keep focus in the menu", async ({ page }) => {
+  // Until #5152 the enlarged Home column scrolled and this held that PageDown
+  // scrolled it. The landscape title never scrolls now (#5150: js/ui/title-layout.js
+  // fit() zooms the cluster into the box), so a page key over it has nothing to
+  // scroll — js/ui/menu-nav.js then treats the pane as one page: PageDown lands
+  // on the last destination, PageUp on the first, the key is consumed, focus
+  // stays in the menu and the document never moves.
+  test("synthetic page keys walk enlarged Home destinations that do not scroll and keep focus in the menu", async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => { window.__apex.headless(true); window.__apex.uiScale(200); });
-    await expect.poll(() => page.locator("#menu-buttons").evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(1);
+    // The fit lands a frame after the write; settled when the cluster fits whole.
+    await expect.poll(() => page.locator("#menu-buttons").evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
     const result = await page.evaluate(() => {
       const menu = document.getElementById("menu-buttons");
+      const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
+      const at = () => doors.indexOf(document.activeElement);
       document.getElementById("mb-career").focus({ preventScroll: true });
-      menu.scrollTop = 0;
+      const start = at();
       const key = name => {
         const event = new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true });
         document.activeElement.dispatchEvent(event);
-        return { prevented: event.defaultPrevented, scroll: menu.scrollTop, focused: menu.contains(document.activeElement) };
+        return { prevented: event.defaultPrevented, scroll: menu.scrollTop, index: at(),
+                 id: document.activeElement && document.activeElement.id, focused: menu.contains(document.activeElement) };
       };
       const down = key("PageDown"), up = key("PageUp");
-      return { down, up, documentScroll: document.documentElement.scrollTop };
+      return { start, doors: doors.length, down, up, documentScroll: document.documentElement.scrollTop,
+               scroller: menu.scrollHeight - menu.clientHeight };
     });
-    expect(result.down.prevented).toBe(true);
-    expect(result.down.scroll).toBeGreaterThan(0);
-    expect(result.up.prevented).toBe(true);
-    expect(result.up.scroll).toBeLessThan(result.down.scroll);
-    expect(result.down.focused && result.up.focused).toBe(true);
+    const dump = JSON.stringify(result);
+    expect(result.scroller, `the enlarged title cluster fits whole ${dump}`).toBeLessThanOrEqual(1);
+    expect(result.start, `CAREER is a measured destination ${dump}`).toBeGreaterThanOrEqual(0);
+    expect(result.down.prevented, `PageDown is consumed ${dump}`).toBe(true);
+    expect(result.down.index, `PageDown lands on a later destination ${dump}`).toBeGreaterThan(result.start);
+    expect(result.down.index, `PageDown reaches the last destination ${dump}`).toBe(result.doors - 1);
+    expect(result.up.prevented, `PageUp is consumed ${dump}`).toBe(true);
+    expect(result.up.index, `PageUp returns to the first destination ${dump}`).toBe(0);
+    expect(result.down.scroll + result.up.scroll, `nothing scrolled ${dump}`).toBe(0);
+    expect(result.down.focused && result.up.focused, `focus stays in the menu ${dump}`).toBe(true);
     expect(result.documentScroll).toBe(0);
   });
 
