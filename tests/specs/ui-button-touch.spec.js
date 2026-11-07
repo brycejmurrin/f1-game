@@ -1585,14 +1585,16 @@ test.describe("Arrange map clearance handoff", () => {
     expect(before.hits, "the map meets no touch button: " + JSON.stringify(before)).toEqual([]);
   });
 
-  test("first keyboard move and resize keep an automatically cleared map at its painted origin", async ({ page }) => {
-    // THE PRECONDITION IS THE SETTING: the column cap only shrinks the pedals to DOCK_MIN_Z (0.5), so the map is still
-    // cleared when the column reaches below that line. capCol = max(0.5, (dockBottom - columnBottom - FIT_AIR) /
-    // pedalsHeight) bottoms out once the column's bottom is within half the pedal stack of the dock's bottom; the
-    // broadcast column fit floors --hud-z-top at 11/14, so HUD 200 under a 100 px top inset paints tower + map past
-    // it (controlsRoom 390 - 100 - 21 - 40 = 229). Derived from the code, not measured here (no browser in the
-    // worktree): CI measures it, and the named expectation below is the first thing to read if it fails.
-    await openMapArranger(page, { hud: 200, btn: 300, sat: 100 });
+  // THE PRECONDITION IS THE SHAPE: the column cap (gap 7) shrinks the pedals only to DOCK_MIN_Z (0.5), so the shipped map
+  // is still cleared where the column reaches below that line — UI contract cell C, a Safari tab under the notch
+  // (844x283, --sat 59). MEASURED on this head (scratch probe, SwiftShader, 2026-11-06): --hud-z-dock-l 0.5, the map
+  // cleared by (44.11, 55.38) px to x 99 / y 170.4 beside the 59-95 px pedals; the same settings on 844x390 need a
+  // 150 px --sat, and HUD 200 / BUTTON 300 / --sat 100 there left the dock at 0.67-0.69 with nothing to clear (CI
+  // 42308611832). The named expectations below are the first thing to read if the shape changes.
+  test.describe("in a 283 px Safari tab", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 283 }, deviceScaleFactor: 1 }) });
+  test("first keyboard move and resize keep an automatically cleared map at its painted origin; the grown map is clamped by the safe box", async ({ page }) => {
+    await openMapArranger(page, { hud: 200, btn: 300, sat: 59 });
     const before=await snap(page); expect(before.user).toBe(false);
     expect(Math.abs(before.clearX)+Math.abs(before.clearY), "PRECONDITION: the shipped map was moved off the pedals " + JSON.stringify(before)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
@@ -1607,13 +1609,20 @@ test.describe("Arrange map clearance handoff", () => {
     const reset=await snap(page); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY), "PRECONDITION after RESET " + JSON.stringify(reset)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-larger").click(); const resized=await snap(page);
     expect(resized.value.s).toBeCloseTo(moved.value.s+10, 8); expect(resized.user).toBe(true);
+    // The first SIZE edit adopts the painted (cleared) box too and grows it in place; then the gap-8 paint clamp keeps
+    // the grown map inside the safe box (HudLayout.screenBounds). The cleared slot sits on the box's bottom edge here,
+    // so the map's bottom stays on it and its top moves up by exactly the overflow (measured 9.4 px); x is untouched.
+    const safe=await page.evaluate(() => HudLayout.screenBounds());
     expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1);
+    const bottom=Math.min(reset.y+resized.h, safe.bottom);
+    expect(Math.abs(resized.y+resized.h-bottom), "grown in place, clamped by the safe box " + JSON.stringify({reset, resized, safe})).toBeLessThanOrEqual(1);
+    expect(resized.hits, "the grown map meets no touch button").toEqual([]);
     const sizeRatio=resized.value.s/moved.value.s;
     // Allow at most one painted pixel of rounding in either scaled dimension.
     expect(Math.abs(resized.w/reset.w-sizeRatio)).toBeLessThanOrEqual(1/reset.w);
     expect(Math.abs(resized.h/reset.h-sizeRatio)).toBeLessThanOrEqual(1/reset.h);
     await page.locator("#hud-arrange-done").click();
+  });
   });
 });
 
