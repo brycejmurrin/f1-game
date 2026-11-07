@@ -60,6 +60,10 @@ window.SheetShape = (function () {
   const PAIR_HYST = 8;
   const RAIL_HYST = 12;
   const WIDE_HYST = 16;
+  /* --page-at band: room is read from the HOST (roomOwn), not from the sheet's
+     own content, so a few px of band is enough; the density band is 40 because
+     a compact layout is shorter than its normal one and would re-measure itself. */
+  const PAGE_HYST = 12;
 
   function classifyFlag(el, w, cssVar, attr, hyst, onVal = "on", offVal = "off") {
     const raw = getComputedStyle(el).getPropertyValue(cssVar);
@@ -283,6 +287,29 @@ window.SheetShape = (function () {
     }
   }
 
+  /* IS THERE ROOM FOR FIXED CHROME? A sheet with a head and a foot pinned
+   * around one scroller needs a minimum of its own px for that scroller to be
+   * worth having. Most sheets answer a short room with the fit cap above
+   * (--fit-at: shrink the zoom). A sheet that must paint the requested UI SIZE
+   * (race settings: "requested enlargement reaches the sheet", ui-scale.spec.js
+   * "Race setup adaptive task") answers it by re-flowing instead: head, body
+   * and foot scroll as ONE page. `--page-at` is that threshold, in the sheet's
+   * own units and read against the host's room like --compact-at; the sheet's
+   * CSS keys the one-page layout on `data-page="on"`. MEASURED 667x320 at UI
+   * SIZE 200 %, TEXT large (2026-11-07): the compact wide race sheet had 152 own
+   * px of room, head 56 + foot 58 left #rs-body 36 own px — with the fit cap the
+   * sheet painted 1.38 of the asked 2.0; at 844x390 the same cap would have
+   * painted 1.0. Absent --page-at (the default) nothing is written. */
+  function classifyPage(el, hOwn) {
+    const at = parseFloat(getComputedStyle(el).getPropertyValue("--page-at"));
+    if (!at) { if (el.dataset.page) delete el.dataset.page; return; }
+    const was = el.dataset.page === "on";
+    const h = roomOwn(el, hOwn);
+    const now = was ? h < at + PAGE_HYST : h < at;
+    const next = now ? "on" : "off";
+    if (el.dataset.page !== next) el.dataset.page = next;
+  }
+
   /* READ ALL, THEN WRITE ALL. Interleaving getBoundingClientRect with classify()
      (dataset / CSS vars / zoom) forces a style+layout flush per sheet — on the
      iPhone race-select open that was a measurable hitch beside the track
@@ -328,6 +355,7 @@ window.SheetShape = (function () {
        MEASURED 852×393 @115%: career guides sat ~39px past the sheet until
        this order flipped. */
     classifyDensity(el, hOwn);
+    classifyPage(el, hOwn);
     classifyRail(el, wOwn, hOwn);
     classifyPair(el, wOwn);
   }
@@ -720,9 +748,9 @@ window.SheetShape = (function () {
       // detailRO already carry ("Without that guard this is a classic RO
       // feedback loop", it says).
       //
-      // classify() writes SEVEN layout-affecting things onto the element it was
+      // classify() writes EIGHT layout-affecting things onto the element it was
       // just told about — --sheet-scale, --sheet-eff-scale, data-fit, data-shape,
-      // data-density, data-rail, data-pair — and --sheet-scale IS that element's
+      // data-density, data-page, data-rail, data-pair — and --sheet-scale IS that element's
       // `zoom` (css/components.css). So every delivery changed the observed box
       // and re-delivered. The per-threshold hysteresis cannot close the cycle,
       // because the cycle HOPS between thresholds: a scale step moves the local
@@ -864,7 +892,7 @@ window.SheetShape = (function () {
     const b = document.body.dataset;
     return {
       id: sheet.id, density: sheet.dataset.density || null, shape: sheet.dataset.shape || null,
-      pair: sheet.dataset.pair || null, fit: sheet.dataset.fit || null,
+      pair: sheet.dataset.pair || null, fit: sheet.dataset.fit || null, page: sheet.dataset.page || null,
       sheetScale: sheet.style.getPropertyValue("--sheet-scale") || null, zoom,
       own: { w: sheet.clientWidth, h: sheet.clientHeight },
       painted: { x: r.left, y: r.top, w: r.width, h: r.height },

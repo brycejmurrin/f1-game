@@ -1652,9 +1652,13 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
     /1fr\) minmax\(0, 1fr\)$/.test(r.decls.get("grid-template-columns") || "")), "two columns once the sheet is wide");
   assert.equal(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 640px\)/ }).length, 0, "no column flip inside the phone band");
   assert.equal(rulesFor(menus, /#rs-/).filter((r) => r.decls.has("grid-row")).length, 0, "no per-section grid-row placement");
-  // Only a TALL sheet is one page-scroller; a compact wide sheet keeps head and START RACE fixed and scrolls #rs-body.
-  assert.equal(decl(menus, '#race-settings > .sheet[data-shape="tall"]', "overflow-y"), "auto");
-  assert.equal(decl(menus, '#race-settings > .sheet[data-shape="tall"] > #rs-body', "overflow"), "visible");
+  // A TALL sheet, or one too SHORT for fixed chrome (SheetShape data-page from --page-at), is one page-scroller;
+  // any other compact wide sheet keeps head and START RACE fixed and scrolls #rs-body.
+  const onePage = '#race-settings > .sheet:is([data-shape="tall"], [data-page="on"])';
+  assert.equal(decl(menus, onePage, "overflow-y"), "auto");
+  assert.equal(decl(menus, onePage + " > #rs-body", "overflow"), "visible");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--page-at"), "220px", "one page under 220 own px of room");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--fit-at"), "0px", "the requested UI SIZE reaches the race sheet");
   assert.equal(rulesFor(menus, /#race-settings > \.sheet.*data-density="compact"/).filter((r) => r.decls.get("display") === "block").length, 0,
     "compact race settings keep the sheet grid (gap 16)");
   assert.equal(decl(menus, "#race-settings > .sheet", "--compact-at"), "480px", "compact at 480 like its siblings");

@@ -45,7 +45,7 @@ async function knob(page, text, ui) {
 const SEL = `(() => {
   const z = (el) => el.currentCSSZoom || 1;
   const own = (el) => { const r = el.getBoundingClientRect(); const k = z(el); return { y: +r.y.toFixed(1), w: +(r.width / k).toFixed(1), h: +(r.height / k).toFixed(1), ph: +r.height.toFixed(1) }; };
-  const F = (el) => ({ density: el.dataset.density, shape: el.dataset.shape, pair: el.dataset.pair, fit: el.dataset.fit, sheetScale: el.style.getPropertyValue("--sheet-scale"), compactAt: getComputedStyle(el).getPropertyValue("--compact-at").trim(), zoom: z(el) });
+  const F = (el) => ({ density: el.dataset.density, shape: el.dataset.shape, pair: el.dataset.pair, fit: el.dataset.fit, page: el.dataset.page, sheetScale: el.style.getPropertyValue("--sheet-scale"), compactAt: getComputedStyle(el).getPropertyValue("--compact-at").trim(), zoom: z(el) });
   const $ = (id) => document.getElementById(id);
   const sel = $("sel-inner"), sec = $("sel-track-section"), hero = $("sel-hero"), info = $("sel-preview-info"), prev = $("sel-track-preview");
   const body = document.body;
