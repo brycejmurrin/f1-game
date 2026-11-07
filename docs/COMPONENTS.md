@@ -752,10 +752,12 @@ screen, viewport, element, and the number of pixels involved.
 > Merged from `LAYOUT-TOKENS.md` on 2026-11-03 (docs/plans/2026-11-03-agent-surface-reset.md §4.9, D-001); links that named that page land here.
 
 The shared sizes every screen should use. Declared in `css/tokens.css`.
-`js/ui/scale.js` writes `html[data-layout]` and `html[data-fold]` from the
-same numbers. A media query cannot read a custom property, so a breakpoint
-that also needs `@media` repeats the pixel value; `tests/unit/layout-tokens.test.mjs`
-fails if the copies drift.
+`js/ui/scale.js` writes `html[data-fold]` for foldables. A media query cannot
+read a custom property, so a breakpoint that also needs `@media` repeats the
+pixel value; `tests/unit/layout-tokens.test.mjs` fails if the copies drift.
+The width tier reaches the DOM through CSS only: `html[data-layout]` is gone
+(UI contract 2026-11-06 gap 20 — it called an 852/844 landscape phone
+"tablet" and nothing read it).
 
 ### Spacing, type, safe area
 
@@ -798,16 +800,17 @@ because those controls are `position:fixed` with literal safe-area anchors.
 
 ### Width tiers
 
-Tiers are widths, not device names. A landscape phone can land in `tablet`.
+Tiers are widths, not device names: a landscape phone is wider than `--bp-tablet`,
+which is why no tier name is stamped on the document.
 
-| `data-layout` | Token | Min width |
+| Tier | Token | Min width |
 |---|---|---|
-| `phone` | `--bp-phone` | under 700px (the token itself is 480px, the small-phone ceiling) |
-| `tablet` | `--bp-tablet` | 700px |
-| `laptop` | `--bp-laptop` | 900px |
-| `desktop` | `--bp-desktop` | 1440px |
-| `wide` | `--bp-wide` | 1920px |
-| `ultra` | `--bp-ultra` | 2200px |
+| phone | `--bp-phone` | under 700px (the token itself is 480px, the small-phone ceiling) |
+| tablet | `--bp-tablet` | 700px |
+| laptop | `--bp-laptop` | 900px |
+| desktop | `--bp-desktop` | 1440px |
+| wide | `--bp-wide` | 1920px |
+| ultra | `--bp-ultra` | 2200px |
 
 `--layout-active` is the token for the tier the viewport is in. `--col-max`
 (660px) is the widest a control column grows. Wide landscape

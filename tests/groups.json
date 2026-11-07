@@ -564,7 +564,7 @@
     "tests/unit/lap-format-rollover.test.mjs",
     "tests/unit/layers-anyopen-memo.test.mjs",
     "tests/unit/layers-nav-memo.test.mjs",
-    "// Width tiers: --bp-* in tokens.css, the media-query copies, and UiScale.layoutOf stay one list.",
+    "// Width tiers: --bp-* in tokens.css and their --layout-active media-query copies stay one list; no html[data-layout] writer (gap 20).",
     "tests/unit/layout-tokens.test.mjs",
     "// getContext TDZ before G exists: gesture listeners and restoreOnEngine must not throw or latch early.",
     "tests/unit/lazy-bundles-getcontext.test.mjs",

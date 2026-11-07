@@ -18600,9 +18600,6 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "layoutOf": [
-        "tests/unit/layout-tokens.test.mjs"
-      ],
       "refreshBtnFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
@@ -18612,6 +18609,7 @@
       ],
       "*": [
         "tests/specs/ui-resize.spec.js",
+        "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",

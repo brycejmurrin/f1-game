@@ -398,3 +398,18 @@ test("a def without turns gets the smoothed-peak corner table, not __apex.corner
     def.turns = turns;
   }
 });
+
+// UI contract 2026-11-06 rule 8: __apex.sheetFit is SheetShape.layoutProbe behind a selector, so a spec cell and a
+// shell probe read one implementation. Pin the alias, its three lookup forms and the empty answers.
+test("sheetFit is SheetShape.layoutProbe behind a selector, an element or the first painted sheet", () => {
+  const doc = g.sandbox.document, el = doc.getElementById("pmsettings-inner");
+  truthy(el, "the settings sheet is in the shell");
+  const bySel = g.apex.sheetFit("#pmsettings-inner");
+  assert.deepEqual(bySel, g.sandbox.SheetShape.layoutProbe(el), "the alias adds nothing and drops nothing");
+  assert.equal(bySel.id, "pmsettings-inner");
+  for (const k of ["own", "painted", "host", "viewport", "inner", "body", "zoom"]) assert.ok(k in bySel, k);
+  assert.deepEqual(g.apex.sheetFit(el), bySel, "an element is accepted as is");
+  assert.equal(g.apex.sheetFit("#no-such-sheet"), null);
+  const open = g.apex.sheetFit();
+  assert.ok(open === null || open.painted.w > 0, "no argument probes a painted sheet or answers null");
+});

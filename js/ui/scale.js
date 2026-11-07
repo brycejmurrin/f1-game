@@ -10,41 +10,20 @@ const UiScale = (() => {
   // The primary-pointer test every touch default below keys off. Module level so
   // defaultResMode() answers without a create(G) (SettingsExport's SPEC row).
   const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
-  // Width tiers. The numbers are the fallback when css/tokens.css has not
-  // applied; the live values are --bp-* (tests/unit/layout-tokens.test.mjs).
-  const LAYOUT_BPS = Object.freeze([["ultra", 2200], ["wide", 1920], ["desktop", 1440], ["laptop", 900], ["tablet", 700]]);
-  function layoutOf(width, bps) {
-    const w = +width;
-    if (!isFinite(w)) return "phone";
-    for (const row of (bps || LAYOUT_BPS)) if (w >= row[1]) return row[0];
-    return "phone";
-  }
-  function readLayoutBps() {
-    try {
-      const cs = getComputedStyle(document.documentElement);
-      const rows = [];
-      for (const row of LAYOUT_BPS) {
-        const n = parseFloat(cs.getPropertyValue("--bp-" + row[0]));
-        if (n > 0) rows.push([row[0], n]);
-      }
-      return rows.length === LAYOUT_BPS.length ? rows : LAYOUT_BPS;
-    } catch (_) { return LAYOUT_BPS; }
-  }
+  // Foldable hinge stamp: html[data-fold="horizontal"|"vertical"] from the viewport-segments
+  // queries. The width tier html[data-layout] that sat beside it until 2026-11-07 is gone (UI
+  // contract 2026-11-06 gap 20): it called an 852/844 landscape phone "tablet" and nothing in
+  // css/ read it. CSS media queries own the width tiers (--layout-active in css/tokens.css).
   function syncLayout() {
     try {
       const root = document.documentElement;
-      if (!root || !root.dataset || typeof getComputedStyle !== "function") return;
-      const vv = window.visualViewport;
-      const w = (vv && +vv.width > 0) ? +vv.width : window.innerWidth;
-      root.dataset.layout = layoutOf(w, readLayoutBps());
+      if (!root || !root.dataset || !window.matchMedia) return;
       let fold = "";
-      if (window.matchMedia) {
-        if (window.matchMedia("(horizontal-viewport-segments: 2)").matches) fold = "horizontal";
-        else if (window.matchMedia("(vertical-viewport-segments: 2)").matches) fold = "vertical";
-      }
+      if (window.matchMedia("(horizontal-viewport-segments: 2)").matches) fold = "horizontal";
+      else if (window.matchMedia("(vertical-viewport-segments: 2)").matches) fold = "vertical";
       if (fold) root.dataset.fold = fold;
       else delete root.dataset.fold;
-    } catch (_) { /* the tier is progressive; a missing API leaves the CSS media queries in charge */ }
+    } catch (_) { /* progressive; a missing API leaves the CSS media queries in charge */ }
   }
   // The RESOLUTION pin's shipped default: a phone ships LOW, a pointer device AUTO.
   const defaultResMode = () => (coarseUi() ? "low" : "auto");
@@ -386,5 +365,5 @@ const UiScale = (() => {
     if (!(z > 0) || z * 100 >= +pct - 0.5) return label;
     return `${label} · fits ${Math.round(z * 100)}%`;
   }
-  return { create, defaultResMode, layoutOf, LAYOUT_BPS, btnFitLabel };
+  return { create, defaultResMode, btnFitLabel };
 })();
