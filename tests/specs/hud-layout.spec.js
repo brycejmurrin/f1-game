@@ -1051,6 +1051,14 @@ for (const v of CONTRACT_WINDOWS) {
       // unwritten, the tyre 80 px low, the cluster on TYRES. Like the neighbours: fonts in, the sector rows built and
       // the cluster laid out before the first knob.
       await page.evaluate(() => document.fonts.ready);
+      // THE ROWS NEED ONE PAINTED TICK, AND THE FREEZE ABOVE STOPS THE FRAME'S: startRace's own updateHud(true) runs
+      // with #hud still hidden (game.js: debrisPrime before `els.hud.hidden = false`), so only a DRAWN count/race frame
+      // builds #hud-sectors (updateHud(false) after render()). On llvmpipe the first present links every TLX program
+      // in one 11-13 s task, so race() resolved and go()/freeze(true) ran before any frame had painted (run 42321863901:
+      // all three cells, line 1054 timed out with the cluster visible and no S1/S2/S3), and under freeze no rAF tick
+      // builds them. The wait below passed only when a frame happened to land first. Force the tick instead
+      // (jump -> refreshHud(true), the same forced fit every knob cell uses); the wait is then the assertion, not a race.
+      await forceHudFit(page);
       await page.waitForFunction(() => {
         const sec = document.getElementById("hud-sectors"), bot = document.querySelector(".hud-bottom");
         return !!(sec && sec.children.length && bot && [...bot.children].some((c) => !c.hidden && c.getBoundingClientRect().width > 0));
