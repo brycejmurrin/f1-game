@@ -101,6 +101,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       heroH: hero.height,
       mapInsideHero: r.top >= hero.top - 1 && r.bottom <= hero.bottom + 1 && r.left >= hero.left - 1 && r.right <= hero.right + 1,
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
+      sectionScroll: (() => { const s = document.getElementById("sel-track-section"); return s.scrollHeight - s.clientHeight; })(),
+      filterInTitleRow: (() => { const f = document.getElementById("sel-track-filter"), h = document.querySelector("#sel-inner > .sheet-head"); return !!f && Math.abs(f.getBoundingClientRect().top - h.getBoundingClientRect().top) < 12; })(),
     };
   });
   // 852×393 is under #sel-inner's --compact-at 480; there is no pane to pair.
@@ -112,6 +114,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(initialSelect.heroH, "the hero keeps a real still slot").toBeGreaterThan(80);
   expect(initialSelect.mapInsideHero, "the outline is drawn inside the hero").toBe(true);
   expect(initialSelect.skew, "the outline canvas is not CSS-squashed").toBeLessThan(0.05);
+  // #5153 gap 13 (UI contract 2026-11-06 §4.5): the phone card's hero never scrolls; the filter chips share the title row.
+  expect(initialSelect.sectionScroll, "the hero section is not a scroller").toBeLessThanOrEqual(1);
+  expect(initialSelect.filterInTitleRow, "the filter row shares the title row").toBe(true);
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. The toolbar must stay one pannable row and the strip must keep at
   // least one whole tile in view before the player scrolls anything.
@@ -202,9 +207,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden, "empty hidden").toBe(true);
 
-  // Short landscape select: the body is not a scroller; the strip stays a
-  // sideways strip; the hero section is the ONLY vertical scroll region and the
-  // foot spans the sheet.
+  // Short landscape select (the phone card, #5153 gap 13): the body is not a
+  // scroller; the strip stays a sideways strip; the hero section is clipped and
+  // NEVER scrolls (the numbers ride on the still), so nothing in the sheet
+  // scrolls vertically; the foot spans the sheet.
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -247,10 +253,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
   expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOX);
   expect(stackedSel.listOY).toBe("hidden");
-  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.sectionOY);
-  // Whatever scrolls vertically here is the hero section (or its numbers
-  // column) — never the body, never the strip.
-  expect(stackedSel.vertical.every((id) => id === "sel-track-section" || id === "sel-preview-info"), JSON.stringify(stackedSel.vertical)).toBe(true);
+  expect(stackedSel.sectionOY, "the hero section is clipped, not a scroller (UI contract 2026-11-06 rule 3)").toBe("hidden");
+  // Nothing scrolls vertically on the phone card — not the body, not the strip,
+  // not the hero.
+  expect(stackedSel.vertical, "no vertical scroller anywhere in the picker").toEqual([]);
   expect(stackedSel.stripTop).toBeLessThan(stackedSel.heroTop);
   expect(stackedSel.footW / stackedSel.innerW).toBeGreaterThan(0.95);
   expect(stackedSel.active).toBe(true);

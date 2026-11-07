@@ -249,21 +249,23 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
    iPhone (734x343, layout-audit 2026-10-05) RESUME painted 39 tall and
    RESTART / SETTINGS / QUIT 36 — under the 52 touch floor. The body already
    scrolls, so the taller doors scroll; RESUME stays the first button. */
-@media (orientation: landscape) and (max-height: 500px) {
-  #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
-    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
-    padding-block: 3px;
-  }
-  #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
-  #pm-race-context { padding-block: 1px; }
-  #pm-race-context :is(span, small) { display: none; }
-  /* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
-     the tray's own (overlays-layer) base rules: written here they lost to them. */
-  #pm-now-card, #pm-build { display: none; }
-  #pausemenu .sheet-body {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+/* Keyed on the body tier (compact + wide in own px, the phone card's own key in
+   css/overlays.css) rather than the raw `(orientation: landscape) and
+   (max-height: 500px)`: that band was zoom-blind (UI contract 2026-11-06 §7
+   gap 24, handed to #5153 PR D). */
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  padding-block: 3px;
+}
+body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale))); }
+body[data-density="compact"][data-shape="wide"] #pm-race-context { padding-block: 1px; }
+body[data-density="compact"][data-shape="wide"] #pm-race-context :is(span, small) { display: none; }
+/* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
+   the tray's own (overlays-layer) base rules: written here they lost to them. */
+body[data-density="compact"][data-shape="wide"] :is(#pm-now-card, #pm-build) { display: none; }
+body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 /* Short phone landscape (≤400px tall — 844×390 / 852×344): the sheet was
    nearly full-bleed and the RACE TOOLS tray's 3-col last row left a hole
@@ -304,23 +306,21 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
    so it never scrolls away and never covers a door: the sheet reserves its
    height as padding. DOM, Tab and autofocus order are unchanged (RESUME is
    still first); MenuNav is geometric, so Up from RESUME reaches the door above
-   it and Down wraps to the top. NOT the split card (css/overlays.css: shipped
-   GRID on a compact wide body, at any CARD WIDTH), whose RESUME slab already
-   sits in the left thumb band; every player layout gets the bar. A player's TOP/BOTTOM position and SIDEBAR's full-height strip keep
-   their own vertical placement. */
+   it and Down wraps to the top. NOT on a compact wide body (css/overlays.css:
+   the phone card, for EVERY layout since #5153 gap 10), whose RESUME slab
+   already sits in the thumb column: this bar is the 420 card's, which a
+   landscape phone reaches only below UI SIZE 66 %. A player's TOP/BOTTOM
+   position keeps its own vertical placement. */
 @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-  :root[data-pause-layout] #pausemenu > .sheet,
   body:not([data-density="compact"][data-shape="wide"]) #pausemenu > .sheet {
     --pm-resume-h: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)), calc(var(--tap-0) * var(--look-pause-btn, 0)));
     position: relative;
     padding-bottom: calc(var(--pm-resume-h) + var(--pad) * 0.7);
   }
-  :root[data-pause-layout] #pausemenu #pm-resume,
   body:not([data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume {
     position: absolute; inset: auto var(--pad) calc(var(--pad) * 0.35);
     height: var(--pm-resume-h); min-height: 0; margin: 0; z-index: 1;
   }
-  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"])[data-pause-layout] #pausemenu { align-items: end; }
   :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):has(> body:not([data-density="compact"][data-shape="wide"])) #pausemenu { align-items: end; }
 }
 /* Opaque enough that leftover HUD cannot read through the card. Color is

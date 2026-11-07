@@ -3046,6 +3046,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/probe-sheets-contract.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c5"
+    },
     "tools/ui/reach-score.mjs": {
       "action": "keep-native",
       "presentation": "native",

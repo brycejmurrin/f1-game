@@ -89,15 +89,17 @@
 }
 /* Short phone landscape: the story + podium was taller than the sheet body,
    so overflow:hidden on .sheet clipped the name row and left P1–P3 looking
-   empty. Drop the team line, tighten type/padding, keep names in view. */
-@media (orientation: landscape) and (max-height: 500px) {
-  [data-results-part="story"] { padding: calc(var(--pad) * 0.55); margin-bottom: calc(var(--pad) * 0.45); }
-  [data-results-part="podium"] { gap: calc(var(--gap) * 0.5); padding-top: calc(var(--pad) * 0.45); }
-  [data-results-part="podium"] > li { padding: calc(var(--pad) * 0.4); gap: 2px; }
-  [data-results-part="podium"] > li > strong { font-size: var(--fs-4); }
-  [data-results-part="podium"] > li > strong + span { font-size: var(--fs-micro); }
-  [data-results-part="podium"] small { display: none; }
-}
+   empty. Drop the team line, tighten type/padding, keep names in view.
+   Keyed on the RESULTS sheet's own density (the ceremony podium, unzoomed and
+   outside any sheet, on the body tier), not the zoom-blind
+   `(orientation: landscape) and (max-height: 500px)` (UI contract 2026-11-06
+   §7 gap 24, handed to #5153 PR D). */
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="story"] { padding: calc(var(--pad) * 0.55); margin-bottom: calc(var(--pad) * 0.45); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] { gap: calc(var(--gap) * 0.5); padding-top: calc(var(--pad) * 0.45); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] > li { padding: calc(var(--pad) * 0.4); gap: 2px; }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] > li > strong { font-size: var(--fs-4); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] > li > strong + span { font-size: var(--fs-micro); }
+:is(#results .sheet[data-density="compact"]:not([data-shape="tall"]), body[data-density="compact"][data-shape="wide"] #ceremony-podium) [data-results-part="podium"] small { display: none; }
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduce"]) [data-results-part="story"] { animation: career-reveal 240ms ease-out both; }
   /* PODIUM COUNTDOWN (design pass 3E): P3, then P2, then P1, the order a real

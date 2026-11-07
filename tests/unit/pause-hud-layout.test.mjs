@@ -93,6 +93,34 @@ test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no 
   assert.match(exp, /#pm-quick-doors\s*>\s*details\[open\]\s*\{[^}]*flex-basis:\s*100%/, "an open disclosure tile takes the tray's full width");
 });
 
+test("the phone pause card (#5153 gap 10) is keyed on the body's own density + shape, for every layout", () => {
+  const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
+  const dialogs = readCssSource("css/dialogs.css");
+  const PHONE = String.raw`body\[data-density="compact"\]\[data-shape="wide"\]`;
+  // No layout gate: measured 2026-11-06 (docs/notes/UI-PR-D-MEASURE-2026-11-06.md), each
+  // stored layout swapped in the 420 card and put QUIT 221-420 own px past the sheet.
+  assert.doesNotMatch(overlays, /:root:not\(\[data-pause-layout\]\)/, "the phone card has no :root:not([data-pause-layout]) gate");
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu \.sheet-body \{[^}]*grid-template-areas: "ctx restart settings" "resume tools tools" "quit tools tools"`));
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu \.sheet-body \{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto`));
+  // 5-up tray: ten tiles are two rows in the ~137 own px tools track of Safari 852x283 at 109 %.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors \{[^}]*--tray-cols: 5`));
+  // The tile label steps down one notch (CI on ec39facd / 354334ed: MESSAGES 74 px in a 71 px text box in the
+  // 852-wide windows with 59 px insets). A flat step: a container unit fit locally but not on CI's Chromium.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu #pm-quick-doors > details \{ font-size: calc\(var\(--fs-micro\) \* 0\.92\); \}`));
+  assert.doesNotMatch(overlays, /#pm-quick-doors[^{]*\{[^}]*container-type/, "no container unit decides the tray's type");
+  // The race line never grows the doors' row.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pm-race-context \{[^}]*max-height: var\(--pm-door\)`));
+  // Layouts rearrange doors inside the card: WIDE puts the doors along the bottom, SIDE RIGHT mirrors.
+  assert.match(overlays, new RegExp(String.raw`:root\[data-pause-layout="wide"\]:has\(> ` + PHONE + String.raw`\) #pausemenu \.sheet-body \{[^}]*"resume restart settings quit"`));
+  assert.match(overlays, new RegExp(String.raw`:root\[data-pause-side="right"\]:has\(> ` + PHONE + String.raw`\) #pausemenu \.sheet-body \{[^}]*"tools tools resume"`));
+  // SIDEBAR's full-height strip is geometry: the phone card keeps its own height.
+  assert.match(overlays, new RegExp(PHONE + String.raw` #pausemenu > \.sheet \{ height: auto; \}`));
+  // The thumb-reach RESUME bar is the 420 card's only: no [data-pause-layout] arm reaches a compact wide body.
+  const thumb = dialogs.slice(dialogs.indexOf("/* THUMB REACH"), dialogs.indexOf("/* Opaque enough that leftover HUD"));
+  assert.doesNotMatch(thumb, /:root\[data-pause-layout\] #pausemenu/, "the bar's [data-pause-layout] arm is gone");
+  assert.match(thumb, /body:not\(\[data-density="compact"\]\[data-shape="wide"\]\) #pausemenu > \.sheet \{/);
+});
+
 test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warning never is", () => {
   let now = 0;
   const { banner, shown } = openBanner({ profile: "broadcast", now: () => now });

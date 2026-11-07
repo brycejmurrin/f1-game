@@ -3,6 +3,7 @@
 // ceremony support fails; no capability skip or debug-seek proves acceptance.
 import { test, expect, BOOT_MS, RACE_BUILD_MS } from "../helpers/fixtures.js";
 import { startCareer, goRacing } from "../helpers/career-boot.js";
+import fs from "node:fs";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
@@ -350,5 +351,65 @@ test.describe("results-flow — desktop cooldown ownership", () => {
       await phase(page, NEXT[current]);
     }
     await expect(page.locator("#results")).toBeVisible();
+  });
+});
+
+// UI contract cells (#5153 gap 12, PR D; docs/notes/UI-CONTRACT-2026-11-06.md §3 rule 8 and §4.9; the numbers in
+// docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pinned podium's pin count comes from the pane, so the shortest window
+// still scrolls >= 2 rows of the classification. Windows A (the iOS Home Screen app), C (the Safari tab) and D (the spec
+// phone), seeded from Bryce's own export (TEXT large, UI 109 %), insets injected on :root as the shell does.
+const OWNER_EXPORT = JSON.parse(fs.readFileSync(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+const CONTRACT_WINDOWS = [
+  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
+  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
+  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
+];
+for (const win of CONTRACT_WINDOWS) test.describe("UI contract results cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("the pinned podium leaves >= 2 scrolling rows: pins from the pane, keyed on the sheet", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await page.waitForFunction(() => !!window.__apex?.race, null, WAIT);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => !!window.__apex?.race, null, WAIT);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await page.evaluate(() => window.__apex.race("bahrain", "day", "dry", { laps: 1, grid: "tier" }));
+    await page.waitForFunction(() => !!window.__apex.info().track
+      && ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: RACE_BUILD_MS });
+    expect(await page.evaluate(() => window.__apex.finishRace())).toEqual({ state: "results" });
+    await expect(page.locator("#results")).toBeVisible();
+    await expect(page.locator("#res-next")).toBeEnabled();
+    await page.waitForFunction(() => !!document.getElementById("results-table").dataset.pins, null, { polling: 50, timeout: 8_000 });
+    const cell = await page.evaluate(() => {
+      const z = (el) => el.currentCSSZoom || 1;
+      const res = document.getElementById("results"), sheet = res.querySelector(":scope > .sheet"), table = document.getElementById("results-table");
+      const rows = [...table.querySelectorAll('[data-results-part="ranking"] > .res-row[role="listitem"]')];
+      const sticky = rows.filter((r) => getComputedStyle(r).position === "sticky").map((r) => r.className.replace("res-row", "").trim());
+      const rowOwnH = rows[0] ? rows[0].getBoundingClientRect().height / z(rows[0]) : 0;
+      const sr = sheet.getBoundingClientRect(), you = rows.find((r) => r.classList.contains("you"));
+      // The story cards sit above the ranking list at open; the pins hold once the list is in the pane.
+      const list = table.querySelector('[data-results-part="ranking"]');
+      if (list) table.scrollTop = list.offsetTop;
+      const yr = you ? you.getBoundingClientRect() : null, tr = table.getBoundingClientRect();
+      return { ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(), text: document.documentElement.dataset.textSize,
+        sheet: { density: sheet.dataset.density, shape: sheet.dataset.shape, inScreen: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 },
+        pins: table.dataset.pins, sticky, rows: rows.length, paneOwnH: +table.clientHeight.toFixed(1), rowOwnH: +rowOwnH.toFixed(1), rowPaintedH: rows[0] ? +rows[0].getBoundingClientRect().height.toFixed(1) : 0,
+        scrollingRows: rowOwnH ? +((table.clientHeight - sticky.length * rowOwnH) / rowOwnH).toFixed(2) : null,
+        youInPane: yr ? yr.top >= tr.top - 0.5 && yr.bottom <= tr.bottom + 0.5 : null, tableScrolls: table.scrollHeight > table.clientHeight + 1 };
+    });
+    const tag = win.name + ": ";
+    expect({ ui: cell.ui, text: cell.text }, tag + "the owner's knobs").toEqual({ ui: "1.09", text: "large" });
+    expect(cell.sheet, tag + "a compact wide results sheet inside the window").toMatchObject({ density: "compact", shape: "wide", inScreen: true });
+    expect(cell.rows, tag + "a full classification").toBeGreaterThanOrEqual(10);
+    expect(cell.rowPaintedH, tag + "one 44-painted-px line per row").toBeCloseTo(44, 0);
+    expect(["1", "2", "4"], tag + "data-pins is one of the three counts").toContain(cell.pins);
+    expect(cell.sticky.length, tag + "the sticky rows are the pin count (" + cell.sticky.join(", ") + ")").toBe(Number(cell.pins));
+    expect(cell.sticky, tag + "YOU is always pinned").toContain("you");
+    if (cell.pins !== "1") expect(cell.sticky, tag + "P1 pins whenever more than YOU does").toContain("p1");
+    expect(cell.scrollingRows, tag + "the classification keeps >= 2 scrolling rows under the pins").toBeGreaterThanOrEqual(2);
+    expect(cell.youInPane, tag + "your row is pinned inside the pane once the list is in view").toBe(true);
+    expect(cell.tableScrolls, tag + "the classification is the one scroller").toBe(true);
   });
 });

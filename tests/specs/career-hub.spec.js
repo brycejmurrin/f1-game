@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 test.describe.configure({ mode: "parallel" });
 
@@ -699,4 +700,76 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
       await expect(page.locator("#cr-left")).toContainText("NEXT RACE");
     });
   }
+});
+
+// ── UI contract cells (#5153 gap 11, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.7) ──
+// The hub in the owner's three windows — A the iOS Home Screen app (852x393, insets 59/21/59),
+// C the Safari tab (852x283), D the spec phone (844x390) — seeded from Bryce's own export, whose
+// career DENSITY is ROOMY. Measured before the fix (docs/notes/UI-PR-D-MEASURE-2026-11-06.md):
+// ROOMY turned the sheet normal, which paired it at 657 own px (a 73-115 px left pane) and at
+// 552 left no scroller at all. On a phone-sized window ROOMY is a request the box clamps: the
+// sheet stays compact, the panes stack, #cr-body is the one scroller, the foot never moves.
+const OWNER_EXPORT = JSON.parse(await readFile(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+const CONTRACT_WINDOWS = [
+  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 }, insets: { l: 59, r: 59, b: 21 } },
+  { name: "C safari 852x283", viewport: { width: 852, height: 283 }, insets: { l: 59, r: 59, b: 0 } },
+  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 }, insets: { l: 0, r: 0, b: 0 } },
+];
+for (const win of CONTRACT_WINDOWS) test.describe("UI contract career cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("ROOMY is clamped: compact, stacked, one scroller, the foot on screen", async ({ page }) => {
+    await boot(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    await startCareer(page, { teamId: "haas", seat: 1, seed: 4242 });
+    await expect(page.locator("#career")).toBeVisible();
+    await expect(page.locator("#cr-nextrace")).toBeVisible({ timeout: BOOT_MS });
+    await expect(page.locator("#cr-nextrace img")).toBeVisible({ timeout: BOOT_MS });
+    const cell = await page.evaluate(() => {
+      const $ = (id) => document.getElementById(id);
+      const z = (el) => el.currentCSSZoom || 1;
+      const inner = $("cr-inner"), body = $("cr-body"), foot = $("cr-foot"), go = $("cr-go");
+      const ir = inner.getBoundingClientRect(), fr = foot.getBoundingClientRect(), gr = go.getBoundingClientRect();
+      const scrollers = [...inner.querySelectorAll("*")].filter((el) => { const o = getComputedStyle(el).overflowY; return (o === "auto" || o === "scroll") && el.scrollHeight > el.clientHeight + 1; }).map((el) => el.id || el.className);
+      return {
+        look: document.documentElement.dataset.lookCareerDensity, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+        density: inner.dataset.density, pair: inner.dataset.pair, compactAt: getComputedStyle(inner).getPropertyValue("--compact-at").trim(),
+        pairAt: getComputedStyle(inner).getPropertyValue("--pair-at").trim(),
+        bodyOverflowY: getComputedStyle(body).overflowY, bodyDisplay: getComputedStyle(body).display, scrollers,
+        footPastSheet: +(fr.bottom - ir.bottom).toFixed(1), footOnScreen: fr.top >= 0 && fr.bottom <= innerHeight + 0.5, footOwnH: +(fr.height / z(inner)).toFixed(1),
+        goPaintedH: +gr.height.toFixed(1), sheetInScreen: ir.top >= 0 && ir.bottom <= innerHeight + 0.5,
+        head: (() => { const h = $("cr-header"), tb = $("cr-titlebar"), m = $("cr-meters"); const hr = h.getBoundingClientRect();
+          return { ownH: +(hr.height / z(inner)).toFixed(1), cols: getComputedStyle(h).gridTemplateColumns.split(" ").length,
+            overflow: Math.max(h.scrollWidth - h.clientWidth, tb.scrollWidth - tb.clientWidth, m.scrollWidth - m.clientWidth),
+            metersBesideTitle: m.getBoundingClientRect().left >= tb.getBoundingClientRect().right - 1,
+            clippedChips: [...h.querySelectorAll(".sel-chip")].filter((c) => c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent.trim()) }; })(),
+      };
+    });
+    const tag = win.name + ": ";
+    expect(cell.look, tag + "the export's career density is ROOMY").toBe("roomy");
+    expect(cell.ui, tag + "the export's UI SIZE").toBe("1.09");
+    expect(cell.density, tag + "ROOMY never lifts compact on a phone-sized window").toBe("compact");
+    expect(cell.compactAt, tag + "the roomy --compact-at: 1px block is gated off the phone").toBe("480px");
+    expect(cell.pairAt, tag + "the pair threshold is a desk/tablet value").toBe("99999px");
+    expect(cell.pair, tag + "the panes stack").not.toBe("on");
+    expect(cell.bodyDisplay, tag + "#cr-body is the stacked flex column").toBe("flex");
+    expect(cell.bodyOverflowY, tag + "#cr-body is the scroller").toBe("auto");
+    expect(cell.scrollers, tag + "#cr-body is the ONE scroller").toEqual(["cr-body"]);
+    expect(cell.sheetInScreen, tag + "the sheet sits inside the window").toBe(true);
+    expect(cell.footPastSheet, tag + "the foot ends inside the sheet").toBeLessThanOrEqual(0.5);
+    expect(cell.footOnScreen, tag + "the foot is on screen").toBe(true);
+    expect(cell.footOwnH, tag + "a one-row foot").toBeLessThanOrEqual(60);
+    expect(cell.goPaintedH, tag + "GO RACING paints the WCAG floor").toBeGreaterThanOrEqual(44);
+    // #5153 gap 16: the BROADCAST LINE (title, team, three meters on one row) fires on every owner window — it keyed on
+    // 660 own px and never fired in A (head 116 own); now from 500, away from the 640-760 phone band (contract rule 6).
+    expect(cell.head.cols, tag + "title | meters on one row").toBe(2);
+    expect(cell.head.metersBesideTitle, tag + "the meters sit beside the title").toBe(true);
+    expect(cell.head.overflow, tag + "the broadcast line fits its row (no horizontal overflow)").toBeLessThanOrEqual(0);
+    expect(cell.head.clippedChips, tag + "every jump chip reads whole").toEqual([]);
+    expect(cell.head.ownH, tag + "a thin head (measured 87 own; was 116 in A)").toBeLessThanOrEqual(100);
+  });
 });

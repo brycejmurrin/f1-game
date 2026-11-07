@@ -1519,9 +1519,16 @@ test.describe("Race setup adaptive task", () => {
         }
 
         if (cell.width === 667) {
-          const sheet = page.locator("#race-settings > .sheet");
-          await sheet.evaluate(el => { el.scrollTop = 0; });
-          const box = await sheet.boundingBox();
+          // #5153 gap 16 (css/race-setup.css): only a TALL sheet is the page
+          // scroller; a compact wide sheet keeps its head and START RACE fixed
+          // and scrolls #rs-body. Swipe whichever scroller the layout designates.
+          const scrollerSel = await page.evaluate(() => {
+            const sh = document.querySelector("#race-settings > .sheet");
+            return /auto|scroll/.test(getComputedStyle(sh).overflowY) && sh.scrollHeight > sh.clientHeight + 1 ? "#race-settings > .sheet" : "#rs-body";
+          });
+          const scroller = page.locator(scrollerSel);
+          await scroller.evaluate(el => { el.scrollTop = 0; });
+          const box = await scroller.boundingBox();
           const gesture = await page.context().newCDPSession(page);
           // Dispatch trusted touch events: synthesizeScrollGesture('touch')
           // is a no-op on this headless host even on a plain scroll fixture.
@@ -1536,7 +1543,7 @@ test.describe("Race setup adaptive task", () => {
             await gesture.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
             // Finger release can fling; compare checkpoints only after the
             // native scroller settles, rather than against a mid-fling value.
-            await sheet.evaluate(async el => {
+            await scroller.evaluate(async el => {
               let previous = el.scrollTop, stable = 0;
               for (let frame = 0; frame < 180; frame++) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
@@ -1550,13 +1557,13 @@ test.describe("Race setup adaptive task", () => {
           };
           const scrollPath = [];
           try {
-            const limit = await sheet.evaluate(el => el.scrollHeight - el.clientHeight);
+            const limit = await scroller.evaluate(el => el.scrollHeight - el.clientHeight);
             let middleCaptured = false;
             for (let step = 0; step < 32; step++) {
-              const before = await sheet.evaluate(el => el.scrollTop);
+              const before = await scroller.evaluate(el => el.scrollTop);
               if (before >= limit - 2) break;
               await swipe(box.y + box.height * .7, box.y + box.height * .2);
-              const after = await sheet.evaluate(el => el.scrollTop);
+              const after = await scroller.evaluate(el => el.scrollTop);
               scrollPath.push({ direction: "down", before, after, limit });
               expect(after, "each downward gesture advances the task").toBeGreaterThan(before + 1);
               if (!middleCaptured && after >= limit / 2) {
@@ -1565,17 +1572,17 @@ test.describe("Race setup adaptive task", () => {
               }
             }
             expect(middleCaptured).toBe(true);
-            expect(await sheet.evaluate(el => el.scrollTop), "touch reaches the end of the task").toBeGreaterThanOrEqual(limit - 2);
+            expect(await scroller.evaluate(el => el.scrollTop), "touch reaches the end of the task").toBeGreaterThanOrEqual(limit - 2);
             await page.screenshot({ path: testInfo.outputPath(`race-touch-end-${index}.png`) });
             for (let step = 0; step < 32; step++) {
-              const before = await sheet.evaluate(el => el.scrollTop);
+              const before = await scroller.evaluate(el => el.scrollTop);
               if (before <= 2) break;
               await swipe(box.y + box.height * .2, box.y + box.height * .7);
-              const after = await sheet.evaluate(el => el.scrollTop);
+              const after = await scroller.evaluate(el => el.scrollTop);
               scrollPath.push({ direction: "up", before, after, limit });
               expect(after, "each upward gesture reveals earlier settings").toBeLessThan(before - 1);
             }
-            expect(await sheet.evaluate(el => el.scrollTop), "touch returns to the task heading").toBeLessThanOrEqual(2);
+            expect(await scroller.evaluate(el => el.scrollTop), "touch returns to the task heading").toBeLessThanOrEqual(2);
             await page.screenshot({ path: testInfo.outputPath(`race-touch-scroll-back-${index}.png`) });
           } finally { await gesture.detach(); }
 
