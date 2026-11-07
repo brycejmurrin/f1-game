@@ -398,3 +398,20 @@ test("a def without turns gets the smoothed-peak corner table, not __apex.corner
     def.turns = turns;
   }
 });
+
+// UI contract 2026-11-06 rule 8: __apex.sheetFit is SheetShape.layoutProbe behind a selector, so a spec cell and a
+// shell probe read one implementation. Pin the alias and its empty answers. The VM DOM's querySelector is a stub that
+// mints a fresh element (tools/lib/game-vm.cjs), so the element form carries the identity check and the selector form
+// is pinned only as "routes through querySelector" — tests/specs/ui-resize.spec.js reads the real one.
+test("sheetFit is SheetShape.layoutProbe behind an element, a selector or the first painted sheet", () => {
+  const doc = g.sandbox.document, el = doc.getElementById("pmsettings-inner");
+  truthy(el, "the settings sheet is in the shell");
+  const byEl = g.apex.sheetFit(el);
+  assert.deepEqual(byEl, g.sandbox.SheetShape.layoutProbe(el), "the alias adds nothing and drops nothing");
+  assert.equal(byEl.id, "pmsettings-inner");
+  for (const k of ["own", "painted", "host", "viewport", "inner", "body", "zoom"]) assert.ok(k in byEl, k);
+  const bySel = g.apex.sheetFit("#pmsettings-inner");
+  truthy(bySel && typeof bySel === "object", "a selector string is looked up, not probed as an element");
+  assert.equal(g.apex.sheetFit(), null, "no argument and no painted .sheet / .fit-managed answers null");
+  assert.equal(g.apex.sheetFit(0), null, "a non-element, non-string argument answers null");
+});

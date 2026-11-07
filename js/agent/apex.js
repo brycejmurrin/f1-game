@@ -1733,6 +1733,22 @@ const api = {
     return { z, vp: { w: window.innerWidth, h: window.innerHeight }, rects, clash };
   },
 
+  // SHEET FIT (UI contract 2026-11-06 rule 8; the alias PR B deferred until PR C owned this file), read-only: one sheet's
+  // measured layout as numbers, SheetShape.layoutProbe verbatim. `sel` = a selector or an element; none = the first
+  // painted .sheet / .fit-managed. null when nothing matches or nothing is painted.
+  sheetFit(sel) {
+    if (typeof SheetShape === "undefined" || !SheetShape.layoutProbe) return null;
+    let el = sel && typeof sel === "object" ? sel : null;
+    if (typeof sel === "string") el = document.querySelector(sel);
+    else if (sel == null) {
+      for (const c of document.querySelectorAll(".sheet, .fit-managed")) {
+        const r = c.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) { el = c; break; }
+      }
+    }
+    return el ? SheetShape.layoutProbe(el) : null;
+  },
+
   safeMode(v) {
     if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };
     if (v === false) PerfGov.clearStrikes();
