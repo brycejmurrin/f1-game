@@ -489,7 +489,10 @@
   background: var(--grad-rule) bottom / 100% 1px no-repeat, var(--grad-head);
   pointer-events: none;
 }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) :is(#sel-body, #sel-shelf) { display: contents; }
+/* overflow: visible with it: a dissolved box has no rect, and `#sel-body`'s base
+   `overflow: hidden` would read as a zero-sized clipping ancestor to anything
+   that walks the chain (ui-scale's clipped-controls probe, a11y tooling). */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) :is(#sel-body, #sel-shelf) { display: contents; overflow: visible; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-head {
   grid-column: 1; grid-row: 1;
   flex-wrap: nowrap; justify-content: flex-start; white-space: nowrap;
@@ -560,7 +563,6 @@
   background: linear-gradient(to top in oklab, var(--plate-opaque) 60%, transparent);
 }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) .sel-map-btn { padding-bottom: calc(var(--chip-h) * 1.35); }
-}
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
   display: flex; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; gap: var(--gap);
 }
@@ -587,6 +589,7 @@
   }
   #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta { display: none; }
   #sel-inner[data-density="compact"]:not([data-shape="tall"]) .sel-map-btn { padding-bottom: 0; }
+}
 /* PORTRAIT PHONE: THE ACTION BAR WAS A THIRD OF THE SHEET. MEASURED
    (layout-audit, ios-iphone-portrait 393x659, 2026-10-05, tip a7d27757f):
    #sel-inner 542 px (497 own); the hero section — still, numbers, CIRCUIT
