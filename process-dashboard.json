@@ -1,9 +1,9 @@
 {
-  "generated": "2026-11-07T11:25Z",
+  "generated": "2026-11-08T11:37Z",
   "window": {
     "runs": 60,
-    "from": "2026-11-05T02:09Z",
-    "to": "2026-11-07T06:36Z"
+    "from": "2026-11-05T03:30Z",
+    "to": "2026-11-08T06:42Z"
   },
   "jobs": {
     "(github.event_name == 'pull_request' && github.event.pull_request.draft) && 'CI (draft fast tier)' || 'CI'": {
@@ -19,8 +19,8 @@
       "n": 19,
       "p50_s": 10,
       "p90_s": 13,
-      "max_s": 14,
-      "fail": 3,
+      "max_s": 13,
+      "fail": 4,
       "cancelled": 0,
       "steps": {
         "Aggregate job results": 0,
@@ -35,7 +35,7 @@
       "p50_s": 11,
       "p90_s": 14,
       "max_s": 22,
-      "fail": 18,
+      "fail": 17,
       "cancelled": 0,
       "steps": {
         "Aggregate job results": 0,
@@ -46,17 +46,17 @@
       }
     },
     "Driving model (characterization traces)": {
-      "n": 25,
+      "n": 22,
       "p50_s": 145,
       "p90_s": 226,
       "max_s": 235,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
         "Characterization traces": 116,
         "Complete job": 0,
         "Failure artifacts": 0,
-        "Playwright Chromium (cached)": 4,
+        "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
@@ -74,7 +74,7 @@
       "p90_s": 169,
       "max_s": 169,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Emulated VR (test:xr)": 92,
@@ -89,15 +89,15 @@
       }
     },
     "Golden menus on a runner (trial, non-blocking)": {
-      "n": 2,
-      "p50_s": 93,
-      "p90_s": 119,
-      "max_s": 119,
+      "n": 3,
+      "p50_s": 119,
+      "p90_s": 129,
+      "max_s": 129,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
-        "Golden menus (test:baseline)": 61,
+        "Golden menus (test:baseline)": 93,
         "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
@@ -110,12 +110,12 @@
       }
     },
     "Parts option-resolution census": {
-      "n": 60,
+      "n": 59,
       "p50_s": 16,
-      "p90_s": 84,
+      "p90_s": 96,
       "max_s": 135,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Does this diff touch the car parts?": 0,
@@ -130,12 +130,12 @@
       }
     },
     "Per-circuit geometry sweeps": {
-      "n": 53,
+      "n": 52,
       "p50_s": 3,
       "p90_s": 4,
       "max_s": 7,
       "fail": 0,
-      "cancelled": 1,
+      "cancelled": 2,
       "steps": {
         "Complete job": 0,
         "Every sweep shard succeeded or the planner proved no sweep applies": 0,
@@ -148,20 +148,20 @@
       "p90_s": null,
       "max_s": null,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {}
     },
     "Per-circuit geometry sweeps (1of4)": {
-      "n": 6,
-      "p50_s": 283,
-      "p90_s": 381,
-      "max_s": 381,
+      "n": 7,
+      "p50_s": 329,
+      "p90_s": 382,
+      "max_s": 382,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
         "Every circuit still builds headlessly": 0,
-        "Geometry sweeps (rebuilds every circuit, per suite)": 265,
+        "Geometry sweeps (rebuilds every circuit, per suite)": 309,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
@@ -172,7 +172,7 @@
       }
     },
     "Per-circuit geometry sweeps (2of4)": {
-      "n": 6,
+      "n": 7,
       "p50_s": 398,
       "p90_s": 440,
       "max_s": 440,
@@ -192,7 +192,7 @@
       }
     },
     "Per-circuit geometry sweeps (3of4)": {
-      "n": 6,
+      "n": 7,
       "p50_s": 373,
       "p90_s": 439,
       "max_s": 439,
@@ -212,7 +212,7 @@
       }
     },
     "Per-circuit geometry sweeps (4of4)": {
-      "n": 5,
+      "n": 6,
       "p50_s": 374,
       "p90_s": 470,
       "max_s": 470,
@@ -221,7 +221,7 @@
       "steps": {
         "Complete job": 0,
         "Every circuit still builds headlessly": 0,
-        "Geometry sweeps (rebuilds every circuit, per suite)": 355,
+        "Geometry sweeps (rebuilds every circuit, per suite)": 352,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
@@ -237,14 +237,14 @@
       "p90_s": null,
       "max_s": null,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {}
     },
     "Pure-node unit suites (page-a)": {
-      "n": 9,
-      "p50_s": 67,
+      "n": 12,
+      "p50_s": 209,
       "p90_s": 375,
-      "max_s": 375,
+      "max_s": 380,
       "fail": 0,
       "cancelled": 0,
       "steps": {
@@ -252,32 +252,32 @@
         "Plan the slices for this diff": 2,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Pure-node unit suites": 40,
+        "Pure-node unit suites": 190,
         "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 11,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
         "Set up job": 1
       }
     },
     "Pure-node unit suites (page-b)": {
-      "n": 9,
-      "p50_s": 78,
-      "p90_s": 207,
+      "n": 12,
+      "p50_s": 121,
+      "p90_s": 168,
       "max_s": 207,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
-        "Plan the slices for this diff": 2,
+        "Plan the slices for this diff": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Pure-node unit suites": 55,
-        "Run ./.github/actions/setup-apex": 6,
+        "Pure-node unit suites": 100,
+        "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 11,
         "Set up job": 1
       }
     },
     "Pure-node unit suites (slow)": {
-      "n": 11,
+      "n": 15,
       "p50_s": 521,
       "p90_s": 604,
       "max_s": 608,
@@ -295,15 +295,15 @@
       }
     },
     "Pure-node unit suites (vm-a1)": {
-      "n": 12,
-      "p50_s": 222,
-      "p90_s": 293,
-      "max_s": 301,
+      "n": 16,
+      "p50_s": 232,
+      "p90_s": 301,
+      "max_s": 303,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
-        "Plan the slices for this diff": 2,
+        "Plan the slices for this diff": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Pure-node unit suites": 200,
@@ -313,9 +313,9 @@
       }
     },
     "Pure-node unit suites (vm-a2)": {
-      "n": 10,
-      "p50_s": 115,
-      "p90_s": 165,
+      "n": 11,
+      "p50_s": 118,
+      "p90_s": 213,
       "max_s": 215,
       "fail": 0,
       "cancelled": 0,
@@ -324,33 +324,33 @@
         "Plan the slices for this diff": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Pure-node unit suites": 90,
-        "Run ./.github/actions/setup-apex": 4,
+        "Pure-node unit suites": 100,
+        "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
         "Set up job": 0
       }
     },
     "Pure-node unit suites (vm-b1)": {
-      "n": 12,
-      "p50_s": 480,
-      "p90_s": 639,
+      "n": 16,
+      "p50_s": 562,
+      "p90_s": 654,
       "max_s": 664,
-      "fail": 1,
+      "fail": 2,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
-        "Plan the slices for this diff": 2,
+        "Plan the slices for this diff": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Pure-node unit suites": 458,
+        "Pure-node unit suites": 539,
         "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 11,
         "Set up job": 1
       }
     },
     "Pure-node unit suites (vm-b2)": {
-      "n": 12,
-      "p50_s": 351,
+      "n": 16,
+      "p50_s": 388,
       "p90_s": 654,
       "max_s": 656,
       "fail": 0,
@@ -360,30 +360,30 @@
         "Plan the slices for this diff": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Pure-node unit suites": 333,
+        "Pure-node unit suites": 370,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
-        "Set up job": 1
+        "Set up job": 0
       }
     },
     "Renderer specs on a real GPU (macos-latest, Metal)": {
-      "n": 2,
-      "p50_s": 787,
-      "p90_s": 929,
-      "max_s": 929,
+      "n": 3,
+      "p50_s": 929,
+      "p90_s": 1095,
+      "max_s": 1095,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
-        "Adapter census — is the Metal adapter still there?": 11,
+        "Adapter census — is the Metal adapter still there?": 18,
         "Complete job": 3,
-        "Playwright Chromium (cached)": 4,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Renderer specs (test:gfx)": 751,
-        "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run artifacts (report, traces, attached frames)": 1,
+        "Renderer specs (test:gfx)": 885,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
+        "Run artifacts (report, traces, attached frames)": 2,
         "Set up job": 1
       }
     },
@@ -439,12 +439,12 @@
       }
     },
     "Select specs for this change": {
-      "n": 60,
+      "n": 59,
       "p50_s": 27,
       "p90_s": 34,
       "max_s": 51,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Does this diff change anything that ships?": 0,
@@ -470,7 +470,7 @@
       "p90_s": null,
       "max_s": null,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {}
     },
     "Selected specs (change-aware gate) (overbudget-1, tests/specs/track-switch-memory.spec.js, 1, 174...": {
@@ -498,8 +498,8 @@
       }
     },
     "Selected specs (change-aware gate) (overbudget-1, tests/specs/track-switch-memory.spec.js, 1, 185...": {
-      "n": 2,
-      "p50_s": 170,
+      "n": 3,
+      "p50_s": 238,
       "p90_s": 277,
       "max_s": 277,
       "fail": 0,
@@ -508,14 +508,14 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 8,
-        "Playwright Chromium (cached)": 4,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 6,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 4,
-        "Run the selection (overbudget-1, 1 tests)": 144,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (overbudget-1, 1 tests)": 196,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -546,10 +546,10 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-camera, tests/specs/camera.spec.js, 7, 77, 540, 1, 0...": {
-      "n": 2,
-      "p50_s": 105,
-      "p90_s": 118,
-      "max_s": 118,
+      "n": 3,
+      "p50_s": 118,
+      "p90_s": 128,
+      "max_s": 128,
       "fail": 0,
       "cancelled": 1,
       "steps": {
@@ -557,21 +557,21 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 3,
+        "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-camera, 7 tests)": 69,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (oversize-camera, 7 tests)": 89,
         "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-career-1of2, tests/specs/career.spec.js, 1/2, 20, 90...": {
-      "n": 16,
-      "p50_s": 164,
+      "n": 17,
+      "p50_s": 169,
       "p90_s": 214,
       "max_s": 220,
       "fail": 0,
@@ -587,14 +587,14 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-career-1of2, 20 tests)": 133,
+        "Run the selection (oversize-career-1of2, 20 tests)": 137,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-career-2of2, tests/specs/career.spec.js, 2/2, 20, 90...": {
-      "n": 15,
+      "n": 16,
       "p50_s": 153,
       "p90_s": 195,
       "max_s": 294,
@@ -618,7 +618,7 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-career-hub-1of2, tests/specs/career-hub.spec.js, 1/2...": {
-      "n": 15,
+      "n": 16,
       "p50_s": 152,
       "p90_s": 170,
       "max_s": 184,
@@ -636,15 +636,15 @@
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-career-hub-1of2, 20 tests)": 4,
-        "Run the selection (oversize-career-hub-1of2, 21 tests)": 112,
+        "Run the selection (oversize-career-hub-1of2, 21 tests)": 117,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-career-hub-2of2, tests/specs/career-hub.spec.js, 2/2...": {
-      "n": 14,
-      "p50_s": 146,
+      "n": 15,
+      "p50_s": 150,
       "p90_s": 174,
       "max_s": 277,
       "fail": 0,
@@ -661,16 +661,16 @@
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-career-hub-2of2, 20 tests)": 110,
-        "Run the selection (oversize-career-hub-2of2, 21 tests)": 100,
+        "Run the selection (oversize-career-hub-2of2, 21 tests)": 105,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-career-season-1of2, tests/specs/career-season.spec.j...": {
-      "n": 16,
-      "p50_s": 175,
-      "p90_s": 188,
+      "n": 17,
+      "p50_s": 177,
+      "p90_s": 190,
       "max_s": 208,
       "fail": 0,
       "cancelled": 0,
@@ -679,20 +679,20 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 11,
-        "Playwright Chromium (cached)": 4,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-career-season-1of2, 18 tests)": 139,
+        "Run the selection (oversize-career-season-1of2, 18 tests)": 146,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-career-season-2of2, tests/specs/career-season.spec.j...": {
-      "n": 15,
+      "n": 16,
       "p50_s": 154,
       "p90_s": 192,
       "max_s": 327,
@@ -716,8 +716,8 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-ctx-lost-retry, tests/specs/ctx-lost-retry.spec.js, ...": {
-      "n": 5,
-      "p50_s": 69,
+      "n": 6,
+      "p50_s": 68,
       "p90_s": 78,
       "max_s": 78,
       "fail": 0,
@@ -726,21 +726,21 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 12,
+        "Mesa llvmpipe + Xvfb": 11,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-ctx-lost-retry, 1 tests)": 31,
+        "Run the selection (oversize-ctx-lost-retry, 1 tests)": 29,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-debris, tests/specs/debris.spec.js, 5, 70, 540, 1, 0...": {
-      "n": 2,
+      "n": 3,
       "p50_s": 101,
       "p90_s": 118,
       "max_s": 118,
@@ -750,7 +750,7 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 12,
+        "Mesa llvmpipe + Xvfb": 22,
         "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
@@ -836,8 +836,8 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-garage-out-before-card-1of2, tests/specs/garage-out-...": {
-      "n": 3,
-      "p50_s": 335,
+      "n": 4,
+      "p50_s": 300,
       "p90_s": 339,
       "max_s": 339,
       "fail": 0,
@@ -848,20 +848,20 @@
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 10,
         "Playwright Chromium (cached)": 3,
-        "Post Playwright Chromium (cached)": 1,
+        "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-garage-out-before-card-1of2, 5 tests)": 302,
+        "Run the selection (oversize-garage-out-before-card-1of2, 5 tests)": 266,
         "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-garage-out-before-card-2of2, tests/specs/garage-out-...": {
-      "n": 3,
-      "p50_s": 214,
+      "n": 4,
+      "p50_s": 185,
       "p90_s": 221,
       "max_s": 221,
       "fail": 0,
@@ -877,14 +877,14 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-garage-out-before-card-2of2, 5 tests)": 181,
-        "Set up job": 1,
+        "Run the selection (oversize-garage-out-before-card-2of2, 5 tests)": 151,
+        "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-garage-pick-cost, tests/specs/garage-pick-cost.spec....": {
-      "n": 3,
+      "n": 4,
       "p50_s": 63,
       "p90_s": 85,
       "max_s": 85,
@@ -895,11 +895,11 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 5,
+        "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
-        "Run ./.github/actions/setup-apex": 5,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 5,
         "Run the selection (oversize-garage-pick-cost, 1 tests)": 31,
         "Set up job": 1,
@@ -908,12 +908,12 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-hud-layout-1of4, tests/specs/hud-layout.spec.js, 1/4...": {
-      "n": 39,
-      "p50_s": 488,
+      "n": 41,
+      "p50_s": 491,
       "p90_s": 564,
       "max_s": 571,
       "fail": 0,
-      "cancelled": 4,
+      "cancelled": 3,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
@@ -926,45 +926,19 @@
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-hud-layout-1of4, 14 tests)": 425,
-        "Run the selection (oversize-hud-layout-1of4, 15 tests)": 512,
-        "Run the selection (oversize-hud-layout-1of4, 9 tests)": 386,
+        "Run the selection (oversize-hud-layout-1of4, 15 tests)": 507,
+        "Run the selection (oversize-hud-layout-1of4, 9 tests)": 342,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-hud-layout-2of4, tests/specs/hud-layout.spec.js, 2/4...": {
-      "n": 39,
-      "p50_s": 497,
-      "p90_s": 565,
+      "n": 41,
+      "p50_s": 508,
+      "p90_s": 561,
       "max_s": 597,
       "fail": 0,
-      "cancelled": 4,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 11,
-        "Playwright Chromium (cached)": 4,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 6,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-hud-layout-2of4, 14 tests)": 456,
-        "Run the selection (oversize-hud-layout-2of4, 15 tests)": 482,
-        "Run the selection (oversize-hud-layout-2of4, 9 tests)": 347,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
-    "Selected specs (change-aware gate) (oversize-hud-layout-3of4, tests/specs/hud-layout.spec.js, 3/4...": {
-      "n": 40,
-      "p50_s": 539,
-      "p90_s": 725,
-      "max_s": 928,
-      "fail": 2,
       "cancelled": 3,
       "steps": {
         "Complete job": 0,
@@ -977,20 +951,20 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-hud-layout-3of4, 14 tests)": 510,
-        "Run the selection (oversize-hud-layout-3of4, 15 tests)": 609,
-        "Run the selection (oversize-hud-layout-3of4, 9 tests)": 266,
+        "Run the selection (oversize-hud-layout-2of4, 14 tests)": 456,
+        "Run the selection (oversize-hud-layout-2of4, 15 tests)": 476,
+        "Run the selection (oversize-hud-layout-2of4, 9 tests)": 393,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
-    "Selected specs (change-aware gate) (oversize-hud-layout-4of4, tests/specs/hud-layout.spec.js, 4/4...": {
-      "n": 41,
-      "p50_s": 527,
-      "p90_s": 591,
-      "max_s": 2033,
-      "fail": 1,
+    "Selected specs (change-aware gate) (oversize-hud-layout-3of4, tests/specs/hud-layout.spec.js, 3/4...": {
+      "n": 42,
+      "p50_s": 558,
+      "p90_s": 725,
+      "max_s": 928,
+      "fail": 2,
       "cancelled": 2,
       "steps": {
         "Complete job": 0,
@@ -1003,9 +977,35 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (oversize-hud-layout-3of4, 14 tests)": 510,
+        "Run the selection (oversize-hud-layout-3of4, 15 tests)": 542,
+        "Run the selection (oversize-hud-layout-3of4, 9 tests)": 266,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (oversize-hud-layout-4of4, tests/specs/hud-layout.spec.js, 4/4...": {
+      "n": 43,
+      "p50_s": 528,
+      "p90_s": 591,
+      "max_s": 2033,
+      "fail": 1,
+      "cancelled": 1,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-hud-layout-4of4, 14 tests)": 524,
-        "Run the selection (oversize-hud-layout-4of4, 15 tests)": 452,
-        "Run the selection (oversize-hud-layout-4of4, 9 tests)": 345,
+        "Run the selection (oversize-hud-layout-4of4, 15 tests)": 443,
+        "Run the selection (oversize-hud-layout-4of4, 9 tests)": 237,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -1036,7 +1036,7 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-hud-mirror, tests/specs/hud-mirror.spec.js, 4, 93, 3...": {
-      "n": 3,
+      "n": 4,
       "p50_s": 138,
       "p90_s": 166,
       "max_s": 166,
@@ -1046,17 +1046,17 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 11,
+        "Mesa llvmpipe + Xvfb": 10,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 6,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 9,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-hud-mirror, 4 tests)": 93,
         "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 2,
-        "Upload the run-step marker": 2
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-image-grade-visual-1of2, tests/specs/image-grade-vis...": {
@@ -1108,10 +1108,10 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-menu-baseline, tests/specs/menu-baseline.spec.js, 6,...": {
-      "n": 26,
+      "n": 25,
       "p50_s": 134,
-      "p90_s": 172,
-      "max_s": 176,
+      "p90_s": 171,
+      "max_s": 173,
       "fail": 3,
       "cancelled": 0,
       "steps": {
@@ -1125,15 +1125,15 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-menu-baseline, 6 tests)": 94,
+        "Run the selection (oversize-menu-baseline, 6 tests)": 96,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-multiplayer-room, tests/specs/multiplayer-room.spec....": {
-      "n": 3,
-      "p50_s": 123,
+      "n": 4,
+      "p50_s": 98,
       "p90_s": 145,
       "max_s": 145,
       "fail": 0,
@@ -1142,21 +1142,45 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 53,
-        "Playwright Chromium (cached)": 6,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
-        "Run the selection (oversize-multiplayer-room, 15 tests)": 62,
-        "Set up job": 1,
+        "Run the selection (oversize-multiplayer-room, 15 tests)": 47,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (oversize-new-hooks, tests/specs/new-hooks.spec.js, 56, 224, 5...": {
+      "n": 4,
+      "p50_s": 266,
+      "p90_s": 342,
+      "max_s": 342,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 12,
+        "Playwright Chromium (cached)": 5,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (oversize-new-hooks, 56 tests)": 226,
+        "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-new-hooks, tests/specs/new-hooks.spec.js, 56, 241, 5...": {
-      "n": 15,
+      "n": 14,
       "p50_s": 243,
       "p90_s": 324,
       "max_s": 379,
@@ -1166,8 +1190,8 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 11,
-        "Playwright Chromium (cached)": 4,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
@@ -1300,8 +1324,8 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-parts-livery-designs, tests/specs/parts-livery-desig...": {
-      "n": 3,
-      "p50_s": 114,
+      "n": 4,
+      "p50_s": 105,
       "p90_s": 132,
       "max_s": 132,
       "fail": 0,
@@ -1317,14 +1341,14 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-parts-livery-designs, 5 tests)": 86,
+        "Run the selection (oversize-parts-livery-designs, 5 tests)": 71,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-parts-livery-zones, tests/specs/parts-livery-zones.s...": {
-      "n": 3,
+      "n": 4,
       "p50_s": 106,
       "p90_s": 106,
       "max_s": 106,
@@ -1334,21 +1358,21 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 11,
-        "Playwright Chromium (cached)": 5,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-parts-livery-zones, 4 tests)": 72,
+        "Run the selection (oversize-parts-livery-zones, 4 tests)": 70,
         "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-parts-mesh-cache, tests/specs/parts-mesh-cache.spec....": {
-      "n": 4,
+      "n": 5,
       "p50_s": 158,
       "p90_s": 209,
       "max_s": 209,
@@ -1359,13 +1383,13 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 12,
-        "Playwright Chromium (cached)": 4,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
+        "Run ./.github/actions/setup-apex": 6,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 9,
-        "Run the selection (oversize-parts-mesh-cache, 6 tests)": 107,
+        "Run the selection (oversize-parts-mesh-cache, 6 tests)": 112,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -1420,8 +1444,8 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-perf-boost-press-pipelines, tests/specs/perf-boost-p...": {
-      "n": 1,
-      "p50_s": 96,
+      "n": 2,
+      "p50_s": 72,
       "p90_s": 96,
       "max_s": 96,
       "fail": 0,
@@ -1430,22 +1454,22 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 19,
-        "Playwright Chromium (cached)": 7,
+        "Mesa llvmpipe + Xvfb": 12,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
-        "Run ./.github/actions/setup-apex": 10,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
-        "Run the selection (oversize-perf-boost-press-pipelines, 1 tests)": 45,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (oversize-perf-boost-press-pipelines, 1 tests)": 34,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-perf-frametime, tests/specs/perf-frametime.spec.js, ...": {
-      "n": 2,
-      "p50_s": 81,
+      "n": 3,
+      "p50_s": 88,
       "p90_s": 91,
       "max_s": 91,
       "fail": 0,
@@ -1459,41 +1483,41 @@
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
+        "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-perf-frametime, 1 tests)": 48,
+        "Run the selection (oversize-perf-frametime, 1 tests)": 60,
         "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-perf-idle-pipeline-churn, tests/specs/perf-idle-pipe...": {
-      "n": 1,
+      "n": 2,
       "p50_s": 69,
-      "p90_s": 69,
-      "max_s": 69,
+      "p90_s": 77,
+      "max_s": 77,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 12,
-        "Playwright Chromium (cached)": 5,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
         "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
         "Run the selection (oversize-perf-idle-pipeline-churn, 1 tests)": 32,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 2
+        "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-perf-race-entry, tests/specs/perf-race-entry.spec.js...": {
-      "n": 2,
-      "p50_s": 147,
+      "n": 3,
+      "p50_s": 151,
       "p90_s": 213,
       "max_s": 213,
       "fail": 0,
@@ -1502,25 +1526,25 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 9,
-        "Playwright Chromium (cached)": 4,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 8,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-perf-race-entry, 1 tests)": 111,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
+        "Run the selection (oversize-perf-race-entry, 1 tests)": 113,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-phone-layout-pin, tests/specs/phone-layout-pin.spec....": {
-      "n": 6,
+      "n": 4,
       "p50_s": 110,
-      "p90_s": 147,
-      "max_s": 147,
-      "fail": 2,
+      "p90_s": 114,
+      "max_s": 114,
+      "fail": 1,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
@@ -1533,7 +1557,7 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 6,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-phone-layout-pin, 1 tests)": 70,
+        "Run the selection (oversize-phone-layout-pin, 1 tests)": 75,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -1564,8 +1588,8 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-props-over-road-1of2, tests/specs/props-over-road.sp...": {
-      "n": 4,
-      "p50_s": 204,
+      "n": 5,
+      "p50_s": 233,
       "p90_s": 242,
       "max_s": 242,
       "fail": 0,
@@ -1574,22 +1598,22 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 9,
-        "Playwright Chromium (cached)": 4,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
+        "Run ./.github/actions/setup-apex": 6,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-props-over-road-1of2, 26 tests)": 164,
+        "Run the selection (oversize-props-over-road-1of2, 26 tests)": 203,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-props-over-road-2of2, tests/specs/props-over-road.sp...": {
-      "n": 4,
-      "p50_s": 146,
+      "n": 5,
+      "p50_s": 162,
       "p90_s": 260,
       "max_s": 260,
       "fail": 0,
@@ -1598,21 +1622,21 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
+        "Mesa llvmpipe + Xvfb": 11,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-props-over-road-2of2, 26 tests)": 115,
+        "Run the selection (oversize-props-over-road-2of2, 26 tests)": 135,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-quali, tests/specs/quali.spec.js, 20, 322, 540, 1, 0...": {
-      "n": 2,
+      "n": 3,
       "p50_s": 369,
       "p90_s": 389,
       "max_s": 389,
@@ -1622,13 +1646,13 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 9,
+        "Mesa llvmpipe + Xvfb": 13,
         "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run ./.github/actions/setup-apex": 1,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run ./.github/actions/setup-apex": 8,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-quali, 20 tests)": 325,
         "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
@@ -1660,8 +1684,8 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-race-cycle-memory, tests/specs/race-cycle-memory.spe...": {
-      "n": 5,
-      "p50_s": 222,
+      "n": 6,
+      "p50_s": 163,
       "p90_s": 262,
       "max_s": 262,
       "fail": 0,
@@ -1671,20 +1695,20 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 4,
+        "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 6,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-race-cycle-memory, 1 tests)": 159,
+        "Run the selection (oversize-race-cycle-memory, 1 tests)": 122,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-session-quit-memory, tests/specs/session-quit-memory...": {
-      "n": 4,
+      "n": 5,
       "p50_s": 63,
       "p90_s": 133,
       "max_s": 133,
@@ -1700,15 +1724,15 @@
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 5,
-        "Run the selection (oversize-session-quit-memory, 1 tests)": 29,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (oversize-session-quit-memory, 1 tests)": 32,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-steer-migration, tests/specs/steer-migration.spec.js...": {
-      "n": 4,
+      "n": 5,
       "p50_s": 87,
       "p90_s": 162,
       "max_s": 162,
@@ -1718,7 +1742,7 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
+        "Mesa llvmpipe + Xvfb": 11,
         "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
@@ -1756,10 +1780,10 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-terrain-over-road-1of2, tests/specs/terrain-over-roa...": {
-      "n": 4,
-      "p50_s": 376,
-      "p90_s": 459,
-      "max_s": 459,
+      "n": 5,
+      "p50_s": 422,
+      "p90_s": 460,
+      "max_s": 460,
       "fail": 0,
       "cancelled": 1,
       "steps": {
@@ -1773,15 +1797,15 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 6,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
-        "Run the selection (oversize-terrain-over-road-1of2, 28 tests)": 335,
+        "Run the selection (oversize-terrain-over-road-1of2, 28 tests)": 342,
         "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-terrain-over-road-2of2, tests/specs/terrain-over-roa...": {
-      "n": 5,
-      "p50_s": 330,
+      "n": 6,
+      "p50_s": 326,
       "p90_s": 411,
       "max_s": 411,
       "fail": 0,
@@ -1790,14 +1814,14 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 16,
+        "Mesa llvmpipe + Xvfb": 12,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
-        "Run the selection (oversize-terrain-over-road-2of2, 28 tests)": 293,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (oversize-terrain-over-road-2of2, 28 tests)": 257,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -1822,6 +1846,30 @@
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-tilt-pipeline, 14 tests)": 66,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (oversize-title-fit, tests/specs/title-fit.spec.js, 1, 16, 540...": {
+      "n": 6,
+      "p50_s": 199,
+      "p90_s": 236,
+      "max_s": 236,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (oversize-title-fit, 1 tests)": 169,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -1876,7 +1924,7 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-tlx-probes, tests/specs/tlx-probes.spec.js, 18, 281,...": {
-      "n": 3,
+      "n": 4,
       "p50_s": 311,
       "p90_s": 325,
       "max_s": 325,
@@ -1886,22 +1934,22 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 14,
+        "Mesa llvmpipe + Xvfb": 11,
         "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
+        "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (oversize-tlx-probes, 18 tests)": 277,
-        "Set up job": 1,
+        "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-track-designer-1of2, tests/specs/track-designer.spec...": {
-      "n": 15,
-      "p50_s": 284,
+      "n": 16,
+      "p50_s": 278,
       "p90_s": 346,
       "max_s": 349,
       "fail": 1,
@@ -1917,15 +1965,15 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-track-designer-1of2, 23 tests)": 251,
+        "Run the selection (oversize-track-designer-1of2, 23 tests)": 249,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-track-designer-2of2, tests/specs/track-designer.spec...": {
-      "n": 16,
-      "p50_s": 252,
+      "n": 17,
+      "p50_s": 261,
       "p90_s": 283,
       "max_s": 310,
       "fail": 1,
@@ -1941,24 +1989,24 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 6,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-track-designer-2of2, 23 tests)": 207,
+        "Run the selection (oversize-track-designer-2of2, 23 tests)": 213,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-audit-1of2, tests/specs/ui-audit.spec.js, 1/2, 39...": {
-      "n": 1,
+      "n": 2,
       "p50_s": 286,
-      "p90_s": 286,
-      "max_s": 286,
+      "p90_s": 314,
+      "max_s": 314,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 12,
+        "Mesa llvmpipe + Xvfb": 9,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
@@ -1966,14 +2014,14 @@
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
         "Run the selection (oversize-ui-audit-1of2, 39 tests)": 253,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-audit-2of2, tests/specs/ui-audit.spec.js, 2/2, 39...": {
-      "n": 1,
-      "p50_s": 464,
+      "n": 2,
+      "p50_s": 423,
       "p90_s": 464,
       "max_s": 464,
       "fail": 0,
@@ -1989,19 +2037,19 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-ui-audit-2of2, 39 tests)": 431,
+        "Run the selection (oversize-ui-audit-2of2, 39 tests)": 387,
         "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 2
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-button-touch-1of2, tests/specs/ui-button-touch.sp...": {
-      "n": 40,
-      "p50_s": 295,
-      "p90_s": 337,
-      "max_s": 348,
+      "n": 42,
+      "p50_s": 278,
+      "p90_s": 335,
+      "max_s": 344,
       "fail": 0,
-      "cancelled": 2,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
@@ -2021,17 +2069,17 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-button-touch-2of2, tests/specs/ui-button-touch.sp...": {
-      "n": 40,
-      "p50_s": 256,
+      "n": 42,
+      "p50_s": 255,
       "p90_s": 277,
       "max_s": 310,
       "fail": 4,
-      "cancelled": 2,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
+        "Mesa llvmpipe + Xvfb": 11,
         "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
@@ -2046,11 +2094,11 @@
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-redesign, tests/specs/ui-redesign.spec.js, 12, 86...": {
-      "n": 6,
-      "p50_s": 134,
-      "p90_s": 168,
-      "max_s": 168,
-      "fail": 1,
+      "n": 1,
+      "p50_s": 135,
+      "p90_s": 135,
+      "max_s": 135,
+      "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
@@ -2061,17 +2109,17 @@
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-ui-redesign, 12 tests)": 101,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 5,
+        "Run the selection (oversize-ui-redesign, 12 tests)": 108,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-scale-1of2, tests/specs/ui-scale.spec.js, 1/2, 23...": {
-      "n": 39,
-      "p50_s": 248,
+      "n": 44,
+      "p50_s": 260,
       "p90_s": 296,
       "max_s": 319,
       "fail": 1,
@@ -2086,67 +2134,19 @@
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-ui-scale-1of2, 23 tests)": 205,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
-    "Selected specs (change-aware gate) (oversize-ui-scale-1of2, tests/specs/ui-scale.spec.js, 1/2, 24...": {
-      "n": 3,
-      "p50_s": 260,
-      "p90_s": 290,
-      "max_s": 290,
-      "fail": 0,
-      "cancelled": 1,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 5,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (oversize-ui-scale-1of2, 24 tests)": 204,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (oversize-ui-scale-1of2, 23 tests)": 214,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (oversize-ui-scale-2of2, tests/specs/ui-scale.spec.js, 2/2, 23...": {
-      "n": 38,
-      "p50_s": 291,
+      "n": 43,
+      "p50_s": 289,
       "p90_s": 313,
       "max_s": 323,
       "fail": 9,
-      "cancelled": 1,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 4,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-ui-scale-2of2, 23 tests)": 251,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
-    "Selected specs (change-aware gate) (oversize-ui-scale-2of2, tests/specs/ui-scale.spec.js, 2/2, 24...": {
-      "n": 3,
-      "p50_s": 300,
-      "p90_s": 331,
-      "max_s": 331,
-      "fail": 0,
       "cancelled": 1,
       "steps": {
         "Complete job": 0,
@@ -2157,9 +2157,9 @@
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 6,
+        "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (oversize-ui-scale-2of2, 24 tests)": 259,
+        "Run the selection (oversize-ui-scale-2of2, 23 tests)": 237,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -2238,6 +2238,30 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (packed-1, tests/specs/menu-traversal.spec.js tests/specs/ui-r...": {
+      "n": 2,
+      "p50_s": 292,
+      "p90_s": 455,
+      "max_s": 455,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 8,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (packed-1, 46 tests)": 262,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (packed-1, tests/specs/time-trial.spec.js tests/specs/browser-...": {
       "n": 1,
       "p50_s": 362,
@@ -2259,6 +2283,30 @@
         "Run the selection (packed-1, 37 tests)": 324,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (packed-1, tests/specs/time-trial.spec.js tests/specs/qatar-fo...": {
+      "n": 1,
+      "p50_s": 383,
+      "p90_s": 383,
+      "max_s": 383,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 5,
+        "Run the selection (packed-1, 28 tests)": 356,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
@@ -2407,25 +2455,25 @@
         "Upload the run-step marker": 1
       }
     },
-    "Selected specs (change-aware gate) (selected-1, tests/specs/dev-tools-dom.spec.js tests/specs/gpu...": {
+    "Selected specs (change-aware gate) (selected-1, tests/specs/dev-tools-dom.spec.js tests/specs/age...": {
       "n": 1,
-      "p50_s": 111,
-      "p90_s": 111,
-      "max_s": 111,
+      "p50_s": 175,
+      "p90_s": 175,
+      "max_s": 175,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
-        "Mark the run step reached": 1,
-        "Mesa llvmpipe + Xvfb": 10,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 1,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 3,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (selected-1, 11 tests)": 80,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (selected-1, 13 tests)": 143,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -2453,6 +2501,30 @@
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 2,
         "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-1, tests/specs/image-grade-visual.spec.js tests/spec...": {
+      "n": 1,
+      "p50_s": 259,
+      "p90_s": 259,
+      "max_s": 259,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 13,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 7,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-1, 14 tests)": 221,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
       }
     },
     "Selected specs (change-aware gate) (selected-1, tests/specs/menu-keyboard.spec.js tests/specs/aud...": {
@@ -2503,34 +2575,9 @@
         "Upload the run-step marker": 1
       }
     },
-    "Selected specs (change-aware gate) (selected-1, tests/specs/menu-keyboard.spec.js tests/specs/eng...": {
-      "n": 2,
-      "p50_s": 214,
-      "p90_s": 254,
-      "max_s": 254,
-      "fail": 0,
-      "cancelled": 1,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 3,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 6,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (selected-1, 30 tests)": 217,
-        "Run the selection (selected-1, 33 tests)": 172,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
     "Selected specs (change-aware gate) (selected-1, tests/specs/menu-keyboard.spec.js tests/specs/men...": {
-      "n": 3,
-      "p50_s": 418,
+      "n": 6,
+      "p50_s": 361,
       "p90_s": 455,
       "max_s": 455,
       "fail": 0,
@@ -2539,26 +2586,28 @@
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 12,
-        "Playwright Chromium (cached)": 3,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
+        "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (selected-1, 48 tests)": 322,
+        "Run the selection (selected-1, 49 tests)": 257,
         "Run the selection (selected-1, 50 tests)": 390,
         "Run the selection (selected-1, 52 tests)": 424,
         "Run the selection (selected-1, 54 tests)": 308,
-        "Set up job": 0,
+        "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (selected-1, tests/specs/menu-keyboard.spec.js tests/specs/pho...": {
       "n": 1,
-      "p50_s": 259,
-      "p90_s": 259,
-      "max_s": 259,
+      "p50_s": 274,
+      "p90_s": 274,
+      "max_s": 274,
       "fail": 0,
       "cancelled": 0,
       "steps": {
@@ -2566,15 +2615,15 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 3,
+        "Playwright Chromium (cached)": 5,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 5,
+        "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (selected-1, 44 tests)": 229,
+        "Run the selection (selected-1, 46 tests)": 241,
         "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Spec timings (junit — a green run's durations are the point)": 2,
         "Upload the run-step marker": 1
       }
     },
@@ -2962,6 +3011,102 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (selected-10, tests/specs/tracks-walls-a.spec.js tests/specs/t...": {
+      "n": 1,
+      "p50_s": 413,
+      "p90_s": 413,
+      "max_s": 413,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-10, 80 tests)": 379,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-11, tests/specs/tracks-walls.spec.js tests/specs/int...": {
+      "n": 1,
+      "p50_s": 499,
+      "p90_s": 499,
+      "max_s": 499,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 1,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-11, 52 tests)": 469,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 0,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-12, tests/specs/settings-reload.spec.js tests/specs/...": {
+      "n": 1,
+      "p50_s": 407,
+      "p90_s": 407,
+      "max_s": 407,
+      "fail": 1,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 2,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 5,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
+        "Run the selection (selected-12, 67 tests)": 368,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
+      }
+    },
+    "Selected specs (change-aware gate) (selected-2, tests/specs/gamepad.spec.js tests/specs/menu-trav...": {
+      "n": 1,
+      "p50_s": 492,
+      "p90_s": 492,
+      "max_s": 492,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 6,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-2, 40 tests)": 456,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (selected-2, tests/specs/menu-survey.spec.js tests/specs/webgl...": {
       "n": 1,
       "p50_s": 665,
@@ -3012,6 +3157,30 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (selected-2, tests/specs/menu-traversal.spec.js tests/specs/ui...": {
+      "n": 1,
+      "p50_s": 358,
+      "p90_s": 358,
+      "max_s": 358,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 16,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 8,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-2, 46 tests)": 317,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (selected-2, tests/specs/season-format.spec.js tests/specs/sea...": {
       "n": 1,
       "p50_s": 244,
@@ -3056,6 +3225,30 @@
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
         "Run the selection (selected-2, 9 tests)": 93,
         "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-2, tests/specs/ui-redesign.spec.js tests/specs/hud-a...": {
+      "n": 2,
+      "p50_s": 315,
+      "p90_s": 457,
+      "max_s": 457,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 9,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (selected-2, 61 tests)": 287,
+        "Set up job": 0,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
@@ -3206,6 +3399,54 @@
         "Upload the run-step marker": 2
       }
     },
+    "Selected specs (change-aware gate) (selected-3, tests/specs/photo-studio-conditions.spec.js tests...": {
+      "n": 2,
+      "p50_s": 246,
+      "p90_s": 293,
+      "max_s": 293,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 12,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-3, 56 tests)": 211,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-3, tests/specs/results-flow.spec.js tests/specs/webg...": {
+      "n": 1,
+      "p50_s": 326,
+      "p90_s": 326,
+      "max_s": 326,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (selected-3, 20 tests)": 294,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (selected-3, tests/specs/spa-foundation.spec.js tests/specs/in...": {
       "n": 1,
       "p50_s": 488,
@@ -3252,6 +3493,30 @@
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-3, tests/specs/ui-redesign.spec.js tests/specs/title...": {
+      "n": 1,
+      "p50_s": 492,
+      "p90_s": 492,
+      "max_s": 492,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 19,
+        "Playwright Chromium (cached)": 6,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 9,
+        "Run the selection (selected-3, 62 tests)": 443,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 2
       }
     },
     "Selected specs (change-aware gate) (selected-3, tests/specs/ui-resize.spec.js tests/specs/hud-aud...": {
@@ -3374,6 +3639,54 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (selected-4, tests/specs/picker-tab-inplace.spec.js, 1, 4, 180...": {
+      "n": 1,
+      "p50_s": 50,
+      "p90_s": 50,
+      "max_s": 50,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 12,
+        "Playwright Chromium (cached)": 5,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
+        "Run the selection (selected-4, 1 tests)": 13,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
+      }
+    },
+    "Selected specs (change-aware gate) (selected-4, tests/specs/sliders.spec.js tests/specs/audit.spe...": {
+      "n": 1,
+      "p50_s": 288,
+      "p90_s": 288,
+      "max_s": 288,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 9,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-4, 34 tests)": 259,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (selected-4, tests/specs/touch-pedals.spec.js tests/specs/phot...": {
       "n": 1,
       "p50_s": 376,
@@ -3420,6 +3733,30 @@
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 2,
         "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-5, tests/specs/menu-keyboard.spec.js tests/specs/cam...": {
+      "n": 1,
+      "p50_s": 463,
+      "p90_s": 463,
+      "max_s": 463,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 6,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 1,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 5,
+        "Run the selection (selected-5, 63 tests)": 428,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
       }
     },
     "Selected specs (change-aware gate) (selected-5, tests/specs/picker-edit-button.spec.js tests/spec...": {
@@ -3518,6 +3855,102 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (selected-6, tests/specs/ui-resize.spec.js tests/specs/season-...": {
+      "n": 1,
+      "p50_s": 359,
+      "p90_s": 359,
+      "max_s": 359,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 12,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (selected-6, 37 tests)": 327,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (selected-7, tests/specs/garage-first-frame.spec.js tests/spec...": {
+      "n": 1,
+      "p50_s": 434,
+      "p90_s": 434,
+      "max_s": 434,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 9,
+        "Playwright Chromium (cached)": 5,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 6,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (selected-7, 90 tests)": 401,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
+      }
+    },
+    "Selected specs (change-aware gate) (selected-8, tests/specs/ui-redesign.spec.js tests/specs/car-e...": {
+      "n": 1,
+      "p50_s": 441,
+      "p90_s": 441,
+      "max_s": 441,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 5,
+        "Run the selection (selected-8, 59 tests)": 408,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 2
+      }
+    },
+    "Selected specs (change-aware gate) (selected-9, tests/specs/custom-team.spec.js tests/specs/multi...": {
+      "n": 1,
+      "p50_s": 461,
+      "p90_s": 461,
+      "max_s": 461,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 10,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (selected-9, 67 tests)": 421,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
+      }
+    },
     "Selected specs (change-aware gate) (spill-1, tests/specs/image-grade-visual.spec.js, 10, 353, 480...": {
       "n": 3,
       "p50_s": 385,
@@ -3544,8 +3977,8 @@
     },
     "Selected specs (change-aware gate) (spill-1, tests/specs/menu-keyboard.spec.js tests/specs/menu-s...": {
       "n": 10,
-      "p50_s": 436,
-      "p90_s": 458,
+      "p50_s": 431,
+      "p90_s": 441,
       "max_s": 461,
       "fail": 0,
       "cancelled": 0,
@@ -3562,21 +3995,45 @@
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
         "Run the selection (spill-1, 45 tests)": 412,
         "Run the selection (spill-1, 47 tests)": 408,
-        "Run the selection (spill-1, 49 tests)": 423,
         "Run the selection (spill-1, 51 tests)": 318,
         "Run the selection (spill-1, 52 tests)": 406,
+        "Run the selection (spill-1, 65 tests)": 389,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (spill-1, tests/specs/menu-survey.spec.js tests/specs/dev-tool...": {
+      "n": 1,
+      "p50_s": 289,
+      "p90_s": 289,
+      "max_s": 289,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 4,
+        "Run the selection (spill-1, 42 tests)": 263,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (spill-1, tests/specs/menu-survey.spec.js tests/specs/menu-tra...": {
-      "n": 13,
-      "p50_s": 363,
-      "p90_s": 442,
-      "max_s": 451,
+      "n": 11,
+      "p50_s": 356,
+      "p90_s": 431,
+      "max_s": 442,
       "fail": 0,
-      "cancelled": 1,
+      "cancelled": 0,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
@@ -3588,9 +4045,7 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (spill-1, 28 tests)": 331,
-        "Run the selection (spill-1, 29 tests)": 398,
-        "Run the selection (spill-1, 32 tests)": 234,
+        "Run the selection (spill-1, 30 tests)": 281,
         "Run the selection (spill-1, 34 tests)": 308,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
@@ -3767,17 +4222,17 @@
       }
     },
     "Selected specs (change-aware gate) (spill-2, tests/specs/menu-traversal.spec.js tests/specs/photo...": {
-      "n": 3,
-      "p50_s": 458,
-      "p90_s": 471,
-      "max_s": 471,
+      "n": 2,
+      "p50_s": 253,
+      "p90_s": 458,
+      "max_s": 458,
       "fail": 0,
       "cancelled": 0,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
+        "Mesa llvmpipe + Xvfb": 8,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
@@ -3786,15 +4241,14 @@
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
         "Run the selection (spill-2, 35 tests)": 224,
         "Run the selection (spill-2, 36 tests)": 421,
-        "Run the selection (spill-2, 55 tests)": 441,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
       }
     },
     "Selected specs (change-aware gate) (spill-2, tests/specs/menu-traversal.spec.js tests/specs/ui-re...": {
-      "n": 2,
-      "p50_s": 306,
+      "n": 3,
+      "p50_s": 320,
       "p90_s": 410,
       "max_s": 410,
       "fail": 0,
@@ -3809,32 +4263,9 @@
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
-        "Run the selection (spill-2, 38 tests)": 274,
-        "Set up job": 0,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
-    "Selected specs (change-aware gate) (spill-2, tests/specs/photo-studio.spec.js tests/specs/title-m...": {
-      "n": 1,
-      "p50_s": 483,
-      "p90_s": 483,
-      "max_s": 483,
-      "fail": 0,
-      "cancelled": 0,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 15,
-        "Playwright Chromium (cached)": 4,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
-        "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (spill-2, 51 tests)": 448,
+        "Run the selection (spill-2, 38 tests)": 274,
+        "Run the selection (spill-2, 46 tests)": 287,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
         "Upload the run-step marker": 1
@@ -3888,6 +4319,30 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (spill-2, tests/specs/spa-foundation.spec.js tests/specs/gpu-c...": {
+      "n": 1,
+      "p50_s": 351,
+      "p90_s": 351,
+      "max_s": 351,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 12,
+        "Playwright Chromium (cached)": 6,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 8,
+        "Run the selection (spill-2, 55 tests)": 314,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 2
+      }
+    },
     "Selected specs (change-aware gate) (spill-2, tests/specs/time-trial.spec.js tests/specs/steering....": {
       "n": 1,
       "p50_s": 337,
@@ -3936,30 +4391,6 @@
         "Upload the run-step marker": 2
       }
     },
-    "Selected specs (change-aware gate) (spill-2, tests/specs/title-menu-rotation.spec.js tests/specs/...": {
-      "n": 2,
-      "p50_s": 341,
-      "p90_s": 375,
-      "max_s": 375,
-      "fail": 0,
-      "cancelled": 1,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 3,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (spill-2, 58 tests)": 312,
-        "Set up job": 0,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
     "Selected specs (change-aware gate) (spill-2, tests/specs/ui-redesign.spec.js tests/specs/hud-audi...": {
       "n": 10,
       "p50_s": 380,
@@ -3987,35 +4418,11 @@
         "Upload the run-step marker": 1
       }
     },
-    "Selected specs (change-aware gate) (spill-3, tests/specs/boot-guard.spec.js tests/specs/rotation-...": {
-      "n": 3,
-      "p50_s": 118,
-      "p90_s": 165,
-      "max_s": 165,
-      "fail": 0,
-      "cancelled": 0,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 11,
-        "Playwright Chromium (cached)": 4,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (spill-3, 13 tests)": 75,
-        "Set up job": 0,
-        "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
-    "Selected specs (change-aware gate) (spill-3, tests/specs/browser-ui-hunt.spec.js tests/specs/boot...": {
+    "Selected specs (change-aware gate) (spill-2, tests/specs/ui-resize.spec.js tests/specs/ui-redesig...": {
       "n": 1,
-      "p50_s": 107,
-      "p90_s": 107,
-      "max_s": 107,
+      "p50_s": 481,
+      "p90_s": 481,
+      "max_s": 481,
       "fail": 0,
       "cancelled": 0,
       "steps": {
@@ -4023,15 +4430,15 @@
         "Failure artifacts": 0,
         "Mark the run step reached": 0,
         "Mesa llvmpipe + Xvfb": 10,
-        "Playwright Chromium (cached)": 4,
-        "Post Playwright Chromium (cached)": 0,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 1,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 4,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Run the selection (spill-3, 15 tests)": 78,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Run the selection (spill-2, 54 tests)": 453,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 0,
         "Upload the run-step marker": 1
       }
     },
@@ -4182,6 +4589,54 @@
         "Upload the run-step marker": 2
       }
     },
+    "Selected specs (change-aware gate) (spill-3, tests/specs/multiplayer-npeer.spec.js tests/specs/to...": {
+      "n": 1,
+      "p50_s": 234,
+      "p90_s": 234,
+      "max_s": 234,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 3,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 3,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (spill-3, 67 tests)": 206,
+        "Set up job": 0,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (spill-3, tests/specs/music-library.spec.js tests/specs/browse...": {
+      "n": 1,
+      "p50_s": 167,
+      "p90_s": 167,
+      "max_s": 167,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 10,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 8,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
+        "Run the selection (spill-3, 28 tests)": 133,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (spill-3, tests/specs/music-library.spec.js tests/specs/gpu-ca...": {
       "n": 3,
       "p50_s": 377,
@@ -4203,30 +4658,6 @@
         "Run the selection (spill-3, 82 tests)": 339,
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 1,
-        "Upload the run-step marker": 1
-      }
-    },
-    "Selected specs (change-aware gate) (spill-3, tests/specs/music-library.spec.js tests/specs/photo-...": {
-      "n": 1,
-      "p50_s": 408,
-      "p90_s": 408,
-      "max_s": 408,
-      "fail": 0,
-      "cancelled": 0,
-      "steps": {
-        "Complete job": 0,
-        "Failure artifacts": 0,
-        "Mark the run step reached": 0,
-        "Mesa llvmpipe + Xvfb": 13,
-        "Playwright Chromium (cached)": 4,
-        "Post Playwright Chromium (cached)": 0,
-        "Post Run ./.github/actions/setup-apex": 0,
-        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 9,
-        "Run the selection (spill-3, 68 tests)": 372,
-        "Set up job": 1,
-        "Spec timings (junit — a green run's durations are the point)": 2,
         "Upload the run-step marker": 1
       }
     },
@@ -4352,6 +4783,30 @@
         "Upload the run-step marker": 1
       }
     },
+    "Selected specs (change-aware gate) (spill-3, tests/specs/ui-redesign.spec.js tests/specs/title-me...": {
+      "n": 1,
+      "p50_s": 437,
+      "p90_s": 437,
+      "max_s": 437,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 18,
+        "Playwright Chromium (cached)": 4,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 1,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 9,
+        "Run the selection (spill-3, 59 tests)": 395,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 1,
+        "Upload the run-step marker": 1
+      }
+    },
     "Selected specs (change-aware gate) (spill-3, tests/specs/ui-resize.spec.js tests/specs/hud-audit....": {
       "n": 1,
       "p50_s": 469,
@@ -4422,6 +4877,30 @@
         "Set up job": 1,
         "Spec timings (junit — a green run's durations are the point)": 2,
         "Upload the run-step marker": 1
+      }
+    },
+    "Selected specs (change-aware gate) (spill-4, tests/specs/boot-guard.spec.js tests/specs/rotation-...": {
+      "n": 1,
+      "p50_s": 172,
+      "p90_s": 172,
+      "max_s": 172,
+      "fail": 0,
+      "cancelled": 0,
+      "steps": {
+        "Complete job": 0,
+        "Failure artifacts": 0,
+        "Mark the run step reached": 0,
+        "Mesa llvmpipe + Xvfb": 11,
+        "Playwright Chromium (cached)": 5,
+        "Post Playwright Chromium (cached)": 0,
+        "Post Run ./.github/actions/setup-apex": 0,
+        "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
+        "Run ./.github/actions/setup-apex": 5,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
+        "Run the selection (spill-4, 28 tests)": 135,
+        "Set up job": 1,
+        "Spec timings (junit — a green run's durations are the point)": 2,
+        "Upload the run-step marker": 2
       }
     },
     "Selected specs (change-aware gate) (spill-4, tests/specs/browser-ui-hunt.spec.js tests/specs/audi...": {
@@ -4957,11 +5436,11 @@
       }
     },
     "Selected specs (verdict)": {
-      "n": 52,
+      "n": 51,
       "p50_s": 9,
-      "p90_s": 12,
+      "p90_s": 11,
       "max_s": 17,
-      "fail": 19,
+      "fail": 17,
       "cancelled": 6,
       "steps": {
         "Checkout the gate verdict scripts": 2,
@@ -4985,12 +5464,12 @@
       "p90_s": null,
       "max_s": null,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {}
     },
     "Smoke (page boots, __apex responds) (1)": {
-      "n": 13,
-      "p50_s": 190,
+      "n": 17,
+      "p50_s": 171,
       "p90_s": 214,
       "max_s": 217,
       "fail": 0,
@@ -5014,7 +5493,7 @@
       }
     },
     "Smoke (page boots, __apex responds) (2)": {
-      "n": 2,
+      "n": 3,
       "p50_s": 86,
       "p90_s": 173,
       "max_s": 173,
@@ -5033,13 +5512,13 @@
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 7,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 7,
-        "Set up job": 0,
+        "Set up job": 1,
         "Smoke": 0,
         "Spec timings (junit — a green run's durations are the point)": 1
       }
     },
     "Smoke (page boots, __apex responds) (3)": {
-      "n": 2,
+      "n": 3,
       "p50_s": 144,
       "p90_s": 161,
       "max_s": 161,
@@ -5056,15 +5535,15 @@
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 4,
+        "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
         "Set up job": 1,
         "Smoke": 0,
-        "Spec timings (junit — a green run's durations are the point)": 1
+        "Spec timings (junit — a green run's durations are the point)": 2
       }
     },
     "Smoke (page boots, __apex responds) (4)": {
-      "n": 2,
+      "n": 3,
       "p50_s": 122,
       "p90_s": 149,
       "max_s": 149,
@@ -5075,38 +5554,38 @@
         "Complete job": 0,
         "Dispatched group on SwiftShader (opt-out)": 0,
         "Failure artifacts": 0,
-        "Mesa llvmpipe + Xvfb": 8,
+        "Mesa llvmpipe + Xvfb": 11,
         "Pick tonight's rotating group": 0,
         "Playwright Chromium (cached)": 3,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
-        "Run ./.github/actions/setup-apex": 3,
-        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 4,
+        "Run ./.github/actions/setup-apex": 4,
+        "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 6,
         "Set up job": 1,
         "Smoke": 0,
-        "Spec timings (junit — a green run's durations are the point)": 0
+        "Spec timings (junit — a green run's durations are the point)": 1
       }
     },
     "Staged build boots (minified _site, as Pages ships it)": {
-      "n": 13,
-      "p50_s": 186,
+      "n": 17,
+      "p50_s": 199,
       "p90_s": 237,
       "max_s": 274,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Failure artifacts": 0,
-        "Mesa llvmpipe + Xvfb": 11,
+        "Mesa llvmpipe + Xvfb": 10,
         "Playwright Chromium (cached)": 4,
         "Post Playwright Chromium (cached)": 0,
         "Post Run ./.github/actions/setup-apex": 0,
         "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 11,
-        "Set up job": 0,
-        "Smoke against the staged site": 140,
+        "Set up job": 1,
+        "Smoke against the staged site": 157,
         "Stage and stamp _site as the deploy does": 12
       }
     },
@@ -5125,7 +5604,7 @@
     },
     "Structural guards (tooling A)": {
       "n": 58,
-      "p50_s": 241,
+      "p50_s": 245,
       "p90_s": 321,
       "max_s": 329,
       "fail": 0,
@@ -5143,18 +5622,18 @@
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
         "Save verdict cache": 1,
         "Set up job": 1,
-        "Tooling-fast shard 1/4": 220,
+        "Tooling-fast shard 1/4": 223,
         "Verdict cache lookup": 0,
         "Was this head already green as a draft?": 0
       }
     },
     "Structural guards (tooling B)": {
-      "n": 60,
-      "p50_s": 160,
-      "p90_s": 203,
+      "n": 59,
+      "p50_s": 153,
+      "p90_s": 204,
       "max_s": 208,
       "fail": 1,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Every test file belongs to a topical group": 1,
@@ -5172,7 +5651,7 @@
         "Save verdict cache": 1,
         "Set up job": 1,
         "Test tolerances are not loosened": 0,
-        "Tooling-fast shard 2/4": 132,
+        "Tooling-fast shard 2/4": 130,
         "Verdict cache lookup": 0,
         "Was this head already green as a draft?": 0,
         "What does this gate cover?": 0
@@ -5196,7 +5675,7 @@
         "Reused draft": 0,
         "Run ./.github/actions/setup-apex": 5,
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 11,
-        "Save verdict cache": 1,
+        "Save verdict cache": 0,
         "Set up job": 1,
         "Tooling-fast shard 3/4": 199,
         "Verdict cache lookup": 0,
@@ -5204,12 +5683,12 @@
       }
     },
     "Structural guards (tooling D)": {
-      "n": 60,
-      "p50_s": 192,
-      "p90_s": 243,
+      "n": 59,
+      "p50_s": 196,
+      "p90_s": 244,
       "max_s": 260,
-      "fail": 2,
-      "cancelled": 0,
+      "fail": 1,
+      "cancelled": 1,
       "steps": {
         "Complete job": 0,
         "Guards scope": 1,
@@ -5223,7 +5702,7 @@
         "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": 10,
         "Save verdict cache": 1,
         "Set up job": 1,
-        "Tooling-fast shard 4/4": 164,
+        "Tooling-fast shard 4/4": 172,
         "Verdict cache lookup": 0,
         "Was this head already green as a draft?": 0
       }
@@ -5234,7 +5713,7 @@
       "p90_s": null,
       "max_s": null,
       "fail": 0,
-      "cancelled": 0,
+      "cancelled": 1,
       "steps": {}
     },
     "Workflow and shader lints": {
@@ -5265,7 +5744,7 @@
       "n": 19,
       "p50_s": 10,
       "p90_s": 13,
-      "max_s": 14
+      "max_s": 13
     },
     "CI (draft fast tier)": {
       "n": 35,
@@ -5274,7 +5753,7 @@
       "max_s": 22
     },
     "Driving model (characterization traces)": {
-      "n": 25,
+      "n": 22,
       "p50_s": 145,
       "p90_s": 226,
       "max_s": 235
@@ -5286,34 +5765,34 @@
       "max_s": 169
     },
     "Golden menus on a runner (trial, non-blocking)": {
-      "n": 2,
-      "p50_s": 93,
-      "p90_s": 119,
-      "max_s": 119
+      "n": 3,
+      "p50_s": 119,
+      "p90_s": 129,
+      "max_s": 129
     },
     "Parts option-resolution census": {
-      "n": 60,
+      "n": 59,
       "p50_s": 16,
-      "p90_s": 84,
+      "p90_s": 96,
       "max_s": 135
     },
     "Per-circuit geometry sweeps": {
-      "n": 6,
+      "n": 7,
       "p50_s": 424,
       "p90_s": 470,
       "max_s": 470
     },
     "Pure-node unit suites": {
-      "n": 12,
-      "p50_s": 590,
+      "n": 16,
+      "p50_s": 604,
       "p90_s": 654,
       "max_s": 664
     },
     "Renderer specs on a real GPU (macos-latest, Metal)": {
-      "n": 2,
-      "p50_s": 787,
-      "p90_s": 929,
-      "max_s": 929
+      "n": 3,
+      "p50_s": 929,
+      "p90_s": 1095,
+      "max_s": 1095
     },
     "Renderer specs on a real GPU (macos-latest, Metal) 1/2": {
       "n": 2,
@@ -5328,38 +5807,38 @@
       "max_s": 525
     },
     "Select specs for this change": {
-      "n": 60,
+      "n": 59,
       "p50_s": 27,
       "p90_s": 34,
       "max_s": 51
     },
     "Selected specs (change-aware gate)": {
-      "n": 51,
-      "p50_s": 561,
+      "n": 50,
+      "p50_s": 570,
       "p90_s": 725,
       "max_s": 2033
     },
     "Selected specs (verdict)": {
-      "n": 52,
+      "n": 51,
       "p50_s": 9,
-      "p90_s": 12,
+      "p90_s": 11,
       "max_s": 17
     },
     "Smoke (page boots, __apex responds)": {
-      "n": 13,
-      "p50_s": 190,
+      "n": 17,
+      "p50_s": 173,
       "p90_s": 214,
       "max_s": 217
     },
     "Staged build boots (minified _site, as Pages ships it)": {
-      "n": 13,
-      "p50_s": 186,
+      "n": 17,
+      "p50_s": 199,
       "p90_s": 237,
       "max_s": 274
     },
     "Structural guards": {
-      "n": 60,
-      "p50_s": 251,
+      "n": 59,
+      "p50_s": 253,
       "p90_s": 321,
       "max_s": 329
     },
@@ -5373,26 +5852,26 @@
   "runs": {
     "n": 60,
     "cancelled_pct": 10,
-    "regated_shas": 9,
-    "regated_runs": 10,
+    "regated_shas": 11,
+    "regated_runs": 12,
     "fast_tier_n": 6,
     "fast_tier_p50_s": 280,
     "fast_tier_p90_s": 559,
     "full_tier_n": 48,
-    "full_tier_p50_s": 666,
+    "full_tier_p50_s": 717,
     "full_tier_p90_s": 1187
   },
   "deploy": {
-    "n": 35,
-    "push_to_live_p50_s": 780,
-    "p90_s": 1212,
-    "superseded": 11
+    "n": 36,
+    "push_to_live_p50_s": 746,
+    "p90_s": 1155,
+    "superseded": 10
   },
   "flake": {},
   "dora": {
-    "deploy_freq_per_day": 16,
-    "lead_time_p50_s": 780,
-    "change_fail_pct": 28.6,
+    "deploy_freq_per_day": 11.5,
+    "lead_time_p50_s": 746,
+    "change_fail_pct": 28,
     "mttr_p50_s": 2970
   },
   "notes": [
