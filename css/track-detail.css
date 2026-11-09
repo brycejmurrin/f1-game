@@ -191,9 +191,9 @@
    Stack it below PAUSE (right-aligned) so the full 4-box top bar is clear. */
 @media (orientation: portrait) {
   #btn-cam {
-    /* DERIVED from PAUSE's own box (css/touch-controls.css --hud-chrome-*), never a constant: it stays
-       inside the 8 + 2 x --tap-hud band the sectors box below hangs from. */
-    top: calc(var(--hud-chrome-t) + var(--hud-chrome-h) + var(--hud-chrome-gap));
+    /* DERIVED from --tap, not 55: on touch --tap is 52, so a 55 constant put
+       CHASE 5px under PAUSE. 8 + tap + 4 = 56 on desktop, 64 on touch. */
+    top: calc(8px + var(--tap-hud) + 4px + var(--sat));
     right: calc(10px + var(--sar));
   }
   /* Sectors below the repositioned CHASE: 8 + 2*tap + 8. The WHOLE offset

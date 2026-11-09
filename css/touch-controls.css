@@ -856,11 +856,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   --hud-chrome-t: min(calc(8px * var(--hud-chrome-z) + var(--sat) + (var(--hud-top-h, var(--hud-top-h-0, 54px)) * var(--hud-chrome-z) - var(--hud-chrome-h)) / 2), calc(8px + var(--tap-hud) + var(--sat) - var(--hud-chrome-h)));
   --hud-chrome-gap: calc(var(--gap) / 2);
 }
-/* Portrait stacks the tower into a tall block (146 px at HUD 155 %): no row to centre on, so the pair
-   top-aligns at the safe edge and css/track-detail.css stacks CAM under PAUSE. */
-@media (orientation: portrait) {
-  :is(#btn-cam, #pausebtn, #campicker) { --hud-chrome-t: calc(8px + var(--sat)); }
-}
 #pausebtn {
   position: fixed;
   top: var(--hud-chrome-t);
@@ -901,6 +896,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   background: var(--look-hud-bg);
   color: var(--look-hud-ink);
   border: 1px solid var(--look-hud-dim);
+}
+/* PORTRAIT KEEPS ITS OLD BAND (#5179 is a landscape fix): CAM / PAUSE at --tap-hud, top-aligned, CAM stacked
+   under PAUSE (css/track-detail.css). A narrower CAM there let fitHud grow the tower into the radio card's
+   lane, and the card collapsed beside the sector plate (hud-layout portrait radio card, HUD 150 %). */
+@media (orientation: portrait) {
+  :is(#btn-cam, #pausebtn, #campicker) { --hud-chrome-t: calc(8px + var(--sat)); --hud-chrome-h: var(--tap-hud); }
+  #btn-cam { min-width: calc(76px * var(--hud-btn-z)); padding: 0 calc(var(--gap) * var(--hud-btn-z));
+    font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z))); }
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
    cinematic view — readouts, start lights, announce, cam picker and the cam
