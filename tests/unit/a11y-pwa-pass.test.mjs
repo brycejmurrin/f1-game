@@ -348,7 +348,8 @@ test("the CAM button's accessible name starts with the word it shows", () => {
 // (≤ 1 per 10 min), shows #update-chip outside races, and its tap persists
 // state, then reloads the way the boot guard does (?b=, query + hash kept).
 // https://developer.chrome.com/docs/workbox/handling-service-worker-updates
-function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist, fetchImpl } = {}) {
+// guardOk: index.html's boot guard read version.json (window.__apexGuardOk, #4925), so the throttle starts at boot.
+function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist, fetchImpl, guardOk = true } = {}) {
   let t = 1_000_000, fetches = 0, replaced = null, persisted = 0;
   const said = [];
   const chip = { hidden: true, textContent: "UPDATE READY · RELOAD", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
@@ -366,7 +367,7 @@ function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = f
   vm.runInContext(read("js/ui/update-check.js"), sb, { filename: absSrc("js/ui/update-check.js") });
   const UC = vm.runInContext("UpdateCheck", sb);
   const u = UC.create({
-    now: () => t, inRace: () => racing, chip: () => chip,
+    guardOk: () => guardOk, now: () => t, inRace: () => racing, chip: () => chip,
     fetch: async (url, init) => { fetches++; assert.equal(init.cache, "no-store"); assert.match(url, /^version\.json\?_=\d+$/); if (fetchImpl) return fetchImpl(fetches); return { ok: true, json: async () => ({ build }) }; },
     persist: () => { persisted++; return persist && persist(); },
     location: { pathname: "/f1-game/", search: "?log=net", hash: "#vs=CODE", replace: (u2) => { replaced = u2; } },

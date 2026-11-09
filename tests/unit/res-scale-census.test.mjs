@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs } from "../../tools/gfx/res-scale-census.mjs";
+import { parseArgs, verdict } from "../../tools/gfx/res-scale-census.mjs";
 
 test("res-scale-census parseArgs: defaults", () => {
   const o = parseArgs([]);
@@ -20,4 +20,10 @@ test("res-scale-census parseArgs: overrides, scale clamp, ls prefixing", () => {
 
 test("res-scale-census parseArgs: unknown flag throws", () => {
   assert.throws(() => parseArgs(["--nope"]), /unknown argument/);
+});
+
+test("res-scale-census verdict: the settle gate (#4783)", () => {
+  const ok = { fixedTargets: false, unsettledSteps: 0, maxSettleFrames: 2, texturesStart: 27, texturesEnd: 27 };
+  const got = [ok, { ...ok, maxSettleFrames: 3 }, { ...ok, unsettledSteps: 2 }, { ...ok, texturesEnd: 29 }, { ...ok, fixedTargets: true, unsettledSteps: 5, maxSettleFrames: 9 }].map(verdict);
+  assert.deepEqual(got, ["ok", "FAIL: settle took 3 presented frames (> 2)", "FAIL: 2 step(s) never reached the scaled post-target size", "FAIL: textures 27 -> 29 after the sweep", "ok"]);
 });

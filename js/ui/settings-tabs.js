@@ -63,6 +63,32 @@ const SettingsNav = (function () {
     }
   }
 
+  /* #4798 settings-lazy gate. Row-wiring initialisers (SettingRow.wire and the
+     like: no eval-time state, nothing a player sees before Settings) queue here
+     instead of running in the DOMContentLoaded task. The queue flushes, in
+     registration order, on the first Settings page enter, the first pointerdown
+     or keydown anywhere (capture, so it precedes the click / key it serves), or
+     idle (4 s cap). A complete document (tests, late loads) runs fn at once. */
+  let lazyQ = null;
+  function flushLazy() {
+    const q = lazyQ;
+    if (!q) return;
+    lazyQ = null;
+    if (typeof document !== "undefined") for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, flushLazy, true);
+    for (const fn of q) { try { fn(); } catch (e) { Log.warn("game", "SettingsNav.lazy init failed: " + (e && e.message)); } }
+  }
+  function lazy(fn) {
+    if (typeof fn !== "function") return;
+    if (typeof document === "undefined" || document.readyState === "complete") { fn(); return; }
+    if (lazyQ) { lazyQ.push(fn); return; }
+    lazyQ = [fn];
+    for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, flushLazy, true);
+    if (typeof requestIdleCallback === "function") requestIdleCallback(flushLazy, { timeout: 4000 });
+    else setTimeout(flushLazy, 1500);
+  }
+  // First in enterFns: a page's rows are wired before any other enter handler reads them.
+  enterFns.push(flushLazy);
+
   // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
   // loads on the first APPEARANCE enter; a failed load logs and the next enter retries.
   let presetsLoad = null;
@@ -348,6 +374,7 @@ const SettingsNav = (function () {
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
+    lazy, flushLazy,
   };
 })();
 Object.freeze(SettingsNav);

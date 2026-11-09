@@ -63,7 +63,10 @@ const TrackBuildClient = (function () {
   // js/ui/setting-row.js, while readyState already reads "interactive".
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
   }
   // ScriptLoader.url: the deploy's content-hash key for a lazy file (the same
   // URL the page and the SW precache use), else `?v=<build>` (R3-PHONE-8).

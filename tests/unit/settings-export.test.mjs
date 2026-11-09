@@ -1428,7 +1428,8 @@ test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker re
   assert.match(html, /<div id="pm-buildworker" class="set-row"[\s\S]*?<select id="pm-buildworker-sel"/, "a static SettingRow in the renderer levers");
   const client = fs.readFileSync(path.join(root, "js/track/build-client.js"), "utf8");
   assert.match(client, /SettingRow\.wire\("pm-buildworker", \{ values: SettingRow\.labels\(\["off", "on"\]\)/);
-  assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
+  // #4798: still never before DCL (setting-row.js loads after this file), now through the settings-lazy gate.
+  assert.match(client, /else document\.addEventListener\("DOMContentLoaded", \(\) => \{[\s\S]*?SettingsNav\.lazy\(initUI\); else initUI\(\);/, "wired after js/ui/setting-row.js has loaded");
   const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
   assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "1",/, "exported and imported with the other settings, default ON");
 });
