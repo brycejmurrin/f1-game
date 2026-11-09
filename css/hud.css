@@ -2583,16 +2583,10 @@ body.desktop #hud-inputs:not([data-hl-user]) {
    widgets use HUD SIZE directly, including instruments detached from the
    bottom flex/grid cluster by HudLayout. */
 [data-hl][data-hl-v4] {
-  /* HUD SIZE, CAPPED AT THE BAND'S FIT (UI contract 2026-11-06 gap 8): a stored entry paints under the same
-     --hud-z-top / --hud-z-bot cap as a shipped piece, so a layout saved on a roomier window cannot outgrow a
-     852x283 Safari tab. The raw slider here let MOVE & SIZE skip every cap fitHud writes. */
-  --hud-z: min(var(--hud-scale), var(--hud-z-top, var(--hud-scale))) !important;
+  --hud-z: var(--hud-scale) !important;
   --vwzh: calc(1vw / var(--hud-z)) !important;
   zoom: var(--hud-z) !important;
   max-width: none !important; max-height: none !important;
-}
-[data-hl][data-hl-v4]:is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-ot, #hud-aero, #hud-bb) {
-  --hud-z: min(var(--hud-scale), var(--hud-z-bot, var(--hud-scale))) !important;   /* the bottom band's cap */
 }
 [data-hl-bottom] {
   position: fixed !important; position-anchor: auto !important;

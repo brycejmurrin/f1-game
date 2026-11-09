@@ -244,6 +244,9 @@ REL/STRAT/INPUTS stacked in a side column that the dock caps budget for. *May sc
 on the dock, text boost on digits. *Only nudges:* FIT_AIR, dock insets. *Overflow:* none, ever.
 *Goes:* the `min(scale,1)` cluster budget; width-only band caps; the `(max-height: 380px)` tier flip; unclamped stored
 entries; density from the menu slider (own density from the ICB height, or none).
+*Reverted 2026-11-09:* PR C (#5155, merged 2026-11-07 as 3b646d20) implemented this layout and was reverted on
+Bryce's ask ("Fix the HUD to how it was last week", #5165): the race HUD renders as it did on the Nov 2 tree again,
+and #5164's `__apex.sheetFit()` alias stays. This section remains the record of what PR C tried.
 
 ## 5. Switch census — rules that can give a phone-sized window a tablet, desktop, tall or two-column layout
 
