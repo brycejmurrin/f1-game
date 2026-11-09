@@ -944,6 +944,7 @@
     "tests/unit/sheetshape-batch-measure.test.mjs",
     "tests/unit/sheetshape-density-scale.test.mjs",
     "tests/unit/sheetshape-keyboard.test.mjs",
+    "tests/unit/sheetshape-orientation.test.mjs",
     "tests/unit/sheetshape-registry.test.mjs",
     "tests/unit/shell-ids.test.mjs",
     "tests/unit/ship-filter-paths.test.mjs",
