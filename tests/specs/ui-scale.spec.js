@@ -1703,7 +1703,19 @@ test.describe("Custom Home width on touch", () => {
       if (index !== 1) {
         const box = await page.locator("#menu-buttons").boundingBox();
         expect(box).toBeTruthy();
-        expect(Math.abs(box.width - viewport.width * 0.2)).toBeLessThanOrEqual(1);
+        // THE FLOOR IS THE TRACK (#5167 part F; UI contract 2026-11-06 §4.1): on
+        // a landscape phone a saved WIDTH under the shipped doors column fills
+        // that column (the overlay's second grid track) instead of pinning the
+        // cluster to 20 % of the screen. Measured before the floor at 852x393
+        // with these values: a 170px cluster, fit 0.628, labels at 9.7 painted
+        // px and the four utility doors one per row. The request stays on
+        // record as the floor's lower bound: the track is never narrower.
+        const track = await page.evaluate(() => {
+          const cols = getComputedStyle(document.getElementById("overlay")).gridTemplateColumns.split(/\s+/).map(parseFloat);
+          return cols[cols.length - 1];
+        });
+        expect(track).toBeGreaterThanOrEqual(viewport.width * 0.2);
+        expect(Math.abs(box.width - track)).toBeLessThanOrEqual(1);
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.y).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);

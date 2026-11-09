@@ -273,6 +273,19 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
   max-width: none; min-width: 0; justify-self: center;
 }
+/* THE FLOOR IS THE TRACK (#5167 part F, UI contract 2026-11-06 §4.1: "width
+   as a share of the viewport without a floor" goes). On a landscape phone the
+   request cannot go under the column the shipped title gives the doors.
+   Measured 2026-11-09 at 852x393 (insets 59/21/59) with Bryce's export,
+   WIDTH 20: a 170px cluster centred in a 330px track, 17 doors in one column,
+   the fit at 0.628, labels painting at 9.7px, the four utility doors one per
+   row and 90px of dead track beside them. 100% here is the grid area (the
+   overlay's second column, in the cluster's own px under its zoom), so a
+   request narrower than that fills the track exactly as AUTO does, and a
+   wider request still widens the cluster, which the fit still contains. */
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  width: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
+}
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
    (css/components.css): 100% is one per line, 0px is one equal row. */
