@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -176,9 +177,12 @@ test("gfx-debug obeys the file conventions", () => {
   const manifest = read("tools/manifest.cjs");
   assert.ok(manifest.includes('"js/perf/gfx-debug-overlay.js"'),
     "new-file lockstep: the module roster must list it");
-  const html = read("index.html");
-  assert.match(html, /src="js\/perf\/gfx-debug-overlay\.js\?v=[A-Za-z0-9._-]+"/,
-    "new-file lockstep: a script tag in the shell (gen-shell writes it from the manifest)");
+  // #4978: LAZY_DEV, not the boot wall — LazyBundles.bootDevPanels injects it when the gfxdebug flag is set.
+  const { LAZY_DEV } = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  assert.ok(LAZY_DEV.includes("js/perf/gfx-debug-overlay.js"), "the overlay rides LAZY_DEV");
+  assert.doesNotMatch(read("index.html"), /src="js\/perf\/gfx-debug-overlay\.js/, "and has no boot <script> tag");
+  assert.match(read("js/core/lazy-bundles.js"), /DevFlags\.get\("gfxdebug"\)[\s\S]*ApexRoster\.LAZY_DEV|ApexRoster\.LAZY_DEV[\s\S]*DevFlags\.get\("gfxdebug"\)/,
+    "the injector gates on the same gfxdebug flag the overlay's wanted() reads");
 });
 
 test("on GLX the overlay prints the post chain's verdict, so a dark-frame report says whether tonemapping ran (iPhone GLX report)", async () => {
@@ -223,4 +227,30 @@ test("on TLX the overlay names the ?lab=tlxLite tier when the backend reports it
   };
   assert.equal(lineFor(true), "mobile=true tier=true lite=false LAB:tlxLite");
   assert.equal(lineFor(false), "mobile=true tier=true lite=false", "no lab: the line is unchanged");
+});
+
+// #4978 row 4: the overlay left the boot wall for LAZY_DEV; LazyBundles injects it only when the flag asks.
+test("LazyBundles injects LAZY_DEV only under the gfxdebug flag", async () => {
+  const bundles = read("js/core/lazy-bundles.js");
+  async function boot(flag) {
+    const asked = [];
+    const ctx = vm.createContext({
+      console, Promise, setTimeout, clearTimeout, queueMicrotask, URLSearchParams,
+      ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+        LAZY_DEV: ["js/perf/gfx-debug-overlay.js"], SCENERY_DIR: "js/circuits/scenery" },
+      DevFlags: { get: (k) => k === "gfxdebug" && flag },
+      localStorage: { getItem() { return null; } },
+      navigator: { userAgent: "apex-game-vm" },
+      location: { search: "", hostname: "example.com" },
+      Log: { warn() {}, info() {}, error() {}, debug() {} },
+      addEventListener() {}, removeEventListener() {},
+    });
+    ctx.window = ctx;
+    vm.runInContext(bundles + "\nthis.LazyBundles = LazyBundles;", ctx, { filename: path.join(ROOT, "js/core/lazy-bundles.js") });
+    ctx.LazyBundles.create({ els: {}, loadBackendScripts: async (files) => { asked.push(...files); return true; } });
+    await new Promise((r) => setTimeout(r, 0));
+    return asked.filter((f) => f === "js/perf/gfx-debug-overlay.js");
+  }
+  assert.deepEqual(await boot(false), [], "no flag: the player never fetches the overlay");
+  assert.deepEqual(await boot(true), ["js/perf/gfx-debug-overlay.js"], "?gfxdebug=1: injected once at boot");
 });
