@@ -418,3 +418,52 @@ test("robust post-warm slope outvotes one odd reading but still catches the H12 
   assert.ok(robustHeapSlope(ser([100, 112, 124, 136, 141, 163, 170, 186])).slope > HEAP_SLOPE_HARD_MB);
   assert.equal(robustHeapSlope(ser([100, 101, 102, 103])).slope, null);
 });
+
+// #4778: wrapper-object growth between the last two cycles.
+test("wrapperGrowth flags a GPU class that grew and ignores a flat pair", async () => {
+  const { wrapperGrowth } = await import("../helpers/race-cycle-memory.mjs");
+  const row = (cycle, bundles, nodes) => ({ cycle, wrappers: { GPURenderBundle: bundles, GPUBuffer: 10 }, dom: { nodes } });
+  assert.equal(wrapperGrowth([row(5, 100, 1000), row(6, 100, 1010)], 6).ok, true);
+  const bad = wrapperGrowth([row(5, 100, 1000), row(6, 181, 1000)], 6);
+  assert.equal(bad.ok, false);
+  assert.match(bad.issues[0], /GPURenderBundle 100 → 181 \(\+81\)/);
+  assert.equal(wrapperGrowth([row(6, 1, 1)], 6).ok, false);
+});
+
+// #4778: `system / Context` closure scopes are gated at +5 % between post-warm cycles.
+test("wrapperGrowth gates system / Context scopes at +5 % and countSnapshotClass counts by name", async () => {
+  const { wrapperGrowth, countSnapshotClass } = await import("../helpers/race-cycle-memory.mjs");
+  const row = (cycle, contexts) => ({ cycle, wrappers: {}, dom: null, contexts });
+  assert.equal(wrapperGrowth([row(5, 10000), row(6, 10400)], 6).ok, true);
+  assert.equal(wrapperGrowth([row(5, 10000), row(6, 9000)], 6).ok, true);
+  const bad = wrapperGrowth([row(5, 10000), row(6, 10700)], 6);
+  assert.equal(bad.ok, false);
+  assert.deepEqual(bad.issues.map((i) => i.startsWith("system / Context 10000 → 10700")), [true]);
+  assert.equal(wrapperGrowth([row(5, null), row(6, 10700)], 6).ok, true, "an unavailable count is not a gate");
+  const snap = { snapshot: { meta: { node_fields: ["type", "name", "id"] } }, strings: ["", "system / Context", "x"],
+    nodes: [3, 1, 1, 3, 2, 2, 3, 1, 3] };
+  assert.equal(countSnapshotClass(snap, "system / Context"), 2);
+});
+
+// #4778: a census that cannot see a channel says so; a zero context count is blind, not a reading.
+test("contextCensus reads 0 as blind and names the context-like classes it did see", async () => {
+  const { contextCensus } = await import("../helpers/race-cycle-memory.mjs");
+  const snap = (names) => ({ snapshot: { meta: { node_fields: ["type", "name"] } }, strings: ["", ...names], nodes: names.flatMap((_, i) => [3, i + 1]) });
+  assert.deepEqual(contextCensus(snap(["system / Context", "x", "system / Context"])), { count: 2, blind: null });
+  const z = contextCensus(snap(["system / NativeContext", "x", "system / NativeContext"]));
+  assert.equal(z.count, null);
+  assert.match(z.blind, /^0 "system \/ Context" nodes in 3/);
+  assert.deepEqual(z.names, { "system / NativeContext": 2 });
+});
+
+test("censusBlindness lists every channel the wrapper census could not see", async () => {
+  const { censusBlindness } = await import("../helpers/race-cycle-memory.mjs");
+  const seen = { cycle: 1, wrappers: { GPUBuffer: 3 }, contexts: 900, dom: { nodes: 1 } };
+  assert.deepEqual(censusBlindness([seen], "webgpu"), []);
+  assert.deepEqual(censusBlindness([], "webgpu"), ["no wrapper readings"]);
+  const b = censusBlindness([{ cycle: 2, wrappers: { GPUBuffer: null }, contexts: null, contextsBlind: "snap failed", dom: null }], "webgpu");
+  assert.equal(b.length, 3);
+  assert.match(b[0], /WebGPU api observed but wrapper counts are null/);
+  assert.match(b[2], /system \/ Context blind at cycle 2: snap failed/);
+  assert.match(censusBlindness([{ ...seen, wrappers: { GPUBuffer: null } }], "webgl2")[0], /api webgl2/);
+});

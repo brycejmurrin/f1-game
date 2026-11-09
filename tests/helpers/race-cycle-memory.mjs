@@ -125,3 +125,139 @@ export function robustHeapSlope(series) {
   const med = slopes.length % 2 ? slopes[m] : (slopes[m - 1] + slopes[m]) / 2;
   return { slope: +med.toFixed(1), points: pts.length };
 }
+
+/* ---- WebGPU wrapper-object census (#4778) -------------------------------------------------------------------
+ * The heap slope cannot see per-cycle wrapper objects (Research B §2.3: GPURenderBundle +81 and GPUTextureView +81
+ * per race→menu cycle while the JS heap was flat). Counting live wrappers by prototype after a forced GC is
+ * cheap (Runtime.queryObjects) and exact. WHAT the +81 is: three's WebGPU backend builds one mip-chain bundle per
+ * (mip level × layer) of every mipmapped texture it uploads (`_mipmapCreateBundles`, each holding a view), and
+ * caches them on that texture's backend data (`r.layers`) until the texture is disposed. They follow the live
+ * texture count, which warms for ~5 cycles (renderer.info.memory.textures 40 → 57), so a plateau is expected
+ * and a post-warm pair must be flat. Soft by default like the heap slope; STRICT fails. */
+export const GPU_WRAPPER_CLASSES = ["GPUBuffer", "GPUTexture", "GPUTextureView", "GPURenderBundle", "GPUBindGroup", "GPURenderPipeline"];
+
+/** Live wrapper counts per class (null where the class is absent, e.g. WebGL2). Call after a forced GC. */
+export async function gpuWrapperCounts(cdp, classes = GPU_WRAPPER_CLASSES) {
+  const out = {};
+  for (const name of classes) {
+    out[name] = null;
+    let proto = null, objs = null;
+    try {
+      const ev = await cdp.send("Runtime.evaluate", { expression: `typeof ${name} === "function" ? ${name}.prototype : undefined` });
+      proto = ev.result && ev.result.objectId;
+      if (!proto) continue;
+      objs = (await cdp.send("Runtime.queryObjects", { prototypeObjectId: proto })).objects;
+      const n = await cdp.send("Runtime.callFunctionOn", { objectId: objs.objectId, functionDeclaration: "function () { return this.length; }", returnByValue: true });
+      out[name] = n.result.value;
+    } catch (_) { out[name] = null; }
+    finally {
+      for (const o of [objs, proto ? { objectId: proto } : null]) if (o && o.objectId) await cdp.send("Runtime.releaseObject", { objectId: o.objectId }).catch(() => {});
+    }
+  }
+  return out;
+}
+
+/**
+ * CDP DOM leak counters (documents / nodes / jsEventListeners), after GC. `Memory.getDOMCountersForLeakDetection`
+ * first; where that method is absent (CI read null, #4778 / PR #4912) the older `Memory.getDOMCounters`, whose three
+ * fields carry the same names. Null only when neither answers: the caller reports that as blind, not as zero.
+ */
+export async function domLeakCounters(cdp) {
+  try {
+    const r = await cdp.send("Memory.getDOMCountersForLeakDetection");
+    const out = Object.fromEntries((r.counters || []).map((c) => [c.name, c.count]));
+    if (Object.keys(out).length) return out;
+  } catch (_) { /* fall through to the older method */ }
+  try {
+    const r = await cdp.send("Memory.getDOMCounters");
+    return { documents: r.documents, nodes: r.nodes, jsEventListeners: r.jsEventListeners };
+  } catch (_) { return null; }
+}
+
+/**
+ * Count of `system / Context` closure scopes in a heap snapshot (#4778). Takes one snapshot over CDP (call after a
+ * forced GC, once per cycle: it is the slow census) and counts nodes by class name. A live V8 heap always holds
+ * closure contexts, so a count of 0 is a census that could not see them (CI read 0 every cycle, PR #4912), never a
+ * measurement: it returns `{ count: null, blind }` with the context-like class names the snapshot DID carry, so the
+ * next run names the cause. `{ count: null, blind }` too when the snapshot cannot be taken or parsed.
+ * @returns {Promise<{ count: number|null, blind: string|null, names?: Record<string, number> }>}
+ */
+export async function contextScopeCount(cdp) {
+  const chunks = [];
+  const onChunk = (e) => { chunks.push(e.chunk); };
+  try {
+    cdp.on("HeapProfiler.addHeapSnapshotChunk", onChunk);
+    await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false, captureNumericValue: false });
+    if (!chunks.length) return { count: null, blind: "heap snapshot delivered no chunks" };
+    const snap = JSON.parse(chunks.join(""));
+    chunks.length = 0;
+    return contextCensus(snap);
+  } catch (e) { return { count: null, blind: `heap snapshot failed: ${String(e && e.message || e).slice(0, 120)}` }; }
+  finally { try { cdp.off("HeapProfiler.addHeapSnapshotChunk", onChunk); } catch (_) { /* ignore */ } }
+}
+
+/** `system / Context` count from a parsed snapshot; 0 reads as blind with the context-like names seen (top 8). */
+export function contextCensus(snap) {
+  const count = countSnapshotClass(snap, "system / Context");
+  if (count > 0) return { count, blind: null };
+  const f = snap.snapshot.meta.node_fields, w = f.length, ni = f.indexOf("name");
+  const tally = new Map();
+  for (let i = 0; i < snap.nodes.length; i += w) {
+    const nm = snap.strings[snap.nodes[i + ni]];
+    if (/context/i.test(nm)) tally.set(nm, (tally.get(nm) || 0) + 1);
+  }
+  const names = Object.fromEntries([...tally].sort((a, b) => b[1] - a[1]).slice(0, 8));
+  return { count: null, blind: `0 "system / Context" nodes in ${snap.nodes.length / w} (a live heap always has some)`, names };
+}
+
+/** Nodes named `name` in a parsed V8 heap snapshot. */
+export function countSnapshotClass(snap, name) {
+  const f = snap.snapshot.meta.node_fields, w = f.length, ni = f.indexOf("name");
+  const strings = snap.strings, nodes = snap.nodes;
+  let n = 0;
+  for (let i = 0; i < nodes.length; i += w) if (strings[nodes[i + ni]] === name) n++;
+  return n;
+}
+
+/** Closure-scope bound between post-warm cycles: growth above this fraction (plus slack) is a leak. */
+export const CONTEXT_GROWTH_FRACTION = 0.05;
+export const CONTEXT_GROWTH_SLACK = 50;
+
+/** Per-class growth between the last two entries of `series` ([{ cycle, wrappers, dom }]): exact for GPU classes. */
+export function wrapperGrowth(series, laterCycle) {
+  const a = series.find((r) => r.cycle === laterCycle - 1), b = series.find((r) => r.cycle === laterCycle);
+  const issues = [];
+  if (!a || !b) return { ok: false, issues: [`need readings for cycles ${laterCycle - 1} and ${laterCycle}`] };
+  for (const name of GPU_WRAPPER_CLASSES) {
+    const x = a.wrappers && a.wrappers[name], y = b.wrappers && b.wrappers[name];
+    if (typeof x === "number" && typeof y === "number" && y > x) issues.push(`${name} ${x} → ${y} (+${y - x})`);
+  }
+  for (const name of ["documents", "nodes", "jsEventListeners"]) {
+    const x = a.dom && a.dom[name], y = b.dom && b.dom[name];
+    if (typeof x === "number" && typeof y === "number" && y > x * 1.05 + 5) issues.push(`DOM ${name} ${x} → ${y}`);
+  }
+  const cx = a.contexts, cy = b.contexts;
+  if (typeof cx === "number" && typeof cy === "number" && cy > cx * (1 + CONTEXT_GROWTH_FRACTION) + CONTEXT_GROWTH_SLACK)
+    issues.push(`system / Context ${cx} → ${cy} (> +${CONTEXT_GROWTH_FRACTION * 100}%)`);
+  return { ok: issues.length === 0, issues };
+}
+
+/**
+ * What the wrapper census could NOT see (#4778): one line per blind channel, never a zero passed off as a reading.
+ * `api` is the backend the census observed. Wrapper counts are null by design on WebGL2 (no GPU* classes), so
+ * they are blind only when the api is webgpu; DOM counters and closure contexts are blind on any api.
+ * @param {Array<{ cycle: number, wrappers?: Record<string, number|null>|null, contexts?: number|null, contextsBlind?: string|null, dom?: object|null }>} series
+ * @param {string|null|undefined} api
+ * @returns {string[]}
+ */
+export function censusBlindness(series, api) {
+  const out = [];
+  if (!series.length) return ["no wrapper readings"];
+  const wrapperSeen = series.every((r) => r.wrappers && Object.values(r.wrappers).some((v) => typeof v === "number"));
+  if (api === "webgpu" && !wrapperSeen) out.push("WebGPU api observed but wrapper counts are null");
+  if (api !== "webgpu") out.push(`wrapper counts not observed: api ${api ?? "unknown"} (they exist only on WebGPU)`);
+  if (series.some((r) => r.dom == null)) out.push("DOM counters unavailable (neither Memory.getDOMCountersForLeakDetection nor Memory.getDOMCounters)");
+  const cb = series.find((r) => typeof r.contexts !== "number");
+  if (cb) out.push(`system / Context blind at cycle ${cb.cycle}: ${cb.contextsBlind || "no count"}`);
+  return out;
+}
