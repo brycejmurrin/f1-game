@@ -5813,6 +5813,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/setup-tune.test.mjs",
         "tests/unit/share-code.test.mjs"
       ]
     },
@@ -7107,6 +7108,7 @@
         "tests/unit/engineer.test.mjs",
         "tests/unit/flyby-intro.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/onboard.test.mjs",
@@ -7176,6 +7178,7 @@
       ],
       "closePitWork": [
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "coast": [
@@ -7292,6 +7295,7 @@
       ],
       "leaveGarage": [
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
       "loadTrack": [
@@ -8370,6 +8374,7 @@
       ],
       "moodDef": [
         "tests/unit/garage-light-cues.test.mjs",
+        "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "prepare": [
