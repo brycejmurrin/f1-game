@@ -634,9 +634,10 @@ test("a slow online navigate serves the precached shell", async () => {
   assert.equal(await res.text(), "precached shell");
 });
 
-test("a slow online shell-bust navigate still fails fast instead of serving the stale shell", async () => {
+test("a dead online shell-bust navigate with no shell at or above b fails after the bust deadline", async () => {
+  // The stale shell (< b) is never served; the bounded BUST_WAIT_MS deadline still ends a fetch that never answers.
   const harness = createHarness({
-    immediateTimeoutMs: 3000,
+    immediateTimeoutMs: 15000,
     navigator: { onLine: true },
     fetchImpl: () => new Promise(() => {}),
   });
@@ -646,6 +647,24 @@ test("a slow online shell-bust navigate still fails fast instead of serving the 
 
   const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
   assert.equal((await bust.responsePromise).status, 0);
+});
+
+test("a slow-but-alive online shell bust with no cached shell at or above b returns the late network shell (#4924)", async () => {
+  // The 3 s fail-fast had nothing to fall back to here, so it only dropped a fetch that answered a moment later:
+  // an installed PWA landed on "cannot open the page" after the boot guard or UPDATE READY navigated to ?b=.
+  const harness = createHarness({
+    immediateTimeoutMs: 3000,
+    navigator: { onLine: true },
+    fetchImpl: () => new Promise((resolve) => setTimeout(() => resolve(new Response("new shell", { status: 200 })), 50)),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
+  ]));
+
+  const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
+  const res = await bust.responsePromise;
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "new shell");
 });
 
 test("a deep-link navigation is not cached under its query URL", async () => {
