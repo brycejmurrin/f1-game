@@ -450,6 +450,8 @@ test("contextCensus reads 0 as blind and names the context-like classes it did s
   const { contextCensus } = await import("../helpers/race-cycle-memory.mjs");
   const snap = (names) => ({ snapshot: { meta: { node_fields: ["type", "name"] } }, strings: ["", ...names], nodes: names.flatMap((_, i) => [3, i + 1]) });
   assert.deepEqual(contextCensus(snap(["system / Context", "x", "system / Context"])), { count: 2, blind: null });
+  // Chrome's V8 names each context by its scope site (PR #5189 CI): those count; a different class does not.
+  assert.deepEqual(contextCensus(snap(["system / Context / scope @126171", "system / Context / scope @9", "system / Contextual"])), { count: 2, blind: null });
   const z = contextCensus(snap(["system / NativeContext", "x", "system / NativeContext"]));
   assert.equal(z.count, null);
   assert.match(z.blind, /^0 "system \/ Context" nodes in 3/);

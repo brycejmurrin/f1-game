@@ -210,12 +210,22 @@ export function contextCensus(snap) {
   return { count: null, blind: `0 "system / Context" nodes in ${snap.nodes.length / w} (a live heap always has some)`, names };
 }
 
-/** Nodes named `name` in a parsed V8 heap snapshot. */
+/**
+ * Nodes of class `name` in a parsed V8 heap snapshot: named exactly `name`, or `name / …`. Chrome's V8 names each
+ * closure context by its scope site (`system / Context / scope @126171`, PR #5189 CI run 42689664479), so an exact
+ * match counted 0 in a 1.3 M-node heap; Node's V8 uses the bare name.
+ */
 export function countSnapshotClass(snap, name) {
   const f = snap.snapshot.meta.node_fields, w = f.length, ni = f.indexOf("name");
-  const strings = snap.strings, nodes = snap.nodes;
+  const strings = snap.strings, nodes = snap.nodes, sub = name + " / ";
+  const hit = new Map();   // per string index: names repeat across nodes, test each once
   let n = 0;
-  for (let i = 0; i < nodes.length; i += w) if (strings[nodes[i + ni]] === name) n++;
+  for (let i = 0; i < nodes.length; i += w) {
+    const k = nodes[i + ni];
+    let h = hit.get(k);
+    if (h === undefined) { const s = strings[k]; h = s === name || s.startsWith(sub); hit.set(k, h); }
+    if (h) n++;
+  }
   return n;
 }
 
