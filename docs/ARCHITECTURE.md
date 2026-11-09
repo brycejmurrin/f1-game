@@ -369,7 +369,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
-| `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
+| `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per local calendar day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
 | `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
 | `car-fields.js` | `CarFields` | tag | CAR FIELDS: pre-declare the fields a car only gains once the frame loop is running. makeCars() (js/game.js) spawns a car with ~176 own fields. |
