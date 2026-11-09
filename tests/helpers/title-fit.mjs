@@ -106,7 +106,8 @@ export function firstFlagsInPage() {
       const k = m.attributeName === "data-density" ? "density" : m.attributeName === "data-shape" ? "shape" : "";
       if (k && !(k in first)) first[k] = document.body.getAttribute(m.attributeName);
     }
-  }).observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ["data-density", "data-shape"] });
+  // `document`, not documentElement: an init script runs at document start, before <html> exists.
+  }).observe(document, { attributes: true, subtree: true, attributeFilter: ["data-density", "data-shape"] });
 }
 
 /** In-page: wait until the fit has settled — the cluster's scroll extent and
