@@ -110,23 +110,20 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   const ov = css("css/touch-controls.css");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "width"), "var(--tap)");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
-  // #5179: CAM and PAUSE are top-band chrome, not driving controls. Both paint ONE height, --hud-chrome-h:
-  // 44 px (48 max with HUD SIZE), never taller than the painted timing strip, floored at 40 — and BUTTON
-  // SIZE (--hud-btn-scale / --tap-hud) never enters it (Bryce's 245 % painted a 97x52 CAM + 52 PAUSE beside
-  // a 43 px strip). PAUSE is a square box, so its coarse-pointer 50 % radius is a true circle.
+  // #5179: CAM and PAUSE are top-band chrome, not driving controls. Both paint ONE constant height,
+  // --hud-chrome-h = 44 px. Neither BUTTON SIZE (Bryce's 245 % painted a 97x52 CAM + 52 PAUSE beside a 43 px
+  // strip) nor HUD SIZE (Bryce 2026-10-17: it must not move or resize a control) may feed it.
   const chrome = ruleFor(ov, /^:is\(#btn-cam, #pausebtn, #campicker\)$/, "--hud-chrome-h");
   assert.ok(chrome, "the CAM/PAUSE chrome size rule exists");
-  const ch = chrome.decls.get("--hud-chrome-h");
-  assert.match(ch, /^max\(40px, min\(48px, calc\(44px \* max\(1, var\(--hud-chrome-z\)\)\), /, "44 px target, 48 px ceiling, 40 px floor");
-  assert.match(ch, /var\(--hud-top-h, [^)]*\)\) \* var\(--hud-chrome-z\)\)\)\)$/, "capped at the timing strip's painted height");
-  assert.doesNotMatch(ch, /--hud-btn-scale|--tap-hud|--hud-btn-z|--hud-z-dock/, "BUTTON SIZE never sizes the pair");
-  assert.equal(chrome.decls.get("--hud-chrome-z"), "var(--hud-z-top, var(--hud-scale, 1))", "the pair rides the strip's own zoom");
-  // Centred on the strip, but the bottom never passes the --tap-hud band every readout below hangs from.
-  assert.match(chrome.decls.get("--hud-chrome-t"), /^min\(calc\(8px \* var\(--hud-chrome-z\) \+ var\(--sat\) \+ .*\/ 2\), calc\(8px \+ var\(--tap-hud\) \+ var\(--sat\) - var\(--hud-chrome-h\)\)\)$/);
+  assert.equal(chrome.decls.get("--hud-chrome-h"), "44px", "a fixed 44 px tap target");
+  assert.equal(chrome.decls.get("--hud-chrome-t"), "calc(8px + var(--sat))", "top-aligned at the safe edge");
+  for (const k of ["--hud-chrome-h", "--hud-chrome-t", "--hud-chrome-gap"])
+    assert.doesNotMatch(chrome.decls.get(k), /--hud-btn-scale|--tap-hud|--hud-btn-z|--hud-z-|--hud-scale|--hud-top-h/, `${k} follows neither BUTTON SIZE nor HUD SIZE`);
   assert.equal(decl(ov, "#pausebtn", "height"), "var(--hud-chrome-h)");
   assert.equal(decl(ov, "#pausebtn", "width"), "var(--hud-chrome-h)", "PAUSE is square: a true circle on touch");
   assert.equal(decl(ov, "#btn-cam", "height"), "var(--hud-chrome-h)", "CAM matches PAUSE's height");
   assert.equal(decl(ov, "#btn-cam", "top"), "var(--hud-chrome-t)");
+  assert.equal(decl(ov, "#pausebtn", "top"), "var(--hud-chrome-t)");
   assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar))", "CAM sits one even gap left of PAUSE");
   assert.doesNotMatch(decl(ov, "#btn-cam", "min-width") + decl(ov, "#btn-cam", "font-size"), /--hud-btn-z/, "CAM's width and label ignore BUTTON SIZE");
   assert.ok(!ov.some((r) => r.decls.has("--tap-btn")), "the BUTTON SIZE > 150 % PAUSE growth is gone");
