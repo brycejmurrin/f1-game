@@ -115,17 +115,6 @@
       "signature": "^spa: previous circuit chunk geometries are still in the render-object set",
       "expires": "2026-11-13",
       "review": "By 2026-11-13, remove this row once the exact test passes without retry on three Metal runs. Platform removes it after a clean week. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
-    },
-    {
-      "spec": "tests/specs/race-cycle-memory.spec.js",
-      "since": "2026-11-09",
-      "owner": "brycejmurrin",
-      "why": "Passed only on retry on the llvmpipe runner: PR #5171 run 42549959777 attempt 1 (head 0023e717, a diff that cannot reach the spec) landed on the title menu mid-race, so the first census read no renderer and no track hooks (#5175). The cause (ctx-loss recovery, stall watchdog or renderer claim reload) is not in that run's artifacts; the spec now fails a reload as 'page reloaded mid-race' with the reload keys and the last warnings. Exempts only that message.",
-      "title": "racing circuit after circuit keeps at most one world in memory",
-      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/42549959777",
-      "signature": "^page reloaded mid-race \\(",
-      "expires": "2026-11-23",
-      "review": "By 2026-11-23: read the reload reason from the next failed attempt (the message carries it) and fix that path, then remove this row; or remove it once the spec passes without retry on five consecutive nightlies. No automatic extension; a further deadline needs a fresh failed-run link. Every other failure message in the spec stays blocking."
     }
   ]
 }
