@@ -288,6 +288,14 @@ const TitleMenu = (function () {
     };
     const dailyBtn = $("mb-daily");
     if (dailyBtn) dailyBtn.onclick = () => G.openDailyPicker();
+    // #5010: an installed app resumed on the title after midnight kept yesterday's DAILY door
+    // while a tap opened today's plan. Repaint when the page comes back and the day has moved.
+    let paintedDay = G.daily && G.daily.dayKey ? G.daily.dayKey() : null;
+    if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible" || !G.daily || !G.daily.dayKey) return;
+      const day = G.daily.dayKey();
+      if (day !== paintedDay) { paintedDay = day; refresh(); }
+    });
 
     return { refresh };
   }

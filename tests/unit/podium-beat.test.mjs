@@ -161,3 +161,20 @@ test("CONTINUE button click finishes the live beat", () => {
   assert.equal(dones[0].reason, "continue");
   assert.equal(results.hidden, false);
 });
+
+// #5064: the real ceremony path (game.js endRace → RaceCeremony meta { sprint, duel, watch })
+// carries no points table, so the head read "Race winner · P1 · 0 points" for every scorer.
+test("the ceremony meta shape (no points table) never reads a scorer's 0 points", () => {
+  const { PodiumBeat, document } = boot();
+  const G = { cssCol: () => "#f00" };
+  PodiumBeat.mount(G, threeCars(1), { sprint: false, duel: false, watch: false }, {});
+  const headText = () => Array.from(document.querySelector('[data-results-part="head"]').children, (n) => n.textContent).join(" | ");
+  const head = { textContent: headText() };
+  assert.ok(head, "story head present");
+  assert.doesNotMatch(head.textContent, /0 points/, "no fake 0 points on the podium beat");
+  assert.match(head.textContent, /P1/, "the position still reads");
+  PodiumBeat.dismount();
+  PodiumBeat.mount(G, threeCars(1), { points: [25, 18, 15] }, {});
+  assert.match(headText(), /P1 · 25 points/, "a real table still prints");
+  PodiumBeat.dismount();
+});

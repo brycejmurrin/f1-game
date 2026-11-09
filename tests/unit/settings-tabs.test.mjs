@@ -232,3 +232,61 @@ test("Back reveal follows reflow until interaction, navigation, focus change or 
     assert.equal(listeners.size, action === "stay" ? 4 : 0, action);
   }
 });
+
+// #4798 settings-lazy gate: row wiring queued at DCL runs on the first enter / pointerdown / keydown / idle, once, in order.
+function lazyWorld(readyState) {
+  const listeners = new Map(), idle = [];
+  const document = {
+    readyState,
+    addEventListener(t, fn) { listeners.set(t, fn); },
+    removeEventListener(t, fn) { if (listeners.get(t) === fn) listeners.delete(t); },
+    getElementById: () => null,
+  };
+  const ctx = vm.createContext({ document, window: {}, Log: { info() {}, warn() {} },
+    requestIdleCallback: (fn) => idle.push(fn), setTimeout });
+  vm.runInContext(source, ctx);
+  return { Nav: ctx.SettingsNav, listeners, idle };
+}
+
+test("SettingsNav.lazy: a complete document runs the initialiser at once", () => {
+  const { Nav } = lazyWorld("complete");
+  let ran = 0;
+  Nav.lazy(() => { ran++; });
+  assert.equal(ran, 1);
+});
+
+for (const trigger of ["pointerdown", "keydown", "idle", "flush"]) {
+  test(`SettingsNav.lazy: queued while interactive, flushed once in order by ${trigger}`, () => {
+    const { Nav, listeners, idle } = lazyWorld("interactive");
+    const order = [];
+    Nav.lazy(() => order.push("a"));
+    Nav.lazy(() => { throw new Error("one bad row"); });
+    Nav.lazy(() => order.push("b"));
+    assert.deepEqual(order, [], "nothing runs in the DCL task");
+    if (trigger === "idle") idle[0]();
+    else if (trigger === "flush") Nav.flushLazy();
+    else listeners.get(trigger)();
+    assert.deepEqual(order, ["a", "b"], "a throwing initialiser does not stop the rest");
+    assert.equal(listeners.has("pointerdown") || listeners.has("keydown"), false, "the capture listeners detach");
+    Nav.flushLazy(); if (idle[0]) idle[0]();
+    assert.deepEqual(order, ["a", "b"], "never twice");
+    let late = 0;
+    Nav.lazy(() => { late++; });
+    Nav.flushLazy();
+    assert.equal(late, 1, "a registration after the flush queues again and runs on the next trigger");
+  });
+}
+
+test("SettingsNav.lazy: the first Settings page enter flushes before other enter handlers", () => {
+  const src = fs.readFileSync(new URL("../../js/ui/settings-tabs.js", import.meta.url), "utf8");
+  const first = src.indexOf("enterFns.push(");
+  assert.ok(first > 0 && src.slice(first, first + 40).startsWith("enterFns.push(flushLazy)"), "flushLazy is the first enter subscriber");
+});
+
+test("SettingsNav.lazy: the audited Settings-only initialisers go through the gate (#4798)", () => {
+  for (const f of ["js/camera/cockpit-finishes.js", "js/camera/feel.js", "js/ui/driving-line-opts.js", "js/ui/a11y-opts.js",
+    "js/ui/debris-opts.js", "js/ui/post-fx-opts.js", "js/track/build-client.js", "js/xr/xr-opts.js"]) {
+    const src = fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
+    assert.match(src, /SettingsNav\.lazy\(initUI\); else initUI\(\);/, f + " wires its rows through SettingsNav.lazy");
+  }
+});
