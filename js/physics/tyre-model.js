@@ -213,6 +213,15 @@ const TyreModel = (function () {
   const W_KERB = 0.35;
   const W_OFF = 1.20;
   const LOAD_MIN = 0.20, LOAD_MAX = 3.0;
+  // OFF-ROAD IS ONE PRICE FOR EVERY CAR (#4936). W_OFF used to sit inside each path's
+  // clamp, before that path's own divisor, so a metre of grass cost the player
+  // W_OFF/LOAD_REF = 2.45 load units and the AI W_OFF/LOAD_AI_REF = 0.98: the
+  // player's stint paid ~2.5x for the same excursion. It is now added AFTER the
+  // divide, on the shared normalised scale, at the player's existing price, so the
+  // player's load is unchanged to the bit and the AI pays the same for the same grass.
+  // LOAD_MAX_N is the player's old ceiling on that scale, shared by both paths.
+  const W_OFF_N = W_OFF / LOAD_REF;
+  const LOAD_MAX_N = LOAD_MAX / LOAD_REF;
 
   // Squared, not linear, for two reasons: tyre energy is not linear in load, and
   // it is what makes a tidy lap materially cheaper than a scrappy one — the
@@ -222,8 +231,8 @@ const TyreModel = (function () {
     const lng = clamp(fin(c.axFrac, 0), 0, 1);
     const slide = clamp(fin(c.skidIntensity, 0), 0, 1);
     const raw = clamp(LOAD_IDLE + W_LAT * lat * lat + W_LONG * lng * lng + W_SLIDE * slide
-      + (c.onKerb ? W_KERB : 0) + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX);
-    return raw / LOAD_REF;
+      + (c.onKerb ? W_KERB : 0), LOAD_MIN, LOAD_MAX);
+    return Math.min(LOAD_MAX_N, raw / LOAD_REF + (c.offroad ? W_OFF_N : 0));
   }
 
   // The AI has no slip angle to read, so its lateral term is implicit: a car
@@ -275,8 +284,8 @@ const TyreModel = (function () {
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
     const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
-    return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
-      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
+    return Math.min(LOAD_MAX_N, clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng,
+      LOAD_MIN, LOAD_MAX) / LOAD_AI_REF + (c.offroad ? W_OFF_N : 0));
   }
 
   // ── GRIP ──────────────────────────────────────────────────────────────────
