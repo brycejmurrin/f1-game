@@ -10728,6 +10728,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
+        "tests/unit/scale-defaults.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "*": [
