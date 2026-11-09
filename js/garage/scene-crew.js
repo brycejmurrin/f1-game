@@ -2,10 +2,9 @@
    drive-out. Two mechanics beside the car's nose who step back as the shutter
    lifts, and a lollipop man out in the working lane on the camera's side who
    holds his board across the car's path and lifts it as the car rolls. Built
-   from GarageCrewDraw.body (Blender-authored lofts), in the active livery's overalls, and
-   drawn only while a pose is playing — a parked setup preview has no crew.
-   Optional service playback adds four blanket handlers and a front-jack operator.
-   Split out of scene.js (the ratchet); GarageScene.draw calls draw(). */
+   from GarageCrewDraw.body (Blender-authored lofts), in the active livery's
+   overalls, and drawn only while a pose is playing — a parked setup preview has
+   no crew. GarageScene.draw calls draw(). */
 const GarageCrew = (function () {
   "use strict";
   const { block, tube, rgb } = GaragePrims;
@@ -25,8 +24,8 @@ const GarageCrew = (function () {
   // loft: chin bar, visor, crown stripe, trim neck roll); +z is forward.
   function helmet(out, H, c1, c2) { return GarageCrewDraw.body.helmet(out, H, c1, c2); }
 
-  /* Crew LOOKS (B·G2, 2026-10-19): alternative crews, picked on the setup
-   * sheet's CREW row (GarageCrew.setLook(id), saved as apex26.crewLook).
+  /* Crew LOOKS: alternative crews, picked on the setup sheet's CREW row
+   * (GarageCrew.setLook(id), saved as apex26.crewLook).
    * "classic" (the default) is two mechanics and the lollipop man, standing.
    * "sculpted" draws GarageCrewMotion articulated guides (no baked look mesh);
    * pitstop / workshop / welcome bake posed figures + props into ONE static
@@ -103,8 +102,6 @@ const GarageCrew = (function () {
     tube(out, [0, sy - 0.06, 1.46], [0, 0.07, 1.36], 0.03, JACK, 6);                 // its leg to the axle
     for (const s of [-1, 1]) tube(out, [s * 0.17, 0.07, 1.36], [s * 0.23, 0.07, 1.36], 0.07, RUBBER, 10);
   }
-  // A tyre about centre c, half-width ax along x (on the car) or along z (held
-  // face-on toward the hub, the way the tyre-on man offers it).
   // THE DRAWN NOSE for the car in the bay: Car3D's tip station moved by the
   // body style (styledNoseStations' tip rule), so the front jack's saddle is
   // seated under THIS chassis' nose. y is the station centre, h its full height.
@@ -139,10 +136,14 @@ const GarageCrew = (function () {
     tube(out, [0, py, pz], [0, 0.07, pz + 0.06], 0.026, JACK, 6);              // the frame to the axle
     for (const s of [-1, 1]) tube(out, [s * 0.10, 0.07, pz + 0.06], [s * 0.16, 0.07, pz + 0.06], 0.07, RUBBER, 10);
     const hz = pz + 1.06;
-    if (handle) tube(out, [0, py, pz], [0, 0.92, hz], 0.03, ALLOY, 8);                     // the long handle
-    if (handle) block(out, 0, 0.92, hz, 0.16, 0.025, 0.025, JACK);                         // its T-bar
+    if (handle) {
+      tube(out, [0, py, pz], [0, 0.92, hz], 0.03, ALLOY, 8);                   // the long handle
+      block(out, 0, 0.92, hz, 0.16, 0.025, 0.025, JACK);                       // its T-bar
+    }
     return hz;
   }
+  // A tyre about centre c, half-width ax along x (on the car) or along z (held
+  // face-on toward the hub, the way the tyre-on man offers it).
   function tyre(out, c, ax, blanket, mark, alongZ) {
     const at = (w) => alongZ ? [c[0], c[1], c[2] + w] : [c[0] + w, c[1], c[2]];
     const a = at(-ax), b = at(ax);
@@ -155,7 +156,10 @@ const GarageCrew = (function () {
       tube(out, at(-(ax - 0.01)), at(ax + 0.01), 0.2, ALLOY, 12);
     }
   }
-  function tablet(out) { block(out, 0.02, 1.15, 0.33, 0.13, 0.085, 0.012, VISOR); block(out, 0.02, 1.15, 0.342, 0.11, 0.07, 0.002, [0.25, 0.45, 0.7]); }
+  function tablet(out) {
+    block(out, 0.02, 1.15, 0.33, 0.13, 0.085, 0.012, VISOR);
+    block(out, 0.02, 1.15, 0.342, 0.11, 0.07, 0.002, [0.25, 0.45, 0.7]);   // the screen
+  }
   // Copy `src` into `dst` turned by yaw about y and moved to (x, y, z).
   function place(dst, src, x, y, z, yaw) {
     const c = Math.cos(yaw), s = Math.sin(yaw), base = dst.pos.length / 3;
@@ -175,27 +179,28 @@ const GarageCrew = (function () {
     place(dst, f, x, 0, z, yaw);
   }
   const FACE_X = (s) => s > 0 ? -Math.PI / 2 : Math.PI / 2;   // a figure at side s facing the car's centreline
+  const SOFT_MARK = [0.95, 0.80, 0.10], MEDIUM_MARK = [0.95, 0.95, 0.95];
+  const WHEELS = [[0.79, 1.7], [-0.79, 1.7], [0.76, -1.6], [-0.76, -1.6]];
+  const heldTyre = (blanket) => (o) => tyre(o, [0, 0.88, 0.5], 0.17, blanket, SOFT_MARK, true);
   // THE LOOKS: who stands where, holding what (bay metres, car parked at 0,0).
   function buildLook(id, c1, c2, nose) {
-    const m = acc(), soft = [0.95, 0.80, 0.10], med = [0.95, 0.95, 0.95];
-    const wheels = [[0.79, 1.7], [-0.79, 1.7], [0.76, -1.6], [-0.76, -1.6]];
+    const m = acc();
     if (id === "pitstop") {
-      for (const [wx, wz] of wheels) {
+      for (const [wx, wz] of WHEELS) {
         const s = Math.sign(wx);
         person(m, c1, c2, "kneel", wx + s * 1.05, wz, FACE_X(s), wheelGun);                // gunner
-        person(m, c1, c2, "carry", wx + s * 1.25, wz + (wz > 0 ? 0.95 : -0.95), FACE_X(s),
-          (o) => tyre(o, [0, 0.88, 0.5], 0.17, false, soft, true));                                            // tyre on
+        person(m, c1, c2, "carry", wx + s * 1.25, wz + (wz > 0 ? 0.95 : -0.95), FACE_X(s), heldTyre(false));   // tyre on
         person(m, c1, c2, "stand", wx + s * 1.55, wz + (wz > 0 ? -0.9 : 0.9), FACE_X(s));    // tyre off
       }
       person(m, c1, c2, "jack", 0, frontJack(m, nose) + 0.52, Math.PI);                 // hands on the T-bar
       person(m, c1, c2, "jack", 0, -2.69 - 1.62, 0, (o) => jack(o, 0.34));             // crash structure
       for (const s of [-1, 1]) person(m, c1, c2, "crouch", s * 1.35, 0.1, FACE_X(s));        // stabilisers
     } else if (id === "workshop") {
-      for (const [wx, wz] of wheels) tyre(m, [wx, 0.36, wz], 0.215, true, wz > 0 ? soft : med);       // blankets on, resting on the floor
+      for (const [wx, wz] of WHEELS) tyre(m, [wx, 0.36, wz], 0.215, true, wz > 0 ? SOFT_MARK : MEDIUM_MARK);   // blankets on, resting on the floor
       person(m, c1, c2, "lean", 1.25, 0.3, -Math.PI / 2);                                        // in the cockpit
       person(m, c1, c2, "crouch", -1.55, 1.9, Math.PI / 2);                                      // at the front corner
       person(m, c1, c2, "tablet", -2.4, -1.4, Math.PI / 2 - 0.5, tablet);                        // engineer
-      person(m, c1, c2, "carry", 2.6, -2.8, -Math.PI / 2 - 0.6, (o) => tyre(o, [0, 0.88, 0.5], 0.17, true, soft, true));
+      person(m, c1, c2, "carry", 2.6, -2.8, -Math.PI / 2 - 0.6, heldTyre(true));
       person(m, c1, c2, "stand", 3.6, 2.2, -Math.PI / 2 - 0.4);
     } else if (id === "welcome") {
       for (const s of [-1, 1]) for (let i = 0; i < 3; i++)
@@ -214,12 +219,12 @@ const GarageCrew = (function () {
         key[4] === c2[0] && key[5] === c2[1] && key[6] === c2[2] && key[7] === nose.z && key[8] === noseY) return;
     free();
     key = [style, ...c1, ...c2, nose.z, noseY];
-    const classic = style === "classic", J = joints("stand");
+    const J = joints("stand");
     const m = acc(); rig(m, J, c1, c2, false);
     mechMesh = gfx.createMesh(m);
     const b = acc(); rig(b, J, c1, c2, true);
     bodyMesh = gfx.createMesh(b);
-    const L = classic ? null : buildLook(style, c1, c2, nose);
+    const L = style === "classic" ? null : buildLook(style, c1, c2, nose);
     lookMesh = L && L.idx.length ? gfx.createMesh(L) : null;
     // The lollipop: arm and pole along local +x from the shoulder, the round
     // board at the end facing ±z (toward the car), raised by a turn about z.
@@ -261,9 +266,10 @@ const GarageCrew = (function () {
   function layout(pose, cam) {
     const back = ease(pose.door), out = pose.z > 0.3 || Math.abs(pose.x || 0) > 0.3;
     const mx = MECH_X0 + (MECH_X1 - MECH_X0) * back, mz = MECH_Z0;
+    const raise = Number.isFinite(pose.crewClear) ? LOWERED + (RAISED - LOWERED) * pose.crewClear : out ? RAISED : LOWERED;
     return {
       mechanics: [[-mx, mz, Math.PI / 2], [mx, mz, -Math.PI / 2]],      // [x, z, yaw]: facing the car
-      lollipop: { x: cam * LOLLI_X, z: LOLLI_Z, yaw: cam > 0 ? Math.PI : 0, raise: Number.isFinite(pose.crewClear) ? LOWERED + (RAISED - LOWERED) * pose.crewClear : out ? RAISED : LOWERED },
+      lollipop: { x: cam * LOLLI_X, z: LOLLI_Z, yaw: cam > 0 ? Math.PI : 0, raise },
     };
   }
   function init(g) {
@@ -278,16 +284,19 @@ const GarageCrew = (function () {
     }
     return look;
   }
+  // A pose's crew override picks the style for that animation only; it never
+  // changes the saved Team-tab look.
+  const POSE_STYLE = Object.freeze({ __proto__: null, service: "service", guides: "sculpted", welcome: "welcome" });
   // teamId (optional): the car's team, so the pit-stop jack seats on its nose.
   function draw(liv, eye, pose, opts, teamId) {
     if (!gfx || !pose || pose.crew === "none") return;
-    // Per-direction animation choices never change the saved Team-tab crew.
+    const o = opts || OPTS;
     const choreo = typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has(pose.crew);
-    const style = choreo ? "choreo" : pose.crew === "service" ? "service" : pose.crew === "guides" ? "sculpted" : pose.crew === "welcome" ? "welcome" : look;
+    const style = choreo ? "choreo" : POSE_STYLE[pose.crew] || look;
     build(liv, teamId, style);
     const L = layout(pose, eye && eye[0] > 0 ? 1 : -1);
     // A Blender variant (GarageCrewChoreo) is the whole crew bar the lollipop.
-    if (choreo && motionRig) GarageCrewChoreo.draw(motionRig, choreoProps, gfx, pose.crew, pose.seconds || 0, pose.side, pose.seconds || 0, !!pose.calm, opts || OPTS);
+    if (choreo && motionRig) GarageCrewChoreo.draw(motionRig, choreoProps, gfx, pose.crew, pose.seconds || 0, pose.side, pose.seconds || 0, !!pose.calm, o);
     else {
       const moving = Math.abs(pose.z || 0) > 1e-6 || Math.abs(pose.x || 0) > 1e-6;
       // Service tools and people leaning into the cockpit belong to a parked
@@ -296,17 +305,17 @@ const GarageCrew = (function () {
       if (guides)
         for (let i = 0; i < L.mechanics.length; i++) {
           const p = L.mechanics[i];
-          if (motionRig) GarageCrewMotion.draw(motionRig, gfx, p[0], p[1], p[2], pose, i, opts || OPTS);
-          else gfx.draw(mechMesh, mk(p[0], 0, p[1], p[2], 0), opts || OPTS);
+          if (motionRig) GarageCrewMotion.draw(motionRig, gfx, p[0], p[1], p[2], pose, i, o);
+          else gfx.draw(mechMesh, mk(p[0], 0, p[1], p[2], 0), o);
         }
-      if (serviceRig && motionRig) GarageCrewService.draw(serviceRig, motionRig, gfx, pose, opts || OPTS);
-      if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), opts || OPTS);
+      if (serviceRig && motionRig) GarageCrewService.draw(serviceRig, motionRig, gfx, pose, o);
+      if (lookMesh && !guides) gfx.draw(lookMesh, mk(0, 0, 0, 0, 0), o);
     }
     const lp = L.lollipop;
-    gfx.draw(bodyMesh, mk(lp.x, 0, lp.z, lp.yaw + Math.PI, 0), opts || OPTS);   // facing the garage
+    gfx.draw(bodyMesh, mk(lp.x, 0, lp.z, lp.yaw + Math.PI, 0), o);   // facing the garage
     // The pole from the right shoulder, across the car's path, lifted by `raise`.
     const sx = lp.x + (lp.yaw === 0 ? 0.25 : -0.25);
-    gfx.draw(poleMesh, mk(sx, 1.38, lp.z, lp.yaw, lp.raise), opts || OPTS);
+    gfx.draw(poleMesh, mk(sx, 1.38, lp.z, lp.yaw, lp.raise), o);
   }
   return Object.freeze({ init, draw, layout, free, setLook, noseTip, helmet, look: () => look, LOOKS, RAISED, LOWERED });
 })();
