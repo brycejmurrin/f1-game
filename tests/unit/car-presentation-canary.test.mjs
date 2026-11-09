@@ -42,12 +42,23 @@ test("render interpolates world px/pz for every car, not only humans", () => {
 // every stamp-gate term true and an empty batch). World state, not a draw.
 test("the player's skid stamp precedes the cockpit-rig continue", () => {
   const game = read("js/game.js");
-  const stamp = game.indexOf("skids.stamp(tmpMat,");
+  const stamp = game.indexOf("skids.stamp(_groundMat,");
   // The branch also carries the VISOR eye (no rig, no body) since 2026-09-28.
   const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
   assert.ok(stamp > 0 && cockpit > 0, "both sites present");
   assert.ok(stamp < cockpit, `skids.stamp at ${stamp} must come before the cockpit branch at ${cockpit}`);
   assert.equal(game.split("skids.stamp(").length - 1, 1, "one stamp site");
+});
+
+// #4751 row 13: the heat-haze anchor is world state. Marked after the side-frustum
+// `continue`, an off-screen anchor car never refreshed it and at() went null (haze blink).
+test("the heat-haze mark precedes the rival frustum cull", () => {
+  const game = read("js/game.js");
+  const mark = game.indexOf("carFx.haze.mark(c, tmpMat);");
+  const cull = game.indexOf("if (!c.isPlayer && _carCullPlanes) {");
+  assert.ok(mark > 0 && cull > 0, "both sites present");
+  assert.ok(mark < cull, `haze.mark at ${mark} must come before the frustum cull at ${cull}`);
+  assert.equal(game.split("carFx.haze.mark(").length - 1, 1, "one haze mark site");
 });
 
 test("xVis is a dump field — render and shadows do not damp it", () => {

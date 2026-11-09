@@ -7980,6 +7980,7 @@ function render(dt) {
     // drawPlayerWheels lifts by the same number off _groundMat.
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
+    carFx.haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8006,9 +8007,8 @@ function render(dt) {
     // smoke/sparks/kickup/spray. Camera-independent: none of these is a draw.
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
+      skids.stamp(_groundMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
     }
-    carFx.haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE
     // because the car's world basis (tmpMat / tmpP / tmpF / tmpR) is already
