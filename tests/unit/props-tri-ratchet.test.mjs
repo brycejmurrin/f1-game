@@ -54,6 +54,10 @@ const require = createRequire(import.meta.url);
 // fence line and the hidden-face strip deleted the enclosed run, so the growth
 // is authored barrier coming back into view (korea: +4830 of +7154 from
 // structures.js guardrail/fence instances), not new geometry.
+// 2026-11-09 (#4967): curveTier's curve cap had the bend sign inverted, so tier rows on the OUTSIDE of a
+// bend were cut short (gaps) and inside rows were not. Rows on the outside now run their full chord, which
+// keeps rows that were dropped under 1 m and lengthens crowd bands (speckle per ~6 m). Measured, not widened:
+// abudhabi 283451 -> 285519 (+0.73 %), catalunya 187691 -> 188873 (+0.63 %), jerez 202989 -> 205360 (+1.17 %).
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
