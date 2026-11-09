@@ -825,7 +825,9 @@ const TrackDesigner = (function () {
       try {
         const cs = getComputedStyle(document.documentElement);
         const k = (parseFloat(cs.getPropertyValue("--ui-scale")) || 1) * (parseFloat(cs.getPropertyValue("--look-designer-size")) || 1);
-        tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
+        // The layout viewport (UI contract 2026-11-06 rule 1): inner* can still hold the portrait pair on a Home Screen landscape launch.
+        const de = document.documentElement, vw = de.clientWidth > 0 ? de.clientWidth : innerWidth, vh = de.clientHeight > 0 ? de.clientHeight : innerHeight;
+        tuck = vw > vh && vh / k <= 600 && vw / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
       const home = tuck ? body : root;
       if (foot.parentNode !== home) {   // a no-op re-append can drop focus from SAVE/RACE

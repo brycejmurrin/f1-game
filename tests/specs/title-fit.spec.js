@@ -20,7 +20,7 @@
 // does; the band's other candidate — the sticky utility-row scrim #menu-buttons
 // paints only as a scroller (.sf-scroll) — cannot appear once nothing scrolls.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { GEOS, profiles, sweep, settleInPage, measureInPage, judge } from "../helpers/title-fit.mjs";
+import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
 
 const SETTLE_FRAMES = 12;
 
@@ -100,3 +100,39 @@ for (const geo of GEOS) {
     }
   });
 }
+
+// STALE LAUNCH — the iOS Home Screen app opened in landscape (#5167 part E). CSS lays out 852x393
+// while innerWidth/innerHeight still hold 393x852 and no resize ever follows. Measured 2026-11-09
+// (Chromium, DPR 3, insets 59/21/59, Bryce's export): the pre-paint boot and SheetShape classify
+// body compact + wide from the ICB either way (#5152), but the keyboard band read
+// `innerHeight − visualViewport.height` = 852 − 393 = 459 and wrote --kb: 459px — every .screen
+// opened from the title carried 459 px of padding-bottom in a 393 px window. The band's minuend is
+// the ICB now; this cell holds both: the flags the first paint got and no band, under both stale
+// shapes (visualViewport right while inner* lies, and the strict iOS case where both lie).
+test.describe("title fit stale landscape launch 852x393-standalone", () => {
+  const geo = GEOS[0];
+  test.use({ viewport: { width: geo.w, height: geo.h }, hasTouch: true, isMobile: true });
+
+  for (const stale of [{ name: "inner* stale, visualViewport right", vv: false }, { name: "inner* and visualViewport stale", vv: true }]) {
+    test(`boots the export with ${stale.name}: ICB flags, no keyboard band, no scroll`, async ({ page }) => {
+      test.setTimeout(150_000);
+      const prof = profiles().find((p) => p.name === "export");
+      await insets(page, geo.insets);
+      await seed(page, prof.store);
+      await page.addInitScript(firstFlagsInPage);
+      await page.addInitScript(staleLaunchInPage, { w: geo.h, h: geo.w, vv: stale.vv });
+      await bootTitle(page);
+      // The band latched at SheetShape.init's own first ask (the broken tree wrote --kb before
+      // the title was interactive), so the boot wait above is the window; measure() then settles the fit.
+      const { frames, m } = await measure(page);
+      expect(frames, "the fit settled").toBeGreaterThan(0);
+      const first = await page.evaluate(() => ({ ...window.__apexFirstFlags, inner: [innerWidth, innerHeight], icb: [document.documentElement.clientWidth, document.documentElement.clientHeight] }));
+      expect(first.inner, "precondition: the stale pair held").toEqual([geo.h, geo.w]);
+      expect(first.icb, "precondition: CSS laid out landscape").toEqual([geo.w, geo.h]);
+      expect(first, "the FIRST paint classified from the ICB").toMatchObject({ density: "compact", shape: "wide" });
+      expect({ density: m.density, shape: m.shape }, "and SheetShape kept it").toEqual({ density: "compact", shape: "wide" });
+      expect(m.kb, "no phantom keyboard band from the stale innerHeight").toBeNull();
+      expect(judge(m, { offsets: prof.offsets }), `${geo.name} stale launch: ${JSON.stringify({ fit: m.fit, mb: m.mb, ov: m.ov })}`).toEqual([]);
+    });
+  }
+});

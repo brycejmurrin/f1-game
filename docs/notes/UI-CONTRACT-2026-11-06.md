@@ -283,7 +283,7 @@ rest, classified by WHEN they read:
 | js/ui/menu-nav.js:121,611 | wheel / D-pad | none (relative) | — |
 | js/ui/select-screen.js:1540-1550 | map fit, prefers `clientWidth` | fallback only | — |
 | js/ui/title-layout.js:451,511-512 | drag editor | editor-time; #5152's file | — |
-| js/ui/sheet-shape.js:557-564 keyboard `--kb` | vv resize | by design (`inner* − vv.height`) | keep |
+| js/ui/sheet-shape.js watchKeyboard `--kb` | vv resize | `innerHeight − vv.height` latched 459 px when only `inner*` was stale at a landscape launch (measured 2026-11-09, #5167 part E) | minuend = ICB (`viewportPx()`), landed with #5167 E |
 | js/data/telemetry-view.js:15-33 | popup open | raw px into a zoomed card | divide by zoom / card box |
 | js/input/input.js:1185 `_viewLong = max(w, h)` | boot | orientation-free by construction | keep |
 

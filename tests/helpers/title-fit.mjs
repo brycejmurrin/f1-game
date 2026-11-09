@@ -81,6 +81,34 @@ export function sweep() {
   return cells;
 }
 
+/** Init script: the iOS Home Screen LANDSCAPE LAUNCH (#5152's finding, #5167 part E). The app opens
+ *  with CSS already laying out landscape while innerWidth/innerHeight still hold the PORTRAIT pair,
+ *  and no resize follows. `vv` also holds visualViewport on the stale pair (the strict iOS case);
+ *  without it the visual viewport is right and only inner* lies, which is the pair that latched
+ *  --kb. Pass as page.addInitScript(staleLaunchInPage, { w, h, vv }) with the PORTRAIT w × h. */
+export function staleLaunchInPage({ w, h, vv }) {
+  Object.defineProperty(window, "innerWidth", { configurable: true, get() { return w; } });
+  Object.defineProperty(window, "innerHeight", { configurable: true, get() { return h; } });
+  if (vv && window.visualViewport) {
+    Object.defineProperty(window.visualViewport, "width", { configurable: true, get() { return w; } });
+    Object.defineProperty(window.visualViewport, "height", { configurable: true, get() { return h; } });
+  }
+}
+
+/** Init script: record the FIRST body[data-density] / [data-shape] the page paints with — the inline
+ *  pre-paint boot's answer, before SheetShape re-asks. Read back as window.__apexFirstFlags. */
+export function firstFlagsInPage() {
+  const first = {};
+  window.__apexFirstFlags = first;
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      if (m.target !== document.body) continue;
+      const k = m.attributeName === "data-density" ? "density" : m.attributeName === "data-shape" ? "shape" : "";
+      if (k && !(k in first)) first[k] = document.body.getAttribute(m.attributeName);
+    }
+  }).observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ["data-density", "data-shape"] });
+}
+
 /** In-page: wait until the fit has settled — the cluster's scroll extent and
  *  fit tokens unchanged for `frames` frames in a row (ResizeObserver and the
  *  rAF-coalesced fit both run per frame). Returns the frames it took. */
@@ -116,8 +144,11 @@ export function measureInPage() {
     doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, hit: !!hit && (hit === b || b.contains(hit)) });
   }
   const de = document.documentElement;
+  // The viewport is the ICB (UI contract 2026-11-06 rule 1): what every tier reads and what
+  // `fixed; inset: 0` spans. inner* sits beside it so a stale-launch disagreement is visible.
   return {
-    vw: innerWidth, vh: innerHeight, shape: document.body.dataset.shape, density: document.body.dataset.density,
+    vw: de.clientWidth, vh: de.clientHeight, inner: [innerWidth, innerHeight],
+    shape: document.body.dataset.shape, density: document.body.dataset.density, kb: de.style.getPropertyValue("--kb") || null,
     uiScale: getComputedStyle(de).getPropertyValue("--ui-scale").trim(),
     tl: { layout: de.dataset.titleLayout, btns: de.dataset.titleBtns, btnw: de.dataset.titleBtnw, side: de.dataset.titleSide },
     fit: { mb: mb.style.getPropertyValue("--tf"), mbDx: mb.style.getPropertyValue("--tf-dx"), mbDy: mb.style.getPropertyValue("--tf-dy"), br: br.style.getPropertyValue("--tf"), brDy: br.style.getPropertyValue("--tf-dy") },
