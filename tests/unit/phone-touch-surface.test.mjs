@@ -110,39 +110,45 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   const ov = css("css/touch-controls.css");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "width"), "var(--tap)");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
-  // CAM and PAUSE share effective BUTTON SIZE independently of HUD bands;
-  // the minimum zoom of 1 protects the top controls' --tap rung. The restore
-  // eye stays on --tap itself.
-  // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
-  // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
-  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn grows DOWN past 150 %, floored at the band");
-  assert.equal(decl(ov, "#pausebtn", "width"), "var(--tap-hud)", "#pausebtn never widens: the top row keeps its width (640x360 BEST × CAM)");
-  assert.equal(decl(ov, "#btn-cam", "height"), "var(--tap-hud)", "#btn-cam keeps the --tap-hud band height");
-  assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--tap-hud) + 4px + var(--sar))", "CAM stays where it was: PAUSE does not widen");
+  // #5179: CAM and PAUSE are top-band chrome, not driving controls. Both paint ONE constant height,
+  // --hud-chrome-h = 44 px. Neither BUTTON SIZE (Bryce's 245 % painted a 97x52 CAM + 52 PAUSE beside a 43 px
+  // strip) nor HUD SIZE (Bryce 2026-10-17: it must not move or resize a control) may feed it.
+  const chrome = ruleFor(ov, /^:is\(#btn-cam, #pausebtn, #campicker\)$/, "--hud-chrome-h");
+  assert.ok(chrome, "the CAM/PAUSE chrome size rule exists");
+  assert.equal(chrome.decls.get("--hud-chrome-h"), "44px", "a fixed 44 px tap target");
+  assert.equal(chrome.decls.get("--hud-chrome-t"), "calc(8px + var(--sat))", "top-aligned at the safe edge");
+  for (const k of ["--hud-chrome-h", "--hud-chrome-t", "--hud-chrome-gap"])
+    assert.doesNotMatch(chrome.decls.get(k), /--hud-btn-scale|--tap-hud|--hud-btn-z|--hud-z-|--hud-scale|--hud-top-h/, `${k} follows neither BUTTON SIZE nor HUD SIZE`);
+  assert.equal(decl(ov, "#pausebtn", "height"), "var(--hud-chrome-h)");
+  assert.equal(decl(ov, "#pausebtn", "width"), "var(--hud-chrome-h)", "PAUSE is square: a true circle on touch");
+  assert.equal(decl(ov, "#btn-cam", "height"), "var(--hud-chrome-h)", "CAM matches PAUSE's height");
+  assert.equal(decl(ov, "#btn-cam", "top"), "var(--hud-chrome-t)");
+  assert.equal(decl(ov, "#pausebtn", "top"), "var(--hud-chrome-t)");
+  assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar))", "CAM sits one even gap left of PAUSE");
+  assert.doesNotMatch(decl(ov, "#btn-cam", "min-width") + decl(ov, "#btn-cam", "font-size"), /--hud-btn-z/, "CAM's width and label ignore BUTTON SIZE");
+  assert.ok(!ov.some((r) => r.decls.has("--tap-btn")), "the BUTTON SIZE > 150 % PAUSE growth is gone");
+  // …and fitHud's side cap still budgets the OLD --tap-hud footprint (PAUSE 44 x btn-z, CAM >= 76 x btn-z beside
+  // it): a freed band grew the tower into the lifted sector plate at HUD 155 / BUTTON 245 (hud-layout, #5179).
+  assert.match(fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8"), /pauseL = pR && pR\.width \? pR\.right - 44 \* bz : Infinity;[\s\S]{0,400}Math\.max\(76, r\.width\) \* bz/);
   // LEFT-HANDED: #dock-right paints on the left, so it is the dock TYRES hangs from; the fit picks docks by side.
   const hc = css("css/hud.css");
   assert.ok(hc.some((r) => /body\.mirror-controls:not\(\.desktop\) #dock-right/.test(r.selector) && r.decls.get("anchor-name") === "--apex-dock-left"), "mirror re-points the TYRES anchor");
   assert.match(fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8"), /function pickDocks\(\)[^\n]*mirror-controls/, "hud.js picks the docks by painted side");
   // A TOUCH steer that starts on the radio card or start lights reaches the canvas; ARRANGE HUD still grabs the card.
   assert.equal(decl(hc, "body:not([data-hud-arrange]) :is(#lights, #announce)", "pointer-events"), "none");
-  const tb = decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--tap-btn");
-  assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
-  assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
-  assert.equal(decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--hud-btn-zt"),
-    "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
   const topZoom = decl(hudCss, ":root", "--hud-btn-z");
   assert.equal(topZoom, "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5)",
-    "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
+    "the --tap-hud band (what readouts below CAM/PAUSE hang from) shares the effective dock cap");
   assert.doesNotMatch(topZoom, /--hud-(?:scale|z-top|z-bot)\b/,
-    "top controls must not depend on a HUD readout scale or fitted band");
+    "the band must not depend on a HUD readout scale or fitted band");
   // --tap-hud is defined on :root, so test its actual base rung rather than
   // assuming it inherits the larger touch-body --tap. The outer clamp's
   // minimum of 1 above protects this rung even when dock fitting goes below 1.
   const chromeTap = rung(decl(css("css/tokens.css"), ":root", "--tap"), "root chrome --tap");
-  assert.ok(chromeTap >= 44, `CAM/PAUSE retain a ${chromeTap}px base target, never under 44px`);
+  assert.ok(chromeTap >= 44, `the --tap-hud band keeps a ${chromeTap}px base, never under 44px`);
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
@@ -384,7 +390,9 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   assert.ok(bar, "#hud-dock is positioned in landscape");
   assert.match(bar.decls.get("left"), /var\(--sal\)/); assert.match(bar.decls.get("right"), /var\(--sar\)/); assert.match(bar.decls.get("bottom"), /var\(--sab\)/);
   for (const id of ["#pausebtn", "#btn-cam", "#hud-restore"]) {
-    assert.match(decl(ov, id, "top"), /var\(--sat\)/, `${id} top clears the notch`);
+    // CAM/PAUSE read their top through --hud-chrome-t (#5179), whose every arm carries --sat.
+    const top = decl(ov, id, "top") === "var(--hud-chrome-t)" ? ruleFor(ov, /^:is\(#btn-cam, #pausebtn, #campicker\)$/, "--hud-chrome-t").decls.get("--hud-chrome-t") : decl(ov, id, "top");
+    for (const arm of top.startsWith("min(") ? top.split("), calc(") : [top]) assert.match(arm, /var\(--sat\)/, `${id} top clears the notch`);
     assert.match(decl(ov, id, "right"), /var\(--sar\)/, `${id} right clears the notch`);
   }
   // The portrait ladder (RACE IN PORTRAIT) anchors on the same insets.

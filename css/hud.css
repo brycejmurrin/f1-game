@@ -64,8 +64,8 @@
      behind the published cap under CI load → fitHud flipped caps. */
   transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
 }
-/* CAM / PAUSE share the dock's effective BUTTON SIZE, capped at 150%.
-   Readouts clear their measured rectangles independently of HUD scale. */
+/* --tap-hud: the top-right BAND readouts hang from (effective BUTTON SIZE, capped 150%). CAM / PAUSE paint
+   --hud-chrome-h inside it, capped at the timing strip (css/touch-controls.css, #5179). */
 :root {
   --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
