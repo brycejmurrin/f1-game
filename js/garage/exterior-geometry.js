@@ -2,9 +2,12 @@
 const GarageExteriorGeometry = (function () {
   "use strict";
   const MAX_VERTICES = 240000, MAX_INDICES = 720000;
+  function checkBudget(budget) {
+    if (budget.vertices > MAX_VERTICES || budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
+  }
   const empty = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
+  // Clip boxes in anchor-local metres: [x0, x1, y0, y1, z0, z1].
   const bounds = (scale = 1) => [-650 * scale, 650 * scale, -120, 300, GaragePrims.Z_DOOR, 1000 * scale];
-
   const groundBounds = () => [-900, 900, -10000, 10000, GaragePrims.Z_DOOR, 1300];
 
   // Match SceneryPits' exact-arc, yaw-only placement, including its banked origin.
@@ -67,13 +70,14 @@ const GarageExteriorGeometry = (function () {
         const cross = TrackGeom.cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
         if (Math.hypot(...cross) < 1e-9) continue;
         budget.indices += 3;
-        if (budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
+        checkBudget(budget);
         for (let k = 0; k < tri.length; k++) {
           const v = tri[k], id = inside ? ids[k] : null;
           if (id !== null && cache.has(id)) { target.idx.push(cache.get(id)); continue; }
           const at = target.pos.length / 3;
           if (id !== null) cache.set(id, at);
-          if (++budget.vertices > MAX_VERTICES) throw new Error("Circuit exterior geometry budget exceeded");
+          budget.vertices++;
+          checkBudget(budget);
           target.pos.push(v[0], v[1], v[2]);
           const n = Math.hypot(v[3], v[4], v[5]) || 1;
           target.nrm.push(v[3] / n, v[4] / n, v[5] / n);
@@ -99,7 +103,7 @@ const GarageExteriorGeometry = (function () {
     }
     road.idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
     budget.vertices += 4; budget.indices += 6;
-    if (budget.vertices > MAX_VERTICES || budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
+    checkBudget(budget);
   }
 
   // CPU-only contact index. Keep source faces once, plus bounded 2 m cell refs.
@@ -142,6 +146,17 @@ const GarageExteriorGeometry = (function () {
     return { cell, triangles: Float64Array.from(triangles), cells,
       bounds: contact, refs, maxFaces };
   }
+  // Height at (x, z) of face f (index into the 9-float triangle soup p) by
+  // barycentric interpolation in the xz plane; NaN when (x, z) is outside it.
+  function faceHeight(p, f, x, z) {
+    const a = f * 9, b = a + 3, c = a + 6;
+    const den = (p[b + 2] - p[c + 2]) * (p[a] - p[c]) + (p[c] - p[b]) * (p[a + 2] - p[c + 2]);
+    if (Math.abs(den) < 1e-12) return NaN;
+    const u = ((p[b + 2] - p[c + 2]) * (x - p[c]) + (p[c] - p[b]) * (z - p[c + 2])) / den;
+    const v = ((p[c + 2] - p[a + 2]) * (x - p[c]) + (p[a] - p[c]) * (z - p[c + 2])) / den;
+    if (u < -1e-8 || v < -1e-8 || u + v > 1 + 1e-8) return NaN;
+    return u * p[a + 1] + v * p[b + 1] + (1 - u - v) * p[c + 1];
+  }
   // Query only one bounded cell without temporary arrays; null means off the owned road.
   function sampleHeight(surface, x, z) {
     if (!surface || !Number.isFinite(x) || !Number.isFinite(z)) return null;
@@ -153,26 +168,15 @@ const GarageExteriorGeometry = (function () {
     const p = surface.triangles;
     let height = -Infinity;
     for (let i = 0; i < faces.length; i++) {
-      const a = faces[i] * 9, b = a + 3, c = a + 6;
-      const den = (p[b + 2] - p[c + 2]) * (p[a] - p[c]) + (p[c] - p[b]) * (p[a + 2] - p[c + 2]);
-      if (Math.abs(den) < 1e-12) continue;
-      const u = ((p[b + 2] - p[c + 2]) * (x - p[c]) + (p[c] - p[b]) * (z - p[c + 2])) / den;
-      const v = ((p[c + 2] - p[a + 2]) * (x - p[c]) + (p[a] - p[c]) * (z - p[c + 2])) / den;
-      if (u >= -1e-8 && v >= -1e-8 && u + v <= 1 + 1e-8)
-        height = Math.max(height, u * p[a + 1] + v * p[b + 1] + (1 - u - v) * p[c + 1]);
+      const y = faceHeight(p, faces[i], x, z);
+      if (y === y) height = Math.max(height, y);
     }
     if (!Number.isFinite(height)) return null;
     // Paint is 15 mm above the ribbon along its near-vertical up vector.
     // Look only in that narrow layer: a lower road 3 cm down must not win.
     let baseHeight = -Infinity;
     for (let i = 0; i < faces.length; i++) {
-      const a = faces[i] * 9, b = a + 3, c = a + 6;
-      const den = (p[b + 2] - p[c + 2]) * (p[a] - p[c]) + (p[c] - p[b]) * (p[a + 2] - p[c + 2]);
-      if (Math.abs(den) < 1e-12) continue;
-      const u = ((p[b + 2] - p[c + 2]) * (x - p[c]) + (p[c] - p[b]) * (z - p[c + 2])) / den;
-      const v = ((p[c + 2] - p[a + 2]) * (x - p[c]) + (p[a] - p[c]) * (z - p[c + 2])) / den;
-      if (u < -1e-8 || v < -1e-8 || u + v > 1 + 1e-8) continue;
-      const y = u * p[a + 1] + v * p[b + 1] + (1 - u - v) * p[c + 1];
+      const y = faceHeight(p, faces[i], x, z);
       if (height - y >= .013 && height - y <= .017) baseHeight = Math.max(baseHeight, y);
     }
     return Number.isFinite(baseHeight) ? baseHeight : height;

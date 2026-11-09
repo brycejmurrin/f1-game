@@ -29,6 +29,7 @@ const GarageDepartureWheels = (function () {
     pose.distance = motion.distance;
     if (opt.camera !== false) {
       if (opt.calm) {
+        // Reduced motion: one still wide shot of the lane instead of the authored move.
         motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
         motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;
         pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = 75;
