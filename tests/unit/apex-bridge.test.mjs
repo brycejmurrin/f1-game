@@ -262,6 +262,54 @@ test("snap downscales the canvas and steps JPEG quality down under the reply cap
   assert.equal((await none.api.handle({ cmd: "snap" })).error, "no rendered canvas");
 });
 
+test("display reads the CSS→device pixel ledger: zoom chain, viewport, canvas backing, build and SW caches", async () => {
+  // html > body > #hud (zoom 1.5) > #hud-time (font 14px). #game is a sibling of #hud with a 3× backing.
+  const node = (id, tag, parent, o = {}) => ({ id, tagName: tag, nodeType: 1, parentElement: parent, hidden: false,
+    getAttribute: (k) => (o.attrs || {})[k] || null, getBoundingClientRect: () => ({ width: o.w || 0, height: o.h || 0 }), ...o });
+  const html = node("", "HTML", null, { clientWidth: 852, clientHeight: 393 });
+  const body = node("", "BODY", html);
+  const hud = node("hud", "DIV", body, { clientWidth: 852, clientHeight: 393 });
+  const time = node("hud-time", "SPAN", hud, { w: 40, h: 14 });
+  const game = node("game", "CANVAS", body, { clientWidth: 852, clientHeight: 393, width: 1917, height: 884, w: 852, h: 393, attrs: { "data-engine": "three" } });
+  const byId = { hud, "hud-time": time, game };
+  const styles = new Map([[html, { zoom: "1", transform: "none", vars: { "--ui-scale": "1.5", "--vwz": "8.52px" } }],
+    [body, { zoom: "1", transform: "none" }], [hud, { zoom: "1.5", transform: "none", fontSize: "16px" }],
+    [time, { zoom: "1", transform: "none", fontSize: "14px" }], [game, { zoom: "1", transform: "none" }]]);
+  const doc = { documentElement: html, getElementById: (id) => byId[id] || null,
+    querySelector: (q) => (/apex-sha/.test(q) ? { content: "abc123" } : /apex-build/.test(q) ? { content: "25547" } : null) };
+  const b = load({ search: "", apex: { renderScale: () => ({ scale: 0.75, tier: 2 }) }, extra: {
+    document: doc,
+    getComputedStyle: (e) => { const s = styles.get(e) || {}; return { ...s, getPropertyValue: (n) => (s.vars || {})[n] || "" }; },
+    matchMedia: (q) => ({ matches: q === "(display-mode: standalone)" }),
+    visualViewport: { scale: 1, width: 852, height: 393, offsetLeft: 0, offsetTop: 0 },
+    screen: { width: 852, height: 393 },
+    caches: { keys: async () => ["apex26-voice", "apex26-25547", "other"] },
+  } });
+  const r = await b.api.handle({ cmd: "display" });
+  assert.equal(r.ok, true);
+  const v = r.value;
+  assert.equal(v.dpr, 3);
+  assert.deepEqual(plain(v.client), [852, 393]);
+  assert.deepEqual(plain(v.visualViewport), { scale: 1, w: 852, h: 393, x: 0, y: 0 });
+  assert.deepEqual(plain(v.standalone), { nav: false, mq: true, fullscreen: false });
+  assert.equal(v.vars.root["--ui-scale"], "1.5");
+  assert.equal(v.vars.root["--hud-scale"], null);
+  assert.deepEqual(plain(v.game.buffer), [1917, 884]);
+  assert.equal(v.game.engine, "three");
+  assert.equal(v.game.chain.zoomProduct, 1);
+  assert.equal(v.hud.chain.zoomProduct, 1.5);
+  assert.deepEqual(plain(v.hud.chain.steps), [{ el: "#hud", zoom: 1.5 }]);
+  assert.equal(v.hud.time.fontSize, "14px");
+  assert.equal(v.hud.time.chain.zoomProduct, 1.5);
+  assert.equal(v.renderScale.scale, 0.75);
+  assert.deepEqual(plain(v.build), { sha: "abc123", build: "25547", swCaches: ["apex26-voice", "apex26-25547"], sw: null });
+  // No DOM at all (a VM, a very early call): every field degrades to null instead of throwing.
+  const bare = await load({ search: "" }).api.handle({ cmd: "display" });
+  assert.equal(bare.ok, true);
+  assert.equal(bare.value.game, null);
+  assert.equal(bare.value.hud, null);
+});
+
 test("batch runs steps in order, stops at the first failure, and keeps reload last", async () => {
   const calls = [];
   const apex = { race: (t) => calls.push("race " + t), go: () => calls.push("go") };
