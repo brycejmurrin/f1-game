@@ -271,7 +271,8 @@ const TyreModel = (function () {
   // Tight, because unlike the player's path this one carries no geometry — only
   // consistency and longitudinal accel — so one divisor fits the calendar
   // instead of straddling a range the way LOAD_REF must. Divided AFTER the
-  // clamp, exactly as humanLoad does, so the two paths stay the same shape.
+  // clamp, exactly as humanLoad does, so the two paths stay the same shape; the
+  // off-road price (W_OFF_N) is added after that divide on both (#4936).
   const LOAD_AI_REF = 1.23;
   // An AI car's SIGNED longitudinal accel. `accSm` is engine pull only: written
   // on the throttle branch, never below 0 and stale under the brake, so the
