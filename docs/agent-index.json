@@ -3770,7 +3770,7 @@
     {
       "path": "js/overlay/render.js",
       "global": "OverlayRender",
-      "roster": "tag"
+      "roster": "OVERLAY_PAGE"
     },
     {
       "path": "js/perf/bench-capture.js",
@@ -3785,7 +3785,7 @@
     {
       "path": "js/perf/gfx-debug-overlay.js",
       "global": "GfxDebug",
-      "roster": "tag"
+      "roster": "LAZY_DEV"
     },
     {
       "path": "js/perf/gfx-escalation.js",
@@ -3865,7 +3865,7 @@
     {
       "path": "js/perf/three-inspector.js",
       "global": "ThreeInspector",
-      "roster": "tag"
+      "roster": "LAZY_AGENT"
     },
     {
       "path": "js/perf/title-warm.js",

@@ -1,4 +1,4 @@
-/* Apex 26 — DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same day gets the same plan. */
+/* Apex 26 — DAILY CHALLENGE: one time-trial plan per local calendar day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same calendar date gets the same plan. */
 const DailyChallenge = (function () {
   "use strict";
 
@@ -15,8 +15,14 @@ const DailyChallenge = (function () {
   // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
   function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
-  // UTC day, YYYY-MM-DD — the one calendar every player shares.
-  function dayKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  // The player's LOCAL calendar day, YYYY-MM-DD (#5010). A UTC key rolled at 4 pm in Los Angeles,
+  // so a 3 pm and a 6 pm lap on consecutive local days were two UTC days apart and reset the streak.
+  // The plan is still a pure function of the date string, so one date is one shared plan; prevDay
+  // and the history window do date-only arithmetic on the key and stay calendar-correct.
+  function dayKey(d) {
+    const t = d || new Date(), p2 = (n) => String(n).padStart(2, "0");
+    return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate());
+  }
   function prevDay(day) {
     const d = new Date(day + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() - 1);
@@ -51,7 +57,7 @@ const DailyChallenge = (function () {
       e.classes[context] = cls;
     }
     if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-    // Streak: consecutive UTC days with at least one lap. Only a NEWER day
+    // Streak: consecutive local days with at least one lap. Only a NEWER day
     // moves it (ISO dates compare as strings): a tab left on yesterday's plan
     // past midnight, today already played elsewhere, reset it to 1.
     if (!d.streak.last || day > d.streak.last) {

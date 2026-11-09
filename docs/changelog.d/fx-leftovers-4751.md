@@ -1,0 +1,1 @@
+Fixed: the player's skid marks lie flat on the road again instead of tilting with the chassis's pitch and roll; far skid marks are culled on the batched renderer path; the exhaust heat haze no longer blinks when its anchor car is off-screen; skid-mark timers no longer advance on a paused frame

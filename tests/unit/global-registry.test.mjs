@@ -140,6 +140,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/car/car-draw.js": ["scheduler"], // warmCarAssetsAsync's step yield (Chrome 129+, perf hunt 4 F3.3); typeof-guarded, else setTimeout(0)
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
+  "js/ui/update-check.js": ["__apexGuardOk"],   // index.html's boot version guard: set only when its version.json read succeeded (#4925)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
   "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)
   "js/car/input-ghost.js": ["__APEX_BUILD"],   // envelope stamps the shell build id (index.html inline)
@@ -263,6 +264,7 @@ test("positive control: an unscannable site is reported unless baselined", () =>
 const WINDOW_WRITES = {
   __APEX_BUILD: "js/career/career-backup.js",      // the shell's build id, stamped into every save/file envelope
   __apex: "tools/shot/agent.mjs",                   // the dev API itself (game.js binds ApexApi)
+  __apexGuardOk: "js/ui/update-check.js",          // the boot guard read version.json → UpdateCheck's throttle starts at boot (#4925)
   __apexErrors: "js/agent/apex.js",                 // index.html's error ring → __apex health
   __apexROLoops: "js/agent/apex.js",                // index.html's ResizeObserver loop counter → health roLoops
   __apexReportError: "js/game.js",                  // the shell's visible error card

@@ -391,7 +391,7 @@ function lazyFiles() {
   // by game.js once a session needs it). Both are tagless BY DESIGN and still
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
-  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
+  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_DEV || []), ...(MANIFEST.OVERLAY_PAGE || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
     ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),

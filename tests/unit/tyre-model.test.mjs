@@ -835,6 +835,20 @@ test("a mid-grid AI on a clean lap scores about one, like the player's path", ()
   assert.ok(T.aiLoad({ consistency: 0.75, accSm: 0, offroad: true }, aTop) > ragged, "off-track outweighs a ragged lap");
 });
 
+// #4936: W_OFF sat inside each path's clamp, before its own divisor, so a metre of
+// grass cost the player W_OFF/LOAD_REF = 2.45 load units and the AI W_OFF/LOAD_AI_REF
+// = 0.98, about 2.5x apart. One price on the shared normalised scale; the player's
+// own number is unchanged (it is the price kept).
+test("running off the road costs the player and the AI the same tyre load", () => {
+  const humanOff = T.humanLoad({ speed: 40, offroad: true }, 30) - T.humanLoad({ speed: 40 }, 30);
+  const aiOff = T.aiLoad({ consistency: 0.75, accSm: 0, offroad: true }, 10) - T.aiLoad({ consistency: 0.75, accSm: 0 }, 10);
+  assert.ok(Math.abs(humanOff - aiOff) < 1e-9, `one off-road price: player ${humanOff.toFixed(4)} vs AI ${aiOff.toFixed(4)}`);
+  assert.ok(Math.abs(humanOff - 1.20 / 0.49) < 1e-9, `the player's price is kept (${humanOff.toFixed(4)})`);
+  // the player's whole load is unchanged, including at the ceiling: a sliding, kerbing car off the road
+  const hard = { speed: 80, yawRateCur: 0.6, axFrac: 1, skidIntensity: 1, onKerb: true, offroad: true };
+  assert.ok(Math.abs(T.humanLoad(hard, 22) - 3.0 / 0.49) < 1e-9, "the player's ceiling is unchanged");
+});
+
 // ── The HUD letter, over the whole catalog ──────────────────────────────────
 // There used to be two ladders. AI_CLASS codes its soft at life 0.48 "S";
 // optionRecord's own inline ternary cut at 0.40, so EVERY soft a player can

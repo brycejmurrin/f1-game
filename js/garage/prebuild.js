@@ -42,11 +42,10 @@
    or on a phone / low-deviceMemory client (PERF item 13: the idle title otherwise
    holds ~11 MB; race settings still prebuilds because RACE! needs that garage).
    A phone that already holds a prebuild releases it while the title idles.
-   The material pack no longer blocks the car/room CPU steps (those run while it
-   downloads); only the hidden program frames wait for packSettled, because a
-   draw before the pack lands compiles the programs again. Race settings keeps
-   its old gates: RACE! needs that garage. Car/room steps yield before each
-   sync build and abandon between steps if a sheet opens mid-run.
+   The car/room CPU steps run while the material pack downloads; only the
+   hidden program frames wait for packSettled, because a draw before the pack
+   lands compiles the programs again. Car/room steps yield before each sync
+   build and abandon between steps if a sheet opens mid-run.
 
    OFF SWITCH (the before/after on one tree): apex26.garagePrewarm = "off" at
    boot, or __apex.garagePrewarm(false); tools/shot/garage-tap.mjs runs both.
@@ -57,10 +56,9 @@ const GaragePrebuild = (function () {
 
   const POLL_MS = 1000;      // the title's idle check: a few property reads
   // The title prebuild is one 1.0-1.5 s task at 4x CPU (Car3D.build + the framing
-  // hull). Started at the first idle after the title wired, it sat exactly where
-  // the first tap lands: a RACE tap waited 1.2-3.5 s (B-H8 phone-profile A/B,
-  // 2026-10-21). It waits for this much REAL quiet on a visible title: no
-  // pointer, key, wheel or visibility change. Input never starts it.
+  // hull). Started at the first idle it sat exactly where the first tap lands (a
+  // RACE tap waited 1.2-3.5 s), so it waits for this much REAL quiet on a visible
+  // title: no pointer, key, wheel or visibility change. Input never starts it.
   const QUIET_MS = 3000;
   const GIVE_UP_MS = 30000;  // a hidden frame withheld this long (a TLX compile) is logged as pending
 
@@ -85,9 +83,7 @@ const GaragePrebuild = (function () {
   function phoneHold(nav, hint) {
     try {
       if (hint && (hint.isMobile || hint.mobileTier)) return true;
-      if (nav && typeof nav.deviceMemory === "number" && nav.deviceMemory > 0 && nav.deviceMemory < 4) {
-        return true;
-      }
+      if (nav && typeof nav.deviceMemory === "number" && nav.deviceMemory > 0 && nav.deviceMemory < 4) return true;
     } catch (_) { /* no navigator / gfx */ }
     return false;
   }
@@ -137,6 +133,9 @@ const GaragePrebuild = (function () {
   function sheetOpenNow() {
     return typeof MenuSheetGate !== "undefined" && MenuSheetGate.open && MenuSheetGate.open();
   }
+  // Settings opening over the title abandons speculative work; race settings' run never yields to it.
+  const sheetBlocks = (want) => want === "title" && sheetOpenNow();
+  const packNow = () => packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null);
 
   // THE A/B SWITCH: localStorage apex26.garagePrewarm = "off" (read at boot) or
   // __apex.garagePrewarm(false) turns the TITLE prebuild off — the tip's behaviour,
@@ -167,6 +166,9 @@ const GaragePrebuild = (function () {
     }
     const ui = () => { const u = d.ui(); return u && u.state ? u.state() : null; };
     const kind = () => homeKind(ui());
+    const gfxWarming = () => !!(G.gfx.warming && G.gfx.warming());
+    // The caller still owns the run and no sheet has opened over the title.
+    const stillOn = (current, want) => current() && !sheetBlocks(want);
     function surface() {
       const rs = $("race-settings"), ov = $("overlay");
       if (rs && !rs.hidden) return "settings";
@@ -187,7 +189,7 @@ const GaragePrebuild = (function () {
         surface: surface(), intro: !!(ov && ov.hasAttribute("data-intro")),
         saveData: saveData(nav, typeof matchMedia === "function" ? matchMedia : null),
         phoneHold: phoneHold(nav, hint),
-        packSettled: packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null),
+        packSettled: packNow(),
         worldReady: !!d.worldReady(), homePainted: !!(st && st.painted),
         worldWarm: gate.warm > 0, warming: !!(G.gfx && G.gfx.warming && G.gfx.warming()),
         quietMs: quietMs(), sheetOpen: sheetOpenNow(),
@@ -200,9 +202,9 @@ const GaragePrebuild = (function () {
     async function yieldBeforeHeavy(current, want) {
       if (typeof MenuSheetGate === "undefined" || !MenuSheetGate.open) return !!current();
       await d.menuSlice();
-      if (!current() || (want === "title" && sheetOpenNow())) return false;
+      if (!stillOn(current, want)) return false;
       await d.menuSlice();
-      return !!(current() && !(want === "title" && sheetOpenNow()));
+      return !!stillOn(current, want);
     }
     // Ready = drawn for THIS key (or, for the title only, built as far as the
     // current Home's plan allows), and the car under that key still cached.
@@ -230,7 +232,7 @@ const GaragePrebuild = (function () {
         if (!(await d.menuIdle(current))) return false;
         // The menu world's own hidden frames (and any compile they started) first.
         const until = now() + GIVE_UP_MS;
-        while ((gate.warm > 0 || (G.gfx.warming && G.gfx.warming())) && current() && now() < until) await d.menuSlice();
+        while ((gate.warm > 0 || gfxWarming()) && current() && now() < until) await d.menuSlice();
         if (!current() || blockers(env(want)).length) return false;
         const k = kind(), p = plan(want, k);
         const rec = { want, kind: k, key: cam.prebuildKey(), t0: now(), carMs: 0, roomMs: 0, frameMs: 0, room: p.room, frames: p.frames };
@@ -244,39 +246,38 @@ const GaragePrebuild = (function () {
           if (!(await yieldBeforeHeavy(current, want))) return finish(rec, "superseded");
           cam.prebuild("car"); rec.carMs = ms(now() - t);
           await d.menuSlice();
-          if (!current() || (want === "title" && sheetOpenNow())) return finish(rec, "superseded");
+          if (!stillOn(current, want)) return finish(rec, "superseded");
         }
         if (p.room && !(had && had.room)) {
           if (!(await yieldBeforeHeavy(current, want))) return finish(rec, "superseded");
           t = now(); cam.prebuild("room"); rec.roomMs = ms(now() - t);
           await d.menuSlice();
-          if (!current() || (want === "title" && sheetOpenNow())) return finish(rec, "superseded");
+          if (!stillOn(current, want)) return finish(rec, "superseded");
         }
         if (!p.frames) { prepped = { key: rec.key, room: p.room || !!(had && had.room) }; return finish(rec, "ready"); }
         // Programs sample the material pack — wait for it before the hidden
         // frames, or the first real garage present recompiles them.
         const packUntil = now() + GIVE_UP_MS;
-        while (!packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null)
-          && current() && now() < packUntil) await d.menuSlice();
-        if (!current() || (want === "title" && sheetOpenNow())) return finish(rec, "superseded");
-        if (!packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null)) {
+        while (!packNow() && current() && now() < packUntil) await d.menuSlice();
+        if (!stillOn(current, want)) return finish(rec, "superseded");
+        if (!packNow()) {
           prepped = { key: rec.key, room: true };
           return finish(rec, "pending");
         }
         // TLX compiles the next present's programs once warm() is asked; one
         // request per session — a repeat links nothing yet holds presents.
         // Do not request while Settings is open (parkWarm holds garageWarm too).
-        if (want === "title" && sheetOpenNow()) return finish(rec, "superseded");
+        if (sheetBlocks(want)) return finish(rec, "superseded");
         if (!warmed && G.gfx.warm) { G.gfx.warm(); warmed = true; }
         t = now(); gate.garageWarm = 2;
         while (!gate.garageReady && current() && now() - t < GIVE_UP_MS) {
-          if (want === "title" && sheetOpenNow()) { gate.garageWarm = 0; return finish(rec, "superseded"); }
+          if (sheetBlocks(want)) { gate.garageWarm = 0; return finish(rec, "superseded"); }
           // render() owes exactly these frames. Once they are spent and no
           // program warm is in flight, waiting out GIVE_UP_MS cannot paint
           // one: the present that started the warm returned without drawing
           // (measured 30027 ms of this wait on software GL / three WebGL2,
           // while memState().warm.total was 1.5 s). The visible tap draws.
-          if (gate.garageWarm <= 0 && !(G.gfx.warming && G.gfx.warming())) break;
+          if (gate.garageWarm <= 0 && !gfxWarming()) break;
           await d.menuSlice();
         }
         rec.frameMs = ms(now() - t);
@@ -361,8 +362,7 @@ const GaragePrebuild = (function () {
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
   let _instance = null;
 
-  // POLL_MS / GIVE_UP_MS stay module-local (create() owns the timers).
-  // blockers / plan / homeKind / readSwitch / QUIET_MS stay exported — garage-prebuild unit seams.
+  // blockers, plan, homeKind, readSwitch and QUIET_MS are exported for the garage-prebuild tests.
   return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, phoneHold, sheetOpenNow, QUIET_MS };
 })();
 Object.freeze(GaragePrebuild);
