@@ -3122,7 +3122,7 @@ The opt-in slow-drift governor step (js/perf/thermal-drift.js, #2652). No arg re
 ### `stallWatch` (localStorage / query)
 `LoopHealth.stallWatch(true)`, `apex26.stallWatch=1`, or `?stallwatch=1` forces the stall watchdog on when `navigator.webdriver` is set (Playwright and software-GL CI). Players get it by default; automation skips it so multi-second present frames do not reload the tab mid-spec. `?stallwatch=0` or `apex26.stallWatch=0` turns it OFF for a probe browser that is not flagged as automation (the Playwright MCP host browser on software GL otherwise reloads mid-race); an explicit force-on still wins.
 
-### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, lookPostShed, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
+### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, lookPostShed, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes, effective}`
 Adaptive-resolution control. No arg: report the current state. A number in
 `0.5–1` (a FRACTION — the opposite unit to `uiScale`) pins the 3D render scale
 and disables the auto-governor; anything else (`60`, `"auto"`, `false`) returns
@@ -3160,6 +3160,17 @@ hitch does not vanish from diagnostics because the next second was smooth.
 every few seconds" — read `p99` against `p50`, not the fps, because an average
 that a 60 Hz panel pins at 16.7 ms cannot show a spike at all. A `p99` several
 times `p50` with a healthy `p50` IS the periodic-hitch signature.
+
+`effective` is the resolution the player actually sees, in one read (#5166):
+`{css, dpr, dprCap, present, buffer, pxPerCss, ofDevice}`. `css` is the canvas
+box, `present` = css × min(`dpr`, the DPR cap: 1.5 on `mobileTier`, else 2),
+`buffer` = present × `scale`, `dprCap` the cap AS APPLIED (present / css),
+`pxPerCss` buffer / css and `ofDevice` buffer / (css × dpr) — the share of the
+panel's pixels the 3D view uses per axis. A DPR‑3 iPhone at 852×393 with
+RESOLUTION LOW (0.5, the touch default) reads `present [1278,590]`, `buffer
+[639,295]`, `pxPerCss 0.75`, `ofDevice 0.25`. Fields are `null` (never 0 or
+NaN) before a size exists. `js/agent/apex-lifecycle.js` `effectiveRes`;
+`tests/unit/render-effective-res.test.mjs` pins the rule and the numbers.
 ```js
 __apex.renderScale();      // full governor snapshot
 __apex.renderScale(0.6);   // pin 60% 3D scale
