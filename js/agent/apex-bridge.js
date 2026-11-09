@@ -111,6 +111,72 @@ const ApexBridge = (function () {
     };
   }
 
+  // The resolution ledger for a "looks pixelated" report (#5166): every layer between a CSS pixel and a device pixel,
+  // read on the device. Painted px per CSS px of HUD text = the zoom chain's product × visualViewport.scale × dpr; the
+  // 3D canvas backing = its CSS size × dpr × the governor's render scale. The SW cache names say which build this phone
+  // holds; `standalone` tells the Home Screen app from Safari.
+  async function display() {
+    const d = typeof document !== "undefined" ? document : null;
+    const nav = typeof navigator !== "undefined" ? navigator : {};
+    const cs = (el) => { try { return el && typeof getComputedStyle === "function" ? getComputedStyle(el) : null; } catch (_) { return null; } };
+    const rect = (el) => { try { const r = el.getBoundingClientRect(); return [r2(r.width), r2(r.height)]; } catch (_) { return null; } };
+    const mq = (q) => { try { return typeof matchMedia === "function" ? matchMedia(q).matches : null; } catch (_) { return null; } };
+    const el = (id) => (d && d.getElementById ? d.getElementById(id) : null);
+    const name = (e) => (e.id ? "#" + e.id : String(e.tagName || "?").toLowerCase());
+    // Every ancestor (the element included) whose zoom is not 1 or whose transform is not none, root-most last, and
+    // the product of those zooms: what multiplies this element's CSS px before dpr.
+    const chain = (start) => {
+      const steps = [];
+      let zoomProduct = 1;
+      for (let e = start; e && e.nodeType === 1; e = e.parentElement) {
+        const s = cs(e);
+        if (!s) break;
+        const z = parseFloat(s.zoom), t = s.transform;
+        const odd = (isFinite(z) && z !== 1) || (t && t !== "none");
+        if (isFinite(z)) zoomProduct *= z;
+        if (odd) steps.push({ el: name(e), zoom: isFinite(z) ? z : s.zoom || null, transform: t && t !== "none" ? t : undefined });
+      }
+      return { steps, zoomProduct: r2(zoomProduct) };
+    };
+    const vars = (e, names) => {
+      const s = cs(e);
+      if (!s) return null;
+      const out = {};
+      for (const n of names) { const v = String(s.getPropertyValue(n) || "").trim(); out[n] = v === "" ? null : v; }
+      return out;
+    };
+    const canvas = (c) => c && {
+      css: [c.clientWidth, c.clientHeight], rect: rect(c), buffer: [c.width, c.height], hidden: !!c.hidden,
+      engine: c.getAttribute ? c.getAttribute("data-engine") : null, chain: chain(c),
+    };
+    const text = (e) => e && { hidden: !!e.hidden, rect: rect(e), fontSize: (cs(e) || {}).fontSize || null, chain: chain(e) };
+    const root = d && d.documentElement, hud = el("hud");
+    const vv = typeof visualViewport !== "undefined" && visualViewport ? visualViewport : null;
+    const meta = (n) => { const m = d && d.querySelector && d.querySelector('meta[name="' + n + '"]'); return m ? m.content : null; };
+    let swCaches = null;
+    try { if (typeof caches !== "undefined" && caches && caches.keys) swCaches = (await caches.keys()).filter((k) => /^apex26-/.test(k)); } catch (_) { swCaches = null; }
+    let sw = null;
+    try { const c = nav.serviceWorker && nav.serviceWorker.controller; sw = c ? { scriptURL: c.scriptURL, state: c.state } : null; } catch (_) { sw = null; }
+    let renderScale = null;
+    try { renderScale = window.__apex && window.__apex.renderScale ? window.__apex.renderScale({ lite: true }) : null; } catch (e) { renderScale = { error: String(e && e.message) }; }
+    const VARS = ["--ui-scale", "--vwz", "--hud-scale", "--hud-z-top", "--hud-z-bot", "--sheet-scale"];
+    return {
+      dpr: window.devicePixelRatio,
+      inner: [window.innerWidth, window.innerHeight],
+      screen: typeof screen !== "undefined" && screen ? [screen.width, screen.height] : null,
+      client: root ? [root.clientWidth, root.clientHeight] : null,
+      visualViewport: vv ? { scale: vv.scale, w: r2(vv.width), h: r2(vv.height), x: r2(vv.offsetLeft), y: r2(vv.offsetTop) } : null,
+      standalone: { nav: !!nav.standalone, mq: mq("(display-mode: standalone)"), fullscreen: mq("(display-mode: fullscreen)") },
+      vars: { root: vars(root, VARS), hud: vars(hud, VARS) },
+      game: canvas(el("game")), soft: canvas(el("game-soft")),
+      hud: hud ? { hidden: !!hud.hidden, css: [hud.clientWidth, hud.clientHeight], chain: chain(hud), fontSize: (cs(hud) || {}).fontSize || null,
+        time: text(el("hud-time")), pos: text(el("hud-pos")) } : null,
+      overlay: text(el("overlay")),
+      renderScale,
+      build: { sha: meta("apex-sha"), build: meta("apex-build"), swCaches, sw },
+    };
+  }
+
   function call(args) {
     const m = args && args.method;
     if (!CALL_OK.has(m)) throw new Error("method not allowed: " + m);
@@ -237,6 +303,7 @@ const ApexBridge = (function () {
   const CMDS = {
     ping: () => ({ pong: true, t: Date.now() }),
     facts,
+    display,
     frames,
     call,
     gpuTest: (a) => perfModule("GpuTestRun", typeof GpuTestRun !== "undefined" ? GpuTestRun : null, ["start", "stop", "status", "active"], a),
@@ -479,7 +546,7 @@ const ApexBridge = (function () {
   }
 
   boot();
-  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, tokenShape,
+  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, tokenShape,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);
