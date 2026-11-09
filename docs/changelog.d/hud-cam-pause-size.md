@@ -1,0 +1,1 @@
+Fixed: the camera and pause buttons in a race are a normal tap size again (no taller than the timing strip, pause a round circle beside it) instead of growing with BUTTON SIZE; the driving buttons still follow your sliders.
