@@ -25,8 +25,13 @@ const UiScale = (() => {
       else delete root.dataset.fold;
     } catch (_) { /* progressive; a missing API leaves the CSS media queries in charge */ }
   }
-  // The RESOLUTION pin's shipped default: a phone ships LOW, a pointer device AUTO.
-  const defaultResMode = () => (coarseUi() ? "low" : "auto");
+  // The RESOLUTION pin's shipped default: a phone ships MED, a pointer device AUTO. MED, not LOW,
+  // since #5166 (2026-11-09): at LOW an 852×393 DPR-3 iPhone drew its 3D view at 639×295 under the
+  // 1.5 mobile DPR cap and Bryce read it as "very pixelated" (crisp HUD, blocky scene); MED draws
+  // 959×443 (×2.25 the pixels). Only an UNSET key follows this: a stored LOW/MED/HIGH/AUTO wins. Frame
+  // rate at a pinned scale is held by PerfGov's stage 2 (the feature-shed ladder and the 45 Hz step),
+  // which runs whether or not the resolution stage is pinned (js/perf/governor.js tick()).
+  const defaultResMode = () => (coarseUi() ? "med" : "auto");
   function create(G) {
     Log.info("ui", "UiScale.create");
     const { $, els, store } = G;
@@ -261,7 +266,7 @@ const UiScale = (() => {
       { id: "med",  label: "MED",  v: 0.75 },
       { id: "high", label: "HIGH", v: 1.0  },
     ];
-    // A phone ships at LOW (half-res buffer) and a pointer device at AUTO — the
+    // A phone ships at MED (0.75 buffer) and a pointer device at AUTO — the
     // other half of the HIGH graphics preset above. Same question
     // Input.touchControlsNeeded() asks, asked directly (coarseUi, above) so
     // this module keeps no dependency on the input stack.
