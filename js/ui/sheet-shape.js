@@ -813,6 +813,34 @@ window.SheetShape = (function () {
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", onViewport, { passive: true });
     }
+    /* THE LAYOUT VIEWPORT'S OWN SIGNAL (UI contract 2026-11-06 rule 1). resize
+       and orientationchange are WINDOW events keyed to innerWidth/innerHeight,
+       the pair iOS leaves on the portrait numbers at a Home Screen landscape
+       launch (#5152, #5167) or settles after its last event (the timers above
+       are a bounded guess at when). A media query is evaluated against the
+       ICB, the box CSS lays out and viewportPx() reads: its change fires when
+       THAT flips, with or without a window event behind it, and at the moment
+       it does rather than at 250/700/1500 ms. Same path, so shape, density,
+       the keyboard band and focus all re-ask from the settled box. The three
+       listeners below are the title's "turned the phone" signals that do not
+       go through the window's size pair; each is idempotent through
+       onViewport, so a browser that fires all four costs four comparisons. */
+    try {
+      const mql = typeof matchMedia === "function" ? matchMedia("(orientation: portrait)") : null;
+      if (mql && typeof mql.addEventListener === "function") mql.addEventListener("change", onViewport);
+      else if (mql && typeof mql.addListener === "function") mql.addListener(onViewport);
+    } catch (_) { /* no media queries here: the window events above still answer */ }
+    try {
+      // screen.orientation (iOS 16.4+): the OS's rotation notice, not a size.
+      const so = window.screen && window.screen.orientation;
+      if (so && typeof so.addEventListener === "function") so.addEventListener("change", onViewport, { passive: true });
+    } catch (_) { /* older WebKit: no ScreenOrientation */ }
+    // Back from the app switcher turned the other way: a suspended Home Screen
+    // app can resume in the other orientation with no resize for the turn it
+    // slept through. pageshow above is the bfcache half; this is the other.
+    if (typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "hidden") onViewport(); }, { passive: true });
+    }
     watchVisibility();
     watchScale();
     watchKeyboard();

@@ -1,0 +1,1 @@
+Fixed: The title screen now re-fits itself the moment the phone turns, and when the Home Screen app comes back from the app switcher the other way round, even when iOS sends no resize for the turn (#5167).
