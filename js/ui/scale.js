@@ -133,16 +133,7 @@ const UiScale = (() => {
         try { if (els.select && !els.select.hidden) G.updateTrackPreview(); } catch { /* menus not ready */ }
       });
     }
-    // HUD SIZE reads the same way off --hud-z-bot: fitHud caps the gear/speed cluster at the bar's spare width
-    // (UI contract 2026-11-06 gap 6), so "155%" alone read as a dead slider on a landscape phone with BUTTON 245.
-    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); refreshHudFit(); }
-    function refreshHudFit() {
-      const out = $("pm-hudscale-v"), body = document.body;
-      if (!out || !body || !body.classList.contains("in-race")) return;
-      const pct = scalePct("hudScale");
-      const next = btnFitLabel(scaleLabel(pct, "hudScale"), pct, document.documentElement.style.getPropertyValue("--hud-z-bot"));
-      if (out.textContent !== next) out.textContent = next;
-    }
+    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
     // The touch dock keeps its own fixed default and explicit override.
     // The readout says what the race fit PAINTS: fitHud's pedal-column cap (--hud-z-dock) can stop the
     // dock below the slider (245 % on an 844x390 phone paints ~118 %), and "245%" alone read as "broken".
@@ -250,7 +241,7 @@ const UiScale = (() => {
       let fitRaf = 0;
       new MutationObserver(() => {
         if (fitRaf || typeof requestAnimationFrame !== "function") return;
-        fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshBtnFit(); refreshHudFit(); });
+        fitRaf = requestAnimationFrame(() => { fitRaf = 0; refreshBtnFit(); });
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
     }
     function setScale(key, prop, v) {

@@ -91,10 +91,6 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   // Selector is comma-joined with the desktop :has stub arm — match by regex.
   const docks = rulesFor(css("css/touch-controls.css"), /body:not\(\.desktop\) \.dock/).filter((r) => r.decls.has("--tap"));
   assert.equal(docks.length, 2, "one base landscape dock rule and one <=700px tier");
-  // Re-blessed 2026-11-06 (UI contract rule 5 / gap 7): the tier keys on WIDTH only. Its `(max-height: 380px)` arm
-  // fired on a 852x283 Safari tab and not on the same phone's 852x393 Home Screen app, so the toolbar flipped the tap
-  // rung and the 0.92 floor; height is fitHud's continuous dock cap (js/ui/hud.js heightCap).
-  assert.ok(!docks.some((r) => r.context.some((c) => /max-height/.test(c))), "no dock tier keys on the viewport height");
   for (const r of docks) {
     const tap = rung(r.decls.get("--tap"), "dock --tap"), hold = rung(r.decls.get("--hold"), "dock --hold");
     assert.ok(tap >= 44, `${r.context.join(" ")} --tap ${tap}px >= 44`);

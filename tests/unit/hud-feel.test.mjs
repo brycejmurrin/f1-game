@@ -1086,15 +1086,11 @@ test("an empty timing tower still fits the bottom band and writes the dock cap",
  * joint height solve, 329 / (236 + 44) = 1.175 — measured live as 85 px pedals from 150 % up. */
 function dockHarness(btn, opts = {}) {
   const W = opts.width || (opts.portrait ? 390 : 844), H = opts.height || (opts.portrait ? 844 : 390);
-  // opts.ins: the window's safe-area insets (844x390 phone by default); opts.hudScale: HUD SIZE as a zoom (1);
-  // opts.gapsBottom: the gap strip's painted bottom edge under the map (the left column the steer must clear).
-  const ins = Object.assign({ "--sal": "47px", "--sar": "47px", "--sat": "0px", "--sab": "21px", "--hud-btn-floor": "0.82" }, opts.ins || {});
-  const sal = parseFloat(ins["--sal"]), sab = parseFloat(ins["--sab"]);
   const b = boot({ innerWidth: W });
   b.sb.innerHeight = H;
   const { dom } = b, root = dom.documentElement;
   if (opts.mirror) dom.body.classList.add("mirror-controls");
-  root.style.setProperty("--hud-scale", String(opts.hudScale || 1));
+  root.style.setProperty("--hud-scale", "1");
   root.style.setProperty("--hud-btn-scale", String(btn));
   const mk = (cls, parent) => { const e = dom.document.createElement("div"); e.className = cls; (parent || dom.body).appendChild(e); return e; };
   const top = mk("hud-top"), bottom = mk("hud-bottom"), bar = dom.document.createElement("div");
@@ -1105,22 +1101,22 @@ function dockHarness(btn, opts = {}) {
   const steer = elL, pedals = elR, sL = opts.mirror ? pedals : steer, sR = opts.mirror ? steer : pedals;
   const R = (left, top_, w, h) => ({ left, top: top_, right: left + w, bottom: top_ + h, width: w, height: h });
   const gear = mk("g", bottom), energy = mk("e", bottom), grpSteer = mk("st", steer), taps = mk("tp", pedals), ped = mk("pd", pedals);
-  const by = H - sab - 236, rows = new Map([
-    [top, R(W / 2 - 150, 8, 300, 54)], [b.els.minimap, R(sal + 10, 8, 110, 110)], [b.els.hudSectors, R(W - sal - 100, 70, 90, 72)],
+  const by = H - 21 - 236, rows = new Map([
+    [top, R(W / 2 - 150, 8, 300, 54)], [b.els.minimap, R(57, 8, 110, 110)], [b.els.hudSectors, R(W - 147, 70, 90, 72)],
     [gear, R(W / 2 - 120, H - 81, 120, 60)], [energy, R(W / 2, H - 81, 120, 60)],
-    [bar, R(sal, by, W - 2 * sal, 236)], [sL, R(sal, by, opts.mirror ? 134 : 152, 236)], [sR, R(W - sal - (opts.mirror ? 152 : 134), by, opts.mirror ? 152 : 134, 236)],
-    [grpSteer, R(opts.mirror ? W - sal - 152 : sal, H - sab - 72, 152, 72)],
-    [taps, R(opts.mirror ? sal : W - sal - 134, by, 54, 236)], [ped, R(opts.mirror ? sal + 62 : W - sal - 72, by + 84, 72, 152)],
+    [bar, R(47, by, W - 94, 236)], [sL, R(47, by, opts.mirror ? 134 : 152, 236)], [sR, R(W - 47 - (opts.mirror ? 152 : 134), by, opts.mirror ? 152 : 134, 236)],
+    [grpSteer, R(opts.mirror ? W - 199 : 47, H - 93, 152, 72)],
+    [taps, R(opts.mirror ? 47 : W - 181, by, 54, 236)], [ped, R(opts.mirror ? 109 : W - 119, by + 84, 72, 152)],
   ]);
-  if (opts.gapsBottom) rows.set(b.els.gapA.parentNode, R(sal + 10, 126, 120, opts.gapsBottom - 126));
   for (const [el, r] of rows) el._rect = r;
+  const ins = { "--sal": "47px", "--sar": "47px", "--sat": "0px", "--sab": "21px", "--hud-btn-floor": "0.82" };
   b.sb.getComputedStyle = () => ({ getPropertyValue: (k) => ins[k] || ALL_TOKENS[k] || "", columnGap: "8px", rowGap: "8px", position: "static", transform: "none" });
   if (opts.portrait) b.sb.matchMedia = (q) => ({ matches: /portrait/.test(q) });
   for (let i = 0; i < 4; i++) { b.sb.GameHud.invalidateFit(); b.tick(); }
   const pv = (k) => root.style.getPropertyValue(k);
   const want = Math.max(0.82, btn);
-  const zR = +pv("--hud-z-dock") || want, zL = +pv("--hud-z-dock-l") || zR, zBot = +pv("--hud-z-bot") || (opts.hudScale || 1);
-  return { pv, zR, zL, zBot, W, H, want, sal, sab };
+  const zR = +pv("--hud-z-dock") || want, zL = +pv("--hud-z-dock-l") || zR, zBot = +pv("--hud-z-bot") || 1;
+  return { pv, zR, zL, zBot, W, H, want };
 }
 
 test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap; the pedals keep theirs", () => {
@@ -1153,50 +1149,10 @@ test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap
 
 test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait keeps the shared cap", () => {
   const m = dockHarness(2.45, { mirror: true });
-  // Re-blessed 2026-11-06 (UI contract gap 7): the pedal column now paints LEFT, under the map, so the column cap
-  // (369 - 118 - 10) / 236 = 1.021 binds before the joint height solve's 1.175 — a 277 px column had run 26 px into the map.
-  assert.equal(m.pv("--hud-z-dock"), "1.021", "mirrored pedals clear the map's bottom edge");
+  assert.equal(m.pv("--hud-z-dock"), "1.175");
   assert.ok(m.zL > 1.175, `mirrored steer dock still follows the slider (${m.zL})`);
   const p = dockHarness(2.45, { portrait: true });
   assert.equal(p.pv("--hud-z-dock-l"), p.pv("--hud-z-dock"), "portrait: the steer dock rides the shared cap");
-});
-
-/* THE OWNER'S WINDOWS (UI contract 2026-11-06 §2 / §4.14; tests/data/settings-defaults-export.json: HUD 155.25,
- * BUTTON 245). A = the Home Screen app, 852x393 with 59/21/59 insets; C = the same phone as a Safari tab, 852x283
- * under the toolbar. Intrinsics as above: steer row 152x72, taps column 134 wide / 236 tall, cluster 240 wide. */
-const OWNER = { hudScale: 1.5525 };
-test("gap 6: at 852x393 on the export HUD SIZE reaches GEAR / SPEED — the cluster takes half the bar's spare, the steer the other half", () => {
-  const h = dockHarness(2.45, { ...OWNER, width: 852, height: 393, ins: { "--sal": "59px", "--sar": "59px", "--sab": "21px" } });
-  // The pedals: the joint height solve, 332 / (236 + 44) = 1.186 (contract §4.14).
-  assert.equal(h.pv("--hud-z-dock"), "1.186");
-  // The bar (734) less pedals at their cap, the gaps, the SHIPPED cluster (240) and the steer at the pedals' cap
-  // leaves ~119 px: half to the steer (152 wide), half to the cluster (240 wide). --hud-z-bot = min(scale, cap):
-  // 1.25 painted where min(scale, 1) painted 1.0 for every HUD SIZE — "HUD SIZE does nothing in landscape".
-  const barW = h.W - 2 * h.sal, spare = barW - 134 * h.zR - 2 * 8 - 20 - 240 - 152 * h.zR;
-  assert.ok(spare > 100, `the fixture has spare width to split (${spare})`);
-  assert.ok(Math.abs(h.zL - (h.zR + spare / 2 / 152)) < 1e-3, `the steer takes half the spare (${h.zL})`);
-  assert.equal(h.pv("--hud-z-bot"), String(Math.ceil((1 + spare / 2 / 240) * 100 - 1e-9) / 100), "--hud-z-bot = min(scale, cap): written, between shipped and the slider");
-  assert.ok(h.zBot > 1.2 && h.zBot < OWNER.hudScale, `the cluster paints above shipped and under HUD 155 (${h.zBot})`);
-  assert.ok(152 * h.zL + 134 * h.zR + 240 * h.zBot + 2 * 8 + 20 <= barW + 1, "steer, cluster and pedals still share the bar");
-  // A smaller HUD SIZE keeps its own number: the cap is the ceiling, never the value.
-  const low = dockHarness(2.45, { hudScale: 1.1, width: 852, height: 393, ins: { "--sal": "59px", "--sar": "59px", "--sab": "21px" } });
-  assert.equal(low.pv("--hud-z-bot"), "", "HUD 110 fits under the cap: no --hud-z-bot written");
-  assert.ok(Math.abs(low.zL - h.zL) < 1e-6, `the steer ignores HUD SIZE (${low.zL} vs ${h.zL})`);
-});
-
-test("gap 7: at 852x283 (Safari tab) the steer dock stops under the left column — map + gap strip — with FIT_AIR to spare", () => {
-  const gapsBottom = 166;   // the strip under the compact 110 px map
-  const h = dockHarness(2.45, { ...OWNER, width: 852, height: 283, ins: { "--sal": "59px", "--sar": "59px", "--sab": "0px" }, gapsBottom });
-  // The pedal column is the height solve's: (243 - 44) / 236 = 0.843, above the 0.82 floor — no 380 tier any more.
-  assert.equal(h.pv("--hud-z-dock"), "0.843");
-  const colCap = (h.H - h.sab - gapsBottom - 10) / 72;
-  assert.ok(h.pv("--hud-z-dock-l") !== "", "the steer cap is explicit although its height and width budgets would allow more");
-  assert.ok(Math.abs(h.zL - Math.round(colCap * 1000) / 1000) < 1e-6, `the steer stops at the column cap ${colCap.toFixed(3)} (${h.zL})`);
-  assert.ok(h.H - h.sab - 72 * h.zL >= gapsBottom + 10 - 1e-6, "the steer's top clears the gap strip by FIT_AIR");
-  assert.ok(h.zBot >= 1 - 1e-9 && h.zBot <= OWNER.hudScale, `the cluster stays between shipped and the slider (${h.zBot})`);
-  // Without the strip the map alone (bottom 118) leaves the column cap above the width budget: the width wins.
-  const open = dockHarness(2.45, { ...OWNER, width: 852, height: 283, ins: { "--sal": "59px", "--sar": "59px", "--sab": "0px" } });
-  assert.ok(open.zL > h.zL, `a shorter column frees the steer (${open.zL} > ${h.zL})`);
 });
 
 test("BUTTON SIZE readout names the size the fit paints when the dock is capped", () => {
@@ -1207,13 +1163,6 @@ test("BUTTON SIZE readout names the size the fit paints when the dock is capped"
   assert.equal(f("100%", 100, ""), "100%", "no cap written: the player's number");
   assert.equal(f("100%", 100, "1.175"), "100%", "a cap above the value is not a limit");
   assert.equal(f("118%", 117.5, "1.175"), "118%", "at the cap: nothing to explain");
-  // HUD SIZE reads the same way off --hud-z-bot (UI contract gap 6): the owner's 155 % on a 852x393 bar paints 125 %.
-  assert.equal(f("155%", 155.25, "1.25"), "155% · fits 125%");
-  const scaleSrc = read("js/ui/scale.js");
-  assert.match(scaleSrc, /function applyHudScale\(\) \{ applyScale\("hudScale", "--hud-scale", "pm-hudscale"\); refreshHudFit\(\); \}/, "HUD SIZE rebuilds its readout when the slider moves");
-  assert.match(scaleSrc, /function refreshHudFit\(\) \{[\s\S]*?\$\("pm-hudscale-v"\)[\s\S]*?btnFitLabel\(scaleLabel\(pct, "hudScale"\), pct, document\.documentElement\.style\.getPropertyValue\("--hud-z-bot"\)\)/,
-    "the HUD SIZE readout reads the cluster's cap, --hud-z-bot");
-  assert.match(scaleSrc, /refreshBtnFit\(\); refreshHudFit\(\); \}/, "and whenever fitHud moves a root var (the style observer), like BUTTON SIZE");
   const css = cssRules(readCssSource("css/touch-controls.css"));
   const zoom = decl(css, /^body:not\(\.desktop\) #dock-left,/, "zoom");
   assert.equal(zoom, "min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))", "the steer dock has its own zoom rule, min()ed with the slider like the pedal dock");

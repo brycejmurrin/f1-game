@@ -1713,26 +1713,6 @@ const api = {
   hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
   btnScale(v) { return badPct("btnScale", v) || G.setScale("hudBtnScale", "--hud-btn-scale", v); },
 
-  // HUD FIT (UI contract 2026-11-06 gap 9), read-only: z = the four caps js/ui/hud.js fitHud publishes inline on :root
-  // (--hud-z-top/-bot/-dock/-dock-l; null = the band fits at its slider); rects = painted screen boxes of the docks, the
-  // gear/speed cluster (in-flow children's union), map, tower, gaps, sectors, tyre; clash = pairs overlapping > 0.5 px.
-  hudFit() {
-    const hit = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
-    const rect = (r) => (r && r.width && r.height ? { x: +r.left.toFixed(1), y: +r.top.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1) } : null);
-    const box = (sel) => { const el = document.querySelector(sel); return el && !el.hidden ? rect(el.getBoundingClientRect()) : null; };
-    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
-    for (const c of document.querySelectorAll(".hud-bottom > :not([hidden]):not(#hud-tyre)")) {
-      const q = c.getBoundingClientRect();
-      if (q.width) { l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom); }
-    }
-    const rects = { dockL: box("#dock-left"), dockR: box("#dock-right"), cluster: r > l ? rect({ left: l, top: t, width: r - l, height: b - t }) : null,
-      map: box("#minimap"), tower: box(".hud-top"), gaps: box(".hud-gaps"), sectors: box("#hud-sectors"), tyre: box("#hud-tyre") };
-    const keys = Object.keys(rects).filter((k) => rects[k]), clash = [], z = {};
-    for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) if (hit(rects[keys[i]], rects[keys[j]])) clash.push(keys[i] + "+" + keys[j]);
-    for (const k of ["top", "bot", "dock", "dock-l"]) z[k] = document.documentElement.style.getPropertyValue("--hud-z-" + k) || null;
-    return { z, vp: { w: window.innerWidth, h: window.innerHeight }, rects, clash };
-  },
-
   // SHEET FIT (UI contract 2026-11-06 rule 8; the alias PR B deferred until PR C owned this file), read-only: one sheet's
   // measured layout as numbers, SheetShape.layoutProbe verbatim. `sel` = a selector or an element; none = the first
   // painted .sheet / .fit-managed. null when nothing matches or nothing is painted.

@@ -49,11 +49,6 @@ export const DEVICES = Object.freeze({
   "phone-se-667x375": { w: 667, h: 375, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   "phone-android-740x360": { w: 740, h: 360, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   "phone-max-932x430": { w: 932, h: 430, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 } },
-  // THE OWNER'S WINDOWS (UI contract 2026-11-06 §2, gap 9): the Home Screen app on an iPhone 15 Pro, 852x393 with
-  // 59/21/59 insets, and the same phone as a Safari tab, 852x283 under the toolbar (no bottom inset). Named cells
-  // and --device; both boot from his LOAD SETTINGS export unless --settings names another (DEVICE_SETTINGS).
-  "phone-pro-852x393": { w: 852, h: 393, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 } },
-  "phone-safari-852x283": { w: 852, h: 283, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 0 } },
   "phone-landscape-left-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 0, sat: 0, sab: 21 } },
   "tablet-portrait-820x1180": { w: 820, h: 1180, touch: true, ins: { sal: 0, sar: 0, sat: 24, sab: 20 } },
   "laptop-1366": { w: 1366, h: 768, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
@@ -62,12 +57,6 @@ export const DEVICES = Object.freeze({
 // The device AXIS of every generated matrix; the lead shapes are named cells.
 export const MATRIX_DEVICES = Object.freeze(["desktop-1280", "desktop-1920", "phone-landscape-844x390",
   "phone-portrait-390x844", "tablet-1180x820"]);
-/** The LOAD SETTINGS export a device boots from when the CLI has no --settings: the owner's phone cells measure
- *  HIS profile (textSize large, HIGH CONTRAST, HUD 155, BUTTON 245), not the shipped store. The export is an
- *  axis of the window, not a flag on the run (UI contract 2026-11-06 gap 9). */
-export const OWNER_EXPORT = "tests/data/settings-defaults-export.json";
-export const DEVICE_SETTINGS = Object.freeze({ "phone-pro-852x393": OWNER_EXPORT, "phone-safari-852x283": OWNER_EXPORT });
-export const deviceSettings = (device) => DEVICE_SETTINGS[device] || null;
 /** css/overlays.css: the #rotate-device gate's media query (portrait, coarse, ≤743 wide, ≤956 tall). */
 export const portraitBlocked = (dev) => !!dev && dev.touch && dev.h > dev.w && dev.w <= 743 && dev.h <= 956;
 
@@ -247,7 +236,7 @@ export function normalizeCell(raw, base = DEFAULT_CELL) {
 }
 
 const short = { "desktop-1280": "d1280", "desktop-1920": "d1920", "desktop-1440x900": "d1440", "phone-landscape-844x390": "phoneL",
-  "phone-portrait-390x844": "phoneP", "tablet-1180x820": "tablet", "phone-pro-852x393": "phonePro", "phone-safari-852x283": "phoneSafari" };
+  "phone-portrait-390x844": "phoneP", "tablet-1180x820": "tablet" };
 function hash6(s) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -507,19 +496,6 @@ export const LEADS = Object.freeze([
     checks: [{ type: "clip", sel: "#hud-energy", label: "#hud-energy .hud-energy-label" }] },
   { name: "lead14-larger-energy-phone", device: PL, textSize: "larger", lead: "TEXT LARGER on a phone: #hud-energy label clipped?",
     checks: [{ type: "clip", sel: "#hud-energy", label: "#hud-energy .hud-energy-label" }] },
-  // 15. The owner's windows on his export (UI contract 2026-11-06 §4.14): HUD 155 must reach the cluster
-  //     (--hud-z-bot written, above 1), every touch button on screen, and in the Safari tab the steer must
-  //     clear the map (the column cap writes --hud-z-dock-l).
-  { name: "lead15-pro-buttons", device: "phone-pro-852x393", steer: "buttons",
-    lead: "852x393 export, BUTTONS: --hud-z-bot written (HUD SIZE reaches GEAR / SPEED), no touch button off-screen",
-    checks: [{ type: "varWritten", var: "--hud-z-bot" }, { type: "onScreen", keys: TOUCH_BUTTONS.slice() }] },
-  { name: "lead15-pro-tilt", device: "phone-pro-852x393",
-    lead: "852x393 export, TILT: no touch button off-screen", checks: [{ type: "onScreen", keys: TOUCH_BUTTONS.slice() }] },
-  { name: "lead15-safari-buttons", device: "phone-safari-852x283", steer: "buttons",
-    lead: "852x283 export, BUTTONS: the steer dock clears the map (--hud-z-dock-l written), no touch button off-screen",
-    checks: [{ type: "varWritten", var: "--hud-z-dock-l" }, { type: "onScreen", keys: TOUCH_BUTTONS.slice() }, { type: "noOverlap", a: "map", b: ["btn-steer-left", "btn-steer-right"] }] },
-  { name: "lead15-safari-tilt", device: "phone-safari-852x283",
-    lead: "852x283 export, TILT: no touch button off-screen", checks: [{ type: "onScreen", keys: TOUCH_BUTTONS.slice() }] },
 ]);
 
 const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };

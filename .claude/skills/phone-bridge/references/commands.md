@@ -17,6 +17,7 @@ Parse: take the text between ` ```apex-result\n ` and the closing fence, `JSON.p
 |---|---|---|
 | `ping` | — | `{pong, t}` |
 | `facts` | — | `{sha, ua, dpr, w, h, gpu, cores, info, render:{backend, threePath, live, engine, fallbackWhy}}` |
+| `display` | — | the CSS→device pixel ledger (#5166): `{dpr, inner, screen, client, visualViewport, standalone, vars:{root,hud} (--ui-scale, --vwz, --hud-scale…), game/soft:{css, rect, buffer, engine, chain}, hud:{chain:{steps, zoomProduct}, time, pos}, overlay, renderScale, build:{sha, build, swCaches, sw}}`; HUD painted px = fontSize × zoomProduct × visualViewport.scale × dpr; canvas backing = css × dpr × renderScale.scale |
 | `frames` | `seconds` 1–60 | `{frames, fps, meanMs, p50, p95, p99, maxMs, over33, longTasks, hidden}` (rAF intervals; `hidden: true` = void) |
 | `call` | `method`, `args[]` | one `__apex` method in `CALL_OK` (see `js/agent/apex-bridge.js`) |
 | `path` | `to` webgpu / webgl2 / auto, `reload` (default true) | `{was, pinned, reloading}`; no `to` = the `render` state alone |

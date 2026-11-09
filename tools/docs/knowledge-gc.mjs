@@ -75,12 +75,28 @@ const readList = (rel) => fs.existsSync(path.join(ROOT, rel)) ? JSON.parse(read(
  * The filename's date, else the OLDEST commit date the clone holds for the note
  * (a shallow clone bottoms out at its boundary commit, which only makes an old
  * note look younger, never older). The last commit would re-date a note on every
- * link repoint. An uncommitted note is dated today.
+ * link repoint. On a shallow clone, batched `git log -- docs/notes` re-dates every
+ * undated file at the boundary commit (a Nov 4 boundary read the whole grandfathered
+ * tree as newer than KIND_REQUIRED_FROM), so git dates are ignored there; a tracked
+ * note with no filename date and no full-clone log hit is dated 1970-01-01 so Kind
+ * enforcement does not treat it as "new". Only an untracked path is dated today.
+ * (Re-landed from 8897fdf, which the Nov 6 rollback removed.)
  */
 export function dateOf(rel) {
   const m = /(\d{4}-\d{2}-\d{2})/.exec(path.basename(rel));
   if (m) return m[1];
-  return gitDates().get(rel) || isoToday();
+  let fromGit;
+  try {
+    if (git(["rev-parse", "--is-shallow-repository"], { stdio: "pipe" }).trim() !== "true") {
+      fromGit = gitDates().get(rel);
+    }
+  } catch { /* no git */ }
+  if (fromGit) return fromGit;
+  try {
+    git(["ls-files", "--error-unmatch", "--", rel], { stdio: "pipe" });
+    return "1970-01-01";
+  } catch { /* untracked: a note being written now */ }
+  return isoToday();
 }
 
 /** True when the note's date comes from its filename (the only date the INDEX shows: a git date differs between a

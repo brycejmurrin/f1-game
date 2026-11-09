@@ -76,7 +76,7 @@ import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 import { probeHudElements, analyzeOverlap } from "../lib/hud-geometry.mjs";
 import {
-  DEVICES, DEFAULT_CELL, HUD_TARGETS, CellError, ENUMS, bootGroups, cellId, classifyFindings, countBy, deviceSettings,
+  DEVICES, DEFAULT_CELL, HUD_TARGETS, CellError, ENUMS, bootGroups, cellId, classifyFindings, countBy,
   applyChecks, estimateMinutes, expandMatrix, filterOnly, mergeReports, normalizeCell, parseShard, portraitBlocked, rankFindings,
   renderFindingsMd, renderIndexHtml, selfTest, shardCells,
 } from "../lib/hud-survey-matrix.mjs";
@@ -403,15 +403,6 @@ export function bootStore(c) {
   return { json, raw };
 }
 
-/** The LOAD SETTINGS export a boot group seeds: an explicit --settings wins; else the device's own default
- *  (hud-survey-matrix DEVICE_SETTINGS — the owner's phone cells boot from his export, UI contract gap 9);
- *  else null, the shipped store. */
-export function groupSettings(device, explicit, readFile = (p) => fs.readFileSync(p, "utf8")) {
-  if (explicit) return explicit;
-  const rel = deviceSettings(device);
-  return rel ? JSON.parse(readFile(path.resolve(ROOT, rel))) : null;
-}
-
 /** In-page: render `frames` frames with the 3D loop on, so the canvas shows THIS cell's camera.
  *  GLX.awaitSoftPresent is a no-op without a soft canvas, so frames are counted by rAF. */
 export async function repaintFrames(frames) {
@@ -443,11 +434,10 @@ async function runGroup(browser, group, plan, log) {
     const t0 = Date.now();
     await page.goto(plan.url, { waitUntil: "domcontentloaded", timeout: plan.waitMs });
     await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: plan.waitMs });
-    const seed = groupSettings(c0.device, plan.settings);
-    if (seed) {
-      const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), seed);
+    if (plan.settings) {
+      const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), plan.settings);
       if (!imp.ok || imp.failed) throw new Error(`--settings import incomplete: ${JSON.stringify(imp)}`);
-      log(`settings${plan.settings ? "" : ` (${c0.device} default: ${deviceSettings(c0.device)})`}: ${imp.applied} applied, ${imp.skipped} skipped`);
+      log(`settings: ${imp.applied} applied, ${imp.skipped} skipped`);
       // The boot-group init script runs again on reload, so the cell's boot keys win over the file's.
       await page.reload({ waitUntil: "domcontentloaded", timeout: plan.waitMs });
       await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: plan.waitMs });

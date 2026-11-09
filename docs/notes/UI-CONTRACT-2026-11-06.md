@@ -244,6 +244,9 @@ REL/STRAT/INPUTS stacked in a side column that the dock caps budget for. *May sc
 on the dock, text boost on digits. *Only nudges:* FIT_AIR, dock insets. *Overflow:* none, ever.
 *Goes:* the `min(scale,1)` cluster budget; width-only band caps; the `(max-height: 380px)` tier flip; unclamped stored
 entries; density from the menu slider (own density from the ICB height, or none).
+*Reverted 2026-11-09:* PR C (#5155, merged 2026-11-07 as 3b646d20) implemented this layout and was reverted on
+Bryce's ask ("Fix the HUD to how it was last week", #5165): the race HUD renders as it did on the Nov 2 tree again,
+and #5164's `__apex.sheetFit()` alias stays. This section remains the record of what PR C tried.
 
 ## 5. Switch census — rules that can give a phone-sized window a tablet, desktop, tall or two-column layout
 
@@ -283,7 +286,7 @@ rest, classified by WHEN they read:
 | js/ui/menu-nav.js:121,611 | wheel / D-pad | none (relative) | — |
 | js/ui/select-screen.js:1540-1550 | map fit, prefers `clientWidth` | fallback only | — |
 | js/ui/title-layout.js:451,511-512 | drag editor | editor-time; #5152's file | — |
-| js/ui/sheet-shape.js:557-564 keyboard `--kb` | vv resize | by design (`inner* − vv.height`) | keep |
+| js/ui/sheet-shape.js watchKeyboard `--kb` | vv resize | `innerHeight − vv.height` latched 459 px when only `inner*` was stale at a landscape launch (measured 2026-11-09, #5167 part E) | minuend = ICB (`viewportPx()`), landed with #5167 E |
 | js/data/telemetry-view.js:15-33 | popup open | raw px into a zoomed card | divide by zoom / card box |
 | js/input/input.js:1185 `_viewLong = max(w, h)` | boot | orientation-free by construction | keep |
 

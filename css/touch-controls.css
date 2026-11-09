@@ -582,14 +582,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     column-gap: max(var(--r-lg), var(--gap));
     row-gap: calc(var(--gap) * 2 / 3);
   }
-  /* Small landscape (an iPhone SE is 667 wide) — one notch down. WIDTH ONLY:
-     a `(max-height: 380px)` arm fired on a 852x283 Safari tab and not on the
-     same phone's 852x393 Home Screen app, so the toolbar flipped the tap rung
-     and the 0.92 floor (UI contract 2026-11-06 rule 5 / gap 7). Height is
-     fitHud's axis: its dock cap (--hud-z-dock / -dock-l) shrinks the pads
-     continuously with the room above the bar, and the --touch-label-floor
-     keeps the labels readable under it (the 740x360 Android case). */
-  @media (max-width: 700px) {
+  /* Small landscape (an iPhone SE is 667 wide) — one notch down. HEIGHT TOO:
+     vertical room is the scarce axis, and a 740x360 Android is 15px shorter
+     than the SE yet took the 54/72 sizes (67/90 painted), which fitHud then
+     had to cap back (hud-mock 2026-10-14: 9.7px pedal labels at HUD 150%). */
+  @media (max-width: 700px), (max-height: 380px) {
     :root { --hud-btn-floor: 0.92; }   /* 48px taps paint 44 */
     /* Same HUD-axis floor as the base dock values above. */
     body:not(.desktop) .dock,
