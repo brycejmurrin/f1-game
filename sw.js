@@ -34,6 +34,9 @@ const VOICE_CACHE = CACHE_PREFIX + "voice";
 const VOICE_KEEP_IDS = 6;
 // A navigation / version.json fetch races this before the cache answers.
 const NAV_RACE_MS = 3000;
+// A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
+// a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
+const BUST_WAIT_MS = 15000;
 // An OPTIONAL precache asset is abandoned (and aborted) after this long.
 const OPTIONAL_ASSET_MS = 4000;
 // A dev host serves the committed shell, whose asset tags all read `?v=dev`
@@ -1144,7 +1147,6 @@ self.addEventListener("fetch", (event) => {
     // Register during dispatch, including when a cache fallback wins the race.
     event.waitUntil(network.then(() => cacheWrite, () => undefined));
     event.respondWith((async () => {
-      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
       const online = typeof navigator !== "undefined" && navigator.onLine;
       // FAIL FAST ONLY WHERE A STALE ANSWER IS WORSE THAN NO ANSWER: version.json
       // (a stale build number makes the shell guard skip its reload) and the
@@ -1162,6 +1164,7 @@ self.addEventListener("fetch", (event) => {
       // page offline and on a slow link, for good.
       const bustShell = isShellBust ? await shellAtLeast(url.searchParams.get("b")) : undefined;
       const failFast = online && (isVersion || (isShellBust && !bustShell));
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), isShellBust && !bustShell ? BUST_WAIT_MS : NAV_RACE_MS));
       try {
         const res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
