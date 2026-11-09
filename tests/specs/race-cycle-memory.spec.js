@@ -30,7 +30,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
-  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues,
+  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth, censusBlindness,
 } from "../helpers/race-cycle-memory.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -129,6 +129,8 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   const readings = [];
   /** @type {Map<number, { heapMB: number|null, audioMB: number|null }>} */
   const menuByCycle = new Map();
+  /** Per-cycle WebGPU wrapper counts + DOM counters at the final menu (#4778). */
+  const wrapperSeries = [];
   const log = (row) => { readings.push(row); mkdirSync("artifacts/logs", { recursive: true }); writeFileSync("artifacts/logs/race-cycle-memory.json", JSON.stringify(readings, null, 1)); };
   let lastCycle = CYCLES;
   for (let cycle = 1; cycle <= lastCycle; cycle++) {
@@ -151,6 +153,9 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
       if (id === CIRCUITS[CIRCUITS.length - 1]) {
         menuByCycle.set(cycle, { heapMB: menu.heapMB, audioMB: menu.audioMB });
+        const ctx = await contextScopeCount(cdp);
+        wrapperSeries.push({ cycle, wrappers: await gpuWrapperCounts(cdp), contexts: ctx.count, contextsBlind: ctx.blind, contextNames: ctx.names, dom: await domLeakCounters(cdp) });
+        log({ cycle, at: "wrappers", ...wrapperSeries[wrapperSeries.length - 1] });
         // A first pair over the hard bound may be one odd reading (dip or step): race CONFIRM_CYCLES more and let
         // the robust slope decide below. A clean pair costs nothing extra.
         if (cycle === CYCLES && lastCycle === CYCLES && postWarmSlope(menuByCycle, CYCLES).heapHardFail) lastCycle = CYCLES + CONFIRM_CYCLES;
@@ -191,6 +196,18 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
     ).toBeLessThanOrEqual(HEAP_SLOPE_HARD_MB);
   }
   const softMsgs = [];
+  // Wrapper objects (#4778): post-warm pair must be flat per class. Soft unless STRICT, like the heap slope.
+  const wg = wrapperGrowth(wrapperSeries, CYCLES);
+  test.info().annotations.push({ type: "gpu-wrapper-series", description: JSON.stringify(wrapperSeries) });
+  // CI observation (#4778): which API the census really saw, and whether the wrapper counts were non-null.
+  const lastRow = readings.filter((r) => r.at === "menu").pop() || {};
+  const api = lastRow.backend && lastRow.backend.api;
+  const wrapperObserved = wrapperSeries.length > 0 && wrapperSeries.every((r) => r.wrappers && Object.values(r.wrappers).some((v) => typeof v === "number"));
+  // A channel the census could not see is SAID, never gated as a zero (wrapperGrowth skips non-numbers).
+  const blind = censusBlindness(wrapperSeries, api);
+  test.info().annotations.push({ type: "gpu-wrapper-observed", description: JSON.stringify({ api, wrapperObserved, blind }) });
+  if (blind.length) softMsgs.push(`census blind: ${blind.join("; ")}`);
+  if (!wg.ok) softMsgs.push(`wrapper growth cycle${CYCLES}−cycle${CYCLES - 1}: ${wg.issues.join("; ")}`);
   if (slope.heapSoftFail) {
     softMsgs.push(`heap slope ${slope.heapDelta} MiB > soft ${HEAP_SLOPE_SOFT_MB} (MEMORY-TOOLING nightly; post-warm after ${WARM_CYCLES})`);
   }
