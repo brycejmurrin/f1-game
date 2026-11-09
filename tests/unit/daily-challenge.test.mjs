@@ -1,8 +1,8 @@
 /* daily-challenge.test.mjs — the DAILY CHALLENGE plan and record, in a VM.
  *
  * js/race/daily-challenge.js is pure rules over the date and a store: the plan
- * must be the same for every player on the same UTC day and different across
- * days; the streak counts consecutive UTC days with a lap; the share line has
+ * must be the same for every player on the same calendar date and different across
+ * days; the streak counts consecutive LOCAL days with a lap (#5010); the share line has
  * one shape. Loaded whole with stub Tracks / Log, like season-cal.test.mjs.
  *
  * Run: node --test tests/unit/daily-challenge.test.mjs   (npm run test:tooling-fast)
@@ -166,7 +166,7 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   assert.equal(ctx.G.daily.shareResult().medal, null);
 });
 
-test("the plan is a pure function of the UTC day — same day, same plan; adjacent days differ", () => {
+test("the plan is a pure function of the day — same day, same plan; adjacent days differ", () => {
   const { D } = load();
   const a = D.plan("2026-09-03"), b = D.plan("2026-09-03");
   assert.deepEqual(a, b);
@@ -178,7 +178,7 @@ test("the plan is a pure function of the UTC day — same day, same plan; adjace
     assert.ok(["default", "dawn", "day", "dusk", "night"].includes(p.tod));
     assert.ok(p.seed > 0 && Number.isInteger(p.seed));
   }
-  assert.equal(D.dayKey(new Date(Date.UTC(2026, 8, 3, 23, 59))), "2026-09-03", "UTC, not local");
+  assert.equal(D.dayKey(new Date(2026, 8, 3, 23, 59)), "2026-09-03", "local calendar day, not UTC");
   assert.equal(D.prevDay("2026-03-01"), "2026-02-28");
 });
 
@@ -225,7 +225,7 @@ test("stop() hands the session seed back: a later one-off GP does not draw off t
   assert.equal(G.seed, 777);
 });
 
-test("record() keeps the day's best and counts a streak of consecutive UTC days", () => {
+test("record() keeps the day's best and counts a streak of consecutive days", () => {
   const { d } = load();
   assert.equal(d.record(80), null, "no active session, nothing recorded");
   d.open("2026-09-03");
@@ -238,6 +238,28 @@ test("record() keeps the day's best and counts a streak of consecutive UTC days"
   d.open("2026-09-06"); d.record(70);   // a missed day resets the streak
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-09-06" });
   assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
+});
+
+// #5010: in Los Angeles (PST) the UTC day rolls at 4 pm, so a 3 pm lap and a 6 pm lap on the next
+// local day were UTC days N and N+2 and the streak reset to 1; two laps one evening counted two days.
+test("the streak counts the player's local days: LA 3 pm then 6 pm the next day is a streak of 2", () => {
+  const tz = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    const { d } = load();
+    const key = (s) => d.dayKey(new Date(s));
+    assert.equal(key("2026-11-04T15:00:00"), "2026-11-04");
+    assert.equal(key("2026-11-05T18:00:00"), "2026-11-05", "6 pm PST is still the 5th, not the UTC 6th");
+    d.open(key("2026-11-04T15:00:00")); d.record(80);
+    d.open(key("2026-11-05T18:00:00")); d.record(80);
+    assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-05" });
+    d.open(key("2026-11-06T14:00:00")); d.record(80);
+    d.open(key("2026-11-06T17:00:00")); d.record(79);
+    assert.deepEqual(host(d.data().streak), { count: 3, last: "2026-11-06" }, "two laps one afternoon are one day");
+    d.stop();
+  } finally {
+    if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz;
+  }
 });
 
 test("record() persists its returned entry before notifying streak badges", () => {
