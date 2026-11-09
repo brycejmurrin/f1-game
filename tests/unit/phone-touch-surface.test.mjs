@@ -127,6 +127,9 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar))", "CAM sits one even gap left of PAUSE");
   assert.doesNotMatch(decl(ov, "#btn-cam", "min-width") + decl(ov, "#btn-cam", "font-size"), /--hud-btn-z/, "CAM's width and label ignore BUTTON SIZE");
   assert.ok(!ov.some((r) => r.decls.has("--tap-btn")), "the BUTTON SIZE > 150 % PAUSE growth is gone");
+  // …and fitHud's side cap still budgets the OLD --tap-hud footprint (PAUSE 44 x btn-z, CAM >= 76 x btn-z beside
+  // it): a freed band grew the tower into the lifted sector plate at HUD 155 / BUTTON 245 (hud-layout, #5179).
+  assert.match(fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8"), /pauseL = pR && pR\.width \? pR\.right - 44 \* bz : Infinity;[\s\S]{0,400}Math\.max\(76, r\.width\) \* bz/);
   // LEFT-HANDED: #dock-right paints on the left, so it is the dock TYRES hangs from; the fit picks docks by side.
   const hc = css("css/hud.css");
   assert.ok(hc.some((r) => /body\.mirror-controls:not\(\.desktop\) #dock-right/.test(r.selector) && r.decls.get("anchor-name") === "--apex-dock-left"), "mirror re-points the TYRES anchor");

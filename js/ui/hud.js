@@ -1113,10 +1113,15 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   let capChrome = Infinity;
   if (!bcast && top) {
     const tR = layoutRect(_hudTop), botInt = (tR.bottom - satPx) / zoomDiv(_hudTop, zTopPub);
+    // #5179 shrank the pair to a fixed 44 px; the band keeps the footprint the old --tap-hud pair (44 x BUTTON
+    // SIZE <= 150 %) reserved, so freeing it never grows the rest of the HUD into the lifted sector plate.
+    const bz = Math.min(1.5, Math.max(1, Math.min(+root.style.getPropertyValue("--hud-z-dock") || 99, btnScale)));
+    const pR = els.pausebtn && !els.pausebtn.hidden ? els.pausebtn.getBoundingClientRect() : null, pauseL = pR && pR.width ? pR.right - 44 * bz : Infinity;
     for (const el of [els.btnCam, els.pausebtn]) {
       const r = el && !el.hidden ? layoutRect(el) : null;
       if (!(r && r.width && r.left > half)) continue;
-      const zSide = (r.left - FIT_AIR - half) / (top / 2);
+      const left = Math.min(r.left, el === els.pausebtn ? pauseL : pauseL - 4 - Math.max(76, r.width) * bz);
+      const zSide = (left - FIT_AIR - half) / (top / 2);
       const zAbove = botInt > 0 ? (r.top - FIT_AIR - satPx) / botInt : -Infinity;
       capChrome = Math.min(capChrome, Math.max(zSide, zAbove));
     }
