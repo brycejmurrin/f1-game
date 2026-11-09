@@ -20,7 +20,7 @@
 // does; the band's other candidate — the sticky utility-row scrim #menu-buttons
 // paints only as a scroller (.sf-scroll) — cannot appear once nothing scrolls.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
+import { GEOS, profiles, sweep, settleInPage, measureInPage, judge, judgeStored, staleLaunchInPage, firstFlagsInPage } from "../helpers/title-fit.mjs";
 
 const SETTLE_FRAMES = 12;
 
@@ -78,6 +78,12 @@ for (const geo of GEOS) {
         const boot = await measure(page);
         expect(boot.frames, "the fit settled").toBeGreaterThan(0);
         expect(judge(boot.m, { offsets: prof.offsets }), `${geo.name} boot ${prof.name}: ${JSON.stringify({ fit: boot.m.fit, mb: boot.m.mb, ov: boot.m.ov })}`).toEqual([]);
+        if (prof.name === "export") {
+          // The stored WIDTH 20 at Bryce's geometries (#5167 part F): the
+          // cluster fills its track, two doors to a row, the small print back.
+          expect(boot.m.tl, "the stored layout reached the page").toMatchObject({ layout: "on", btnw: "on" });
+          expect(judgeStored(boot.m), `${geo.name} boot export (stored WIDTH 20): ${JSON.stringify({ track: boot.m.track, mbW: boot.m.mb.rect.w, raceFs: boot.m.raceFs, fit: boot.m.fit })}`).toEqual([]);
+        }
         if (prof.name === "export-w40-stack") {
           // The repro cell: this is the layout that scrolled (563/343) before the fit.
           expect(boot.m.tl, "the stored layout reached the page").toMatchObject({ layout: "on", btns: "stack", btnw: "on" });

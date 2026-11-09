@@ -128,25 +128,42 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   align-content: safe center; pointer-events: auto;
   container: title-menu / inline-size;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
+/* THE BRAND COLUMN IS NOT A BUTTONS SETTING (#5167 part F). These three rules
+   used to share the no-stored-layout gate above, so a stored WIDTH or LAYOUT
+   on the DOORS handed the brand to the live-home plate rules in css/menus.css:
+   measured 2026-11-09 at 852x393 with Bryce's export, the wordmark fell from
+   56 to 36 own px, the disclaimer vanished and a --scrim-heavy plate 380x160
+   sat behind the brand. The brand's type, margin and small print are the
+   same whatever the cluster was told; only SIDE moves the column, and these
+   rules do not care which column they are in. */
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
   align-self: start; margin-top: calc(4 * var(--vhz));
   background: transparent; width: 100%;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #title {
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #title {
   font-size: min(calc(7.2 * var(--vwz)), 21cqi);
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #tc-frame {
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
+/* The car's placement and the DAILY door's wrap are the phone composition,
+   not a buttons setting (#5167 part F, same reason as the brand rules). */
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #tc-frame {
   transform: translate(69px, 145px) scale(0.902);
 }
 :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
   flex-wrap: nowrap;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
+/* The utility row SHARES its row whatever WIDTH the doors were given; only a
+   stored LAYOUT (STACK / ROW) composes it differently. Under a stored WIDTH
+   these four kept `width: 100%` from the destination rule above with
+   `flex-basis: auto`, so each took a row of its own: measured 2026-11-09 at
+   852x393 with Bryce's export, four rows of 27.6px for SETTINGS, USE AS
+   CONTROLLER, HOW TO PLAY and SAVES & DATA, 137 own px the fit paid for
+   (--tf 0.695 with the cluster already at its track). */
+:root:where(:not([data-title-btns])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
   flex: 1 1 0; width: auto; min-width: min-content;
   overflow-wrap: normal;
 }
-:root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
+:where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
 /* The six Play/Garage tiles on three tracks: two whole rows, never 4+2 with a
    hole (design pass #1). THE TRACKS ARE A SHARE OF THE CLUSTER'S OWN WIDTH AND
    NOTHING ELSE (#5150, UI contract §3 rule 2: zoom scales type inside a fitted
@@ -184,8 +201,17 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   align-self: center; align-content: start; pointer-events: auto;
   container: title-menu / inline-size;
 }
+/* One column; the ROWS stay the compact Home shape's (hero 1, play 2 with
+   GARAGE in its spare cell, explore 3, create 4, utilities 5 — the rules
+   above and css/menus.css). `grid-row: auto` here used to flatten them, so
+   GARAGE took a full row of its own under a half-empty PRACTICE row:
+   measured 2026-11-09 at 852x393 with Bryce's export, 47.7 own px more for
+   the fit to pay for (#5167 part F). */
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
-  grid-column: 1; grid-row: auto; width: 100%; min-width: 0;
+  grid-column: 1; width: 100%; min-width: 0;
+}
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > #menu-garage {
+  width: calc(50% - var(--home-g) / 2);
 }
 :root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { flex-wrap: wrap; }
 :root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-column: 1; }

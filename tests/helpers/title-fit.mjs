@@ -145,9 +145,17 @@ export function measureInPage() {
     doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, hit: !!hit && (hit === b || b.contains(hit)) });
   }
   const de = document.documentElement;
+  const cols = cs.gridTemplateColumns.split(/\s+/).map(parseFloat).filter((n) => n > 0);
+  const disc = $("disclaimer");
+  const mbZoom = parseFloat(getComputedStyle(mb).zoom) || 1;
   // The viewport is the ICB (UI contract 2026-11-06 rule 1): what every tier reads and what
   // `fixed; inset: 0` spans. inner* sits beside it so a stale-launch disagreement is visible.
   return {
+    // The overlay's grid tracks (screen px), the brand's small print, and the
+    // painted size of the RACE label (own font-size under the cluster's zoom,
+    // the fit included): what the stored-layout pins in judgeStored read.
+    track: cols, disc: disc ? { ...R(disc), display: getComputedStyle(disc).display } : null,
+    raceFs: Math.round(parseFloat(getComputedStyle($("mb-race")).fontSize) * mbZoom * 100) / 100,
     vw: de.clientWidth, vh: de.clientHeight, inner: [innerWidth, innerHeight],
     shape: document.body.dataset.shape, density: document.body.dataset.density, kb: de.style.getPropertyValue("--kb") || null,
     uiScale: getComputedStyle(de).getPropertyValue("--ui-scale").trim(),
@@ -194,5 +202,43 @@ export function judge(m, { offsets = false } = {}) {
   const vp = { l: 0, t: 0, r: m.vw, b: m.vh };
   if (!inside(m.ov.rect, vp, 0.5) || Math.abs(m.ov.rect.w - m.vw) > 0.5 || Math.abs(m.ov.rect.h - m.vh) > 0.5) bad.push(`#overlay ${fmt(m.ov.rect)} is not the viewport ${m.vw}x${m.vh}`);
   if (m.game && (Math.abs(m.game.w - m.vw) > 0.5 || Math.abs(m.game.h - m.vh) > 0.5)) bad.push(`#game ${fmt(m.game)} is not the viewport`);
+  return bad;
+}
+
+/** The stored-layout cell at a landscape phone (#5167 part F): Bryce's export
+ *  carries WIDTH 20 on the doors, and before the floor that request pinned
+ *  the cluster to 170 of 852 px at 852x393 (insets 59/21/59): the fit at
+ *  0.628, labels painting at 9.7 px, GARAGE under a half-empty PRACTICE row,
+ *  the four utility doors one per row, the disclaimer hidden and the wordmark
+ *  at 36 own px (the live-home plate rules). What the code promises now, and
+ *  what the reference picture shows (docs/notes/title-reference-2026-11-06.jpg
+ *  on branch cursor/title-reference-7c1a): the cluster fills its track, two
+ *  doors to a play row, PRACTICE beside GARAGE, the utilities on one row, the
+ *  small print visible inside the box, and labels no smaller than 12 painted
+ *  px where the box gives the composition its full height — the request's 9.7
+ *  fails that, the 15.4 measured at fit 1 clears it with the room a machine's
+ *  fonts can take back (#5152: never pin the fit). Where the cluster IS the
+ *  track and the fit still sits under 1, the fit is paying for height alone
+ *  (Safari's 283: seven rows in a 246 px box, fit 0.752, RACE at 11.6) and
+ *  the label follows it with every door (UI contract §3 rules 2–3: zoom
+ *  scales type inside a fitted box; fit, never scroll); the track and the
+ *  row pins are the guard there, and a label floor would only restate the
+ *  fit. Returns every miss, like judge(). */
+export function judgeStored(m) {
+  const bad = [];
+  const TOL = 1;
+  const track = m.track[m.track.length - 1];
+  const isTrack = track > 0 && Math.abs(m.mb.rect.w - track) <= TOL;
+  if (!(track > 0)) bad.push(`no overlay column track in ${JSON.stringify(m.track)}`);
+  else if (!isTrack) bad.push(`#menu-buttons ${Math.round(m.mb.rect.w)} wide in a ${Math.round(track)} track (the floor is the track)`);
+  const fit = parseFloat(m.fit.mb) || 1;
+  const heightBound = isTrack && fit < 1;
+  if (!heightBound && m.raceFs < 12) bad.push(`RACE paints at ${m.raceFs}px (under 12 at fit ${fit})`);
+  const door = (id) => m.doors.find((d) => d.id === id);
+  const sameRow = (a, b) => { const x = door(a), y = door(b); if (!x || !y) return bad.push(`door ${!x ? a : b} missing`); if (Math.abs(x.t - y.t) > TOL) bad.push(`${a} (top ${Math.round(x.t)}) and ${b} (top ${Math.round(y.t)}) do not share a row`); };
+  sameRow("mb-race", "mb-tt"); sameRow("mb-vs", "mb-season"); sameRow("mb-practice", "mb-garage"); sameRow("mb-watch", "mb-data");
+  sameRow("mb-settings", "mb-phonepad"); sameRow("mb-phonepad", "mb-help"); sameRow("mb-help", "mb-saves");
+  if (!m.disc || m.disc.display === "none" || !(m.disc.h > 0)) bad.push("the disclaimer is hidden");
+  else if (!inside(m.disc, m.ov.box, TOL)) bad.push(`disclaimer ${fmt(m.disc)} leaves the box ${fmt(m.ov.box)}`);
   return bad;
 }
