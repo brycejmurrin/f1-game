@@ -1,1 +1,0 @@
-Fixed: the first BOOST press no longer freezes the frame on the three.js WebGPU path (iPhone); the cockpit ERS bar's deploy pulse is now compiled during the pre-race warm-up in the mirrored orientation it is drawn with

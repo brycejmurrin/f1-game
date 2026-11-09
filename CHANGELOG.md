@@ -13,6 +13,35 @@ Under each build, use only these categories:
 
 Do not list internal refactors, agent workflows, CI, or tooling. Older history lives in git and merged PRs.
 
+## 25564
+
+### Improved
+- garage pit-crew walk uses contralateral arm swing, slight torso lean, shorter varied steps, and a hip weight-shift (Blender-authored curves).
+- Garage departure eases out of the box, rolls its wheels with path distance (no skating), and holds a flat pitch/heave on the authored follow shot. PREVIEW OUT / Race start now publishes that distance so spokes spin with the body.
+- garage bay equipment (fuel/air rig, monitor gantry, light booms, work lamp) from Blender look-dev; Rain ready and Qualifying night room looks; RAIN READY / HERITAGE / QUALIFYING arrival STYLE quick-picks.
+- GRAPHICS: HIGH on a phone loads the sharper 256 px material pack again — the Nov 6 rollback had dropped it back to 128 px (#4702, #5166).
+
+### Fixed
+- the first BOOST press no longer freezes the frame on the three.js WebGPU path (iPhone); the cockpit ERS bar's deploy pulse is now compiled during the pre-race warm-up in the mirrored orientation it is drawn with
+- the Track Designer keeps keyboard or pad focus on its foot control (SAVE, RACE, SHARE & FILES) when a rotation or resize re-seats the foot under the rail; the next Enter opens what was focused instead of jumping to the mode bar.
+- The title screen now re-fits itself the moment the phone turns, and when the Home Screen app comes back from the app switcher the other way round, even when iOS sends no resize for the turn (#5167).
+- opening the Home Screen app in landscape could leave every menu and dialog squashed against the top of the screen by a phantom keyboard band; the band is now measured against the real screen height
+- on a landscape phone the title screen's saved BUTTONS WIDTH can no longer squeeze the doors into a sliver of the screen — a width under the shipped doors column fills that column, two doors to a row with PRACTICE beside GARAGE and the four utility doors on one row, and the wordmark, car and small print keep their phone composition whatever the doors were told (the Home Screen app on an iPhone with a saved width painted 9.7 px labels in a 170 px column).
+- the race HUD returns to its early-November layout (the HUD rebuild of PR C is reverted on Bryce's ask)
+- Settings appearance rows now update immediately when a layout preset changes a knob, without reloading the page.
+- the landscape title screen never scrolls — a TITLE LAYOUT size, width or offset that would not fit the screen now shrinks the buttons or the title to fit and keeps them on screen, so the bottom row (USE AS CONTROLLER, SAVES) is never below the fold on a phone. At UI SIZE 200 % on a phone the destinations keep their three columns instead of one per row, so the fit keeps them readable, and PageDown / PageUp on a title that does not scroll jump to the last / first destination instead of doing nothing.
+- on a landscape phone the Settings pages are one reading column again (no more half-width plates with labels wrapping to three lines), the Appearance studio stacks its preview above the controls with readable preset names, the on-screen keyboard no longer covers the Settings search and share-code boxes, a sheet is never shrunk below 100 % to fit (it scrolls instead) and a Safari toolbar show/hide no longer re-zooms it, and the Home Screen app classifies its layout from the real screen size at launch instead of a stale portrait reading.
+- on a landscape phone the pause card, results list, career hub, circuit picker and race settings keep every button on screen without scrolling the card itself: the picker's filter chips share the title row and the two key numbers ride on the circuit still so the hero never scrolls; race settings go compact like the other sheets with two columns on both phones and START RACE fixed under the one scroller (a window too short for that fixed chrome at a large UI SIZE scrolls the whole sheet as one page instead of shrinking the size you asked for); the career header's broadcast line fires on the Home Screen window too (PR D of the UI rebuild).
+- In the garage on a notched phone the car keeps its room clear of the notch; the parts panel no longer takes it (#5153).
+- Photo studio thumbsticks no longer sit under the side panel on a phone held sideways (#5153).
+- The data hub's close button sits at the end of the title row again on a phone held sideways; the section tabs are one strip that scrolls between the title and the button (#5153).
+- A phone at a small UI SIZE no longer gets the desktop-sized data hub card (#5153).
+- SETTINGS › HIGH CONTRAST makes the data hub card solid, as it does the HUD; telemetry charts and the results sheet's inline type follow UI SIZE and TEXT SIZE (#5153).
+- WATCH's replay bar on a phone is one row — transport, DRIVER, the timeline and a ⋯ button whose panel holds speed, camera, director and the event chapters — instead of three rows covering half the screen (#5153).
+- The pre-race loading card never runs past the top of a short phone window: it shrinks to fit the safe area at the CARD SIZE and CARD Y you authored, with the radio caption inside it (#5153).
+- The circuit detail sheet, the lighting and camera tuners and the editor workspaces lay out from their own measured shape and density instead of the window's orientation, so UI SIZE no longer gives a phone a desktop layout (#5153).
+- car wheels visibly roll with road speed — shared `v/R·dt` phase step, rim/sidewall spin cues, and a gapped compound stripe (car viewer rolls too).
+
 ## 24324
 
 ### New
