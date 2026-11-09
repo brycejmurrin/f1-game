@@ -14264,6 +14264,7 @@
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
@@ -14512,6 +14513,7 @@
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs",
@@ -15586,6 +15588,7 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/three-inspector.test.mjs",
@@ -15746,6 +15749,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/three-inspector.test.mjs",
@@ -16262,6 +16266,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/perf-try.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
@@ -18595,6 +18600,7 @@
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-feel.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
       "refreshBtnFit": [

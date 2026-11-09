@@ -859,6 +859,8 @@
     "// tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation",
     "// that stands between a dispatch input and a shell, and the run pick. Pure, instant.",
     "tests/unit/remote-group.test.mjs",
+    "// #5166: the effective 3D resolution rule (DPR cap 1.5 on mobileTier / 2, RESOLUTION LOW = 0.5 on touch) and __apex.renderScale().effective — Bryce's phone reads 639×295 for 852×393 at DPR 3. Source pins + VM-loaded apex.js, ~0.1 s.",
+    "tests/unit/render-effective-res.test.mjs",
     "// Renderer ownership, post health, material detail and particle residency; isolated VM.",
     "tests/unit/render-final-contracts.test.mjs",
     "// RenderRate (#2652): a phone halves the draw rate on a 100 Hz+ rAF; desktop and XR never; no time lost. VM, ~0.1 s.",
