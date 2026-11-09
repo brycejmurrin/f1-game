@@ -545,7 +545,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `experience.js` | `GarageExperience` | tag | reversible garage/home cameras, ambient clock, and honest part comparisons. |
 | `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants. |
-| `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
+| `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment in the bay. build(g, liv, ctx) parks the rear jack, the wheel guns on their hose reels, the tyre trolleys, the floor boxes,… |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
 | `crew-draw.js` | `GarageCrewDraw` | tag | Shared pit-crew draw helpers and the crew body. |
