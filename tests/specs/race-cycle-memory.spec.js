@@ -77,6 +77,30 @@ async function menuQuiet(page) {
   return Date.now() - t0;
 }
 
+// A RELOAD IS NOT A CENSUS (#5175). A mid-race reload (TLX/GLX context-loss recovery, the loop-health stall
+// watchdog, the renderer claim) re-creates the document, and the census then reads a fresh title page as "no
+// renderer, no track hooks". Count document loads in sessionStorage (it survives a reload) and stash the reason at
+// pagehide, so a reload fails as itself, with the reload keys and the last warnings, not as three census strings.
+function reloadWatchInitScript() {
+  try { sessionStorage.setItem("rcm.loads", String(Number(sessionStorage.getItem("rcm.loads") || 0) + 1)); } catch (_) { /* blocked storage */ }
+  addEventListener("pagehide", () => {
+    try {
+      const keys = {};
+      for (const k of ["apex26.ctxLostNotice", "apex26.ctxLostNeedReload", "apex26.ctxLostExhausted", "apex26.stallReloads", "apex26.gfxClaimFail"]) {
+        const v = sessionStorage.getItem(k); if (v != null) keys[k] = v;
+      }
+      let info = null, tail = [];
+      try { info = window.__apex.info(); } catch (_) { /* not booted */ }
+      try { tail = Log.records({ level: "warn", limit: 8 }).map((r) => `${r.ns}: ${r.msg}`.slice(0, 240)); } catch (_) { /* no Log */ }
+      sessionStorage.setItem("rcm.unload", JSON.stringify({ state: info && info.state, track: info && info.track, keys, tail }));
+    } catch (_) { /* blocked storage */ }
+  });
+}
+async function expectNoReload(page, loads0, where) {
+  const r = await page.evaluate(() => ({ loads: Number(sessionStorage.getItem("rcm.loads") || 0), unload: sessionStorage.getItem("rcm.unload") }));
+  expect(r.loads, `page reloaded mid-race (${where}): ${r.unload}`).toBe(loads0);
+}
+
 async function flagToMenu(page) {
   await page.evaluate(() => window.__apex.finishRace());
   await page.waitForFunction(() => window.__apex.info().state === "results", null, { polling: 200, timeout: 60000 });
@@ -95,11 +119,13 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
     try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}   // as track-switch-memory: TLX init can exceed 8 s on a busy runner
   });
   await page.addInitScript(censusInitScript);
+  await page.addInitScript(reloadWatchInitScript);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("HeapProfiler.enable");
   await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
   await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
 
+  const loads0 = await page.evaluate(() => Number(sessionStorage.getItem("rcm.loads") || 0));
   const readings = [];
   /** @type {Map<number, { heapMB: number|null, audioMB: number|null }>} */
   const menuByCycle = new Map();
@@ -108,6 +134,7 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
   for (let cycle = 1; cycle <= lastCycle; cycle++) {
     for (const id of CIRCUITS) {
       await raceAndDrive(page, id);
+      await expectNoReload(page, loads0, `cycle ${cycle}, ${id} race`);
       const built = await censusAfterGc(page, cdp);
       log({ cycle, id, at: "race", ...built });
       expect(cycleCensusIssues(built), "race census must observe the requested renderer and usable counters").toEqual([]);
@@ -116,6 +143,7 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
 
       await flagToMenu(page);
       const quietMs = id === CIRCUITS[CIRCUITS.length - 1] ? await menuQuiet(page) : null;
+      await expectNoReload(page, loads0, `cycle ${cycle}, menu after ${id}`);
       const menu = await censusAfterGc(page, cdp);
       log({ cycle, id, at: "menu", quietMs, ...menu });
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);

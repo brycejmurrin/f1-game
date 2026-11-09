@@ -2,8 +2,8 @@
 const UpdateCheck = (function () {
   "use strict";
 
-  // Re-read version.json when the tab comes back, at most this often. The
-  // boot guard has just read it, so the clock starts at boot.
+  // Re-read version.json when the tab comes back, at most this often. The clock
+  // starts at boot only once index.html's guard REPORTS its read (#4925).
   const THROTTLE_MS = 10 * 60 * 1000;
   // Bounded wait for the store's mirror flush before reloading: an update must
   // never hang on a stuck IndexedDB, and pagehide flushes again anyway.
@@ -62,7 +62,13 @@ const UpdateCheck = (function () {
     const inRace = o.inRace || (() => false);
     const chip = o.chip || (() => null);
     let generationRequest = null, generationController = null, generation = 0;
-    let lastCheck = now();
+    // The boot guard swallows its own failure (offline, a 3 s fail-fast), so it
+    // reports success as window.__apexGuardOk. Until it does, the first check is
+    // the failed-read backoff, not the throttle; read lazily: it may land late.
+    const guardOk = o.guardOk || (() => typeof window !== "undefined" && !!window.__apexGuardOk);
+    const bootAt = now();
+    let lastCheck = bootAt - THROTTLE_MS + FAIL_BACKOFF_MS;
+    let bootSeed = true;
     let ready = 0;
     let inflight = null;
     let follow = 0;   // once ready: re-render on a slow timer, so the chip follows race start / finish
@@ -108,12 +114,17 @@ const UpdateCheck = (function () {
       return true;
     }
 
+    function since() {
+      if (bootSeed && guardOk()) { bootSeed = false; lastCheck = bootAt; }
+      return lastCheck;
+    }
+
     function check(force) {
       if (!booted) return Promise.resolve(false);   // an unstamped shell has nothing to compare
       const t = now();
       if (inflight) return inflight;
-      if (!force && t - lastCheck < THROTTLE_MS) return Promise.resolve(false);
-      lastCheck = t;
+      if (!force && t - since() < THROTTLE_MS) return Promise.resolve(false);
+      lastCheck = t; bootSeed = false;
       const abort = typeof AbortController === "function" ? new AbortController() : null;
       let timer;
       const deadline = new Promise((_, reject) => {
@@ -221,7 +232,7 @@ const UpdateCheck = (function () {
 
     // A lazy load with no controller: a forced read when the last one is stale.
     function freshen() {
-      const read = now() - lastCheck > FRESH_MS ? check(true) : inflight;
+      const read = now() - since() > FRESH_MS ? check(true) : inflight;
       if (!read) return Promise.resolve(false);
       let timer = null;
       const late = new Promise((resolve) => { timer = setTimeout(() => resolve(false), FRESH_WAIT_MS); });
@@ -230,7 +241,7 @@ const UpdateCheck = (function () {
 
     const api = {
       check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused, freshen,
-      state: () => ({ booted, ready, lastCheck, checking: !!inflight }),
+      state: () => ({ booted, ready, lastCheck: since(), checking: !!inflight }),
       stop: () => { clearInterval(follow); follow = 0; },
     };
     _active = api;

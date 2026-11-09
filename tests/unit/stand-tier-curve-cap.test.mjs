@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -31,7 +32,8 @@ const CUT_MAX = 0.75; // metres
 // Every tieredBowl riser box on `id`, tagged with its along() station and tier.
 function bowlRisers(id) {
   const env = buildContext();
-  const Fresh = vm.runInContext(`(function(){${SRC}\n;return SceneryStands;})()`, env.sandbox);
+  const Fresh = vm.runInContext(`(function(){${SRC}\n;return SceneryStands;})()`, env.sandbox,
+    { filename: absSrc("js/track/scenery/stands.js") });
   const runs = [];
   const orig = env.sandbox.TrackScenery[id];
   env.sandbox.TrackScenery[id] = function (api) {

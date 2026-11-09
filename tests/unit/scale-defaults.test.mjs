@@ -231,12 +231,60 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
   assert.match(read("js/ui/settings-export.js"), /k: "hudPanelOpacity", lane: "json", group: "display", def: null/);
 });
 
+// #5166: the default moved LOW -> MED on touch. What the boot APPLIES, not just what the helper says:
+// an unset phone pins 0.75, a stored choice wins over the new default, and a pointer device is unchanged
+// (AUTO hands the scale to the governor). Pinning never turns the governor off: setAutoRes(false) gates
+// only its resolution stage (js/perf/governor.js tick()), the feature-shed ladder still runs.
+function bootRes({ coarse, stored = {} }) {
+  const calls = { scale: [], autoRes: [], painted: [] };
+  const ctx = vm.createContext({
+    Math, Number, String, JSON, isFinite, Object, Array,
+    Log: { info() {} },
+    SettingRow: { wire() {}, paint: (el, v) => { if (el && el.id === "pm-res") calls.painted.push(v); }, labels: (v) => v.map((x) => [x, x]) },
+    PerfGov: { setAutoRes: (on) => calls.autoRes.push(on) },
+    requestAnimationFrame: () => 0,
+    window: { matchMedia: (q) => ({ matches: q === "(pointer: coarse)" ? coarse : false }) },
+    document: { documentElement: { style: { setProperty() {}, removeProperty() {} } } },
+  });
+  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
+  const el = (id) => ({ id, value: "", textContent: "", hidden: true, classList: { toggle() {}, contains: () => false }, closest: () => null });
+  const store = { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; }, raw: () => null, rawSet() {} };
+  vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: { setRenderScale: (v) => calls.scale.push(v) }, updateTrackPreview() {} });
+  return calls;
+}
+
+test("RESOLUTION: a phone with nothing stored boots at MED (0.75), pinned", () => {
+  const c = bootRes({ coarse: true });
+  assert.deepEqual(c.painted, ["med"]);
+  assert.deepEqual(c.scale, [0.75]);
+  assert.deepEqual(c.autoRes, [false]);
+});
+
+test("RESOLUTION: a stored choice wins over the touch default", () => {
+  for (const [mode, v] of [["low", 0.5], ["high", 1.0], ["med", 0.75]]) {
+    const c = bootRes({ coarse: true, stored: { resMode: mode } });
+    assert.deepEqual(c.painted, [mode], `stored ${mode} stays ${mode}`);
+    assert.deepEqual(c.scale, [v]);
+  }
+  const auto = bootRes({ coarse: true, stored: { resMode: "auto" } });
+  assert.deepEqual(auto.painted, ["auto"]);
+  assert.deepEqual(auto.scale, [], "AUTO pins nothing");
+  assert.deepEqual(auto.autoRes, [true], "AUTO hands the scale to the governor");
+});
+
+test("RESOLUTION: a pointer device with nothing stored is unchanged (AUTO, governor-driven)", () => {
+  const c = bootRes({ coarse: false });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, []);
+  assert.deepEqual(c.autoRes, [true]);
+});
+
 test("UiScale.defaultResMode() answers from the primary pointer, without create(G)", () => {
   const run = (matches, throws) => {
     const ctx = vm.createContext({ window: { matchMedia: (q) => { if (throws) throw new Error("no mq"); assert.equal(q, "(pointer: coarse)"); return { matches }; } } });
     return vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx);
   };
-  assert.equal(run(true), "low");
+  assert.equal(run(true), "med", "a phone ships MED since #5166 (LOW drew 639×295 on Bryce's 852×393 iPhone)");
   assert.equal(run(false), "auto");
   assert.equal(run(false, true), "auto", "a throwing matchMedia is a pointer device");
   assert.match(scaleJs, /store\.get\("resMode", defaultResMode\(\)\)/, "the live row reads the same helper SPEC consumes");
