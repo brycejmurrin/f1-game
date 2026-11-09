@@ -594,7 +594,7 @@ window.SheetShape = (function () {
      The guards are load-bearing, do not simplify them out:
        - vv.scale > 1.01: pinch zoom also shrinks vv.height; that is not a
          keyboard and padding the screen for it would be wrong.
-       - kb < 15% of innerHeight: URL-bar show/hide and Safari's tab-bar
+       - kb < 15% of the layout height: URL-bar show/hide and Safari's tab-bar
          collapse arrive as small vv.height deltas; svh already owns those.
          Every real keyboard is far taller than 15% of any phone viewport.
        - "scroll" listener: iOS often PANS the visual viewport (offsetTop
@@ -616,8 +616,15 @@ window.SheetShape = (function () {
     let raf = 0;
     const apply = () => {
       raf = 0;
-      let kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      if (vv.scale > 1.01 || kb < window.innerHeight * 0.15) kb = 0;
+      /* THE MINUEND IS THE LAYOUT VIEWPORT (viewportPx, rule 1), not innerHeight.
+         A Home Screen landscape launch can hold the portrait innerHeight (852)
+         while visualViewport already says 393: 852 − 393 = 459 passed the 15%
+         guard and every .screen opened from the title carried 459px of
+         padding-bottom in a 393px window (#5167 part E, reproduced in Chromium
+         with the stale pair stubbed). The ICB is what .screen's inset: 0 spans. */
+      const lh = viewportPx()[1];
+      let kb = Math.max(0, lh - vv.height - vv.offsetTop);
+      if (vv.scale > 1.01 || kb < lh * 0.15) kb = 0;
       kb = Math.round(kb);
       if (kb === last) return;
       last = kb;
@@ -657,7 +664,7 @@ window.SheetShape = (function () {
     /* AND THE LAYOUT VIEWPORT, which is the other half of the subtraction.
        These two were the visualViewport pair alone — every event a keyboard
        opening or closing produces, and not every event that changes the
-       answer. `window.innerHeight` is the minuend, and ROTATING THE PHONE is
+       answer. The layout height is the minuend, and ROTATING THE PHONE is
        the one thing that moves it without necessarily moving vv.height again
        afterwards.
        The failure was a latch, not a flicker. A phone rotated out of
