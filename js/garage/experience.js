@@ -2,14 +2,20 @@
 const GarageExperience = (function () {
   "use strict";
 
+  // An ambient clock that advances only while `moving`, by at most 100 ms per
+  // step, so a background tab or a paused frame does not jump the scene.
   function clock(now = 0) {
     let at = now, last = now;
-    return { step(wall, moving) {
-      const gap = Math.max(0, Math.min(100, wall - last));
-      last = wall;
-      if (moving) at += gap;
-      return at;
-    }, reset(wall) { at = last = wall; }, get value() { return at; } };
+    return {
+      step(wall, moving) {
+        const gap = Math.max(0, Math.min(100, wall - last));
+        last = wall;
+        if (moving) at += gap;
+        return at;
+      },
+      reset(wall) { at = last = wall; },
+      get value() { return at; },
+    };
   }
 
   // Composed home shots use the existing orbit rig and its panel lens shift.
@@ -118,6 +124,14 @@ const GarageExperience = (function () {
       remaining: cap - Parts.getCost(next, team) };
   }
 
+  const signed = (v) => (v > 0 ? "+" : "") + v;
+  // "+12 cr vs fitted · 340 cr remaining · Downforce +2 / Drag -1"
+  function comparisonText(c, cap) {
+    const stats = c.deltas.filter((d) => d.value).map((d) => d.label + " " + signed(d.value));
+    return signed(c.cost) + " cr vs fitted · " + (Number.isFinite(cap) ? c.remaining + " cr remaining" : "Free build")
+      + (stats.length ? " · " + stats.join(" / ") : " · Same displayed performance");
+  }
+
   function partSummary(container, team, parts, cat, current, tune, cap, frame) {
     const box = document.createElement("section"); box.className = "cs-inspection";
     box.setAttribute("aria-label", "Part comparison");
@@ -128,25 +142,27 @@ const GarageExperience = (function () {
     inspect.onclick = frame;
     box.append(head, detail, inspect); container.appendChild(box);
     function show(opt) {
-      const c = compare(team, parts, cat, current, opt, tune, cap);
       head.textContent = opt.label;
-      const stats = c.deltas.filter((d) => d.value).map((d) => d.label + " " + (d.value > 0 ? "+" : "") + d.value);
       detail.textContent = opt.id === (current && current.id) ? "Fitted · inspect the car or compare another option."
-        : (c.cost > 0 ? "+" : "") + c.cost + " cr vs fitted · " + (Number.isFinite(cap) ? c.remaining + " cr remaining" : "Free build")
-          + (stats.length ? " · " + stats.join(" / ") : " · Same displayed performance");
+        : comparisonText(compare(team, parts, cat, current, opt, tune, cap), cap);
     }
     if (current) show(current);
     return show;
   }
 
-  function careerKey(ctx) {
+  // The career achievements when a career is active, else null.
+  function achievementsOf(ctx) {
     const a = ctx && ctx.achievements;
-    return a && a.active ? [a.facility, a.wins, a.podiums, a.titles].join(":") : "-";
+    return a && a.active ? a : null;
+  }
+  function careerKey(ctx) {
+    const a = achievementsOf(ctx);
+    return a ? [a.facility, a.wins, a.podiums, a.titles].join(":") : "-";
   }
 
   function buildFacility(g, liv, ctx) {
-    const a = ctx && ctx.achievements;
-    if (!a || !a.active) return;
+    const a = achievementsOf(ctx);
+    if (!a) return;
     const { block, DARK, STEEL, Z_BACK, rgb } = GaragePrims;
     const accent = rgb(liv && liv.c2, STEEL);
     // Each two earned facility levels install a research workstation; geometry
@@ -166,8 +182,8 @@ const GarageExperience = (function () {
   }
 
   function paintCareer(cv, ctx) {
-    const a = ctx && ctx.achievements;
-    if (!a || !a.active) return;
+    const a = achievementsOf(ctx);
+    if (!a) return;
     const c = cv.getContext("2d");
     c.fillStyle = "#10141b"; c.fillRect(0, 320, 512, 64);
     c.fillStyle = "#f2f3f5"; c.textAlign = "center"; c.textBaseline = "middle";
