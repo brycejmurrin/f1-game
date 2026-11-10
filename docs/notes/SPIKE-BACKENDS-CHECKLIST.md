@@ -1,5 +1,7 @@
 # Spike-backends checklist (historical WGX/TLX spike-out)
 
+Summary: The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes.
+
 > Re-attached: WGX and TLX are back in the shipped tree. The map is archived
 > under `docs/archive/moves/` with a non-executable `appliedMoves` key.
 

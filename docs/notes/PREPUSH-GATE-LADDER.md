@@ -1,5 +1,7 @@
 # The pre-push gate is a ladder — moved
 
+Summary: The pre-push ladder: `test:guards` ⊂ `test:tooling-fast` ⊂ `deploy.mjs --gate-only`, with the measured sizes (`gen-ladder-figures.mjs` regenerates it). Read before judging a green rung as proof of the one above.
+
 Kind: how-to
 
 > This note's content is §4 of [VERIFICATION.md](../VERIFICATION.md) since
