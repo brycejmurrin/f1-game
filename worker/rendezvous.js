@@ -48,11 +48,15 @@ const MAX_SEALED_PAYLOAD = 12288;
 // JSON adds a few bytes around `payload` and the stable owner capability.
 const MAX_BODY = MAX_SEALED_PAYLOAD + 512;
 
-// Defence in depth before a request reaches a Durable Object. Cloudflare may
-// run several isolates, so this is not a substitute for an account-level WAF
-// rule, but it prevents one browser/origin from cheaply minting unbounded room
-// objects through a single hot isolate. Real clients write at most twice and
-// poll about 50 times/minute; these ceilings leave ample retry/NAT headroom.
+// Defence in depth before a request reaches a Durable Object. The buckets live
+// in ONE isolate's memory: Cloudflare runs many isolates (and locations), each
+// with its own map, so the effective per-IP ceiling is these numbers times the
+// isolates an attacker reaches. It is NOT a quota guard: even one isolate lets
+// one IP make 200 requests/minute (288,000/day), above the Workers Free plan's
+// 100,000 Durable Object requests/day, and on the Free plan an exhausted daily
+// limit makes further requests FAIL until 00:00 UTC (worker/README.md §Cost).
+// Real clients write at most twice and poll about 50 times/minute; these
+// ceilings leave retry/NAT headroom. Account-wide limits need a WAF rule.
 const RATE_WINDOW_MS = 60000;
 const WRITE_LIMIT = 20;
 const READ_LIMIT = 180;
@@ -197,9 +201,14 @@ export class Room {
 
   // A later answer must retain its own TTL, without retaining an expired offer.
   // Alarm delivery may be delayed by the platform; reads still enforce expiry.
+  // When the room is empty, deleteAll() drops the object's whole SQLite database
+  // so an abandoned room keeps no stored rows at all (storage API: deleteAll;
+  // before compatibility date 2026-02-24 it does not clear the alarm, hence
+  // deleteAlarm first). blockConcurrencyWhile holds off a POST that lands
+  // between the two steps; if one did, its slot survives and its alarm stands.
   async alarm() {
-    await this.state.storage.transaction(async () => {
-      const storage = this.state.storage;
+    const storage = this.state.storage;
+    const empty = await storage.transaction(async () => {
       let next = Infinity;
       const now = Date.now();
       for (const slot of SLOTS) {
@@ -208,8 +217,14 @@ export class Room {
         if (rec.expires <= now) await storage.delete(slot);
         else next = Math.min(next, rec.expires);
       }
-      if (Number.isFinite(next)) await storage.setAlarm(next);
-      else await storage.deleteAlarm();
+      if (Number.isFinite(next)) { await storage.setAlarm(next); return false; }
+      await storage.deleteAlarm();
+      return true;
+    });
+    if (!empty) return;
+    await this.state.blockConcurrencyWhile(async () => {
+      for (const slot of SLOTS) if (await storage.get(slot)) return;
+      await storage.deleteAll();
     });
   }
 }
