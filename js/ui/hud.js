@@ -62,7 +62,7 @@ function syncPulse(e) {
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
-let _invalidateFit = null, _syncPhoneFit = null;
+let _invalidateFit = null, _syncPhoneFit = null, _secFlashRead = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -2342,15 +2342,15 @@ function syncPhoneFit() {
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }
-_syncPhoneFit = syncPhoneFit;
+_syncPhoneFit = syncPhoneFit; _secFlashRead = () => ({ flash: _secFlash.slice(), ..._secFlashLog });
 return {
   updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
-  laneRectMisses, resetLaneRectMisses, secFlash: () => ({ flash: _secFlash.slice(), ..._secFlashLog }),   // PERF probe (hud-radio-lane.js); sector-flash probe (__apex.hudSecFlash)
+  laneRectMisses, resetLaneRectMisses, secFlash: _secFlashRead,   // PERF probe (hud-radio-lane.js); sector-flash probe
 };
 }
 
 return {
-  create,
+  create, secFlash: () => (_secFlashRead ? _secFlashRead() : null),   // GameHud.secFlash(): the live instance's sector-flash probe (__apex.hudSecFlash)
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
   vp: () => [vpW(), vpH()],   // the layout viewport (ICB) every HUD rect is measured in; never inner* (#5201)

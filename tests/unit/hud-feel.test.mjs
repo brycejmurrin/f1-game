@@ -336,7 +336,7 @@ test("a sector split shows its GAIN on the previous best for 3 s, then the split
 // W32's Time Trial spec saw no .sec-flash* after a crossing; GameHud.secFlash() is the read-only seam
 // (__apex.hudSecFlash, W25) that tells "flashSector never called" from "called, never painted".
 test("secFlash(): the sector flash is recorded at the crossing and painted on the next HUD tick", () => {
-  const { els, G, hud, tick } = boot();
+  const { els, G, hud, sb, tick } = boot();
   tick();
   const rows = els.hudSectors.children;
   assert.deepEqual(JSON.parse(JSON.stringify(hud.secFlash())), { flash: [0, 0, 0], last: -1, raceT: null, calls: 0, painted: 0 });
@@ -351,6 +351,8 @@ test("secFlash(): the sector flash is recorded at the crossing and painted on th
   tick(); tick(); tick();
   assert.equal(rows[0].classList.contains("sec-flash"), false, "a ~0.35 s pulse: off after its fourth tick");
   assert.equal(hud.secFlash().flash[0], 0);
+  // js/agent cannot reach the instance (a game.js closure value): __apex.hudSecFlash reads the module API.
+  assert.deepEqual(JSON.parse(JSON.stringify(sb.GameHud.secFlash())), JSON.parse(JSON.stringify(hud.secFlash())), "GameHud.secFlash() reads the live instance");
 });
 
 test("in a race the lap clock holds the lap just driven for 3 s — green on a personal best", () => {
