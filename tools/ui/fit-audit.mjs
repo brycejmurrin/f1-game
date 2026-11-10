@@ -148,7 +148,7 @@ const MEASURE = function (rootSel) {
   const COMFY = floors.comfy, FLOOR = floors.wcag, SPACE = 24, TYPE_MIN = 10;
   const idOf = (el) => ((el.id ? "#" + el.id : "") + (typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : "")) || el.tagName.toLowerCase();
   const out = { tap: [], spacing: [], type: [], overflow: [], marker: [] };
-  const vis = (el) => { const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05; };
+  const vis = (el) => { if (!T.rendered(el)) return false; const cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05; };
 
   // What is actually PAINTED — intersected with every clipping ancestor. A row
   // scrolled out of a list is not a tiny tap target, it is a hidden one.
