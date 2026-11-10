@@ -18874,19 +18874,13 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "parseCaps": [
-        "tests/unit/hud-feel.test.mjs"
-      ],
-      "refreshFit": [
+      "refreshBtnFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
-      ],
-      "sizeRow": [
-        "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
         "tests/specs/menu-keyboard.spec.js",
