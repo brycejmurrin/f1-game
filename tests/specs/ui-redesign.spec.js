@@ -431,6 +431,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     "pm-open-controls", "pm-open-driving", "pm-open-display",
     "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
     "pm-open-credits",
+    "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);

@@ -179,7 +179,7 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   const failed = [{ name: "Per-circuit geometry sweeps", conclusion: "failure" },
     { name: "Selected specs (change-aware gate)", conclusion: "failure" },
     { name: "Structural guards", conclusion: "success" },
-    { name: "Golden menus on a runner (trial, non-blocking)", conclusion: "skipped" }];
+    { name: "Golden menus on a runner (nightly)", conclusion: "skipped" }];
 
   const green = verdict([ci(B)]);
   assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — run 11`);
