@@ -983,7 +983,9 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
   await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
   const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
   const bar = page.locator("#hud-arrange-bar");
-  expect(await bar.evaluate(el => parseFloat(getComputedStyle(el).fontSize)), "toolbar respects larger text").toBe(18);
+  // #5198 (Bryce): the toolbar is FIXED-SIZE chrome like CAM / PAUSE, NOT scaled by TEXT SIZE / HUD SIZE. At
+  // TEXT large + HUD 155 % it used to paint ~715x217 on his 393 px tall phone and hide the widgets being arranged.
+  expect(await bar.evaluate(el => parseFloat(getComputedStyle(el).fontSize)), "toolbar text is fixed chrome, not TEXT SIZE (#5198)").toBe(13);
   for (const viewport of sizes) {
     await page.setViewportSize(viewport);
     await expect(bar).toBeVisible();

@@ -64,8 +64,6 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.ok(l > 0 && p > l && b > p && h > b, "build and plans precede the outgoing animation and afterGarageOut handoff");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(handoff, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
-  assert.match(ib, /reduce-motion still builds then plays the garage-out before the card and the flyby/,
-    "reduced motion still builds + the garage-out at its tuned pace, then card + flyby (loadingScreen.run no longer gates it)");
   assert.match(game, /_mq = [^;]*matchMedia\("\(prefers-reduced-motion: reduce\)"\)/, "…and motionReduced still reads the OS flag");
   assert.match(game, /function motionReduced\(\) \{\s*return typeof TitleFx[^;]*TitleFx\.mode\(\) === "reduce"[^;]*_mq && _mq\.matches/, "intro motion honors the resolved preference, with an OS fallback");
   const pa = ib.indexOf("prepareMenuCarAssets(");
@@ -79,6 +77,44 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.ok(prior > gen && prior < l, "a non-join still awaits the picker's abort before loadTrackStepped");
   assert.match(handoff, /if \(!prepared && live\(\)\) announce\("PREPARATION FAILED/,
     "a still-live failed intro announces instead of a silent sheetRelease");
+});
+
+test("reduced motion still builds, plays the garage-out, then the card and the flyby (introBuild and introGarage run)", async () => {
+  // Behaviour, not a comment: with motionReduced() true the REAL introBuild /
+  // introGarage (sliced from game.js) must still load the world, open the
+  // studio drive-out (setup-camera tunes its pace) and hand over to raceIntro.
+  const game = gameSource();
+  const a = game.indexOf("function cancelIntro()"), b = game.indexOf("\nfunction introWarm(go)", a);
+  for (const flow of ["introBuild", "introGarage"]) {
+    let now = 0;
+    const events = [];
+    const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null, reloadFlybyShots() {},
+      RaceEntryProfile: RACE_ENTRY_PROFILE_STUB,
+      _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0,
+      entrySettings: () => "one", menuKey: () => "world", motionReduced: () => true, titleIfBare: () => events.push("bare"),
+      clearTimeout() {}, setTimeout: f => f(), requestAnimationFrame: f => f(),
+      performance: { now: () => now }, loadingInfo: () => ({}),
+      loadingScreen: { prep: () => events.push("prep"), building: () => events.push("build"), garage: () => events.push("garage"),
+        stop: () => events.push("stop"), phase: () => "", nextFlyMs: () => 24000 },
+      ensureScenery: async () => {},
+      loadTrackStepped: async (idx, liveNow) => { events.push("load"); return liveNow(); }, prepareMenuCarAssets: async () => {}, _atmo: { prebakeLamps: () => null },
+      warmPrograms() {}, gfx: { warming: () => false },
+      menuSlice: async () => { now += 1000; if (c.setupPreviewOn) c.studioShown(); },
+      FlybySeq: { reset() {}, setDuration() {}, DEFAULT: [], vary: () => [], planSteps: () => () => true },
+      raceIntro: () => events.push("intro"),
+      quitToMenu: () => events.push("recover"), announce: () => events.push("message"), Log: { warn() {} },
+      LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: false, addEventListener() {} },
+      setupPreviewOn: false, setupCam: { startDriveOut: () => { events.push("driveOut"); return 5000; }, stopDriveOut() {}, driveOutLeft: () => Math.max(0, 5000 - now) },
+      buildKey: () => "tier" };
+    vm.createContext(c); vm.runInContext(game.slice(a, b), c, { filename: absSrc("js/game.js") });
+    assert.equal(c[flow](() => events.push("go")), true, flow + ": reduced motion does not decline the intro");
+    for (let i = 0; i < 250; i++) await Promise.resolve();
+    if (flow === "introBuild") assert.ok(events.includes("load"), flow + ": the world is built: " + events.join(","));
+    assert.ok(events.includes("driveOut") && events.includes("garage"), flow + ": the garage-out plays: " + events.join(","));
+    assert.ok(events.includes("intro"), flow + ": then the card + flyby (raceIntro): " + events.join(","));
+    assert.ok(events.indexOf("garage") < events.indexOf("intro"), flow + ": garage-out before the flyby");
+    assert.equal(events.includes("recover") || events.includes("bare"), false, flow + ": no recovery path: " + events.join(","));
+  }
 });
 
 test("introBuild awaits a mismatched-tier picker abort before its own loadTrackStepped", async () => {

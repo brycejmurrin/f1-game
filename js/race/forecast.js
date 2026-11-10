@@ -3,13 +3,8 @@
  * + the race clock + an expected lap time in, a forecast object out. The engineer speaks it (js/race/engineer.js);
  * any UI reads Forecast.current().
  *
- * WHY TIMED, NOT A PERCENTAGE. F1's own forecaster (Ubimet) gives teams statements of WHEN rain arrives, where it
- * hits first and how much, to the minute, and still misses a single cell by ~500 m
- * (https://www.formula1.com/en/latest/features/2016/9/how-weather-forecasting-works-in-f1.html). Players ask the
- * same of a game: the timed information, not a %; GT7 answers with a live rain radar
- * (https://traxion.gg/gran-turismo-7-features-detailed-dynamic-weather-but-not-at-every-track/).
- * WHY IT CAN BE WRONG. iRacing's Tempest forecast is deliberately imperfect, and its uncertainty grows with the
- * lead time (https://www.iracing.com/?p=272386). So the STATED time here is the true time plus an error whose
+ * WHY TIMED, NOT A PERCENTAGE: teams (and players) want WHEN rain arrives, not a %.
+ * WHY IT CAN BE WRONG. Uncertainty grows with lead time, so the STATED time here is the true time plus an error whose
  * bound grows with lead — ±10 % of the lead, never under ±20 s, and never more than half the lead so the call
  * cannot point into the past — drawn ONCE per (seed, arc, event): the stated lead then falls monotonically and
  * converges on the truth as the event approaches (d/dt of lead + u·bound is −1 − 0.1u < 0), so a re-read never
