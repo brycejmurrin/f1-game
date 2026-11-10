@@ -119,7 +119,9 @@ const Droplets = (function () {
   function _resize() {
     if (typeof window === "undefined") return;
     const dpr = Math.min(window.devicePixelRatio || 1, _mob() ? DPR_MAX_PHONE : DPR_MAX_DESK);
-    const w = Math.max(1, Math.round((window.innerWidth || 1) * dpr)), h = Math.max(1, Math.round((window.innerHeight || 1) * dpr));
+    // The layout viewport (ICB) the fixed 100% layer fills, not inner* (stale portrait pair on a Home Screen landscape launch, #5201).
+    const de = document.documentElement, bw = de ? de.clientWidth | 0 : 0, bh = de ? de.clientHeight | 0 : 0, box = bw > 0 && bh > 0;
+    const w = Math.max(1, Math.round((box ? bw : window.innerWidth || 1) * dpr)), h = Math.max(1, Math.round((box ? bh : window.innerHeight || 1) * dpr));
     if (w === _w && h === _h && dpr === _dpr) return;
     _w = w; _h = h; _dpr = dpr;
     _cv.width = w; _cv.height = h;

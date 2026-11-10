@@ -142,15 +142,22 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
       .toEqual([
         "kit:montreal:espace-paddock",
         "kit:montreal:pit-building",
-        "montreal-park-lawn-r-0",
-        "montreal-park-lawn-r-10",
-        "montreal-pit-lawn-l-1",
         "montreal-pit-lawn-l-2",
         "montreal-pit-lawn-l-3",
         "montreal-pit-lawn-l-4",
         "montreal-pit-lawn-l-5",
         "montreal-pit-lawn-l-6",
       ]);
+    // TRIMMED, NOT DROPPED (#5080, PR #5254). A road hit no longer drops a
+    // lawn whole: each draped cell must clear the road's footprint height-blind.
+    // Measured in the VM: park-lawn-r-0 keeps 74 cells, r-10 39 and pit-lawn-l-1 75,
+    // every cell corner and centre >= 0.59 m off any road edge, vertices
+    // 0.03-0.15 m over the terrain.
+    for (const id of ["montreal-park-lawn-r-0", "montreal-park-lawn-r-10", "montreal-pit-lawn-l-1"]) {
+      const lawn = session.models.emitted.find((entry) => entry.id === id);
+      expect(lawn, `${id} is drawn (trimmed per cell)`).toBeTruthy();
+      expect(lawn.vertices, `${id} vertices`).toBeGreaterThan(0);
+    }
     const bridge = session.models.emitted.find((entry) => entry.id === "montreal-casino-footbridge");
     expect(bridge).toMatchObject({ required: true, overhead: true, clearance: 8 });
     const supportModels = session.models.emitted.filter((entry) =>
