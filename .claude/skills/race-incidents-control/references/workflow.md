@@ -33,7 +33,8 @@ Load from the SKILL.md index when the task needs this detail.
    - Incident takeovers must explicitly invalidate affected laps/ghosts.
 
 4. **Keep RaceControl read-only and host-owned.**
-   - `RaceControl.update()` reads `DebrisWorld.hazards()` at about 4 Hz.
+   - `RaceControl.update()` reads `DebrisWorld.hazards()` every `QUERY_EVERY`;
+     the storm SC (`stormTick`) and a scripted `hold()` raise flags with no hazard.
    - It raises caution immediately but lowers with hysteresis/minimum hold and
      hard caps to avoid flicker or permanent neutralization.
    - In multiplayer only the host computes (step 4 of "SC never deploys").
@@ -44,12 +45,11 @@ Load from the SKILL.md index when the task needs this detail.
        overtake nor active aero. LOW GRIP (wet: `TyreModel.treadFor` > 0) also
        disables it (B7.2.2(d)) and halves the active-aero trade (`aeroWetK` in
        `js/race/pace-math.js`). Overtake itself is `js/race/overtake-mode.js` (detection line,
-       0.5 MJ allowance).
+       allowance).
      - SPEED CAP: race control never slows a car. game.js applies it live from
-       `raceCtl.level` (`cautionV`; AI `holdCap`): VSC 0.6 × vTop; under the SC
-       the field QUEUES (B5.13), `RaceControl.scQueueFrac` giving the leader
-       0.45 × vTop and a car > 1 s adrift of the car ahead up to 0.6 × vTop until
-       it closes. Cars at SC pace with `level` 0 point at game.js.
+       `raceCtl.level` (`cautionV`; AI `holdCap`); under the SC the field QUEUES
+       (B5.13): `RaceControl.scQueueFrac` sets each car's fraction of vTop (read
+       the values there). Cars at SC pace with `level` 0 point at game.js.
 
 5. **Preserve determinism.**
    - No `Date.now()` or `Math.random()` in debris, incident, caution, or
@@ -60,8 +60,8 @@ Load from the SKILL.md index when the task needs this detail.
 
 6. **Use hooks to inspect the exact layer:** the SKILL.md Hooks table (`carAt(i).otEnabled` confirms overtake gating under cautions).
 
-7. **Verify narrowly, then with browser coverage.**
-   - Commands: SKILL.md Commands (race-control and incident-gate unit tests, `test-bg.mjs --spec`, `remote-group.mjs`).
+7. **Verify narrowly; browser coverage runs on CI.**
+   - Commands: SKILL.md Commands (race-control and incident-gate unit tests; the browser specs via `remote-group.mjs physics-core` on the pushed branch).
    - `race-control.spec.js` and
      `debris.spec.js` do NOT exercise IncidentSim; `collisions-deep.spec.js` /
      `collisions-deep-vm.test.mjs` switch every takeover OFF via
@@ -80,15 +80,15 @@ All in `js/physics/incident-sim.js`; `__apex.incident()` is `status()`.
    `preStep` only while `DebrisWorld.active()`). A paused or non-race state that skips the physics
    step also freezes the takeover.
 3. Normal exit per car: settle (`pose.sleeping` or speed < `SETTLE_V` and spin
-   < `SETTLE_W`) for `SETTLE_HOLD_S` (0.30 s), or `inc.elapsed >= WINDOW_MAX_S`
-   (3.0 s hard cap) → `handbackCar(inc, i, false, pose)`.
+   < `SETTLE_W`) for `SETTLE_HOLD_S`, or `inc.elapsed >= WINDOW_MAX_S`
+   (hard cap) → `handbackCar(inc, i, false, pose)`.
    `elapsed` advances by `dt`; a NaN/0 `dt` from the caller is the first suspect.
 4. Anomaly exits → `handbackCar(…, true)` restores last-good `inc.good`/`snap`
    (`_fallbacks++`): world inactive or `worldGen()` changed, no/NaN body pose,
    teleport past `stepBound`, car retired/finished.
 5. External release: `release(c)` (rescuePlayer, retireCar, `__apex.jump`)
    returns false when the car is not in `_owned`. `reset()` hands back ALL.
-6. `c1Pileup` (`apex26.c1Pileup`, default ON) gates promotion; switching a
+6. `c1Pileup` (`apex26.c1Pileup`) gates promotion; switching a
    kind off via `incident({flags})` (`setFlags`) also hands back that kind's
    live takeovers as anomalies — the quickest A/B for "is it the takeover?".
 Tests: `incident-gate.test.mjs` (`incident window scales with time, not car
@@ -108,9 +108,9 @@ heading): use `__apex.resetPlayer()` or `__apex.jump(frac, speed, x)`. Reach for
 **"SC never deploys" checklist** (steps 1-3 also run through `createGame()` in `tools/lib/game-vm.cjs`; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
 0. `RaceControl.update` early exits: not racing (`G.state` other than race), Time Trial or quali → reset, no
    flag ever (a T1 pile-up in quali flies nothing); a WATCH replay owns the snapshot; a peer that does not
-   `ownsRaceControl()` computes nothing; and the hazard query runs only every `QUERY_EVERY` (4 Hz).
-1. `caution().enabled` — **`apex26.caution` defaults OFF** (`race-control.js` `enabled` init), so a fresh page never throws a flag; `caution(true)` or the CAUTIONS race setting turns it on. The switch also gates OVERTAKE lock-out.
-2. `debris().active` — flags are computed ONLY from `DebrisWorld.hazards()`, and `update()` returns early (level frozen, only the hard cap ages) while `DebrisWorld.active()` is false: `apex26.debris` is `"1"`, and the Rapier wasm must have loaded (`_loadState === 2`; a trapped step latches it off).
+   `ownsRaceControl()` computes nothing; and the hazard query runs only every `QUERY_EVERY`.
+1. `caution().enabled` — while false no flag the sim raises flies, the storm SC included (default: `readCaution` in `race-control.js`); `caution(true)` or the CAUTIONS race setting turns it on. The switch also gates OVERTAKE lock-out. A scripted `hold()` flies either way.
+2. `debris().active` — the hazard loop needs `DebrisWorld.hazards()`, and `update()` returns early (level frozen, only the hard cap ages) while `DebrisWorld.active()` is false: `apex26.debris` is `"1"`, and the Rapier wasm must have loaded (`_loadState === 2`; a trapped step latches it off). The storm SC (`stormTick`, run before this check) needs no debris.
 3. `caution({hazards:true})` — hazard `total` vs `YELLOW_MIN` (one sector) / `VSC_MIN` / `SC_MIN`, and `RED_MIN` on
    `redTotal` (needs ≥ 2 source cars), all in `js/race/race-control.js` (read the values there).
    3a. What counts and when it drops out: SKILL.md "What `hazards()` counts". Sample `caution({hazards:true})`
@@ -125,15 +125,15 @@ heading): use `__apex.resetPlayer()` or `__apex.jump(frac, speed, x)`. Reach for
 
 ### SC deploys but never comes back in (stuck out)
 
-Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` is not in the hook result (a scripted hold shows its own `cause`); a flag older than ~90 s of `sinceT` is not the hazard loop.
+Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` is not in the hook result (a held flag shows its own `cause`, "STORM" for the storm); a flag older than `SC_MAX` of `sinceT` is not the hazard loop.
 
 **"SC deploys but never comes back in" (stuck out)** — all in `RaceControl.update()`, pinned by `race-control.test.mjs` ("a stuck hazard cannot neutralise the race forever", "a frozen flag still AGES", "hold(): a scripted flag flies past the SC cap"):
-- Normal exits: hazards fall below SC_MIN and `sinceT >= MIN_HOLD` (6 s) lowers it a level at a time, or the hard cap SC_MAX (90 s, VSC/SC; YELLOW_MAX 30 s) forces GREEN even with the hazard picture intact, then CAP_REARM_HOLD (45 s) suppresses a same-level re-raise from that stale picture (an escalation still flies). A flag that outlives ~90 s of `caution().sinceT` is therefore not the hazard loop: look for a `held` flag.
-- `held` (scripted, `G.holdCaution` from `js/race/real-race.js`): exempt from the cap and MIN_HOLD until `hold(0)`; a real-race replay that never releases keeps the SC out. Hazard-loop inputs cannot lower it.
+- Normal exits: hazards fall below SC_MIN and `sinceT >= MIN_HOLD` lowers it a level at a time, or the hard cap (`SC_MAX` for VSC/SC, `YELLOW_MAX`) forces GREEN even with the hazard picture intact, then `CAP_REARM_HOLD` suppresses a same-level re-raise from that stale picture (an escalation still flies). A flag that outlives `SC_MAX` of `caution().sinceT` is therefore not the hazard loop: look for a `held` flag.
+- `held` = max of the script's (`G.holdCaution` from `js/race/real-race.js`) and the storm's (`wxHeld`, cause "STORM"; `rehold()`): exempt from the cap and MIN_HOLD. The script's lasts until `hold(0)` (a real-race replay that never releases keeps the SC out); the storm's until the storm eases or its window (`Storm.SC_START_S` / `SC_ROLL_S`) ends (`storm-weather.test.mjs`, `storm-vm.test.mjs`). Hazard-loop inputs cannot lower it.
 - Debris going inactive or CAUTIONS switched off mid-flag freezes the LEVEL but it still ages to the cap (`capDropIfExpired`); `caution(false)` drops it at once.
 - "Back in" for the player is two separate things: the flag (`caution().level`) and the OVERTAKE hold / game.js speed cap (step 4).
 - Guest: green on the host but SC on the guest = missed `EV.CAUTION` (`apply()`); `update()` returns early for guests, so only a host message clears it (`reset()` clears it when `G.state !== "race"`).
-- Repro in the VM: `caution(true)`, raise the flag, step past 90 s of sim time (or `hold()`) and read `caution().sinceT`/`level` each step.
+- Repro in the VM: `caution(true)`, raise the flag, step past `SC_MAX` of sim time (or `hold()`) and read `caution().sinceT`/`level` each step.
 
 ## Common Mistakes
 
@@ -147,8 +147,8 @@ Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` i
 - Assuming `RaceControl.update()` slows cars: it only sets the flag and gates
   overtake; the speed cap is game.js's (Workflow step 4).
 - Using wall-clock time or global random sources, breaking seeded determinism.
-- Reporting a timeout-shaped browser failure as logic before checking load and
-  re-running the specific spec alone if needed.
+- Reporting a timeout-shaped CI browser failure as logic before checking load
+  (AGENTS.md rule 7) and re-requesting the group with `remote-group.mjs`.
 - Trusting a clean `incident({reset:true})` return: see "Incident reset is a no-op after handback" above.
 
 ## Fresh reset evidence

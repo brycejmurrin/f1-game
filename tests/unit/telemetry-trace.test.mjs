@@ -650,3 +650,29 @@ test("normal sub-sample boundary skew uses observed bracketing rows while a lead
     }
   }
 });
+
+// W23 #6: 2026 has no DRS, and OpenF1's car_data sends `drs: null` on every
+// 2026 sample (session 11412, 2026-11-10). The DRS channel, its pill and the
+// "DRS —" summary text exist only when some lane carries a value.
+test("TELEMETRY shows no DRS channel, pill or summary when no sample has a value", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  const lane = (drs) => ({ d: { num: 1, code: "NOR" },
+    car: [0, 1].map((t) => ({ t, speed: 200, gear: 6, throttle: 100, brake: 0, rpm: 11000, drs })),
+    cum: { t: [0, 1], d: [0, 55] } });
+  assert.equal(model.hasDrs([lane(null), lane(null)]), false, "2026: every sample null");
+  assert.equal(model.hasDrs([lane(null), lane(12)]), true, "2025: one lane with DRS codes");
+  assert.equal(model.hasDrs([]), false);
+  const player = vm.runInContext("DataTelemetryPlayer", ctx).create({}, { paintFrame() {} });
+  const cell = () => ({ textContent: "", style: {}, classList: { toggle() {} } });
+  const laps = [lane(null)];
+  const view = { cursorT: 0, primary: laps[0], compare: null, laps, rpmMax: 12000, hasDrs: false,
+    a11ySummary: { textContent: "" },
+    g: { speed: [cell()], gear: [cell()], thr: [cell()], brk: [cell()], rpm: [cell()], board: [] } };
+  player.paintFrame(view);   // no g.drs: must not throw
+  player.updateTextSummary(view);
+  const lastBit = () => view.a11ySummary.textContent.split(": ").pop();
+  assert.equal(lastBit().split(", ").pop(), "rpm 11000.", "no DRS clause: " + view.a11ySummary.textContent);
+  view.hasDrs = true; laps[0] = lane(12); view.primary = laps[0];
+  player.updateTextSummary(view);
+  assert.equal(lastBit().split(", ").pop(), "DRS open.");
+});

@@ -113,3 +113,32 @@ test("sunMapSize keeps the pre-B8 rule exactly: only isMobile picks 1024 (a forc
   assert.deepEqual([size({ isMobile: true }), size({ mobileTier: true }), size({ mobileTier: true, softwareGL: true }), size({}), size({ softwareGL: true }), size({ isMobile: true, sunSize: 512 })],
     [1024, 2048, 512, 2048, 512, 512]);
 });
+
+// ?lab=dpr2 / ?lab=dpr3 (phone perf hunt 2026-11-10): the lab that lets a phone and live-frame-census --sweep draw
+// above the 1.5 mobile cap. create()'s own line is run against the shipped labDprCap.
+const LAB_DPR_LINE = line(TLX_SRC, "if (!_lite) DPR_CAP = labDprCap(DPR_CAP);");
+function labCap(search, { mobileTier = true, webgpu = true } = {}) {
+  const ctx = boot(search);
+  ctx.renderer = { backend: webgpu ? { isWebGPUBackend: true } : { isWebGLBackend: true } };
+  ctx.mobileTier = mobileTier; ctx._phoneHw = true;
+  ctx.liteTier = ctx.TLX.liteTier; ctx.labDprCap = ctx.TLX.labDprCap;
+  vm.runInContext(LITE_LINE + "\n" + DPR_LINE + "\n" + LAB_DPR_LINE + "\nglobalThis.__cap = DPR_CAP;", ctx, { filename: absSrc("tests/unit/tlx-lite-lab.test.mjs") });
+  return ctx.__cap;
+}
+
+test("no lab: the DPR cap is the tier's (1.5 phone, 2 desktop), so the shipped picture is unchanged", () => {
+  assert.equal(labCap(""), 1.5);
+  assert.equal(labCap("", { mobileTier: false }), 2);
+  assert.equal(labCap("?lab=other"), 1.5);
+});
+
+test("?lab=dpr2 and ?lab=dpr3 replace the cap on either tier; dpr3 wins when both are listed", () => {
+  assert.equal(labCap("?lab=dpr2"), 2);
+  assert.equal(labCap("?lab=dpr3"), 3);
+  assert.equal(labCap("?lab=dpr3", { mobileTier: false }), 3);
+  assert.equal(labCap("?lab=dpr2,dpr3"), 3);
+});
+
+test("?lab=tlxLite keeps its own lower cap on the WebGL2 phone leg even with a dpr lab beside it", () => {
+  assert.equal(labCap("?lab=tlxLite,dpr3", { webgpu: false }), 1.25);
+});

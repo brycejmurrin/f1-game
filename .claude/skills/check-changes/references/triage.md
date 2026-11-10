@@ -6,35 +6,34 @@ starve each other into 120 s timeouts that read exactly like test failures.
 Measured 2026-08-17: the same three smoke specs "failed" in three separate
 loaded runs and passed solo in 8.1 s / 69 s / 25.6 s — zero code delta.
 
-## Step 0 — "it timed out at 45 min": which timeout? (read-only, seconds)
+## Step 0 — "it timed out": which timeout? (read-only, seconds)
 
-`test-bg.mjs --wait --timeout 45` exiting **124** is the WAITER giving up, not a
-test result: the group is left alive. Read the log, not the exit code:
+Browser groups run on CI, not here (AGENTS.md rule 5). A `cancelled` job with zero
+failures is a timeout until proven otherwise (rule 8); a `remote-group.mjs` waiter
+running out of `--timeout` is the WAITER giving up, not a test result (the run is
+left alive: `node tools/ci/remote-group.mjs --watch <run-id>`). Read the shard log,
+not the exit code:
 
 ```sh
-cat /proc/loadavg                                   # >= 3 = the box was/is busy (rule 8)
-node tools/ci/test-bg.mjs --status                  # running / how it ended, elapsed, log path
-ps -eo pid,pcpu,args --sort=-pcpu | head            # who holds the CPU now; ONE busy playwright of yours is expected, a second or a sibling node suite is the load
-grep -aE '= (run (passed|failed|timedout|interrupted)|bg exit)' artifacts/logs/<group>.log   # no line = still running (or died: --status says)
-grep -aE 'x FAIL|! retry|= FAILURES|= slowest' artifacts/logs/<group>.log | head   # per-test 78.0s-style durations; `while setting up "context"` = load
+node tools/ci/ci-watch.mjs --once --failures-only    # this HEAD's red/cancelled jobs and their failing step
+gh run view <run-id> --log-failed | grep -aE 'x FAIL|! retry|= FAILURES|= slowest|= run ' | head
+#   per-test 78.0s-style durations; `while setting up "context"` = load
 ```
 
-No `= bg exit` line and `--status` says `running` = wait more (`--wait --timeout`
-again), do not re-run. A `= bg exit 1` with only ~120 s timeouts on a loaded
-box goes to step 1; the load NOW is not the load THEN (compare log timestamps
-with other `artifacts/logs/*.log` mtimes).
+No verdict line yet = still running: wait (skill `steward`), do not re-dispatch.
+A red with only ~120 s timeouts goes to step 1.
 
 ## The decision tree
 
-**1. Was the box busy?** Check the log's failure text and the timeline first.
+**1. Was the runner starved?** Check the log's failure text and the timeline first.
 `Test timeout … while setting up "context"` is the classic load signature —
-the browser couldn't even boot a context. Cross-check what ELSE ran during the
-window (`/proc/loadavg` now; other `artifacts/logs/*.log` timestamps; node
-sweeps, subagents, a second Playwright process — all count).
-→ Re-run the spec ALONE: `node tools/ci/test-solo.mjs <spec> [-g "grep"]`.
-It refuses to start until the 1-min load is quiet, runs at 1 worker, and
-prints the load beside the verdict. PASS solo = contention, done — do NOT
-"fix" the test. FAIL solo = real; bisect.
+the browser couldn't even boot a context. Cross-check the sibling shards on the
+same `head_sha` and the spec's usual duration (`tests/data/spec-timings.json`).
+→ Re-run the group on the pushed branch: `node tools/ci/remote-group.mjs <group>`
+(a green run of the same sha is reused; `--force` re-dispatches). PASS there =
+contention, but a pass that needed the retry is still a red (rule 9). FAIL again
+= real; bisect. A local solo re-run (`test-solo.mjs`) is for a Bryce-attended
+session on his explicit grant only.
 
 **2. Could the failure be a code regression at all?** Diff the tree the
 failing run served against the last passing run's tree. A prose-only delta
@@ -74,7 +73,7 @@ Do not re-dispatch CI until gen is clean.
 
 ## One red shard outside the diff — flake or base red?
 
-Before one re-run (AGENTS.md §Coordination: at most once, timeout/infra,
+Before one re-run (`docs/VERIFICATION.md` §5: at most once, timeout/infra,
 `node tools/ci/ci-rerun.mjs`): name the test and assertion (agent `ci-red-triage`),
 confirm the sibling shards on the same `head_sha` are green, and check the deploy
 tip — the same test red there is base red, not your flake; an unselected or unread
@@ -83,15 +82,11 @@ base result is UNKNOWN, not green. A pass that needed the retry is still a red
 
 ## Rules that prevent the class
 
-- ONE Playwright process. `verify-change.mjs` batches at **one group** per
-  batch, browser groups first. `test-bg.mjs` starts ONE group at a time by
-  default (a second is refused; `--parallel` raises the cap to
-  `floor(CORES/WORKERS)`), and refuses ANY start at 1-min loadavg >= 3.
-  Browser+browser pairing is the measured source of the entire 120 s class.
-- Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
-  `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
-- Verdicts come from the log's closing line: a `test-bg` log's verdict is `= bg exit N` (its `= run <status>
-  (N/M done, K failed)` line is the runner's summary, written before the exit); a `tooling-fast` log ends
+- No local browser test runs (AGENTS.md rule 5); a subagent never starts one (rule 10,
+  `bash-guard.sh`). Browser+browser pairing on this box is the measured source of the
+  entire 120 s class; on CI each shard owns its runner.
+- `verify-change.mjs` plans ONE group per batch and reports browser batches as not-run;
+  name them in the PR or run them with `remote-group.mjs`.
+- Verdicts come from a log's closing line: `remote-group.mjs` ends `= group <verdict>`,
+  `ci-watch.mjs` ends `= ci <verdict>`, a `tooling-fast` log ends
   `= tooling-fast passed|failed (<n> files, <m> failed)`. Match with `grep -E '^= '` — never the process table.
-- `tools/ci/verify-change.mjs` runs the whole selection serialized correctly and
-  labels timeout outcomes with the triage command.

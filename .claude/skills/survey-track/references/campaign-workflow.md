@@ -141,9 +141,10 @@ Name before/after discrepancies, exact audit deltas and remaining uncertainties.
 Existing audit caps are regression ratchets, not a licence to add defects.
 
 Children run the appropriate offline checks only, including
-`node tools/track/verify-track.cjs <id>` for circuit edits, and report browser evidence unverified. Parent selects the most
-specific foundation/subsystem specs and runs the existing validation ladder;
-broaden only when shared geometry or new failures require it. Keep source,
+`node tools/track/verify-track.cjs <id>` for circuit edits, and report browser evidence unverified. Browser specs run
+on CI, not locally: the parent pushes and lets the PR's selected shard and groups prove them
+(`node tools/ci/remote-group.mjs <group>` for a whole group; loop.md §6); broaden only when
+shared geometry or new failures require it. Keep source,
 offline-contract, rendered and native-device evidence separate. Update the
 packet at the integrated SHA, then put status and not-run coverage in the draft
 PR using the repository template. Do not merge or publish as part of this skill.

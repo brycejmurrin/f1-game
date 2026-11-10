@@ -20,7 +20,7 @@ The player guide is `docs/TRACK-DESIGNER.md`; the HOW TO tab text is
 
 | File | Global | Does |
 |---|---|---|
-| `designer.js` | `TrackDesigner` | the `#trackdesigner` screen: modes DRAW / EDIT / ELEVATION / SCENERY / TEST, tools SELECT / DRAW / STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND, undo, 600 ms draft autosave, SAVE / RACE / SHARE |
+| `designer.js` | `TrackDesigner` | the `#trackdesigner` screen: modes DRAW / EDIT / ELEVATION / SCENERY / TEST, tools SELECT / DRAW / STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND, undo, debounced draft autosave, SAVE / RACE / SHARE |
 | `canvas.js` | `DesignerCanvas` | the 2D drawing surface (pointer / wheel / keys → callbacks; canvas ink, never CSS colours) |
 | `profile.js` | `DesignerProfile` | the elevation strip under the canvas (per-node height grips) |
 | `selection-panel.js` | `DesignerSelection` | shared point/range selection controls |
@@ -56,7 +56,8 @@ node --test tests/unit/custom-tracks.test.mjs tests/unit/track-codec.test.mjs te
   tests/unit/elev-presets.test.mjs tests/unit/track-zones.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-designer-dom.test.mjs \
   tests/unit/designer-code-cli.test.mjs
 node --test tests/unit/track-validate-fleet.test.mjs     # the validator's ORACLE: no shipped circuit reads RED
-npm test -- tests/specs/track-designer.spec.js           # BROWSER (group modes): door → randomise → SAVE → RACE → reload; background it
+# BROWSER, CI only (AGENTS.md rule 5): tests/specs/track-designer.spec.js (door → randomise → SAVE → RACE → reload)
+#   is in group `modes`: the PR run covers it; node tools/ci/remote-group.mjs modes on the pushed branch
 ```
 
 The VM tests share `tests/helpers/editor-vm.mjs` (the real track engine + the

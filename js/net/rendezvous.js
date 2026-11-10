@@ -350,6 +350,7 @@ const NetRendezvous = (function () {
   function nostrExchange(o) {
     return NetNostr.directExchange({
       code: o.code, send: o.mine, reply: o.reply, token: o.token, onTick: o.onTick,
+      reanswer: !!o.reanswer, onFail: o.onFail,
     });
   }
 

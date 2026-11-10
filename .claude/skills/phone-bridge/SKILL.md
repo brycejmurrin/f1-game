@@ -7,7 +7,7 @@ description: "Use when measuring live play on Bryce's actual iPhone through the 
 
 The live site (`js/agent/apex-bridge.js`, on Pages since #4235) polls ONE GitHub issue for the OWNER's ` ```apex-cmd `
 comments and answers each with an ` ```apex-result ` comment. Routes ruled out, protocol and safety:
-`docs/notes/PHONE-BRIDGE-2026-10-30.md`. Command recipes and result parsing: `references/commands.md`.
+`docs/notes/PHONE-BRIDGE-2026-10-30.md`. Recipes and parsing: `references/commands.md`. Live runs: #5135, #5168.
 
 ## 1. Link (Bryce does this on the phone)
 
@@ -17,20 +17,22 @@ comments and answers each with an ` ```apex-result ` comment. Routes ruled out, 
    `https://brycejmurrin.github.io/f1-game/?apex=1&bridge=<n>`, paste his fine-grained token once (Issues read/write,
    this repo only; it stays in that phone's `localStorage`), tap LINK, and keep the game IN FRONT (iOS suspends a
    background tab: no polls, no rAF).
-3. Read the thread (`issue_read` `get_comments`) until a comment carries `{"hello":true,"facts":…}`. That hello is
-   the link; `facts.render` says which path is drawing. No hello: the badge says why (`CLAUDE LINK OFF — <why>`);
-   Safari has no remote console, so ask Bryce what the badge reads.
+3. Read the thread (`issue_read` `get_comments`) until a comment with `author_association` `OWNER` carries
+   `{"hello":true,"facts":…}` (public repo: anyone can post a fake). That hello is the link; `facts.render` says which
+   path is drawing. No hello: the badge says why (`CLAUDE LINK OFF — <why>`); ask Bryce what it reads.
 
 ## 2. Send, then read back
 
 - Send: `add_issue_comment` with the body ` ```apex-cmd\n{"cmd":"…","args":{…}}\n``` `. Only one fence per comment
   is read; use `batch` for several steps.
-- The page polls every 4 s; GitHub adds a few. Then `get_comments` and find the comment whose fenced JSON has
-  `re` = your command comment's id. `{ok:false,error}` is the answer, not a lost reply: do not resend.
-- A long command (`frames` 10 s, `wait`, a race build) answers late; read again after its duration, never a shell
-  sleep loop. Nothing after 60 s: the page is hidden or reloaded; ask Bryce.
+- The page polls every `POLL_MS`, plus GitHub's lag. Then `get_comments`: the reply is the OWNER-authored comment
+  whose fenced JSON has `re` = your command's id (ignore other authors). `{ok:false,error}` is the answer: no resend.
+- A long command (`frames`, `wait`, a race build) answers late; read again after its duration, never a shell
+  sleep loop. Nothing after a minute: the page is hidden or reloaded; ask Bryce.
 - After `reload`, `path` or `bench start` the page reloads and posts a NEW hello; commands sent before it are
-  never replayed (the hello's time is the cutoff), so wait for that hello before sending more.
+  never replayed (the hello's time is the cutoff), so wait for it. The reloading command's own reply can be lost
+  (`bench start` reloads before posting; `path`/`reload` race it): the new hello is the answer, so read what you need
+  (`path` with no `to`) BEFORE it.
 
 ## 3. When done
 

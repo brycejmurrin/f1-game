@@ -753,7 +753,7 @@ function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
 function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
 function otEnabled() { return raceCtl.otEnabled(); }
-let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
+let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62, camFovBoost = 0;   // dynamic share of camFov, kept over the HFOV cap (#5015)
 let camAncX = null, camAncZ = 0;      // last frame's car anchor — camera damps in the CAR's frame (see render())
 let camAncNX = null, camAncNZ = 0;    // this frame's, published where renderPosOf() is in scope
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
@@ -2360,7 +2360,7 @@ function snapGameCam(paint) {
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
-  camFov = v.fov;
+  camFov = v.fov; camFovBoost = v.fovBoost || 0;
   feel.camRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
   // Re-anchor too: render() damps the eye and target in the CAR's frame, from last frame's
   // anchor to this one. A car that was just moved (a mid-race JUMP IN drops it half a lap
@@ -6571,7 +6571,7 @@ function rescuePlayer(c) {
   // just watched it happen, so a card saying RECOVERED spends the radio — and
   // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
   // obvious can delay or mask one that does not. The sound still marks it.
-  if (c.local && soundOn) GameAudio.offtrack();
+  if (c.local && soundOn) GameAudio.offtrack(); if (c === player) snapGameCam();   // a teleport is a CUT (#5020)
 }
 
 // Retire a car. The counterpart of rescuePlayer above — same job, opposite
@@ -7345,7 +7345,7 @@ function render(dt) {
   if (!track) return;
   _frameNo++;
   // camera
-  let eyeT, tgtT, fovT, roadCamRoll = 0;
+  let eyeT, tgtT, fovT, fovBoostT = 0, roadCamRoll = 0;
   // Is THIS frame the pre-race cinematic? It is rendered like photo mode rather
   // than like gameplay — far plane out, fog thinned, scenery not culled to the
   // fog wall — because its shots are whole-circuit vistas from a few hundred
@@ -7422,7 +7422,7 @@ function render(dt) {
       _vantExtra.snap = false;
     }
     const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
-    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; if (vant.cut) camSnapNext = true;
+    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; fovBoostT = vant.fovBoost || 0; if (vant.cut) camSnapNext = true;
     if (feel.shake > 0) {
       feel.shake = Math.max(0, feel.shake - dt * 1.6);
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the OFFSET, not the trauma
@@ -7498,7 +7498,7 @@ function render(dt) {
     camTgt[i] = aN[i] + damp(camTgt[i] - aP[i], tgtT[i] - aN[i], lT, dt);
   }
   camAncX = ancX; camAncZ = ancZ;
-  camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
+  camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt); camFovBoost = damp(camFovBoost, fovBoostT, onboard ? 4 : 4 * cutEase, dt);
   if (typeof CamFeel !== "undefined" && CamFeel.consumeAimSnap()) { for (let i = 0; i < 3; i++) camTgt[i] = tgtT[i]; feel.camRoll = -feel.camRoll; }   // LOOK BACK flipped: a cut for the AIM, roll mirrored (feel.js)
   // A CUT LANDS WHOLE. Damping exists to smooth a moving vantage; across a shot
   // boundary there is nothing to smooth — the two vantages are unrelated, and
@@ -7506,7 +7506,7 @@ function render(dt) {
   // between. Set by the flyby sequencer at a shot boundary only.
   if (camSnapNext) {
     for (let i = 0; i < 3; i++) { camEye[i] = eyeT[i]; camTgt[i] = tgtT[i]; }
-    camFov = fovT;
+    camFov = fovT; camFovBoost = fovBoostT;
     camSnapNext = false;
   }
   // The EDITOR's preview is the same cinematic, parked (js/agent/apex.js stamps
@@ -7549,7 +7549,7 @@ function render(dt) {
   } else {
     // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
     // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
-    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine, boost: camFovBoost * Math.PI / 180 });
   }
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /
@@ -8575,7 +8575,7 @@ function tickBody(now) {
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
-      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(Math.min(dt, 1 / 20)); // fly-cam + scrub
+      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(dt); // dt already clamped to 1/4 s (#5030)
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
       // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.
@@ -8636,7 +8636,7 @@ function tickBody(now) {
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   PerfSpans.begin("camera"); director.tick(dt); PerfSpans.end("camera");   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
-  if (state === "results") { resultsCam.tick(Math.min(dt, 1 / 20)); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.min(dt, 1 / 20)); }
+  if (state === "results") { resultsCam.tick(dt); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.min(dt, 1 / 20)); }
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
   RenderRate.observe(_dtMs);
   if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame

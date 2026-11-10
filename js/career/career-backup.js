@@ -45,6 +45,7 @@ const CareerBackup = (function () {
     if (v === null) return "invalid-version";
     return v > SaveMigrate.CAREER_V ? "newer-version" : null;
   }
+  const inRange = (n, k) => Number.isFinite(n) && n >= 0 && n <= ((typeof SaveMigrate !== "undefined" && SaveMigrate.LIMITS || {})[k] ?? Infinity);
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
@@ -60,7 +61,13 @@ const CareerBackup = (function () {
       if (typeof m === "number" && !Number.isFinite(m)) return { ok: false, reason: "nan-money" };
       if (m != null && typeof m !== "number" && typeof m !== "string") return { ok: false, reason: "nan-money" };
       if (typeof m === "string" && m !== "" && !Number.isFinite(Number(m))) return { ok: false, reason: "nan-money" };
+      if (m != null && m !== "" && !inRange(Number(m), "MONEY_MAX")) return { ok: false, reason: "money-range" };
     }
+    // Every salary paid out (deal, offers, hire, its ask); scalars only, migrateCareer coerces the rest.
+    const rows = (a) => (Array.isArray(a) ? a.filter(isObj) : []);
+    const pay = [data.deal && data.deal.salary, ...rows(data.offers).map((o) => o.salary),
+      ...rows(data.roster).flatMap((d) => [d.salary, isObj(d.pending) ? d.pending.ask : null])];
+    if (pay.some((v) => (typeof v === "number" || (typeof v === "string" && v !== "" && Number.isFinite(+v))) && !inRange(+v, "SALARY_MAX"))) return { ok: false, reason: "salary-range" };
     if (data.season != null && (typeof data.season !== "object" || Array.isArray(data.season))) {
       return { ok: false, reason: "season-not-object" };
     }
@@ -309,7 +316,7 @@ const CareerBackup = (function () {
       if (data.flavour != null && !FLAVOURS.includes(data.flavour)) return { ok: false, reason: "flavour-mismatch" };
       if ((data.flavour || "driver") !== target.flavour) return { ok: false, reason: "flavour-mismatch" };
       if (typeof SaveMigrate === "undefined" || !Number.isSafeInteger(SaveMigrate.CAREER_V)
-        || (data.v != null && (!Number.isSafeInteger(data.v) || data.v < 0 || data.v > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
+        || (data.v != null && (SaveMigrate.careerVersion(data.v) === null || SaveMigrate.careerVersion(data.v) > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
       envelope.slots.push({ flavour: target.flavour, i: target.i, data });
     }
     // Career calendars use calIds; standalone calendars use config.trackIds.

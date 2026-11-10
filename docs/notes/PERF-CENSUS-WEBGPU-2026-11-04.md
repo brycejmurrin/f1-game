@@ -89,6 +89,14 @@ had freed threw on its next render-state change, and the reload loop followed. T
 bug, filed as #4900 and fixed by #4904 (f6aebe48). This branch is synced past it; the next `perf-census-webgpu` run is
 the first that can reach the render-scale sweep and judge the settle gate.
 
+> **Correction 2026-11-10:** that fix did NOT survive. The 2026-11-06 whole-tree rollback (f740619, restoring e2d1574b)
+> put `a.array = null` back in `releaseGeoMirrors`, and the 2026-11-09 re-land above did not bring #4904 with it. The
+> live-play audit reproduced the reload again (LP-01, 9 of 9, default backend, a few seconds after the race finish:
+> results screen → title with "Graphics reset"). Re-landed in PR #5270: on the WebGPU backend no mirror release nulls
+> an array (`releaseGeoMirrors`, the chunked `releaseMirrors`), and a freed-mirror throw on any backend is repaired
+> (zero-length view of the array's own class) and skips one frame instead of descending the paint ladder to a reload
+> (`tests/unit/tlx-r187-contracts.test.mjs`, "LP-01").
+
 Run 12 (7724ba33, synced past #4904): the throw and the reload are gone (no `present failed`, no `nullattr`, governor
 held at tier 0), but `no top-level render in 240s (warming=false)` right after, and the sweep then waited 60 s for each
 of up to 9 frames per step until the 25-min job cap cancelled it, losing the JSON. Either the page stopped presenting or

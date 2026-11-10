@@ -12,9 +12,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
+import os from "node:os";
 import { filesFor, runGroup } from "../../tools/ci/run-group.mjs";
-import { nodeGroupPhases } from "../../tools/ci/run-node-group.mjs";
-import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
+import { nodeGroupPhases, fileVerdicts, runNodeGroup, withFileVerdict } from "../../tools/ci/run-node-group.mjs";
+import { collect } from "../../tools/ci/file-verdict-reporter.mjs";
+import { TOOLING_FAST_FILES, guardsRanFiles } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
 import { ADAPTED, ADAPTED_RUNNER } from "../../tools/ci/twinned-specs.mjs";
 
@@ -109,7 +111,7 @@ test("matched PR runners preserve generated flags, exact remaining rosters and i
   for (const script of [...ALWAYS_ON_TOPICAL, ...THINNED_VM]) {
     const calls = [];
     const files = filesFor(script, { skipTf: true });
-    assert.equal(runGroup(script, { skipTf: true, announce() {},
+    assert.equal(runGroup(script, { skipTf: true, announce() {}, fileVerdict: false,
       execute(cmd, args, opts) { calls.push({ cmd, args, opts }); return { status: 0 }; },
     }), 0);
     const doc = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
@@ -128,13 +130,13 @@ test("matched PR runners preserve generated flags, exact remaining rosters and i
     kind: "node", flags: ["--test-timeout=4321", "--test-concurrency=1"], files: [shared, ordinary, isolated],
   } } };
   const calls = [];
-  assert.equal(runGroup("test:fixture", { doc, skipTf: true, announce() {},
+  assert.equal(runGroup("test:fixture", { doc, skipTf: true, announce() {}, fileVerdict: false,
     env: { NODE_TEST_CONTEXT: "child-v8" }, execute(cmd, args) { calls.push(args); return { status: 0 }; },
   }), 0);
   assert.deepEqual(calls, [isolated, ordinary].map(file => ["--test", "--test-timeout=4321", "--test-concurrency=1", file]));
   for (const result of [{ status: 7 }, { status: null, signal: "SIGTERM" }, { status: 0, error: new Error("launch") }]) {
     let launched = 0;
-    assert.notEqual(runGroup("test:fixture", { doc, announce() {}, execute() { launched++; return result; } }), 0);
+    assert.notEqual(runGroup("test:fixture", { doc, announce() {}, fileVerdict: false, execute() { launched++; return result; } }), 0);
     assert.equal(launched, 1, "a failed isolated phase prevents ordinary work");
   }
 });
@@ -279,4 +281,113 @@ test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-
   assert.ok(cota.run.includes("test:vm-page-a"), JSON.stringify(cota.skip));
   assert.ok(!cota.run.includes("test:vm-page-b"));
   assert.ok(!plan(["js/circuits/dijon.js"]).run.some((s) => s.startsWith("test:vm-page")));
+});
+
+
+// ── AUDIT W6 (2026-11-10): what the PR tiers actually run ─────────────────────
+// On a js/-only pull request the guards shards run `tooling-fast --changed` (a
+// SELECTION) while vm-b1/b2 and the always-on riders ran `run-group --skip-tf`,
+// which dropped EVERY tooling-fast member: a member the selection left out ran
+// in no PR job (game-vm, physics-characterization-vm, real-replay-vm, ...).
+const JS_ONLY_DIFFS = [
+  ["js/game.js"], ["js/physics/tyre-model.js"], ["js/ui/hud.js"], ["css/hud.css"],
+  ["js/circuits/monza.js"], ["js/audio/engine.js"], ["js/track/tracks.js", "js/ui/hud.js"],
+].filter((d) => d.every((f) => fs.existsSync(path.join(ROOT, f))));
+
+test("W6: on a js-only PR every file of every node-suites script that runs is run by some PR job", () => {
+  assert.ok(JS_ONLY_DIFFS.length >= 4, "anti-vacuity: the sample diffs must exist in the tree");
+  let rescued = 0;
+  for (const diff of JS_ONLY_DIFFS) {
+    const guards = guardsRanFiles(diff, "pull_request");
+    assert.equal(guards.mode, "changed", `${diff}: a js-only PR narrows the guards shards`);
+    const ran = new Set(guards.files);
+    const p = plan(diff);
+    const scripts = [...ALWAYS_ON_TOPICAL, ...THINNED_VM.filter((s) => p.run.includes(s))];
+    for (const script of scripts) {
+      const kept = new Set(filesFor(script, { skipTf: p.skipTf, ran: guards.files }));
+      for (const f of groups[script].files) {
+        assert.ok(kept.has(f) || ran.has(f), `${diff.join("+")}: ${script} member ${f} runs in no PR job`);
+        if (kept.has(f) && TOOLING_FAST_FILES.includes(f)) rescued++;
+      }
+      // Never double-billed either: what guards ran is not re-run here.
+      for (const f of kept) assert.ok(!ran.has(f), `${script}: ${f} already ran in Structural guards`);
+    }
+  }
+  assert.ok(rescued > 0, "anti-vacuity: some tooling-fast member is now run by its topical script");
+  const vm = guardsRanFiles(["js/game.js"], "pull_request");
+  const b1 = filesFor("test:game-vm-b1", { skipTf: true, ran: vm.files });
+  for (const f of ["tests/unit/game-vm.test.mjs", "tests/unit/physics-characterization-vm.test.mjs", "tests/unit/real-replay-vm.test.mjs"]) {
+    if (groups["test:game-vm-b1"].files.includes(f) && !vm.files.includes(f)) assert.ok(b1.includes(f), `${f} must run on vm-b1 for a js/game.js PR`);
+  }
+});
+
+test("W6: a full guards run still thins the riders; an unknown guards run thins nothing", () => {
+  for (const [diff, ev] of [[["tools/ci/run-group.mjs"], "pull_request"], [["js/game.js"], "push"], [["js/game.js"], undefined]]) {
+    const g = guardsRanFiles(diff, ev);
+    assert.equal(g.mode, "full", `${diff} on ${ev}`);
+    assert.deepEqual(g.files, TOOLING_FAST_FILES.filter((f) => !f.startsWith("//")));
+  }
+  for (const script of THINNED_VM) {
+    assert.deepEqual(filesFor(script, { skipTf: true, ran: [] }), groups[script].files, "no base: nothing is known to have run");
+  }
+});
+
+test("W6: run-group fails a phase whose clean exit verified nothing, per file", () => {
+  const doc = { isolatedFiles: [], groups: { "test:fixture": { kind: "node", files: ["a.test.mjs", "b.test.mjs"] } } };
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "apex-run-group-"));
+  try {
+    const summaryFor = (b) => ({ [path.join(cwd, "a.test.mjs")]: { enqueued: 2, done: 2, pass: 2, fail: 0, skipped: 0, todo: 0, fileMarker: null },
+      [path.join(cwd, "b.test.mjs")]: b });
+    const exec = (b) => (cmd, args) => {
+      const dest = args.filter((a) => a.startsWith("--test-reporter-destination=")).pop().split("=")[1];
+      fs.writeFileSync(dest, JSON.stringify(summaryFor(b)));
+      return { status: 0 };
+    };
+    const logs = [];
+    const good = { enqueued: 1, done: 1, pass: 1, fail: 0, skipped: 0, todo: 0, fileMarker: null };
+    const exited = { enqueued: 0, done: 0, pass: 0, fail: 0, skipped: 0, todo: 0, fileMarker: "pass" };
+    assert.equal(runGroup("test:fixture", { doc, cwd, env: {}, announce() {}, execute: exec(good) }), 0);
+    const realErr = console.error; console.error = (m) => logs.push(m);
+    try { assert.equal(runGroup("test:fixture", { doc, cwd, env: {}, announce() {}, execute: exec(exited) }), 1); }
+    finally { console.error = realErr; }
+    assert.match(logs.join("\n"), /FAIL b\.test\.mjs: exit 0 but registered no tests/);
+    assert.deepEqual(fs.readdirSync(path.join(cwd, "artifacts/run")), [], "summaries are cleaned up");
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+});
+
+test("W6: fileVerdicts names each empty, truncated or all-skipped file", () => {
+  const root = "/r";
+  const c = (o) => ({ enqueued: 1, done: 1, pass: 1, fail: 0, skipped: 0, todo: 0, fileMarker: null, ...o });
+  const summary = { "/r/ok.mjs": c({}), "/r/marker.mjs": c({ enqueued: 0, done: 0, pass: 0, fileMarker: "pass" }),
+    "/r/cut.mjs": c({ enqueued: 3, done: 1 }), "/r/skip.mjs": c({ pass: 0, skipped: 1 }) };
+  const out = fileVerdicts(summary, ["ok.mjs", "marker.mjs", "cut.mjs", "skip.mjs", "absent.mjs"], { root, allSkipOk: {} });
+  assert.deepEqual(out.map((v) => v.file), ["marker.mjs", "cut.mjs", "skip.mjs", "absent.mjs"]);
+  assert.match(out[1].reason, /only 1 of 3/);
+  assert.deepEqual(fileVerdicts(summary, ["skip.mjs"], { root, allSkipOk: { "skip.mjs": "why" } }), []);
+  // The reporter's fold: the runner's own per-file entry is the marker, not a test.
+  const ev = (type, name, nesting = 0, extra = {}) => ({ type, data: { file: "/w/t/x.test.mjs", name, nesting, ...extra } });
+  const folded = collect([ev("test:enqueue", "t/x.test.mjs"), ev("test:pass", "t/x.test.mjs", 0, { details: { type: "test" } })], "/w");
+  assert.deepEqual(folded["/w/t/x.test.mjs"], { enqueued: 0, done: 0, pass: 0, fail: 0, skipped: 0, todo: 0, fileMarker: "pass" });
+  assert.equal(withFileVerdict(["--test", "--test-reporter=dot", "x"], "/d"), null, "a forwarded reporter keeps the bare exit code");
+});
+
+test("W6: run-node-group fails a real `node --test` phase whose file process.exit(0)s", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-run-node-group-"));
+  try {
+    fs.writeFileSync(path.join(dir, "ok.test.mjs"), 'import { test } from "node:test"; test("one", () => {});\n');
+    fs.writeFileSync(path.join(dir, "early.test.mjs"), 'import { test } from "node:test"; process.exit(0); test("never", () => {});\n');
+    fs.writeFileSync(path.join(dir, "mid.test.mjs"), 'import { test } from "node:test"; test("a", () => {}); test("b", () => { process.exit(0); }); test("c", () => {});\n');
+    const doc = (files) => ({ isolatedFiles: [], groups: { "test:x": { kind: "node", files: files.map((f) => path.join(dir, f)) } } });
+    const quiet = async (files) => {
+      const realErr = console.error; const lines = []; console.error = (m) => lines.push(String(m));
+      try { return { r: await runNodeGroup("test:x", [], { doc: doc(files), stdio: "ignore" }), lines }; }
+      finally { console.error = realErr; }
+    };
+    assert.deepEqual((await quiet(["ok.test.mjs"])).r, { code: 0, signal: null });
+    for (const bad of ["early.test.mjs", "mid.test.mjs"]) {
+      const { r, lines } = await quiet(["ok.test.mjs", bad]);
+      assert.deepEqual(r, { code: 1, signal: null }, `${bad}: node --test exits 0 here; the per-file verdict must not`);
+      assert.ok(lines.some((l) => l.includes(bad)), lines.join("\n"));
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

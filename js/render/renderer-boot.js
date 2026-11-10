@@ -36,6 +36,15 @@ const BACKEND_FILES = ApexRoster.DEFERRED;
 // whether a DEFERRED backend actually took the canvas on THIS load.
 const STRIKE_KEY = "apex26.gfxProbeStrikes";
 let _backendBound = false;
+// THE RETIREMENT RECORD (#4995), apex26.gfxRetired = "<backend>:<build>", written with the second-
+// strike rewrite of the pick. Two iOS app kills inside the first race load are
+// enough to retire TLX/WebGPU, and without this the next cold launch showed
+// WEBGL2 as if the player had chosen it. RendererPicker reads it for the
+// SETTINGS notice and its TRY AGAIN button; a hand pick or RESET clears it.
+function retiredWhy(raw) {
+  const m = /^(three|webgpu):(\d+)$/.exec(raw || "");
+  return m ? "retired: " + m[1] + " never presented a frame on two starts in a row (build " + m[2] + "); WebGL2 is the pick until a renderer is picked by hand" : "";
+}
 function strikesFor(raw, backend) {
   if (raw == null) return 0;
   const m = /^([a-z0-9]+):(\d+)$/.exec(raw);
@@ -200,6 +209,21 @@ if (typeof RendererPicker !== "undefined" && RendererPicker.setUnavailableDefaul
   RendererPicker.setUnavailableDefaults(graphicsUnavailableOpts());
 }
 async function start() {
+// Reload once with a session skip so the fresh tab attaches GLX. Read the skip back before
+// reloading: with sessionStorage blocked the write fails silently and the reload replays this
+// claim-and-die boot forever. And ONCE: a latch already set when this boot started means the
+// previous reload failed too (measured 236 reloads/64 s on a Vulkan-only config before this cap).
+// disarm = clear the canary first (a refused init keeps the pick; a hang keeps its strike).
+function reloadOnceIntoGlx(disarm) {
+  let skipped = false;
+  try { if (!_claimSkipped) {
+    sessionStorage.setItem("apex26.gfxClaimFail", "1");
+    skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
+  if (!skipped) return false;
+  if (disarm) try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* storage blocked (private mode): the probe just stays armed */ }
+  try { location.reload(); } catch (_) { /* a reload that throws leaves the page as it is; nothing to recover */ }
+  return true;
+}
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 let _initOwner = null;
@@ -243,6 +267,14 @@ try {
   // still reverts; a probe still armed at the NEXT boot means create() or
   // present() never completed last time.
   const PROBE_KEY = "apex26.gfxBackendProbe";
+  // A record only speaks for the webgl2 pick it wrote: any other stored pick
+  // (a settings import, the agent bridge) makes it stale. While it stands, every
+  // boot says why WebGL2 is drawing, not just the boot that retired the pick.
+  try {
+    const retired = localStorage.getItem("apex26.gfxRetired");
+    if (retired && localStorage.getItem("apex26.gfxBackend") !== "webgl2") localStorage.removeItem("apex26.gfxRetired");
+    else if (retired) why = retiredWhy(retired);
+  } catch (_) { /* blocked storage: no record to read */ }
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
   // skipClaim = this tab already claimed-and-died; the probe is leftover from
@@ -270,6 +302,7 @@ try {
       localStorage.removeItem(PROBE_KEY);
       if (retire) {
         localStorage.setItem("apex26.gfxBackend", "webgl2");
+        localStorage.setItem("apex26.gfxRetired", armed + ":" + ((typeof window !== "undefined" && window.__APEX_BUILD) || 0));
         localStorage.removeItem(STRIKE_KEY);
       } else localStorage.setItem(STRIKE_KEY, armed + ":" + strikes);
     } catch (_) { /* the in-memory revert above still holds for this load */ }
@@ -352,7 +385,12 @@ if (!gfx) {
   // An alternate that claimed the canvas (getContext succeeded) then timed out
   // cannot attach GLX on this load — same rule as init-fail below, without
   // calling GLX.init on a poisoned surface (renderer-boot-timeout VM).
+  // #4577: reload ONCE so the fresh tab attaches GLX, behind the same claim-fail latch as
+  // init-fail below (a second hang finds the latch consumed and stops here). Its canary stays
+  // armed: the skip boot leaves it for the next cold start to strike, as for an unclaimed hang.
+  // A claimed REFUSAL (create() answered null/threw) is a live tab: keep the pick, disarm the canary (#4817).
   if (_initOwner && _initOwner.claimed) {
+    if (reloadOnceIntoGlx(!_createHung)) return null;
     showGraphicsUnavailable(); return null;
   }
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
@@ -381,26 +419,8 @@ if (!gfx) {
     // getContext("webgl2") can never attach on this load. Reload once with a
     // session skip so THIS tab attaches GLX; keep the pick and disarm the
     // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
-    let backendTried = false;
     const p = backendPreference();
-    backendTried = p === "webgpu" || p === "three";
-    let skipped = false;
-    if (backendTried) {
-      // Read the skip back before reloading — with sessionStorage blocked the
-      // write fails silently and the reload replays this claim-and-die boot
-      // forever. And reload ONCE: a latch already set when this boot started
-      // means the previous reload's GLX.init failed too and WebGL2 is gone
-      // from this tab (measured 236 reloads/64 s on a Vulkan-only config
-      // before this cap). Fall through to #nogl instead.
-      try { if (!_claimSkipped) {
-        sessionStorage.setItem("apex26.gfxClaimFail", "1");
-        skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
-    }
-    if (skipped) {
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* storage blocked (private mode): the probe just stays armed */ }
-      try { location.reload(); } catch (_) { /* a reload that throws leaves the page as it is; nothing to recover */ }
-      return null;
-    }
+    if ((p === "webgpu" || p === "three") && reloadOnceIntoGlx(true)) return null;
     showGraphicsUnavailable(); return null;
   }
   gfx = GLX;
@@ -423,7 +443,8 @@ if (!gfx) {
   // create() that HUNG is the same case as a jetsam kill (it never completed),
   // so its probe stays armed too: the strike ledger retires a device that hangs
   // twice instead of costing every boot BOOT_STEP_MS.
-  if (!_createHung) try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+  // A claim-skip boot owes the probe nothing either: a hang's reload (#4577) left it armed on purpose.
+  if (!_createHung && !_claimSkipped) try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
 // What this boot BOUND, for the next boot's early preload (guessBackend below).
 try { localStorage.setItem("apex26.gfxBootBound", _backendBound ? pref : "webgl2"); } catch (_) { /* blocked storage: the next guess reads the pick alone */ }

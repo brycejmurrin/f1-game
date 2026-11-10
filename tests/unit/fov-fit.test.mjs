@@ -134,3 +134,50 @@ test("bad aspect / FOV never yields 0 or NaN (resize / orientation edge)", () =>
   // cine still refuses a poisoned authored FOV (projection safety).
   assert.ok(F.fitFovY(NaN, 16 / 9, { cine: true }) > 0);
 });
+
+// ---- #5015: the cap must not swallow the speed widen / deploy boost / lens deltas ----
+function loadFovMode() {
+  const ctx = { M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } };
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/camera/fov-mode.js"), "utf8") + "\nthis.exported = CamFov;", ctx,
+    { filename: absSrc("js/camera/fov-mode.js") });
+  return ctx.exported;
+}
+
+test("#5015 landscape: the cap fits the BASE and the dynamic boost survives on top (helmet/chase, phone and 16:9)", () => {
+  const F = load(), M = loadFovMode();
+  for (const aspect of [852 / 393, 844 / 390, 16 / 9, 21 / 9]) {
+    for (const mode of ["helmet", "cockpit", "chase", "far"]) {
+      const rest = M.modeFov(mode, 0, false), full = M.modeFov(mode, 1, true), boost = M.modeBoost(mode, 1, true);
+      assert.equal(M.modeBoost(mode, 0, false), 0);
+      assert.ok(Math.abs(full - rest - boost) < 1e-9, "modeBoost is exactly what modeFov added over its base");
+      const atRest = F.fitFovY(rest * DEG, aspect, { boost: 0 });
+      assert.equal(atRest, oldCapOnly(rest * DEG, aspect, false), "the rest framing is the old capped one, bit for bit");
+      const old = F.fitFovY(full * DEG, aspect, {});
+      assert.equal(old, atRest, `${mode} @${aspect.toFixed(2)}: without the boost the cap returns the same FOV at rest and flat out (the bug)`);
+      const fitted = F.fitFovY(full * DEG, aspect, { boost: boost * DEG });
+      assert.ok(Math.abs(fitted - (atRest + boost * DEG)) < 1e-9 || F.hfovFromVfov(fitted, aspect) >= F.HFOV_BOOST_MAX - 1e-9,
+        `${mode} @${aspect.toFixed(2)}: full boost on top of the capped base (${(fitted / DEG).toFixed(1)}°)`);
+      assert.ok(fitted > atRest + 5 * DEG, "the widen reaches the screen");
+      const half = F.fitFovY(M.modeFov(mode, 0.5, false) * DEG, aspect, { boost: M.modeBoost(mode, 0.5, false) * DEG });
+      assert.ok(half > atRest && half < fitted, "monotonic in speed");
+    }
+  }
+});
+
+test("#5015 boost edges: HFOV ceiling, negative lens delta, portrait and cine untouched, junk ignored", () => {
+  const F = load();
+  // Super-ultrawide: the boost stops at HFOV_BOOST_MAX and never drops below the plain cap.
+  const wide = F.fitFovY(81 * DEG, 32 / 9, { boost: 17 * DEG });
+  assert.ok(Math.abs(F.hfovFromVfov(wide, 32 / 9) - F.HFOV_BOOST_MAX) < 1e-9);
+  assert.ok(wide > F.fitFovY(81 * DEG, 32 / 9, {}));
+  // A punch-in (negative delta) still zooms in from the capped base.
+  const a = 852 / 393, base = F.fitFovY(64 * DEG, a, {});
+  assert.ok(Math.abs(F.fitFovY(61 * DEG, a, { boost: -3 * DEG }) - (base - 3 * DEG)) < 1e-9);
+  // A base under the cap: the authored FOV passes whole (heli 36 + 6).
+  assert.ok(Math.abs(F.fitFovY(42 * DEG, 16 / 9, { boost: 6 * DEG }) - 42 * DEG) < 1e-12);
+  // Portrait and cine paths ignore the boost entirely.
+  assert.equal(F.fitFovY(78 * DEG, 0.46, { boost: 14 * DEG }), F.fitFovY(78 * DEG, 0.46, {}));
+  assert.equal(F.fitFovY(78 * DEG, 2.2, { cine: true, boost: 14 * DEG }), 78 * DEG);
+  for (const junk of [NaN, Infinity, "3", null, undefined]) assert.equal(F.fitFovY(78 * DEG, a, { boost: junk }), F.fitFovY(78 * DEG, a, {}));
+  assert.equal(F.fitFovY(10 * DEG, a, { boost: 20 * DEG }), 10 * DEG, "a boost larger than the FOV is not a base: plain fit");
+});

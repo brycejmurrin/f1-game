@@ -3,8 +3,8 @@
 ## Keyboard leaks into a menu (or a menu eats the wheel)
 
 Trace, in order: `onKey` (`js/input/input.js`) computes `typing` (focused
-INPUT/TEXTAREA/SELECT/BUTTON/A, except `hudControl` = `#btn-cam, #pausebtn,
-#hud-restore, #pc-restore, .touchbtn`) and `menuOverlayOpen()` =
+interactive element, except the HUD buttons matched as `hudControl` in
+`onKey`) and `menuOverlayOpen()` =
 `UiLayers.anyOpen()`; either one makes a keydown a no-op and a keyup a
 latch-clear only. Pause/Escape sit ABOVE that gate. The layer list and its
 `gate: false` entries (`overlay`, `rotate-device`) live only in `js/ui/layers.js`;
@@ -39,8 +39,8 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
   steers — `touch-steer.spec.js`. Pedal travel: `touch-pedals.spec.js`.
 - Tilt: One-Euro filter → dead zone → `MAX_TILT` map → slew
   (`input.js`; `clampDeadzone()` keeps `DEADZONE < MAX_TILT` so the map cannot
-  invert). Rotating the phone (`onScreenRotate`) resets the filter only, not the
-  centre: an offset after rotation needs RECALIBRATE (`calibrate()` takes the
+  invert). Rotating the phone (`onScreenRotate`) resets the filter (and any drag), not
+  the centre: an offset after rotation needs RECALIBRATE (`calibrate()` takes the
   RAW angle). Spec `tilt-pipeline.spec.js` (dead zone, full lock at MAX_TILT,
   slew, calibrate).
 - "Racing-line help stays highlighted" is not an input latch. The on-track ribbon is

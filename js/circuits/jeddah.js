@@ -6,7 +6,10 @@
     id: "jeddah",
     reverse: false, // real-world CW/CCW direction
     // Start on the main straight before T1 (LEFT ~256 m): was 0.9625 on the T27 bend.
-    // Scenery/authored fracs stay on the old origin until re-anchored by hand.
+    // Still on the OLD 0.9625 origin (the engine adds _sceneryShift ~0.0479):
+    // bankZones { frac } rows, elevations[].s, dressingExclusions s0/s1 and every
+    // frac in scenery/jeddah.js. On the RACING (start-line) origin: sectors,
+    // turns and bankZones { turn } rows.
     startFrac: 0.9160,
     sceneryStartFrac: 0.9625,
     name: "JEDDAH",
@@ -44,7 +47,9 @@
       { frac: 0.4792, angleDeg: 7.0, widthM: 240 },   // banked left onto the north loop
       { frac: 0.5552, angleDeg: 6.0, widthM: 200 },   // banked sweeper
       { frac: 0.6110, angleDeg: 3.0, widthM: 120 },
-      { frac: 0.9981, angleDeg: 6.0, widthM: 120 },   // banked final right
+      // Final corner by turn index: the old { frac: 0.9981 } plus the shift
+      // built ~0.046, on T1 (a tight LEFT), and left T27 flat.
+      { turn: 27, angleDeg: 6.0, widthM: 120 },       // banked final corner
     ],
     elevations: [
       { s: 0.16, halfM: 520, rise: 1.5 },

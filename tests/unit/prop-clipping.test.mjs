@@ -148,6 +148,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // 2026-10-10 round-2 bug hunt (#1309): sepang 2 -> 1 and bahrain 1 -> 0 — the hwZone
 // re-key (Sepang's final hairpin) and the hairpin fold clamp moved the road off
 // two props that used to clip it. Lowered to the measured tree.
+// 2026-11-10 (#5080, PR #5254): monza 2 -> 3. The Rettifilo gravel trap
+// (monza-rettifilo-gravel, frac 0.099 left) was dropped WHOLE on the base,
+// because the whole-box road test fired. The per-cell guard now draws its clear
+// cells, and the default tyre-wall stack (sunk base, structures.js tyreWall) stands
+// in one of them: the one new spot (1.03 m, frac 0.093) is emit[groundPatch] x
+// addCyl[tyre stack]. The 1.03 m is the bounding box of one draped cell over a
+// ~1 m terrain rise. Visually it is a barrier standing in gravel, not a prop
+// through a prop. Fleet clip-audit --all: only monza moved (46 -> 47).
 
 mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
 const BASELINE = JSON.parse(

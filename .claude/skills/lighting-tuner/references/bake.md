@@ -25,8 +25,8 @@ Per-track agent proposals: see the merge path below. Never let a subagent write
 
 **Never hand `bake.mjs` a partial object.** It replaces the entire
 `window.LightPresets = {…};` literal, so a one-profile paste silently wipes
-~1,000 other keys. Its only safe input is a complete snapshot. A key-count
-WARNING (incoming < half of shipped) is a stop sign, not a block; a
+every other key. Its only safe input is a complete snapshot. Its key-count
+shrink WARNING is a stop sign, not a block; a
 `window.LightEdits` paste is refused outright, because that shape is now an
 expected input and guessing wrong destroys the file.
 
@@ -56,7 +56,8 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edi
 - **Player paste** — `window.LightEdits = {…}` from COPY VALUES, keyed by the
   full `"track|tod|wx"` plus the `"*"` / `"*|tod"` layers a proposal cannot
   express. Within a condition a delta **MERGES**: two sliders moved is two knobs
-  added, not the other eight deleted. A delta may never delete a condition.
+  added, not the other eight deleted; a knob set back to what the layers below
+  resolve to is unpinned. A delta never deletes a condition it does not unpin.
 
 Save the paste to a file and pass the path — it is read with `vm`, so the `//`
 comments the export writes between blocks are fine.
@@ -66,8 +67,8 @@ comments the export writes between blocks are fine.
 If you only need to update ONE `track|tod|weather` (or `"*"`) key and do not
 have a complete shipped snapshot, do **not** feed `bake.mjs` a one-key object:
 
-1. Read `js/lighting/presets.js` and parse the existing
-   `window.LightPresets` object (plain JSON after the assignment).
+1. Read `js/lighting/presets.js` and evaluate the existing
+   `window.LightPresets` object (it carries `//` comments, so not `JSON.parse`).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
    `node tools/gen/gen-shell.mjs --check` (no bump: [shell/cache](../../check-changes/references/bump.md)).
@@ -76,8 +77,8 @@ Prefer the explicit `merge-proposals.mjs` path for partial player deltas.
 
 ### Input shape
 
-Keys are `"trackId|timeOfDay|weather"`, `"*"`, or `"*|timeOfDay"`;
-`timeOfDay` ∈ dawn|day|dusk|night, `weather` values must be registered in the current game settings.
+Keys are `"trackId|timeOfDay|weather"`, `"*"`, `"*|timeOfDay"` or `"*|timeOfDay|weather"`; the
+accepted values are `badProfileKey` in `tools/lighting/preset-validation.mjs`.
 Values are partial `{knobId: number}` maps (only non-default knobs).
 
 ### Steps
@@ -111,7 +112,8 @@ Values are partial `{knobId: number}` maps (only non-default knobs).
 
 ### Dry run (no write into js/)
 
-`--check` (see Read-only preflight receipts) prints a receipt and writes nothing. Verdict: `Merged N incoming profile(s): W written, K knob(s).` rc 0; any error lists
+`--check` (see Read-only preflight receipts) prints a JSON receipt (`changes`) and writes nothing,
+rc 0; any error lists
 `file: key.id …` and rc 1 with nothing written. `bake.mjs` reads bare JSON or a JS
 literal only: a leading `//` comment line fails to parse, so strip comments from a
 `window.LightPresets` paste first (`window.LightEdits` goes through `merge-proposals`, which tolerates them).
@@ -127,7 +129,7 @@ literal only: a leading `//` comment line fails to parse, so strip comments from
 ## Read-only preflight receipts
 
 Both scripts accept `[file] --check` (alias `--dry-run`) and `--json`.
-Before writes, validate registered track/time/weather keys, `*` and `*|tod`,
+Before writes, validate registered track/time/weather keys, `*`, `*|tod` and `*|tod|wx`,
 registered knob ids, finite range and slider-grid values through the shared
 `tools/lighting/preset-validation.mjs`. Receipts list added/deleted/changed
 profiles deterministically. `--check` creates no output or shipped-file edits.

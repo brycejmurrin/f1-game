@@ -20,14 +20,14 @@ Double pay. `settleRound()` -> `settleSponsor()`. Two guards make a second pay a
 `rollover()` resets `paidSponsors`; `save-migrate.js` normalises it to `[]` on old saves.
 
 Pins: `career-settle.test.mjs` "MY TEAM completing a sponsor window through settleRound cannot pay twice" and
-"sponsor settlement records one payout even when settlement is retried"; `tests/specs/career-hub.spec.js`
+"MY TEAM sponsor settlement records one payout even when settlement is retried"; `tests/specs/career-hub.spec.js`
 "a window pays at most once across a whole season" (browser: no double pay, ledger cleared at rollover);
 `docs/CAREER.md` §Sponsors — MY TEAM's second income. Those units use `dnf: false` rows only: a PAYOUT window
 whose rows include a DNF is unpinned.
 
 DNF and the money ("wrong sponsor money after a DNF"). A DNF row is always `clean:false`, so a clean window is never
-met. It scores 0 pts UNLESS it is classified: `settleRound()`'s `scored()` counts a car that retired past 90 %
-distance (`c.classified`, set in `js/race/race-control.js` at the finish), which keeps its points, counts as a finish and can make a `double`. So a
+met. It scores 0 pts UNLESS it is classified: `settleRound()`'s `scored()` counts a car that retired past the
+classification cut (`c.classified`, set in `js/race/race-control.js` at the finish), which keeps its points, counts as a finish and can make a `double`. So a
 points/finishes/double window can still be met after a late DNF. Other modifiers that change the amount:
 - `sponsorAt()`: `career.sponsorPicks[year:idx] === 1` swaps the window's kind, target and pay;
 - a season's LAST window is cut at the finale and asks and pays pro rata (`window / kind.window`);

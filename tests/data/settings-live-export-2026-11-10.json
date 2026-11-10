@@ -1,0 +1,505 @@
+{
+ "format": "apex26-settings-v1",
+ "mode": "all",
+ "exportedAt": "2026-11-10T10:09:48.362Z",
+ "build": "25715",
+ "device": {
+  "desktop": false,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1"
+ },
+ "keys": {
+  "json": "went through store.set (JSON)",
+  "raw": "bare strings from store.rawSet; null = unset"
+ },
+ "excluded": "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, ghosts, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section (merged on import)",
+ "changed": [
+  "audio.sound",
+  "display.uiScale",
+  "display.hudBtnScale",
+  "appearance.titleLayout",
+  "appearance.lookPause",
+  "appearance.lookSelect",
+  "appearance.lookRace",
+  "appearance.lookGarage",
+  "appearance.lookDesigner",
+  "appearance.layoutPreset",
+  "display.resMode",
+  "display.gfxPreset",
+  "display.tlxForceGL",
+  "hud.hudElements",
+  "hud.hudLayout",
+  "appearance.uiContrast",
+  "appearance.homeScene",
+  "driving.raceDraft"
+ ],
+ "settings": {
+  "audio": {
+   "sound": false,
+   "sfx": true,
+   "menuSfx": true,
+   "music": true,
+   "volMusic": 0.6,
+   "volSfx": 0.2,
+   "battleEarcon": false,
+   "radioVoice": false,
+   "announcer": true,
+   "volRadio": 0.8,
+   "radioFocusDb": 0,
+   "radioFx": 1,
+   "radioPreset": "modern",
+   "spokenLang": "auto",
+   "voiceTune": {},
+   "radioChat": "normal",
+   "radioPack": true,
+   "spotter": false,
+   "commentary": "tv",
+   "musicSource": "all",
+   "sndProfile": "team",
+   "sndTune": {
+    "pitch": 0.85,
+    "idle": 1,
+    "revRange": 1.3,
+    "curve": 1,
+    "detune": 0,
+    "brightness": 1,
+    "gravel": 1,
+    "sub": 0.25,
+    "limiter": 2.25,
+    "limRate": 0.8,
+    "limPitch": 0,
+    "boost": 1.12,
+    "boostPitch": 1,
+    "whine": 0.62,
+    "harvest": 1,
+    "wind": 1,
+    "screech": 1,
+    "brakes": 1,
+    "shift": 1,
+    "rivals": 1,
+    "reverb": 1,
+    "overrun": 1
+   },
+   "sndLayers": {
+    "whine": true,
+    "harvest": true,
+    "ers": true,
+    "wind": true,
+    "limiter": true,
+    "screech": true,
+    "sub": true,
+    "gravel": true,
+    "brakes": true,
+    "rivals": true,
+    "reverb": true,
+    "overrun": true
+   }
+  },
+  "display": {
+   "uiScale": 70,
+   "hudScale": null,
+   "hudBtnScale": 143.25,
+   "hudBtnOpacity": null,
+   "hudBtnShape": null,
+   "hudPanelOpacity": null,
+   "resMode": "high",
+   "resSchema": 2,
+   "spatialUpscale": "0",
+   "occlusionCull": "0",
+   "buildWorker": null,
+   "portraitOk": "0",
+   "debris": "0",
+   "gfxSsao": "1",
+   "gfxGodrays": "1",
+   "gfxPreset": "high",
+   "gfxHigh": null,
+   "gfxBackend": null,
+   "tlxForceGL": "0",
+   "tlxMaterialDetail": "4",
+   "tlxSharpenLimit": "0",
+   "tlxEnvProbe": null,
+   "xr": "0",
+   "xrBackend": "webgl2",
+   "xrInput": "controllers"
+  },
+  "a11y": {
+   "motion": null,
+   "focusRing": "high",
+   "cbCues": "off",
+   "holdMode": {
+    "throttle": "hold",
+    "lookBack": "hold"
+   }
+  },
+  "appearance": {
+   "titleIntro": "full",
+   "menuWash": "full",
+   "titleArt": "on",
+   "pauseLayout": "grid",
+   "pauseSide": "centre",
+   "pauseDim": "full",
+   "pauseConfirm": "on",
+   "titleLayout": {
+    "v": 2,
+    "wide": {
+     "btns": {
+      "x": 2,
+      "y": 1,
+      "size": 123,
+      "width": 0
+     },
+     "title": {
+      "x": 0,
+      "y": 0,
+      "size": 100
+     },
+     "art": {
+      "x": 0,
+      "y": 0,
+      "size": 100
+     },
+     "layout": "grid",
+     "side": "auto"
+    }
+   },
+   "lookPause": {
+    "btn": 115,
+    "w": 115
+   },
+   "lookDatahub": null,
+   "lookSelect": {
+    "w": 125,
+    "tile": 95
+   },
+   "lookRace": {
+    "w": 120,
+    "btn": 90
+   },
+   "lookCareer": null,
+   "lookGarage": {
+    "btn": 80,
+    "pw": 110,
+    "stats": "hide"
+   },
+   "lookPopups": null,
+   "lookDesigner": {
+    "size": 75
+   },
+   "layoutPreset": "shipped",
+   "uiTheme": "dark",
+   "menuAccent": "ember",
+   "hudAccent": "team",
+   "menuAccentHex": "#e10600",
+   "hudAccentHex": "#e10600",
+   "textSize": "large",
+   "uiContrast": "off",
+   "appIcon": "default",
+   "cvdMode": "off",
+   "captions": "on",
+   "captionSize": "medium",
+   "captionPos": "auto",
+   "captionBg": 82,
+   "captionSpeakerInk": "on",
+   "speedUnits": "kmh",
+   "menuHelp": "on",
+   "homeScene": "static",
+   "backgroundMotion": "ambient",
+   "homeCamera": "side",
+   "appearanceProfiles": []
+  },
+  "hud": {
+   "hudProfile": "standard",
+   "hudMetricsLayout": "full",
+   "hudMapVis": "on",
+   "hudGapsVis": "on",
+   "hudElements": {
+    "speed": "off",
+    "gear": "off",
+    "energy": "off",
+    "ot": "off",
+    "aero": "off"
+   },
+   "hudLayout": {
+    "v": 4,
+    "standard": {
+     "cockpit": {},
+     "helmet": {
+      "tower": {
+       "x": 0,
+       "y": 0,
+       "s": 80
+      },
+      "gaps": {
+       "x": -1.6823161189358413,
+       "y": -0.7911895674300313,
+       "s": 100
+      },
+      "sectors": {
+       "x": 6.572769953051643,
+       "y": -9.893182782018677,
+       "s": 100
+      },
+      "limits": {
+       "x": -71.31137519561814,
+       "y": -7.071989284318003,
+       "s": 70
+      },
+      "flag": {
+       "x": 0.2738654147104829,
+       "y": 13.480703986429173,
+       "s": 100
+      },
+      "mirror": {
+       "x": 0.00794818143889378,
+       "y": 0.22662213740458376,
+       "s": 78.59375
+      },
+      "announce": {
+       "x": -42.214397496087635,
+       "y": 20.406912948440148,
+       "s": 60
+      },
+      "gearbox": {
+       "x": 7.116832942097028,
+       "y": -49.458539475820345,
+       "s": 92.7001953125
+      },
+      "speed": {
+       "x": -22.451413341158062,
+       "y": -4.60209892602974,
+       "s": 100
+      },
+      "energy": {
+       "x": 4.585411776212829,
+       "y": -4.38711622916005,
+       "s": 101.53846153846153
+      },
+      "tyre": {
+       "x": -37.2848200312989,
+       "y": -26.961411700196148,
+       "s": 80
+      },
+      "damage": {
+       "x": 7.144341744913936,
+       "y": -21.36916661282733,
+       "s": 90
+      },
+      "strat": {
+       "x": -0.0003910213942059926,
+       "y": 27.819338888309076,
+       "s": 100.00001537409477
+      },
+      "inputs": {
+       "x": 74.12673609917152,
+       "y": -22.406435538592024,
+       "s": 70.76108399958467
+      }
+     },
+     "other": {
+      "tower": {
+       "x": 0,
+       "y": -5.4239903493137414e-15,
+       "s": 80
+      },
+      "speed": {
+       "x": 9.474031690140844,
+       "y": 2.038273960983889,
+       "s": 100
+      },
+      "energy": {
+       "x": 5.41006455399061,
+       "y": -11.279397823731712,
+       "s": 101.53846153846153
+      },
+      "ot": {
+       "x": -5.247454576089348,
+       "y": -0.16698473282442747,
+       "s": 100
+      },
+      "aero": {
+       "x": 19.800224960876363,
+       "y": 3.9042620865139805,
+       "s": 100
+      }
+     }
+    }
+   },
+   "hudMirror": "auto"
+  },
+  "camera": {
+   "garageArrival": null,
+   "flybyShots": null,
+   "ldCard": null,
+   "helmetVisor": "off",
+   "helmetVisorColor": "neutral",
+   "helmetVisorIntensity": "light",
+   "helmetVisorRefraction": "off",
+   "helmetVisorReflections": "light",
+   "helmetVisorBeams": "100",
+   "helmetVisorRain": "normal",
+   "helmetVisorDropSize": "100",
+   "helmetVisorRunoff": "normal",
+   "camMode": 19,
+   "pitCamAuto": false,
+   "camTune": {},
+   "camTuneGlobal": {},
+   "camComfort": {},
+   "camTuneTrack": {},
+   "camTuneCar": {},
+   "motionBlur": 5,
+   "speedLines": 5,
+   "cockpitHalo": "fairing",
+   "cockpitWheelFinish": "carbon",
+   "cockpitBodyFinish": "livery",
+   "cockpitHaloFinish": "livery",
+   "cockpitWheel": "f1",
+   "cockpitBody": "sculpted",
+   "cockpitSeat": "std",
+   "cockpitInterior": "team",
+   "cockpitTurnChaseLead": "0.4",
+   "lookBackLatch": false,
+   "speedVignette": false
+  },
+  "lighting": {
+   "lightTune": {}
+  },
+  "driving": {
+   "steerMode": "buttons",
+   "manual": false,
+   "autoThrottle": false,
+   "mirrorControls": false,
+   "dockLayout": null,
+   "tiltCurve": 5,
+   "touchCurve": 5,
+   "padCurve": 5,
+   "touchRange": 5,
+   "touchDragSpeed": 1,
+   "dragSmooth": 1,
+   "digitalRate": 5,
+   "analogSpeedSteer": 1,
+   "haptics": 6,
+   "triggerHaptics": true,
+   "padDeadzone": 5,
+   "padSaturation": 0,
+   "padLabels": "auto",
+   "padAxes": null,
+   "padProfiles": {
+    "v": 1,
+    "devices": [],
+    "legacyClaimed": false
+   },
+   "conditionCues": true,
+   "padRest": 0,
+   "aeroMode": "manual",
+   "drivingLine": "full",
+   "drivingLinePalette": "f1",
+   "drivingLineOpacity": "normal",
+   "lineBrakeCue": "off",
+   "difficulty": "hard",
+   "aiPace": "scripted",
+   "drivingCoach": false,
+   "throttleLatch": false,
+   "tyreWear": "real",
+   "dirtyAir": "classic",
+   "wind": "real",
+   "ersPlan": [
+    "manual",
+    "manual",
+    "manual"
+   ],
+   "damageHandling": false,
+   "raceGrid": "random",
+   "champGrid": "champ",
+   "reliability": "off",
+   "caution": false,
+   "unlimitedBudget": true,
+   "bodyAttitude": null,
+   "raceDraft": {
+    "weather": "rain",
+    "tod": "dusk",
+    "mixed": false,
+    "laps": "3"
+   },
+   "favTracks": null
+  },
+  "steering": {
+   "preset": "standard",
+   "steerRate": 2,
+   "steerExpo": 6,
+   "steerSmooth": 3,
+   "tiltDeg": 8,
+   "steerLock": 7,
+   "steerSpeed": 7,
+   "carWeight": null,
+   "adaptiveButtons": 5,
+   "brakeCue": 1,
+   "gripSteer": 1,
+   "audioCues": 1,
+   "drivingHelp": 1,
+   "pace": 11,
+   "raceLine": 0,
+   "steerSchema": 5
+  },
+  "controls": {
+   "keys": null,
+   "pad": null
+  },
+  "metrics": {
+   "metrics": null,
+   "metricsPage": "gov",
+   "metricsPos": "left",
+   "metricsSize": "s",
+   "metricsLogNs": "*",
+   "metricsLogLvl": "warn"
+  }
+ },
+ "defaults": {
+  "audio": {
+   "sound": true
+  },
+  "display": {
+   "uiScale": null,
+   "hudBtnScale": null,
+   "resMode": "med",
+   "gfxPreset": "medium",
+   "tlxForceGL": null
+  },
+  "appearance": {
+   "titleLayout": null,
+   "lookPause": null,
+   "lookSelect": null,
+   "lookRace": null,
+   "lookGarage": null,
+   "lookDesigner": null,
+   "layoutPreset": null,
+   "uiContrast": "high",
+   "homeScene": "photo"
+  },
+  "hud": {
+   "hudElements": {},
+   "hudLayout": null
+  },
+  "driving": {
+   "raceDraft": null
+  }
+ },
+ "where": {
+  "audio.sound": "js/game.js",
+  "display.uiScale": "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)",
+  "display.hudBtnScale": "js/ui/scale.js + css/tokens.css (null = follows hudScale)",
+  "appearance.titleLayout": "js/ui/title-layout.js TITLE LAYOUT (null = shipped; else {v:2, wide, tall}, one {btns,title,art,layout,side} per shape — a missing shape is shipped; a v1 object is both)",
+  "appearance.lookPause": "js/ui/screen-looks.js PAUSE MENU buttons & card (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
+  "appearance.lookSelect": "js/ui/screen-looks.js TRACK SELECTOR (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
+  "appearance.lookRace": "js/ui/screen-looks.js RACE SETTINGS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
+  "appearance.lookGarage": "js/ui/screen-looks.js GARAGE (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
+  "appearance.lookDesigner": "js/ui/screen-looks.js TRACK DESIGNER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)",
+  "appearance.layoutPreset": "js/ui/layout-presets.js LAYOUT PRESET (null = none recorded; the last preset applied — it reads CUSTOM once the knobs above no longer match it)",
+  "display.resMode": "js/ui/scale.js (MED on a touch device)",
+  "display.gfxPreset": "js/perf/quality-preset.js defaultId",
+  "display.tlxForceGL": "js/perf/renderer-picker.js (null = AUTO)",
+  "hud.hudElements": "js/ui/hud-elements.js per-element on/off (missing key = on)",
+  "hud.hudLayout": "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements and older formats use SHIPPED layouts)",
+  "appearance.uiContrast": "js/ui/appearance-opts.js HIGH CONTRAST",
+  "appearance.homeScene": "js/ui/appearance-studio.js",
+  "driving.raceDraft": "js/race/race-settings.js REMEMBER LAST RACE SETUP (null = 3 laps / dry / default; else {laps: \"3\"|\"5\"|\"10\"|\"25\"|\"FULL\", weather, tod, mixed})"
+ }
+}
