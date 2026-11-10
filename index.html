@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-zxIG36w+fII5C9RxzWLJjqF7EzL7GtQ8WB0yslg2+4I=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-JDzAdPEOtiQUf5FoM4YfPNh2sNp6gHIU7oycf0e18bU=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -329,15 +329,19 @@
       d.style.display = "block";
       shows++;
       var stopped = loopStopped();
-      d.textContent = "⚠ " + title + "\n\n";
+      var head = "⚠ " + title + "\n\n";
+      var rest = (stopped ? "The game loop has stopped.\n\n" : "") + (msg || "") + "\n\n" + (stack || "")
+        + "\n\n(" + (stopped ? "" : "tap to dismiss · ") + "build " + (window.__APEX_BUILD || "?") + ")";
+      // The ordinary card stays one text node, as it always was; only a card that needs buttons builds nodes.
+      d.textContent = head + rest;
       if (pin || stopped) {
         var bar = document.createElement("div");
         addButton(bar, "__err_reload", "RELOAD", function () { try { location.reload(); } catch (e) {} });
         if (stopped && !pinned) addButton(bar, "__err_menu", "BACK TO MENU", backToMenu);
+        d.textContent = head;
         d.appendChild(bar);
+        d.appendChild(document.createTextNode(rest));
       }
-      d.appendChild(document.createTextNode((stopped ? "The game loop has stopped.\n\n" : "") + (msg || "")
-        + "\n\n" + (stack || "") + "\n\n(" + (stopped ? "" : "tap to dismiss · ") + "build " + (window.__APEX_BUILD || "?") + ")"));
     } catch (e) {}
   }
   // Build number for the overlay footer — parsed from the shell generation meta
