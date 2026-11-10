@@ -6624,7 +6624,7 @@ function retireCar(c, reason) {
 // blast and a 25-lap race lose their cars at the same points of the story.
 function checkRetirements(dt) {
   const dist = Math.max(1, lapsTarget * track.total);
-  AiDrive.stallSweep(cars, dt, state === "race" && raceCtl.level === 0 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s under green
+  AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level === 0 && raceT > 0 && !isTimeTrial() && !isQuali(), c => { retireCar(c, "stationary"); announce("RETIRED — CAR STATIONARY FOR 60 s", 3, "penalty-hit"); });   // a parked player is retired after 60 s under green; a pause (online too) stops the clock
   for (const c of cars) {
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its

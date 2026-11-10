@@ -148,3 +148,33 @@ test("no game.js path ends a race past the G.endRace façade", () => {
   // `function endRace(` is the one bare match allowed: every caller goes through G.endRace
   assert.equal(bare, 1, `${bare - 1} bare endRace( call(s) — call G.endRace() so RealRace's wrap applies`);
 });
+
+// W26 row 5 (Bryce, 2026-11-10: "Keep it", on the promise that PAUSING STOPS THE CLOCK): a player
+// stationary for 60 s under green is retired; a pause or a caution counts nothing. __apex.step runs
+// update() even while paused (the solo frame loop does not), so the paused case is the rule itself —
+// the online path, where the race keeps running under the pause sheet. Stepped one second at a time,
+// tracking the highest count: the field comes round and shunts a parked car, and any motion restarts it.
+test("W26: a parked player is retired after 60 s under green, never while paused or under VSC / SC", async () => {
+  const G = g.G, A = g.apex;
+  const watch = (p, secs) => { let hi = 0; for (let t = 0; t < secs && !p.retired; t++) { A.step(1, 1); hi = Math.max(hi, p.stallT || 0); } return hi; };
+  let p = await drive();
+  const hiGreen = watch(p, 300);
+  assert.ok(p.retired && p.dnf === "stationary", `control: parked under green should retire within 300 s (max stallT ${hiGreen}, dnf ${p.dnf})`);
+
+  p = await drive(); A.step(1, 1);
+  G.paused = true;
+  try {
+    const t0 = G.raceT, hi = watch(p, 120);
+    assert.ok(G.raceT - t0 > 100, "the race clock ran under the pause (the case discriminates)");
+    assert.ok(!p.retired && hi === 0, `paused: max stallT ${hi}, retired ${p.retired}`);
+  } finally { G.paused = false; }
+
+  for (const level of [2, 3]) {
+    p = await drive(); A.step(1, 1);
+    assert.ok(G.applyCaution({ level, replay: true }), "caution applied");
+    const hi = watch(p, 90);
+    assert.equal(A.caution().level, level, "the caution held for the whole window");
+    assert.ok(!p.retired && hi === 0, `level ${level}: max stallT ${hi}, retired ${p.retired}`);
+    G.applyCaution({ level: 0 });
+  }
+});

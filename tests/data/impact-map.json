@@ -7250,6 +7250,7 @@
         "tests/unit/vstd-invariant.test.mjs"
       ],
       "applyCaution": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "applyLightTune": [
@@ -11764,6 +11765,9 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "stallStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "stallSweep": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "startCalm": [
