@@ -743,7 +743,9 @@
         });
       };
       tifosiBowl(0.824, -1, 44, 96, 4, "crimson");   // Parabolica outer — largest crowd
-                  tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
+      // gap 25, not 24: with #4967 the riser runs its full outside chord and met the
+      // gap-21 hedge (clip-audit 1.44 m severe @ frac 0.105).
+      tifosiBowl(0.11, 1, 25, 64, 3, "crimson");    // Curva Grande sweep
       // 0.02 R / 0.955 L / 0.633 L bowls removed: each doubled a grandstandEx on the same anchor.
       
       (function museum() {

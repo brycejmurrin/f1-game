@@ -271,7 +271,9 @@
       const M = 1 / 5900;
       for (const [s, side, gap, len, rows] of [
         [0.105, -1, 34, 44, 8], // Maggotts approach
-        [0.145,  1, 30, 46, 7], // Becketts exit
+        // +2 m gap: #4967 lengthened outside-of-bend rows; the front tread
+        // reached 0.53 m under the Becketts bank (ground-audit buried 3 > 2).
+        [0.145,  1, 32, 46, 7], // Becketts exit
         [0.285,  1, 32, 46, 9], // Stowe entry
         [0.325, -1, 26, 46, 7], // Vale
         // +2 m gap: front tread tops were 0.29–0.37 m under the rising
