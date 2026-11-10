@@ -452,9 +452,9 @@ const F1Transport = (function () {
           if (err && err.cancelled) throw err;   // asked for: no stale-cache fallback, no fail warning
           // Never paper over live-session auth lockouts with stale cache — that
           // makes LIVE look "updated" while silently serving old classification.
-          const msg = (err && err.message) || "";
+          // The status is the signal: fetchTimed keeps it on every wrapped error.
           const status = err && err.status;
-          if (hit && status !== 401 && status !== 403 && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
+          if (hit && status !== 401 && status !== 403) {
             warnFetchFail(name, "stale");
             staleLog.push({ seq: ++staleSeq, t: hit.t });
             if (staleLog.length > 64) staleLog.shift();

@@ -109,7 +109,7 @@ var ErsLayer = (function () {
     idled = false;
   }
 
-  // LAB audioIdle (engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
   // idle(true) unplugs the four output gains from the bus once silence() has
   // faded them; idle(false) plugs them back. Same nodes, same ctx.
   let idled = false;
@@ -219,7 +219,7 @@ var ErsLayer = (function () {
     wasBoost = boostActive;
     const sGain = sustainGain(boostActive, energy, s);
     if (moving(deployG, on, t, 0.10) && deployOsc) aim(deployOsc.frequency, deployHz(deploy, energy), t, 0.06, 1e-4);
-    if (moving(harvestG, on, t, 0.08)) {
+    if (moving(harvestG, on && hGain > 0, t, 0.08)) {   // audible, not just switched on (#5052)
       if (harvestOsc) aim(harvestOsc.frequency, harvestHz(brake), t, 0.08, 1e-4);
       if (harvestBp) aim(harvestBp.frequency, harvestHz(brake), t, 0.08, 1e-4);
     }

@@ -187,13 +187,14 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
   for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
     assert.equal(shared[id], want, `*|dawn|dry.${id}`);
   }
-  assert.equal(shared.sunAzim, undefined,
-    "sunAzim stays per-track (paul_ricard 144.5 vs fleet 128.5)");
+  // sunAzim: 51 of 52 tracks pinned 128.5 per row; it is the stamp's now and
+  // only paul_ricard keeps its own 144.5 (checked resolved, below).
+  assert.equal(shared.sunAzim, 128.5, "*|dawn|dry.sunAzim is the fleet 128.5");
   const redundant = [];
   for (const key of Object.keys(P)) {
     if (!/\|dawn\|dry$/.test(key) || key.startsWith("*")) continue;
     const o = P[key];
-    for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
+    for (const [id, want] of Object.entries({ ...DAWN_DRY_HOIST, sunAzim: 128.5 })) {
       if (Object.prototype.hasOwnProperty.call(o, id) && o[id] === want) {
         redundant.push(`${key}.${id}=${o[id]}`);
       }
@@ -207,7 +208,7 @@ test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
  *  the shipped presets, for one (track, tod, weather). Returns the live LT after
  *  apply(), so a layering bug in LightStore fails the tests built on it. */
 function resolveLive(trackId, tod, wx, extra = {}) {
-  const defs = vm.createContext({ GLX: { isMobile: false }, Math, Object });
+  const defs = vm.createContext({ GLX: { isMobile: !!extra.mobile }, Math, Object });
   vm.runInContext(read("js/lighting/knobs.js"), defs, { filename: absSrc("js/lighting/knobs.js") });
   const TUNE_DEFS = vm.runInContext("LightKnobs.TUNE_DEFS", defs);
   const ctx = vm.createContext({
@@ -226,8 +227,9 @@ function resolveLive(trackId, tod, wx, extra = {}) {
     raceTimeOfDay: tod, raceWeather: wx, state: "race",
     applyRaceSettings() {}, isWetRoad: () => false, initRainDrops() {},
   };
-  vm.runInContext("LightStore", ctx).create(G).apply();
-  return { LT: vm.runInContext("LightTune.LT", ctx), TUNE_DEFS };
+  const store = vm.runInContext("LightStore", ctx).create(G);
+  store.apply();
+  return { LT: vm.runInContext("LightTune.LT", ctx), TUNE_DEFS, store, stored };
 }
 
 test("*|dawn|dry hoisted knobs resolve identically on every track", () => {
@@ -251,6 +253,36 @@ test("*|dawn|dry hoisted knobs resolve identically on every track", () => {
   }
   assert.deepEqual(drift, [],
     "every track must resolve the hoisted dawn|dry knobs to the shared stamp");
+});
+
+test("dawn sunAzim resolves 128.5 on every track but paul_ricard (144.5), in every weather", () => {
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  const wrong = [];
+  for (const track of circuits) for (const wx of ["dry", "fog", "rain"]) {
+    const want = track === "paul_ricard" ? 144.5 : 128.5;
+    const { LT } = resolveLive(track, "dawn", wx);
+    if (LT.sunAzim !== want) wrong.push(`${track}|dawn|${wx} sunAzim=${LT.sunAzim} want ${want}`);
+  }
+  assert.deepEqual(wrong, []);
+});
+
+// ENV REFLECTION's knob default is OFF on phones (the probe's extra world pass
+// can drop a mobile GL context), but the shared *|dawn|wet stamp pins 0.96 and
+// turned it on for every device. On mobile the presets are capped at the knob's
+// `shippedMax`; desktop keeps the stamp, and the player's own value still wins.
+test("carEnvCube: a shipped preset cannot turn the env probe on on mobile; desktop and the player unchanged", () => {
+  for (const track of ["spa", "monaco", "bahrain"]) {
+    assert.equal(resolveLive(track, "dawn", "wet").LT.carEnvCube, 0.96, `${track} desktop keeps the stamp`);
+    const m = resolveLive(track, "dawn", "wet", { mobile: true });
+    assert.equal(m.LT.carEnvCube, 0, `${track} mobile: the stamp must not enable the probe`);
+    m.store.set("carEnvCube", 0.5); m.store.persist();
+    assert.equal(m.LT.carEnvCube, 0.5, `${track} mobile: the player's slider still reaches the probe`);
+    const r = resolveLive(track, "dawn", "wet", { mobile: true, saved: m.stored.lightTune });
+    assert.equal(r.LT.carEnvCube, 0.5, `${track} mobile: the player's saved value survives a reload`);
+  }
+  for (const tod of ["dawn", "day", "dusk", "night"]) for (const wx of ["dry", "wet", "rain", "overcast", "fog"])
+    assert.equal(resolveLive("monza", tod, wx, { mobile: true }).LT.carEnvCube, 0, `monza|${tod}|${wx} mobile`);
 });
 
 test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () => {
