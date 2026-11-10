@@ -1278,7 +1278,7 @@ const TLX = (function () {
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
       // B8 lab (liteTier above): three's WebGL2 leg on a phone, only with ?lab=tlxLite.
       const _lite = liteTier(!!(renderer.backend && !renderer.backend.isWebGPUBackend), mobileTier || _phoneHw);
-      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      let DPR_CAP = _lite ? _lite.dprCap : (mobileTier ? 1.5 : 2);   // a phone is ALWAYS mobileTier (glx-facade.js): no setting lifts this 1.5 cap, only the URL lab below (docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F1)
       // LAB ?lab=dpr2 / ?lab=dpr3 (labOn above: URL only, one boot, no storage key) replaces the cap, so what a sharper
       // phone picture costs per frame can be measured on the phone itself and by tools/gfx/live-frame-census.mjs --sweep
       // (docs/notes/PHONE-PERF-MEASURE-2026-11-10.md). No lab: the tier's cap, unchanged.

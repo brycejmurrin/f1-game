@@ -18909,6 +18909,12 @@
       "showStill": [
         "tests/unit/hero-still-density.test.mjs"
       ],
+      "swatchPx": [
+        "tests/unit/team-swatch-density.test.mjs"
+      ],
+      "teamSwatch": [
+        "tests/unit/team-swatch-density.test.mjs"
+      ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
       ],
