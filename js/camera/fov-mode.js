@@ -39,8 +39,7 @@ const CamFov = (function () {
     return speedFov(r.base, r.widen, sp, r.scale, (deploy ? 1 : 0) * r.dep);
   }
 
-  // The DYNAMIC share of modeFov (speed widen + deploy), 0 for a mode with no recipe. CamFovFit caps the base
-  // and keeps this on top (#5015), so it must be exactly what modeFov added over its base.
+  // The dynamic share of modeFov (speed widen + deploy); CamFovFit keeps it over the cap (#5015).
   function modeBoost(mode, sp, deploy) {
     const r = FOV_BY_MODE[mode];
     return r ? speedFov(0, r.widen, sp, r.scale, (deploy ? 1 : 0) * r.dep) : 0;

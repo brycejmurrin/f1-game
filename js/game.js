@@ -753,7 +753,7 @@ function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
 function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
 function otEnabled() { return raceCtl.otEnabled(); }
-let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62, camFovBoost = 0;   // camFovBoost: the dynamic share of camFov (speed widen, deploy, lens), kept by CamFovFit over the HFOV cap (#5015)
+let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62, camFovBoost = 0;   // dynamic share of camFov, kept over the HFOV cap (#5015)
 let camAncX = null, camAncZ = 0;      // last frame's car anchor — camera damps in the CAR's frame (see render())
 let camAncNX = null, camAncNZ = 0;    // this frame's, published where renderPosOf() is in scope
 let hideMeshes = {};   // debug: per-mesh visibility toggle (set via __apex.meshToggle)
@@ -6571,7 +6571,7 @@ function rescuePlayer(c) {
   // just watched it happen, so a card saying RECOVERED spends the radio — and
   // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
   // obvious can delay or mask one that does not. The sound still marks it.
-  if (c.local && soundOn) GameAudio.offtrack(); if (c === player) snapGameCam();   // a teleport is a CUT (#5020): damped, the chase eye swung through the car on a wrong-way rescue
+  if (c.local && soundOn) GameAudio.offtrack(); if (c === player) snapGameCam();   // a teleport is a CUT (#5020)
 }
 
 // Retire a car. The counterpart of rescuePlayer above — same job, opposite
@@ -8575,7 +8575,7 @@ function tickBody(now) {
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
       // (and photo mode pins its own — see enterPhotoMode).
-      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(dt); // fly-cam + scrub (dt is already clamped to 1/4 s: a 1/20 clamp here played 1x at 0.75x under 20 fps, #5030)
+      if (photoMode) updatePhotoCam(Math.min(dt, 1 / 20)); replayBuf.tickScrub(dt); // dt already clamped to 1/4 s (#5030)
       const settingsOnly = paused && !setupPreviewOn && !replayBuf.isScrubbing() && !photoMode &&
         els.lighting.hidden && els.camtune.hidden && els.flyby.hidden && !els.pmsettings.hidden;
       // Settings cadence gate: retain skipped dt for sky motion; tuners/photo/scrub/garage stay live.

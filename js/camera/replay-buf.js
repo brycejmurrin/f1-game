@@ -22,7 +22,7 @@ const ReplayBuf = (function () {
   const WINDOW_S = 20;
   const MAX_FRAMES = HZ * WINDOW_S;           // 600
   const FLOATS = 9;                           // s, x, yaw, speed, px, py, pz, steer, yawVis
-  const AUX = ["aeroX", "brakeHeat", "throttleDemand", "brakeDemand"];   // 0..1 render cues, one byte each (4 more floats would cost 5 s of the 24-car window)
+  const AUX = ["aeroX", "brakeHeat", "throttleDemand", "brakeDemand"];   // 0..1 render cues, one byte each
   const MAX_CARS = 24;                         // MY TEAM / LEGENDS grids run 23-24 cars
   const MAX_BYTES = 720 * 1024;               // ring typed-array cap; fixed scratch/status reported separately
   const TAG_CAP = 64;
@@ -298,18 +298,16 @@ const ReplayBuf = (function () {
       snapped = !G.photoMode && !G.dbgCam && !!G.snapGameCam;
       if (snapped) G.snapGameCam();
     }
-    const _applySnap = { t: 0, k: 0, cars: [] };   // apply() consumes the snapshot at once (applyPose copies fields)
+    const _applySnap = { t: 0, k: 0, cars: [] };   // consumed at once by apply()
     let snapped = false;   // last apply() ran snapGameCam, which already resets the follows (no second reset)
-    let shownK = -1;       // out.k of the last applied pose (valid inside one scrub: the ring does not move)
+    let shownK = -1;       // out.k of the last applied pose
     function apply(t, continuous = false) {
       if (!scrubbing) return false;
       // Indexed footage belongs to the captured field, never replacement cars.
       if (!audioOwner.valid()) { audioOwner.release(); return false; }
       const snap = at(t, _applySnap);
       if (!snap || !G.cars) return false;
-      // PLAYBACK keeps the rig's damping, except across a discontinuity: a timeline break (red-flag re-grid) or
-      // the followed car's teleport (RECOVER, a rescue). Left damped, the follow offset, the CamFeel follows and
-      // a world-fixed eye (trackside, pit wall) carried over from the old spot (#5021).
+      // PLAYBACK keeps the damping except across a timeline break or the followed car's teleport (#5021).
       const f = G.player && G.cars.indexOf(G.player) >= 0 ? G.player : G.cars[0];
       const fx = f ? f.px : 0, fz = f ? f.pz : 0, fv = f ? Math.abs(f.speed || 0) : 0, gap = Math.abs(snap.t - scrubT);
       let jump = false;

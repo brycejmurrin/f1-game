@@ -132,8 +132,7 @@ const VisorOptics = (function () {
 
   // ---------- camera (pure) ----------
 
-  // `roll` (radians, G.camRoll) tilts the basis exactly as game.js's view matrix does: up = worldUp + right·sin(roll),
-  // re-squared against the view axis. Without it the glints stayed level while the horizon rolled (#5018).
+  // `roll` (G.camRoll, rad) tilts the basis as game.js's view matrix does (#5018).
   function camBasis(eye, tgt, out, roll) {
     const o = out || { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
     let fx = tgt[0] - eye[0], fy = tgt[1] - eye[1], fz = tgt[2] - eye[2];
@@ -732,8 +731,7 @@ const VisorOptics = (function () {
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
     return {
-      // The lens the WORLD was drawn with: G.lens.fovY is the fitted vertical FOV (CamFovFit caps HFOV on a wide
-      // screen: 46.6° at 844x390 against a 64°+ camFov), so the raw camFov put every glint ~31 % too near the centre.
+      // The lens the world was drawn with: G.lens.fovY is the fitted FOV, not the raw camFov (#5018).
       eye: G.camEye, tgt: G.camTgt, fov: G.lens && G.lens.fovY > 0 ? G.lens.fovY * 180 / Math.PI : G.camFov, roll: G.camRoll || 0,
       sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
