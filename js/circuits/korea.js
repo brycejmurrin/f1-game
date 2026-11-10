@@ -19,9 +19,10 @@
     // engine built lane and garages on the default right, under the stand.
     pit: { side: -1 },
     classic: true,
-    // Projected trace winding is CCW for a clockwise circuit — the x axis is
-    // negated by the projection, so it mirrors handedness. Calibrated against
-    // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
+    // Yeongam runs ANTICLOCKWISE, and so does the built lap with reverse:false:
+    // the built centreline integrates to +2π of curvature (+k = LEFT, so net
+    // left-hand = anticlockwise). Measured 2026-11-10: sum of curv*ds over the
+    // built lap (verify-track buildContext) = +6.28.
     reverse: false,
     // Yeongam is reclaimed tidal flat at sea level: the SRTM bake
     // (node tools/gen/bake-elevation.mjs korea) measured 0.00 m of relief over
@@ -71,7 +72,9 @@
     // 18 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
     sectors: [0.334, 0.68],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0653, 0.0823, 0.2998, 0.4298, 0.4572, 0.4748, 0.5487, 0.5893, 0.6292, 0.6627, 0.7103, 0.7228, 0.7378, 0.7602, 0.7973, 0.8387, 0.8642, 0.8848],
+    // Re-seated 2026-11-10 onto the built smoothed-|k| peaks (the previous table
+    // sat 8-28 m early on every row after control points were added).
+    turns: [0.0670, 0.0864, 0.3024, 0.4341, 0.4593, 0.4766, 0.5508, 0.5911, 0.6314, 0.6652, 0.7127, 0.7250, 0.7408, 0.7624, 0.7991, 0.8409, 0.8668, 0.8877],
     // tree "none": the brief's identity is bare salt fill. "broad" asked the
     // generic scatter for a tree line the engine then dropped (131 of them).
     furniture: { tree: "none", fol: [0.24, 0.40, 0.22], lamp: "none", lc: [0.90, 0.96, 1.0] },

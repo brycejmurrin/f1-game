@@ -10,12 +10,12 @@ Use `node tools/shot/agent.mjs help <hook>` for static hook help, or
 Numeric one-offs can use `node tools/shot/agent.mjs monza world --vm --detail brief`;
 the VM has no last-drawn frame, so raster/camera evidence still needs a browser.
 **Geometry, no browser (one command):** the corner list is `trackInfo({what:'corners'})`
-(curated FIA apexes, `source` says so); `corners()` is curvature PEAKS, often about twice the
-official count, never "the corner list". Grade is `trackProfile(n).slope` (formula:
+(curated FIA apexes, `source` says so; overlapping same-direction turns merge into one row
+labelled like `T1-T2`); `corners()` is curvature PEAKS, more than the official count, never "the corner list". Grade is `trackProfile(n).slope` (formula:
 track-geometry.md §Whole-lap recipe); `trackInfo({what:'profile'})` / CLI `track --what profile`
-is 60 points of `y`/`widthM`/`radiusM` with NO slope.
+is sampled `y`/`widthM`/`radiusM` with NO slope.
 `node tools/shot/apex-eval.mjs spa "({c:a.trackInfo({what:'corners'}), p:a.trackProfile(200)})" --raw --vm`
-(`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays. Main session only: bash-guard refuses it in a subagent, see below.)
+(`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays. Main session only, see below.)
 MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
 '{"track":"monza","command":"world"}'`. Full surface catalog, staging, and
 driving policy → [references/surface.md](references/surface.md). Design notes:
@@ -34,7 +34,8 @@ driving policy → [references/surface.md](references/surface.md). Design notes:
 **Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
 (`race` → `go` → `jump` + frames). Browser boots are serialized by AGENTS.md rules 5 and 10; use the Node VM for numeric batches.
-In a subagent bash-guard refuses every `tools/shot/*.mjs` call, `--vm` included, and `apex_agent`:
+In a subagent bash-guard refuses `agent.mjs`/`apex-eval.mjs` (`--vm` included) and mcp-browser-guard refuses
+`apex_agent`/`apex_eval` (`vm:true` included):
 use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or report the probe unverified.
 
 **Vocab:** `frac` = lap 0→1; `s` = metres along centreline; `lateralM` = +right.
@@ -45,9 +46,9 @@ use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or r
   field, every option, the typed errors).
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests, one spec at a time (`npm test -- tests/specs/<file>`, session only):
-  `agent-view.spec.js` and `agent-drive-bench.spec.js` (group `test:hooks`),
-  `agent-determinism.spec.js` (group `test:ui`); `select-specs.mjs` names them per diff.
+- Tests (browser specs run on CI, never locally — AGENTS.md rule 5): `agent-view.spec.js`,
+  `agent-drive-bench.spec.js` (group `hooks`), `agent-determinism.spec.js` (group `ui`); `pick-tests.mjs` names
+  the groups per diff, `node tools/ci/remote-group.mjs <group>` runs one on the pushed branch.
 - Seeded replay field diff (VM): `node tools/check/episode-diff.mjs`
 
 ## Load on demand

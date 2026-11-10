@@ -6,7 +6,7 @@ description: "Use when editing the GARAGE parts catalog, liveries, paint, number
 # Garage — parts, livery, and car mesh
 
 The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you
-drive (12 categories under the `Parts.BUDGET` cap), and how it looks. Catalog: `js/car/parts.js`.
+drive (the `Parts.CATALOG` categories under the `Parts.BUDGET` cap), and how it looks. Catalog: `js/car/parts.js`.
 Paint: `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
 ## Where things live (garage scene + render hook)
@@ -57,9 +57,9 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 
 | Item | Contract |
 |---|---|
-| Catalog | Ordered 12-category array; budget `Parts.BUDGET` (career: `Career.budget()`) |
+| Catalog | Ordered category array; budget `Parts.BUDGET` (career: `Career.budget()`) |
 | SIGNATURE | Same cost/stats as `equivalent`; mesh-only |
-| FACTORY_PRESETS | AI visual setup only |
+| FACTORY_PRESETS | AI build: mesh + aeroLoad/ERS (no stat `mods`) |
 | `_resolve` | Career-blind; supplier/team lock only |
 | Owned gate | UI: `G.careerOwned()` → `Parts.isOptionAvailable` |
 | ERS / aero | `ersProfile` / `aeroLoad` → game.js battery / X-mode |
@@ -68,8 +68,8 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 
 ```sh
 npm run test:garage-unit                   # node gate for a part/wing/livery edit (no browser)
-node tools/ci/test-bg.mjs --spec tests/specs/parts-catalog.spec.js   # ONE spec; parent only
-node tools/ci/remote-group.mjs car         # the whole group, on the pushed branch (modes: research locks / ownership UI)
+node tools/ci/pick-tests.mjs              # which groups prove it (car; modes for research locks / ownership UI)
+node tools/ci/remote-group.mjs car         # a whole group, on the PUSHED branch — never browser specs locally
 node tools/car/audit-parts.mjs             # browser-gated (needs :3456) [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
@@ -88,7 +88,7 @@ Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **
 
 ## BEFORE pack — fetch, do not recapture
 
-Never capture your own 11-team garage BEFORE grid (tens of minutes): fetch the
+Never capture your own full-grid garage BEFORE pack (tens of minutes): fetch the
 **Garage before** pack with `node tools/garage-angles-fetch.mjs`, then shoot
 only AFTER angles → [references/before-pack.md](references/before-pack.md).
 

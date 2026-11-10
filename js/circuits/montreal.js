@@ -24,7 +24,7 @@
       { kind: "foliage", s0: 0, s1: 1 },
       // Foldbacks need a furniture-free envelope on both sides.
       { kinds: ["lighting"], s0: 0.05, s1: 0.09 },   // T1-T2 foldback
-      { kinds: ["lighting"], s0: 0.55, s1: 0.59 },   // hairpin foldback
+      { kinds: ["lighting"], s0: 0.60, s1: 0.64 },   // hairpin foldback (apex turns[11] 0.6178)
     ],
     pal: { zenith: [0.30, 0.50, 0.82], horizon: [0.74, 0.80, 0.86], grass: [0.24, 0.50, 0.20], runoff: [0.18, 0.38, 0.16], fogDensity: 0.0014, sunDir: [0.5134360308102702, 0.6067880364121376, 0.6067880364121376], sun: [1, 0.92, 0.78], sunColor: [1, 0.9, 0.76] },
     // Racing-frame fracs (scenery-frame values +0.8598), so each bank sits on

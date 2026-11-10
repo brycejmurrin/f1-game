@@ -51,11 +51,11 @@ Gentle, with a noticeable climb to the Dry Sack hairpin (Curva Dani Pedrosa sinc
 - Vegetation is sparse: olive, low scrub, the occasional palm. Never a tree line.
 - Pale concrete terracing is the built landmark alongside El Ovni and the control tower.
 - Keep the outfield open and empty — the horizon should be visible almost everywhere.
-- Frame debt: `startFrac` 0.122 with `sceneryStartFrac` 0 — pit/finish props key through `sl()`; do not move frame keys. Probe before touching authored `K()` on non-sl blocks.
+- Start line (2026-11-10, #5078): `startFrac` 0.2169 with `sceneryStartFrac` 0. The line is on the real start/finish straight, the 600 m run from the final left hairpin (Curva Lorenzo) to Turn 1 (Expo '92, a right, first apex 364 m after the line); pit/finish props key through `sl()` and follow it. The §4 fracs are authored against v0, which is two corners early: the block NAMES are labels, not surveyed corners. Probe before touching authored `K()` on non-sl blocks.
 
 ## 7. UNCERTAIN (do not build as fact)
 
 - Exact Tío Pepe bottle/face art and copyrighted brand detailing.
 - Exact corner-board graphics for Pedrosa / Lorenzo markers.
 - Mayor-podium incident (1997) — history only; do not model.
-- Residual `_sceneryShift` ≈ 0.87 — frame debt; leave `startFrac` / `sceneryStartFrac` alone.
+- Residual `_sceneryShift` ≈ 0.78: the non-sl blocks still carry v0-era corner names (see §6). Re-naming them against the OSM corner order is open work.

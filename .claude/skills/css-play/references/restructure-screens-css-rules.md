@@ -68,13 +68,11 @@ in this repo, `css/dialogs.css` (the contexts) and `css/components.css`
 (the `.sheet` rule):
 
 ```css
-#pausemenu  { --sheet-w: 420px; }
-#pmsettings { --sheet-w: 760px; }
-/* …12 more contexts… */
-.sheet { width: min(100%, var(--sheet-w, 520px)); }
+#pausemenu  { --sheet-w: …; }   /* one line per context: grep -n -- '--sheet-w' css/*.css */
+.sheet { width: min(100%, var(--sheet-w, …)); }
 ```
 
-One class, fourteen contexts, zero variant classes. *Prevents:* class-family
+One class, many contexts, zero variant classes. *Prevents:* class-family
 growth. **Measured:** Pico CSS ships a complete design system in **2,835 lines /
 16 classes / 251 custom properties**. Run `node tools/check/tree-counts.mjs`
 and restructure.md's commands for this repo's current lines / classes / custom
@@ -88,8 +86,8 @@ classes. CUBE describes itself as *"a step back from BEM's principles"* — a
 disposition, not a mechanism.
 
 **10. Import ITCSS's one durable rule — specificity is inversely proportional to
-reach — and none of its folder structure.** `@layer reset, base, components,
-hud, overlays` already does the ordering natively. *Prevents:* a Sass-shaped
+reach — and none of its folder structure.** The `@layer` statement in
+`css/tokens.css` already does the ordering natively. *Prevents:* a Sass-shaped
 directory tree in a project with no build step.
 
 **11. Ratchet the distinct-class count the way `tests/data/ratchets.json` ratchets

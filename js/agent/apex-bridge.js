@@ -177,6 +177,61 @@ const ApexBridge = (function () {
     };
   }
 
+  // The geometry ledger (docs/notes/GEOMETRY-TRUTH-HUNT-2026-11-09.md): what the DEVICE reports for every number the UI
+  // contract assumes, read on the phone because Chromium emulation cannot answer for WebKit. `zoom` is a self-test of
+  // CSS zoom semantics on this engine (a 100 px box at zoom 2: rect 200 = standardized, 100 = legacy; whether vw and
+  // env() lengths inside it are multiplied by the zoom). `wish` vs `paint` is each slider's stored value against the
+  // fit cap it actually paints at. Read-only: the probe node is removed before the function returns.
+  function geom() {
+    const d = typeof document !== "undefined" ? document : null;
+    const root = d && d.documentElement, body = d && d.body;
+    const mq = (q) => { try { return typeof matchMedia === "function" ? matchMedia(q).matches : null; } catch (_) { return null; } };
+    const vv = typeof visualViewport !== "undefined" && visualViewport ? visualViewport : null;
+    const sc = typeof screen !== "undefined" && screen ? screen : null;
+    const out = {
+      inner: [window.innerWidth, window.innerHeight],
+      client: root ? [root.clientWidth, root.clientHeight] : null,
+      visualViewport: vv ? { scale: vv.scale, w: r2(vv.width), h: r2(vv.height), x: r2(vv.offsetLeft), y: r2(vv.offsetTop) } : null,
+      screen: sc ? [sc.width, sc.height, sc.availWidth, sc.availHeight] : null,
+      orientation: sc && sc.orientation ? [sc.orientation.type, sc.orientation.angle] : null,
+      dpr: window.devicePixelRatio,
+      standalone: { nav: !!(typeof navigator !== "undefined" && navigator.standalone), mq: mq("(display-mode: standalone)") },
+      units: null, insets: null, zoom: null, media: {}, tiers: null, wish: null, paint: null,
+    };
+    for (const q of GEOM_MEDIA) out.media[q] = mq(q);
+    if (!d || !body || typeof d.createElement !== "function" || typeof getComputedStyle !== "function") return out;
+    const cs = getComputedStyle(root), v = (n) => { const s = String(cs.getPropertyValue(n) || "").trim(); return s === "" ? null : s; };
+    const p = d.createElement("div");
+    try {
+      body.appendChild(p);
+      const box = (css) => { p.style.cssText = "position:fixed;visibility:hidden;pointer-events:none;" + css; return p.getBoundingClientRect(); };
+      out.units = {};
+      for (const u of ["vh", "svh", "dvh", "lvh"]) out.units[u] = r2(box("left:0;top:0;width:1px;height:100" + u).height);
+      for (const u of ["vw", "svw"]) out.units[u] = r2(box("left:0;top:0;height:1px;width:100" + u).width);
+      const e = box("left:env(safe-area-inset-left,0px);top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px)");
+      const full = box("left:0;top:0;right:0;bottom:0");
+      out.insets = { left: r2(e.left - full.left), top: r2(e.top - full.top), right: r2(full.right - e.right), bottom: r2(full.bottom - e.bottom), fixedBox: [r2(full.width), r2(full.height)] };
+      const z = box("left:0;top:0;width:100px;height:50px;zoom:2");
+      const c = d.createElement("div");
+      c.style.cssText = "width:10vw;height:1px;padding-left:env(safe-area-inset-left,0px)";
+      p.appendChild(c);
+      const cr = c.getBoundingClientRect(), vw = out.units.vw || 0, cps = getComputedStyle(c);
+      out.zoom = {
+        currentCSSZoom: typeof p.currentCSSZoom === "number" ? p.currentCSSZoom : null,
+        rectOf100At2: r2(z.width), offsetOf100At2: p.offsetWidth,
+        vwInZoom2: vw ? r2((cr.width - parseFloat(cps.paddingLeft) * (z.width / 100)) / (vw / 10)) : null,   // painted 10vw ÷ real 10vw: 2 = vw is multiplied
+        envInZoom2: out.insets.left ? r2(parseFloat(cps.paddingLeft) * (z.width / 100) / out.insets.left) : null,   // painted inset ÷ real inset
+      };
+    } catch (err) { out.error = String(err && err.message); }
+    try { p.remove(); } catch (_) { /* detached already */ }
+    out.tiers = { density: body.getAttribute("data-density"), shape: body.getAttribute("data-shape"), desktop: !!(body.classList && body.classList.contains("desktop")),
+      html: root.dataset ? Object.assign({}, root.dataset) : null };
+    out.wish = { ui: v("--ui-scale"), hud: v("--hud-scale"), btn: v("--hud-btn-scale"), textBoost: v("--hud-text-boost") };
+    out.paint = { hudTop: v("--hud-z-top"), hudBot: v("--hud-z-bot"), dock: v("--hud-z-dock"), dockLeft: v("--hud-z-dock-l"), sheet: v("--sheet-scale"), kb: v("--kb"),
+      gut: v("--gut"), sal: v("--sal"), sar: v("--sar"), sat: v("--sat"), sab: v("--sab") };
+    return out;
+  }
+
   function call(args) {
     const m = args && args.method;
     if (!CALL_OK.has(m)) throw new Error("method not allowed: " + m);
@@ -203,6 +258,9 @@ const ApexBridge = (function () {
   // The renderer pin BENCHMARK uses (BenchRun.pathPrefs): three.js on WebGPU or WebGL2, or AUTO. THREE PATH is chosen
   // only at boot, so a change reloads (`reload: false` to stage it) and the link re-forms with a new hello.
   const PATHS = ["webgpu", "webgl2", "auto"];
+  // Every media bucket a phone-landscape rule in css/ keys on (the band edges at 380/400/500/560 and 700/761/900).
+  const GEOM_MEDIA = ["(pointer: coarse)", "(hover: hover)", "(any-pointer: fine)", "(orientation: landscape)", "(max-height: 380px)", "(max-height: 400px)",
+    "(max-height: 500px)", "(max-height: 560px)", "(min-width: 700px)", "(min-width: 761px)", "(min-width: 900px)"];
   function pathState() {
     const RP = typeof RendererPicker !== "undefined" ? RendererPicker : null;
     let live = null, engine = null, fallbackWhy = null;
@@ -304,6 +362,7 @@ const ApexBridge = (function () {
     ping: () => ({ pong: true, t: Date.now() }),
     facts,
     display,
+    geom,
     frames,
     call,
     gpuTest: (a) => perfModule("GpuTestRun", typeof GpuTestRun !== "undefined" ? GpuTestRun : null, ["start", "stop", "status", "active"], a),
@@ -546,7 +605,7 @@ const ApexBridge = (function () {
   }
 
   boot();
-  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, tokenShape,
+  return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts, display, geom, tokenShape,
     active: () => !!_run };
 })();
 Object.freeze(ApexBridge);

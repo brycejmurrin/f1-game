@@ -9,11 +9,15 @@ const CarWheels = (function () {
   // speed (m/s) → axle angle delta (rad) for one frame. Front axle scales by
   // (1 − lock) so a lock-up freezes the fronts while the rears keep rolling.
   // Pure: no DOM, no G, no mesh — unit-tested in wheel-phase-math.test.mjs.
+  // Returns ONE reused scratch (#5057 row 3: was a fresh {rear, front} per car per frame,
+  // 1,320 objects/s on a 22-car grid); read both fields before the next call.
+  const _step = { rear: 0, front: 0 };
   function phaseStep(speed, dt, wheelR, lock) {
     const r = wheelR > 0 ? wheelR : WHEEL_R;
     const spin = (speed || 0) / r * (dt || 0);
     const L = lock == null ? 0 : lock;
-    return { rear: spin, front: spin * (1 - L) };
+    _step.rear = spin; _step.front = spin * (1 - L);
+    return _step;
   }
   function wrapPhase(rad) {
     const x = (rad || 0) % TWO_PI;

@@ -360,7 +360,8 @@ const MirrorPass = (function () {
     let _sideFits = null, _sideX = "", _sideW = "";   // what side() last wrote (null: unknown)
     function side(er) {
       const b = document.body;
-      let right = typeof innerWidth === "number" ? innerWidth - 10 : 0;
+      // The layout viewport the rects below are measured in (GameHud.vp, the ICB), not inner* (#5201).
+      let right = typeof GameHud !== "undefined" && GameHud.vp ? GameHud.vp()[0] - 10 : typeof innerWidth === "number" ? innerWidth - 10 : 0;
       const pause = document.getElementById("pausebtn"), cam = document.getElementById("btn-cam");
       const sec = document.getElementById("hud-sectors");
       const box = (n) => (n && !n.hidden && n.getBoundingClientRect ? n.getBoundingClientRect() : null);

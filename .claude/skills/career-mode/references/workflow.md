@@ -49,7 +49,7 @@ Load from the SKILL.md index when the task needs this detail.
      career markets, objectives, development, or reliability plans.
    - If you must add a draw, include stable varying parts in the key.
    - `tests/unit/career-determinism.test.mjs` fails on any `simRnd` or a new
-     `Math.random()` in `js/career/*.js` (two allowlisted non-draw sites).
+     `Math.random()` in `js/career/*.js` outside its allowlist of non-draw sites.
 
 7. **Verify through hooks before UI assertions.** Browser steps are session
    only (a subagent reports them unverified); reproduce hub/HUD UI at Bryce's
@@ -59,9 +59,9 @@ Load from the SKILL.md index when the task needs this detail.
    - **`careerSim()` needs the career hub plus a loaded track/grid first** — stage
      qualifying/race context before calling it.
    - Garage locked rows: `#cs-options .cs-opt.locked`, or assert owned parts vs
-     `Parts.CATALOG` via `__apex.career().owned` / `Career.isOwned()`.
-   - Then assert UI flow through `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`.
-   - Spec and group commands: SKILL.md §Commands.
+     `Parts.CATALOG` via `__apex.career().owned` / `Career.owned(teamId)` (a Set).
+   - The UI flow is pinned by `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`; CI runs them
+     (group `modes`, requested on the pushed branch) — SKILL.md §Commands.
 
 8. **Check the generated shell.**
    - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
@@ -100,5 +100,5 @@ Load from the SKILL.md index when the task needs this detail.
 - Running browser career tests before staging a loaded track/grid for hooks that
   depend on qualifying or `careerSim()`.
 - Reading `careerState().owned` as part ids — it is a count; use
-  `__apex.career().owned` / `Career.isOwned()` for the list.
+  `__apex.career().owned` for the list (`Career.owned(teamId)` is the fittable Set).
 - Verifying `sponsorPay` or `careerState().sponsor` as "just paid": see Sponsor payout in [traces.md](traces.md).

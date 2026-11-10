@@ -47,11 +47,11 @@ do **not** `snapCam()` after `orbit()` — `snapCam()` clears `dbgCam`.
 ```sh
 # one-off via the reusable evaluator (boots headless, prints JSON):
 node tools/shot/apex-eval.mjs monaco "a.camera()"                 # list modes / current
-node tools/shot/apex-eval.mjs spa    "a.cinematic(0.07)"          # resolve Eau Rouge cinematic
-node tools/shot/apex-eval.mjs monza  "(a.park(0.03), a.orbit(0.03,45,18,45), a.camState())"  # T1 ~0.016–0.042 (monza.js turns)
+node tools/shot/apex-eval.mjs spa    "a.cinematic(<f>)"           # Eau Rouge: <f> from spa.js turns (its comment names the bends)
+node tools/shot/apex-eval.mjs monza  "(a.park(<f>), a.orbit(<f>,45,18,45), a.camState())"  # T1: <f> = monza.js turns[0]
 
-# lap tour — chase cam at every 5% of a circuit (20 shots in order):
-node tools/shot/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
+# lap tour — chase cam at evenly spaced fractions (`STEPS` in apex-capture.mjs), in order:
+node tools/shot/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/
 node tools/shot/apex-capture.mjs lap-tour monaco 55       # slower speed for tighter street circuit
 node tools/shot/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/spa # custom outdir
 ```
@@ -60,12 +60,12 @@ node tools/shot/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/s
 __apex.race("monaco");
 // Probe fractions first — don't hardcode folklore:
 // __apex.trackInfo({what:"corners"}) or __apex.corners() or the def's `turns` in js/circuits/<id>.js
-__apex.park(0.18);   // stationary + frozen
-__apex.orbit(0.18, 60, 20, 40);             // orbit the chicane (dbgCam — no snapCam after)
+__apex.park(f);      // stationary + frozen; f from the probe above
+__apex.orbit(f, 60, 20, 40);                // orbit that corner (dbgCam — no snapCam after)
 // for a PNG, use tools/shot/shot.mjs (cam = orbit|eye|cinematic|trackside)
 
 // manual chase-cam snap (the lap-tour pattern in bare JS):
-__apex.jump(0.035, 60, 0);  // Monza T1 ~0.016–0.042 (monza.js turns), not 0.1
+__apex.jump(f, 60, 0);      // f = Monza T1, turns[0] in js/circuits/monza.js
 __apex.camera("chase");     // switch to chase mode
 __apex.snapCam();           // snap rig without damping — essential before a screenshot
 ```

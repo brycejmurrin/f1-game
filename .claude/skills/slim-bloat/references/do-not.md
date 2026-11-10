@@ -29,5 +29,5 @@ reaches for these first. They are not bloat.
 | "Fewer lines is simpler" | Nested ternaries and deleted comments are how characterization went red. |
 | "This comment is obvious" | If it names a fixed bug, a column, or a leftover — keep it. |
 | "I'll extract render later" | Do not start. Take cohesive blocks **around** it. |
-| "The auditor can chrome-start" | Never hand a subagent a browser run. Parent uses mcp-probe. |
+| "The hunter can chrome-start" | Never hand a subagent a browser run. Parent uses mcp-probe. |
 | "I'll bump the ceiling and extract next PR" | Next PR never comes. Lower now or do not extract. |

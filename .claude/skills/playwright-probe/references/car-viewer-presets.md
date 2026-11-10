@@ -43,15 +43,13 @@ shot, columns = tod). Capture is soft `#view` / `#game-soft` → CDP (never
 
 ## Options
 
-- Car: `--team=` `--livery=` `--num=` and `--engine= --aero= --brakes=
-  --gearbox= --ers= --tyres= --suspension= --fuel=` (ids in `js/car/parts.js`).
-  The CLI parses these 8 of 12 categories; `tools/carview.html` has all 12
-  (exhaust, floor, cockpit, wheels too).
+- Car: `--team=` `--livery=` `--num=` and one `--<category>=` per part category
+  (`PART_CATS` in `render-car.mjs`; ids in `js/car/parts.js`).
 - Lighting: `--tod=day|dusk|dawn|night|void` ·
   `--rig=studio|3point|rim|topdown|none` · `--intensity=<n>` · `--exp=<n>` ·
   `--bg=RRGGBB`.
 - Reflection: `--refl=<0..1>` is a **studio dial** on all shine (roughness,
-  metalness, specular, clearcoat, sparkle, `carEnvCube`). Default `0.2`.
+  metalness, specular, clearcoat, sparkle, `carEnvCube`). Default: `refl` in `tools/carview.html`.
   **Not** in-game chrome: that is `finish:"chrome"` on a livery
   (`--livery=mer_chrome`). Universal id `chrome` is a **gloss** palette named
   "Chrome".
@@ -59,7 +57,7 @@ shot, columns = tod). Capture is soft `#view` / `#game-soft` → CDP (never
   shot-sets already set this.
 - Reflection tests: `--rig=rim` or `--rig=3point`;
   `--plight=x,y,z,r,g,b,intensity,radius` (repeatable); `--sweep=1`.
-- `--w= --h=` viewport, `--url=` (default `http://127.0.0.1:3456`).
+- `--w= --h=` viewport, `--url=` (the `:3456` serve by default).
 
 All-teams side batch — `--team=all` (or a list) walks every roster team in ONE Chromium:
 

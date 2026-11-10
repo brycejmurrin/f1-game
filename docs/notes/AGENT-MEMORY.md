@@ -17,7 +17,6 @@ the `assume-unchanged` mark are retired.
 | Instructions | `AGENTS.md` (via `CLAUDE.md`), `docs/WORKERS.md`, `.claude/rules/` (by `paths:`) | every session | people, reviewed |
 | Decisions | `docs/DECISIONS.md` (`D-NNN` rows) | when a rule or test cites one | a PR, one row per decision |
 | Measured facts | the doc that uses them; a note with `Kind:` + `Re-measure-by:` | when cited | a PR; `tools/docs/knowledge-gc.mjs` flags an overdue re-measure |
-| Subagent memory | `.claude/agent-memory/<agent>/` (`memory: project`) | that subagent | the subagent; schema + expiry pinned by `agent-config.test.mjs` |
 | Preferences (auto memory) | tracked: `.claude/memory/`; Claude live: `~/.claude/projects/<repo>/memory/` | every host reads the tracked copy; Claude also loads the first 200 lines / 25 KB of `MEMORY.md` | people and Claude, through a PR |
 
 Coordination behaviour (merge commits, the `hold` label, `land`, subscribe, PT,

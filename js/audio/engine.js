@@ -168,6 +168,8 @@ var GameAudio = (function () {
   });
   let camMix = CAM_MIX.chase, camKind = "chase";
   let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }
+  // Rival voice settle floors (#5052): gain 3 % (~0.26 dB), rate 0.004 (~7 cents).
+  const RIVAL_EPS_GAIN = 0.03, RIVAL_EPS_RATE = 0.004;
 
   const { ENGINE_VOICES, TUNE_DEF, TUNE_RANGE, LAYER_DEF, SOUND_PROFILES } = GameAudioToneModel;
   let voice = ENGINE_VOICES["default"];
@@ -198,6 +200,16 @@ var GameAudio = (function () {
     node.gain.setTargetAtTime(target, t, tau);
     node._apexAimTgt = target;
   }
+  // aimGain with a RELATIVE floor for a level that drifts (a rival voice with
+  // distance and revs, #5052): 3 % is ~0.26 dB (rivals.js EPS_GAIN). A hard 0
+  // still passes exactly.
+  function aimGainRel(node, target, t, tau, rel) {
+    if (!node) return;
+    const prev = node._apexAimTgt;
+    if (prev === target || (prev !== undefined && target !== 0 && Math.abs(prev - target) <= Math.max(1e-4, Math.abs(target) * rel))) return;
+    node.gain.setTargetAtTime(target, t, tau);
+    node._apexAimTgt = target;
+  }
   // The same guard for a PITCH or CUTOFF param, RELATIVE to the target: setEngine
   // re-aimed eight of these on every call (each a cross-thread timeline
   // insertion) though a car at steady revs hands the identical value back.
@@ -218,20 +230,21 @@ var GameAudio = (function () {
     if (node._apexMuteUntil === undefined) node._apexMuteUntil = t + 10 * tau;
     return t < node._apexMuteUntil;
   }
-  // LAB audioIdle (OFF by default; Bryce's opt-in listening pass, 2026-10-30).
-  // Try: https://brycejmurrin.github.io/f1-game/?lab=audioIdle
-  // The rival pass-by pool, the crowd bed + cheers and the ERS layer keep looping
-  // through menus at gain 0 (battery). With the lab on, stopEngineGraph() waits
-  // out their 0.06-0.08 s silence fades, then each module DISCONNECTS its output
-  // gains from the bus (idle(true)); startEngineGraph() reconnects them before
-  // the first param write. The AudioContext is never closed or created here, so
-  // the iOS unlock path is untouched. Read once, from the URL only (no store key).
+  // AUDIO IDLE — ON BY DEFAULT since #5053 (was the opt-in LAB audioIdle, 2026-10-30).
+  // The rival pass-by pool, the crowd bed + cheers and the ERS layer looped
+  // through every menu at gain 0 (13 silent outputs, a busy render thread on the
+  // phone). stopEngineGraph() waits out their 0.06-0.08 s silence fades, then
+  // each module DISCONNECTS its output gains from the bus (idle(true));
+  // startEngineGraph() reconnects them before the first param write. The
+  // AudioContext is never closed or created here, so the iOS unlock path is
+  // untouched. Off switch for one release, read once from the URL only (no store
+  // key): https://brycejmurrin.github.io/f1-game/?lab=noAudioIdle
   const LAB_AUDIO_IDLE = (() => {
     try {
-      if (typeof location === "undefined" || !location) return false;
+      if (typeof location === "undefined" || !location) return true;
       const v = new URLSearchParams(location.search).get("lab");
-      return !!v && v.split(",").some((s) => s.trim() === "audioIdle");
-    } catch (e) { return false; }
+      return !(v && v.split(",").some((s) => s.trim() === "noAudioIdle"));
+    } catch (e) { return true; }
   })();
   let layerIdleTimer = null;
   function idleLayers(on) {
@@ -764,7 +777,11 @@ var GameAudio = (function () {
     if (e === true) return true;
     if (e.isTrusted === false) return false;
     if (e.type === "keydown") return e.key !== "Escape";
-    if (e.type === "pointerdown") return e.pointerType === "mouse";
+    if (e.type === "pointerdown") {
+      if (e.pointerType === "mouse") return true;
+      // An engine that granted activation anyway (#5248, #5029).
+      try { return !!(navigator.userActivation && navigator.userActivation.isActive); } catch (_) { return false; }
+    }
     if (e.type === "pointerup") return e.pointerType !== "mouse";
     return true;   // touchend, click
   }
@@ -772,10 +789,13 @@ var GameAudio = (function () {
   /*
    * Resume the context if it isn't running. ctx.resume() is async and
    * slow on iOS, so never tear the context down on a timer — a context
-   * that's about to start would be destroyed, and one created outside a
-   * user gesture can never be unlocked. Instead: if a PREVIOUS gesture
+   * that's about to start would be destroyed. Instead: if a PREVIOUS gesture
    * tried to resume and the context still isn't running by the time a
-   * later gesture arrives, rebuild inside that gesture.
+   * later gesture arrives, rebuild inside that gesture. A context created
+   * outside a gesture stays suspended until a later gesture resumes it
+   * (lazy-bundles.js audioGestureUnlock relies on that), so a rebuild outside
+   * activation is not fatal, but it is wasted: a throw-away context and a
+   * DEVICE_REBUILD_MAX slot.
    */
   function resumeIfNeeded(gestureEv) {
     if (!ctx || document.hidden) return;
@@ -1247,7 +1267,7 @@ var GameAudio = (function () {
             // mul carries Doppler, the slot's detune and THEIR maker's trim; the curve and
             // the PITCH/IDLE/REV RANGE trims are the player's own, so the same car sounds the same.
             const rate = baseRate(Math.pow(rev01, tune.curve)) * tune.pitch * mul;
-            if (Math.abs((src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
+            if (Math.abs((src.playbackRate._apexRate ?? -1) - rate) > RIVAL_EPS_RATE) {
               src.playbackRate.setTargetAtTime(rate, t, 0.06);
               src.playbackRate._apexRate = rate;
             }
@@ -1487,7 +1507,7 @@ var GameAudio = (function () {
     if (!sfxOk()) { engineWanted = true; return; }
     engineWanted = false;
     engineOn = true;
-    wakeLayers();   // LAB audioIdle: reconnect before the body's first param write
+    wakeLayers();   // audio idle (#5053): reconnect before the body's first param write
     try { startEngineBody(); }
     // ...and the flag comes back down even if the teardown ITSELF throws on the
     // half-built graph (stopEngine touches engGain/whineGain, either of which
@@ -1509,7 +1529,7 @@ var GameAudio = (function () {
   function stopEngineGraph() {
     if (!engineOn) return;
     const t0 = now();
-    scheduleLayerIdle();   // LAB audioIdle: disconnects after the fades below
+    scheduleLayerIdle();   // audio idle (#5053): disconnects after the fades below
     soundtrack.releaseEngineDuck(t0, true);  // a line still on air keeps its own duck
     // Every node is guarded: startEngine's catch calls this on a HALF-built
     // graph, and one throw here skipped the stopAt()s below, leaking every
@@ -1900,7 +1920,9 @@ var GameAudio = (function () {
     if (subOctGain && subOctOsc) {
       const f0 = enginePeriod > 1 ? (ctx.sampleRate * lastRate) / enginePeriod : 0;
       const subF = Math.max(25, Math.min(240, f0 * 0.5));
-      if (layerMoving(subOctGain, layers.sub, t, 0.08) && subOctOsc._apexSubF !== subF) { subOctOsc.frequency.setTargetAtTime(subF, t, 0.05); subOctOsc._apexSubF = subF; }
+      // 0.25 Hz (~3.5 cents at 123 Hz), the gravOsc guard's shape: an exact compare
+      // against the engine period re-aimed this on 599 of 600 cruise frames (#5052).
+      if (layerMoving(subOctGain, layers.sub, t, 0.08) && Math.abs((subOctOsc._apexSubF ?? -1) - subF) > 0.25) { subOctOsc.frequency.setTargetAtTime(subF, t, 0.05); subOctOsc._apexSubF = subF; }
       aimGain(subOctGain, layers.sub
         ? (0.012 + rev * 0.016 + b * 0.006) * (s > 0.04 ? 1 : 0) * voice.subLvl * tune.sub
         : 0, t, 0.08);
@@ -1958,7 +1980,9 @@ var GameAudio = (function () {
     const harvGainScale = usingSamples ? 0.035 : 0.06;
     const coastMix = harvLevel > 1e-6 ? (harvCoastLevel * coastW) / harvLevel : 0;
     // MGU-K harvest: braking decel stays loud; lift-and-coast is softer and brighter.
-    if (layerMoving(harvGain, layers.harvest, t, 0.06)) {
+    // Gated on AUDIBILITY, not the layer switch (#5052): at full throttle the gain
+    // target is 0 and the filter still chased speed on every frame for nobody.
+    if (layerMoving(harvGain, layers.harvest && harvLevel > 1e-3, t, 0.06)) {
       aimParam(harvFilter.frequency, 680 + s * 1500 + coastMix * 420, t, 0.08, 1e-4);
       if (harvFilter._apexQ == null) harvFilter._apexQ = harvFilter.Q.value;
       const harvQ = 6 - coastMix * 2.4;
@@ -2682,7 +2706,7 @@ var GameAudio = (function () {
       const near = RIVAL_REF / (RIVAL_REF + 1.15 * Math.max(0, dist - RIVAL_REF));
       const behind = arc < 0 ? 0.78 : 1;   // your own engine is between you and it
       const rv = (r.voice && ENGINE_VOICES[r.voice]) || ENGINE_VOICES["default"];
-      aimGain(v.gain, PAN_MAKEUP * rivalPeak * tune.rivals * camMix.rivals * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
+      aimGainRel(v.gain, PAN_MAKEUP * rivalPeak * tune.rivals * camMix.rivals * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10, RIVAL_EPS_GAIN);
 
       // Air absorbs the top end with distance, which is most of why a far car
       // reads as far rather than merely quiet. A POWER LAW, not a scale of the

@@ -718,3 +718,18 @@ test("resuming after a forced preview judges the actual preceding draw", () => {
   frame(1);
   assert.deepEqual(judged, [true], "governor sees the preview that actually drew");
 });
+
+test("#5030 highlights re-pose on every rendered frame (the flag and the orbit keep their 30 Hz cap)", () => {
+  const R = boot(), winner = { finPos: 1, s: 10, px: 10, pz: 0 };
+  let applies = 0;
+  const G = { player: winner, cars: [winner], gfx: {}, camVantage: (_m, s) => ({ eye: [s, 5, -10], tgt: [s, 0, 0], fov: 58 }) };
+  const camera = R.create(G);
+  camera.attachReplay({ window: () => ({ t0: 0, t1: 20, frames: 600 }), tags: () => [{ kind: "contact", t: 10, car: 0 }],
+    beginScrub: () => true, apply: () => { applies++; }, endScrub() {} });
+  camera.onFlag();
+  assert.equal(camera.startHighlights(), true);
+  applies = 0;
+  for (let i = 0; i < 120; i++) camera.tick(1 / 120);
+  assert.equal(applies, 120, "one replay pose per rendered frame at 120 Hz, not 30");
+  assert.equal(camera.status().phase, "highlights", "1 s into a 4 s clip");
+});

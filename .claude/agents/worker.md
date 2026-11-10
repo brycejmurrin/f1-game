@@ -2,7 +2,7 @@
 name: worker
 description: Implementation subagent for ONE scoped change the parent hands off — edit, node-verify, commit on its own worktree branch — coordinating by SendMessage while it works; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.
 model: inherit
-tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github__*, mcp__claude-code-remote__*, mcp__apex-tools__*, mcp__apex-lsp__*, mcp__Context7__*, mcp__Claude_Docs__*, mcp__TinyFish__*
+tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github__*, mcp__claude-code-remote__*, mcp__apex-lsp__*
 maxTurns: 120
 isolation: worktree
 ---
@@ -22,14 +22,14 @@ you push a branch or open a PR. With no OWNED list, edit only what the goal
 plainly needs, and message main before touching a shared contract:
 `tests/groups.json`, anything generated (AGENTS.md rule 11),
 `tests/data/ratchets.json`, `AGENTS.md`, `.github/workflows/`, `.claude/`.
-In a worktree `protect-files.py` REFUSES any edit to `index.html`,
-`manifest.cjs`, `version.json`, `sw.js`, `roster.js`, `gen-shell.mjs`,
-`package.json`, `package-lock.json`, `playwright.config.js`: put the exact
-diff in a message to main instead. A brief naming the main checkout cannot
-run here (the isolation guard refuses `cd`/`git -C` into it): do the same work
-in your worktree and say so. A fresh worktree has no `node_modules`: symlink
-the parent checkout's after checking its lockfile matches. The hooks refuse
-compound commands they cannot parse: one plain command per Bash call.
+In a worktree `protect-files.py` REFUSES any edit to a shared-contract file
+(its `SHARED` list): put the exact diff in a message to main instead. A brief naming the main checkout cannot
+run here: do the same work in your worktree and say so (no hook stops a
+`cd` into the main checkout; staying out is on you). The MCP servers
+(`apex-lsp`, and the parent's `apex-tools`) were started at the main checkout,
+so they read the tree WITHOUT your edits: verify with the `node tools/…` CLIs
+run from your worktree. A fresh worktree has no `node_modules`: symlink the
+parent checkout's after checking its lockfile matches.
 
 ## Messaging (`SendMessage`; plain text reaches nobody until the report)
 
@@ -75,4 +75,4 @@ not run: <group or check, and why>
 next: <one line for the parent>
 ```
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.

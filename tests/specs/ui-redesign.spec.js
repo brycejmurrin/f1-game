@@ -430,6 +430,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
     "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
+    "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
@@ -1125,9 +1126,10 @@ test("data hub constructor names stay readable in phone landscape", async ({ pag
   const drivers = teams.flatMap(([team, g1, f1, c1, g2, f2, c2], i) => [
     { position: String(i * 2 + 1), points: String(300 - i * 40), wins: "1", Driver: { givenName: g1, familyName: f1, code: c1 }, Constructors: [{ name: team }] },
     { position: String(i * 2 + 2), points: String(280 - i * 40), wins: "0", Driver: { givenName: g2, familyName: f2, code: c2 }, Constructors: [{ name: team }] }]);
+  // `*`: api.js asks every Jolpica list for `?limit=100` (and pages by offset).
   const cons = teams.map(([team], i) => ({ position: String(i + 1), points: String(580 - i * 80), wins: String(4 - i), Constructor: { name: team } }));
-  await page.route("**/driverstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
-  await page.route("**/constructorstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
+  await page.route("**/driverstandings.json*", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
+  await page.route("**/constructorstandings.json*", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
   await page.setViewportSize({ width: 844, height: 390 });
   await waitReady(page);
   await page.click("#mb-data");

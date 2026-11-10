@@ -61,26 +61,28 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** Commands: SKILL.md §Quick Reference (spec: `menu-keyboard`, `ui-button-touch` or `ui-scale`).
+8. **Verify.** Commands: SKILL.md §Quick Reference (specs `menu-keyboard`, `ui-button-touch`, `ui-scale` ride the `ui` group on CI).
    Shell/cache: [bump.md](../../check-changes/references/bump.md).
 
 ### Escape path / Escape does nothing
 
-Where Escape goes, in order: inner-disclosure handlers on `document` CAPTURE registered first
-(`js/game.js`, e.g. the GARAGE camera panel; `js/ui/key-binds.js` `onKey` on `window` capture while
-a rebind is armed) -> `TopModal`'s `onEscape` (`js/ui/modal.js`, `document` capture, runs BEFORE the
-native `cancel`) -> `door.click()` -> only when no screen claimed it: the pause switch in
-`js/input/input.js` (`window`, BUBBLE). `onEscape`'s `stopPropagation` is what keeps the key from
+Where Escape goes, in order: inner handlers on `window` CAPTURE, which precede every `document`
+listener whatever the registration order (`js/ui/key-binds.js` `onKey` while a rebind is armed; the
+GARAGE camera panel in `js/garage/setup-camera.js`; the peek in `js/ui/screen-looks.js`; the search-clear
+handlers in `js/ui/select-screen.js` and `js/ui/settings-search.js`) -> `document` CAPTURE: `TopModal`'s
+`onEscape` (`js/ui/modal.js`, runs BEFORE the native `cancel`; the dock/HUD edit modes in
+`js/ui/dock-layout.js` and `js/ui/hud-arrange.js` also listen here) -> `door.click()` -> only when no
+screen claimed it: the pause switch in `js/input/input.js` (`window`, BUBBLE). `onEscape`'s `stopPropagation` is what keeps the key from
 toggling pause behind a sheet: "Escape toggles pause instead" starts in `modal.js`, not `input.js`.
 
 "Escape does nothing" — suspects in `onEscape` order:
-1. `e.defaultPrevented`: an earlier capture listener took it (armed key-bind, a game.js inner disclosure).
+1. `e.defaultPrevented` or never reached: a window-capture listener took it (armed key-bind, garage camera panel, a search clear).
 2. Alt/Ctrl/Meta held: `onEscape` returns without acting.
 3. `UiLayers.top()` is null, or names another layer than the one on screen (step 1).
 4. A nested `:modal` inside the layer stands aside (`topModalInside`, back-stack item 2).
 5. The door is missing or `disabled` (step 2); native `cancel` (`wire()`) clicks a disabled door to no effect.
 6. On a Settings sub-page, BACK pops to `home` and does not close — by design (`SettingsNav.back()`).
-Static pins only (SKILL.md §Quick Reference); behaviour needs `menu-keyboard` / `ui-button-touch`.
+Static pins only (SKILL.md §Quick Reference); behaviour needs `menu-keyboard` / `ui-button-touch` (`ui` group, CI).
 
 ### Pause settings overlay
 
@@ -139,8 +141,9 @@ a chip whose parent is not the button group (`syncGroup` walks direct children);
 a root missing from `ROOTS`. Pins (no browser): `menu-a11y-audit.test.mjs`
 ("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer",
 "#announce is a live region", MenuNav landing on `aria-pressed='true'`) —
-grep that file for a `select-screen.js` `aria-pressed` pin before assuming one
-exists; the browser ladder is `tests/specs/menu-keyboard.spec.js`. A fix there
+its "circuit tiles announce the chosen one" test pins path (b) for `.track-row`, but
+the renderer writes `aria-pressed` right after `trackTile`, so that premise is false — trust
+the source; the browser ladder is `tests/specs/menu-keyboard.spec.js`. A fix there
 should add a source-regex pin to that unit file.
 
 ### Cramped single screen (phone shape, UI scale)

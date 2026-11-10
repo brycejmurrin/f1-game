@@ -150,12 +150,13 @@ test("a delayed account check cannot overwrite a replacement Spotify session", a
   disk.set(TOKEN_KEY, JSON.stringify({ access_token: "replacement", refresh_token: "replacement", expires_at: Date.now() + 3600000, scope: "streaming" }));
   await SpotifyMusic.connect();
   assert.equal(SpotifyMusic.status().state, "connected");
+  const before = SpotifyMusic.status().message;
 
   resolveAccount(jsonResponse({ display_name: "Old account" }));
   const result = await checking;
   assert.equal(result.reason, "stale");
   assert.equal(SpotifyMusic.status().state, "connected");
-  assert.doesNotMatch(SpotifyMusic.status().message, /Old account|Free/);
+  assert.equal(SpotifyMusic.status().message, before, "the stale check paints nothing (no \"Old account\", no plan)");
 });
 
 test("a malformed token response is retryable and preserves the session", async () => {
@@ -830,7 +831,8 @@ test("a /me without `product` is an unknown plan, not \"not-premium\"", async ()
   const r = await SpotifyMusic.check();
   assert.equal(r.reason, "ok", "a 200 with no plan field must not fail the check");
   assert.equal(r.premium, null);
-  assert.doesNotMatch(SpotifyMusic.status().message, /not Premium|"unknown"/);
+  assert.equal(SpotifyMusic.status().message, "Account OK: playback permission granted (Spotify no longer tells apps " +
+    "the plan; Premium is confirmed when a track starts). Press CONNECT.", "an unknown plan is neither \"not Premium\" nor \"unknown\"");
 });
 
 test("an app that still gets `product` keeps the old verdicts", async () => {
@@ -853,7 +855,8 @@ test("a playback 403 PREMIUM_REQUIRED is what tells check() the account is not P
   const r = await SpotifyMusic.check();
   assert.equal(r.reason, "not-premium");
   assert.equal(r.premium, "no");
-  assert.match(SpotifyMusic.status().message, /Premium required/);
+  assert.equal(SpotifyMusic.status().message, "Signed in as Player, but this account is not Premium (Spotify refused " +
+    "playback: Premium required) — the web player needs full Premium. Free, Mini and Lite cannot play here.");
 });
 
 test("check() after an authentication_error does not paint a clean account over the real cause", () => {
@@ -866,6 +869,8 @@ test("an authentication_error check with a clean account reports the player refu
   const r = await SpotifyMusic.check({ after: "authentication_error" });
   assert.equal(r.ok, false);
   assert.equal(r.reason, "auth-error");
-  assert.doesNotMatch(SpotifyMusic.status().message, /Account OK/);
-  assert.match(SpotifyMusic.status().message, /rejected the session/);
+  assert.equal(SpotifyMusic.status().message, "Spotify's player rejected the session, though the account and its " +
+    "playback permission check out. Usually the app is not enabled for the Web Playback SDK, or its owner has no " +
+    "active Premium (Spotify requires it for apps in Development Mode). Fix that in the dashboard, then press CONNECT.",
+    "the player refusal, never \"Account OK\"");
 });

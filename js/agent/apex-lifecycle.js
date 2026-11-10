@@ -119,7 +119,7 @@ const ApexLifecycle = (function () {
   // effectiveRes(gfx, canvas) — what the player actually sees, in one read (#5166): the 3D drawing
   // buffer (gfx.width×height) against the canvas's CSS box and the panel's pixels. present = CSS ×
   // min(devicePixelRatio, DPR cap: 1.5 on mobileTier, else 2); buffer = present × renderScale. A DPR-3
-  // phone at RESOLUTION LOW (0.5; the touch default until #5166 made it MED) draws 639×295 for 852×393
+  // phone at RESOLUTION LOW (0.5; the touch default until #5166 made it MED; AUTO capped at MED since #5227) draws 639×295 for 852×393
   // CSS: pxPerCss 0.75, ofDevice 0.25 (a quarter of its pixels per axis); MED draws 959×443. dprCap is the cap as APPLIED (present / CSS), so
   // a phone reads 1.5 and a desktop 2 (or its real DPR when lower). Surfaces as __apex.renderScale().effective.
   function effectiveRes(gfx, canvas) {

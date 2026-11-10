@@ -136,7 +136,10 @@ const DataTelemetryView = (function () {
       view.updateSummary = function () { updateTextSummary(view); };
       // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
       view.visibleC = {};
-      CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
+      view.hasDrs = DataTelemetryModel.hasDrs(view.laps);
+      CHANNELS.forEach(function (ch) {
+        view.visible[ch.id] = view.visibleC[ch.id] = !ch.off && (ch.id !== "drs" || view.hasDrs);
+      });
       view.colP = view.laneCols[0]; view.colC = view.laneCols[1] || null;
       view._dup = _dupForView;
       function scan(car) {
@@ -221,6 +224,7 @@ const DataTelemetryView = (function () {
         });
       }
       CHANNELS.forEach(function (ch) {
+        if (ch.id === "drs" && !view.hasDrs) return;   // no DRS in the data (2026): no toggle for it
         function toggleBtn(cls, on, title) {
           const b = el("button", "dh-legend-item " + cls + (on ? "" : " dh-off"));
           b.type = "button"; b.title = title;
