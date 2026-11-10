@@ -1,8 +1,8 @@
 # Changelog
 
-Player-facing changes for each shipped build, one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
+Player-facing changes for each shipped build, one section per exact build: the STAMPED build Pages deploys (2000 + the deploy tip's commit count, `pagesBuild` in `tools/desktop/stage.mjs`), never `version.json`'s placeholder `1695`. The `## 1695` section further down predates stamped headings; it is history, not the pattern.
 
-Do not edit the build sections in a PR: add a fragment `docs/changelog.d/<slug>.md` (see its README). `node tools/gen/gen-changelog.mjs --fold` writes the sections at release.
+Do not edit the build sections in a PR: add a fragment `docs/changelog.d/<slug>.md` (see its README). The weekly fold (`.github/workflows/changelog-fold.yml`, `npm run fold`) writes the sections in a fold PR.
 
 Under each build, use only these categories:
 
@@ -11,7 +11,7 @@ Under each build, use only these categories:
 - **Fixed** — bugs and regressions
 - **Removed** — features or UI removed on purpose
 
-Do not list internal refactors, agent workflows, CI, or tooling. Older history lives in git and merged PRs.
+New fragments list only player-visible changes: no internal refactors, agent workflows, CI or tooling (`docs/changelog.d/README.md`). Nothing lints that, and some entries already folded do describe CI or tooling; leave them, add no more. Older history lives in git and merged PRs.
 
 ## 24324
 

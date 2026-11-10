@@ -1,6 +1,8 @@
 # Colour-blind-safe mode + complete captions — plan (2026-10-04)
 
-Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — cvdMode COLOUR VISION and COLOURBLIND CUES exist (js/ui/appearance-opts.js, a11y-opts.js) and captions are js/ui/captions.js; the single-palette-module goal was not verified.
+Status: **SHIPPED** (re-checked against the code 2026-11-10) — the palette module js/ui/cvd-palette.js, COLOUR VISION / COLOURBLIND CUES (js/ui/appearance-opts.js, a11y-opts.js) and captions (js/ui/captions.js). Archived.
+
+Earlier status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — cvdMode COLOUR VISION and COLOURBLIND CUES exist (js/ui/appearance-opts.js, a11y-opts.js) and captions are js/ui/captions.js; the single-palette-module goal was not verified.
 
 Date: 2026-10-04
 Status when written: **PLAN** — docs-only; implement as five draft PRs against
