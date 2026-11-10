@@ -528,7 +528,9 @@ test("phone ownership, parked diagnostics and controls refresher preserve drivin
   const refresher = $("htp-controls").kids.find((n) => n.id === "htp-controls-refresher");
   assert.ok(refresher, "reminders belong inside the scrolling Controls section");
   assert.ok(!$("howtoplay").kids.some((n) => n.id === "htp-controls-refresher"), "no controls outside the help sheet");
-  refresher.onclick(); assert.equal(coach.state().shown, 0); assert.equal(coach.state().races, 0);
+  // Re-arms brake/overtake/aero only (shown &= ~7) and leaves the race count alone: the
+  // reminders still fire for a player 9 races in (Onboard.resetControls).
+  refresher.onclick(); assert.equal(coach.state().shown, 0); assert.equal(coach.state().races, 9); assert.equal(disk.onboardRaces, 9);
   assert.deepEqual(disk.coachStats, { corners: 12 });
   r.sb.UiLayers.navOpen = () => false; now++;
   Input.remoteSample({ thr: 1, roll: 0 }); coach.tick(1);

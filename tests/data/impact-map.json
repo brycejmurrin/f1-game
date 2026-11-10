@@ -7054,6 +7054,9 @@
       ]
     },
     "js/fx/visor-optics.js": {
+      "bindScene": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "blendMode": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -7077,9 +7080,6 @@
       ],
       "readScene": [
         "tests/unit/visor-optics.test.mjs"
-      ],
-      "sceneFromG": [
-        "tests/unit/global-registry.test.mjs"
       ],
       "stats": [
         "tests/unit/visor-optics.test.mjs"
@@ -7453,7 +7453,8 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
         "tests/unit/source-integrity.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "renderPosOf": [
         "tests/unit/field-lod.test.mjs"
@@ -7602,6 +7603,7 @@
         "tests/unit/sporting-regs.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs",
+        "tests/unit/visor-optics.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
@@ -10537,7 +10539,8 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "*": [
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ]
     },
     "js/overlay/publisher.js": {
@@ -10986,6 +10989,9 @@
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "bindGame": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
       "clearMenuEntrySession": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
@@ -11043,6 +11049,9 @@
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "stagesFromSnapshot": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
+      "stallHandoffCover": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "tickFrame": [
@@ -12394,7 +12403,8 @@
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "fmtGap": [
         "tests/unit/hud-gap-decimals.test.mjs",
@@ -12423,7 +12433,8 @@
       ],
       "start": [
         "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "status": [
         "tests/unit/director.test.mjs",
@@ -12432,13 +12443,15 @@
       "stop": [
         "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "tick": [
         "tests/unit/director.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "towerAt": [
         "tests/unit/real-replay-broadcast.test.mjs"
@@ -12507,9 +12520,6 @@
       ]
     },
     "js/race/cooldown-lap.js": {
-      "aiPolicy": [
-        "tests/unit/cooldown-lap.test.mjs"
-      ],
       "create": [
         "tests/unit/cooldown-lap.test.mjs"
       ],
@@ -13557,6 +13567,9 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-duration.test.mjs"
       ],
+      "offer": [
+        "tests/unit/race-radio.test.mjs"
+      ],
       "replayEvent": [
         "tests/unit/race-radio.test.mjs"
       ],
@@ -14035,6 +14048,7 @@
       "info": [
         "tests/specs/jump-start.spec.js",
         "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
@@ -14047,11 +14061,13 @@
       ],
       "reset": [
         "tests/unit/damage.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
       "tick": [
         "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
@@ -14125,13 +14141,19 @@
     },
     "js/race/tv-graphics.js": {
       "create": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "diff": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
+      ],
+      "stop": [
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "tick": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ]
     },
     "js/race/weather-arc.js": {
@@ -17346,6 +17368,9 @@
       ]
     },
     "js/ui/css-zoom.js": {
+      "viewportRect": [
+        "tests/unit/css-zoom.test.mjs"
+      ],
       "*": [
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
@@ -18055,6 +18080,9 @@
       ]
     },
     "js/ui/key-binds.js": {
+      "create": [
+        "tests/unit/onboard.test.mjs"
+      ],
       "section": [
         "tests/unit/store-registry.test.mjs"
       ],
@@ -18365,6 +18393,9 @@
       "reset": [
         "tests/unit/onboard.test.mjs"
       ],
+      "resetControlsRefresher": [
+        "tests/unit/onboard.test.mjs"
+      ],
       "state": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/onboard.test.mjs"
@@ -18635,6 +18666,7 @@
         "tests/unit/scale-defaults.test.mjs"
       ],
       "*": [
+        "tests/specs/menu-keyboard.spec.js",
         "tests/specs/ui-resize.spec.js",
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",

@@ -256,24 +256,24 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
+  // game.js's G and loadingScreen live inside its async IIFE, so a bare `typeof G` from this
+  // script is always "undefined" in the browser (only a VM that injected a global saw them).
+  // game.js hands over two probes instead: {state(): G.state, loadingPhase(): loadingScreen.phase()}.
+  let game = null;
+  function bindGame(probe) { game = probe || null; }
+  function gameState() {
+    try { return game && game.state ? game.state() : ""; } catch (_) { return ""; }   // mid-boot
+  }
+
   /** True while race-entry handoff should use the stall watchdog's relaxed cover (#3510). */
   function stallHandoffCover() {
     if (armed) return true;
+    if (gameState() === "count") return true;
     try {
-      if (typeof G !== "undefined" && G.state === "count") return true;
-    } catch (_) { /* harness */ }
-    try {
-      if (typeof loadingScreen !== "undefined" && loadingScreen.phase) {
-        const ph = loadingScreen.phase();
-        if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
-      }
-    } catch (_) { /* harness */ }
-    if (softwareRaster()) {
-      try {
-        if (typeof G !== "undefined" && G.state === "race" && introBudgetLeft() > 0) return true;
-      } catch (_) { /* harness */ }
-    }
-    return false;
+      const ph = game && game.loadingPhase ? game.loadingPhase() : "";
+      if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
+    } catch (_) { /* loading screen mid-build */ }
+    return softwareRaster() && gameState() === "race" && introBudgetLeft() > 0;
   }
 
   /** Yield so #loading can paint before ensure* / intro sync work.
@@ -447,7 +447,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover,
+    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover, bindGame,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,

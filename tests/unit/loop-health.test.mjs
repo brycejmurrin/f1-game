@@ -152,7 +152,12 @@ function loadStall(opts = {}) {
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? carsetup : null),
+    // A real Document method: called unbound (`const g = document.getElementById; g(id)`) it
+    // throws "Illegal invocation", so the stub does too — an arrow let the unbound call pass.
+    getElementById(id) {
+      if (this !== doc) throw new TypeError("Illegal invocation");
+      return id === "loading" ? cover : id === "carsetup" ? carsetup : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
@@ -273,7 +278,10 @@ test("stall: #race-settings (PREPARING…) uses the same relaxed cover as #loadi
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null),
+    getElementById(id) {
+      if (this !== doc) throw new TypeError("Illegal invocation");   // as a browser's Document does
+      return id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,

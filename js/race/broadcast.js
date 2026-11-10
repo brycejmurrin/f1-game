@@ -89,8 +89,19 @@ const Broadcast = (function () {
       h = _mix(h, pit ? 1 : 0);
       h = _mix(h, tyre ? tyre.charCodeAt(0) : 0);
     }
-    const fast = script.fastest && script.fastest.t != null && T >= script.fastest.t ? script.fastest.num : 0;
-    return _mix(h, fast || 0);
+    return _mix(h, fastestAt(script, T) || 0);
+  }
+  /** The fastest-lap holder's car number at race time T, or null (the tower's purple row). */
+  function fastestAt(script, T) {
+    const f = script && script.fastest;
+    return f && f.t != null && T >= f.t ? f.num : null;
+  }
+  /** …and that car's code, for TvGraphics' FASTEST LAP banner. */
+  function fastestCode(script, T) {
+    const num = fastestAt(script, T);
+    if (num == null) return null;
+    const d = (script.drivers || []).find((x) => x.num === num);
+    return d && d.code ? String(d.code) : null;
   }
   /** The tower rows at race time T. `out(num)` says a car is parked (its data ended). Ordered as the timing
    *  shows it: most laps first, then who crossed the last line first; the stopped cars last, the latest out first.
@@ -117,7 +128,7 @@ const Broadcast = (function () {
       h = _mix(h, pit ? 1 : 0);
       h = _mix(h, tyre ? tyre.charCodeAt(0) : 0);
     }
-    const fast = script.fastest && script.fastest.t != null && T >= script.fastest.t ? script.fastest.num : null;
+    const fast = fastestAt(script, T);
     h = _mix(h, fast || 0);
     _lead.length = nLead;
     _stopped.length = nStop;
@@ -247,13 +258,13 @@ const Broadcast = (function () {
     let clickBound = null;
     let cameraSuspended = false;
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
-    let graphics = null, graphicsLoad = null;
+    let graphics = null, graphicsLoad = null, fastCode = null;
 
     // TV graphics are a display-only lazy island. WATCH/HIGHLIGHTS is the
     // existing Broadcast owner, so loading it here needs no game.js hook.
     function makeGraphics() {
       const factory = TvGraphics;
-      return Reflect.apply(factory.create, factory, [G]);
+      return Reflect.apply(factory.create, factory, [G, null, { fastest: () => fastCode }]);
     }
     function ensureGraphics() {
       if (graphics || graphicsLoad || typeof document === "undefined") return;
@@ -483,6 +494,7 @@ const Broadcast = (function () {
       direct(st);
       towerT -= dt;
       if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
+      fastCode = fastestCode(st.script, st.T);
       if (graphics) graphics.tick(dt);
     }
     function refresh(st) { if (on && st) { paintTower(st); pipTick(st); } }

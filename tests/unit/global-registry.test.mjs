@@ -135,8 +135,10 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "scheduler"], // shell build id + error card; scheduler.yield (Chrome 129+) typeof-guarded in startRaceBody, Safari → setTimeout(0)
-  "js/fx/visor-optics.js": ["G"], // readScene → sceneFromG(G): window.__apex (the old only source) is LAZY_AGENT and absent on a player's build, so the helmet glint never painted there (perf hunt 9)
-  "js/perf/race-entry-profile.js": ["scheduler", "G", "loadingScreen"], // afterPaint yield; stallHandoffCover reads game state and loading-screen phase for LoopHealth (#3510)
+  // No "G" / "loadingScreen" for visor-optics or race-entry-profile: both live inside game.js's
+  // async IIFE, so a bare read from another script is always undefined in the browser. game.js
+  // hands them over with VisorOptics.bindScene / RaceEntryProfile.bindGame instead.
+  "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield
   "js/car/car-draw.js": ["scheduler"], // warmCarAssetsAsync's step yield (Chrome 129+, perf hunt 4 F3.3); typeof-guarded, else setTimeout(0)
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)

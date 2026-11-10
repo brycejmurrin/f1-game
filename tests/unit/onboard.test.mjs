@@ -270,6 +270,28 @@ test("the race budget survives a reload: two races in one session, a third start
   assert.equal(next.stored.get("onboardRaces"), 0, "reset() gives the marks their two races back");
 });
 
+// REPEAT CONTROL REMINDERS (js/ui/key-binds.js, Onboard.resetControlsRefresher) re-arms the
+// three CONTROL marks only. It ran the whole reset(): the harvest mark re-armed and the stored
+// race count was wiped — and a veteran past the two-race cap would otherwise see nothing at all.
+test("REPEAT CONTROL REMINDERS re-arms brake, overtake and aero only, keeps the harvest mark and the race count", () => {
+  const vet = load({ urgency: 0.9, stored: { onboarded: 15, onboardRaces: 3 } });
+  assert.equal(vet.on.state().done, true, "a veteran: every mark seen, past the race cap");
+  assert.equal(vet.O.resetControlsRefresher(), true);
+  assert.equal(vet.on.state().shown, 8, "shown &= ~7: the harvest bit stays");
+  assert.equal(vet.stored.get("onboarded"), 8, "persisted");
+  assert.equal(vet.stored.get("onboardRaces"), 3, "the race count is left alone");
+  assert.equal(vet.on.state().races, 3);
+  assert.equal(vet.on.state().done, false, "the re-armed reminders get their own window");
+  const run = () => { vet.G.state = "count"; vet.on.tick(1 / 60); vet.G.state = "race"; vet.on.tick(1 / 60); };
+  run();
+  step(vet.on, 30);
+  assert.equal(vet.said.length, 1, "the brake reminder shows again");
+  assert.match(vet.said[0][0], /^BRAKE/);
+  run(); run();
+  assert.equal(vet.on.state().done, true, "two more races and the window closes again");
+  assert.equal(vet.stored.get("onboardRaces") > 3, true, "the count kept counting from where it was");
+});
+
 // UI-04 (hunt2): announce() drops "coach" lines on the TV cameras and on a
 // full queue (returns false). The mark was saved as seen BEFORE that answer,
 // so a first race on a TV camera spent BRAKE / OVERTAKE / ACTIVE AERO unseen.

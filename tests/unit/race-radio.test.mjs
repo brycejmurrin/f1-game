@@ -1349,6 +1349,26 @@ test("the real announce queue plays a burst in priority order, penalty-hit over 
   assert.ok(!order.includes("comm line"), "the weakest card was shed once the deeper queue filled");
 });
 
+test("an accepted card is never taken back: announce() true means the card plays (no pop of a queued line)", () => {
+  // The comment promised "a slot once given is NEVER taken back" while the code raised the cap to 5
+  // and popped cards that had already returned true — their callers spent cooldowns for words
+  // nobody heard. A full queue now refuses the newcomer instead; the caller offers it again.
+  const r = raceSaturated();
+  r.G.announce("FIRST", 3, "race");                      // on screen, inside its floor
+  const accepted = [];
+  const offer = (msg, kind) => { if (r.G.announce(msg, 3, kind) === true) accepted.push(msg); };
+  offer("warn A", "warning");                            // warnings always play (never stale-dropped)
+  offer("warn B", "warning");                            // the two base slots
+  offer("box 1", "box");                                 // outranks the tail: queues deeper
+  offer("box 2", "box");
+  offer("box 3", "box");                                 // five waiting: the queue is full
+  offer("hit 1", "penalty-hit");                         // used to pop "warn B" (already told true)
+  r.step(0.1, 400);
+  const said = r.said.map((x) => x.msg);
+  for (const msg of accepted) assert.ok(said.includes(msg), `accepted "${msg}" was played (${JSON.stringify(said)})`);
+  assert.ok(!accepted.includes("hit 1"), "the newcomer to a full queue is refused, not swapped in");
+});
+
 function loadEngineer() {
   const ectx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
   seedLog(ectx);

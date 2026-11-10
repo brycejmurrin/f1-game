@@ -7,7 +7,7 @@
  *   LIGHT   a <canvas id="fx-visor"> composited with mix-blend-mode: plus-lighter (screen where unsupported), so
  *           reflections are ADDED light and can never grey the scene — on WebGPU. On the WebGL2 path (TLX's WebGL2
  *           backend, GLX) the layer composites as plain "over" instead (blendMode(), #3657). Repainted at ~15 Hz
- *           from the scene lighting game.js publishes on G (sceneFromG; else window.__apex visorScene() / camState() + lightState()):
+ *           from the scene lighting game.js publishes on G (bindScene → sceneFromG; else window.__apex visorScene() / camState() + lightState()):
  *           the sun's glint and its double-reflection ghost, a Fresnel rim sheen on the sun's side, one glint per
  *           flood / street lamp / tail-light in view (projected through the camera, so they slide with heading),
  *           and a chromatic fringe along the rim that scales with VISOR REFRACTION. Every term is proportional to
@@ -302,12 +302,15 @@ const VisorOptics = (function () {
     return _knobs;
   }
 
-  // The scene comes from game.js's G façade (the script-scope `const G`, read by name like
-  // js/perf/race-entry-profile.js does) — NOT only through window.__apex: the agent surface is LAZY_AGENT, absent
-  // on a player's Pages build, and gating on it left the visor glint unpainted for every player.
+  // The scene comes from game.js's G façade, handed over by VisorOptics.bindScene(G) — NOT only
+  // through window.__apex: the agent surface is LAZY_AGENT, absent on a player's Pages build, and
+  // gating on it left the visor glint unpainted for every player. A bare `typeof G` read never
+  // worked either: game.js's `const G` lives inside its async IIFE, invisible to this script.
+  let _G = null;
+  function bindScene(G) { _G = G || null; }
   function readScene() {
     try {
-      if (typeof G !== "undefined" && G && G.frame) return sceneFromG(G);
+      if (_G && _G.frame) return sceneFromG(_G);
     } catch (_) { /* G mid-boot: try the agent surface */ }
     const A = typeof window !== "undefined" ? window.__apex : null;
     if (!A) return null;
@@ -730,6 +733,6 @@ const VisorOptics = (function () {
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG, bindScene };
 })();
 Object.freeze(VisorOptics);

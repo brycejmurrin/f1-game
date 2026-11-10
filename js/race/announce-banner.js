@@ -133,17 +133,12 @@ const AnnounceBanner = (function () {
         // race-radio its cooldowns and the told position). A full queue refuses a
         // newcomer that outranks nothing waiting; one that does (a warning behind
         // two reports) queues deeper instead of pushing an accepted line out.
+        // The refusal is the caller's cue to offer the line again (RaceEngineer and
+        // race-radio do, on their next tick); popping a waiting card instead broke
+        // this promise for a line that had already been told "true".
         const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
         const cap = pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX;
-        // A full queue used to refuse the newcomer outright (race-radio counted
-        // those as announce-refused and dropped the line). Shed the lowest-priority
-        // waiting cards — comm and coach first — so engineer, box and warnings still
-        // land. Only refuse when nothing waiting is weaker than the newcomer.
-        while (_annQueue.length >= cap) {
-          const tail = _annQueue[_annQueue.length - 1];
-          if (!tail || tail.pri >= pri) return false;
-          _annQueue.pop();
-        }
+        if (_annQueue.length >= cap) return false;
         let at = _annQueue.length;
         while (at > 0 && _annQueue[at - 1].pri < pri) at--;
         _annQueue.splice(at, 0, { msg, dur, kind, pri, still, age: 0 });
