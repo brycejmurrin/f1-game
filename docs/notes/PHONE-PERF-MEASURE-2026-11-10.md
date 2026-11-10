@@ -79,7 +79,8 @@ Readings, each `software`:
   `_createBindings` for render objects first drawn in the window, over 894 frames. Geometry that first enters view
   uploads on that frame. No per-frame re-creation of an existing buffer was seen.
 - **Major GC:** two ~29 ms major collections inside a 4–6 s trace on both rows. A 29 ms pause is a dropped frame
-  at 60 Hz. Attribution by site is §5.
+  at 60 Hz. Attribution by site is §5. Those are V8 collections on this box; §5 says why they do not predict the
+  phone's.
 - **Weather change** (`--poke 'weather("rain")'`, ×4): 0 pipelines, 0 shader modules, 39 buffers in the next 12 s,
   no single call over 20 ms. No compile hitch at a weather change on this path.
 - **First lap from 8 s after the lights:** 0 pipelines in the 30 s window on both rows (20 were built before it). The
@@ -110,8 +111,15 @@ gave no main-window data; a rerun needs `lf.rowCap=1300` and a shorter sweep. Th
 ## 5. Per-frame allocation
 
 Method: `--alloc 10` on the ×1 row above (V8 sampling heap profiler, 16 KB interval, objects collected by minor
-and major GC kept), 597 frames. Bytes allocated are a property of the JavaScript, not of the adapter, so this is
-the one number here that carries to a phone (sampled: read ±10%).
+and major GC kept), 597 frames (sampled: read ±10%).
+
+**This number is V8's, and most of it does not carry to the phone** (correction, 2026-11-10, adopting session; the
+first version of this section said the opposite). Issue #5056 item 2 measured the same 222 KB/frame after 600 warm
+frames with a 128 B sampler and found 93% of the bytes are 16 B HeapNumbers (boxed doubles) from functions V8 keeps
+deoptimising (`updateCarBrakePlan`, `updateCarLateral`, `render`); after 3,000 warm frames the same frame is
+94.8 KB (78.9 boxed, 15.9 real objects). JavaScriptCore, the engine on Bryce's iPhone, stores doubles inline and
+does not allocate them. This census used a 16 KB interval and cannot separate the two, so read the table as a V8
+ranking, not as phone garbage. The real-object rows are #5057's.
 
 **222 KB allocated per frame** (132 MB in 10 s; about 13 MB/s at 60 fps), which is what feeds the collections in
 §3. Top allocating functions, KB per frame:
@@ -130,9 +138,9 @@ the one number here that carries to a phone (sampled: read ±10%).
 | `updateCarAdvance` game.js:6253 | 4.0 |
 | `curvature` spline.js:147 | 3.8 |
 
-The car step (`updateCar*`) is about 50 KB per frame, the largest single owner and all game code. That is the
-measured lead of this note. It is not fixed here: the step is the physics core (replay determinism and the
-curvature contract ride on it) and a zero-allocation pass needs its own PR with the characterization traces.
+The car step (`updateCar*`) is about 50 KB per frame, the largest single owner and all game code. It is not a new
+lead: it is open issue #3100 item 1 (boxed doubles in `updateCar*`, gated on `physics-characterization` staying
+bit-identical), re-measured here on the TLX WebGPU page instead of the Node VM. Not fixed here.
 
 ## 6. A default that is sharp when the phone can afford it (for #5227; `js/ui/scale.js` is held by #5205)
 
@@ -157,4 +165,4 @@ Evidence class of this section: design from `software` rows and exact pixel coun
 - WebGL2 fallback rows; pit-stop and replay hitches; cold vs warm load under a phone-class throttle (only the
   software boot 1.5 s / entry 12.1 s above); per-pass target sizes; repeat runs for a noise floor.
 - Open leads #4680 #4272 #4270 #3104 #3100 were not re-read; only #4710 was checked against counts (§3).
-- No game-code win landed: the one sized lead (§5, car-step allocation) is physics-core work for its own PR.
+- No game-code win landed: §5's car-step allocation is #3100 item 1 (V8 boxed doubles), not a new phone lead.
