@@ -109,7 +109,10 @@ const F1API = (function () {
       if (!standingsSeasonOk(sl, year)) return [];
       return arr(sl && sl.DriverStandings).map(function (s) {
         const d = (s && s.Driver) || {};
-        const cons = (s && Array.isArray(s.Constructors) && s.Constructors[0]) || {};
+        // The feed lists a season's constructors in the order the driver drove for
+        // them (2025: Lawson ["Red Bull", "RB F1 Team"]), so the current team is the LAST.
+        const list = s && Array.isArray(s.Constructors) ? s.Constructors : [];
+        const cons = list[list.length - 1] || {};
         const name = ((d.givenName || "") + " " + (d.familyName || "")).trim();
         return {
           pos: num(s && s.position),

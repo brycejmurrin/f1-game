@@ -82,7 +82,7 @@ cmd_run() {
   [[ -z "$exe" ]] && echo "playwright-mcp: no repo-discovered Chromium; the package's pinned build may be absent" >&2
   # Opt-ins, read once at server start (measured 2026-10-19,
   # docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md):
-  #   APEX_PW_CDP=http://127.0.0.1:9222  attach to tools/mcp/debug-chrome.sh's
+  #   APEX_PW_CDP=http://127.0.0.1:9222  attach to tools/mcp/debug-chrome.mjs's
   #     browser instead of launching one, so js-debugger / browser-use share it.
   #   APEX_PW_DEVICE="iPhone 15"  a Playwright device descriptor: hasTouch, UA
   #     and DPR on the context. Without it browser_resize is viewport-only,

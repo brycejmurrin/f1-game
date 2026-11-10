@@ -62,12 +62,13 @@ test("the workflow is daily + dispatch, starts its own CI, pushes a bot branch t
   const foldRun = wf.jobs.fold.steps.find((st) => st.name === "Fold").run;
   const skipRun = wf.jobs.fold.steps.find((st) => st.name === "Skip while a fold PR is open").run;
   assert.equal(/FOLD_BRANCH="bot\/ratchets-fold-\$\{GITHUB_RUN_ID\}"/.test(foldRun), true);
-  assert.equal(/git push origin "\$FOLD_BRANCH"/.test(foldRun), true);
-  assert.equal(/gh workflow run ci\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$FOLD_BRANCH"/.test(foldRun), true,
-    "a GITHUB_TOKEN PR starts no CI; the dispatch does");
+  assert.equal(/git -c http\.https:\/\/github\.com\/\.extraheader=.* push origin "\$FOLD_BRANCH"/.test(foldRun), true, "the push carries the token itself (persist-credentials: false)");
+  assert.equal(foldRun.includes('echo "branch=$FOLD_BRANCH"'), true,
+    "the fold step hands its branch to open-bot-pr (LAND_TOKEN PR, or a ci.yml dispatch without it)");
   assert.equal(/startswith\("bot\/ratchets-fold"\)/.test(skipRun), true,
     "skip while any open fold PR uses the bot/ratchets-fold prefix");
-  assert.equal(wf.permissions.actions, "write");
+  assert.equal(wf.jobs.fold.permissions.actions, "write");
+  assert.equal(wf.permissions.actions, undefined, "actions: write is the job's, not the workflow's");
   assert.doesNotMatch(w, /git push[^\n]*claude\/f1-game-project-26h3ng/, "the protected deploy branch is reached only through the PR");
   assert.match(w, /MIN_FRAGMENTS: \$\{\{ inputs\.min_fragments/, "the dispatch input enters shell via env only");
   assert.doesNotMatch(w, /run:[^\n]*\$\{\{ inputs\./);
