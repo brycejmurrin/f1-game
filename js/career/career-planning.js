@@ -77,7 +77,7 @@ const CareerPlanning = (function () {
       })();
       let savings = 0, count = 0;
       for (const cat of (Parts.CATALOG || [])) for (const opt of cat.options) {
-        if (!opt.cost || (c().owned || []).includes(opt.id)) continue;
+        if (!opt.cost || (c().owned || []).includes(Parts.ownId ? Parts.ownId(opt) : opt.id)) continue;
         if (Parts.isOptionAvailable && !Parts.isOptionAvailable(opt, team)) continue;
         if (nextBan && nextBan.has(opt.id)) continue;
         const current = Math.round(opt.cost * mult * (1 - Math.min(dMax, level * dStep)));

@@ -843,3 +843,30 @@ test("AudioContext constructor throw leaves GameAudio without a context (no over
   assert.equal(A.context(), null);
   assert.ok(warns.some((w) => /AudioContext unavailable/.test(w)), "warn names the refusal");
 });
+
+// #5029: a finger's pointerdown is not activation-triggering, yet the engine's capture listener
+// rebuilt the stalled context on it: a throw-away context outside activation (and a device-rebuild
+// slot) on every such tap, before the same tap's touchend could do it properly.
+test("a touch pointerdown resumes but never rebuilds; the same tap's touchend rebuilds (#5029)", async () => {
+  let clock = 1000;
+  const ua = { isActive: false, hasBeenActive: true };
+  const { A, listeners, contexts, resumes } = boot({ clock: () => clock, userActivation: ua });
+  A.init(); await flush();
+  const gen0 = A.ctxGen();
+  contexts[0].state = "interrupted";
+  listeners.touchend({ type: "touchend", isTrusted: true }); await flush();   // a resume that does not take
+  clock += 1000;
+  const r0 = resumes();
+  listeners.pointerdown({ type: "pointerdown", pointerType: "touch", isTrusted: true }); await flush();
+  assert.equal(A.ctxGen(), gen0, "no rebuild on a finger's pointerdown");
+  assert.equal(contexts.length, 1, "no throw-away context");
+  assert.equal(resumes(), r0 + 1, "it may still ask the context to resume");
+  listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  assert.equal(A.ctxGen(), gen0 + 1, "the touchend of the same tap rebuilds inside activation");
+  // A mouse's pointerdown IS activation-triggering: it keeps the rebuild path.
+  contexts[1].state = "interrupted";
+  listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  clock += 1000;
+  listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  assert.equal(A.ctxGen(), gen0 + 2, "a mouse press still rebuilds a stalled context");
+});

@@ -23,7 +23,7 @@ function harness(online) {
     DataLive: create({ loadLive: empty, stopLiveAuto() {}, disarmLiveAuto() {} }),
     DataTelemetry: create({ loadTelemetry: empty, closeTelemPopup() {} }),
     DataRealRace: create({ loadRealRace: empty, cancel() {} }), DataExport: create({ loadExport: empty }) });
-  for (const file of ['js/ui/dom.js', 'js/data/hub.js']) {
+  for (const file of ['js/ui/dom.js', 'js/data/tab-utils.js', 'js/data/hub.js']) {
     vm.runInContext(fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), ctx, { filename: absSrc(file) });
   }
   const hub = vm.runInContext('DataHub', ctx);
