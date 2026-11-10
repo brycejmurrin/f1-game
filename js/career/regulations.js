@@ -35,7 +35,7 @@ const Regulations = (function () {
   // seasons) rather than during the climb — a regulation that interrupts the
   // first build is a tax on the part of the mode that already works.
   //
-  // TWO options, not the whole category. Falling all the way back to DEFAULTS
+  // TWO stat classes (an option and its STYLE/SIGNATURE twins), not the whole category. Falling all the way back to DEFAULTS
   // guts a car; taking the dearest two leaves mid-shelf rungs legal, so an era
   // is a re-optimisation rather than a demolition. Both numbers are the tuning
   // surface — change them here and re-run tools/car/career-economy.mjs.
@@ -81,6 +81,20 @@ const Regulations = (function () {
     for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
     return h;
   }
+  // Everything Parts reads for performance: the four mod ratios (absent = 1),
+  // plus the tyre fields, at the option's cost. ERS deploy/regen and aero load
+  // derive from these same stats (Parts.ersProfile / aeroLoad).
+  const CLASS_STATS = ["speed", "accel", "cornering", "braking"];
+  function classKey(o) {
+    return [o.cost || 0, ...CLASS_STATS.map((k) => (o[k] != null ? o[k] : 1)),
+      o.wetTread != null ? o.wetTread : "", o.life != null ? o.life : ""].join("|");
+  }
+  // The class's tie-break name: its catalog root (no `equivalent`) when it has
+  // one, else its smallest id — so adding a twin never moves which class is cut.
+  function classRep(opts) {
+    const ids = opts.filter((o) => !o.equivalent).map((o) => o.id).sort();
+    return ids.length ? ids[0] : opts.map((o) => o.id).sort()[0];
+  }
   function bannedIds(eraId) {
     let set = _banCache.get(eraId);
     if (set) return set;
@@ -95,10 +109,24 @@ const Regulations = (function () {
         // Costs tie at the top of every ladder (six engines at 200, three wings at
         // 190), so the cut is broken by a hash of era + id, not by authoring order:
         // reordering the catalog never changes WHICH teams an era hits.
-        const ranked = cat.options.filter((o) => (o.cost || 0) > 0)
-          .sort((a, b) => (b.cost || 0) - (a.cost || 0)
-            || tieHash(eraId, a.id) - tieHash(eraId, b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-        for (const o of ranked.slice(0, BAN_TOP)) set.add(o.id);
+        //
+        // THE BAN IS BY STAT CLASS, not by id (#5038). STYLE rows are their
+        // root's cost and stats under a new id, and a SIGNATURE matches its
+        // `equivalent`, so banning two ids left a legal twin that performed
+        // identically (AERO RESET banned `active`; `style_susp_upright` and
+        // `sig_redbull_pullrod` kept every number). A class is every priced
+        // option with the same cost and stats; the top BAN_TOP classes go whole.
+        const classes = new Map();
+        for (const o of cat.options) {
+          if ((o.cost || 0) <= 0) continue;
+          const k = classKey(o);
+          if (!classes.has(k)) classes.set(k, []);
+          classes.get(k).push(o);
+        }
+        const ranked = [...classes.values()].map((opts) => ({ opts, cost: opts[0].cost || 0, rep: classRep(opts) }))
+          .sort((a, b) => b.cost - a.cost
+            || tieHash(eraId, a.rep) - tieHash(eraId, b.rep) || (a.rep < b.rep ? -1 : a.rep > b.rep ? 1 : 0));
+        for (const c of ranked.slice(0, BAN_TOP)) for (const o of c.opts) set.add(o.id);
       }
     }
     _banCache.set(eraId, set);

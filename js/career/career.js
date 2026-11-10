@@ -19,13 +19,19 @@ const RESEARCH_MULT = 3;
 const BUDGET_MULT = [1.0, 1.15, 1.35, 1.6];
 const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 
-// Team development is stat points converted to a pace multiplier here: ±8 points
-// is ±2%. TIER_V was compressed on 2026-10-06 (#1112) to ~1.05% from tier 0 to
-// tier 4 (~0.26% a step), so a fully developed team gains about 7.7 tier steps —
-// twice the whole ladder — over a few seasons without `team.tier` ever changing
-// (it drives the grid sort, the mesh presets and the colours). The multiplier was
-// left at its pre-compression value on purpose: the number is a balance call.
+// Team development is stat points converted to a pace multiplier here
+// (TDEV_TO_PACE: 0.25 % a point). TDEV_MAX ±8 is the CLAMP an imported save is
+// held to (SaveMigrate mirrors it), not a level a winter reaches: tdevStep halves
+// the carried value, adds a shove of at most ±2 and rounds half toward zero, so
+// a team climbing from neutral tops out at TDEV_REACH = ±3 points, ±0.75 % pace
+// (#5047: it was +4 but -3; an imported ±8 parks at ±4, also stable). TIER_V was compressed on 2026-10-06 (#1112) to ~1.05% from tier 0 to
+// tier 4 (~0.26% a step), so a fully developed team gains about 2.9 tier
+// steps over a few seasons without `team.tier` ever
+// changing (it drives the grid sort, the mesh presets and the colours). The
+// multiplier was left at its pre-compression value on purpose: a balance call.
 const TDEV_MAX = 8;
+const TDEV_SHOVE = 2;
+const TDEV_REACH = 3;   // the fixed point of tdevStep(x, ±TDEV_SHOVE); pinned by career-parts-regs.test.mjs
 const TDEV_TO_PACE = 0.0025;
 
 const MYTEAM_WORKS = 900;
@@ -452,7 +458,7 @@ function start(opts) {
     facility: 0,          // the open-ended research facility
     season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} },
     results: [],
-    owned: Object.values(factory),
+    owned: ownedOf(factory),
     fitted: Object.assign({}, factory),
     deal: null,             // filled by contract() below
     offers: [],
@@ -970,13 +976,19 @@ function grant(n) {
 }
 const charge = (cost) => (freeMoney() ? 0 : cost);
 
+// A fitted {cat: id} build as ownership keys (Parts.ownId): the brakes and the
+// suspension "sport" are two parts, and a flat owned list must not merge them.
+function ownedOf(setup) {
+  return Object.keys(setup).map((cat) => (Parts.ownIdOf ? Parts.ownIdOf(cat, setup[cat]) : setup[cat]));
+}
 function research(opt) {
   if (!career || !opt || blocked()) return false;
-  if (career.owned.indexOf(opt.id) >= 0) return false;
+  const key = Parts.ownId ? Parts.ownId(opt) : opt.id;
+  if (career.owned.indexOf(key) >= 0) return false;
   const cost = charge(researchCost(opt));
   if (cost > career.money) return false;
   career.money -= cost;
-  career.owned.push(opt.id);
+  career.owned.push(key);
   save();
   return true;
 }
@@ -1453,10 +1465,19 @@ function rolloverTeams(tStand) {
   const expect = expectedConstructor();
   for (const team of Teams.LIST) {
     if (!Teams.isReal(team) && team.id !== career.team) continue;
-    const shove = clamp(((expect.get(team.id) || 11) - (posOf.get(team.id) || 11)) * 0.5, -2, 2);
-    const next = clamp(Math.round((career.tdev[team.id] || 0) * 0.5 + shove), -TDEV_MAX, TDEV_MAX);
+    const shove = ((expect.get(team.id) || 11) - (posOf.get(team.id) || 11)) * 0.5;
+    const next = tdevStep(career.tdev[team.id] || 0, shove);
     if (next) career.tdev[team.id] = next; else delete career.tdev[team.id];
   }
+}
+// One winter of team development: half the carried delta plus the season's
+// shove, rounded HALF TOWARD ZERO. Math.round sends .5 up, so +1 stuck at +1
+// forever while -1 decayed to 0, and +3 went to 2 but -3 to -1 (#5047): an
+// underachiever and an overachiever drift back to neutral alike, and the
+// ceiling is ±TDEV_REACH both ways.
+function tdevStep(prev, shove) {
+  const v = (Number(prev) || 0) * 0.5 + clamp(Number(shove) || 0, -TDEV_SHOVE, TDEV_SHOVE);
+  return clamp(Math.sign(v) * Math.ceil(Math.abs(v) - 0.5), -TDEV_MAX, TDEV_MAX) || 0;
 }
 
 /** Fitted setup an AI car should resolve in career, or null → factory. */
@@ -1621,7 +1642,7 @@ function offerPreview(i) {
   if (!team) return null;
   const moving = team.id !== career.team, seat = moving ? weakerSeat(team) : career.seat;
   const fitted = moving ? worksSnapshot(team) : Object.assign({}, career.fitted);
-  const owned = moving ? Object.values(fitted) : career.owned.slice();
+  const owned = moving ? ownedOf(fitted) : career.owned.slice();
   const kind = goalTypeOk(o.goal && o.goal.type), amb = ambition();
   const keep = kind === "beatRival" && o.goal && typeof o.goal.value === "string" && o.goal.value;
   const goal = { type: kind, value: keep || goalKind(kind).value(team, amb) };
@@ -2006,7 +2027,7 @@ function state() {
 }
 
 return {
-  PRIZE, RESEARCH_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
+  PRIZE, RESEARCH_MULT, TDEV_MAX, TDEV_REACH, TDEV_TO_PACE, START_MONEY, tdevStep,
   planning,
   OBJ_BONUS, OBJ_REP, HISTORY_MAX, craftScore, seasonCraft,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, armedRevision, firstFree,
