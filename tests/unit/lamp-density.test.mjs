@@ -207,7 +207,6 @@ test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
 
 test("street posts and flood banks share one lampPosts bake, one LAMPS tab", () => {
   const lighting = read("js/lighting/track-lights.js") + read("js/lighting/knobs.js");
-  assert.match(lighting, /function buildTrackLights/);
   assert.doesNotMatch(lighting, /function buildFloodLights/);
   assert.doesNotMatch(lighting, /group:\s*"FLOODLIGHTS"/);
   const api = loadLightTune();

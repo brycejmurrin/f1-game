@@ -26,6 +26,33 @@ function scope(ids) {
 }
 const scoped = () => SCOPE.length > 0;
 
+/** scope() for a CLI's `--all`: throws when APEX_CIRCUITS is set but matches
+ *  NONE of `ids` (2026-11-10: `APEX_CIRCUITS=zzz float-audit --all` printed
+ *  "All 0 circuits clean" and exited 0). The sweep SUITES keep scope(): their
+ *  floor already expects the scoped count, and a CI scope naming a circuit the
+ *  diff deleted must not throw there. */
+function scopeAll(ids, tool = "this tool") {
+  const out = scope(ids);
+  if (SCOPE.length && !out.length)
+    throw new Error(`${tool}: APEX_CIRCUITS=${SCOPE.join(",")} matches none of the ${ids.length} circuits — nothing would be checked`);
+  return out;
+}
+
+/** The named ids that are not circuits. A CLI that filters its roster by
+ *  positional ids must refuse an unknown one rather than check nothing
+ *  (`centreline-kinks nosuch --gate` exited 0). */
+function unknownIds(named, ids) {
+  const known = new Set(ids);
+  return named.filter((id) => !known.has(id));
+}
+/** Throws naming every unknown id (and a few valid ones) — see unknownIds(). */
+function requireKnown(named, ids, tool = "this tool") {
+  const bad = unknownIds(named, ids);
+  if (bad.length)
+    throw new Error(`${tool}: unknown circuit id(s) ${bad.map((b) => JSON.stringify(b)).join(", ")} — valid ids: ${ids.join(", ")}`);
+  return named;
+}
+
 /** APEX_CIRCUIT_SHARD=i/n (2026-09-30): every n-th id starting at the i-th,
  *  so n runners can each build a disjoint part of one script's roster
  *  (ci.yml's vm-a1 / vm-a2 slices are 1/2 and 2/2 of test:game-vm-a).
@@ -49,4 +76,4 @@ function inShard(spec = process.env.APEX_CIRCUIT_SHARD || "") {
   return (_, k) => k % n === i - 1;
 }
 
-module.exports = { SCOPE, scope, scoped, shard, inShard };
+module.exports = { SCOPE, scope, scoped, scopeAll, unknownIds, requireKnown, shard, inShard };
