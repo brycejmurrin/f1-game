@@ -33,7 +33,18 @@ const SetupTune = (function () {
   };
   const BB_REF = PhysicsConsts.BB_REF;   // 0.56 — where the ellipse split is exactly 1/1
 
-  function defaults(teamId) { return Object.assign({}, BASE, DEFAULTS[teamId] || {}); }
+  // The works sheet a fresh install gets: the SHIPPED setup.<team> block in
+  // GarageDefaults when one exists (#4922 — get/reset land there, so isDefault,
+  // mods, balance and rake must measure from it too), else the code baseline.
+  function shipped(teamId) {
+    if (typeof GarageDefaults === "undefined" || !GarageDefaults.has(KEY + teamId)) return null;
+    const raw = GarageDefaults.get(KEY + teamId);
+    if (!raw || typeof raw !== "object") return null;
+    const o = {};
+    for (const k of FIELDS) { const v = clampField(k, raw[k]); if (v != null) o[k] = v; }
+    return o;
+  }
+  function defaults(teamId) { return Object.assign({}, BASE, DEFAULTS[teamId] || {}, shipped(teamId) || {}); }
   function clampField(k, v) {
     const r = RANGE[k];
     // typeof, not Number(): a damaged field must fall back to the WORKS value,

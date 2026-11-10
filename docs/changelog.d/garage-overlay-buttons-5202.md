@@ -1,0 +1,1 @@
+Fixed: the CAMERA, PHOTO and ACTIVE AERO buttons over the car in the GARAGE are a normal tap size again (one 44 px height, lined up) instead of growing with the garage's BUTTON SIZE look; the CAMERA menu shows all five rows on a phone without scrolling.

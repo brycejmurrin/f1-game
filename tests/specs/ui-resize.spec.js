@@ -828,6 +828,66 @@ for (const win of PHONE_WINDOWS) test.describe("UI contract pause cells — " + 
     const heights = Object.values(seen).map((c) => c.sheetOwnH);
     expect(Math.max(...heights) - Math.min(...heights), "every layout keeps the one phone card's box (" + heights.join("/") + ")").toBeLessThanOrEqual(40);
   });
+  // #5200 (Bryce's iPhone, build 25617: "on pause menu there's no resume"). His screenshots are the 420 card at a UI
+  // SIZE near 51 %: a landscape phone is a NORMAL body there (393 / 0.51 = 770 own px), the list scrolled 209 own px
+  // and RESUME, an absolute bar under the scroller's fade mask, was not painted at all. The cells above only ever ran
+  // the export's 109 %. Every mode x UI SIZE opens the card through the real pause button and asks the same things.
+  test("RESUME is the first, focused, painted door in every mode and UI SIZE, and the card never scrolls", async ({ page }) => {
+    await page.goto("/?inspector=0");
+    await waitReady(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await waitReady(page);
+    await page.addStyleTag({ content: `:root{--sal:${win.insets.l}px;--sar:${win.insets.r}px;--sat:0px;--sab:${win.insets.b}px;}` });
+    const rows = [];
+    for (const mode of ["race", "timeTrial"]) {
+      await page.evaluate((m) => m === "race" ? window.__apex.race("bahrain", null, null, { grid: "tier" }) : window.__apex.tt("bahrain"), mode);
+      await page.waitForFunction((m) => { try { const i = window.__apex.info(); return i.track === "bahrain" && !!i.timeTrial === (m === "timeTrial"); } catch (_) { return false; } },
+        mode, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.park(0.1));
+      for (const ui of [null, 51, 40]) {   // null = the export's own (109 % on touch)
+        await page.evaluate((u) => { window.__apex.uiScale(u == null ? 109 : u); SheetShape.reclassify(); }, ui);
+        await page.evaluate(() => document.getElementById("pausebtn").click());
+        await page.waitForFunction(() => { const pm = document.getElementById("pausemenu"); return pm.open && !pm.hidden && document.querySelectorAll("#pm-quick-doors > *").length > 3; },
+          null, { polling: 50, timeout: 8_000 });
+        await page.waitForFunction(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, { polling: 50, timeout: 2_000 });
+        const cell = await page.evaluate(() => {
+          const pm = document.getElementById("pausemenu"), sheet = pm.querySelector(":scope > .sheet"), sb = sheet.querySelector(":scope > .sheet-body");
+          const sr = sheet.getBoundingClientRect();
+          const shown = (el) => !el.hidden && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().width > 0;
+          const doors = [...pm.querySelectorAll("button, summary")].filter((el) => shown(el) && !el.closest("details:not([open]) > :not(summary)"));
+          const rect = (el) => { const r = el.getBoundingClientRect(); return { id: el.id || el.textContent.trim(), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), area: r.width * r.height, inSheet: r.top >= sr.top - 0.5 && r.bottom <= sr.bottom + 0.5 && r.left >= sr.left - 0.5 && r.right <= sr.right + 0.5 }; };
+          const all = doors.map(rect);
+          const resume = document.getElementById("pm-resume"), rr = resume.getBoundingClientRect();
+          const hit = document.elementFromPoint(rr.x + rr.width / 2, rr.y + rr.height / 2);
+          return { short: document.body.hasAttribute("data-pause-short"), density: document.body.dataset.density, ui: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+            bodyScroll: sb.scrollHeight - sb.clientHeight, sheetScroll: sheet.scrollHeight - sheet.clientHeight,
+            sheet: { x: Math.round(sr.x), y: Math.round(sr.y), w: Math.round(sr.width), h: Math.round(sr.height), inScreen: sr.top >= 0 && sr.left >= 0 && sr.bottom <= document.documentElement.clientHeight + 0.5 && sr.right <= document.documentElement.clientWidth + 0.5 },
+            firstDoor: all[0].id, focus: document.activeElement && document.activeElement.id, hit: hit && hit.id, resumePosition: getComputedStyle(resume).position,
+            resume: rect(resume), maxOther: Math.max(...all.filter((d) => d.id !== "pm-resume").map((d) => d.area)), outside: all.filter((d) => !d.inSheet).map((d) => d.id), small: all.filter((d) => d.h < 43.5).map((d) => d.id + " " + d.h), doors: all.length };
+        });
+        const tag = `${win.name} ${mode} UI ${ui == null ? "export" : ui + " %"}: `;
+        rows.push(tag + JSON.stringify(cell));
+        expect(cell.short, tag + "the short landscape window is stamped").toBe(true);
+        expect(cell.bodyScroll, tag + "the card body does not scroll").toBeLessThanOrEqual(1);
+        expect(cell.sheetScroll, tag + "the sheet does not scroll").toBeLessThanOrEqual(1);
+        expect(cell.sheet.inScreen, tag + "the sheet sits inside the window").toBe(true);
+        expect(cell.firstDoor, tag + "RESUME is the first door in reading (DOM, Tab) order").toBe("pm-resume");
+        expect(cell.focus, tag + "RESUME has the default focus").toBe("pm-resume");
+        expect(cell.hit, tag + "RESUME is what a tap at its centre lands on (painted, not masked or covered)").toBe("pm-resume");
+        expect(cell.resumePosition, tag + "RESUME is in flow").toBe("static");
+        expect(cell.resume.h, tag + "RESUME paints at least 44 px").toBeGreaterThanOrEqual(44);
+        expect(cell.resume.area, tag + "no door on the card is larger than RESUME (QUIT may tie it; RESUME alone carries the primary fill)").toBeGreaterThanOrEqual(cell.maxOther * 0.99);
+        expect(cell.outside, tag + "every door ends inside the sheet").toEqual([]);
+        expect(cell.small, tag + "every door paints the 44 px floor").toEqual([]);
+        expect(cell.sheet.w, tag + "the card uses the width (the 420 card was 214 px here)").toBeGreaterThanOrEqual(600);
+        await page.evaluate(() => document.getElementById("pm-resume").click());
+        await page.waitForFunction(() => document.getElementById("pausemenu").hidden, null, { polling: 50, timeout: 8_000 });
+      }
+    }
+    test.info().annotations.push({ type: "pause-cells", description: rows.join("\n") });
+  });
 });
 
 // UI contract cells for the circuit picker and race settings (#5153 gaps 13 and 16, UI contract 2026-11-06 §4.5;
