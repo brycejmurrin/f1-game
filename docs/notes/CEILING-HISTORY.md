@@ -1,5 +1,16 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+
+## 2026-11-10 — PR #5276 (claude/audit-fix-credits-notices): Settings › ABOUT & CREDITS (audit W13)
+
+`(tree) shellNodes` 2256 → **2322** (+66). Deliberate raise past the 40-line absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. The growth is
+the new Settings page the audit asked for (door + section, 3 nodes) and its 63
+generated rows (`<!-- @gen-notices:credits -->`, written by `desktop/scripts/notices.mjs`
+from the vendor licence/MANIFEST files and assets CREDITS files): the third-party
+notices must be visible, static rows that `gen:check` keeps in step with what ships.
+The `<b>` wrappers were dropped and the new CSS uses id/attribute selectors, so
+`cssClasses` is unchanged. Fragment: `ratchets.d/claude--audit-fix-credits-notices.json`.
 ## 2026-10-20 — PR #3164 (cursor/design-aero-d3c-7e2a): concept-sheet wings + floors (B·D3c/D3d)
 
 `js/car/car3d.js` lines 2630 → **2693** (+63). Deliberate raise past the 40-line absorb.
