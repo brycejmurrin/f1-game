@@ -908,9 +908,10 @@ test("TopModal: the shield also swallows the ghost's pointerdown/pointerup, but 
   const canvas = h.add(td, "td-canvas", { y: 100 });
   h.TopModal.scanLayers();
   const ev = (type, target, o = {}) => {
-    const e = { type, target, isTrusted: true, detail: type === "click" ? 1 : 0, clientX: 100, clientY: 110, stopped: false, ...o };
+    const e = { type, target, isTrusted: true, detail: type === "click" ? 1 : 0, clientX: 100, clientY: 110, stopped: false, immediate: false, ...o };
     e.preventDefault = () => {};
-    e.stopImmediatePropagation = () => { e.stopped = true; };
+    e.stopPropagation = () => { e.stopped = true; };
+    e.stopImmediatePropagation = () => { e.stopped = true; e.immediate = true; };
     h.TopModal.onClickShield(e);
     return e;
   };
@@ -919,7 +920,9 @@ test("TopModal: the shield also swallows the ghost's pointerdown/pointerup, but 
   h.flip(td, false);
   now += 120;
   assert.equal(ev("pointerdown", canvas).stopped, true, "the 120 ms ghost's pointerdown never reaches the canvas");
-  assert.equal(ev("pointerup", canvas).stopped, true, "nor its pointerup (the designer places a point on it)");
+  const up = ev("pointerup", canvas);
+  assert.equal(up.stopped, true, "nor its pointerup (the designer places a point on it)");
+  assert.equal(up.immediate, false, "but other window-capture listeners (input.js's hold-release net) still see the lift");
   assert.equal(ev("pointerup", canvas, { clientX: 500 }).stopped, false, "elsewhere on the new screen is a choice");
   now += 400;
   assert.equal(ev("pointerup", canvas).stopped, false, "after SHIELD_MS the canvas is live");

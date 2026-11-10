@@ -459,7 +459,9 @@ window.TopModal = (function () {
     if (s && now < s.until && s.layer.contains(e.target) &&
         Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
       e.preventDefault();
-      e.stopImmediatePropagation();
+      // A pointer event stops short of its target only: other window-capture
+      // listeners (input.js's hold-release net) must still see the lift.
+      if (isClick) e.stopImmediatePropagation(); else e.stopPropagation();
       return;
     }
     if (isClick) lastTap = { at: now, x: e.clientX, y: e.clientY };
