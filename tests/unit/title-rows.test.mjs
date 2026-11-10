@@ -43,7 +43,24 @@ test("the look: italic slanted doors, subtitles on the hero and retention only",
   assert.match(quiet, /@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\) \{\n#overlay #menu-buttons \.bigbtn \{\n  transform: none;/, "the quiet restyle stays off the short landscape screen");
 });
 
-test("WIDTH runs from the shipped column (20) to the whole box (100)", () => {
-  assert.match(block, /--home-t: clamp\(0, calc\(\(var\(--tl-btns-w, 20\) - 20\) \/ 80\), 1\)/);
-  assert.match(block, /width: calc\(100% \+ 85\.185% \* var\(--home-t\)\)/);
+test("WIDTH moves the split: 54 % of the box at 20, 80 % at 100, the doors never wider than their track", () => {
+  assert.match(block, /#overlay \{[^}]*--home-t: clamp\(0, calc\(\(var\(--tl-btns-w, 20\) - 20\) \/ 80\), 1\);\n  grid-template-columns: minmax\(0, calc\(46% - 26% \* var\(--home-t\)\)\) minmax\(0, 1fr\);/);
+  assert.match(block, /\[data-title-side="swap"\][^{]*#overlay \{ grid-template-columns: minmax\(0, 1fr\) minmax\(0, calc\(46% - 26% \* var\(--home-t\)\)\); \}/, "SWAPPED mirrors the split");
+  // A cluster wider than its track covered the brand (#5150 rule 3) and, at the box's edge, tripped the fit.
+  assert.match(block, /grid-column: 2; grid-row: 1; justify-self: stretch; align-self: center;\n  width: 100%; min-width: 0;/);
+  assert.doesNotMatch(block.replace(/\/\*[^]*?\*\//g, ""), /width: calc\(100% \+/);
+});
+
+test("UI SIZE under 100 % does not shrink the Home: the pieces are sized by TITLE LAYOUT and the fit", () => {
+  assert.match(block, /zoom: calc\(max\(1, var\(--ui-compact-scale\)\) \* var\(--tl-btns-size, 1\) \* var\(--tf, 1\)\)/, "doors: floor 1");
+  assert.match(block, /#menu-brand \{[^}]*zoom: calc\(var\(--tl-title-size, 1\) \* var\(--tf, 1\)\)/, "brand: no UI SIZE factor");
+  assert.doesNotMatch(block.replace(/\/\*[^]*?\*\//g, ""), /--ui-compact-brand-scale|var\(--ui-scale\)/, "no other UI SIZE zoom in the block");
+});
+
+test("a slider stops at the edge: the box's answer is stored, not the request", () => {
+  const js = fs.readFileSync(path.join(ROOT, "js/ui/title-layout.js"), "utf8");
+  assert.match(js, /function hold\(l, part, k\)/);
+  assert.match(js, /l = hold\(set\(l\), part, k\);/, "the fold's sliders");
+  assert.match(js, /hold\(set\(l\), ed\.sel, k\);/, "the editor's steps and keys");
+  assert.match(js, /hold\(hold\(h, d\.part, "x"\), d\.part, "y"\); else hold\(h, d\.part, "size"\);/, "the editor's drags");
 });

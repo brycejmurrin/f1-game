@@ -215,3 +215,8 @@ density / shape lines of the inline boot.
    height, insets and the launch bug — never from a rule.
 6. **The one justified cherry-pick** from the rolled-back window is #5097's `dialog.screen` keyboard inset (gap 5).
    Nothing else is re-landed wholesale; §5 says per PR why.
+7. **2026-11-10, #5199: three gates were selecting three titles on one phone.** The upright flat doors came from #4291
+   (`2ceaa3795`, 2026-10-30) plus the `html[data-home-live]` rules; the uneven 11-row column is the base layout a
+   landscape phone falls to at `body[data-density="normal"]`; a fresh profile and a stored WIDTH got different row
+   counts. PR #5213 replaced the gates with one viewport-keyed block (UI contract §4.1) and made the TITLE LAYOUT
+   sliders stop at the box edge. Not established: which stored value put the phone at density `normal`.

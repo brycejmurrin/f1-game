@@ -19109,6 +19109,7 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "current": [
+        "tests/specs/title-fit.spec.js",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
@@ -19150,7 +19151,7 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [
-        "tests/specs/title-fit.spec.js"
+        "tests/unit/title-rows.test.mjs"
       ]
     },
     "js/ui/title-menu.js": {

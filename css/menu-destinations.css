@@ -375,40 +375,53 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
    (css/components.css) and the play-door plate (css/menus.css): italic, the
    -6deg slant, the red leading edge, the red gradient hero.
    WIDTH (html[data-title-btnw], --tl-btns-w 20..100) runs from the shipped
-   column at 20 to the whole content box at 100, so every step moves the
-   cluster's edge; SIZE is the cluster's zoom (css/responsive.css) and the fit
+   54 % column at 20 to 80 % of the content box at 100 by moving the split, so
+   every step moves the cluster's edge and the brand keeps its own column; SIZE is the cluster's zoom (css/responsive.css) and the fit
    in js/ui/title-layout.js is still the law: nothing here scrolls. */
 @media (max-height: 519px) and (min-aspect-ratio: 1/1) {
-body[data-shape="wide"]:not([hidden]) #overlay { grid-template-columns: minmax(0, 46fr) minmax(0, 54fr); grid-template-rows: minmax(0, 1fr); column-gap: 0; align-items: center; }
+body[data-shape="wide"]:not([hidden]) #overlay {
+  /* WIDTH moves the SPLIT, so the doors never cover the brand (#5150 rule 3;
+     the first cut grew the cluster over the brand's column and every WIDTH
+     40+ cell of tests/specs/title-fit.spec.js overlapped it): 46 / 54 at 20,
+     20 / 80 at 100. The wordmark is sized in cqi, so the brand shrinks with
+     its track. */
+  --home-t: clamp(0, calc((var(--tl-btns-w, 20) - 20) / 80), 1);
+  grid-template-columns: minmax(0, calc(46% - 26% * var(--home-t))) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: 0; align-items: center;
+}
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
   grid-column: 1; grid-row: 1; align-self: start; align-items: flex-start; text-align: start;
   width: 100%; margin-top: calc(4 * var(--vhz)); padding: 0; background: transparent;
-  /* The same base zoom with or without a stored layout and at either density
-     (it was --ui-scale under html[data-title-layout] and min(--ui-scale, 1)
-     without: a stored TITLE SIZE 100 painted the brand 9 % bigger at 109 %). */
-  zoom: calc(var(--ui-compact-brand-scale) * var(--tl-title-size, 1) * var(--tf, 1));
-  --vwz: calc(1vw / var(--ui-compact-brand-scale)); --vhz: calc(1vh / var(--ui-compact-brand-scale));
+  /* The same base zoom with or without a stored layout, at either density and
+     at ANY UI SIZE (it was --ui-scale under html[data-title-layout] and
+     min(--ui-scale, 1) without: a stored TITLE SIZE 100 painted the brand 9 %
+     bigger at 109 %, and UI SIZE 51 % halved it). On this screen the pieces
+     are sized by TITLE LAYOUT's SIZE and by the fit; UI SIZE under 100 % does
+     not shrink them (measured 2026-11-10: at 51 % the doors were a 129 px strip
+     with 6.9 px labels in a 356 px box). */
+  zoom: calc(var(--tl-title-size, 1) * var(--tf, 1));
+  --vwz: 1vw; --vhz: 1vh;
 }
 :root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-brand { grid-column: 2; }
 body[data-shape="wide"]:not([hidden]) #overlay #title { font-size: min(calc(6 * var(--vwz)), 21cqi); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-meta { align-items: flex-start; margin-top: var(--gap); gap: calc(var(--gap) / 2); }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #soundbtn { font-size: calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)); margin: 0; min-height: 0; padding: calc(var(--gap) * .7) var(--gap); }
-body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer { font-size: calc(var(--fs-micro) * .52 * var(--ui-compact-brand-text, 1)); margin: 0; white-space: nowrap; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer { font-size: calc(var(--fs-micro) * .52 * var(--ui-compact-brand-text, 1)); margin: 0; white-space: normal; text-wrap: balance; max-width: 100%; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons {
-  --home-g: calc(var(--gap) * .45); --home-t: clamp(0, calc((var(--tl-btns-w, 20) - 20) / 80), 1);
-  /* 100% is the doors' track (54 of 100, no column gap); 100 / 54 of it is the
-     whole content box. The cluster grows over the brand's column from its
-     own outer edge, so the track never changes under the brand. */
-  grid-column: 2; grid-row: 1; justify-self: end; align-self: center;
-  width: calc(100% + 85.185% * var(--home-t)); min-width: 0; max-width: none; height: auto; max-height: none;
+  --home-g: calc(var(--gap) * .45);
+  /* The cluster IS its track, never wider: a percent width does not shrink
+     under zoom, so a cluster 0.016 px over the box sent the fit through all
+     six passes (0.899) and WIDTH 100 painted SMALLER doors than 90 (measured
+     2026-11-10 on the first cut's 100% + 85.185%). */
+  grid-column: 2; grid-row: 1; justify-self: stretch; align-self: center;
+  width: 100%; min-width: 0; max-width: none; height: auto; max-height: none;
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: max-content;
   gap: var(--home-g); align-content: center; margin: 0; padding-block: 0; pointer-events: auto;
   background: transparent; border: 0;
-  zoom: calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
+  zoom: calc(max(1, var(--ui-compact-scale)) * var(--tl-btns-size, 1) * var(--tf, 1));
 }
-:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay { grid-template-columns: minmax(0, 54fr) minmax(0, 46fr); }
-:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-column: 1; justify-self: start; }
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay { grid-template-columns: minmax(0, 1fr) minmax(0, calc(46% - 26% * var(--home-t))); }
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-column: 1; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-primary, #menu-garage) { display: contents; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; grid-row: auto; width: 100%; min-height: 0; align-self: auto; justify-self: auto; }
 body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-flow: row nowrap; gap: var(--home-g); width: 100%; }

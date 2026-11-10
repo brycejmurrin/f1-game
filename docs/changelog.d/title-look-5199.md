@@ -1,0 +1,1 @@
+Fixed: the phone-landscape title is the italic eight-row menu again (CAREER MODES hero, CONTINUE | DAILY TIME TRIAL, four two-up rows, three creation doors, four utility doors) on every profile and at any UI SIZE, and every TITLE LAYOUT slider now moves the piece it names and stops at the edge of the screen instead of travelling on with nothing happening.
