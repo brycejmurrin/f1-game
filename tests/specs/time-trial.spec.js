@@ -639,6 +639,8 @@ const drivingDevices = [
   { name: 'tablet', viewport: { width: 834, height: 1194 }, touch: true, safe: [0,0,0,0] },
   { name: 'desktop', viewport: { width: 1280, height: 800 }, touch: false, safe: [0,0,0,0] },
 ];
+// Legacy matrix rungs; on a phone #5235 floors UI SIZE at 70 % and scale.js caps the range at what fits (#5229).
+const UI_SIZE_WISH_RUNGS = [40, 80, 100, 130, 150, 200];
 for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device.name}`, () => {
   test.use({ viewport: device.viewport, hasTouch: device.touch, isMobile: device.touch, deviceScaleFactor: 1 });
   test('settings, help and Back remain readable and reachable', async ({page}, info) => {
@@ -655,8 +657,20 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
     const rows = [], helpSettlements = [];
 
     try {
-      for (const pct of [40,80,100,130,150,200]) {
+      const uiPctDone = new Set();
+      let clampUiPct;
+      for (const wish of UI_SIZE_WISH_RUNGS) {
         await press('#mb-settings'); await press('#pm-open-appearance');
+        if (!clampUiPct) {
+          const uiBounds = await page.locator('#pm-uiscale').evaluate(el => ({ min: +el.min, max: +el.max }));
+          clampUiPct = n => Math.max(uiBounds.min, Math.min(uiBounds.max, n));
+        }
+        const pct = clampUiPct(wish);
+        if (uiPctDone.has(pct)) {
+          await press('#pm-settings-close');
+          continue;
+        }
+        uiPctDone.add(pct);
         await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
         await press('#pm-settings-close'); await press('#pm-open-driving');
