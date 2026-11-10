@@ -413,6 +413,7 @@ const NetTransport = (function () {
     let restartTimer = null;
     let episode = null;               // { code, attempt, token } while an outage lasts
     let listener = null;              // answerer-only, last completed credentials
+    let resume = null;                // { code, attempt } of an episode that ended still down
     let iceRestarts = 0;
     function cancelRestart(ctx) {
       if (!ctx) return;
@@ -430,7 +431,7 @@ const NetTransport = (function () {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
       const pending = episode;
       cancelRestart(episode); cancelRestart(listener);
-      episode = listener = null;
+      episode = listener = resume = null;
       // A blip that healed before the answer came leaves our restart offer
       // pending; roll it back so the next episode starts from stable.
       if (pending && pc.signalingState === "have-local-offer" && ep.status === "open") {
@@ -519,6 +520,22 @@ const NetTransport = (function () {
         else if (!r || r.error !== "expired") return;   // only a quiet relay is worth another listen
       }
     }
+    // An episode that ends while the pc is still down — a courier offer that
+    // came back no_relay mid network switch, a thrown createOffer, a listen
+    // that errored — must not hold `episode` for the rest of the outage, or no
+    // later state change ever starts another restart and the wire closes at
+    // the grace a restart would have beaten (#4998). Release it and try again
+    // after the usual delay on the same code and attempt (a failed offer never
+    // advanced the answerer either); the grace still bounds the whole outage.
+    function settleEpisode(ctx) {
+      if (episode !== ctx || ctx.token.cancelled || ep.status !== "open") return;
+      cancelRestart(ctx); episode = null;
+      const s = pc.connectionState;
+      if (!ctx.code || ctx.attempt >= 3 || !(s === "disconnected" || s === "failed")) return;
+      resume = { code: ctx.code, attempt: ctx.attempt };
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(beginRestart, RESTART_DELAY_MS);
+    }
     function beginRestart() {
       restartTimer = null;
       if (episode || !courier || ep.status !== "open") return;
@@ -530,16 +547,20 @@ const NetTransport = (function () {
         cancelRestart(old);
         if (old.code) {
           const ctx = episode = { code: old.code, attempt: old.attempt, token: { cancelled: false } };
-          answerRestart(ctx).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); });
+          answerRestart(ctx).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); })
+            .finally(() => settleEpisode(ctx));
           return;
         }
       }
       const ctx = episode = { code: null, attempt: 0, token: { cancelled: false } };
+      const was = resume; resume = null;
       restartCode().then((k) => {
         if (!k || !live(ctx)) return null;
         ctx.code = k.code;
+        if (was && was.code === k.code) ctx.attempt = was.attempt;
         return k.offerer ? offerRestart(ctx) : answerRestart(ctx);
-      }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); });
+      }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); })
+        .finally(() => settleEpisode(ctx));
     }
     function listenRestart(rotate = false) {
       // Only the original answerer listens while healthy. This is the same

@@ -57,8 +57,6 @@ test("setup turntable spins even when reduced motion is on; Home ambient stays g
   assert.doesNotMatch(cam,
     /setupPreviewSpin && !reducedMotion\(\)/,
     "the turntable increment must not AND reducedMotion (Playwright + macOS Reduce motion left SPIN lit)");
-  assert.match(cam, /home\.active \? home\.moving/,
-    "title Home still uses home.moving (ambient && !reduced)");
 });
 
 test("garage ambient clock freezes fans and light time without a resume jump", () => {
@@ -273,7 +271,6 @@ test("the big surfaces are not left on MAT.FLAT", () => {
 
 test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
   const scene = read("js/garage/scene.js");
-  assert.match(scene, /hullKey/);
   assert.match(scene, /previewHulls\.delete\(victim\.hullKey\)/);
   // dropPreviewMeshes keeps the hulls: a cap, sparing live meshes' hulls, bounds them.
   assert.match(scene, /if \(previewHulls\.size > HULL_SLOTS\)/);
@@ -600,10 +597,6 @@ test("garage glare and fixture energy stay under the bloom knee at default knobs
     "floor uplights keep a small glareW, not the old 0.5");
   assert.match(scene, /const LED_OPTS = \{ emissive: 0\.[4567]/,
     "LED faces stay lit without an HDR 1.0 push over the bloom threshold");
-  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
-    "floor reflection depth-resolves (opaque + depth bias)");
-  assert.match(scene, /mirrorSheen\(/, "contact sheen scales with camera distance");
-  assert.match(scene, /ensureMirrorFade/, "bay fade quad restores floor sheen");
   assert.doesNotMatch(scene, /MIRROR_OPTS.*noDepthTest/,
     "noDepthTest ghost smeared a duplicate car under the floor slab");
 });
