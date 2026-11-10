@@ -96,6 +96,24 @@ function judgeSpecs(input) {
   let reason = "";
 
   if (selected === "success") {
+    // A GREEN MATRIX IS A CLAIM, THE JUNIT IS THE EVIDENCE (#5241 G5). `success` was taken at its word, so a shard
+    // that reached its run step and executed nothing read as "selected specs passed". When this job was handed the
+    // shard evidence (main() always is; pure callers may omit it), every started shard must have left a junit with
+    // at least one testcase. Checked on green run 42740553927: 29 markers, 29 junits. A lost upload (the junit step
+    // is continue-on-error telemetry) reds here too: missing execution evidence needs a re-run (docs/VERIFICATION.md §5).
+    const ev = input.evidence;
+    if (ev) {
+      if (ev.downloadFailed) {
+        return { ok: false, reason: "selected specs success, but the shard junit could not be read (artifact download failed) — a green without execution evidence is not a pass; re-run this job", infraRetry: false, failedSpecs };
+      }
+      const empty = ev.started.filter((n) => !ev.junit.includes(n));
+      if (empty.length > 0) {
+        return { ok: false, reason: `selected specs success, but shard(s) ${empty.join(", ")} reached the run step and left no junit with a testcase — they ran zero tests (or lost the upload); re-run the failed evidence, never read it as a pass`, infraRetry: false, failedSpecs };
+      }
+      if (ev.started.length === 0) {
+        return { ok: false, reason: "selected specs success, but no shard left a run-step marker — nothing shows a selected spec ran", infraRetry: false, failedSpecs };
+      }
+    }
     reason = "selected specs passed";
   } else if (selected === "skipped") {
     // A draft runs the selected legs too since 2026-11-03 (one 5-min shard), so

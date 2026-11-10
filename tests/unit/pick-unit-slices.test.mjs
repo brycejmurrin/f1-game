@@ -275,3 +275,65 @@ test("a rider's source path selects the row that runs the rider (2026-10-15)", (
   const xr = slices("js/xr/xr-boot.js");
   assert.ok(xr.has("slow") && !xr.has("vm-b1"), [...xr].join(","));
 });
+
+// ---- #5241 G3 / G4: the 20 merged PRs before e808230 (tests/data/gate-sample-2026-11-09.json) ----
+import { select } from "../../tools/ci/select-specs.mjs";
+import { plan as nodePlan } from "../../tools/ci/node-plan.mjs";
+import { twinHosts, droppedTwins } from "../../tools/ci/pick-unit-slices.mjs";
+const SAMPLE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/gate-sample-2026-11-09.json"), "utf8"));
+
+test("#5241 G3: on every sampled PR each twin the browser plan dropped has its host slice on the matrix", () => {
+  assert.equal(SAMPLE.length, 20);
+  let holesBefore = 0;
+  for (const { pr, files } of SAMPLE) {
+    const present = files.filter((f) => fs.existsSync(path.join(ROOT, f)));
+    const dropped = droppedTwins(present);
+    const hosts = twinHosts(dropped);
+    const before = new Set(pick(present, { dropped: [] }).slices.keys());   // the path RULES alone: the old behaviour
+    const after = new Set(pick(present).slices.keys());
+    if (hosts.some((h) => !(h.slices || []).some((s) => before.has(s)))) holesBefore++;
+    for (const h of hosts) {
+      assert.ok(h.slices, `#${pr}: ${h.spec} has a twin in a known slice`);
+      assert.ok(h.slices.every((s) => after.has(s)), `#${pr}: ${h.spec} was dropped from the browser plan but ${h.slices} is not on the node matrix`);
+    }
+  }
+  assert.ok(holesBefore >= 11, `the path rules alone left a dropped twin unhosted on ${holesBefore} of 20 (the hunt measured 11)`);
+});
+
+test("#5241 G3: node-plan runs the script hosting a dropped twin, and a partition forced only for it runs only it", () => {
+  const p = nodePlan(["js/ui/hud.js"], "", undefined, {});
+  assert.equal(p.reason, "matched");
+  assert.ok(p.run.includes("test:vm-page-a"), "logging.spec.js (boot group, ADAPTED, page-a) ran nowhere on a js/ui diff");
+  assert.deepEqual(p.vmPageOnly, ["tests/specs/logging.spec.js"], "page-a is not paid whole for one dropped spec");
+  for (const h of twinHosts(droppedTwins(["js/ui/hud.js"]))) for (const sc of h.scripts) {
+    if (/^test:(game-vm|vm-page)/.test(sc)) assert.ok(p.run.includes(sc), `${sc} hosts the twin of ${h.spec} and the plan skips it`);
+  }
+  const routed = nodePlan(["js/physics/aero-zones.js"], "", undefined, {});
+  assert.ok(routed.vmPageOnly.includes("tests/specs/physics-fixes.spec.js") && routed.vmPageOnly.includes("tests/specs/logging.spec.js"),
+    "a routed partition keeps its whole roster in the filter beside a forced one");
+  assert.deepEqual(nodePlan(["js/ui/hud.js"], "", undefined, { dropped: [] }).vmPageOnly, [], "no dropped twin, no filter");
+});
+
+test("#5241 G3: the adapted runner honours APEX_VM_PAGE_ONLY and refuses a name that is not ADAPTED", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tests/unit/adapted-specs.test.mjs"), "utf8");
+  assert.match(src, /APEX_VM_PAGE_ONLY/);
+  let threw = "";
+  try {
+    execFileSync("node", ["--test", "tests/unit/adapted-specs.test.mjs"], { cwd: ROOT, encoding: "utf8", stdio: "pipe",
+      env: { ...process.env, APEX_VM_PAGE_ONLY: ["tests/specs/not-a", "spec.spec.js"].join("-"), NODE_TEST_CONTEXT: "" } });
+  } catch (e) { threw = `${e.stdout || ""}${e.stderr || ""}`; }
+  assert.match(threw, /not an ADAPTED spec/);
+});
+
+test("#5241 G4: js/fx and sw.js route to the spec that exercises them (#5181, #5187, #5188)", () => {
+  const ran = (r) => [...r.selected, ...r.oversize, ...(r.overflow || []), ...(r.spill || []), ...(r.overBudgetRun || [])].map((x) => x.file);
+  assert.ok(ran(select(undefined, undefined, { files: ["js/fx/skidmarks.js"] })).includes("tests/specs/tlx-probes.spec.js"));
+  const sw = select(undefined, undefined, { files: ["sw.js"] });
+  assert.ok(ran(sw).includes("tests/specs/perf-sw-cache-hit.spec.js"));
+  assert.ok(sw.shards.length > 0, "a sw.js-only diff had an empty browser plan");
+  for (const n of [5181, 5187, 5188]) {
+    const row = SAMPLE.find((x) => x.pr === n);
+    const got = ran(select(undefined, undefined, { files: row.files.filter((f) => fs.existsSync(path.join(ROOT, f))) }));
+    assert.ok(got.includes(n === 5181 ? "tests/specs/tlx-probes.spec.js" : "tests/specs/perf-sw-cache-hit.spec.js"), `#${n}`);
+  }
+});
