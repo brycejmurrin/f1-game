@@ -1104,6 +1104,8 @@
     "// TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,",
     "// OT lamp and ERS strip): an idle unpinned wrapper still goes. Lifts the real prunePool (#3677).",
     "tests/unit/tlx-prune-pin.test.mjs",
+    "// TLX vs vendored three r187 (audit W11): the in-init WebGL2 swap (AUTO retry gets the opaque context; a pin's swap corrects forceWebGL), the data-engine revision, adapter.info.isFallbackAdapter, mirror release kept on WebGPU (r187's vertex-layout key reads every attribute array), getter-only samples, shared vertex buffers destroyed on chunk free; LP-01/#4900 the car-caster sweep on WebGPU and the null-mirror repair that replaces the post-race reload.",
+    "tests/unit/tlx-r187-contracts.test.mjs",
     "// Shadow warm retirement, post-failure SSR graph recovery and effective SSR diagnostics using vendored Three/TSL.",
     "tests/unit/tlx-recovery-lifecycle.test.mjs",
     "// TLX perf hunt 6 (B·H6): gfx.warmDraws captures the cockpit rig's draws (never painted) and the next present compiles exactly those pairs, owned like the deferred mirror warm; the first rig frame then links nothing (a cold one links). Race entry awaits it under the cover.",
