@@ -21,8 +21,17 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+/** Whether `id` is a shipped circuit. The roster, not a character class: the
+ *  old /^[a-z0-9-]+$/ refused the seven ids with an underscore (albert_park,
+ *  brands_hatch, buenos_aires, magny_cours, mont_tremblant, paul_ricard,
+ *  watkins_glen), so those surveyors could never be merged by this tool. */
+export function isCircuitId(id) {
+  return createRequire(import.meta.url)("../manifest.cjs").CIRCUITS.includes(id);
+}
 
 /** The worktree path checked out on `branch`, or null. */
 export function worktreeFor(branchName, porcelain) {
@@ -49,9 +58,13 @@ function main() {
   const argv = process.argv.slice(2);
   const flags = new Set(argv.filter((a) => a.startsWith("--")));
   const [id, base, branch] = argv.filter((a) => !a.startsWith("--"));
-  if (flags.has("--help") || flags.has("-h") || !id || !base || !branch || !/^[a-z0-9-]+$/.test(id)) {
+  if (flags.has("--help") || flags.has("-h") || !id || !base || !branch) {
     console.error("usage: merge-surveyor.mjs <circuit-id> <base-sha> <surveyor-branch> [--dry-run] [--keep-worktree]");
     process.exit(flags.has("--help") || flags.has("-h") ? 0 : 2);
+  }
+  if (!isCircuitId(id)) {
+    console.error(`merge-surveyor: unknown circuit id ${JSON.stringify(id)} (not in tools/manifest.cjs CIRCUITS)`);
+    process.exit(2);
   }
   const run = (cmd, args, opts = {}) => spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
   const wt = flags.has("--keep-worktree") ? null : worktreeFor(branch, run("git", ["worktree", "list", "--porcelain"]).stdout || "");

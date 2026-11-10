@@ -161,26 +161,15 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
      without the 0 floor a long list forces the sheet past the screen instead
      of scrolling inside it */
   grid-template-rows: auto minmax(0, 1fr) auto;
-  /* ZOOM IS THE ONLY LEVER THAT REACHES THIS UI'S TYPE. Of 359 font-size
-     declarations in css/, 314 are raw px and 30 go through a var() — there is
-     no root font-size, no rem system, and only 1.6% of all sizing is relative.
-     So a token knob moves the boxes and leaves the text where it was, which is
-     exactly what "everything is still slightly too small" felt like after two
-     passes of raising tokens. `zoom` scales the whole subtree including the
-     hard-coded px, for one declaration.
-     ON .sheet, NOT .screen: .screen carries the safe-area padding, and zooming
-     that would divide the notch inset by the scale and centre the sheet under
-     hardware.
-     NO WIDTH COMPENSATION IS NEEDED, and adding some is a bug. `min(100%, …)`
-     and `max-height: 100%` resolve in the element's OWN (zoomed) space, so the
-     painted box still fits its parent — measured: #sel-inner paints 836px at
-     every scale. What grows is the --sheet-w cap, which is exactly the uplift
-     wanted. Dividing by the scale as well would shrink the sheet as the setting
-     went up.
-     Container queries inside evaluate in the same local space, so `--pair-at`
-     and every `@container sheet` breakpoint keep their meaning: at 130% you
-     need 30% more REAL width to afford two columns, which is the honest answer.
-     A browser without `zoom` renders at 1.0, which is the old behaviour. */
+  /* ZOOM IS THE ONLY LEVER THAT REACHES THIS UI'S TYPE: of 359 font-size
+     declarations 314 are raw px and there is no rem system, so a token knob
+     moves boxes, not text. `zoom` scales the subtree, hard-coded px included.
+     ON .sheet, NOT .screen: .screen carries the safe-area padding.
+     NO WIDTH COMPENSATION (adding some is a bug): `min(100%, …)` and
+     `max-height: 100%` resolve in the zoomed space, so the box still fits
+     (#sel-inner paints 836px at every scale); dividing would shrink the sheet as
+     the setting rose. `@container sheet` breakpoints keep their meaning (130 %
+     needs 30 % more real width for two columns). No `zoom` support = 1.0. */
   /* A dense screen may declare --fit-at (its minimum functional height in
      LOCAL units). SheetShape then supplies --sheet-scale only when the safe
      viewport cannot afford the requested UI size. This keeps a 200% preference
@@ -402,28 +391,15 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .sf-r { --sfade-r: 36px; }
 
 /* ---------- scroll POSITION INDICATOR ----------
-   A scrollbar thumb down the right edge, like a web page has. The fade above
-   only ever says "there is more"; this says how much and where you are, and it
-   stays put instead of appearing for half a second mid-flick the way the
-   platform's own overlay scrollbar does on a phone.
-
-   ScrollFade sets --sf-h (thumb height) and --sf-y (its offset down the track)
-   on every scrollable region; everything here is just drawing.
-
-   Mechanics that matter:
-   * `position: sticky` — a pseudo-element is the first IN-FLOW child, so sticky
-     is what pins it to the scrollPORT rather than letting it scroll away with
-     the content. `top: var(--sf-y)` is then the thumb's travel: JS moves it
-     down the track as scrollTop grows. Absolute positioning could not do this
-     without adding a wrapper element around every panel.
-   * `margin-bottom: calc(-1 * var(--sf-h))` cancels the thumb's own height, so
-     it never grows scrollHeight — which ScrollFade measures, and which would
-     otherwise let a panel conclude it was scrollable because of its own
-     indicator.
-   * `grid-column: 1 / -1` because several of these regions are grids
-     (#sel-teams, #cz-body, #cs-tabs, the HOW TO PLAY <dl>); without it the
-     pseudo-element takes a cell and shoves a real item out of place. Inert in
-     flex and block containers. */
+   A scrollbar thumb down the right edge: the fade says "there is more", this
+   says how much and where, and it stays put (unlike the phone's overlay bar).
+   ScrollFade sets --sf-h (thumb height) and --sf-y (offset); CSS only draws.
+   * `position: sticky` pins the first in-flow pseudo-element to the scrollPORT;
+     `top: var(--sf-y)` is its travel (absolute would need a wrapper per panel).
+   * `margin-bottom: calc(-1 * var(--sf-h))` keeps it out of scrollHeight, which
+     ScrollFade measures — else a panel is scrollable because of its indicator.
+   * `grid-column: 1 / -1`: several regions are grids (#sel-teams, #cz-body,
+     #cs-tabs, the HOW TO PLAY <dl>); a cell-taking thumb shoves an item out. */
 .sf-scroll::before {
   content: "";
   position: sticky;
@@ -471,22 +447,14 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    a sixth of --gap (~2px) in from the padding edge. A region with no padding measures 0 and keeps
    the old placement, so nothing is pushed past its own scrollport. */
 .sf-scroll:not(.sheet-body)::before { margin-right: calc(var(--gap) / 6 - var(--sf-pr)); }
-/* NO THUMB ON THE TITLE SCREEN. #overlay's children are all grid-PLACED, so the
-   auto-placed pseudo-element lands in a trailing row below the content, where
-   its cancelling margin cancels nothing: its box grows scrollHeight, and its
-   height is computed FROM scrollHeight. Measured 2026-09-29: a title screen
-   left scrollable by its own thumb after a rotation (430px landscape, 654
-   tall), and at UI SIZE 130 % on a 320x568 phone scrollTop jittering 342/343
-   every repaint, so HELP never held still long enough to tap. Hiding the thumb
-   there for one read clamped the reader back to the top instead. The fades
-   (sf-t / sf-b) still say "there is more"; the doors are the position.
-
-   #menu-buttons is the REAL title scroller (zoom rides `#overlay > *`, so
-   #overlay's own overflow-y is mostly a dead letter). Its children are also
-   grid items, and on a narrow landscape column (568×320, UI 130 %) the 6px
-   accent thumb had no .sheet-body padding lane to sit in — it painted a red
-   strip down the door edges and clipped CAREER / DAILY labels. Same hide,
-   same fades-still-say-more contract. */
+/* NO THUMB ON THE TITLE SCREEN. #overlay's children are grid-PLACED, so the
+   auto-placed pseudo-element lands in a trailing row where its cancelling
+   margin cancels nothing and its height feeds back from scrollHeight
+   (2026-09-29: a title left scrollable by its own thumb after a rotation, and
+   scrollTop jittering 342/343 at UI 130 % on 320x568, so HELP never held still).
+   #menu-buttons, the REAL title scroller, had no padding lane either: at
+   568×320 UI 130 % the 6px thumb painted down the door edges and clipped
+   labels. The fades (sf-t / sf-b) still say "there is more". */
 #overlay.sf-scroll::before,
 #menu-buttons.sf-scroll::before { display: none; }
 

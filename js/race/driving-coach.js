@@ -66,7 +66,6 @@ const DrivingCoach = (function () {
     let tyreAcc = null;
     const tyreSaid = new Map();
     let log = [];   // one row per tip: which tip, which turn, when — the session's map
-    // --- where the lap went, against your own best lap ---------------------
     // The coach's tips answer "is the car at its limit"; they cannot answer
     // "where am I slow", which is the question that actually moves lap times.
     // This does, by differencing your elapsed time against the ghost's at the
@@ -391,7 +390,6 @@ const DrivingCoach = (function () {
     // before the lights, and the pause menu opens during the countdown.
     const onTrack = () => G.state === "race" || G.state === "count";
     function canPractice() { return !!(G.practice && !G.daily.isActive() && !G.netPlay.active() && G.player && onTrack()); }
-    // ---- capture / restore: ONE pair, three callers -------------------------
     // mark() (a checkpoint the player places), rewind() (the rolling buffer)
     // and retry() all move the SAME state, so they share these rather than
     // each growing their own field list that drifts out of step.
@@ -478,7 +476,6 @@ const DrivingCoach = (function () {
       c.rPrevPx = c.px; c.rPrevPz = c.pz;
       c.rPrevHead = c.head; c.rPrevS = c.s; c.rPrevX = c.x;
     }
-    // ---- the WORLD, not just the player ------------------------------------
     // A rewind that moved one car through a field that kept running is not a
     // rewind, it is a teleport: you rejoin having lost the ground everyone else
     // covered, the order scrambles, and you can land inside a rival who is now

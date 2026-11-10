@@ -22,8 +22,18 @@
  *         node tools/check/twin-fidelity.mjs --list
  *         node tools/check/twin-fidelity.mjs --dry       # patch/restore only
  *         node tools/check/twin-fidelity.mjs --help
+ *
+ * THE REAL TREE IS NEVER WRITTEN. Mutants used to be written into js/ and put
+ * back in a `finally` — which SIGINT, a kill or a spawn timeout skips, leaving
+ * broken product code in the working tree (and in the next commit). Now each run
+ * builds a SHADOW TREE under artifacts/twin-fidelity/tree-<pid>/: the code
+ * directories are real copies (so tools/lib/game-vm.cjs's own `ROOT` and every
+ * spec's relative imports resolve INSIDE the shadow), the big read-only data
+ * directories are symlinks, and the mutant is applied to the shadow copy only.
+ * A run that dies leaves at most a stale shadow, which the next run deletes.
  */
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -54,20 +64,71 @@ export function parseTap(out) {
   return res;
 }
 
-function withMutant(m, fn) {
-  const abs = path.join(ROOT, m.file);
+// Top-level entries the shadow LINKS instead of copying: large, read-only, and
+// never a mutant's target (a mutant into one of these is refused below).
+// Everything else at the root is copied except SKIP.
+export const SHADOW_LINK = new Set(["node_modules", "assets", "examples", "docs"]);
+const SHADOW_SKIP = new Set([".git", "artifacts", "scratch"]);
+const SHADOW_HOME = "artifacts/twin-fidelity";
+
+const sha = (abs) => crypto.createHash("sha256").update(fs.readFileSync(abs)).digest("hex");
+
+/** Delete shadows left by runs that died (their pid is gone). */
+export function sweepStaleShadows(root = ROOT) {
+  const home = path.join(root, SHADOW_HOME);
+  if (!fs.existsSync(home)) return [];
+  const gone = [];
+  for (const e of fs.readdirSync(home)) {
+    const m = /^tree-(\d+)$/.exec(e);
+    if (!m) continue;
+    const pid = Number(m[1]);
+    let alive = false;
+    if (pid !== process.pid) { try { process.kill(pid, 0); alive = true; } catch (_) { alive = false; } }
+    if (!alive) { fs.rmSync(path.join(home, e), { recursive: true, force: true }); gone.push(e); }
+  }
+  return gone;
+}
+
+/**
+ * Build the shadow tree of `root` and return { dir, dispose }. Code is copied
+ * (dereferencing nothing: a symlink in the tree stays a symlink), SHADOW_LINK
+ * entries are symlinked to the originals.
+ */
+export function makeShadowTree(root = ROOT, { home = path.join(root, SHADOW_HOME) } = {}) {
+  sweepStaleShadows(root);
+  const dir = path.join(home, `tree-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  for (const e of fs.readdirSync(root, { withFileTypes: true })) {
+    if (SHADOW_SKIP.has(e.name)) continue;
+    const src = path.join(root, e.name);
+    const dst = path.join(dir, e.name);
+    if (SHADOW_LINK.has(e.name)) fs.symlinkSync(src, dst);
+    else fs.cpSync(src, dst, { recursive: true, verbatimSymlinks: true });
+  }
+  fs.mkdirSync(path.join(dir, "artifacts"), { recursive: true });
+  return { dir, dispose: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+/** Apply `m` to the SHADOW copy of its file (never the real one), run fn, restore the shadow. */
+export function withMutant(m, fn, tree) {
+  if (!tree) throw new Error("withMutant needs a shadow tree — the real source is never mutated");
+  const top = m.file.split("/")[0];
+  if (SHADOW_LINK.has(top)) throw new Error(`${m.id}: ${m.file} is under a LINKED shadow dir (${top}/) — mutating it would write the real file`);
+  const abs = path.join(tree, m.file);
+  if (fs.lstatSync(abs).isSymbolicLink()) throw new Error(`${m.id}: ${m.file} is a symlink in the shadow — refusing to write through it`);
   const original = fs.readFileSync(abs, "utf8");
   try {
     fs.writeFileSync(abs, original.replace(m.find, m.replace));
     return fn();
   } finally {
-    fs.writeFileSync(abs, original);     // ALWAYS restore, including on a throw
+    fs.writeFileSync(abs, original);     // the next mutant must see a clean shadow
   }
 }
 
-function runSpec(spec) {
+function runSpec(spec, cwd = ROOT) {
   const r = spawnSync(process.execPath, ["--test", spec],
-    { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_VM_PAGE: "1" }, timeout: 300_000 });
+    { cwd, encoding: "utf8", env: { ...process.env, APEX_VM_PAGE: "1" }, timeout: 300_000 });
   return parseTap(`${r.stdout || ""}\n${r.stderr || ""}`);
 }
 
@@ -100,7 +161,7 @@ export function planFidelity(args) {
     run: only.length ? MUTANTS.filter((m) => only.includes(m.id)) : MUTANTS };
 }
 
-export function runFidelity(args, { needles = needleReport, mutate = withMutant, spec = runSpec } = {}) {
+export function runFidelity(args, { needles = needleReport, mutate = withMutant, spec = runSpec, shadow = makeShadowTree } = {}) {
   const plan = planFidelity(args);
   if (plan.mode === "help") {
     console.log("usage: node tools/check/twin-fidelity.mjs [--list|--dry|--help] [mutant-id…]");
@@ -120,14 +181,28 @@ export function runFidelity(args, { needles = needleReport, mutate = withMutant,
   }
   if (plan.mode === "dry") { console.log(`needles ok for ${MUTANTS.length} mutants`); return 0; }
   const { run } = plan;
+  // Fingerprint every real target: a run that changes one is a bug in this tool.
+  const before = new Map(run.map((m) => [m.file, sha(path.join(ROOT, m.file))]));
+  const tree = shadow();
+  const onSignal = (sig) => { try { tree.dispose(); } finally { process.exit(sig === "SIGINT" ? 130 : 143); } };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
   let failed = 0;
-  for (const m of run) {
-    const rows = mutate(m, () => verdictFor(m, spec(m.spec)));
-    const ok = rows.every((r) => r.ok);
-    console.log(`${ok ? "PASS" : "FAIL"} ${m.id}`);
-    for (const r of rows) console.log(`   ${r.ok ? "ok  " : "FAIL"} ${r.why.padEnd(34)} ${r.name}`);
-    if (!ok) failed++;
+  try {
+    for (const m of run) {
+      const rows = mutate(m, () => verdictFor(m, spec(m.spec, tree.dir)), tree.dir);
+      const ok = rows.every((r) => r.ok);
+      console.log(`${ok ? "PASS" : "FAIL"} ${m.id}`);
+      for (const r of rows) console.log(`   ${r.ok ? "ok  " : "FAIL"} ${r.why.padEnd(34)} ${r.name}`);
+      if (!ok) failed++;
+    }
+  } finally {
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+    tree.dispose();
   }
+  const touched = [...before].filter(([f, h]) => sha(path.join(ROOT, f)) !== h).map(([f]) => f);
+  if (touched.length) { console.error(`twin-fidelity: REAL source changed during the run: ${touched.join(", ")}`); return 3; }
   console.log(`twin-fidelity: ${run.length - failed}/${run.length} mutants caught as declared`);
   return failed ? 1 : 0;
 }
