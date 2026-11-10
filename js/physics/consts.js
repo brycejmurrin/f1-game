@@ -184,7 +184,9 @@ window.PhysicsConsts = {
 
   TAPER_FLOOR: 0.35,   // deploy never tapers below this — see deployTaper() in game.js
 
-  DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy
+  DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy. Real seconds, no PACE
+                                     //   term (game.js: c.energy -= drainFor(c)·dt), so a full battery lasts
+                                     //   1/0.26 ≈ 3.8 s to 1/0.14 ≈ 7.1 s of deploy (5.0 s at ersDeploy 0.5).
   REGEN_LO: 0.085, REGEN_HI: 0.155,  // energy/s recovered: worst -> best regen
   REGEN_FULL_V: 20,   // m/s (standard pace): recovery reaches its full rate here, fading to 0 at a stop
   OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // seconds of push a full Overtake allowance buys: worst -> best deploy

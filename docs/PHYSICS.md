@@ -10,20 +10,23 @@ other and it existed nowhere.
 
 ---
 
-Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
-`STEER_EXPO`, `STEER_MAX_SLIP`, `STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`,
-`PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
+Per-axle bicycle model. Key tuning variables are the fields of the
+`driveTune` bag (`js/physics/drive-tune.js`, `DriveTune.create()`, held by
+game.js as `driveTune`): `WHEELBASE`, `STEER_EXPO`, `STEER_MAX_SLIP`,
+`STEER_SPEED_REF`, `DRIFT`, `ROAD_FOLLOW`, `PLAYER_GRIP`, `FRONT_GRIP`,
+`YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
 `__apex.setPhysics(o)` for A/B tests. The model's immutable constants (`VMAX`,
 `ACCEL`, `BRAKE`, `LAT_MAX`, `LONG_GRIP`, the `X_*` aero pairs, the ERS/OT
 windows, …) live in `js/physics/consts.js` (global `PhysicsConsts`),
 destructured once by game.js at eval time — anything a slider or `setPhysics`
-can change stays a `let` in game.js.
+can change is a `driveTune` field or a `let` in game.js.
 
 **`PACE` is a ground-speed scale, not a speed cap.** The OVERALL SPEED slider
 scales the car's real m/s (and the accel curve) — nothing else. Everything else
-measured in speed is pace-normalised through two helpers next to `PACE` in game.js:
+measured in speed is pace-normalised through two helpers in `js/race/pace-math.js`
+(`PaceMath.create`, which game.js destructures; it reads `driveTune.PACE` through a getter):
 `vTop()` (where the envelope tops out in m/s — divide by it to normalise) and
-`vStd(v)` (that speed on the standard, pace-5 scale — compare hard-coded
+`vStd(v)` (that speed on the standard `PACE` 1 scale — compare hard-coded
 thresholds against it). So `VMAX`, `GEAR_TOP`, `TAPER_LO/HI`, `GRASS_V` and
 `STEER_SPEED_REF` all keep their literal values, while the gearbox still sweeps
 1→8, the tach its whole band, and the dial 0 → ~259 km/h at *every* setting.
@@ -71,19 +74,22 @@ None of these is a defect to chase; a new reader of any of them
 should treat the raw number as the intended tuning.
 
 **Lateral tyre curve** (`TyreModel.lateralCurve`, `js/physics/tyre-model.js`):
-each of the player's axles turns `x = cs·α/mu` into a normalised force —
-`sin(x)` up to the peak at `x = π/2` (slope 1 at the origin, so `CS_FRONT` /
-`CS_REAR` keep their meaning and the peak force is exactly `mu`), then a
+each of the player's axles turns `x = cs·α/mu` into a normalised force whose
+peak force is exactly `mu`. The FRONT (no `hold` argument) is `sin(k·x)` with
+`k = (π/2)/CURVE_PEAK_X_F = 10.5/8.5 ≈ 1.235` up to its peak at
+`x = CURVE_PEAK_X_F ≈ 1.272` — slope ≈ 1.235 at the origin, not 1, so the
+front's linear range is ~24 % stiffer than `CS_FRONT` alone says — then a
 Gaussian fall to `CURVE_FLOOR` (0.75) of width `CURVE_FALL_W` (1.4): ≥ 0.97 of
-peak out to x ≈ 2.1, 0.85 at x = 3, the floor by x ≈ 5 — that is the FRONT.
-The rear holds its peak out to `CURVE_HOLD_R` (2.6) before a gentler fall
+peak out to x ≈ 1.77, 0.80 at x = 3, the floor by x ≈ 5. The REAR is `sin(x)`
+(slope 1, so `CS_REAR` keeps its meaning) up to `x = CURVE_PEAK_X` (π/2), and
+holds its peak out to `CURVE_HOLD_R` (2.6) before a gentler fall
 (`CURVE_FALL_W_R` 2.0) to `CURVE_FLOOR_R` (0.80): with the front's fall on
 both axles, full lock while coasting at 32–44 m/s spun the car, because the
 rear's peak slip angle is only 6–7° without aero and every turn-in overshoot
 carried it past the peak. It replaced `tanh(x)`,
 which saturated and never fell, so an overdriven front kept 100 % of its force
 at 16° of slip and a flick at full lock cost nothing. The peak slip angle is
-`(π/2)·mu/cs` — about 9–11° front and 8–9° rear at 45 m/s, lower at low speed,
+`peak·mu/cs` (front `CURVE_PEAK_X_F`, i.e. 8.5/10.5 of the figures that follow; rear π/2) — at π/2, about 9–11° front and 8–9° rear at 45 m/s, lower at low speed,
 rising with aero load as it should. Never negative, never oscillating (a Magic
 Formula with a sharpening E goes negative at spin-sized slips, which this model
 reaches). The front-saturation haptic fires at `x > 1.15`, i.e. before the
@@ -328,9 +334,17 @@ roadWetness())` asks for treaded tyres, `aeroWetK()` halves `xVmaxGain`,
 `xDfLoss` and `xCoastCut` (partial active aero: half the top-speed gain for half
 the downforce and drag change), Overtake is off, and race control shows
 `LOW GRIP — OVERTAKE OFF` once a race. On slicks the factor is exactly 1.
-`tests/specs/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
-`setLap()` moves only the player's counter, so a teleport cannot exercise a
-leader-based gate.
+No spec drives a wet race: `tests/specs/aero-zones.spec.js` pins the
+opening-lap gate instead (Overtake off until the LEADER starts lap 2, active
+aero not gated on lap 1), driving a REAL opening lap — `setLap()` moves only
+the player's counter, so a teleport cannot exercise a leader-based gate. LOW
+GRIP itself is pinned in unit rows: `tests/unit/physics-rows-vm.test.mjs`
+(a wet monza race halves `xVmaxGain` / `xDfLoss` against the dry one and
+`otEnabled()` is false), `tests/unit/pace-math.test.mjs` (the wet golden
+`xVmaxGain` / `xCoastCut` / `aeroDfMult`), `tests/unit/overtake-mode.test.mjs`
+(`lowGrip()` shuts `otEnabled` / `otDetectOpen`, the note fires once per race),
+`tests/unit/storm-vm.test.mjs` (storm is low grip) and
+`tests/unit/hud-feel.test.mjs` (`OT · LOW GRIP`).
 
 **Slope gravity** adds up to `vmax × 1.06` on a descent and never confiscates
 speed already above that margin (ERS / X leftover). On the flat or a climb,
@@ -375,7 +389,7 @@ both are usually needed: the first reaches nobody who has opened the settings,
 the second reaches nobody who has not.
 
 `STEER_SCHEMA` in `js/input/steer-tuning.js` is the migration, and it is a
-per-version LADDER (`STEER_MIGRATIONS`, currently at 4), not a single gate. That
+per-version LADDER (`STEER_MIGRATIONS`, currently at 5 — `STEER_SCHEMA = 5`, the last rung the `gripSteer` clean-up), not a single gate. That
 distinction is load-bearing. It was once `if (stored >= STEER_SCHEMA) return`
 followed by the v2 body, which works for exactly one version: bump the constant
 and a store already at 2 falls through and receives v2's assist reset a SECOND
@@ -426,10 +440,11 @@ cell is 0.88. Through `weatherGrip`'s lerp the inter/full crossover is wetness
 `tests/unit/wet-grip-ladder.test.mjs` pins the ordering. The table cannot say
 "a full wet is worse than an inter on a near-dry road" by itself — the dry knot
 is 1 for every tread inside `weatherGrip` — so that half lives in the catalog's
-stat cost. KNOWN GAP: `gripMult` maps `tread == null` (wear-off AI) to the
-full-wet column, which is no longer "the right tyre" below wetness ~0.68; it
-should read `TyreModel.treadFor(raceWeather, trackWetness())` instead (a
-`js/game.js` change).
+stat cost. CLOSED (was a KNOWN GAP): `gripMult` once mapped `tread == null`
+(wear-off AI) to the full-wet column, which is not "the right tyre" below
+wetness ~0.68; `js/game.js` `gripMult` now reads
+`c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread`,
+so a tread-less car gets the tyre the conditions call for.
 
 ### The three call shapes
 
@@ -1211,7 +1226,7 @@ it lands.
 | `js/camera/vantage.js` | `vantage` | **broadcast-only** | heli/side/cinematic plus ExtraRigs drone (side sway); trackside uses corner poses (no curvature); cam-avoid uses prop boxes only; 0 in every driven mode |
 | `js/camera/extra-rigs.js` | `droneFollow` | **broadcast-only** | optional `Tracks.curvature` read for drone side sway only; never reaches the car |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
-| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue. Its condition-aware estimate (`conditionCues`, default ON since #2177) scales the cue's grip by weather/tread and solves the corner speed with the car's aero load; still no force path (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md) |
+| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. Ships OFF: the store fallback is notch 1 (`store.get("brakeCue", 1)` in `js/input/steer-tuning.js` `applySteerTuning`, matched by the STANDARD preset); only picking a preset that writes a higher notch (ROOKIE 9, RELAX 8, PRO 4) or moving the slider turns it on. Its condition-aware estimate (`conditionCues`, default ON since #2177) scales the cue's grip by weather/tread and solves the corner speed with the car's aero load; still no force path (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md) |
 | `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
