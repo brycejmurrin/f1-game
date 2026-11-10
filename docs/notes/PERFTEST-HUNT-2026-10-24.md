@@ -19,7 +19,7 @@ PR #3697.
 | Race entry | `perf-race-entry.spec.js` | stage ms, soft | wall clock |
 | Per-frame allocation | `frame-hotpath-alloc.test.mjs`, `physics-hotpath.spec.js` | source shape | **no measured bytes/frame gate** (PERF-ALLOC-HUNT-2026-10-17 measured 130–260 KB/frame, but only by hand) |
 | Mesh / triangle size | `car-mesh-budget.test.mjs`, `mesh-census.test.mjs` | exact | per body, not per scene |
-| BOOST first press | `tools/archive/perf/ers-deploy-census.mjs` (A·W45, #3677) | CLI census | **no gate**, and nothing pins presses 2..N |
+| BOOST first press | `tools/archive/perf/ers-deploy-census` (A·W45, #3677) | CLI census | **no gate**, and nothing pins presses 2..N |
 | Service worker | `service-worker.test.mjs` | handlers in a VM | **no browser cache-hit / offline-boot test** |
 | Listeners / timers across sessions | PERF-HUNT-SESSION-MEMORY R1/R2 notes (by hand, "no leak") | manual census | **no gate** |
 
@@ -81,3 +81,5 @@ Expected green on the fix: presses 2..4 build 0 pipelines on both legs, with eve
 - three `renderer.info` plateau gate over 7+ cycles, as a nightly job (too slow for a PR leg).
 - Browser-side listener / interval / AudioNode / DOM-node balance across race → results → garage
   cycles. The VM covers the first three for the race flow. Garage DOM and WebAudio only exist in a browser.
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

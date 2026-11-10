@@ -1,0 +1,3 @@
+Fixed: the installed app keeps its downloaded sound effects, baked textures, music and opt-in libraries across a deploy instead of downloading them again (each is re-checked with a tiny request, not re-fetched); the vendored three.js no longer re-downloads at every deploy.
+Fixed: one script that failed to load on a flaky connection no longer wipes the whole offline copy of the game (only that file is dropped before the repair reload).
+Fixed: the UPDATE READY chip stays hidden through the post-race ceremony (podium, cooldown lap) and hides the moment the race loading screen appears, so it can no longer reload mid-podium or sit over the GAS pedal at the start lights.
