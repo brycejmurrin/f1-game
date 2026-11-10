@@ -269,7 +269,43 @@ test("a race started in a HIDDEN tab never wakes the context the hide path suspe
   assert.ok(vis.resumes() > 0, "a visible page still resumes inside the gesture");
 });
 
-test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume restores music + rain", () => {
+// KEYBOARD UNLOCKS AUDIO, executed: the real wireFirstGesture (platform-session.js)
+// over a recording document, so the one-shot is judged by what a key press DOES —
+// sound starts, the radio is primed, every listener unhooks — not by its text.
+test("a key press (bar Escape) unlocks audio once; a finger's pointerdown does not spend the gesture", () => {
+  const ps = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
+  const a = ps.indexOf("function wireFirstGesture() {"), b = ps.indexOf("\nreturn { wireFirstGesture", a);
+  assert.ok(a >= 0 && b > a, "wireFirstGesture exists in platform-session.js");
+  const wire = () => {
+    const calls = [], listeners = new Map();
+    const ctx = {
+      document: {
+        addEventListener(t, fn, cap) { assert.equal(cap, true, t + " listens in the capture phase"); listeners.set(t, fn); },
+        removeEventListener(t, fn) { if (listeners.get(t) === fn) listeners.delete(t); },
+      },
+      GameAudio: { setEnabled: (on) => calls.push("enabled:" + on), setMusicEnabled: (on) => calls.push("music:" + on),
+        init: () => calls.push("init"), startMusic: (i) => calls.push("startMusic:" + i) },
+      G: { soundOn: true, musicEnabled: true, radio: { unlock: () => calls.push("radio") } },
+    };
+    vm.runInNewContext(ps.slice(a, b) + "\nwireFirstGesture();", ctx, { filename: absSrc("js/ui/platform-session.js") });
+    const fire = (e) => { const fn = listeners.get(e.type); if (fn) fn(e); };
+    return { calls, listeners, fire };
+  };
+  const k = wire();
+  assert.ok(k.listeners.has("keydown"), "keydown is one of the gesture events");
+  k.fire({ type: "keydown", key: "Escape" });
+  assert.deepEqual(k.calls, [], "Escape is not activation-triggering: nothing unlocks");
+  k.fire({ type: "keydown", key: "a" });
+  assert.deepEqual(k.calls, ["enabled:true", "music:true", "init", "startMusic:-1", "radio"], "a key press starts sound and primes the radio");
+  assert.equal(k.listeners.size, 0, "the one-shot unhooks every gesture listener together");
+  const t = wire();
+  t.fire({ type: "pointerdown", pointerType: "touch" });
+  assert.deepEqual(t.calls, [], "a finger's pointerdown does not spend the one-shot");
+  t.fire({ type: "pointerup", pointerType: "touch" });
+  assert.ok(t.calls.includes("radio") && t.calls.includes("init"), "the same finger's pointerup unlocks");
+});
+
+test("game.js wiring source pins: gesture events, hidden-tab start pause, pause/resume music + rain, comfort routing", () => {
   const g = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8") + fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   // keydown is activation-triggering (html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event); Escape is not.
   assert.match(g, /const GESTURE_EVTS = \["pointerdown", "pointerup", "touchend", "keydown", "click"\];/);

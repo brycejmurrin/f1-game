@@ -2,11 +2,18 @@
 // Generate screenshot targets from required, actually emitted scenery models.
 // Camera stations use source viewpoints where possible, else the built road.
 // @doc Regenerate/check the all-circuit emitted-scenery screenshot location catalog.
+//
+// The catalog carries NO input fingerprint (2026-11-10, tooling hunt row 2): a committed hash of every TRACK_VM
+// file made any two garage/scenery/circuit PRs conflict on one line by construction. Staleness is `--check`
+// (rebuild every circuit and compare, about a minute). A passed check or a write records
+// `artifacts/cache/scenery-catalog.json` = { inputs: scenerySourceDigest, catalog: sha256 of the file }, and
+// `--check --cached` answers from that receipt when both still match (the unit test's path).
 "use strict";
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { buildContext } = require("../lib/track-build-vm.cjs");
+const { createHash } = require("node:crypto");
 const { scenerySourceDigest } = require("./scenery-source-hash.cjs");
 
 const root = path.resolve(__dirname, "../..");
@@ -131,16 +138,41 @@ function generate() {
   }
   if (new Set(rows.map(r => r.id)).size !== rows.length) throw new Error("Duplicate scenery location IDs");
   for (const id of Object.keys(VIEWPOINTS)) if (!rows.some(r => r.modelId === id)) throw new Error(`Viewpoint ${id} no longer emits`);
-  return { schema: 2, method: "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise", sourceDigest: scenerySourceDigest(root), locations: rows, omitted };
+  return { schema: 3, method: "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise", locations: rows, omitted };
 }
 
+const cacheFile = path.join(root, "artifacts/cache/scenery-catalog.json");
+const sha = (text) => createHash("sha256").update(text).digest("hex");
+/** The receipt of the last passed check: the committed bytes were what these inputs generate. */
+function receiptHolds() {
+  try {
+    const r = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+    return r.inputs === scenerySourceDigest(root) && r.catalog === sha(fs.readFileSync(outFile, "utf8"));
+  } catch { return false; }
+}
+function writeReceipt(text) {
+  try {
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+    fs.writeFileSync(cacheFile, JSON.stringify({ inputs: scenerySourceDigest(root), catalog: sha(text) }) + "\n");
+  } catch { /* a read-only tree: the next check rebuilds */ }
+}
+
+const check = process.argv.includes("--check");
+if (check && process.argv.includes("--cached") && receiptHolds()) {
+  console.log("OK scenery catalog: unchanged inputs and bytes since the last passed check (artifacts/cache/scenery-catalog.json)");
+  process.exit(0);
+}
 const actual = JSON.stringify(generate(), null, 2) + "\n";
-if (process.argv.includes("--check")) {
+if (check) {
   if (!fs.existsSync(outFile) || fs.readFileSync(outFile, "utf8") !== actual) {
     console.error("scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs");
     process.exitCode = 1;
-  } else console.log(`OK scenery catalog: ${JSON.parse(actual).locations.length} emitted locations`);
+  } else {
+    writeReceipt(actual);
+    console.log(`OK scenery catalog: ${JSON.parse(actual).locations.length} emitted locations`);
+  }
 } else {
   fs.writeFileSync(outFile, actual);
+  writeReceipt(actual);
   console.log(`Wrote ${outFile}: ${JSON.parse(actual).locations.length} emitted locations`);
 }

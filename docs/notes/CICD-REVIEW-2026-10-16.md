@@ -1,5 +1,7 @@
 # CI/CD and dev-process review — 2026-10-16
 
+Summary: Whole-system CI/CD review, 2026-10-16: 1,200 ci.yml runs and 30,400 jobs measured — the pool runs at 39 of 40 slots, 26 % of runner-minutes die in cancelled runs (mostly manual sweeps), the ship-push fast tier reaches 38 % of merges, selected legs wait 63 min on a ready PR's critical path. The pipeline-now table, the ranked findings, the seven fix PRs, the 16 AGENTS.md contradictions and the three owner decisions (organisation + merge queue, cancel sweeps, train on push).
+
 A whole-system review of how a change reaches https://brycejmurrin.github.io/f1-game/: `ci.yml`,
 `pages.yml`, the tools under `tools/ci/`, the hooks, the skills and `AGENTS.md`. Every number below
 was measured from the GitHub REST API on 2026-10-16 02:10–02:40 UTC; §9 says how to re-measure.

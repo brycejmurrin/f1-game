@@ -80,13 +80,14 @@ const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/
 const LAZY_V_ID = "apex-lazy-v";
 const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
 
-// Every file the page injects WITHOUT a tag, from the roster's own source (the bitmap worker included since
-// audit4 I3 B6: its client takes the key from ScriptLoader.url like every other lazy file).
+// Every file the page injects WITHOUT a tag, DERIVED from the roster's own exports: DEFERRED plus every `LAZY_*`
+// file list (the `_EDGES` pair lists hold no files). A hand-typed list of rosters went stale twice (#4992): a new
+// roster missing here has no `apex-lazy-integrity` key, and ScriptLoader refuses a keyless file on a stamped shell,
+// so LAZY_GARAGE_EXTERIOR and LAZY_DEV never loaded on the deployed site while every dev host worked.
 function lazyFiles() {
   const M = createRequire(import.meta.url)("../manifest.cjs");
-  const lists = [...Object.values(M.DEFERRED || {}), M.LAZY_AGENT, M.LAZY_RACE, M.LAZY_RACE_SESSION, M.LAZY_AUDIO,
-    M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_UI_PRESETS, M.LAZY_RESULTS_SHEET, M.LAZY_TRACK_BUILD, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
-    (M.LAZY_WORKER || [])];
+  const lists = [...Object.values(M.DEFERRED || {}),
+    ...Object.keys(M).filter((k) => /^LAZY_/.test(k) && !/_EDGES$/.test(k)).map((k) => M[k] || [])];
   return [...new Set(lists.flat().filter((f) => typeof f === "string"))].sort();
 }
 // The map for the files this root actually holds (a fixture shell holds none).
