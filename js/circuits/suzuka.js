@@ -31,7 +31,7 @@
     // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
     // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
     tyreSeverity: 0.85,  // Japan 0.042 s/lap
-    sunAzimBias: -0.14,   // Pacific-coast morning race slot — sun still east of the crossover
+    sunAzimBias: -0.14,   // art-directed day-sun yaw offset (rad, atmosphere.js) — not a time-of-day fact
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [

@@ -43,7 +43,7 @@
     // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
     // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
     tyreSeverity: 0.89,  // Britain 0.044 s/lap
-    sunAzimBias: 0.28,   // high-summer northern sun, gentle SW tilt over the old airfield
+    sunAzimBias: 0.28, // art-directed day-sun yaw offset (rad, atmosphere.js) — not a compass bearing
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
