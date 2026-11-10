@@ -763,12 +763,8 @@ jobs:
         run: node tools/check/workflow-lint.mjs
       - name: Shader validation (glslang + naga)
         run: node tools/check/shader-validate.mjs
-      # Pillow + numpy for the slider-effect view checks, which skip where they are absent (every
-      # tooling-fast shard); here they run. Pinned so a release never changes the measurement.
-      - name: Python image deps (Pillow, numpy)
-        run: python3 -m pip install --disable-pip-version-check --user "pillow==11.3.0" "numpy==2.3.2"
-      - name: Planted-defect fixtures and the slider-effect view checks
-        run: node --test --test-timeout=900000 tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs tests/unit/slider-effect.test.mjs
+      - name: Planted-defect fixtures
+        run: node --test --test-timeout=900000 tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs
 
   node-suites:
     # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
@@ -935,10 +931,17 @@ jobs:
             node tools/ci/node-plan.mjs --all --sh > "$PLAN"
             echo "no gated base for this $EVENT: every script runs"
           fi
+      # slider-effect.test.mjs (test:node-slow, the `slow` slice) needs Pillow + numpy; pinned so a
+      # release never changes the measurement. APEX_REQUIRE_TOOLS below makes their absence a failure
+      # on that slice instead of a skip.
+      - name: Python image deps for the slow slice (Pillow, numpy)
+        if: matrix.needed != 'false' && matrix.slice == 'slow'
+        run: python3 -m pip install --disable-pip-version-check --user "pillow==11.3.0" "numpy==2.3.2"
       - name: Pure-node unit suites
         env:
           SLICE: ${{ matrix.slice }}
           NEEDED: ${{ matrix.needed }}
+          APEX_REQUIRE_TOOLS: ${{ matrix.slice == 'slow' && 'pillow,numpy' || '' }}
         run: |
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
