@@ -20,9 +20,8 @@
  *
  * Outputs: three.webgpu.min.js, three.core.min.js, three.tsl.min.js (the internal
  * `./three.core.js` import rewritten to `./three.core.min.js`, exactly as upstream's
- * min build did), LICENSE.txt, addons/tsl/display/BloomNode.js (from
- * examples/jsm/tsl/display/, the one addon TLX uses), addons/webxr/{XR,VR}Button.js
- * + WebGLXRFallback.js (Phase 0 immersive-vr), and MANIFEST.json — the three
+ * min build did), LICENSE.txt, the addons/inspector/ files (the opt-in dev Inspector, the
+ * only addon the game imports: js/perf/three-inspector.js), and MANIFEST.json — the three
  * version, the terser version, the tarball's sha256, the patch ids applied, and a
  * sha256 per written file. `--check` recomputes the file hashes; it needs no network
  * and is what the guard suite runs.
@@ -38,11 +37,8 @@ const VENDOR = path.join(ROOT, "vendor");
 const SCRATCH = path.join(ROOT, "scratch");
 const OUTPUTS = ["three.webgpu", "three.core", "three.tsl"];
 const ADDONS = [
-  ["examples/jsm/tsl/display/BloomNode.js", "addons/tsl/display/BloomNode.js"],
-  // WebXR Phase 0: ENTER VR UI + WebGPU→WebGL session fallback (Quest / Immersive Web).
-  ["examples/jsm/webxr/XRButton.js", "addons/webxr/XRButton.js"],
-  ["examples/jsm/webxr/VRButton.js", "addons/webxr/VRButton.js"],
-  ["examples/jsm/webxr/WebGLXRFallback.js", "addons/webxr/WebGLXRFallback.js"],
+  // BloomNode (TLX has its own bloom) and webxr/{XR,VR}Button + WebGLXRFallback (js/xr/ builds its own
+  // ENTER VR path) had no importer and left on 2026-11-10 (dead-weight audit W17); git keeps them.
   // Opt-in dev Inspector (?inspector=1, js/perf/three-inspector.js). Core only: Settings.js lazily
   // imports extensions/ on a click, which we do not vendor. Never precached (sw.js), never preloaded.
   ["examples/jsm/inspector/Inspector.js", "addons/inspector/Inspector.js"],
@@ -148,8 +144,6 @@ async function generate(version, tarballArg) {
   const patchesMd = path.join(outDir, "PATCHES.md");
   const keepPatches = fs.existsSync(patchesMd) ? fs.readFileSync(patchesMd) : null;
   fs.rmSync(outDir, { recursive: true, force: true });
-  fs.mkdirSync(path.join(outDir, "addons/tsl/display"), { recursive: true });
-  fs.mkdirSync(path.join(outDir, "addons/webxr"), { recursive: true });
   fs.mkdirSync(path.join(outDir, "addons/inspector/tabs"), { recursive: true });
   fs.mkdirSync(path.join(outDir, "addons/inspector/ui"), { recursive: true });
   const files = {};

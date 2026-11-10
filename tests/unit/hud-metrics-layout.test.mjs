@@ -97,7 +97,7 @@ test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
   // to the other side rather than to a viewport-wide number.
   assert.match(hud, /mmR && mmR\.width \? Math\.max\(0, mmR\.left - 10 \* mz\) : null/);
-  assert.match(hud, /scR && scR\.width \? Math\.max\(0, window\.innerWidth - scR\.right - 10 \* sz\) : null/);
+  assert.match(hud, /scR && scR\.width \? Math\.max\(0, vpW\(\) - scR\.right - 10 \* sz\) : null/);
   assert.match(hud, /const sal = salM != null \? salM : \(sarM != null \? sarM : 0\);/);
   assert.match(hud, /const sar = sarM != null \? sarM : \(salM != null \? salM : 0\);/);
 });

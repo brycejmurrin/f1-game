@@ -191,8 +191,9 @@ function find(node, className) {
   return null;
 }
 
-async function runExport(fetchImpl) {
+async function runExport(fetchImpl, onBoot) {
   const harness = boot(fetchImpl);
+  if (onBoot) onBoot(harness);
   const wrap = await harness.context.DataExport.create({
     el: (tag, cls, text) => new El(tag, cls, text),
     clear() {},
@@ -488,4 +489,29 @@ test("export instances keep independent UI state while producing identical archi
     assert.equal(find(views[1 - i], "dh-export-row").children[0].textContent, "Gather");
   }
   assert.deepEqual(archives[0], archives[1]);
+});
+
+
+// W23 #5: F1API.cancelAll() is one global switch. TELEMETRY's COMPARE abort or
+// leaving WATCH mid-load rejected the ~10 min EXPORT gather's request too, and
+// it stopped with "Cancelled — data hub closed." while the hub was still open.
+test("an unrelated F1API.cancelAll() with the hub open retries the step instead of ending the gather", async () => {
+  let h = null, cancelled = 0;
+  const base = openF1Fetch();
+  const out = await runExport(async (url) => {
+    if (String(url).includes("/laps") && cancelled < 2) {
+      cancelled++;
+      h.context.F1API.cancelAll();   // another tab resets the API while this request is in flight
+      return new Promise(() => {});
+    }
+    return base(url);
+  }, (harness) => { h = harness; });
+  assert.equal(cancelled, 2);
+  const lines = out.status.split("\n");
+  assert.equal(lines.filter((l) => l === "· Bahrain interrupted by another Data Hub tab — retrying").length, 2,
+    "each foreign cancel retries the step, once");
+  assert.equal(lines.filter((l) => l === "Cancelled — data hub closed.").length, 0);
+  assert.equal(out.download.disabled, false, "the gather completed");
+  const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+  assert.ok(Object.keys(parsed.circuits).length > 0);
 });

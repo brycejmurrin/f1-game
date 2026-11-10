@@ -19,7 +19,7 @@ import { bootEditor } from "../helpers/editor-vm.mjs";
 
 // The start-straight / grade reds the fleet carries TODAY (real hills, corner starts). A ratchet: a
 // circuit may leave these lists, none may join them.
-const KNOWN_START_REDS = ["silverstone", "suzuka", "vegas", "magny_cours", "jerez", "mont_tremblant", "mosport"];
+const KNOWN_START_REDS = ["silverstone", "suzuka", "vegas", "magny_cours", "mont_tremblant", "mosport"];
 const KNOWN_GRADE_REDS = ["spa"];
 /** CPU ms the callback burns (user+system): a wall-clock bound flakes at loadavg 36, CPU time does not. */
 function cpuMs(fn) { const t0 = process.cpuUsage(); const r = fn(); const u = process.cpuUsage(t0); return { r, ms: (u.user + u.system) / 1000 }; }

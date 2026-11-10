@@ -719,9 +719,16 @@ const SceneryCity = (function () {
       const awnDist = w * 0.42;
       const awnC = vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.u, loH * 0.92);
       const awning = addBox(out, awnC, [0.05, 0.10, d * 0.9], opts.awning || [0.20, 0.22, 0.26], b);
+      // Each post stands on the ground under it, not the road frame: cota's
+      // 60 m body runs onto rising ground and its end posts were 2.1 and
+      // 6.2 m under the terrain (#5088). A post whose ground is above the
+      // awning has nothing to hold up there and is left out.
       if (awning !== false) for (const e of [-1, 1]) {
-        const postC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, -0.2);
-        addCyl(out, postC, 0.05, loH * 0.92 + 0.25, [0.35, 0.35, 0.38], 4, b);
+        const topC = vadd(vadd(vadd(p.c, p.r, faceOff - side * awnDist), p.t, e * d * 0.42), p.u, loH * 0.92 - 0.05);
+        const gy = terrainYAt(topC[0], topC[2]);
+        const base = Number.isFinite(gy) ? gy - 0.2 : topC[1] - (loH * 0.92 + 0.25) * p.u[1];
+        const len = (topC[1] - base) / Math.max(0.5, p.u[1]);
+        if (len > 0.3) addCyl(out, vadd(topC, p.u, -len), 0.05, len, [0.35, 0.35, 0.38], 4, b);
       }
       // Roof AC / satellite unit.
       if (hh > 0.25) addBox(out, vadd(p.c, p.u, h + 0.3), [w * 0.28, 0.5, d * 0.20], [0.55, 0.56, 0.58], b);

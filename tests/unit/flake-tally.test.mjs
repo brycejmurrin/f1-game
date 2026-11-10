@@ -246,6 +246,7 @@ import {
   JOBS_PAGE,
   upsertIssue,
   baseRedRows, formatBaseRedBody, syncBaseRedIssue, BASE_RED_MARKER, BASE_RED_TITLE,
+  baseRedIssueAction, baseRedWindowHours, pickLastBaseRedRun, lastSuccessfulBaseRedRun,
   setFlakeTallyTestHooks,
   ISSUE_MARKER,
   ISSUE_TITLE,
@@ -418,11 +419,122 @@ test("syncBaseRedIssue opens on the first suspect, refreshes while it lasts, clo
   } finally { setFlakeTallyTestHooks(); }
 });
 
+test("baseRedIssueAction: a clean window closes only when every run was read in full", () => {
+  assert.equal(baseRedIssueAction({ suspects: 0, hasOpen: true }), "close");
+  assert.equal(baseRedIssueAction({ suspects: 0, hasOpen: true, incomplete: true }), "keep",
+    "an API error or unreadable run means the window is not known clean");
+  assert.equal(baseRedIssueAction({ suspects: 0, hasOpen: false, incomplete: true }), "none");
+  assert.equal(baseRedIssueAction({ suspects: 2, hasOpen: true, incomplete: true }), "update", "a suspect is still news");
+  assert.equal(baseRedIssueAction({ suspects: 1, hasOpen: false, incomplete: true }), "create");
+});
+
+test("syncBaseRedIssue keeps the open issue untouched when a run's read produced a note", async () => {
+  const calls = [];
+  setFlakeTallyTestHooks({
+    fetch: async (url, init) => {
+      calls.push([init.method, url]);
+      return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify([{ number: 12, body: BASE_RED_MARKER + "\nold" }])) };
+    },
+    delay: async () => {},
+  });
+  try {
+    assert.deepEqual(await syncBaseRedIssue([], "clean", { token: "t", incomplete: true }), { number: 12, kept: true });
+    assert.deepEqual(calls.map((c) => c[0]), ["GET"], "no PATCH: the issue is neither closed nor rewritten");
+  } finally { setFlakeTallyTestHooks(); }
+});
+
+test("baseRedWindowHours: since 1 h before the last successful base-red run, 3-24 h; 24 h when none", () => {
+  const now = new Date("2026-10-16T12:00:00Z");
+  assert.deepEqual(baseRedWindowHours({ lastSuccessAt: "2026-10-16T10:00:00Z", now }), { hours: 3, source: "last-success" },
+    "an on-time 2 h slot reads 3 h, as before");
+  assert.deepEqual(baseRedWindowHours({ lastSuccessAt: "2026-10-16T04:00:00Z", now }), { hours: 9, source: "last-success" },
+    "three dropped slots widen the next read");
+  assert.deepEqual(baseRedWindowHours({ lastSuccessAt: "2026-10-16T11:30:00Z", now }), { hours: 3, source: "last-success" }, "at least 3 h");
+  assert.deepEqual(baseRedWindowHours({ lastSuccessAt: "2026-10-10T00:00:00Z", now }), { hours: 24, source: "last-success" }, "capped at 24 h");
+  assert.deepEqual(baseRedWindowHours({ lastSuccessAt: null, now }), { hours: 24, source: "fallback" });
+  assert.deepEqual(baseRedWindowHours({ lastSuccessAt: "not a date", now }), { hours: 24, source: "fallback" });
+});
+
+test("pickLastBaseRedRun takes the newest successful base-red run, never a daily one or the current run", () => {
+  const runs = [
+    { id: 9, conclusion: "success", display_title: "Flake tally (base-red)", created_at: "c9" },
+    { id: 8, conclusion: "success", display_title: "Flake tally (daily)", created_at: "c8" },
+    { id: 7, conclusion: "failure", display_title: "Flake tally (base-red)", created_at: "c7" },
+    { id: 6, conclusion: "success", display_title: "Flake tally (base-red)", created_at: "c6" },
+  ];
+  assert.equal(pickLastBaseRedRun(runs).id, 9);
+  assert.equal(pickLastBaseRedRun(runs, { currentRunId: 9 }).id, 6);
+  assert.equal(pickLastBaseRedRun(runs.slice(1, 3)), null);
+  assert.equal(pickLastBaseRedRun([{ id: 1, conclusion: "success", display_title: "Flake tally" }]), null,
+    "a run from before the run-name carried the mode is not matched (the 24 h fallback reads it)");
+});
+
+test("lastSuccessfulBaseRedRun lists this workflow's successful runs and reports an API error", async () => {
+  const calls = [];
+  setFlakeTallyTestHooks({
+    fetch: async (url) => {
+      calls.push(url);
+      return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ workflow_runs: [
+        { id: 5, conclusion: "success", display_title: "Flake tally (base-red)", created_at: "2026-10-16T10:17:00Z" }] })) };
+    },
+    delay: async () => {},
+  });
+  try {
+    const r = await lastSuccessfulBaseRedRun({ token: "t", currentRunId: null });
+    assert.equal(r.run.id, 5);
+    assert.match(calls[0], /actions\/workflows\/flake-tally\.yml\/runs\?status=success&per_page=50$/);
+    setFlakeTallyTestHooks({ fetch: async () => ({ status: 404, arrayBuffer: async () => Buffer.from("nope") }), delay: async () => {} });
+    assert.match((await lastSuccessfulBaseRedRun({ token: "t", currentRunId: null })).error, /HTTP 404/);
+  } finally { setFlakeTallyTestHooks(); }
+});
+
+test("runFlakeTally --base-red: a run whose jobs call fails is a printed note, and the open issue stays open", async () => {
+  const { runFlakeTally } = await import("../../tools/ci/flake-tally.mjs");
+  const os = await import("node:os");
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "flake-tally-"));
+  const calls = [];
+  const json = (o, status = 200) => ({ status, arrayBuffer: async () => Buffer.from(JSON.stringify(o)) });
+  setFlakeTallyTestHooks({
+    fetch: async (url, init) => {
+      calls.push([init.method, url]);
+      if (/workflows\/flake-tally\.yml\/runs/.test(url)) return json({ workflow_runs: [] });
+      if (/actions\/runs\?status=failure/.test(url)) return json({ workflow_runs: [{ id: 41, path: ".github/workflows/ci.yml", conclusion: "failure", head_branch: "cursor/a", created_at: "x" }] });
+      if (/actions\/runs\/41\/jobs/.test(url)) return json({ message: "boom" }, 403);
+      if (/issues\?state=open/.test(url)) return json([{ number: 12, body: BASE_RED_MARKER + "\nold" }]);
+      throw new Error(`unexpected ${init.method} ${url}`);
+    },
+    delay: async () => {},
+  });
+  const savedSummary = process.env.GITHUB_STEP_SUMMARY;
+  delete process.env.GITHUB_STEP_SUMMARY;
+  try {
+    const r = await runFlakeTally(["--base-red", "--since-last-success", "--issue", "--work-dir", workDir], { token: "t" });
+    assert.equal(r.code, 0);
+    assert.deepEqual(r.issue, { number: 12, kept: true });
+    assert.ok(!calls.some(([m]) => m === "PATCH"), "the issue is not closed");
+    assert.match(r.text, /kept open \(1 run\(s\) not read in full\)/);
+    assert.match(r.text, /notes \(1 run\(s\) not read in full\):\n- 41: jobs: HTTP 403/, "notes print without --json");
+    assert.match(r.text, /none in the last 24 h/, "no earlier success: the 24 h fallback window");
+  } finally {
+    setFlakeTallyTestHooks();
+    if (savedSummary !== undefined) process.env.GITHUB_STEP_SUMMARY = savedSummary;
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same least privilege; the base-red label exists", () => {
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
   assert.match(wf, /^\s+- cron: "17 \*\/2 \* \* \*"$/m, "every 2 h");
   assert.match(wf, /MODE: \$\{\{ github\.event\.schedule == '17 \*\/2 \* \* \*' && 'base-red' \|\| inputs\.mode \|\| 'daily' \}\}/);
-  assert.match(wf, /node tools\/ci\/flake-tally\.mjs --base-red --hours 3 --issue/);
+  // The window runs from the last successful base-red run, not a fixed 3 h
+  // (a dropped 2-hourly slot left its runs unread); the run-name carries the
+  // mode so that lookup can tell base-red runs from daily ones.
+  assert.match(wf, /node tools\/ci\/flake-tally\.mjs --base-red --since-last-success --issue/);
+  assert.doesNotMatch(wf, /--base-red --hours/, "no fixed base-red window in the workflow");
+  const mode = /MODE: \$\{\{ (.+) \}\}/.exec(wf)?.[1];
+  assert.ok(mode);
+  assert.ok(wf.includes(`run-name: Flake tally (\${{ ${mode} }})`), "run-name and MODE use the same expression");
+  assert.ok(pickLastBaseRedRun([{ id: 1, conclusion: "success", display_title: "Flake tally (base-red)" }]), "the tool matches the run-name");
   assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "no new permission");
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
   const l = labels.find((x) => x.name === "base-red");
