@@ -714,7 +714,7 @@ test("a race nobody took the flag in pays the shortened-race scale by the leader
   assert.equal(pay(1, 10).pts.d0 || 0, 0, "under two laps: no points");
   assert.deepEqual([0, 4, 5].map((i) => pay(2, 10).pts["d" + i] || 0), [6, 1, 0], "2 laps to 25 %: column 1, top five");
   assert.deepEqual([0, 8, 9].map((i) => pay(4, 10).pts["d" + i] || 0), [13, 1, 0], "25-50 %: column 2, top nine");
-  assert.deepEqual([0, 3, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 10, 1], "50-75 %: column 3");
+  assert.deepEqual([0, 3, 6, 9].map((i) => pay(5, 10).pts["d" + i] || 0), [19, 9, 5, 1], "50-75 %: column 3 (19-14-12-9-8-6-5-3-2-1)");
   assert.equal(pay(8, 10).pts.d0, 25, "75 % or more: the full table");
   assert.equal(pay(null).pts.d0, 25, "a race that saw the flag is never shortened");
   assert.equal(pay(4, 10, "d0").lastFl, undefined, "no fastest-lap point below 50 %");
