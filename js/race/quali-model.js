@@ -100,7 +100,6 @@ const Quali = (function () {
     // season round 1 at Monza (bug hunt 2026-09-27).
     let classMode = null;
     let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
-    const _kAnon = new WeakMap();   // id-less tracks (#4343)
 
     // The circuit now loaded, in the same form persistOrder() stamps.
     function hereId() { return (G.track && G.track.def && G.track.def.id) || null; }
@@ -140,19 +139,15 @@ const Quali = (function () {
       // scope the whole time. quitToMenu() clears five other caches and never
       // knew about this one. A def id is all the invalidation needs; track-lights.js's
       // _postNodeMemo (a WeakMap keyed on track) is the same lesson.
-      // Id-less tracks key on the object (WeakMap), not a shared slot (#4343).
       const _kId = (track && track.def && track.def.id) || null;
-      const anon = _kId == null && track && typeof track === "object";
-      let kc = anon ? _kAnon.get(track) : (_kCacheTrack === _kId ? _kCache : null);
-      if (!kc || kc.length !== m) {
-        kc = new Float64Array(m);
-        for (let i = 0; i < m; i++) kc[i] = Math.abs(Tracks.curvature(track, (i / m) * total));
-        if (anon) _kAnon.set(track, kc);
-        else { _kCacheTrack = _kId; _kCache = kc; }
+      if (_kCacheTrack !== _kId || _kCache.length !== m) {
+        _kCacheTrack = _kId;
+        _kCache = new Float64Array(m);
+        for (let i = 0; i < m; i++) _kCache[i] = Math.abs(Tracks.curvature(track, (i / m) * total));
       }
       const v = new Float64Array(m);
       for (let i = 0; i < m; i++) {
-        const k = kc[i];
+        const k = _kCache[i];
         v[i] = k > 1e-5 ? Math.min(vCap, Math.sqrt(latMax / k) * cornerK) : vCap;
       }
 
