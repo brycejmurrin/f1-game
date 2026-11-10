@@ -35,8 +35,8 @@ Peraltada line survives as real **banking** into the final corners (6° at
 | 0.00 | R | near | Main grandstand: long tall stepped box, grey seats + festive banner trim |
 | 0.02 | L | near | Pit/paddock block: low wide white box with flat roof slab |
 | 0.06 | both | mid | **DRS Mixhuca park corridor**: dense forestEdge / hedge — park before city |
-| 0.12 | R | near | Turn 1 right-hander grandstand: stepped seating box, big red/white kerb |
-| 0.20 | both | mid | Moises Solana Esses stands: low thin seating boxes flanking flat infield |
+| 0.248 | L | near | Turn 1 right-hander grandstand (outside; built T1 0.257): stepped seating box, big red/white kerb |
+| 0.58–0.60 | R | mid | Moises Solana Esses stands (terrace on the outside of T7; Esses are T7–T11, 0.58–0.69): low thin seating boxes flanking flat infield |
 | 0.34 | L | far | Distant city sprawl (pushed back): low pale skyline behind park green |
 | 0.42 | R | near | Horquilla hairpin: wide grey runoff box, tight kerb, small fan stand box |
 | 0.55 | both | mid | Park greenery + sports facility: green grass plane + scattered low boxes |
@@ -66,7 +66,7 @@ Peraltada line survives as real **banking** into the final corners (6° at
   **Park-first**: dense Mixhuca `forestEdge` on the DRS/mid-lap; push/thin
   `cityFront` so CDMX sprawl sits as backdrop, not street canyon.
 - Scatter **festive accents**: pink/orange/green banner and flag boxes on stands and
-  fences for the fiesta atmosphere; Mexican GP billboards at Foro entry/exit.
+  fences for the fiesta atmosphere; Mexico City GP billboards at Foro entry/exit.
 - Pit/paddock: white hospitality suites with green/white/red fascia behind the
   engine pit complex (not grey/orange placeholder boxes).
 - Brick/terracotta pavilion variety on the Mixhuca sports-city arcs.
@@ -87,7 +87,7 @@ road-normal anchors 17° off and in swapped order until 2026-10-10.
 
 **DETAIL 2026-10-05:** closed Foro Sol terrace/bowl backs, seated portals +
 scoreboard masts, midfield plaza/lawn/service roads, brick pavilion variety,
-Mexican GP signage/crowd, and paddock suite identity.
+Mexico City GP signage/crowd, and paddock suite identity.
 
 Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
 Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in

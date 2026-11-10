@@ -2746,6 +2746,36 @@
       "presentation": "native",
       "preserve": "Every offender row with its circuit, kind, stable key and offset metres; --baseline JSON is the test's shrink-only allowlist."
     },
+    "tools/track/corner-names/jerez.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/kyalami.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/magny_cours.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/mexico.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/miami.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/montreal.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
     "tools/track/designer-code.mjs": {
       "action": "keep-native",
       "presentation": "native",

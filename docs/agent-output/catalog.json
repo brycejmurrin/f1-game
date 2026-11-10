@@ -3896,6 +3896,36 @@
       ]
     },
     {
+      "path": "tools/track/corner-names/jerez.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/corner-names/kyalami.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/corner-names/magny_cours.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/corner-names/mexico.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/corner-names/miami.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/track/corner-names/montreal.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/track/designer-code.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

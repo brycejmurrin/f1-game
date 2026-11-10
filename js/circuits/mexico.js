@@ -15,7 +15,7 @@
     // straight before Foro Sol and the stadium bowl on the T4-T6 hairpins.
     // docs/notes/DEFECT-LEDGER.md "mexico — FIXED".
     name: "MEXICO CITY",
-    gp: "Mexican GP",
+    gp: "Mexico City GP",
     country: "Mexico",
     night: false,
     theme: "modern",

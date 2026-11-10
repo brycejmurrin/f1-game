@@ -677,8 +677,10 @@
 
       // The start gantry stands over the REAL line through the sl() above; RS()
       // alone put it — and the start lamps it carries — 556 m from the grid.
+      // The second gantry rides the same sl() frame (raw 0.0345 was left
+      // behind when the first moved and stood ~404 m BEFORE the line).
       gantry(sl(0.0), 8, CONC);
-      gantry(0.0345, 7.5, CONC_ALT);
+      gantry(sl(0.0345), 7.5, CONC_ALT);
 
       // ── EL OVNI (VIP platform) ───────────────────────────────────────────
       // Official circuit site + Box Repsol: the 2002 VIP viewing platform over
@@ -757,8 +759,10 @@
 
       // ── CURVA JORGE LORENZO marker (final corner, renamed 2013) ──────────
       // Wikipedia / RacingCircuits.info. Signage art UNCERTAIN — abstract board.
+      // Seated on def.turns[12] (built T13, the final corner) through sl(): the
+      // old authored K(0.9517) built on T12, ~500 m before the corner it names.
       {
-        const a = anchor(K(0.9517), -1, 16);
+        const a = anchor(K(sl(api.def.turns[12])), -1, 16);
         if (!onTrack(a.c[0], a.c[2], 6)) {
           const b = [a.r, a.u, a.t];
           modelGroup("jerez-lorenzo-corner", {
@@ -777,8 +781,10 @@
 
       // ── CURVA DANI PEDROSA marker (T6 / Dry Sack, renamed 2019) ──────────
       // Wikipedia. Signage art UNCERTAIN — abstract board.
+      // Seated on def.turns[5] (built T6, the hairpin after the back straight)
+      // through sl(): the old authored K(0.3842) built on T5, ~600 m early.
       {
-        const a = anchor(K(0.3842), -1, 18);
+        const a = anchor(K(sl(api.def.turns[5])), -1, 18);
         if (!onTrack(a.c[0], a.c[2], 6)) {
           const b = [a.r, a.u, a.t];
           modelGroup("jerez-dani-pedrosa", {

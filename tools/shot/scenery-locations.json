@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "445a1c292a7465bd91830f3d1bc2296bd768e45d56f07c703537011a21097181",
+  "sourceDigest": "033c9a9a9ba4a7db698ed8d811fa8b4240ee91ed59debf5baa95d35804b7c44c",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -1454,15 +1454,15 @@
       "track": "jeddah",
       "name": "Golden Tower Hotel",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.10318,
+      "frac": 0.029577,
       "target": [
-        -247.23,
+        -325.4,
         26.05,
-        -1166.38
+        -1443.64
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 80,
-      "viewDistanceM": 80,
+      "nearestRoadDistanceM": 43.6,
+      "viewDistanceM": 43.6,
       "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
     },
     {
@@ -1526,11 +1526,11 @@
       "track": "jerez",
       "name": "Lorenzo Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.825224,
+      "frac": 0.939891,
       "target": [
-        499.77,
-        4.99,
-        -199.27
+        137.09,
+        3.18,
+        100.83
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 23.5,
@@ -1543,11 +1543,11 @@
       "track": "jerez",
       "name": "Dani Pedrosa",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.258061,
+      "frac": 0.396175,
       "target": [
-        -74.66,
-        13.16,
-        363.48
+        -442.59,
+        18.61,
+        86.24
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 25.5,
@@ -1838,15 +1838,15 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.62,
       "target": [
-        78.06,
+        79.34,
         7.76,
-        288.29
+        288.04
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/magny_cours.js anchor K(0.62)",
-      "projectedFrac": 0.1142,
-      "nearestRoadDistanceM": 178.9,
-      "viewDistanceM": 242.8,
+      "projectedFrac": 0.114149,
+      "nearestRoadDistanceM": 180.1,
+      "viewDistanceM": 244.1,
       "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
     },
     {
@@ -2163,15 +2163,15 @@
       "track": "montreal",
       "name": "Hairpin Grandstands",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.550098,
+      "frac": 0.618215,
       "target": [
-        37.77,
-        2.12,
-        800.09
+        114.35,
+        2.39,
+        1121.09
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 33.2,
-      "viewDistanceM": 33.2,
+      "nearestRoadDistanceM": 34.5,
+      "viewDistanceM": 34.5,
       "source": "tests/data/landmarks/montreal.json; js/circuits/scenery/montreal.js"
     },
     {
@@ -2180,11 +2180,11 @@
       "track": "montreal",
       "name": "Wall Of Champions Stand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.972335,
+      "frac": 0.917145,
       "target": [
-        -243.19,
-        3.04,
-        -360.98
+        -193.43,
+        3.03,
+        -126.15
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 22.1,

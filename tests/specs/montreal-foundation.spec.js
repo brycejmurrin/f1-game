@@ -105,12 +105,13 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   // Assert the semantic content, not the count: the island-wide foliage span
   // plus the two lighting clearance windows. 1389215d2 dropped the bogus
   // sceneryStartFrac 0.915 and re-keyed those windows into the racing frame
-  // (was 0.19-0.23 / 0.69-0.73 under the 0.86 shift).
+  // (was 0.19-0.23 / 0.69-0.73 under the 0.86 shift). The hairpin window
+  // moved 0.55-0.59 -> 0.60-0.64 onto the built apex (0.6178) in W5.
   expect(result.def.dressingExclusions).toContainEqual({ kind: "foliage", s0: 0, s1: 1 });
   const lightingSpans = result.def.dressingExclusions
     .filter((entry) => entry.kinds?.includes("lighting"))
     .map((entry) => [entry.s0, entry.s1]);
-  expect(lightingSpans).toEqual([[0.05, 0.09], [0.55, 0.59]]);
+  expect(lightingSpans).toEqual([[0.05, 0.09], [0.60, 0.64]]);
 
   for (const session of Object.values(result.sessions)) {
     expect(session.geometry.every((entry) => entry.ok)).toBe(true);

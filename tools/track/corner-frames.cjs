@@ -39,6 +39,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const TURN_M = 12;     // a curated apex within this of a curvature peak is "on" it
 const BANK_M = 60;     // a bank zone centre within this of its named apex
 const KIT_M = 60;      // a corner kit's window within this of its corner's apex
+const APPROACH_M = 300; // an "approach"/"braking" kit: this far before the apex
 const PEAK_K = 0.004;  // rad/m: smoothed |k| below this is not a corner (BANK_STRAIGHT_K)
 // Named corners, one file per circuit (tools/track/corner-names/<id>.json:
 // { "why": "...", "names": { "Adelaide": 6 } }, turn numbers 1-based into THIS
@@ -322,7 +323,11 @@ function measure(Tracks, id) {
       const winLo = wrap01(ref + lo), winHi = wrap01(ref + hi);
       let nt = 0, nd = Infinity;
       turns.forEach((t, i) => { const d = dist(t); if (d < nd) { nd = d; nt = i + 1; } });
-      rows.push({ circuit: id, kind: "kit", key: `kit:L${g.ln}`, offsetM: Math.round(m), bad: m > KIT_M || inside,
+      // Approach / braking boards stand BEFORE the corner by design: they get
+      // APPROACH_M of run-up, but only on the approach side of the apex.
+      const approach = /\b(approach|braking)\b/i.test(text) && hi <= 0;
+      const limit = approach ? APPROACH_M : KIT_M;
+      rows.push({ circuit: id, kind: "kit", key: `kit:L${g.ln}`, offsetM: Math.round(m), bad: m > limit || inside,
         inside, line: g.ln, label: text,
         detail: `L${g.ln} T${g.corners.join("/")} apex ${turns[tBest - 1].toFixed(4)} window ${winLo.toFixed(4)}-${winHi.toFixed(4)} [${names2}] nearest T${nt} ${Math.round(nd)} m${inside ? " INSIDE" : ""}` });
     }

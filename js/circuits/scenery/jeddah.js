@@ -165,7 +165,7 @@
           });
           seatCanyonFeet(a0, a1, side, 4.35);
         }
-        // The T13 banked sector keeps its own wider, taller wall.
+        // The T14 banked sector (FIA T13; def.turns[13]) keeps its own wider, taller wall.
         canyon(0.47, 0.53, side, 5.05, {
           h: 1.40 + (side > 0 ? 0.08 : 0.00),
           stripeCol: GOLD, stripeEvery: 2,
@@ -538,8 +538,10 @@
       });
 
       // Golden Tower hotel cue near T1 — warm-lit mid-rise facing the canyon.
+      // Seated on def.turns[0] through sl(): authored K(0.055) built ~356 m
+      // past T1, on the straight.
       {
-        const a = anchor(K(0.055), -1, 74), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(api.def.turns[0])), -1, 74), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
           const put = (stage, c, sz, col) => {
@@ -610,7 +612,7 @@
         }
       }
 
-      // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
+      // ── T14 BANKED SECTOR (FIA T13; def.turns[13]) — s 0.50 ──────────────
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
       if (typeof scaffoldStand === "function") {
@@ -624,7 +626,7 @@
         grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
         grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
       }
-      tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
+      tyreWall(0.485, 0.515,  1, 4.5, MAGENTA);   // T14 is a LEFT: outside is +1 (was -1, inside); gap 4.5 clears the +1 marshal post (flatCoplanar)
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
       building(K(0.69), -1, 70, 22, 22, 18, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 5 });
@@ -718,7 +720,9 @@
       floodMast(K(0.91), -1, 24);
 
       // ── CORNER PROTECTION ─────────────────────────────────────────────────
-      tyreWall(0.07, 0.10, -1, 2.8, GREEN);
+      // T1 is a LEFT: its outside is +1. Authored 0.07-0.10 (-1) built on the
+      // straight ~450 m past it.
+      tyreWall(sl(api.def.turns[0] - 0.008), sl(api.def.turns[0] + 0.010), 1, 2.8, GREEN);   // T1 outside
       tyreWall(0.79, 0.82,  1, 2.8, SPANGLE);
       guardrail(0.34, 0.38, -1, 2.4, [0.55, 0.56, 0.6]);
       guardrail(0.96, 0.99,  1, 2.4, [0.55, 0.56, 0.6]);
