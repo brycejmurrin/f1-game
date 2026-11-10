@@ -401,6 +401,9 @@ body[data-density="compact"] .dh-footnote {
   margin-top: calc(var(--gap) / 3);
   padding-top: calc(var(--gap) / 3);
 }
+/* The feed credit under the freshness footnote (js/data/hub.js sourceLine). */
+.dh-footnote + [data-feed] { margin-top: calc(var(--gap) / 3); font-size: var(--fs-2); color: var(--dim); text-align: right; }
+.dh-footnote + [data-feed] a { color: inherit; text-decoration: underline; }
 
 /* schedule */
 [data-nextgp="tile"] {

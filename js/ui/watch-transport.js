@@ -124,7 +124,12 @@ const WatchTransport = (function () {
       root.appendChild(chapters);
       const caption = node("div", "caption");
       caption.appendChild(node("span", "name", desc.name));
-      caption.appendChild(node("span", "event")); caption.appendChild(node("span", "director"));
+      caption.appendChild(node("span", "event"));
+      // REAL TEAM RADIO is caption-only (docs/DECISIONS.md D-031): the replay never fetches or
+      // plays the recording; this link opens the published clip at its source in a new tab.
+      const radio = node("a", "radio", "LISTEN AT SOURCE ↗");
+      radio.target = "_blank"; radio.rel = "noopener noreferrer"; radio.hidden = true;
+      caption.appendChild(radio); caption.appendChild(node("span", "director"));
       root.appendChild(caption); document.body.appendChild(root);
       document.body.classList.add("watch-controls-on");
       watchBand(); paint();
@@ -203,6 +208,9 @@ const WatchTransport = (function () {
       setText(refs.director, b && b.locked ? "FOLLOW LOCKED" : b && b.manual && b.auto ? "AUTO IN " + Math.ceil(b.manualRemaining) + "s" : b && b.auto ? "TV DIRECTOR" : "MANUAL CAMERA");
       const current = desc.events.find((e) => e.t >= s.T - 5);
       setText(refs.event, current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : s.finished ? "CHEQUERED FLAG" : "RACE IN PROGRESS");
+      const r = s.radio, radioUrl = r && /^https:\/\//.test(r.url || "") ? r.url : "";
+      if (refs.radio.hidden !== !radioUrl) refs.radio.hidden = !radioUrl;
+      if (radioUrl) { setAttr(refs.radio, "href", radioUrl); setAttr(refs.radio, "aria-label", "L" + r.lap + " " + r.text.replace(" · ", " ") + ": listen at the source, opens a new tab"); }
       const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
       setDisabled(refs.prev, !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) < s.T - 1));
       setDisabled(refs.next, !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) > s.T + 1));

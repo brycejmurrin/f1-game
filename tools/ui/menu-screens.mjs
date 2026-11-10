@@ -139,6 +139,10 @@ export const SCREENS = [
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-progress");
       await p.waitForSelector("#pm-panel-progress:not([hidden])", { timeout: 15000 }); } },
+  { id: "settingscredits", view: "#pm-panel-credits", name: "About & credits", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-credits");
+      await p.waitForSelector("#pm-panel-credits:not([hidden])", { timeout: 15000 }); } },
   { id: "settingsfiles", view: "#pm-panel-files", name: "Saves & Data", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-files");

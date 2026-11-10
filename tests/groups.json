@@ -1364,6 +1364,7 @@
     "test:audio-unit": {
       "files": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/asset-credits.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
@@ -1472,7 +1473,8 @@
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
         "tests/unit/desktop-version.test.mjs",
-        "tests/unit/followup-platform.test.mjs"
+        "tests/unit/followup-platform.test.mjs",
+        "tests/unit/notices.test.mjs"
       ],
       "kind": "node"
     },

@@ -15,7 +15,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 
 | Layer | What it does |
 |---|---|
-| Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` is on disk but nothing loads it) |
+| Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` was never loaded and was deleted 2026-11-10) |
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
 | Pitch curve | `baseRate()` in `engine.js`: `RATE_IDLE·idle + RATE_SPAN·revRange·rev^curve`, then × boost pitch, `rateTrim`, `pitch` and `revFlare` |
 | Pitch, per gear | Sample core: no gear term, one rev = one note in every gear (synth fallback: per-gear `gIdle`/`gSpan`). `rev` = `rpmFor(gear, speed)` normalised, 1 at the top of each gear; `GameAudio.rate()` reads it |

@@ -2,8 +2,6 @@
 "use strict";
 
 var GameAudioRadioFx = (function () {
-  /** Set when GameAudioRadioFx.create() runs; used by WATCH OpenF1 clips without an engine.js export. */
-  let playWatchMediaFn = null;
   function create(host, signal) {
     /* ── TEAM RADIO FX: THE FRAME AROUND THE VOICE ──────────────────────────
      *
@@ -414,189 +412,6 @@ var GameAudioRadioFx = (function () {
       return radioFx;
     }
 
-    /* OPENF1 WATCH CLIPS (js/race/real-replay.js): recorded team radio through the
-     * same band-pass / soft-clip / compressor chain as voice-pack lines, with music
-     * ducking for the clip's lifetime. MediaElementSource when CORS allows; else
-     * fetch+decode into radioVoice; else plain HTMLAudio with duck only. */
-    const _watchClips = new Set();
-    let _watchSeq = 0;
-    function radioMediaClip(url, o) {
-      if (!url || typeof url !== "string") return null;
-      const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
-      if (!(vol > 0) || !host.enabled() || !host.sfxOk()) return null;
-      let ducked = false;
-      // Its own duck source: the engineer's setRadioDuck(false) on a card replace
-      // (and another clip ending) must not lift the music under this clip.
-      const duckId = "watch:" + (++_watchSeq);
-      const duck = () => {
-        if (ducked) return;
-        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) { GameAudio.setRadioDuck(true, duckId); ducked = true; }
-      };
-      const releaseDuck = () => {
-        if (!ducked) return;
-        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false, duckId);
-        ducked = false;
-      };
-      duck();
-      let dead = false;
-      let el = null;
-      let nodes = [];
-      let voiceHandle = null;
-      let chained = false;
-      let ended = false;
-      const entry = {};
-      let unbindFocus = null;
-      // Abort the CORS fallback fetch on stop (IMPROVEMENT-CANDIDATES §6). Without
-      // it a late response still decoded and plainFallback could resurrect audio.
-      let fetchAbort = null;
-      function bindMediaFocus(a) {
-        let playing = false;
-        const sync = () => {
-          if (dead || el !== a) return;
-          if (host.setVoiceFocusHold) host.setVoiceFocusHold(playing
-            && !a.paused && !a.ended && !a.muted && a.volume > 0 && host.enabled(), entry);
-        };
-        a.onplaying = () => { playing = true; sync(); };
-        a.onwaiting = a.onpause = () => { playing = false; sync(); };
-        // stalled concerns network fetch; buffered playback can continue.
-        a.onstalled = a.onvolumechange = sync;
-        unbindFocus = () => {
-          playing = false;
-          a.onplaying = a.onwaiting = a.onpause = a.onstalled = a.onvolumechange = null;
-          if (host.setVoiceFocusHold) host.setVoiceFocusHold(false, entry);
-          unbindFocus = null;
-        };
-      }
-      const teardown = () => {
-        if (dead) return;
-        dead = true;
-        ended = true;
-        _watchClips.delete(entry);
-        if (fetchAbort) { try { fetchAbort.abort(); } catch (e) { /* already */ } fetchAbort = null; }
-        if (unbindFocus) unbindFocus();
-        releaseDuck();
-        if (voiceHandle && voiceHandle.stop) { try { voiceHandle.stop(); } catch (e) { /* gone */ } voiceHandle = null; }
-        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
-        nodes = [];
-        if (el) {
-          el.onended = el.onerror = null;
-          try { el.pause(); } catch (e) { /* gone */ }
-          // Drop the network src so a paused element does not keep fetching.
-          try { el.removeAttribute ? el.removeAttribute("src") : (el.src = ""); } catch (e) { /* gone */ }
-          try { if (el.load) el.load(); } catch (e) { /* gone */ }
-          el = null;
-        }
-      };
-      entry.teardown = teardown;
-      _watchClips.add(entry);
-      const handle = {
-        get chained() { return chained; },
-        get paused() { return dead || ended || (el ? el.paused : !voiceHandle); },
-        get ended() { return ended || (el ? el.ended : dead || !voiceHandle); },
-        pause() { teardown(); },
-        play() {
-          if (dead || !el) return Promise.resolve();
-          return el.play().catch(() => { teardown(); });
-        },
-        stop() { teardown(); },
-      };
-      function plainFallback() {
-        chained = false;
-        if (typeof Audio === "undefined") { teardown(); return null; }
-        el = new Audio(url);
-        el.volume = Math.min(1, vol);
-        bindMediaFocus(el);
-        el.onended = el.onerror = () => teardown();
-        const p = el.play();
-        if (p && p.catch) p.catch(() => teardown());
-        return handle;
-      }
-      const disconnectMedia = () => {
-        if (unbindFocus) unbindFocus();
-        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
-        nodes = [];
-        if (el) {
-          el.onended = el.onerror = null;
-          try { el.pause(); } catch (e) { /* gone */ }
-          try { el.removeAttribute ? el.removeAttribute("src") : (el.src = ""); } catch (e) { /* gone */ }
-          try { if (el.load) el.load(); } catch (e) { /* gone */ }
-          el = null;
-        }
-        chained = false;
-      };
-      // ONE FALLBACK PER CLIP. A failing media element fires `error` AND rejects the
-      // pending play() promise; both used to run disconnectMedia + tryFetchDecode,
-      // so the clip was fetched and put on air twice (the first handle lost).
-      let fellBack = false;
-      const fallBack = () => {
-        if (dead || fellBack) return;
-        fellBack = true;
-        disconnectMedia();
-        tryFetchDecode();
-      };
-      const tryFetchDecode = () => {
-        if (dead || typeof fetch !== "function" || !host.context()) { plainFallback(); return; }
-        const ac = (typeof AbortController === "function") ? new AbortController() : null;
-        fetchAbort = ac;
-        const opts = { mode: "cors", credentials: "omit" };
-        if (ac) opts.signal = ac.signal;
-        fetch(url, opts).then((r) => {
-          if (dead) throw new Error("aborted");
-          if (!r.ok) throw new Error("fetch " + r.status);
-          return r.arrayBuffer();
-        }).then((ab) => {
-          // Pre-decode liveness: decodeAudioData is expensive and uncancellable.
-          if (dead) throw new Error("aborted");
-          return decodeClip(ab);
-        }).then((buf) => {
-          if (dead) return;
-          fetchAbort = null;
-          const h = radioVoice([buf], host.now(), { fx: "radio", channel: "radio", volume: vol });
-          if (!h) { plainFallback(); return; }
-          chained = true;
-          voiceHandle = h;
-          const endAt = (h.end - host.now()) * 1000 + 150;
-          setTimeout(() => { if (!dead) teardown(); }, Math.max(50, endAt));
-        }).catch((err) => {
-          fetchAbort = null;
-          // An abort is intentional silence — do not resurrect via plainFallback.
-          if (dead || (ac && ac.signal.aborted) || (err && err.name === "AbortError")) return;
-          if (!dead) plainFallback();
-        });
-      };
-      const ctx = host.context();
-      if (!ctx || ctx.state === "closed" || ctx.state !== "running") return plainFallback();
-      el = new Audio();
-      el.crossOrigin = "anonymous";
-      el.preload = "auto";
-      try {
-        const mediaSrc = ctx.createMediaElementSource(el);
-        const preset = RADIO_PRESETS[radioPreset];
-        const ch = Object.assign({}, VOICE_CH.radio, {
-          lo: preset.lo, hi: preset.hi, drive: preset.drive, click: 0,
-        });
-        const g = ctx.createGain();
-        g.gain.value = ch.level * vol;
-        mediaSrc.connect(g);
-        g.connect(voiceChain("radio:" + radioPreset, ch));
-        nodes = [mediaSrc, g];
-        chained = true;
-        bindMediaFocus(el);
-        el.onended = () => teardown();
-        el.onerror = fallBack;
-        el.src = url;
-        const p = el.play();
-        if (p && p.catch) p.catch(fallBack);
-        return handle;
-      } catch (e) {
-        fallBack();
-        return handle;
-      }
-    }
-    playWatchMediaFn = radioMediaClip;
-
-    // radioMediaClip stays create-local: playWatchMediaFn holds it for the
-    // module-level playWatchMedia; no create()-return reader exists.
     return {
       decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset,
       radioPreset: () => radioPreset,
@@ -618,17 +433,14 @@ var GameAudioRadioFx = (function () {
       radioFxMax: () => RADIO_FX_MAX,
       resetContext() {
         radioStingStop();
-        for (const w of _watchClips) w.teardown();
-        _watchClips.clear();
         for (const ent of _voiceChains.values()) dropVoiceChain(ent);
         _voiceChains.clear();
         radioBed = null;
       },
     };
   }
-  function playWatchMedia(url, o) {
-    return playWatchMediaFn ? playWatchMediaFn(url, o) : null;
-  }
-  return { create, playWatchMedia };
+  // No WATCH media player: real team radio in WATCH is caption-only (docs/DECISIONS.md
+  // D-031); the broadcast recordings are never fetched or played.
+  return { create };
 })();
 Object.freeze(GameAudioRadioFx);

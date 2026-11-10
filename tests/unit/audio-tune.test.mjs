@@ -1167,38 +1167,6 @@ test("an engineer radioVoice clip does not own the duck (radio-voice.js does)", 
   for (const fn of pendingTimers.splice(0)) fn();
 });
 
-test("playWatchMedia ducks music and routes media elements through the radio band", async () => {
-  const b = boot({
-    Audio: function AudioMock() {
-      this.crossOrigin = "";
-      this.preload = "";
-      this.src = "";
-      this.volume = 1;
-      this.paused = false;
-      this.ended = false;
-      this.play = () => Promise.resolve();
-      this.pause = () => {};
-    },
-  });
-  const gains = [];
-  const mk = b.ctx.createGain;
-  b.ctx.createGain = () => { const n = mk(); gains.push(n); return n; };
-  b.GameAudio.init();
-  b.GameAudio.startMusic();
-  await b.release();
-  const musicGain = gains.find((g) => Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
-  assert.ok(musicGain, "precondition: music gain");
-  const full = musicGain.gain.value;
-  const GameAudioRadioFx = vm.runInContext("GameAudioRadioFx", b.vctx);
-  const h = GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.9 });
-  assert.ok(h && h.chained, "media element path chains into WebAudio");
-  assert.ok(Math.abs(musicGain.gain.value - full * 0.35) < 1e-9, "music ducks for the clip");
-  assert.ok((b.counts.mediaSrc || 0) >= 1, "createMediaElementSource ran");
-  assert.ok((b.counts.biquad || 0) >= 2, "radio band filters are in the graph");
-  h.stop();
-  assert.ok(Math.abs(musicGain.gain.value - full) < 1e-9, "stop releases the duck");
-});
-
 test("the skid layer glides its gain and filter, and still lands an exact 0", async () => {
   const { GameAudio: A, release, ctx } = boot();
   const nodes = [];

@@ -151,3 +151,18 @@ test('reselecting a pending schedule then changing tabs retires superseded compl
   assert.equal(h.panel().querySelector('.schedule-data').textContent, 'Delayed schedule');
   assert.equal(disposed, 39);
 });
+
+// D-031: both feeds are CC BY-NC-SA 4.0; the tab that shows their data credits them.
+test('a tab showing feed data carries the data-source line with the licence', async () => {
+  const h = harness(true);
+  h.hub.open('schedule');
+  await h.answer(true, 'Race at Monza');
+  const find = (n) => (n.dataset && n.dataset.feed ? n : (n.children || []).map(find).find(Boolean) || null);
+  const src = find(h.panel());
+  assert.ok(src, 'the schedule tab has a source line');
+  assert.equal(src.dataset.feed, 'jolpica');
+  const text = src.children.map((n) => n.textContent).join('');   // mini-dom keeps text per node
+  assert.equal(text, 'Data: Jolpica F1, CC BY-NC-SA 4.0 · unofficial, non-commercial');
+  const links = src.querySelectorAll('a');
+  assert.deepEqual(links.map((a) => a.href), ['https://github.com/jolpica/jolpica-f1', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']);
+});
