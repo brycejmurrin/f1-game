@@ -60,7 +60,7 @@ costs and the GLX `_ensureScratchGl` row in minutes.
 
 Ideas:
 
-- I4. `tools/perf/race-entry-timer.mjs` (landed with #3385: the session's timer, productised) does boot → `race("monza")` → `info().track` under an optional CDP profile; the proposed next step is writing
+- I4. `tools/perf/race-entry-timer` (landed with #3385: the session's timer, productised) does boot → `race("monza")` → `info().track` under an optional CDP profile; the proposed next step is writing
   `artifacts/perf/race-entry-<sha>.cpuprofile` plus a `summary.json` (self ms by file, top 40 functions,
   `raceEntryStages()`), on the headless project's launch args, with `APEX_PIN=webgl2|three` and `APEX_GL`.
   The `gpu-census.yml` macos leg should take the same profile on Metal, where the SwiftShader-only rows
@@ -160,3 +160,5 @@ follow-up PR after #3385.
   https://arxiv.org/html/2610.09023
 - In-repo: `tools/ci/spec-timings.mjs`, `.github/workflows/spec-timings.yml`, `tests/data/spec-timings.json`,
   `js/perf/race-entry-profile.js`, `docs/BUGS.md` §spec-timings, this PR's `artifacts/logs/h14-*.log`.
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

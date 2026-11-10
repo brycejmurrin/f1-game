@@ -322,7 +322,7 @@ iPhones run TLX on three's WebGL backend. In 0.186.1 `Pipelines._releaseProgram`
 only calls the stats-only `info.destroyProgram`, `WebGLBackend` never deletes a
 program, shader or VAO, and `vaoCache` keys on a growing attribute id, so every
 track switch leaves its VAOs, programs and shaders behind while the buffers are
-freed. `tools/gfx/gl-object-census.mjs` (WebGL2 prototype create/delete counters,
+freed. `tools/gfx/gl-object-census.mjs` (deleted 2026-11-10, in git history; WebGL2 prototype create/delete counters,
 picker mode, monza → monaco → spa × 3 on SwiftShader) measured, before the patch:
 VertexArray / Program / Shader deleted = 0 at every step, live +149 / +12 / +24
 per three-circuit cycle (about +50 / +4 / +8 per visit). Numbers after the patch:
