@@ -42,4 +42,9 @@ test("no rule re-adds the gutter to a raw inset, and fixed banners cap to the sa
   const data = read("css/data.css");
   assert.match(data, /--dh-safe-h: calc\(100 \* var\(--svhz\) - \(var\(--safe-t\) \+ var\(--safe-b\)\) \/ var\(--ui-scale\)\)/, "the data hub cap follows the same tokens as its overlay's padding");
   assert.doesNotMatch(data, /2 \* var\(--gut\)[^;]*var\(--sat\)/, "no second copy of the inset arithmetic");
+  // telemetry-fit.spec.js at 852x393: a card capped on the raw insets was 372 in a 364 box and ended at y 376 (bound 373).
+  const pop = data.match(/\.dh-tpopup \{[^}]*\}/), card = data.match(/\.dh-tpopup-card \{[^}]*\}/);
+  assert.match(pop[0], /padding: var\(--safe-t\) var\(--safe-r\) var\(--safe-b\) var\(--safe-l\)/, "the telemetry dialog pads by the safe box");
+  assert.match(card[0], /max-height: calc\(100 \* var\(--svhz\) - \(var\(--safe-t\) \+ var\(--safe-b\)\) \/ var\(--sheet-scale, var\(--ui-scale\)\)\)/, "and its centred card is capped by that same box");
+  assert.doesNotMatch(data, /max-height:[^;]*var\(--sat\)\s*\+\s*var\(--sab\)/, "no card height cap on the raw insets (a box padded by --safe-* is smaller)");
 });
