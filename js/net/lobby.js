@@ -1275,9 +1275,9 @@ const NetLobby = (function () {
         try { sess.sendEvent(NetPlay.EV.LEFT, { evicted: true }); } catch (e) { /* leaving */ }
       }
       Log.info("net", "host removed " + id);
-      // ACK BEFORE CLOSE: shutdown() drops the SCTP queue (pc.close()), so a
-      // LEFT sent and closed in one breath never reaches the guest, who then
-      // reads "The host left the room". The guest closes its own end on
+      // ACK BEFORE CLOSE: shutdown("local") lingers only ~500 ms for the SCTP
+      // queue, so a LEFT sent and closed in one breath can still miss a slow
+      // guest, who then reads "The host left the room". The guest closes on
       // LEFT { evicted } — that close is the ack; EVICT_GRACE_MS is the
       // fallback for a guest that never answers.
       if (!sess) { try { t.close(); } catch (e) { /* its close handler is the cleanup */ } return true; }
