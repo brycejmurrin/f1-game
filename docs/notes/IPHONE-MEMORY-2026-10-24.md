@@ -1,5 +1,7 @@
 # iPhone memory from the Device Farm syslogs (2026-10-24)
 
+Summary: iPhone memory read from the Device Farm syslogs, lever 5 of the Device Farm analysis (A·Y2, issue #3675); no device minutes spent.
+
 A·Y2 (Fleet A analyst), issue #3675, lever 5 of `DEVICE-FARM-ANALYSIS-2026-10-24.md` §4 (PR #3671). Bryce chose "All"
 of A·Y1's levers in OrchA 31 (~00:22Z) and said "Yes" to pulling the logs with the session's AWS credentials.
 Read-only: `list-runs`, `list-artifacts` and downloads. **0 device-minutes were spent.** Nothing here was run on a device.

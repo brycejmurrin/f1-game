@@ -10,7 +10,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -304,7 +304,7 @@ test("module never writes Ghost storage and stays under the RAM budget constant"
   assert.match(text, /MAX_BYTES = 720 \* 1024/);
 });
 
-test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path in game.js", () => {
+test("retirement edge auto-tags; jumpLastTag seeks", () => {
   const R = boot();
   const field = cars(2);
   const G = { cars: field, netPlay: { active: () => false } };
@@ -321,22 +321,9 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
   const st = api.status();
   assert.ok(Math.abs(st.scrubT - tag.t) < 1e-6);
   assert.equal(api.isScrubbing(), true);
-
-  // Contract: endRace / career score must refuse while scrubbing (source pin —
-  // a settle spy would need the full game boot; the call sites are the gate).
-  const game = gameSource();
-  assert.match(game, /replayBuf\.isScrubbing\(\)/);
-  assert.match(game, /replayBuf\.onRaceStart|replayBuf\.reset/);
-  assert.match(game, /Career\.scoreRound/);
-  // scoreRound must sit AFTER the scrubbing early-return in endRace.
-  const scrubGate = game.indexOf("if (replayBuf.isScrubbing())");
-  const score = game.indexOf("Career.scoreRound");
-  assert.ok(scrubGate >= 0 && score > scrubGate, "scrub gate precedes career score");
-  // A valid completion flushes before the scrub gate; the session guard may lead.
-  const end = symbolSource("function endRace(forcedOrder)");
-  const flush = end.indexOf("Ghost.flush();"), scrub = end.indexOf("if (replayBuf.isScrubbing())");
-  assert.ok(flush >= 0 && scrub > flush, "ghost flush precedes the scrub return");
   api.endScrub();
+  // endRace refusing to settle while scrubbing is proven in the real game below
+  // ("endRace while scrubbing scores nothing").
 });
 
 test("a car crossing the start/finish line interpolates through the seam, not round the lap", () => {
@@ -486,6 +473,52 @@ test("the replay ring is not a G expando: game.js never assigns G.replayBuf (1a-
   // The façade is DECLARED, not grown by assignment (an Object.seal(G) would throw at boot); tests reach the ring above.
   const game = gameSource();
   assert.ok(!/\bG\.replayBuf\s*=(?!=)/.test(game), "G.replayBuf = … is an undeclared façade member");
+});
+
+// THE SCRUB GATE, in the real game: a championship round paused into the
+// instant replay, and the flag asked for mid-scrub (game.js endRace, via the
+// façade and via __apex.finishRace). Nothing may settle: no results, no points,
+// no round advance. After the scrub ends the same call scores the round, so the
+// refusal is the gate's and not a race that could not end.
+test("endRace while scrubbing scores nothing; after the scrub the same call settles the round", async () => {
+  let rb = null;
+  const trapCreate = (sb) => {
+    let mod;
+    Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+  };
+  const g = await createGame({ track: "monza", carMeshes: false, onSandbox: trapCreate });
+  try {
+    const a = g.apex, G = g.G;
+    a.headless(true);
+    const S = vm.runInContext("SeasonCal", g.ctx);
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.flow = "season"; G.session = "race";
+    const r = S.applyConfig(Object.assign(S.fresh(), { quali: false, trackIds: ["monza", "spa"] }));
+    G.season = r.season; G.trackIdx = S.trackIndex(0); G.raceLaps = 3;
+    const before = G.cars; G.startRace();
+    await vmSettle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+    a.go(); a.setInput({ throttle: true, steer: 0 });
+    const t0 = g.sandbox.performance.now();
+    for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
+    assert.ok(rb, "ReplayBuf.create was trapped");
+    assert.equal(G.state, "race");
+    G.els.pausebtn.onclick();
+    assert.equal(rb.beginScrub(false), true, "the pause card opens the instant replay");
+    const round0 = G.season.round, pts0 = JSON.stringify(G.season.pts || {});
+    const since = (g.sandbox.Log.records().slice(-1)[0] || { id: 0 }).id;
+    G.endRace();
+    a.finishRace();
+    assert.equal(G.state, "race", "no results sheet mid-scrub");
+    assert.equal(G.season.round, round0, "the round is not scored mid-scrub");
+    assert.equal(JSON.stringify(G.season.pts || {}), pts0, "no points paid mid-scrub");
+    assert.ok(!g.sandbox.Log.records({ ns: "game", since }).some((x) => /^Race finished/.test(x.msg)), "no classification built");
+    assert.equal(rb.isScrubbing(), true, "still scrubbing");
+    rb.endScrub();
+    a.finishRace();
+    assert.equal(G.state, "results", "the flag settles once the scrub is over");
+    assert.ok(G.season.round > round0, "…and the round scores");
+  } finally { g.close(); }
 });
 
 test("solo pause replay scrub feeds engine and rivals; rpm tracks speed; radio silent", async () => {
