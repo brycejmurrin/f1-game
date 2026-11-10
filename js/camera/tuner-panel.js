@@ -445,7 +445,7 @@ $("ct-reset").onclick = () => {
   if (_scope === "global") CamTune.resetGlobal();
   else if (_scope === "track" || _scope === "car") CamTune.resetScoped(_scope, curMode());
   else CamTune.reset(curMode());
-  CamTune.persist(); applyLive(); refreshCamTunePanel();
+  CamTune.persist(_scope === "track" || _scope === "car" ? _scope : undefined); applyLive(); refreshCamTunePanel();
 };
 $("ct-reset-all").onclick = () => {
   CamTune.resetAll(); CamTune.persist(); CamTune.persist("track"); CamTune.persist("car");

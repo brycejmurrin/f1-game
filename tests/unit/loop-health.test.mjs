@@ -152,7 +152,10 @@ function loadStall(opts = {}) {
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? carsetup : null),
+    getElementById(id) {
+      assert.equal(this, doc, "native DOM methods require their Document receiver");
+      return id === "loading" ? cover : id === "carsetup" ? carsetup : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
@@ -238,6 +241,17 @@ test("stall: ?stallwatch=0 turns it off for a probe browser that is not flagged 
   assert.deepEqual(forced.calls.tier, [4], "an explicit force-on still wins");
 });
 
+test("stallWatch(false) persists an explicit OFF choice through a fresh module load", () => {
+  const h = loadStall();
+  assert.equal(h.LoopHealth.stallWatch(), true);
+  assert.equal(h.LoopHealth.stallWatch(false), false);
+  assert.equal(h.ls.get("apex26.stallWatch"), "0");
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), h.ctx, { filename: absSrc("js/perf/loop-health.js") });
+  assert.equal(h.ctx.LoopHealth.stallWatch(), false, "OFF survives reconstruction on a normal browser");
+  assert.equal(h.ctx.LoopHealth.stallWatch(true), true);
+  assert.equal(h.ls.get("apex26.stallWatch"), "1");
+});
+
 test("stall: under the loading cover the shed waits and the reload needs a 30-frame run", () => {
   const h = loadStall();
   h.cover.hidden = false;
@@ -273,7 +287,10 @@ test("stall: #race-settings (PREPARING…) uses the same relaxed cover as #loadi
   const doc = {
     visibilityState: "visible",
     addEventListener: (n, f) => { listeners[n] = f; },
-    getElementById: (id) => (id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null),
+    getElementById(id) {
+      assert.equal(this, doc, "native DOM methods require their Document receiver");
+      return id === "loading" ? cover : id === "carsetup" ? { hidden: true } : id === "race-settings" ? raceSettings : null;
+    },
   };
   const ctx = {
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,

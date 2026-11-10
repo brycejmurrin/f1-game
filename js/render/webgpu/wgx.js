@@ -1026,19 +1026,28 @@ const WGX = (function () {
     function _halfTexW(w, h, data) {
       const tex = device.createTexture({ size: [w, h], format: "rgba16float",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-      device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: w * 8, rowsPerImage: h }, { width: w, height: h });
+      try { device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: w * 8, rowsPerImage: h }, { width: w, height: h }); }
+      catch (e) { tex.destroy(); throw e; }
       return tex;
     }
     function _syncLampBake(lb) {
       if (!lb || lb === _bakeSrcW || !lb.data || !lb.indir) return;
-      const tex = _halfTexW(lb.atlasW, lb.atlasH * 2, lb.data);     // diffuse + bounce atlas halves
-      const idx = _halfTexW(lb.tilesX, lb.tilesY, lb.indir);        // tile -> slot (textureLoad)
+      let tex = null, idx = null;
+      const oldView = lampBakeView, oldIdxView = lampBakeIdxView;
+      try {
+        tex = _halfTexW(lb.atlasW, lb.atlasH * 2, lb.data);   // diffuse + bounce
+        idx = _halfTexW(lb.tilesX, lb.tilesY, lb.indir);      // tile -> slot
+        lampBakeView = tex.createView(); lampBakeIdxView = idx.createView();
+        _rebuildFrameBG();   // builds both groups before publishing either
+      } catch (e) {
+        lampBakeView = oldView; lampBakeIdxView = oldIdxView;
+        if (tex) tex.destroy(); if (idx) idx.destroy();
+        throw e;
+      }
       const old = _bakeTexW, oldIdx = _bakeIdxW;
-      _bakeTexW = tex; lampBakeView = tex.createView(); _bakeSrcW = lb;
-      _bakeIdxW = idx; lampBakeIdxView = idx.createView();
-      _rebuildFrameBG();
-      if (old) old.destroy();
-      if (oldIdx) oldIdx.destroy();
+      _bakeTexW = tex; _bakeIdxW = idx; _bakeSrcW = lb;
+      if (old) _retiredBufs.push(old);
+      if (oldIdx) _retiredBufs.push(oldIdx);
     }
     // Bake off ~2 s (GLX bindLampBake _bakeOffN): rebind the placeholder, then
     // retire the light map — destroyed after this frame's submit, never while
@@ -2744,7 +2753,7 @@ const WGX = (function () {
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
-    // Interleave [pos3, nrm3, col3] (stride 36) + a side array [mat, s, x, hw].
+    // Packed pos/nrm/colour (stride 28) + a side array [mat, s, x, hw].
     function _interleave(data) {
       const pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const vCount = pos.length / 3;
@@ -3746,7 +3755,7 @@ const WGX = (function () {
         pass.__ib = buf; pass.__ibf = fmt;
       }
     }
-    // Slot 0 = pos/nrm/col (stride 36), slot 1 = instance.
+    // Slot 0 = packed pos/nrm/colour (stride 28), slot 1 = instance.
     // Group 2 = mat+trk storage (vertex_index). Road draws bind the piece's
     // authored buffer; bury/floor keep the world LUT (magic 12345).
     function _bindLitVerts(pass, vbuf, instBuf, attrBG, authored) {
@@ -6006,14 +6015,7 @@ const WGX = (function () {
       gpuMs,
       createInstancedBatch,
       cullInstances,
-      // NOT IMPLEMENTED, declared rather than omitted: an absent name would let
-      // descriptor-copy keep GLX's own closure and run it against a null device
-      // (backend-surface-parity.test.mjs). DebrisWorld feature-tests this and
-      // keeps its per-body loop here, which is exactly what WGX ships today —
-      // so this is a perf gap, never a correctness one. Porting it means
-      // expanding the caller's stride-16 matrices into WGX's stride-20 instance
-      // layout (16 matrix + 3 colour + pad) and deciding what the colour lanes
-      // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2h.
+      // Expands caller matrices into the stride-20 matrix/colour instance layout.
       updateInstances,
       drawInstanced,
       freeInstancedBatch,

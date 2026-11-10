@@ -100,46 +100,40 @@ test("warmPlusOn is on for WebGPU only when where===menu (source behaviour)", ()
   assert.ok(warmApi.includes("_resolveWarmWhere(opts)"), "warm(opts) stamps where");
 });
 
-test("warmPlusOn evaluates: WebGL always; WebGPU menu yes / race no", () => {
-  // Behaviour sandbox of the gate alone (no renderer boot).
-  const mk = (backend, where, forced) => {
-    const renderer = backend ? { backend: { isWebGLBackend: backend === "webgl" } } : null;
-    let _warmPlus = forced;
-    let _warmWhere = where;
-    const warmPlusOn = () => {
-      if (_warmPlus !== null) return _warmPlus;
-      if (renderer && renderer.backend && renderer.backend.isWebGLBackend) return true;
-      return _warmWhere === "menu";
-    };
-    return warmPlusOn();
-  };
-  assert.equal(mk("webgl", "race", null), true);
-  assert.equal(mk("webgl", "menu", null), true);
-  assert.equal(mk("webgpu", "menu", null), true);
-  assert.equal(mk("webgpu", "race", null), false);
-  assert.equal(mk("webgpu", "loading", null), false);
-  assert.equal(mk("webgpu", "race", true), true);    // apex26.tlxWarmPlus=1
-  assert.equal(mk("webgpu", "menu", false), false);  // forced off
+// Execute the real closed-over policy block. These stubs supply its environment;
+// they do not copy its decisions, so production logic mutations reach the tests.
+function warmPolicy(backend, where, forced = null, profile) {
+  const start = TLX.indexOf("function _resolveWarmWhere(opts)");
+  const end = TLX.indexOf("const drawWarmOn = () =>", start);
+  assert.ok(start >= 0 && end > start, "production warm policy block found");
+  const sandbox = { renderer: backend ? { backend: { isWebGLBackend: backend === "webgl" } } : null,
+    _warmPlus: forced, _warmWhere: where, RaceEntryProfile: profile };
+  vm.runInNewContext(TLX.slice(start, end) +
+    "\nthis.policy = { warmPlusOn, resolve: _resolveWarmWhere };", sandbox,
+    { filename: absSrc("js/render/three/tlx.js") });
+  return sandbox.policy;
+}
+
+test("production warmPlusOn: WebGL always; WebGPU menu yes / race no", () => {
+  const on = (backend, where, forced) => warmPolicy(backend, where, forced).warmPlusOn();
+  assert.equal(on("webgl", "race"), true);
+  assert.equal(on("webgl", "menu"), true);
+  assert.equal(on("webgpu", "menu"), true);
+  assert.equal(on("webgpu", "race"), false);
+  assert.equal(on("webgpu", "loading"), false);
+  assert.equal(on("webgpu", "race", true), true);
+  assert.equal(on("webgpu", "menu", false), false);
 });
 
-test("_resolveWarmWhere: explicit opts, RaceEntryProfile armed, else menu", () => {
+test("production _resolveWarmWhere: explicit opts, RaceEntryProfile armed, else menu", () => {
   const P = loadProfile();
-  // Mirror tlx.js helper against a live profile.
-  function resolve(opts, profile) {
-    if (opts && typeof opts.where === "string" && (opts.where === "menu" || opts.where === "loading" || opts.where === "race")) return opts.where;
-    try {
-      if (profile && profile.armed && profile.armed()) {
-        if (profile.menuEntrySession && profile.menuEntrySession()) return "loading";
-        return "race";
-      }
-    } catch (_) { /* */ }
-    return "menu";
-  }
-  assert.equal(resolve({ where: "menu" }, null), "menu");
-  assert.equal(resolve(undefined, null), "menu");
+  const resolve = (opts, profile) => warmPolicy("webgpu", "menu", null, profile).resolve(opts);
+  assert.equal(resolve({ where: "menu" }), "menu");
+  assert.equal(resolve(undefined), "menu");
+  assert.equal(resolve({ where: "invalid" }), "menu");
   P.begin("startRace");
   assert.equal(resolve(undefined, P), "race");
-  const P2 = loadProfile();
-  P2.beginUi("ui");
+  assert.equal(resolve({ where: "menu" }, P), "menu", "explicit intent wins over armed profile");
+  const P2 = loadProfile(); P2.beginUi("ui");
   assert.equal(resolve(undefined, P2), "loading");
 });
