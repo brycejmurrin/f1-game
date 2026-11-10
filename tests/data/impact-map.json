@@ -19200,7 +19200,6 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
-        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "move": [
