@@ -5288,9 +5288,9 @@ test("SSAO tap setup is skipped when strength is 0 on all three backends", () =>
 });
 
 test("Gfx seam lists instancing on all three backends", () => {
-  const gfx = read("js/render/gfx.js");
+  const gfx = read("docs/GFX-CONTRACT.md");   // the seam's contract (moved out of the gfx.js header)
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
-    "gfx.js must not still say TLX exports instancing as undefined");
+    "the Gfx contract must not still say TLX exports instancing as undefined");
 });
 
 test("TLX garage (noEnv) paints the canvas, not the HDR scene target", () => {

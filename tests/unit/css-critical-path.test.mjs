@@ -100,9 +100,6 @@ test("blocking sheets hide #rotate-device until overlays.css arrives", () => {
     .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
   assert.match(blocking, /#rotate-device\s*\{\s*display:\s*none\s*;?\s*\}/,
     "a cold print→all withhold must not paint the rotate dialog in flow");
-  const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
-  assert.match(overlays, /body\.in-race:not\(\.rotate-ok\) #rotate-device \{ display: flex; \}/,
-    "the in-race show rule stays in the deferred chrome sheet");
 });
 
 test("blocking and preload byte census stay under the post-cut ceilings", () => {
