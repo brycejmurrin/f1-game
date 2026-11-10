@@ -1035,9 +1035,30 @@ test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis",
 test("finishRace does not stamp the go() 0.5s floor as official winner elapsed", () => {
   // go() floors raceT at 0.5; a harness finishRace that copied it printed
   // OFFICIAL WINNER ELAPSED 0:00.500. Only stamp a clock when raceT has left that floor.
-  const apex = read("js/race/ceremony.js");
-  assert.match(apex, /clock = ran > 0\.5 \? ran : 0/);
-  assert.match(apex, /c\.finishT = clock/);
+  // The REAL RaceCeremony.finishThrough (the __apex.finishRace body) marks the
+  // field and hands the order to the REAL RESULTS sheet; the sheet is read back.
+  const Ceremony = vm.runInNewContext(src("js/race/ceremony.js") + "\n;RaceCeremony", { Object, Number, Math }, { filename: absSrc("js/race/ceremony.js") });
+  const team = (id, color) => ({ id, name: id.toUpperCase(), color });
+  const field = () => [
+    { driverId: "w", code: "WIN", name: "Winner", team: team("red", [1, 0, 0]), lap: 5, penalty: 0 },
+    { driverId: "s", code: "SEC", name: "Second", team: team("blue", [0, 0, 1]), lap: 5, penalty: 0 },
+  ];
+  const finishAt = (raceT) => {
+    const cars = field(), h = bootResults({ season: null, cars, seasonMode: false });
+    h.G.raceT = raceT;
+    Ceremony.finishThrough(h.G, (order) => h.api.buildResults(order), (cs) => cs.slice(), {});
+    const summary = h.els.resultsTable.children.find((c) => /OFFICIAL WINNER ELAPSED/.test(c.textContent || ""));
+    return { cars, summary };
+  };
+  const floor = finishAt(0.5);
+  assert.ok(floor.cars.every((c) => c.finished), "finishRace marks the field finished");
+  assert.ok(floor.cars.every((c) => c.finishT === 0), `at the floor no clock is stamped: ${floor.cars.map((c) => c.finishT)}`);
+  assert.equal(floor.summary, undefined, `RESULTS prints no official elapsed off the 0.5 s floor: ${floor.summary && floor.summary.textContent}`);
+  // A race that actually ran stamps its clock, and the sheet prints it.
+  const ran = finishAt(100);
+  assert.ok(ran.cars.every((c) => c.finishT === 100));
+  assert.ok(ran.summary, "a real race clock is the official elapsed");
+  assert.match(ran.summary.textContent, /WIN.*1:40\.00/);
 });
 
 

@@ -171,34 +171,25 @@ test("a primary control centre inside the unsafe inset is rejected by clamp", ()
 });
 
 test("store.subscribe on steerMode reloads that scheme's offsets", () => {
-  const left = dockEl(), right = dockEl();
-  const listeners = [];
-  let mode = "buttons";
-  const bag = DL.normalize({});
-  bag.buttons.L = { x: 0.2, y: 0 };
-  bag.tilt.L = { x: 0, y: 0 };
-  const store = {
-    get(k, d) { return k === "dockLayout" ? bag : d; },
-    set() {},
-    subscribe(fn) { listeners.push(fn); return () => {}; },
-  };
-  // Lightweight create stand-in: paint via apply + the same subscribe filter.
-  function paint() { DL.apply(mode, bag, { L: left, R: right }); }
-  store.subscribe((change) => {
-    if (!change) return;
-    const hit = (k) => k === "steerMode" || k === DL.KEY;
-    if (hit(change.key) || (Array.isArray(change.keys) && change.keys.some(hit))) paint();
-  });
-  mode = "buttons"; paint();
-  assert.match(left.style.transform, /^translate\(/);
-  mode = "tilt";
+  // The PRODUCTION listener create() registers: switch STEERING INPUT, fire it.
+  const { els, listeners, setMode } = bootCreate({ subscribe: true });
+  const left = els["dock-left"];
+  assert.match(left.style.transform, /^translate\(/, "buttons offset painted at create");
+  assert.equal(listeners.length, 1, "create() subscribes to the store");
+  setMode("tilt");
   listeners[0]({ key: "steerMode" });
   assert.equal(left.style.transform, "", "singular key notify must clear buttons offset");
+  setMode("buttons");
+  listeners[0]({ keys: ["steerMode"] });
+  assert.match(left.style.transform, /^translate\(/, "bulk keys notify repaints the buttons offset");
+  setMode("tilt");
+  listeners[0]({ key: "unrelated" });
+  assert.match(left.style.transform, /^translate\(/, "an unrelated key does not repaint");
 });
 
 // create() itself, in a context that records its window/document listeners
 // and the settings MutationObserver, so the two lifecycle edges are testable.
-function bootCreate() {
+function bootCreate(opts = {}) {
   const winL = {}, docL = {}, observers = [];
   const settings = { hidden: false };
   const pause = { hidden: true };
@@ -226,9 +217,12 @@ function bootCreate() {
   const bag = ctx.DockLayout.normalize({});
   bag.buttons.L = { x: 0, y: 0.35 };
   const sets = [];
+  const listeners = [];
+  let mode = "buttons";
   const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set(k, v) { sets.push([k, v]); } };
-  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => "buttons" });
-  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets };
+  if (opts.subscribe) store.subscribe = (fn) => { listeners.push(fn); return () => {}; };
+  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode });
+  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, setMode: (m) => { mode = m; } };
 }
 
 test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
