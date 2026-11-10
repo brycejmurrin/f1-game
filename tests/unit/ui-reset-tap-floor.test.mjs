@@ -7,7 +7,7 @@ import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  readFloors, toCssPx, judgeTap, unionRect, measureTapTarget, TAP_FLOOR_SRC, WCAG_MIN, COMFY_FALLBACK,
+  readFloors, toCssPx, judgeTap, unionRect, measureTapTarget, isRendered, TAP_FLOOR_SRC, WCAG_MIN, COMFY_FALLBACK,
 } from "../../tools/ui/tap-floor.mjs";
 import { resetOverlays, resetConfig, ROUTE_BODY_CLASSES, NEVER_HIDE } from "../../tools/ui/ui-reset.mjs";
 import { OVERLAY_IDS } from "../../tools/ui/menu-screens.mjs";
@@ -129,6 +129,28 @@ async function runReset(page, cfg) {
   globalThis.document = page.document; globalThis.window = page.window;
   try { return await resetOverlays(cfg); } finally { globalThis.document = prev.document; globalThis.window = prev.window; }
 }
+
+// A closed <details> keeps real rects and ordinary display/visibility/opacity on its
+// contents: fit-audit judged 16 unseen controls on SETTINGS › DISPLAY (geometry hunt 2, T2).
+test("a control inside a closed <details> is not a tap target: fit-audit's vis asks checkVisibility first", () => {
+  const closed = { checkVisibility: () => false, getBoundingClientRect: () => ({ width: 140, height: 52 }) };
+  const open = { checkVisibility: () => true };
+  assert.equal(isRendered(closed), false, "a non-zero rect is not evidence of being rendered");
+  assert.equal(isRendered(open), true);
+  assert.equal(isRendered({}), true, "an engine without checkVisibility keeps the old answer");
+  // The page copy is the same function.
+  const ctx = { document: { body: {} }, getComputedStyle: () => ({ getPropertyValue: () => "" }), CSS: { escape: (s) => s } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(TAP_FLOOR_SRC, ctx, { filename: path.join(ROOT, "tools/ui/tap-floor.mjs") });
+  assert.equal(ctx.window.__apexTap.rendered(closed), false);
+  assert.equal(ctx.window.__apexTap.rendered(open), true);
+  // And fit-audit's gate consults it before any computed style, in the function it serialises into the page.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ui/fit-audit.mjs"), "utf8");
+  const vis = /const vis = \(el\) => \{([^\n]*)\n/.exec(src);
+  assert.ok(vis, "fit-audit.mjs still declares vis");
+  assert.match(vis[1], /^\s*if \(!T\.rendered\(el\)\) return false;/);
+});
 
 test("reset closes every layer through its door and needs no hidden=true fallback", async () => {
   let hubOpen = true;
