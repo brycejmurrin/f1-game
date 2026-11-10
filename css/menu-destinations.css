@@ -300,7 +300,11 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 }
 /* Destination presentation: one quiet control family, with category names taken
    from the same accessible grouping used by navigation. Geometry and
-   custom layout attributes above remain authoritative. */
+   custom layout attributes above remain authoritative. NOT ON A SHORT
+   LANDSCAPE SCREEN (#5199): this restyle (#4291, 2026-10-30) is what took the
+   italic, slanted doors and the orange CAREER hero off Bryce's phone; the
+   PHONE LANDSCAPE HOME block at the end of this file owns that screen. */
+@media (min-height: 520px), (max-aspect-ratio: 1/1) {
 #overlay #menu-buttons .bigbtn {
   transform: none; border-radius: var(--r-sm);
   font-style: normal; box-shadow: none;
@@ -314,6 +318,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 #overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
 #overlay #menu-buttons .bigbtn::before { background: none; }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
+}
 /* At comfortable heights the destinations retain their groups instead of
    dissolving into a field of equal tiles. DOM order is the reading order. */
 @media (min-height: 1000px) and (min-aspect-ratio: 1/1) {
@@ -350,5 +355,100 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 @media (prefers-reduced-motion: reduce) {
   #overlay #menu-buttons .bigbtn { transition: none; }
   #overlay #menu-buttons .bigbtn:active { transform: none; }
+}
+/* ---------- PHONE LANDSCAPE HOME (#5199) ----------
+   ONE composition for every short landscape screen, keyed on the layout
+   viewport alone: the complement of the Dense Home query above. It does not
+   read body[data-density], the home scene or a stored TITLE LAYOUT, because
+   each of those used to select a different title on the same phone:
+     - density "normal" at 852x393 (measured 2026-11-10 with UI SIZE 60 %:
+       393 / 0.6 = 655 own px, over --compact-at 600) fell out of every
+       compact rule: one door per line for CAREER, DAILY, PRACTICE, GARAGE and
+       VISUAL STUDIO, mode subtitles back, 11 uneven rows — Bryce's screenshot;
+     - a live home scene (html[data-home-live], css/menus.css) and then #4291
+       made the doors upright and flat;
+     - a fresh profile got three play doors to a row, a stored WIDTH got two.
+   THE ROWS (tests/unit/title-rows.test.mjs pins them): CAREER MODES hero with
+   its subtitle; CONTINUE | DAILY TIME TRIAL with theirs; RACE | TIME TRIAL;
+   RACE A FRIEND | SEASON; PRACTICE | GARAGE; WATCH | DATA HUB; three creation
+   doors; four utility doors. No other subtitle. THE LOOK is the house .bigbtn
+   (css/components.css) and the play-door plate (css/menus.css): italic, the
+   -6deg slant, the red leading edge, the red gradient hero.
+   WIDTH (html[data-title-btnw], --tl-btns-w 20..100) runs from the shipped
+   column at 20 to the whole content box at 100, so every step moves the
+   cluster's edge; SIZE is the cluster's zoom (css/responsive.css) and the fit
+   in js/ui/title-layout.js is still the law: nothing here scrolls. */
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) {
+body[data-shape="wide"]:not([hidden]) #overlay { grid-template-columns: minmax(0, 46fr) minmax(0, 54fr); grid-template-rows: minmax(0, 1fr); column-gap: 0; align-items: center; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand {
+  grid-column: 1; grid-row: 1; align-self: start; align-items: flex-start; text-align: start;
+  width: 100%; margin-top: calc(4 * var(--vhz)); padding: 0; background: transparent;
+  /* The same base zoom with or without a stored layout and at either density
+     (it was --ui-scale under html[data-title-layout] and min(--ui-scale, 1)
+     without: a stored TITLE SIZE 100 painted the brand 9 % bigger at 109 %). */
+  zoom: calc(var(--ui-compact-brand-scale) * var(--tl-title-size, 1) * var(--tf, 1));
+  --vwz: calc(1vw / var(--ui-compact-brand-scale)); --vhz: calc(1vh / var(--ui-compact-brand-scale));
+}
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-brand { grid-column: 2; }
+body[data-shape="wide"]:not([hidden]) #overlay #title { font-size: min(calc(6 * var(--vwz)), 21cqi); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-meta { align-items: flex-start; margin-top: var(--gap); gap: calc(var(--gap) / 2); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #soundbtn { font-size: calc(var(--fs-micro) * .6 * var(--ui-compact-brand-text, 1)); margin: 0; min-height: 0; padding: calc(var(--gap) * .7) var(--gap); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-brand #disclaimer { font-size: calc(var(--fs-micro) * .52 * var(--ui-compact-brand-text, 1)); margin: 0; white-space: nowrap; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons {
+  --home-g: calc(var(--gap) * .45); --home-t: clamp(0, calc((var(--tl-btns-w, 20) - 20) / 80), 1);
+  /* 100% is the doors' track (54 of 100, no column gap); 100 / 54 of it is the
+     whole content box. The cluster grows over the brand's column from its
+     own outer edge, so the track never changes under the brand. */
+  grid-column: 2; grid-row: 1; justify-self: end; align-self: center;
+  width: calc(100% + 85.185% * var(--home-t)); min-width: 0; max-width: none; height: auto; max-height: none;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: max-content;
+  gap: var(--home-g); align-content: center; margin: 0; padding-block: 0; pointer-events: auto;
+  background: transparent; border: 0;
+  zoom: calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
+}
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay { grid-template-columns: minmax(0, 54fr) minmax(0, 46fr); }
+:root[data-title-side="swap"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-column: 1; justify-self: start; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-primary, #menu-garage) { display: contents; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; grid-row: auto; width: 100%; min-height: 0; align-self: auto; justify-self: auto; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-hero, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-flow: row nowrap; gap: var(--home-g); width: 100%; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-hero { flex-direction: column; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn {
+  --home-row: 31px;
+  display: flex; flex: 1 1 0; flex-flow: row nowrap; align-items: center; justify-content: center; gap: .45em;
+  grid-column: auto; grid-row: auto; width: 100%; min-width: 0; height: auto; max-height: none; min-height: var(--home-row); box-sizing: border-box;
+  margin: 0; padding: calc(var(--gap) / 6) calc(var(--gap) * .6);
+  font-size: calc(var(--fs-4) * .74 * var(--ui-compact-text, 1)); font-style: italic; font-weight: 700;
+  line-height: 1.08; letter-spacing: 0; text-align: center;
+  white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; overflow: hidden;
+  transform: skewX(-6deg); border-radius: var(--r-md);
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg) scale(.98); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: 0; min-width: 0; max-width: 100%; text-align: center; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .btn-ico { flex: none; margin: 0; width: .95em; height: .95em; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
+  background: linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box, color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
+  border-color: var(--plate-line);
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #mb-career { --home-row: 37px; flex: none; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-retention .bigbtn { --home-row: 33px; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .mb-sub { display: none; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub {
+  display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: calc(var(--fs-micro) * .62 * var(--ui-compact-text, 1)); line-height: 1.1; letter-spacing: .06em;
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-create .bigbtn { font-size: calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)); padding-inline: calc(var(--gap) / 3); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons #menu-secondary .bigbtn {
+  --home-row: 28px; font-size: calc(var(--fs-micro) * .64 * var(--ui-compact-text, 1)); line-height: 1.05;
+  padding: calc(var(--gap) / 8) calc(var(--gap) / 4);
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
+/* LAYOUT: STACK is one door per line, ROW the six play doors on one line. */
+:root[data-title-btns="stack"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: minmax(0, 1fr); }
+:root[data-title-btns="stack"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { flex-direction: column; }
+:root[data-title-btns="row"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-height: 519px) and (min-aspect-ratio: 1/1) and (prefers-reduced-motion: reduce) {
+  body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg); }
 }
 }

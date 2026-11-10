@@ -77,6 +77,18 @@ for (const geo of GEOS) {
 
         const boot = await measure(page);
         expect(boot.frames, "the fit settled").toBeGreaterThan(0);
+        // THE ROWS (#5199): one composition on every landscape phone, whatever the profile.
+        // CONTINUE is shown so the retention pair is whole (a fresh profile has no last session).
+        if (!prof.sweep) {
+          await page.evaluate(() => { document.getElementById("mb-continue").hidden = false; });
+          const withContinue = await measure(page);
+          const rows = {};
+          for (const d of withContinue.m.doors) (rows[Math.round(d.t)] ||= []).push(d.id);
+          expect(Object.values(rows).map((r) => r.length), `${geo.name} ${prof.name} rows ${JSON.stringify(rows)}`).toEqual([1, 2, 2, 2, 2, 2, 3, 4]);
+          expect(judge(withContinue.m, { offsets: prof.offsets }), `${geo.name} ${prof.name} with CONTINUE`).toEqual([]);
+          await page.evaluate(() => { document.getElementById("mb-continue").hidden = true; });
+          await measure(page);
+        }
         expect(judge(boot.m, { offsets: prof.offsets }), `${geo.name} boot ${prof.name}: ${JSON.stringify({ fit: boot.m.fit, mb: boot.m.mb, ov: boot.m.ov })}`).toEqual([]);
         if (prof.name === "export") {
           // The stored WIDTH 20 at Bryce's geometries (#5167 part F): the

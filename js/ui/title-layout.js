@@ -10,7 +10,8 @@
    The three pieces are the BUTTONS (#menu-buttons), the TITLE (#menu-brand:
    wordmark, sound toggle, small print) and the CAR DRAWING (#title-car). Each
    moves on X and Y (percent of the screen) and scales (SIZE). The buttons also
-   take a WIDTH (a share of the screen, or AUTO for the shipped width), a
+   take a WIDTH (AUTO for the shipped width; on a short landscape screen 20 is
+   the shipped column and 100 the whole box, elsewhere a share of the screen), a
    LAYOUT (GRID is the shipped 2x2 of play modes; STACK is one door per line;
    ROW puts the play modes side by side) and a SIDE (SWAPPED trades the title's
    and the buttons' columns, or their order on a tall screen).
@@ -205,7 +206,7 @@ const TitleLayout = (function () {
   function scheduleFit() {
     if (typeof requestAnimationFrame !== "function") { fit(); return; }
     if (fitRaf) return;
-    fitRaf = requestAnimationFrame(() => { fitRaf = 0; fit(); });
+    fitRaf = requestAnimationFrame(() => { fitRaf = 0; fit(); if (ed.on) paintEd(); });   // the editor's readout and handle follow the fitted box
   }
   if (doc && typeof ResizeObserver === "function") {
     // The overlay's box (viewport, insets, zoom) and each piece's own (its
@@ -258,7 +259,7 @@ const TitleLayout = (function () {
 
   const pctTxt = (k, n) => {
     if (k === "size") return n + "%";
-    if (k === "width") return n ? n + "% of screen" : "AUTO";
+    if (k === "width") return n ? n + "%" : "AUTO";
     if (!n) return "CENTRE";
     if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
     return Math.abs(n) + "% " + (n < 0 ? "up" : "down");
@@ -423,6 +424,9 @@ const TitleLayout = (function () {
   const uiScale = () => {
     try { return parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1; } catch (_) { return 1; }
   };
+  const phoneWide = () => { try { return !!win().matchMedia && win().matchMedia("(max-height: 519px) and (min-aspect-ratio: 1/1)").matches; } catch (_) { return false; } };
+  /** The fit is holding this piece under its requested SIZE (#5150): the box is full. */
+  const fitted = (p) => { const e = p === "art" ? null : byId(p === "btns" ? "menu-buttons" : "menu-brand"); return !!(e && e.style && parseFloat(e.style.getPropertyValue("--tf")) < 1); };
   const zoomOf = (p, size) => (p === "art" ? 1 : uiScale() * size / 100);
 
   function page(on) {
@@ -533,8 +537,11 @@ const TitleLayout = (function () {
     const l = current(), p = l[ed.sel];
     if (k === "width") {
       if (ed.sel !== "btns") return;
+      // On a short landscape screen WIDTH 20 IS the shipped column and 100 the
+      // whole box (css/menu-destinations.css PHONE LANDSCAPE HOME), so AUTO
+      // steps from 20; elsewhere it starts at the share the buttons have now.
       const r = pieceEl("btns").getBoundingClientRect();
-      const w = (p.width || Math.round(r.width / (win().innerWidth || 1) * 100)) + d;
+      const w = (p.width || (phoneWide() ? 20 : Math.round(r.width / (win().innerWidth || 1) * 100))) + d;
       p.width = w < 20 ? 0 : num(w, "width");
     } else p[k] = num(p[k] + d, k);
     set(l);
@@ -554,7 +561,7 @@ const TitleLayout = (function () {
     const E = ed.els;
     if (!E || !ed.on) return;
     const p = current()[ed.sel];
-    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + p.size + "%" +
+    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + p.size + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
       (ed.sel === "btns" ? " · " + (p.width ? p.width + "% WIDE" : "AUTO WIDTH") : "");
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";
     const car = byId("title-car"), r = car ? car.getBoundingClientRect() : null;
