@@ -6934,6 +6934,9 @@
       "tick": [
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/fx/grade-tint.js": {
@@ -7129,6 +7132,9 @@
       ],
       "tintRGB": [
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/game.js": {
@@ -15160,7 +15166,8 @@
       ],
       "*": [
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/mirror-lights.test.mjs"
+        "tests/unit/mirror-lights.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/render/shared/post-common.js": {
@@ -17996,6 +18003,9 @@
       "tick": [
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/hud-skin.js": {
@@ -18170,7 +18180,8 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/tooling-fast-runner.test.mjs"
+        "tests/unit/tooling-fast-runner.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18424,6 +18435,9 @@
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/modal.js": {
