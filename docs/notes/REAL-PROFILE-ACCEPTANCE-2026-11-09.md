@@ -55,6 +55,11 @@ The cap, not the raw slider, is what fits 200 % on these phones (three 58 px tap
 drag mode BOOST overlaps his sector plate by 5 px (his stored +4.8 % offset). The cap is a height cap, so the old
 54 px tap should land on the same rect; that was not measured on the old tree.
 
+The garage cap also moves a profile that is not his: 844×390 with a mouse pointer and UI SIZE 100 % (the
+`menu-baseline.spec.js` garage shot) paints the bar 288 wide at x 120 where it was 392 at x 16 (CAMERA 207 → 155,
+PHOTO 179 → 127, ACTIVE AERO 392 → 288, all 44 tall; measured 2026-11-10 by deleting the rule in the live page).
+That golden was re-blessed with the image CI itself rendered. A fresh TOUCH profile (UI 109 %) is unchanged at 255.
+
 ## Findings nobody asked for
 
 1. **Title and pause broke only at 393 tall.** 852×368 was fine on the same tree. A test at one phone height is not a
