@@ -125,10 +125,11 @@ test("post-edit.sh: a js/ file that does not parse is named; a new test file poi
       assert.equal(out.status, 0, out.stderr);
       return out.stdout.trim() ? JSON.parse(out.stdout).hookSpecificOutput.additionalContext : "";
     };
-    assert.match(hook(BAD), /bad\.js does not parse/);
+    assert.equal(hook(BAD).split("\n")[0], `[post-edit] ${BAD} does not parse:`);
     const t = hook(NEW);
-    assert.match(t, /docs\/TESTING-COVERAGE\.md row/);
-    assert.doesNotMatch(t, /docs\/TESTING\.md §5/, "the retired hand table");
+    // The whole message: the coverage-table row is the fix it names, and nothing points at the retired TESTING.md §5 table.
+    assert.equal(t, "[post-edit] new-thing.test.mjs is not fully registered — test:guards fails the commit until it is:\n"
+      + "  - regenerate its docs/TESTING-COVERAGE.md row: give the file a one-sentence header comment (what it covers), then `node tools/docs/gen-coverage-table.mjs` (npm run gen)");
     r.put(GOOD, "var x = 1;\n");
     assert.equal(hook(GOOD), "", "a clean edit says nothing");
   } finally { r.rm(); }
@@ -142,9 +143,10 @@ test("session-start.sh dry mode: names the bounded install and an open hatch, an
     const out = spawnSync("bash", [path.join(ROOT, ".claude/hooks/session-start.sh")], { encoding: "utf8", timeout: 60000,
       env: { ...process.env, CLAUDE_PROJECT_DIR: r.dir, APEX_SESSION_START_DRY: "1", APEX_SKIP_SESSION_INSTALL: "" } });
     assert.equal(out.status, 0, out.stderr);
-    assert.match(out.stdout, /^apex26 session-start: npm ci: would run \(dry\);/);
-    assert.match(out.stdout, /hooksPath: would set \.githooks/);
-    assert.match(out.stdout, /HATCH ACTIVE: \.claude\/allow-protected/);
+    // The first two fields and the last are fixed; the ones between (Chromium, lsp, branch, loadavg) depend on the box.
+    const head = "apex26 session-start: npm ci: would run (dry); hooksPath: would set .githooks (was unset; dry); ";
+    assert.equal(out.stdout.slice(0, head.length), head);
+    assert.equal(out.stdout.trim().split("; ").at(-1), "HATCH ACTIVE: .claude/allow-protected (remove it when the assigned edit is done);");
     assert.ok(!fs.existsSync(path.join(r.dir, "node_modules")), "no install ran");
     assert.equal(spawnSync("git", ["-C", r.dir, "config", "--get", "core.hooksPath"], { encoding: "utf8" }).stdout.trim(), "", "no git config write");
     const src = fs.readFileSync(path.join(ROOT, ".claude/hooks/session-start.sh"), "utf8");

@@ -289,7 +289,10 @@ export const MAX_OVERFLOW_SHARDS = 11;
 // routes the whole suite; at 4 career-season, career-hub and props-over-road
 // ran nowhere. Measured on --since <merge-base>: 4 -> 3 skipped, 5 -> 2,
 // 6 -> 1, 7 -> 0 (58 shards, +6 jobs).
-export const MAX_SPILL_SHARDS = 7;
+// 7 -> 8 (2026-11-10, #5368, Bryce: "you fix 5368"): the same whole-suite route
+// (`--files tests/helpers/fixtures.js` on tip 7ad0ee9) ran props-over-road (52 tests)
+// nowhere at 7. Measured with MAX_OVER_BUDGET_SHARDS 9: spill 7 -> 1 dropped, 8 -> 0.
+export const MAX_SPILL_SHARDS = 8;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -302,7 +305,10 @@ export const MAX_SPILL_SHARDS = 7;
 // its own allowance of this many TARGET_SHARD_SEC jobs. Only what that pool
 // cannot afford is left in overBudgetSpecs, by name, and on a pull request a
 // name is a red verdict.
-export const MAX_OVER_BUDGET_SHARDS = 8;
+// 8 -> 9 (2026-11-10, #5368, Bryce: "you fix 5368"): a tests/helpers/fixtures.js
+// change (whole-suite route, tip 7ad0ee9) DROPPED new-hooks.spec.js (540 s/test) with
+// the pool full at 8. Measured with MAX_SPILL_SHARDS 8: over-budget 8 -> 1 dropped, 9 -> 0.
+export const MAX_OVER_BUDGET_SHARDS = 9;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job
@@ -1436,8 +1442,32 @@ export function cssSpecs(changed) {
     specs.add("tests/specs/season.spec.js");
     specs.add("tests/specs/ui-audit.spec.js");
   }
+  // The smoke above is ONE boot at 844x390 on the default profile: it proves a control can be tapped, never how
+  // big it paints or whether a sheet fits a phone. The specs that MEASURE a stylesheet's surface at phone shapes
+  // ran only for a JS diff, so a pure-CSS change to the HUD, the pause sheet or the title could land with none of
+  // them (docs/notes/TEST-TRUTH-HUNT-2026-11-09.md G1). Route each sheet to the layout spec that measures it.
+  for (const [re, add] of CSS_LAYOUT_SPECS) {
+    if (files.some((f) => re.test(f))) for (const spec of add) specs.add(spec);
+  }
   return [...specs];
 }
+
+/** Stylesheet -> the browser specs that measure what it lays out, at phone shapes. tokens/responsive/components
+ *  feed every surface, so they take all of them. A sheet not listed keeps the smoke only (its row says so in
+ *  tests/unit/select-specs.test.mjs, which also checks every css/ file is classified). */
+const HUD_LAYOUT = ["tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
+const SHEET_LAYOUT = ["tests/specs/ui-resize.spec.js"];
+const TITLE_LAYOUT = ["tests/specs/title-fit.spec.js"];
+const GARAGE_LAYOUT = ["tests/specs/garage-aero.spec.js"];
+export const CSS_LAYOUT_SPECS = [
+  [/^css\/(hud|touch-controls|helmet-visor|fonts-hud)\.css$/, HUD_LAYOUT],
+  [/^css\/(dialogs|dialog-platform|overlays|settings|settings-controls)\.css$/, SHEET_LAYOUT],
+  [/^css\/(title|menus|menu-destinations)\.css$/, TITLE_LAYOUT],
+  [/^css\/(garage-experience|carsetup)\.css$/, GARAGE_LAYOUT],
+  [/^css\/(tokens|responsive|components)\.css$/, [...HUD_LAYOUT, ...SHEET_LAYOUT, ...TITLE_LAYOUT, ...GARAGE_LAYOUT]],
+];
+/** Sheets whose surface no phone-shape layout spec measures yet: the smoke (and menu-baseline where listed) only. */
+export const CSS_SMOKE_ONLY = /^css\/(a11y-loading|appearance-studio|career-experience|career|cockpit-preview|data|editor|experience|loading|photo-studio|player-tools|race-setup|save-health|select|track-detail|tuner|watch-transport)\.css$/;
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.

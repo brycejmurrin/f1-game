@@ -24,7 +24,7 @@ function driver(dur = 80, r = 1600, speedKmh = 200) {
   return { loc, car };
 }
 
-test("a DPR change under unchanged boxes refits the map canvas as well as the chart", async () => {
+async function openPopup(drs = 12) {
   const dom = makeDom();
   const timers = new Map(), frames = new Map(), observers = [];
   let nextId = 0;
@@ -60,7 +60,7 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
     { num: 3, name: "Comparison Driver", code: "CMP", color: "0000ff" }
   ];
   const trace = driver(80);
-  trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs: 12 }));
+  trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs }));
   const meta = { sessionKey: 7, meetingKey: 1, name: "Race", type: "Race" };
   const context = vm.createContext({
     document: dom.document,
@@ -103,7 +103,11 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
   for (let i = 0; i < 12; i++) await Promise.resolve();
   for (const [id, fn] of timers) { timers.delete(id); fn(); }
 
-  const popup = dom.document.querySelector(".dh-tpopup");
+  return { popup: dom.document.querySelector(".dh-tpopup"), observers, frames, context };
+}
+
+test("a DPR change under unchanged boxes refits the map canvas as well as the chart", async () => {
+  const { popup, observers, frames, context } = await openPopup();
   assert.ok(popup && popup.open);
   const chart = popup.querySelector(".dh-canvas"), map = popup.querySelector(".dh-canvas.dh-map");
   assert.ok(chart && map);
@@ -121,4 +125,19 @@ test("a DPR change under unchanged boxes refits the map canvas as well as the ch
   for (const [id, fn] of frames) { frames.delete(id); fn(); }
   assert.equal(chart.width, cw * 3, "the chart refits to the new ratio");
   assert.equal(map.width, mw * 3, "and so does the map canvas");
+});
+
+// W23 #6: 2026 car_data has `drs: null` on every sample (no DRS in the 2026
+// rules): the popup built a DRS legend toggle, gauge pill and channel anyway.
+test("a lap with no DRS values gets no DRS gauge or legend toggle; a lap with them keeps both", async () => {
+  // One toggle per channel (compare mode: the both-drivers label button), named by its title.
+  const labels = (popup) => popup.querySelectorAll(".dh-legend-item").map((b) => b.title)
+    .filter((t) => / for both drivers$/.test(t)).map((t) => t.slice("Show / hide ".length, -" for both drivers".length));
+  const none = (await openPopup(null)).popup;
+  assert.equal(none.querySelector(".dh-gdrscell"), null, "no DRS pill for 2026");
+  assert.equal(labels(none).filter((t) => t === "DRS").length, 0, "no DRS legend toggle");
+  assert.ok(labels(none).length > 0, "the other channel toggles are still built");
+  const some = (await openPopup(12)).popup;
+  assert.ok(some.querySelector(".dh-gdrscell"), "a 2025 lap keeps the pill");
+  assert.equal(labels(some).filter((t) => t === "DRS").length, 1);
 });

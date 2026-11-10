@@ -205,8 +205,9 @@
         let i = 0;
         along(s0, s1, 16, (k, spacing) => {
           if (i++ % 2) return;
-          const a = anchor(k, side, 30);
-          addBox(out, vadd(a.c, a.u, 0.24), [46, 0.10, 2.2], PLAZA_D, [a.r, a.u, a.t]);
+          // Draped, not a road-frame box: 46 m wide, the box's centre was
+          // flush with the terrain and its ends 0.7-1.1 m under it (#5088).
+          groundPatch(k, side, 7, [46, 0.10, 2.2], PLAZA_D, { id: `sochi-plaza-strip-${k}-${side}`, samples: 6 });
         });
       }
 

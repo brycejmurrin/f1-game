@@ -41,9 +41,12 @@ const DataRealRaceScript = (function () {
     const win = day && typeof SeasonCal !== "undefined" && SeasonCal.REAL_2026
       ? SeasonCal.REAL_2026.find((r) => day >= r.from && day <= r.to && list.some((t) => t.id === r.id)) : null;
     if (win) return win.id;
+    // OpenF1 circuit_short_name values that no game id or name matches, from
+    // https://api.openf1.org/v1/meetings?year=2026 (checked 2026-11-10). Names
+    // the circuit-first match above already resolves ("Mexico City", "Las Vegas",
+    // "Singapore", "Catalunya", "Hungaroring", "Montreal") need no entry.
     const alias = { "kuala lumpur": "sepang", "monte carlo": "monaco", "sakhir": "bahrain", "melbourne": "albert_park", "spielberg": "redbull", "austin": "cota",
-                    "mexico city": "mexico", "yas marina": "abudhabi", "lusail": "qatar", "las vegas": "vegas", "spa-francorchamps": "spa",
-                    "marina bay": "singapore", "budapest": "hungaroring", "montreal": "montreal", "imola": "imola", "barcelona": "catalunya" };
+                    "yas marina circuit": "abudhabi", "lusail": "qatar", "spa-francorchamps": "spa", "madring": "madrid" };
     if (alias[circuit] && list.some((t) => t.id === alias[circuit])) return alias[circuit];
     const same = list.filter((t) => String(t.country || "").toLowerCase() === country || (country === "united states" && t.country === "USA") || (country === "united kingdom" && t.country === "UK") || (country === "united arab emirates" && t.country === "UAE"));
     const current = same.find((t) => !t.classic);
