@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 import {
-  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, SLICE_SCRIPTS, pick, costs, testFileOwners, ciOutputs,
+  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, SLICE_SCRIPTS, pick, costs, testFileOwners, ciOutputs, characterizationCircuits,
 } from "../../tools/ci/pick-unit-slices.mjs";
 
 function runJson(...args) {
@@ -55,6 +55,24 @@ test("a physics-baseline-only diff selects the characterization job (#3037)", ()
   assert.ok(sel.has("guards"));
   assert.ok(!new Set(pick(["tests/data/ratchets.json"]).slices.keys()).has("driving-model"),
     "other tests/data files stay guards-only");
+});
+
+test("the raced circuit, the track engine and car parts run BOTH physics characterization copies (2026-11-10)", () => {
+  // Premise: a monza.js / tracks.js diff ran neither copy and parts.js skipped
+  // driving-model, though both copies race Monza on those parts.
+  const vmSlices = [...testFileOwners().get("tests/unit/physics-characterization-vm.test.mjs")];
+  assert.ok(vmSlices.length, "the VM twin is in some node slice's group");
+  const raced = [...characterizationCircuits()];
+  assert.ok(raced.includes("monza"), `circuitsOf reads the raced circuit from the two copies: ${raced}`);
+  for (const f of ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/track/tracks.js",
+    "js/track/core/spline.js", "js/car/parts.js"]) {
+    const sel = new Set(pick([f]).slices.keys());
+    assert.ok(sel.has("driving-model"), `${f}: driving-model (browser copy) — ${[...sel]}`);
+    for (const s of vmSlices) assert.ok(sel.has(s), `${f}: ${s} (VM copy) — ${[...sel]}`);
+  }
+  // A circuit the characterization does not race keeps its narrow selection.
+  const other = new Set(pick(["js/circuits/scenery/monaco.js"]).slices.keys());
+  assert.ok(!other.has("driving-model"), [...other].join(","));
 });
 
 test("an unknown path fail-safes to every slice", () => {

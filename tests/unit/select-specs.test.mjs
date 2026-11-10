@@ -696,11 +696,15 @@ test("select(): an edited spec runs first, alone in rank 0", () => {
   assert.equal(filesOf(r)[0], spec, "the edited spec leads the selection");
 });
 
-test("select(): a css edit selects the small CSS set, not a whole group", () => {
+test("select(): a css edit runs its layout specs AND its js owner's routing (W31 row 6)", () => {
+  // Was "the small CSS set, not a whole group": css/hud.css then ran
+  // css-player-smoke alone and never hud-layout.spec.js, which js/ui/hud.js
+  // selects. Owner decision 2026-11-10: a stylesheet routes with its js owner.
   const r = selectFor({ "css/menus.css": "/* fixture edit */\n" });
   assert.equal(r.reason, "matched");
-  const allowed = new Set(cssSpecs(["css/menus.css"]));
-  assert.ok(r.selected.length > 0 && filesOf(r).every((f) => allowed.has(f)), `got ${filesOf(r)}`);
+  const got = new Set([r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file)));
+  for (const f of cssSpecs(["css/menus.css"])) assert.ok(got.has(f), `layout spec ${f} still runs`);
+  assert.ok(r.cssOwners.includes("js/ui/modal.js"), `menus.css routes with its owner: ${r.cssOwners}`);
 });
 
 test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
@@ -1823,7 +1827,7 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
     assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
   }
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
+  assert.match(src, /kind === "css" \? \[\.\.\.new Set\(\[\.\.\.cssSpecs\(changed\), \.\.\.routed\]\)\] : routed/);
   assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
 
@@ -1911,3 +1915,90 @@ test("files plans a hypothetical change and names rule 3's floor spec only when 
   assert.equal(routed.floor, null);
   assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
 });
+
+// ── audit W31 (2026-11-10): when the selector cannot place a change it selects MORE ──
+{
+  const W31 = await import("../../tools/ci/select-specs.mjs");
+  const planned = (r) => [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
+  const sel = (files) => W31.select(undefined, DEFAULT_BUDGET_MIN, { files });
+
+  test("W31 row 1: an infra-only diff runs the boot floor, never an empty plan", () => {
+    for (const files of [["tools/ci/select-specs.mjs"],
+      [".github/workflows/ci.yml", "package-lock.json", "playwright.config.js", "tests/data/flaky-quarantine.json"]]) {
+      const r = sel(files);
+      assert.equal(r.reason, "infra");
+      assert.ok(r.floored, `${files}: the floor is applied`);
+      assert.ok(r.shards.length > 0, `${files}: a job runs`);
+      assert.ok(planned(r).includes("tests/specs/boot-guard.spec.js"), `${files}: boot-guard is planned`);
+    }
+    assert.deepEqual(W31.floorSpecs().sort(), ["tests/specs/boot-guard.spec.js", "tests/specs/logging.spec.js", "tests/specs/smoke.spec.js"]);
+  });
+
+  test("W31 row 1: a runner/config diff runs one spec per default-project browser group", () => {
+    const per = W31.perGroupSpecs();
+    assert.ok(per.length >= 10, `only ${per.length} representatives`);
+    const r = sel(["playwright.config.js"]);
+    assert.ok(r.runner);
+    const got = new Set([...planned(r), ...r.coveredByVmTwin.map((x) => x.file)]);
+    for (const f of per) assert.ok(got.has(f), `${f} is planned`);
+    for (const f of ["tools/ci/run-playwright.mjs", "tests/helpers/fixtures.js", "tests/helpers/global-setup.js"]) assert.ok(sel([f]).runner, f);
+  });
+
+  test("W31 row 1: an empty plan is a pass only for a docs diff (non-browser code diffs get the floor)", () => {
+    const tools = sel(["tools/check/ratchets.mjs"]);
+    assert.ok(tools.shards.length > 0 && tools.floored, "a tools/ diff with no browser group still runs the floor");
+    const docs = sel(["README.md"]);
+    assert.equal(docs.reason, "docs");
+    assert.equal(docs.shards.length, 0);
+    const step = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
+    assert.match(step, /!shards\.length && !dropped && !\["none", "docs"\]\.includes\(r\.reason\)/, "the CI step fails closed on an empty code plan");
+  });
+
+  test("W31 row 2: vendor/ and the standalone pages route to real groups; some-unmatched is partial + floor", () => {
+    const all = sel(["vendor/three-0.187.0/three.core.min.js", "overlay.html", "controller.html", "bench.html"]);
+    assert.equal(all.reason, "matched");
+    for (const g of ["test:gfx", "test:modes", "test:input", "test:perf-frametime"]) assert.ok(all.groups.includes(g), `${g}: ${all.groups}`);
+    assert.ok(all.shards.length > 0);
+    assert.ok(sel(["cockpit-view.html"]).groups.includes("test:ui"));
+    // A path nothing claims, beside a claimed one: partial, the floor runs, the path is named.
+    const part = sel(["README.md", "nowhere/unclaimed.bin"]);
+    assert.equal(part.reason, "partial");
+    assert.deepEqual(part.unmatched, ["nowhere/unclaimed.bin"]);
+    assert.ok(part.floored && part.shards.length > 0);
+    const mixed = sel(["tools/check/ratchets.mjs", "nowhere/unclaimed.bin"]);
+    assert.equal(mixed.reason, "partial");
+    assert.equal(sel(["nowhere/unclaimed.bin"]).reason, "unmatched", "every path unmatched still fails closed");
+    // Hooks are executable config, not docs: claimed, and the floor runs.
+    const hook = sel([".claude/hooks/bash-guard.sh"]);
+    assert.notEqual(hook.reason, "docs");
+    assert.notEqual(hook.reason, "unmatched");
+    assert.equal(isDocsOnly([".claude/hooks/bash-guard.sh"]), false);
+    assert.equal(isDocsOnly([".claude/settings.json"]), false);
+  });
+
+  test("W31 row 6: every css/ file has a js owner and routes to a non-boot browser group", () => {
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
+    for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((n) => n.endsWith(".css")).map((n) => `css/${n}`)) {
+      assert.ok(W31.cssOwners([f]).length > 0, `${f} has no CSS_OWNERS row`);
+      const groups = [...W31.pickAll([f, ...W31.cssOwners([f])]).keys()]
+        .filter((g) => g !== "tiny" && (scripts[`test:${g}`] || "").includes("run-playwright"));
+      assert.ok(groups.length > 0, `${f} routes to no non-boot browser group`);
+    }
+    for (const [css, js] of W31.CSS_OWNERS) {
+      assert.ok(fs.readdirSync(path.join(ROOT, "css")).some((n) => css.test(`css/${n}`)), `${css} matches no css file`);
+      assert.ok(W31.cssOwners(fs.readdirSync(path.join(ROOT, "css")).map((n) => `css/${n}`).filter((f) => css.test(f))).some((f) => js.test(f)), `${js} matches no js file`);
+    }
+    const hud = sel(["css/hud.css"]);
+    assert.ok(planned(hud).includes("tests/specs/hud-layout.spec.js"), "css/hud.css runs hud-layout.spec.js, as js/ui/hud.js does");
+  });
+
+  test("W31 row 7: every spec pick-tests' extraSpecs names is in select-specs' plan (or a covered bucket)", async () => {
+    const { extraSpecs } = await import("../../tools/ci/pick-tests.mjs");
+    for (const f of ["js/ui/modal.js", "js/ui/dom.js", "js/ui/photo-studio.js", "js/ui/key-binds.js", "css/hud.css", "js/ui/menu-nav.js"]) {
+      const r = sel([f]);
+      const got = new Set([...planned(r), ...[r.coveredByFixedGates, r.coveredByManualOptIn, r.coveredByVmTwin,
+        r.overBudgetSpecs, r.unreachable, r.skipped].flatMap((b) => (b || []).map((x) => x.file))]);
+      for (const x of extraSpecs([f])) assert.ok(got.has(x.spec), `${f}: pick-tests names ${x.spec}, CI never schedules it`);
+    }
+  });
+}

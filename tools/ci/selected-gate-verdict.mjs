@@ -174,7 +174,7 @@ function judgeSpecs(input) {
     };
   }
   if (selected === "skipped") {
-    reason = "nothing this diff touches has a spec — an empty plan is a pass";
+    reason = "no selected job ran: an empty plan is a pass only for a docs-only diff (the select step fails closed on an empty plan for a code diff, and select-specs puts the boot floor in every other plan)";
   }
   return { ok: true, reason, infraRetry, failedSpecs };
 }

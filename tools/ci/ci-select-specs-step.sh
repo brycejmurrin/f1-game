@@ -51,6 +51,8 @@ node -e '
     console.error("SELECTED GATE FAILED CLOSED: changed files matched no selection rule");
     process.exit(1);
   }
+  if (r.reason === "partial")
+    console.log(`::warning::SELECTION PARTIAL: ${r.unmatched.length} changed path(s) match no selection rule (${r.unmatched.slice(0, 6).join(", ")}); the boot floor runs for them`);
   const specs = r.selected.map((s) => s.file).join(" ");
   console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra")
@@ -98,4 +100,12 @@ node -e '
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
     `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`
     + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`);
+  // AN EMPTY PLAN IS A PASS ONLY FOR A DOCS-ONLY (OR EMPTY) DIFF (audit W31).
+  // select() puts the boot floor in every other plan; a code diff that still
+  // has no job and dropped nothing (a drop reds the verdict on its own) means
+  // the selection is broken: fail closed.
+  if (!shards.length && !dropped && !["none", "docs"].includes(r.reason)) {
+    console.error(`SELECTED GATE FAILED CLOSED: a ${r.reason} diff produced an empty plan (the boot floor is missing)`);
+    process.exit(1);
+  }
 '

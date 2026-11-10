@@ -2171,6 +2171,12 @@
       "cmd": "APEX_SHIMMER=1 node tools/ci/run-playwright.mjs tests/specs/material-shimmer.spec.js",
       "kind": "command"
     },
+    "test:shipped-defaults": {
+      "files": [
+        "tests/specs/shipped-defaults.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:smoke": {
       "files": [
         "tests/specs/smoke.spec.js"
