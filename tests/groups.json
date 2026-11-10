@@ -512,6 +512,8 @@
     "// GPU TEST (js/perf/gpu-test-run.js): the phase plan, phaseStats and the fill-slope fit. VM, ~0.1 s.",
     "tests/unit/gpu-test-run.test.mjs",
     "tests/unit/harness-display.test.mjs",
+    "// #5223: the circuit picker hero ships a 1600 px still beside the 800 px one and asks for it by srcset.",
+    "tests/unit/hero-still-density.test.mjs",
     "tests/unit/home-world.test.mjs",
     "tests/unit/hooks-documented.test.mjs",
     "// ...and an HTML-sink audit over js/: every innerHTML/outerHTML/",
