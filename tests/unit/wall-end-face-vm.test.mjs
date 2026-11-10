@@ -16,7 +16,19 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 let g = null;
-before(async () => { g = await createGame({ track: "monaco" }); await g.race("monaco", "day", "dry"); });
+// THE FACE IS PLANTED. The real one this test was written on (8.9 m, Monaco's
+// pit-exit taper, nodes 37-41) was the openBoundary pocket #5079 removed, and
+// feathering leaves no other face over 4 m on any circuit. The same 14 -> 5.1
+// m step is planted on the LEFT (non-pit) side at the same nodes, so the
+// mechanism is still driven across a real wall-limit drop.
+function plantFace(tr) {
+  for (let k = 30; k <= 40; k++) tr.barL[k] = tr.hw[k] + 9;
+  for (let k = 41; k <= 46; k++) tr.barL[k] = tr.hw[k] + 0.1;
+}
+before(async () => {
+  g = await createGame({ track: "monaco" }); await g.race("monaco", "day", "dry");
+  plantFace(g.G.track);
+});
 after(() => { if (g) g.close(); });
 
 /** The widest one-step tightening of the wall limit with the car on the road side. */

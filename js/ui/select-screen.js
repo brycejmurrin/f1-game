@@ -1148,6 +1148,15 @@ watchHero(document.getElementById("sel-hero"));
 // glyph; a circuit with no still keeps the hero's own gradient. The token
 // guards a slow decode landing after the player has already moved on.
 let stillToken = 0;
+// Hero ~ full width: a DPR-3 phone takes the 1600 px file (#5223). STILL_1X_ONLY have no 2x file.
+const STILL_SIZES = "100vw";
+const STILL_1X_ONLY = ["baku", "estoril", "imola", "watkins_glen", "zolder"];
+/** "" = the 800 px file only (no 2x file, Save-Data, 2G). */
+function stillSrcset(id, conn) {
+  if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
+  const base = "assets/stills/" + id;
+  return base + ".webp 800w, " + base + "-1600.webp 1600w";
+}
 function showStill(t) {
   const img = document.getElementById("sel-still");
   if (!img) return;
@@ -1160,7 +1169,15 @@ function showStill(t) {
   img.hidden = true;
   img.dataset.id = t.id;
   img.onload = () => { if (token === stillToken) img.hidden = false; };
-  img.onerror = () => { if (token === stillToken) img.hidden = true; };
+  // A failed 2x load retries the 800 px file once; only a second failure hides the still.
+  img.onerror = () => {
+    if (token !== stillToken) return;
+    if (img.getAttribute("srcset")) { img.removeAttribute("srcset"); img.removeAttribute("sizes"); img.src = src; return; }
+    img.hidden = true;
+  };
+  const set = stillSrcset(t.id, typeof navigator !== "undefined" ? navigator.connection : null);
+  if (set) { img.sizes = STILL_SIZES; img.srcset = set; }
+  else { img.removeAttribute("srcset"); img.removeAttribute("sizes"); }
   img.src = src;
 }
 

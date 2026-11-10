@@ -135,7 +135,8 @@
         "tests/unit/apex-bridge.test.mjs"
       ],
       "handle": [
-        "tests/unit/apex-bridge.test.mjs"
+        "tests/unit/apex-bridge.test.mjs",
+        "tests/unit/bridge-link.test.mjs"
       ],
       "issueOf": [
         "tests/unit/apex-bridge.test.mjs"
@@ -255,6 +256,26 @@
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/wgx-labels.test.mjs"
+      ]
+    },
+    "js/agent/bridge-link.js": {
+      "forget": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "link": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "parseIssue": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "unlink": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "view": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "*": [
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/audio/announcer-recorded.js": {
@@ -5238,6 +5259,7 @@
         "tests/unit/metrics.test.mjs"
       ],
       "*": [
+        "tests/unit/bridge-link.test.mjs",
         "tests/unit/stage-minify.test.mjs",
         "tests/unit/verify-live.test.mjs"
       ]
@@ -8104,6 +8126,12 @@
         "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "phase": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "warm": [
         "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
@@ -14345,6 +14373,7 @@
       "*": [
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/garage-before.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },
@@ -15255,15 +15284,20 @@
       ],
       "chunked": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cull": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "disposeShared": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "free": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "idleYield": [
         "tests/unit/webgpu-menu-warm.test.mjs"
@@ -15283,7 +15317,8 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "releaseMirrors": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "splitRanges": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
@@ -15625,6 +15660,9 @@
       "attachKey": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "bootRenderer": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "buildGeometry": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -15708,6 +15746,9 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
+      "engineLabel": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "ensureGlowStream": [
         "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -15743,6 +15784,9 @@
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
       ],
+      "isNullMirrorError": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -15771,6 +15815,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-mat-key-memo.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "mirrorLedger": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "mirrorWarmGate": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -15833,6 +15880,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs",
@@ -15855,7 +15903,8 @@
       ],
       "releaseGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs"
+        "tests/unit/tlx-car-shadow-cpu.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "releaseGeometry": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -15926,6 +15975,9 @@
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "sweepCarShadowMirrors": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "sweepGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -18006,7 +18058,8 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/race-insights.test.mjs",
-        "tests/unit/race-radio.test.mjs"
+        "tests/unit/race-radio.test.mjs",
+        "tests/unit/service-worker.test.mjs"
       ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",
@@ -18799,6 +18852,9 @@
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "showStill": [
+        "tests/unit/hero-still-density.test.mjs"
+      ],
       "swatchPx": [
         "tests/unit/team-swatch-density.test.mjs"
       ],
@@ -19206,7 +19262,6 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
-        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "move": [
@@ -19295,7 +19350,8 @@
     },
     "js/ui/update-check.js": {
       "apply": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "blocksLazyLoad": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -19315,6 +19371,7 @@
       ],
       "markReady": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "onVisible": [
@@ -19325,7 +19382,8 @@
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "render": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "*": [
         "tests/unit/global-registry.test.mjs"

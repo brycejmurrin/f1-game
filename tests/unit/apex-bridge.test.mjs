@@ -353,3 +353,53 @@ test("a failing reply post does not skip the queued commands behind it (HUNT-202
   for (let i = 0; i < 3; i++) await b.api.pollOnce();
   assert.deepEqual([...new Set(ran)].sort(), [1, 2, 3], "commands 2 and 3 still ran after command 1's reply failed");
 });
+
+test("geom reads the device's own geometry: insets, viewport units, the zoom self-test, and wish vs painted scale", async () => {
+  // A WebKit-like engine with STANDARDIZED zoom: a 100 px box at zoom 2 reports a 200 px rect, and vw / env() lengths
+  // inside it are multiplied by the zoom. Viewport 852x393, insets 59/0/59/21, HUD SIZE 1.5525 capped to 0.99.
+  const W = 852, H = 393, INS = { l: 59, t: 0, r: 59, b: 21 };
+  const mk = () => { const n = { style: { cssText: "" }, children: [], offsetWidth: 100, currentCSSZoom: 2, appendChild(c) { c.parent = n; n.children.push(c); }, remove() { n.removed = true; },
+    getBoundingClientRect() {
+      const c = n.style.cssText, m = /height:100(vh|svh|dvh|lvh)/.exec(c), w = /width:100(vw|svw)/.exec(c);
+      if (n.parent && n.parent.style) return { width: 2 * (W / 10 + INS.l), height: 2 };            // 10vw + env() padding, inside zoom 2
+      if (m) return { left: 0, top: 0, width: 1, height: m[1] === "lvh" ? 430 : H, right: 1, bottom: H };
+      if (w) return { left: 0, top: 0, width: W, height: 1, right: W, bottom: 1 };
+      if (/zoom:2/.test(c)) return { left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100 };
+      if (/env\(safe-area-inset-left/.test(c)) return { left: INS.l, top: INS.t, right: W - INS.r, bottom: H - INS.b, width: W - INS.l - INS.r, height: H - INS.t - INS.b };
+      return { left: 0, top: 0, right: W, bottom: H, width: W, height: H };
+    } }; return n; };
+  const nodes = [];
+  const vars = { "--ui-scale": "1.09", "--hud-scale": "1.5525", "--hud-btn-scale": "2.45", "--hud-z-top": "0.99", "--hud-z-dock": "1.186", "--hud-z-dock-l": "1.942", "--sal": "59px" };
+  const html = { clientWidth: W, clientHeight: H, dataset: { textSize: "large" } };
+  const body = { appendChild: (n) => { n.parent = null; nodes.push(n); }, getAttribute: (k) => ({ "data-density": "compact", "data-shape": "wide" })[k] || null, classList: { contains: () => false } };
+  const b = load({ search: "", extra: {
+    document: { documentElement: html, body, createElement: () => mk(), getElementById: () => null, querySelector: () => null },
+    getComputedStyle: (e) => (e === html ? { getPropertyValue: (n) => vars[n] || "" } : { paddingLeft: INS.l + "px", getPropertyValue: () => "" }),
+    matchMedia: (q) => ({ matches: q === "(pointer: coarse)" || q === "(max-height: 400px)" }),
+    visualViewport: { scale: 1, width: W, height: H, offsetLeft: 0, offsetTop: 0 },
+    screen: { width: 393, height: 852, availWidth: 393, availHeight: 852, orientation: { type: "landscape-primary", angle: 90 } },
+  } });
+  const r = await b.api.handle({ cmd: "geom" });
+  assert.equal(r.ok, true);
+  const v = r.value;
+  assert.deepEqual(plain(v.client), [W, H]);
+  assert.deepEqual(plain(v.insets), { left: 59, top: 0, right: 59, bottom: 21, fixedBox: [W, H] });
+  assert.equal(v.units.svh, 393);
+  assert.equal(v.units.lvh, 430, "a large viewport taller than the small one is reported, not folded into vh");
+  assert.equal(v.units.vw, W);
+  assert.deepEqual(plain(v.zoom), { currentCSSZoom: 2, rectOf100At2: 200, offsetOf100At2: 100, vwInZoom2: 2, envInZoom2: 2 });
+  assert.equal(v.media["(max-height: 400px)"], true);
+  assert.equal(v.media["(min-width: 900px)"], false);
+  assert.deepEqual(plain(v.tiers), { density: "compact", shape: "wide", desktop: false, html: { textSize: "large" } });
+  assert.equal(v.wish.hud, "1.5525");
+  assert.equal(v.paint.hudTop, "0.99", "the cap the HUD paints at is reported beside the slider's wish");
+  assert.equal(v.paint.dockLeft, "1.942");
+  assert.equal(v.paint.kb, null);
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].removed, true, "the probe node never stays in the page");
+  // No DOM: the viewport numbers still answer and the probes are null.
+  const bare = await load({ search: "" }).api.handle({ cmd: "geom" });
+  assert.equal(bare.ok, true);
+  assert.equal(bare.value.insets, null);
+  assert.equal(bare.value.zoom, null);
+});
