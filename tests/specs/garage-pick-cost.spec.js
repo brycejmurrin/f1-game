@@ -12,7 +12,10 @@ const PICKS = 4;
 // Measured on this branch (TLX, 844x390 touch, 4 picks, 2026-10-21): every pick 0 card repaints + 113 blits (113 adopted canvases since B·H32),
 // 1 Car3D.build, 2 LiveryTex.buildAtlas (the 1024 preview, then the deferred 2048). The ceilings ARE those
 // counts: one more is a regression. Atlas textures are held to one upload per atlas painted (below).
-const CEIL = Object.freeze({ cardPaints: 0, car3dBuilds: 1, atlases: 2 });
+// cardPaints 1 since #5224 (PR #5360, Bryce's decision 2026-11-10 15:35Z "raise garage-pick-cost CEIL to 1"): cards
+// paint at their own box x DPR, and the picked card moves from the factory fold into the grid, so it paints once
+// at the grid size (measured: cardPaints 1, cardReused 112). A second repaint is still the regression.
+const CEIL = Object.freeze({ cardPaints: 1, car3dBuilds: 1, atlases: 2 });
 
 test.describe("garage livery pick cost", () => {
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
