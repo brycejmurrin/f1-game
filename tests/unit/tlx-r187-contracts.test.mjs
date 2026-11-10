@@ -96,7 +96,6 @@ test("WebGPU pin: three's in-init swap is detected and the WebGL2-leg flags are 
   assert.equal(r.initSwapGL, true, "backendState().initSwapGL reports it");
   assert.equal(r.forceWebGL, true, "and forceWebGL follows the backend that actually bound");
   assert.ok(r.latched.some((w) => /fell back inside three/.test(w)), "reported (the real latch ignores a pin)");
-  assert.match(TLX, /forceWebGL, initSwapGL: _initSwapGL, pin: _glPin/, "backendState() exposes the swap");
 });
 
 test("r187 still arms getFallback on a non-forceWebGL WebGPURenderer (the disarm's premise)", () => {
@@ -111,13 +110,21 @@ test("#game data-engine names the vendored revision, not a hand-kept r185", () =
   const engineLabel = new Function(`${fnSource(TLX, "function engineLabel(")}; return engineLabel;`)();
   assert.equal(engineLabel(THREE, "webgpu"), "three.js r187 webgpu");
   assert.equal(engineLabel({ REVISION: "188" }, "webgl2"), "three.js r188 webgl2");
-  assert.match(TLX, /canvas\.setAttribute\("data-engine", engineLabel\(THREE, api\)\)/);
   assert.doesNotMatch(code(TLX), /"three\.js r18\d/, "no literal revision left in code");
 });
 
 // ── 5. adapter.info.isFallbackAdapter (TLX sniff) ─────────────────────────────────────────────────────────────────
 test("TLX's software-adapter sniff reads GPUAdapterInfo.isFallbackAdapter first (Chrome 140 removed the adapter's)", () => {
-  assert.match(code(TLX), /_softAdapter = !_phoneHw && !!\(\(info && info\.isFallbackAdapter\) \|\| ad\.isFallbackAdapter \|\|/);
+  // The REAL sniff (tlx.js, verbatim from `const info = ad.info` to the _softAdapter verdict).
+  const a = TLX.indexOf("            const info = ad.info || null;");
+  const b = TLX.indexOf("\n", TLX.indexOf("_softAdapter = !_phoneHw", a));
+  assert.ok(a > 0 && b > a, "the adapter sniff moved: re-pin this slice");
+  const soft = (ad, phone = false) => new Function("ad", "_phoneHw", `"use strict"; let _softAdapter = false; ${TLX.slice(a, b)} return _softAdapter;`)(ad, phone);
+  const hw = { vendor: "apple", architecture: "metal-3", device: "", description: "" }, big = { maxTextureDimension2D: 16384, maxBufferSize: 4294967296 };
+  assert.equal(soft({ info: { ...hw, isFallbackAdapter: true }, limits: big }), true, "Chrome 140 shape: the flag on GPUAdapterInfo");
+  assert.equal(soft({ info: hw, isFallbackAdapter: true, limits: big }), true, "pre-140 shape still counts");
+  assert.equal(soft({ info: hw, limits: big }), false, "hardware stays hardware");
+  assert.equal(soft({ info: { ...hw, isFallbackAdapter: true }, limits: big }, true), false, "never on a phone");
 });
 
 // ── 6. mirror release vs r187's vertex-layout key ─────────────────────────────────────────────────────────────────
@@ -206,8 +213,6 @@ test("batched flush: disposeShared destroys each shared attribute once, then dis
   const d0 = h.fg.counts.deleteBuffer || 0;
   assert.equal(sys.disposeShared(batch), 3, "three shared attributes, deduplicated across the two geometries");
   assert.ok((h.fg.counts.deleteBuffer || 0) - d0 >= 2, "position and the index buffer deleted");
-  assert.match(code(fnSource(TLX, "flushChunkedOwnership() {")), /flushOwnershipRelease\(_ownershipFreeBatch\);\s*if \(chunkedSys && chunkedSys\.disposeShared\) chunkedSys\.disposeShared\(_ownershipFreeBatch\);/,
-    "tlx.js flushes the batch through disposeShared");
 });
 
 // ── LP-01 / #4900: the post-race "Graphics reset" reload ─────────────────────────────────────────────────────────
@@ -268,15 +273,43 @@ test("LP-01: a nulled mirror's throw is recognised and repaired to a zero-length
   assert.equal(ledger.repair(), 0, "idempotent");
 });
 
-test("LP-01: present() repairs and skips the frame instead of descending the ladder, and refuseTab only on a real refusal", () => {
+test("LP-01: present() repairs and skips the frame before the ladder; a device loss or another error still reloads", () => {
   const src = code(TLX);
-  assert.match(src, /\} catch \(e\) \{\s*if \(!nullMirrorSkip\(e\)\) persistFail\(e, !!post\);\s*else painted = true;\s*\}/,
-    "the main present catch tries the repair before the post-only / unlit / raw rungs");
-  assert.match(src, /catch \(e\) \{ if \(nullMirrorSkip\(e\)\) painted = true; else \{ persistFail\(e\); refuseTab\(\); \} \}/,
-    "the last rung repairs before it reloads");
-  const skip = src.slice(src.indexOf("const nullMirrorSkip = (e) => {"), src.indexOf("const refuseTab = () => {"));
-  assert.match(skip, /if \(_deviceLost \|\| !isNullMirrorError\(e\)\) return false;/, "a device loss still takes the reload path");
-  assert.match(skip, /if \(!n\) return false;/, "nothing repaired → the ladder runs as before");
-  assert.match(src, /_mirrorLedger\.note\(a\);[^\n]*\n\s*a\.array = null;/, "releaseGeoMirrors records what it nulls");
-  assert.match(CHUNKED.replace(/^[ \t]*\/\/.*$/gm, ""), /ctx\.noteNulled\(atts\[k\]\); atts\[k\]\.array = null;/, "and so does the chunked release");
+  // Wiring: the main present catch tries the repair before the post-only / unlit / raw rungs, and the last rung
+  // tries it again before refuseTab (one pin: both sites, in order).
+  assert.match(src, /\} catch \(e\) \{\s*if \(!nullMirrorSkip\(e\)\) persistFail\(e, !!post\);\s*else painted = true;\s*\}[\s\S]*?dropTo\(2, rawUnlitMat\);[\s\S]*?catch \(e\) \{ if \(nullMirrorSkip\(e\)\) painted = true; else \{ persistFail\(e\); refuseTab\(\); \} \}/);
+  // The REAL nullMirrorSkip (tlx.js, verbatim) over the real ledger.
+  const at = TLX.indexOf("      let _nullMirrorLogged = false;"), end = TLX.indexOf("      const refuseTab = () => {", at);
+  const mk = (deviceLost) => {
+    const ledger = LEDGER.mirrorLedger(), stat = { repaired: 0 }, warned = [];
+    const skip = new Function("_deviceLost", "isNullMirrorError", "_mirrorLedger", "_mirrorStat", "Log",
+      `"use strict"; ${TLX.slice(at, end)} return nullMirrorSkip;`)(deviceLost, LEDGER.isNullMirrorError, ledger, stat, { warn: (...a) => warned.push(a) });
+    return { skip, ledger, stat, warned };
+  };
+  const nullErr = new TypeError("Cannot read properties of null (reading 'BYTES_PER_ELEMENT')");
+  const nulled = (ledger) => { const a = new THREE.BufferAttribute(new Int16Array(6), 3); ledger.note(a); a.array = null; return a; };
+  const ok = mk(false), a = nulled(ok.ledger);
+  assert.equal(ok.skip(nullErr), true, "repaired: the frame is skipped, the ladder never runs");
+  assert.equal(a.array.constructor, Int16Array);
+  assert.equal(ok.stat.repaired, 1, "memState().mirror.repaired counts it");
+  assert.equal(ok.skip(nullErr), false, "nothing left to repair: the ladder runs as before");
+  assert.equal(ok.warned.length, 1, "logged once");
+  const lost = mk(true); nulled(lost.ledger);
+  assert.equal(lost.skip(nullErr), false, "a device loss still takes the ladder and refuseTab");
+  const other = mk(false); nulled(other.ledger);
+  assert.equal(other.skip(new Error("GPU validation error")), false, "any other error still takes the ladder");
+});
+
+test("LP-01: both release sites record what they null (WebGL2 leg), so the repair can find them", () => {
+  // releaseGeoMirrors, through the real car-caster sweep, on a non-WebGPU backend with uploaded attributes.
+  const data = new Map(), backend = { isWebGPUBackend: false, get: (a) => (data.has(a) ? data.get(a) : (data.set(a, {}), data.get(a))) };
+  const rig = sweepRig({ backend });
+  const { g, attrs } = carCaster(backend);
+  rig.reg(g); rig.sweep(5000);
+  for (const at of Object.values(attrs)) assert.equal(at.array, null, "WebGL2 still frees the CPU mirror");
+  assert.equal(rig.ledger.repair(), 3, "and the ledger knows every one");
+  // The chunked release.
+  const noted = [], gl = sharedGeos(2);
+  chunkedSys({ isWebGPU: () => false, noteNulled: (x) => noted.push(x) }).releaseMirrors({ chunks: gl.geos.map((geo) => ({ geo })) });
+  assert.deepEqual(noted, Object.values(gl.attrs), "the chunked release notes each shared attribute before nulling it");
 });

@@ -18,8 +18,8 @@ const BOOT_STEP_MS = Number(src.match(/let ms = (\d+);/)?.[1] || 15000);
 const settle = () => new Promise((r) => setImmediate(r));
 
 const gfxSeam = vm.runInNewContext(readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8") + ";Gfx");
-function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false, requestAdapter } = {}) {
-  const ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map();
+function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false, requestAdapter,
+  ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map(), onReload } = {}) {
   const timers = [], warns = [], calls = [];
   const ctx = vm.createContext({
     console, Promise,
@@ -28,7 +28,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     sessionStorage: { getItem: (k) => (ss.has(k) ? ss.get(k) : null), setItem: (k, v) => ss.set(k, String(v)), removeItem: (k) => ss.delete(k) },
     ApexXR: { bootPick: () => null, detect: xrDetect || (async () => {}) },
     navigator: { gpu: { requestAdapter: requestAdapter || (async () => ({})) } },
-    location: { reload() { throw new Error("no reload expected"); } },
+    location: { reload() { if (!onReload) throw new Error("no reload expected"); onReload(); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
     GLX: noGLX ? {} : { init: () => { calls.push("GLX.init"); return true; } },
@@ -47,7 +47,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     loadBackendScripts: loadBackend || (async (files) => { calls.push(...files); }),
   });
   const fire = (ms) => { for (const t of timers) if (t.live && t.ms === ms) { t.live = false; t.fn(); } };
-  return { rb, ls, ss, warns, calls, fire, timers, ctx };
+  return { rb, ls, ss, warns, calls, fire, timers };
 }
 
 test("a Gfx.create() that never settles resolves start() with GLX, canary left armed", async () => {
@@ -116,8 +116,8 @@ test("missing GLX fallback script is bounded and failed fetch resolves unavailab
 });
 
 for (const claimed of [false, true]) test(`timed-out alternate relinquishes publication and prevents competing claim (alreadyClaimed=${claimed})`, async () => {
-  let owner, finish;
-  const h=boot({ownerProtocol:true,gfxCreate:async (_, opts)=>{
+  let owner, finish, reloads = 0;
+  const h=boot({ownerProtocol:true,onReload:()=>reloads++,gfxCreate:async (_, opts)=>{
     owner=opts.initOwner;
     if(claimed) owner.canvas.getContext("webgpu");
     await new Promise(r=>{finish=r;});
@@ -127,8 +127,72 @@ for (const claimed of [false, true]) test(`timed-out alternate relinquishes publ
   const pending=h.rb.start(); await settle(); h.fire(BOOT_STEP_MS); const result=await pending;
   assert.equal(owner.active,false);
   if(claimed) assert.equal(result,null,"claimed timeout refuses same-page binding"); else assert.equal(result.bound,false);
-  assert.equal(h.calls.includes("GLX.init"),!claimed,"claimed canvas takes existing safe reload/refusal path");
+  assert.equal(h.calls.includes("GLX.init"),!claimed,"a claimed canvas is never handed to GLX on this page");
+  assert.equal(reloads,claimed?1:0,"#4577: a claimed hang reloads once into GLX instead of Graphics unavailable");
+  assert.equal(h.calls.includes("unavailable"),false,"no Graphics unavailable panel on either path");
+  assert.equal(h.ss.get("apex26.gfxClaimFail"),claimed?"1":undefined,"the reload rides the claim-fail latch");
   finish();await settle();assert.equal(result && result.bound,claimed ? null : false,"late backend never publishes");
+});
+
+// #4577: the claimed-hang reload shares the claim-fail latch, so it can never loop. The reloaded
+// tab consumes the latch and binds GLX without claiming; a second hang (here: the latch already
+// set when the hanging boot ran, the shape blocked or replayed storage would take) does NOT reload.
+function claimedHang(opts) {
+  return boot({ ownerProtocol: true, ...opts, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgpu"); return new Promise(() => {}); } });
+}
+test("a claimed hang reloads once; the reloaded tab binds GLX and keeps the hang's strike", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
+  let reloads = 0;
+  const h1 = claimedHang({ ls, ss, onReload: () => reloads++ });
+  const p1 = h1.rb.start(); await settle(); h1.fire(BOOT_STEP_MS);
+  assert.equal(await p1, null);
+  assert.equal(reloads, 1);
+  assert.equal(ls.get("apex26.gfxBackendProbe"), "three", "the hang's canary stays armed across the reload");
+  const h2 = boot({ ls, ss, gfxCreate: async () => { throw new Error("the reloaded tab must not claim again"); } });
+  const r2 = await h2.rb.start();
+  assert.equal(r2.bound, false);
+  assert.deepEqual(h2.calls, ["GLX.init"], "the reload attaches GLX");
+  assert.equal(ss.has("apex26.gfxClaimFail"), false, "the latch is consumed");
+  assert.equal(ls.get("apex26.gfxBackendProbe"), "three", "the next cold start strikes the hang, as for an unclaimed one");
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick is untouched");
+});
+test("a claimed refusal reloads once, disarms the canary, and the next cold boot takes no strike (#4817)", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
+  let reloads = 0;
+  const h1 = boot({ ls, ss, ownerProtocol: true, onReload: () => reloads++, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgpu"); return null; } });
+  assert.equal(await h1.rb.start(), null);
+  assert.equal(reloads, 1);
+  assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a refusal is a live tab: canary disarmed");
+  const h2 = boot({ ls, ss, gfxCreate: async () => { throw new Error("the reloaded tab must not claim again"); } });
+  assert.equal((await h2.rb.start()).bound, false);
+  assert.equal(ls.has("apex26.gfxBackendProbe"), false);
+  const h3 = boot({ ls, ss });
+  await h3.rb.start();
+  assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "no strike on the next cold boot");
+  assert.equal(ls.get("apex26.gfxBackend"), "three", "the pick survives");
+});
+// W11 (audit finding 3): TLX's WebGL2 leg claims "webgl2", not "webgpu". Its clean refusal takes the same reload
+// (#4851), never "Graphics unavailable" and never a same-page GLX on the context three just let go of.
+test("a claimed WebGL2 refusal (TLX's WebGL2 leg) also reloads once into GLX, not Graphics unavailable", async () => {
+  const ls = new Map([["apex26.gfxBackend", "three"]]), ss = new Map();
+  let reloads = 0;
+  const h = boot({ ls, ss, ownerProtocol: true, onReload: () => reloads++, gfxCreate: async (_, o) => { o.initOwner.canvas.getContext("webgl2"); return null; } });
+  assert.equal(await h.rb.start(), null);
+  assert.equal(reloads, 1);
+  assert.deepEqual(h.calls.filter((c) => c === "unavailable" || c === "GLX.init"), [], "no panel, no same-page GLX");
+  assert.equal(ss.get("apex26.gfxClaimFail"), "1", "behind the claim-fail latch");
+  assert.equal(ls.has("apex26.gfxBackendProbe"), false, "a refusal disarms the canary");
+});
+test("a second claimed hang does NOT reload: the latch is the only way back in", async () => {
+  // The reloaded tab cannot hang again: it consumed the latch and never hands the canvas over
+  // (asserted above). What is left is a hang whose latch cannot stick — storage that drops the
+  // write. Reloading there would replay the hang forever, so it must show the panel instead.
+  const ss = new Map();
+  ss.set = function () { return this; };   // writes vanish, reads see nothing
+  const h = claimedHang({ ss, onReload: () => assert.fail("a hang without a readable latch reloaded") });
+  const p = h.rb.start(); await settle(); h.fire(BOOT_STEP_MS);
+  assert.equal(await p, null);
+  assert.deepEqual(h.calls.filter((c) => c === "unavailable"), ["unavailable"], "Graphics unavailable, once");
 });
 
 test("known asynchronous GPU failure gets one compatibility card with explicit guarded recovery", async () => {
@@ -249,21 +313,6 @@ test("a known WebGPU failure is claimed in capture so the raw overlay does not a
 // sessionStorage apex26.gfxFallbackWhy (read by __apex.diag().env.backendFallback).
 // Each of these paths used to bind GLX with no gfxWgxFail and no warning.
 const WHY = "apex26.gfxFallbackWhy";
-// A CLEAN refusal after a claim is not a hang: TLX's WebGL2 leg hands #game's context back intact (tlx.js
-// disposeKeepingContext), so GLX must get its same-page try. Before, any claim showed "Graphics unavailable".
-for (const type of ["webgl2", "webgpu"]) test(`a claimed-then-refused alternate falls through to GLX, not "Graphics unavailable" (${type})`, async () => {
-  const glxOk = type === "webgl2";   // a "webgpu"-bound canvas cannot give GLX a webgl2 context
-  let reloaded = 0;
-  const h = boot({ ownerProtocol: true, gfxCreate: async (_, opts) => { opts.initOwner.canvas.getContext(type); return null; } });
-  h.ctx.GLX.init = () => { h.calls.push("GLX.init"); return glxOk; };
-  h.ctx.location.reload = () => { reloaded++; };
-  const r = await h.rb.start();
-  assert.ok(h.calls.includes("GLX.init"), "GLX gets its same-page try after a clean refusal");
-  assert.ok(!h.calls.includes("unavailable"), "no Graphics-unavailable card");
-  if (glxOk) assert.equal(r.bound, false, "GLX bound on this load");
-  else { assert.equal(r, null); assert.equal(reloaded, 1, "a webgpu-bound canvas takes the one claim-fail reload"); }
-});
-
 test("a null adapter on a WGX pick falls back loudly", async () => {
   const h = boot({ stored: "webgpu", requestAdapter: async () => null });
   const r = await h.rb.start();

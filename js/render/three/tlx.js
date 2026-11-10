@@ -204,7 +204,8 @@ const TLX = (function () {
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
-    // three renderer before same-page GLX fallback claims #game.
+    // three renderer before the GLX fallback: same page when #game was never
+    // claimed, else one claim-fail reload (renderer-boot.js reloadOnceIntoGlx, #4594/#4851).
     let _abortDisplay = null, _abortRenderer = null;
     // Undo for the observers/listeners create() attaches, run by the catch: a create that throws after init
     // (an initOwner superseded mid-boot) would otherwise leave them on a dead backend.
@@ -7130,16 +7131,16 @@ const TLX = (function () {
       } catch (_) { /* already detached */ }
       try { disposeKeepingContext(_abortRenderer); } catch (_) { /* three dispose best-effort */ }
       if (initOwner && !initOwner.active) return null;
-      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
+      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract; a claimed canvas reloads once)
     }
   }
 
   // Dispose a three renderer WITHOUT losing the WebGL2 context it rendered to.
   // r186 WebGLBackend.dispose() ends with WEBGL_lose_context.loseContext(), and
   // on the forceWebGL path that context is #game's own (bootRenderer hands it
-  // to three): the GLX fallback that _fail() boots next calls
-  // getContext("webgl2") on the same canvas and gets the SAME object back,
-  // dead or about to die. Lost before GLX.init → link fails → claim-fail
+  // to three): a same-load GLX fallback would call
+  // getContext("webgl2") on the same canvas and get the SAME object back,
+  // dead or about to die (today a claimed refusal reloads into GLX instead, #4817). Lost before GLX.init → link fails → claim-fail
   // reload; lost after → GLX's webglcontextlost handler latches
   // apex26.envProbeOff / perChunkOff for good and counts a reload strike.
   // Neutering the extension lookup keeps the rest of the dispose (three frees
