@@ -1,5 +1,7 @@
 # perf(gameplay): periodic in-race hitches + Monza→Spa switch — attribution
 
+Summary: Gameplay hitch attribution: 4× CPU reproduces ~133 ms max with healthy p50; spike CPU profile pins `getBoundingClientRect` via `announceLane`/`announceLaneTick` in `js/ui/hud.js` (FORBIDDEN for that job). Monza→Spa phase table (loadTrack dominates locally; cold `ensureScenery` owns the live ~29 s wall).
+
 **Date:** 2026-10-14  
 **Tip measured:** `b5f2f18de` (deploy at session start); branch `cursor/perf-gameplay-hitches-a752`  
 **Shape:** Attribute first. No OWNED code fix — the biggest mid-race hitch cause sits in a FORBIDDEN path.

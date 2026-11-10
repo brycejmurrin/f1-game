@@ -34,7 +34,7 @@ const TMP_BASE = (() => {
 })();
 
 test("landing validates the scenery catalog in the actual merged checkout", async (t) => {
-  for (const mode of ["matching", "base-moved", "mismatch", "missing", "malformed", "missing-digest", "gen-failure", "validator-error"]) {
+  for (const mode of ["matching", "base-moved", "mismatch", "missing", "malformed", "digest-not-hex", "no-digest-fresh", "no-digest-stale", "gen-failure", "validator-error"]) {
     await t.test(mode, () => {
       const dir = fs.mkdtempSync(path.join(TMP_BASE, "scenery-merge-"));
       const git = (cwd, ...args) => {
@@ -67,7 +67,14 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         if (mode === "mismatch") write(cwd, "js/track/core/geom.js", "// changed input\n");
         if (mode === "missing") fs.unlinkSync(path.join(cwd, catalog));
         if (mode === "malformed") write(cwd, catalog, "{not JSON");
-        if (mode === "missing-digest") write(cwd, catalog, "{}\n");
+        if (mode === "digest-not-hex") write(cwd, catalog, "{\"sourceDigest\":5}\n");
+        // No fingerprint at all: the gate must run the generator's own --check on the merge, and believe its exit code.
+        if (mode.startsWith("no-digest")) {
+          write(cwd, catalog, "{\"locations\":[]}\n");
+          write(cwd, "tools/shot/gen-scenery-locations.cjs", mode === "no-digest-fresh"
+            ? "if (!process.argv.includes('--check')) process.exit(9);\nconsole.log('OK scenery catalog: 0 emitted locations');\n"
+            : "console.error('scenery location catalog is stale; run node tools/shot/gen-scenery-locations.cjs');\nprocess.exit(1);\n");
+        }
         if (mode === "gen-failure") write(cwd, "package.json", JSON.stringify({ scripts: { "gen:check": "node -e \"process.exit(7)\"" } }));
         git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", `PR ${mode}`);
         git(cwd, "push", "-q", "origin", "pr");
@@ -96,10 +103,13 @@ test("landing validates the scenery catalog in the actual merged checkout", asyn
         });
         assert.equal(result.tip, tip, "a catalog refusal retains the actual merge tip");
         assert.equal(result.error, undefined, "generation failures are refusals, not git infrastructure errors");
-        assert.deepEqual(calls, mode === "gen-failure" ? ["npm"] : ["npm", process.execPath]);
-        assert.equal(result.ok, mode === "matching", result.evidence);
-        assert.equal(ratchetCalls, mode === "matching" ? 1 : 0, "catalog/gen refusals stop before ratchets");
-        if (mode !== "matching") assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
+        const passes = mode === "matching" || mode === "no-digest-fresh";
+        assert.deepEqual(calls, mode === "gen-failure" ? ["npm"] : mode.startsWith("no-digest") ? ["npm", process.execPath, process.execPath] : ["npm", process.execPath]);
+        assert.equal(result.ok, passes, result.evidence);
+        if (mode === "no-digest-fresh") assert.match(result.evidence, /scenery catalog rebuild check 0$/);
+        if (mode === "no-digest-stale") assert.match(result.evidence, /scenery catalog fails .*catalog is stale/);
+        assert.equal(ratchetCalls, passes ? 1 : 0, "catalog/gen refusals stop before ratchets");
+        if (!passes) assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
         assert.equal(fs.existsSync(path.join(cwd, "artifacts", "merge-gate", "wt-17")), false, "all outcomes clean up the merged checkout");
       } finally { fs.rmSync(dir, { recursive: true, force: true }); }
     });
@@ -407,9 +417,12 @@ test('every circuit exposes authored turn locations usable by named shot plans',
 });
 test('named scenery catalog accounts for every registered hero and targets emitted geometry', async () => {
  const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
- const { default: { scenerySourceDigest } } = await import('../../tools/shot/scenery-source-hash.cjs');
  const catalog = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8'));
- assert.equal(catalog.sourceDigest,scenerySourceDigest(path.resolve('.')),'catalog must be regenerated after scenery or projection source changes');
+ // No committed input digest (it made every garage/scenery PR conflict on one line): the generator rebuilds and
+ // compares (about a minute), or answers at once from its receipt under artifacts/ when inputs and bytes are unchanged.
+ assert.equal(catalog.sourceDigest,undefined,'the catalog carries no input fingerprint; staleness is gen-scenery-locations.cjs --check');
+ const fresh = spawnSync(process.execPath,['tools/shot/gen-scenery-locations.cjs','--check','--cached'],{encoding:'utf8',timeout:480_000});
+ assert.equal(fresh.status,0,`catalog must be regenerated after scenery or projection source changes: ${fresh.error?.message||fresh.stderr||fresh.stdout}`);
  const registryDir = 'tests/data/landmarks';
  const registryFiles = fs.readdirSync(registryDir).filter(f=>f.endsWith('.json'));
  const { createRequire } = await import('node:module');

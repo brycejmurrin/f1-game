@@ -1,5 +1,7 @@
 # Perf test hunt — coverage map, gaps, new gates (A·H17, 2026-10-24)
 
+Summary: Coverage map, gaps and new perf gates; the rule is count, do not time (A·H17).
+
 Lane: make a perf regression or leak impossible to merge silently. Bryce plays TLX on three's WebGPU
 backend on an iPhone, so that leg comes first. Rule for every new gate: **count, don't time**. A
 number that repeats exactly under SwiftShader and llvmpipe is a gate. A millisecond is a report.

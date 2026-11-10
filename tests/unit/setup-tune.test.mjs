@@ -17,7 +17,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function load(shipped = {}) {
+function load(shipped = {}, { realDefaults = false } = {}) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, console, Object, Array, Number, JSON, isFinite,
@@ -30,6 +30,11 @@ function load(shipped = {}) {
   });
   seedLog(ctx);
   ctx.window = ctx;
+  if (realDefaults) {
+    vm.runInContext(readFileSync(join(ROOT, "js/data/garage-defaults.js"), "utf8") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx, { filename: absSrc("js/data/garage-defaults.js") });
+    const GD = ctx.GarageDefaults;
+    for (const k of GD.keys()) if (!(k in shipped)) shipped[k] = GD.get(k);
+  }
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
@@ -140,4 +145,18 @@ test("reset returns to the SHIPPED sheet a fresh install gets, not the works def
   const { S: bare } = load();
   bare.set("mclaren", { arbF: 11 });
   assert.equal(bare.reset("mclaren").arbF, 6, "a team with no shipped sheet still resets to the works default");
+});
+
+test("#4922: the SHIPPED garage-defaults sheet is the works sheet — untouched and reset read WORKS, mods identity", () => {
+  const { Teams, S } = load({}, { realDefaults: true });
+  for (const t of Teams.LIST) {
+    assert.equal(S.isDefault(t.id), true, t.id + " fresh install must read WORKS");
+    assert.deepEqual(host(S.mods(t.id)), { speed: 1, accel: 1, cornering: 1, braking: 1 }, t.id + " fresh mods");
+    assert.equal(S.rake(t.id), 0, t.id + " fresh rake");
+    S.set(t.id, { arbF: 1 });
+    assert.equal(S.isDefault(t.id), false, t.id + " a tune reads TUNED");
+    S.reset(t.id);
+    assert.equal(S.isDefault(t.id), true, t.id + " RESET TO WORKS must read WORKS");
+    assert.deepEqual(host(S.mods(t.id)), { speed: 1, accel: 1, cornering: 1, braking: 1 }, t.id + " reset mods");
+  }
 });

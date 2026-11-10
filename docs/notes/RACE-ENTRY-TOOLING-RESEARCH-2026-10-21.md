@@ -1,5 +1,7 @@
 # Race-entry tooling research — 2026-10-21 (B·H14)
 
+Summary: Tooling research for race entry after the 2026-10-20 monza-foundation Pages red (B·H14).
+
 Context: the 2026-10-20 Pages red (monza-foundation 8 → 26 s on llvmpipe at #3221, fixed by #3356) was found by a
 red deploy run, three failures in, not by a gate. OrchB 24 asked (Bryce, quoted: "do a bunch of web research on how
 to help profile debug test this stuff") for three things: how to pace work on the main thread without idling on

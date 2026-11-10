@@ -1,5 +1,7 @@
 # First BOOST press freezes ~0.74–0.93 s on iPhone: the first ERS-strip draw (A·W15, 2026-10-23)
 
+Summary: The first BOOST press froze about 0.74-0.93 s on iPhone because of the first ERS-strip draw (A·W15, PR #3611).
+
 Bryce: "whenever I am in buttons steering mode and I take my finger off of throttle to hit boost the game lags".
 PR #3611. Fleet A worker A·W15.
 

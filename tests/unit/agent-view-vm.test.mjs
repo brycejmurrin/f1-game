@@ -384,7 +384,14 @@ test("lists every car by position with second gaps, compactly", async () => {
     contains(["string", "object"], typeof r.team);   // string id or null
     assert.equal(r.team === null || typeof r.team === "string", true);
     assert.equal(typeof r.code === "string" || r.code === null, true);
+    assert.equal(typeof r.inPit, "boolean");
   }
+  const brief = () => g.apex.field().positions.find((r) => r.id === f.positions[1].id);
+  const car = g.G.cars.find((c, i) => (c.id != null ? c.id : i) === f.positions[1].id);
+  const was = car.pitState;
+  for (const st of ["lane", "box", "out"]) { car.pitState = st; assert.equal(brief().inPit, true, st); }
+  car.pitState = "none"; assert.equal(brief().inPit, false);
+  car.pitState = was;
   for (let i = 1; i < f.positions.length; i++) {
     gte(f.positions[i].gapToLeaderS, f.positions[i - 1].gapToLeaderS - 0.01);
   }
