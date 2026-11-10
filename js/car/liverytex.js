@@ -1083,7 +1083,9 @@ const LiveryTex = (function () {
   const FIN_BADGE_IDS = ["logo", "number", "code", "none"];
   function driverCode(teamId, num) {
     const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
-    const d = t && t.drivers && t.drivers.find((x) => x.num === num);
+    // resolveRaceNumber returns numberOverride as-is; a string "63" from a share
+    // code or stored override must still match the numeric drivers[].num.
+    const d = t && t.drivers && t.drivers.find((x) => x.num == num);
     return (d && d.code) || teamShort(teamId);
   }
   // Whether the crest is also drawn on the engine-cover spine. With the badge

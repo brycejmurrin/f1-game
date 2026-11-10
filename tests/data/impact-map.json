@@ -3222,6 +3222,9 @@
         "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs"
       ],
+      "normalizeImported": [
+        "tests/unit/livery-paint-zones.test.mjs"
+      ],
       "pickLivery": [
         "tests/unit/livery-design.test.mjs"
       ],
@@ -3490,6 +3493,9 @@
         "tests/unit/tlx-texture-release.test.mjs"
       ],
       "drawSpineTop": [
+        "tests/unit/livery-cover-graphics.test.mjs"
+      ],
+      "drawTailTop": [
         "tests/unit/livery-cover-graphics.test.mjs"
       ],
       "*": [
