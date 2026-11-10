@@ -285,7 +285,7 @@ test("SettingsNav.lazy: the first Settings page enter flushes before other enter
 
 test("SettingsNav.lazy: the audited Settings-only initialisers go through the gate (#4798)", () => {
   for (const f of ["js/camera/cockpit-finishes.js", "js/camera/feel.js", "js/ui/driving-line-opts.js", "js/ui/a11y-opts.js",
-    "js/ui/debris-opts.js", "js/ui/post-fx-opts.js", "js/track/build-client.js", "js/xr/xr-opts.js"]) {
+    "js/ui/post-fx-opts.js", "js/track/build-client.js", "js/xr/xr-opts.js"]) {
     const src = fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
     assert.match(src, /SettingsNav\.lazy\(initUI\); else initUI\(\);/, f + " wires its rows through SettingsNav.lazy");
   }

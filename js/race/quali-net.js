@@ -34,10 +34,9 @@ const QualiNet = (function () {
     let gateSince = null;     // when the gate first held after arm (rival outstanding)
     let gateTimedOut = false;
     let gateTimer = null;
-    let iDone = false;        // Flow B: player's own session is on the sheet (MENU path)
 
     function gateReset() {
-      gateSince = null; gateTimedOut = false; iDone = false;
+      gateSince = null; gateTimedOut = false;
       if (gateTimer != null) { clearTimer(gateTimer); gateTimer = null; }
     }
 
@@ -199,7 +198,9 @@ const QualiNet = (function () {
     }
 
     /** The player's own session is run (q-done): MENU is the second door off the sheet. */
-    function markDone() { iDone = true; }
+    // The player's own session is on the sheet (Flow B, MENU path). Kept as a
+    // no-op seam for game.js: canLeave() reads the gate and its timeout only.
+    function markDone() {}
     const timedOut = () => gateTimedOut;
     /** BACK/Escape may leave once the gate gave up on a silent rival. */
     const canLeave = () => gateTimedOut;

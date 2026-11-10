@@ -1,7 +1,7 @@
 # Tree budget decision — 2026-10-19
 
 Refs [#1619](https://github.com/brycejmurrin/f1-game/issues/1619). Measured on
-deploy tip `484d7ea10` with `node tools/archive/gen/trees/measure-tree-budget.mjs`
+deploy tip `484d7ea10` with `node tools/archive/gen/trees/measure-tree-budget`
 (`tools/lib/track-build-vm.cjs` + `TrackHiddenFaces.compact`, same path as
 `tools/track/props-tris.cjs`).
 
@@ -73,3 +73,5 @@ AX26 **v3** = v2 packed body + trailing `u8` sway (`w×255`), decoded as
 - Commit baked models into `assets/pack/`, CREDITS, manifest
 - Swap scenery placements 1:1 once kenney / stands hunters land
 - `verify-track spa` against the swapped pack
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

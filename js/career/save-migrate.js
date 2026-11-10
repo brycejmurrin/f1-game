@@ -260,19 +260,31 @@ const SaveMigrate = (function () {
     if (typeof Parts === "undefined" || !Array.isArray(Parts.CATALOG) || !Parts.CATALOG.length) return;
     const byCategory = new Map();
     const all = new Set();
+    // #5043: a bare legacy "sport" unlocked both Sport rows; it also grants the
+    // new key. Additive, idempotent, no CAREER_V rung (older builds still load).
+    const split = [];
     for (const cat of Parts.CATALOG) {
       if (!cat || typeof cat.id !== "string" || !Array.isArray(cat.options)) continue;
       const ids = new Set();
       for (const opt of cat.options) {
         if (!opt || typeof opt.id !== "string") continue;
         ids.add(opt.id); all.add(opt.id);
+        if (typeof opt.own === "string" && opt.own !== opt.id) { all.add(opt.own); split.push(opt); }
       }
       byCategory.set(cat.id, ids);
     }
-    if (Array.isArray(career.owned)) {
-      career.owned = career.owned.filter((id, i, a) =>
-        typeof id === "string" && all.has(id) && a.indexOf(id) === i);
-    } else career.owned = [];
+    const grantSplit = (out) => {
+      for (const opt of split) if (out.includes(opt.id) && !out.includes(opt.own)) out.push(opt.own);
+      return out;
+    };
+    career.owned = Array.isArray(career.owned) ? grantSplit(career.owned.filter((id, i, a) =>
+      typeof id === "string" && all.has(id) && a.indexOf(id) === i)) : [];
+    // AI bags only gain the key.
+    const bags = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts) ? career.aiParts : {};
+    for (const id of Object.keys(bags)) {
+      const bag = bags[id];
+      if (bag && typeof bag === "object" && Array.isArray(bag.owned)) grantSplit(bag.owned);
+    }
     const fitted = {};
     if (career.fitted && typeof career.fitted === "object" && !Array.isArray(career.fitted)) {
       for (const cat of Object.keys(career.fitted)) {

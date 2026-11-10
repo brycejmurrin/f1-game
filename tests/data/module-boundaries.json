@@ -54,22 +54,29 @@
         ]
       }
     },
-    "js/race/wx-hash.js": {
-      "export": "WxHash",
-      "globals": {
-        "Math": [
-          "imul"
-        ],
-        "Object": [
-          "freeze"
-        ]
-      }
-    },
     "js/perf/thermal-drift.js": {
       "export": "ThermalDrift",
       "globals": {
         "Number": [
           "isFinite"
+        ]
+      }
+    },
+    "js/race/rain-cells.js": {
+      "export": "RainCells",
+      "globals": {
+        "Math": [
+          "abs",
+          "ceil",
+          "exp",
+          "floor",
+          "imul",
+          "max",
+          "min",
+          "round"
+        ],
+        "Object": [
+          "freeze"
         ]
       }
     }

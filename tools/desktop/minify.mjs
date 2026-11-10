@@ -32,11 +32,12 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-// terser is loaded on first use, not at import: pages.yml's deploy and
-// verify-live jobs and desktop.yml's pack job run stage.mjs WITHOUT a root
-// `npm ci`, and a static import would fail the whole stage there. Where terser
-// cannot be resolved the stage ships source bytes and says so (minifyStaged
-// returns { skipped }); ci.yml staged-boot asserts it really minified.
+// terser is loaded on first use, not at import: desktop.yml's pack job and
+// mobile/scripts/sync-web.mjs can run stage.mjs WITHOUT a root `npm ci`, and a
+// static import would fail the whole stage there. What a missing terser does is
+// `unminifiedPolicy`: a RELEASE build throws; a pull-request or local build
+// ships source bytes and logs that choice (minifyStaged returns { skipped }).
+// ci.yml staged-boot asserts the Pages stage really minified.
 let _terser = null;
 async function terser() {
   if (!_terser) _terser = await import("terser");
@@ -46,6 +47,32 @@ async function terser() {
 /** Can this checkout minify (is terser resolvable)? */
 export async function canMinify() {
   try { await terser(); return true; } catch (_) { return false; }
+}
+
+const PR_EVENTS = new Set(["pull_request", "pull_request_target", "merge_group"]);
+
+/**
+ * What a stage does when terser is missing. A release build is
+ * APEX_RELEASE_BUILD=1, a tag ref, or any GitHub Actions event that is not a
+ * pull request (push, workflow_dispatch, schedule, release): it must ship the
+ * minified bytes the web deploy ships, so it fails. A pull-request run or a
+ * local dev stage may ship source bytes; the returned reason is logged.
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {{ allow: boolean, reason: string }}
+ */
+export function unminifiedPolicy(env = process.env) {
+  if (env.APEX_RELEASE_BUILD === "1" || env.APEX_RELEASE_BUILD === "true") {
+    return { allow: false, reason: "APEX_RELEASE_BUILD is set" };
+  }
+  if (env.GITHUB_REF_TYPE === "tag" || String(env.GITHUB_REF || "").startsWith("refs/tags/")) {
+    return { allow: false, reason: `tag build (${env.GITHUB_REF || env.GITHUB_REF_NAME || "tag"})` };
+  }
+  if (env.GITHUB_ACTIONS === "true") {
+    const ev = env.GITHUB_EVENT_NAME || "unknown";
+    if (PR_EVENTS.has(ev)) return { allow: true, reason: `GitHub Actions ${ev} build` };
+    return { allow: false, reason: `GitHub Actions ${ev} build is a release build` };
+  }
+  return { allow: true, reason: "local build (not GitHub Actions, APEX_RELEASE_BUILD unset)" };
 }
 
 /** terser options: one frozen object so the test and the stage cannot drift. */
@@ -114,12 +141,16 @@ export function minifyJobCount(requested = 2, {
  * Temporary results bound memory to one source/output per worker and are removed
  * after success or failure. The serial path uses the same publication barrier.
  * @param {string} siteRoot
- * @param {{ jobs?: number }} [opts]
+ * @param {{ jobs?: number, env?: Record<string, string | undefined> }} [opts] env: for unminifiedPolicy (default process.env)
  * @returns {Promise<{ files: number, before: number, after: number } | { skipped: string }>}
  */
 export async function minifyStaged(siteRoot, opts = {}) {
   if (!(await canMinify())) {
-    const skipped = "terser is not installed here (run npm ci at the repo root); js/ staged unminified";
+    const policy = unminifiedPolicy(opts.env || process.env);
+    if (!policy.allow) {
+      throw new Error(`stage: terser is not installed (run npm ci at the repo root); a release build must minify js/ (${policy.reason})`);
+    }
+    const skipped = `terser is not installed here (run npm ci at the repo root); js/ staged unminified — allowed: ${policy.reason}; a release build fails here`;
     process.stderr.write(`::warning::stage: ${skipped}\n`);
     return { skipped };
   }

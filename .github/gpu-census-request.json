@@ -1,1 +1,1 @@
-{"images":"macos-latest","track":"montreal","tod":"night","clock":23,"census_only":false,"force":"1","ls":"","cam":"helmet","entry":"api","rev":18}
+{"images":"macos-latest","track":"monza","leg":"live-frame","lf_backends":"tlx-gpu,tlx-gl","census_only":true,"force":"1","ls":"lf.dsf=3 lf.lab=dpr3 lf.sweep=3,2,1.5 lf.step=6 lf.win=24","cam":"helmet","entry":"api","rev":19}

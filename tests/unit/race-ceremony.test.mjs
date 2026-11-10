@@ -167,3 +167,12 @@ test("want + afterClassify: armed eligible defers sheet; default shows it", () =
   assert.equal(R.afterClassify(G, G.cars, {}), false);
   assert.equal(results.hidden, false);
 });
+
+test("resetLive disarms a stale want: a quali/TT flag must not arm the NEXT race's SKIP TO RESULTS", () => {
+  // update() arms want(true) at every natural flag; endRace returns before afterClassify in
+  // qualifying and time trial. startRaceBody and quitToMenu both call resetLive().
+  const { R } = boot();
+  R.want(true);
+  R.resetLive();
+  assert.equal(R.want(), false);
+});

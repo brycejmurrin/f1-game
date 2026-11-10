@@ -71,62 +71,6 @@
       "outputPolicy": "no-direct-output"
     },
     {
-      "path": "tools/archive/ci/measure-guard-commit.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/archive/gen/trees/measure-tree-budget.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/archive/gfx/decal-bake-probe.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/archive/net/rtc-sync-probe.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/archive/perf/devicefarm-boot.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/archive/perf/ers-deploy-census.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/archive/perf/touch-boost-probe.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node"
-    },
-    {
       "path": "tools/assets/gltf-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -942,6 +886,11 @@
       ]
     },
     {
+      "path": "tools/ci/file-verdict-reporter.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "protocol-only"
+    },
+    {
       "path": "tools/ci/fixture-consumer-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -994,15 +943,6 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
-    },
-    {
-      "path": "tools/ci/js-debugger-smoke.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
     },
     {
       "path": "tools/ci/junit-failed.mjs",
@@ -1602,336 +1542,6 @@
       "interpreter": "bash"
     },
     {
-      "path": "tools/environment/.gitignore",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/ENVIRONMENT.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/MCP-STARTUP-SKILL.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/PLUGIN-BUILD.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/activate.sh",
-      "classification": "ambiguous",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/bin/f1-build-plugins",
-      "classification": "asset",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/bin/f1-env",
-      "classification": "asset",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/bind-canonical.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/boot-chat-mcp.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/build-plugins.py",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "python3",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/check-chat-mcp-health.py",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "python3",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/environment/environment/install-dependencies.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/environment/install-local-plugins.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/environment/install-tools.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/environment/plugin-install.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/environment/environment/preflight.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/environment/resume.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/environment/test-environment.py",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/environment/test-health.py",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/environment/validate-shaders.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/environment/verify.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/fixtures/lifecycle-echo.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "protocol-only"
-    },
-    {
-      "path": "tools/environment/install-environment.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/launch-mcp.sh",
-      "classification": "protocol-entrypoint",
-      "outputPolicy": "protocol-only"
-    },
-    {
-      "path": "tools/environment/plugin-sources/.agents/plugins/marketplace.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-cloud-mcp/.app.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-cloud-mcp/.codex-plugin/plugin.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/.app.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/.codex-plugin/plugin.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/executor/.mcp.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/executor/mcp.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/plugin.json",
-      "classification": "data",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/agent-readiness.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/apex-tools-bridge.mjs",
-      "classification": "protocol-entrypoint",
-      "outputPolicy": "protocol-only"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/readiness.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/codex-workflows.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/profiling.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/ui-inspection.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md",
-      "classification": "asset",
-      "outputPolicy": "no-direct-output",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js",
-      "classification": "ambiguous",
-      "outputPolicy": "no-direct-output"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/agent-setup.test.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/bridge.test.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/readiness.test.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
-      "path": "tools/environment/setup.sh",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "bash"
-    },
-    {
-      "path": "tools/environment/test-plugin-build.py",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native",
-      "nativeOutputFlagMentions": [
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/environment/test-stdio-lifecycle.py",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "python3"
-    },
-    {
       "path": "tools/garage-angles-fetch.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -2347,16 +1957,6 @@
       ],
       "npmScripts": [
         "wgx:capture"
-      ]
-    },
-    {
-      "path": "tools/gfx/gl-object-census.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json",
-        "--quiet"
       ]
     },
     {
@@ -3017,11 +2617,6 @@
       "outputPolicy": "protocol-only"
     },
     {
-      "path": "tools/mcp/check-chat-browser.mjs",
-      "classification": "ambiguous",
-      "outputPolicy": "keep-native"
-    },
-    {
       "path": "tools/mcp/check-chat-contract.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -3437,12 +3032,6 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
-    },
-    {
-      "path": "tools/perf/race-entry-timer.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "artifact-first",
-      "interpreter": "node"
     },
     {
       "path": "tools/perf/runtime-memory.mjs",
@@ -4368,6 +3957,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ui/profile-survey.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ui/reach-score.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -4668,7 +4263,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-planning.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-btn-cache.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout-hidden.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/layout-presets.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/overlay-publisher.test.mjs tests/unit/overlay-render.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race-tab-no-race.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/season-calendar-default.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-parts-regs.test.mjs tests/unit/career-planning.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-btn-cache.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout-hidden.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/layout-presets.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/overlay-publisher.test.mjs tests/unit/overlay-render.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race-tab-no-race.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/season-calendar-default.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
     },
     {
       "name": "test:steering-unit",
@@ -4676,7 +4271,7 @@
     },
     {
       "name": "test:sweeps",
-      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/baked-model-road-guard.test.mjs tests/unit/barrier-runoff-jumps.test.mjs tests/unit/build-steps.test.mjs tests/unit/build-worker.test.mjs tests/unit/car-front-wing-width.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/driving-line-opts.test.mjs tests/unit/driving-line.test.mjs tests/unit/elevation-smoothness.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/kerb-berm-surface.test.mjs tests/unit/kerb-stripes.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/pit-complex.test.mjs tests/unit/pit-signs.test.mjs tests/unit/prop-clipping.test.mjs tests/unit/props-over-road.test.mjs tests/unit/props-tri-ratchet.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/scenery-ground-audit.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/spline-project-height.test.mjs tests/unit/track-build-vm-release.test.mjs tests/unit/track-line-circuits.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-validate-fleet.test.mjs tests/unit/water-local-level.test.mjs"
+      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/baked-model-road-guard.test.mjs tests/unit/barrier-runoff-jumps.test.mjs tests/unit/build-steps.test.mjs tests/unit/build-worker.test.mjs tests/unit/car-front-wing-width.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/driving-line-opts.test.mjs tests/unit/driving-line.test.mjs tests/unit/elevation-smoothness.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/kerb-berm-surface.test.mjs tests/unit/kerb-stripes.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/pit-complex.test.mjs tests/unit/pit-signs.test.mjs tests/unit/prop-clipping.test.mjs tests/unit/props-over-road.test.mjs tests/unit/props-tri-ratchet.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/scenery-ground-audit.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/scenery-seats.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/spline-project-height.test.mjs tests/unit/track-build-vm-release.test.mjs tests/unit/track-line-circuits.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-validate-fleet.test.mjs tests/unit/water-local-level.test.mjs"
     },
     {
       "name": "test:sweeps-parts",
@@ -4696,7 +4291,7 @@
     },
     {
       "name": "test:ui",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/agent-determinism.spec.js tests/specs/audio-smoke.spec.js tests/specs/browser-ui-hunt.spec.js tests/specs/css-player-smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/engine-audio-offline.spec.js tests/specs/hud-audit.spec.js tests/specs/hud-layout.spec.js tests/specs/menu-keyboard.spec.js tests/specs/menu-survey.spec.js tests/specs/menu-traversal.spec.js tests/specs/music-library.spec.js tests/specs/persistence.spec.js tests/specs/photo-studio-conditions.spec.js tests/specs/photo-studio.spec.js tests/specs/picker-edit-button.spec.js tests/specs/picker-tab-inplace.spec.js tests/specs/rotation-recovery.spec.js tests/specs/title-fit.spec.js tests/specs/title-menu-rotation.spec.js tests/specs/ui-button-touch.spec.js tests/specs/ui-redesign.spec.js tests/specs/ui-resize.spec.js tests/specs/ui-scale.spec.js tests/specs/watch-transport-layout.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/agent-determinism.spec.js tests/specs/audio-smoke.spec.js tests/specs/browser-ui-hunt.spec.js tests/specs/css-player-smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/engine-audio-offline.spec.js tests/specs/hud-audit.spec.js tests/specs/hud-layout.spec.js tests/specs/menu-keyboard.spec.js tests/specs/menu-survey.spec.js tests/specs/menu-traversal.spec.js tests/specs/music-library.spec.js tests/specs/named-controls.spec.js tests/specs/persistence.spec.js tests/specs/photo-studio-conditions.spec.js tests/specs/photo-studio.spec.js tests/specs/picker-edit-button.spec.js tests/specs/picker-tab-inplace.spec.js tests/specs/rotation-recovery.spec.js tests/specs/title-fit.spec.js tests/specs/title-menu-rotation.spec.js tests/specs/ui-button-touch.spec.js tests/specs/ui-redesign.spec.js tests/specs/ui-resize.spec.js tests/specs/ui-scale.spec.js tests/specs/watch-transport-layout.spec.js"
     },
     {
       "name": "test:vm-page",

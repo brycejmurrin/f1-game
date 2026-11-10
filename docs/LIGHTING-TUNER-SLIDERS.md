@@ -23,7 +23,7 @@ knocked four knobs' own defaults off their grids; the guard caught it.
 ## Every slider is wired — the full audit
 
 An exhaustive scan of every `<obj>.<id>` read across the WHOLE `js/` tree (not a
-sampled file list) gives all 183 knobs a consumer on the shipping (GLX) path —
+sampled file list) gives every knob in `TUNE_DEFS` a consumer on the shipping (GLX) path —
 **zero unwired**. The classification, and the invalidation each class needs to
 be live from a slider drag (not just at track load):
 
@@ -36,7 +36,7 @@ their consumers and are not part of the class counts in the next table.
 | class | count | consumed in | live via | guarded by |
 |---|---|---|---|---|
 | per-frame | 74 | render/frame code | read every frame off live `LT` | — |
-| shader-uniform | 73 | GLX upload → GLSL (all 73 uniforms upload) | uniform re-uploaded each frame | — |
+| shader-uniform | 73 | GLX upload → GLSL (every `u:` knob uploads; count today's with `u:` in `TUNE_DEFS`) | uniform re-uploaded each frame | — |
 | build-only | 5 | `buildTrackLights` only (poolEnergy, lampRadiusMul, bleedMul, beamCone, lampGapFill) | `rebuild:true` nulls `track._lights` | `lighting-rebuild.test.mjs` |
 | apply-only | 15 | `applyRaceSettings`/`atmosphere.js` only | `APPLY_RACE_IDS` re-runs it | `lighting-reapply.test.mjs` |
 
@@ -62,7 +62,7 @@ these, and they need different fixes:
 | **Conditional** | inert in the condition you are in, live in another | **expected, not a defect** — night lamp knobs in daylight, wet-road knobs when dry |
 
 The third and fourth are the common ones, and the reason a casual "half these do
-nothing" is usually wrong: 69 of the 183 knobs are also set by shipped presets per
+nothing" is usually wrong: many knobs are also set by shipped presets per
 (track, time-of-day, weather), so what a slider appears to do depends on where
 you are standing when you drag it.
 
@@ -264,8 +264,9 @@ reproducible:
 
 ≈14–20% faster, which is the mechanism working as designed: a chunk binds only
 lamps whose radius reaches it, so fragments run fewer light-loop iterations, and
-that saving outweighs the extra uploads. Two caveats keep the knob **off by
-default** anyway: (1) these frames are 5–6.5 SECONDS under SwiftShader, ~60x off
+that saving outweighs the extra uploads. Two caveats kept the knob's own
+`TUNE_DEFS` default at 0 (the shipped `"*|<tod>"` presets now resolve it to 0.3 at
+every time of day, on every backend — `js/lighting/presets.js`): (1) these frames are 5–6.5 SECONDS under SwiftShader, ~60x off
 real-time and heavily fragment-bound — exactly the regime where cutting
 per-fragment light iterations wins biggest, so the magnitude will not transfer
 to a real GPU even if the direction does; (2) nothing here measures the mobile
@@ -581,7 +582,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampBehindBias` | BEHIND-CAM BIAS | 0.2 … 8 | 5.25 | — |   | frame-lights.js×3 |
 | `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | apex.js, game.js×4, chunked.js, glx.js×3, shadow-pass.js |
 | `lampBake` | BAKED LAMP POOLS | 0 … 1 | 1 | — |   | game.js×5, atmosphere.js×2, glx.js×6 |
-| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×8, frame-lights.js×2, profiles.js×5, tuner-panel.js, chunked.js×3, glx.js |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×8, frame-lights.js×2, profiles.js×3, tuner-panel.js, chunked.js×3, glx.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
 | `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | game.js, atmosphere.js×2, profiles.js, glx.js×2 |
 
