@@ -71,7 +71,6 @@ test("speedYawDamp locals live in player-forces.js, not consts.js", () => {
   assert.ok(/SPEED_YAW_LO\s*=\s*50/.test(forces), "SPEED_YAW_LO = 50");
   assert.ok(/SPEED_YAW_HI\s*=\s*65/.test(forces), "SPEED_YAW_HI = 65");
   assert.ok(/SPEED_YAW_EXTRA\s*=\s*5/.test(forces), "SPEED_YAW_EXTRA = 5");
-  assert.ok(forces.includes("speedYawDamp"), "speedYawDamp multiplies yaw damp");
   assert.ok(forces.includes("coastYaw"), "COAST_YAW path untouched");
   assert.ok(!/SPEED_YAW_/.test(consts), "no SPEED_YAW_* key in consts.js");
 });

@@ -336,3 +336,50 @@ test("W6: a generated file in the diff runs gen:check in verify-change's fast ph
   assert.equal(out.verdict, "fail", "a hand-edited generated file must not pass the fast gate");
   assert.equal(r.status, 1);
 });
+
+test("test-honesty --strict: a test NAME is not a reason; bare and reasonless skip/todo options are scanned", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts/tmp-test-honesty-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests"), { recursive: true });
+    const site = (name, body) => fs.writeFileSync(path.join(dir, "tests", `${name}.test.mjs`), body);
+    // each line is one planted site; the name says which way it must go
+    site("bad-decl-skip", 'test.skip("the tyre model", () => { assert.ok(1); });\n');
+    site("bad-describe-skip", 'describe.skip("pit lane", () => {});\n');
+    site("bad-todo", 'test.todo("wet weather");\n');
+    site("bad-cond-no-reason", "test.skip(!process.env.X);\n");
+    site("bad-option-true", 'test("name", { skip: true }, () => {});\n');
+    site("bad-option-todo", 'test("Baku\'s night", { todo: true }, () => {});\n');
+    site("bad-option-cond", 'test("n", { skip: process.platform !== "linux" }, () => {});\n');
+    site("bad-option-next-line", 'test("n",\n  { skip: true }, () => {});\n');
+    site("ok-cond-reason", 'test.skip(!process.env.X, "opt-in: set X=1");\n');
+    site("ok-cond-reason-next-line", 'test.skip(true,\n  "retired: see #12");\n');
+    site("ok-skip-ok", '// SKIP-OK: flaky on CI, #123\ntest.skip("n", () => {});\n');
+    site("ok-option-reason", 'test("n", { skip: !hasPack && "no pack installed" }, () => {});\n');
+    site("ok-option-computed", 'test("n", { skip: probe.skip }, () => {});\n');
+    site("ok-option-off", 'test("n", { skip: false }, () => {});\n');
+    site("ok-in-string", 'const src = `test.skip("not now", async () => {});`;\n');
+    site("baselined", 'test("old one", { skip: true }, () => {});\n');
+    const baseline = path.join(dir, "baseline.json");
+    const rows = [{ file: ["tests", "baselined.test.mjs"].join("/"), text: "old one", reason: "predates the rule" }];
+    fs.writeFileSync(baseline, JSON.stringify({ baseline: rows }));
+    const r = run(["tools/ci/test-honesty.mjs", "--json", "--strict", "--root", dir, "--baseline", baseline]);
+    assert.equal(r.status, 1, r.out);
+    const v = JSON.parse(r.out);
+    const bad = [...new Set(v.detail.map((f) => path.basename(f.file, ".test.mjs")))].sort();
+    assert.deepEqual(bad, ["bad-cond-no-reason", "bad-decl-skip", "bad-describe-skip", "bad-option-cond", "bad-option-next-line",
+      "bad-option-todo", "bad-option-true", "bad-todo"]);
+    assert.equal(v.baselined, 1);
+    assert.deepEqual(v.stale, []);
+    // shrink-only: a baseline row that matches no site is stale and fails --strict on its own
+    for (const f of fs.readdirSync(path.join(dir, "tests"))) if (f.startsWith("bad-")) fs.rmSync(path.join(dir, "tests", f));
+    fs.writeFileSync(baseline, JSON.stringify({ baseline: [...rows, { file: ["tests", "gone.test.mjs"].join("/"), text: "x", reason: "r" }] }));
+    const s = run(["tools/ci/test-honesty.mjs", "--json", "--strict", "--root", dir, "--baseline", baseline]);
+    assert.equal(s.status, 1, s.out);
+    assert.deepEqual(JSON.parse(s.out).stale.map((b) => b.file), [["tests", "gone.test.mjs"].join("/")]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("test-honesty: the shipped baseline is not stale (it only shrinks)", () => {
+  const v = JSON.parse(run(["tools/ci/test-honesty.mjs", "--json"]).out);
+  assert.deepEqual(v.stale, [], "delete stale rows from tests/data/test-honesty-baseline.json");
+});

@@ -6159,6 +6159,7 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
+        "tests/unit/real-race-tab-no-race.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -9790,6 +9791,9 @@
       "buildLightTunePanel": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
+      "closeLightTuner": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+      ],
       "create": [
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -10696,6 +10700,7 @@
         "tests/unit/bench-run.test.mjs"
       ],
       "*": [
+        "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs"
       ]
     },
@@ -11230,7 +11235,8 @@
         "tests/unit/soak-run.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs"
       ]
     },
     "js/perf/spans.js": {
@@ -12583,6 +12589,9 @@
       ],
       "tick": [
         "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "*": [
+        "tests/unit/vstd-invariant.test.mjs"
       ]
     },
     "js/race/daily-challenge.js": {
@@ -14328,7 +14337,6 @@
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
-        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
@@ -15015,6 +15023,9 @@
       ],
       "walk": [
         "tests/unit/assets-pack.test.mjs"
+      ],
+      "*": [
+        "tests/unit/gltf-selftest.test.mjs"
       ]
     },
     "js/render/shared/glx-facade.js": {
@@ -15908,15 +15919,13 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "startMirrorWarm": [
-        "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "startProgramWarm": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
-        "tests/unit/tlx-lite-lab.test.mjs",
-        "tests/unit/tlx-rig-warm.test.mjs"
+        "tests/unit/tlx-lite-lab.test.mjs"
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"
@@ -16649,6 +16658,7 @@
       "*": [
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/float-audit-harness.test.mjs",
         "tests/unit/track-shot-survey.test.mjs"
       ]
     },
@@ -19195,7 +19205,6 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "isDefault": [
-        "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "move": [
