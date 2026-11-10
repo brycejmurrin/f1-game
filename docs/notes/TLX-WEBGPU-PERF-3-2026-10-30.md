@@ -115,7 +115,7 @@ WEBGPU on the phone). What this session checked:
   - the exhaust heat-haze, which is off on `mobileTier`;
   - the mirror, which skips the player's own car;
   - the ERS sound, whose nodes are built once at `attach()`.
-- **`tools/archive/perf/ers-deploy-census.mjs --backend tlx-gl --cam helmet --mirror on --track montreal --presses 2`**
+- **`tools/archive/perf/ers-deploy-census --backend tlx-gl --cam helmet --mirror on --track montreal --presses 2`**
   (three's WebGL2 path, SwiftShader) reads `deployed=true pre=25 lazy=0 misses=0`. So at the three.js level, the first
   deploy builds no pipeline and mints no material.
 - **Not checked:** a WebGPU-only key difference. This container cannot run three's WebGPU leg, and the macOS census never
@@ -152,3 +152,5 @@ owed by Bryce's next PHONE TEST › GPU TEST.
 - three.js #34782, depth-only render targets on both backends: https://github.com/mrdoob/three.js/pull/34782
 - The vendored r187 source itself (`scratch/three-r187/x/package/build/*.js` in the session), for every line cited above.
 - GPUQueue.writeBuffer alignment: https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/writeBuffer
+
+> 2026-11-10 (W17 dead-weight pass): the tools cited here without an extension were deleted; `git log --diff-filter=D -- <path>` recovers them.

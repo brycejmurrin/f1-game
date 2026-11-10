@@ -204,7 +204,8 @@ const TLX = (function () {
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
-    // three renderer before same-page GLX fallback claims #game.
+    // three renderer before the GLX fallback: same page when #game was never
+    // claimed, else one claim-fail reload (renderer-boot.js reloadOnceIntoGlx, #4594/#4851).
     let _abortDisplay = null, _abortRenderer = null;
     // Undo for the observers/listeners create() attaches, run by the catch: a create that throws after init
     // (an initOwner superseded mid-boot) would otherwise leave them on a dead backend.
@@ -236,10 +237,12 @@ const TLX = (function () {
 
       THREE.ColorManagement.enabled = false;
 
-      // The vendored bundle carries TWO local patches (swizzle omission for
-      // Chromium 141, the #33952 bind-group-leak backport) — recipe and
-      // rationale in vendor/three-0.187.0/PATCHES.md, guarded by
-      // gfx-backend-canary. Re-apply both on any vendor bump.
+      // The vendored bundle carries local patches (TEN on r187: ids 1, 4, 5,
+      // 11, 12, 13, 14, 17, 18, 19 — vendor/three-0.187.0/MANIFEST.json is the
+      // list), applied by tools/gen/vendor-three.mjs from
+      // vendor/three-patches/patches.mjs; rationale in
+      // vendor/three-0.187.0/PATCHES.md, shapes pinned by gfx-backend-canary.
+      // A bump re-runs the tool; a needle that moved stops it.
 
       // WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
       // pin WebGPU, UNSET = AUTO. AUTO may land on three's WebGL2 — that
@@ -399,7 +402,8 @@ const TLX = (function () {
             // read (measured in-container: byte-identical captures across a
             // camera move, awaitSoftPresent never resolving again). Content
             // gates key off this flag too. Never on a mobile UA.
-            _softAdapter = !_phoneHw && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            // GPUAdapterInfo.isFallbackAdapter (Chrome 136+) first: Chrome 140 removed the GPUAdapter attribute.
+            _softAdapter = !_phoneHw && !!((info && info.isFallbackAdapter) || ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -590,9 +594,16 @@ const TLX = (function () {
           // Phase 0 XR uses XRWebGLLayer + manual per-eye present — not three's
           // multiview ArrayCamera path. Keep multiview off: three #32538
           // (right-eye projection) and #32151 (Quest flicker) are still open,
-          // and perCameraCulling is absent from vendored 0.186.0.
+          // and perCameraCulling is absent from the vendored r187 bundle.
           multiview: false,
         });
+        // r187's WebGPURenderer arms its OWN WebGL2 fallback (`getFallback`): Renderer.init() catches a failed
+        // WebGPUBackend.init() — no adapter, requestDevice refused, no navigator.gpu — and swaps in a WebGLBackend that
+        // binds #game itself with `alpha: true`, so the AUTO retry below never ran and forceWebGL stayed false. AUTO
+        // disarms it: the failure throws into that retry, which binds #game with the opaque context (#game is still
+        // untouched — WebGPUBackend.init() never calls getContext). A WebGPU pin keeps three's swap; the post-init
+        // check below catches it (and any other swap) and corrects the flags.
+        if (!forceWebGL && _glPin !== "0" && "_getFallback" in renderer) renderer._getFallback = null;
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
@@ -731,9 +742,6 @@ const TLX = (function () {
               _dev.__apexShaderHook = true;
             } catch (_) { /* optional hook */ }
           }
-          if (_liteGpu) {
-            try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
-          }
         }
         return { renderer: renderer, ownGL: glCtx };
       }
@@ -756,6 +764,16 @@ const TLX = (function () {
         } else {
           throw e;
         }
+      }
+      // A WebGL backend under forceWebGL=false is three's own swap (see bootRenderer): under a WebGPU pin, or a
+      // build whose fallback the disarm missed. The canvas is bound by then and cannot be re-bound opaque, but every
+      // leg decision keyed on forceWebGL (_softBlit, sceneSamplesFor, the refusal's toGlx) must take the WebGL2 leg.
+      let _initSwapGL = false;
+      if (!forceWebGL && renderer.backend && renderer.backend.isWebGLBackend) {
+        _initSwapGL = true;
+        forceWebGL = true;
+        try { Log.warn("gfx", "[TLX] three swapped in its WebGL2 backend during init (WebGPU failed); pin", _glPin); } catch (_) { /* Log optional */ }
+        _latchWebKitGL("WebGPU init fell back inside three");
       }
       _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
@@ -1055,7 +1073,7 @@ const TLX = (function () {
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
-          canvas.setAttribute("data-engine", "three.js r185 " + api);
+          canvas.setAttribute("data-engine", engineLabel(THREE, api));
         }
       } catch (_) { /* three already stamped a label; ours is best-effort */ }
       try {
@@ -1786,7 +1804,7 @@ const TLX = (function () {
           // maxLights: see tsl-lit.js — 48 lamp array rows overrun the WebGL2
           // fragment-uniform floor (224) once three/TSL adds its own block, so
           // the lit shader fails to LINK on iOS Safari and every lit surface
-          // draws nothing. Same _liteGpu gate as samples/outputType above.
+          // draws nothing. Same _liteGpu gate as antialias/outputType above.
           // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
@@ -1941,10 +1959,13 @@ const TLX = (function () {
         if (window.TLXShaders && TLXShaders.chunked) {
           // isWebGPU feeds the pack's vertex-format rule (tlx-chunked.js
           // packAttr `fmt24`): WebGPU has no 1- or 3-wide 8/16-bit formats.
+          // LP-01 repair ledger (_mirrorLedger is declared further down; this runs only at a release, after create).
+          const noteNulled = (a) => _mirrorLedger.note(a);
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
             releaseGeometry,
             releaseAttribute,
+            noteNulled,
           });
         }
       } catch (e) {
@@ -3472,7 +3493,7 @@ const TLX = (function () {
       // into a 1x1 scratch depth target (tlx-shadow drawWarm; the sun map is
       // snap-cached, so never the live one). Then it waits for the GPU to
       // settle, so warm.total absorbs the stall. Identical pixels. Every
-      // state it touches (autoClear, scissor test, the target's scissor,
+      // state it touches (autoClear, each target's scissorTest and scissor,
       // target, MRT, the mirror swap) is restored. apex26.tlxDrawWarm: unset =
       // on except on software adapters (SwiftShader CI pays nothing), "1" on,
       // "0" off.
@@ -3495,12 +3516,13 @@ const TLX = (function () {
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
         const drawn = { mirror: 0, scene: 0, post: 0, casts: 0, sky: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
-        const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
-        const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
+        // r187 reads a bound target's OWN scissorTest (Renderer._renderScene: `scissorTest = renderTarget.scissorTest`);
+        // renderer.setScissorTest() only gates the canvas, so the 1x1 rect needs the target's flag set beside it.
+        const autoClear0 = renderer.autoClear;
+        const sRT = post.sceneTarget(), sSc = sRT.scissor.clone(), sST = sRT.scissorTest;
         let tmp = null;
         try {
           renderer.autoClear = false;   // a clear ignores the scissor (WebGPU loadOp)
-          renderer.setScissorTest(true);
           if (mirrorWarmed && mirRT) {
             // The mirror stage left the mirror's own instanced meshes shown. The scratch target takes mirRT's
             // attachment list, and the draw its MRT (on only for a mirror-shaped mirRT), as mirrorEnd draws.
@@ -3515,10 +3537,10 @@ const TLX = (function () {
           if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
           if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
           renderer.setMRT(useTag ? _ssrMrtNode() : null);   // exactly as present() sets it
-          sRT.scissor.set(0, 0, 1, 1);
+          sRT.scissor.set(0, 0, 1, 1); sRT.scissorTest = true;
           renderer.setRenderTarget(sRT);
           renderer.render(scene, camera); drawn.scene++;
-          sRT.scissor.copy(sSc);
+          sRT.scissor.copy(sSc); sRT.scissorTest = sST;
           if (post.drawWarm) drawn.post = post.drawWarm(opts, _postF);   // under the MRT, as present() runs the chain
           renderer.setMRT(null);
           if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
@@ -3527,8 +3549,7 @@ const TLX = (function () {
           if (typeof sky !== "undefined" && sky && sky.cacheDrawWarm) drawn.sky = sky.cacheDrawWarm(renderer);   // cacheWarm's compile keys depth on; the bake has none
         } finally {
           _mirWarmUnswap();
-          sRT.scissor.copy(sSc);
-          renderer.setScissorTest(sc0);
+          sRT.scissor.copy(sSc); sRT.scissorTest = sST;
           renderer.autoClear = autoClear0;
           if (tmp) try { tmp.dispose(); } catch (_) { /* device dying */ }
         }
@@ -4351,6 +4372,10 @@ const TLX = (function () {
       //    zero-length array — a silent no-op instead of the new data.
       function releaseGeoMirrors(g) {
         if (!g || g.__tlxFreed) return 0;
+        // Not on the WebGPU backend: r187 rebuilds a pipeline's vertex-layout key from attribute.array
+        // (BYTES_PER_ELEMENT, constructor) for every new RenderObject — an acquireMesh wrapper, a shadow-pool
+        // mesh taking this geometry — so a nulled array throws there (tlx-chunked.js releaseMirrors). Kept.
+        if (renderer && renderer.backend && renderer.backend.isWebGPUBackend) { g.__tlxFreed = true; g.__tlxKept = true; return 0; }
         // THE BOUNDS ARE READ FROM THE POSITIONS THIS IS ABOUT TO EMPTY.
         // frustumCulled=false covers the cull, but it is not the only reader:
         // three's render walk does `sortObjects && (geometry.boundingSphere ===
@@ -4393,6 +4418,7 @@ const TLX = (function () {
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
           // mechanism I asserted and could NOT substantiate.
+          _mirrorLedger.note(a);   // LP-01: the class is kept so a null-mirror throw can be repaired
           a.array = null;
         };
         const atts = g.attributes;
@@ -4413,7 +4439,8 @@ const TLX = (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
       let _mirrorSweepAt = 0, _carMirrorAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1 };
+      const _mirrorLedger = mirrorLedger();   // every attribute a mirror release nulled (LP-01 repair)
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1, repaired: 0 };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -4932,6 +4959,16 @@ const TLX = (function () {
       // written to webgl2 (session skip + reload if even classic dies).
       // postOnly: the failure may be the post chain alone and the canvas repaint
       // below still paints on TLX — then the session stays bound to three.
+      // LP-01: true when `e` is a freed-mirror read and at least one nulled mirror was repaired (logged once).
+      let _nullMirrorLogged = false;
+      const nullMirrorSkip = (e) => {
+        if (_deviceLost || !isNullMirrorError(e)) return false;
+        const n = _mirrorLedger.repair();
+        if (!n) return false;
+        _mirrorStat.repaired += n;
+        try { if (!_nullMirrorLogged) { _nullMirrorLogged = true; Log.warn("gfx", "TLX: freed vertex mirror read by three; repaired", n, "attribute(s), frame skipped —", e); } } catch (_) { /* Log optional */ }
+        return true;
+      };
       const refuseTab = () => {
         const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
@@ -5280,11 +5317,9 @@ const TLX = (function () {
         flushChunkedOwnership() {
           if (_ownershipFreeBatch && _ownershipFreeBatch.size) {
             flushOwnershipRelease(_ownershipFreeBatch);
-            for (const g of _ownershipFreeBatch) {
-              const names = Object.keys(g.attributes);
-              for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
-              try { g.dispose(); } catch (_) { /* already gone */ }
-            }
+            // Each shared vertex attribute disposed once, THEN stripped and the geometry disposed: r187's geometry
+            // dispose walks only the attributes it still holds (tlx-chunked.js disposeShared).
+            if (chunkedSys && chunkedSys.disposeShared) chunkedSys.disposeShared(_ownershipFreeBatch);
           }
           _ownershipFreeBatch = null;
           _ownershipFreeDepth = 0;
@@ -6476,7 +6511,8 @@ const TLX = (function () {
               const n = _drawChunked(rec, i, _frameVP, frameEye, frameCullDist, frameCullFog, 0);
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
-              // Hold the release until the env probe has LATCHED.
+              // Hold the release until the env probe has LATCHED. (On the WebGPU backend releaseMirrors keeps
+              // the mirrors outright: r187's vertex-layout key reads every attribute's array.)
               // THIS GATE IS LOAD-BEARING. releaseMirrors() (tlx-chunked.js)
               // sets every shared chunk attribute's .array = null — it does NOT
               // swap in a zero-length array (an earlier version of this comment
@@ -6592,7 +6628,14 @@ const TLX = (function () {
               paintCanvas(this);
             }
             painted = true;
-          } catch (e) { persistFail(e, !!post); }
+          } catch (e) {
+            // LP-01 (#4900): a freed CPU mirror read by three's vertex-layout key is ONE geometry's defect, not the
+            // device's. Repair every nulled mirror (zero-length view of its own class; the GPU buffer is intact)
+            // and skip only this frame: the ladder below would strip post/lit/sky for good and, at its last rung,
+            // reload the tab out of the results screen ("Graphics reset").
+            if (!nullMirrorSkip(e)) persistFail(e, !!post);
+            else painted = true;
+          }
           // Post-only death: same materials, canvas (the 1269 intent). The chain is
           // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
@@ -6614,7 +6657,7 @@ const TLX = (function () {
           if (!painted) {
             dropTo(2, rawUnlitMat);
             try { paintCanvas(this); painted = true; }
-            catch (e) { persistFail(e); refuseTab(); }
+            catch (e) { if (nullMirrorSkip(e)) painted = true; else { persistFail(e); refuseTab(); } }   // refuseTab: a real refusal only
           }
           _presentN++;
           _presentMs += (_presentAcc - _presentMs) * 0.1; _presentAcc = 0;
@@ -6912,7 +6955,7 @@ const TLX = (function () {
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
-              forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, webkitStayGL: _webkitStayGL, hasGpu: _hasGpu,
+              forceWebGL, initSwapGL: _initSwapGL, pin: _glPin, autoStayGL: _autoStayGL, webkitStayGL: _webkitStayGL, hasGpu: _hasGpu,
               gpuAdapterOk: _gpuAdapterOk, gpuCanvasOk: _gpuCanvasOk,
               // Read back off the LIVE context, not inferred from what we
               // passed: `true` IS the see-through-car defect, and the paths
@@ -6984,7 +7027,8 @@ const TLX = (function () {
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
                         mirror: { sweeps: _mirrorStat.sweeps, geos: _mirrorStat.geos,
                                   freedMB: _mirrorStat.freedMB, drains: _mirrorStat.drains,
-                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate } };
+                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate,
+                                  carSh: _mirrorStat.carSh, repaired: _mirrorStat.repaired } };   // LP-01: null-mirror repairs
             try {
               const inf = renderer && renderer.info;
               if (inf) {
@@ -7087,16 +7131,16 @@ const TLX = (function () {
       } catch (_) { /* already detached */ }
       try { disposeKeepingContext(_abortRenderer); } catch (_) { /* three dispose best-effort */ }
       if (initOwner && !initOwner.active) return null;
-      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
+      return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract; a claimed canvas reloads once)
     }
   }
 
   // Dispose a three renderer WITHOUT losing the WebGL2 context it rendered to.
   // r186 WebGLBackend.dispose() ends with WEBGL_lose_context.loseContext(), and
   // on the forceWebGL path that context is #game's own (bootRenderer hands it
-  // to three): the GLX fallback that _fail() boots next calls
-  // getContext("webgl2") on the same canvas and gets the SAME object back,
-  // dead or about to die. Lost before GLX.init → link fails → claim-fail
+  // to three): a same-load GLX fallback would call
+  // getContext("webgl2") on the same canvas and get the SAME object back,
+  // dead or about to die (today a claimed refusal reloads into GLX instead, #4817). Lost before GLX.init → link fails → claim-fail
   // reload; lost after → GLX's webglcontextlost handler latches
   // apex26.envProbeOff / perChunkOff for good and counts a reload strike.
   // Neutering the extension lookup keeps the rest of the dispose (three frees
@@ -7122,6 +7166,51 @@ const TLX = (function () {
   // (getInternalformatParameter — many GPUs render RGBA16F but not
   // multisampled RGBA16F). Native WebGPU stays single-sample: core WebGPU
   // cannot resolve a depth attachment.
+  // LP-01 / #4900. three r187 rebuilds a pipeline's vertex-layout key from EVERY attribute's array
+  // (WebGPUAttributeUtils.getVertexBufferLayout: array.BYTES_PER_ELEMENT; _getVertexFormat: array.constructor) and
+  // its node builder types an attribute from array.constructor, so a mirror freed to null throws on the next
+  // render-state change of any draw that holds it. The ledger records each nulled attribute with its array class;
+  // repair() gives every one still null a zero-length view of that class. Only UPLOADED attributes are nulled
+  // (releaseGeoMirrors' uploaded(), the chunked release's lit-draw gate), so the view never reaches createAttribute
+  // (gpu-census 26's zero-byte buffer was an index / never-uploaded chunk), and the GPU buffer draws unchanged.
+  function mirrorLedger() {
+    let refs = [];
+    return {
+      note(a) {
+        if (!a || !a.array) return;
+        a.__tlxArrayCtor = a.array.constructor;
+        refs.push(typeof WeakRef === "function" ? new WeakRef(a) : { deref: () => a });
+      },
+      repair() {
+        let n = 0;
+        const keep = [];
+        for (const r of refs) {
+          const a = r.deref();
+          if (!a) continue;
+          if (a.array == null) { a.array = new (a.__tlxArrayCtor || Float32Array)(0); n++; }
+          else keep.push(r);
+        }
+        refs = keep;
+        return n;
+      },
+      size: () => refs.length,
+    };
+  }
+  // A TypeError from reading a property of a null array (V8: "Cannot read properties of null (reading 'X')";
+  // WebKit: "null is not an object (evaluating '….X')"), X one of the array reads above.
+  function isNullMirrorError(e) {
+    if (!e || e.name !== "TypeError") return false;
+    const m = String(e.message || "");
+    return /null/.test(m) && /BYTES_PER_ELEMENT|constructor|byteLength/.test(m);
+  }
+
+  // #game's data-engine label: the revision the vendored bundle reports, never a hand-kept number (it said r185
+  // under r187).
+  function engineLabel(THREE, api) {
+    const rev = THREE && THREE.REVISION ? String(THREE.REVISION) : "?";
+    return "three.js r" + rev + " " + api;
+  }
+
   function sceneSamplesFor(renderer, forceWebGL, isMobile) {
     if (!forceWebGL || isMobile) return 0;
     let s = 4;

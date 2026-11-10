@@ -18,6 +18,7 @@
  *   node tools/ci/flake-tally.mjs --events all --days 7 --propose   # + quarantine rows (JSON) for the repeat offenders
  *   node tools/ci/flake-tally.mjs --events all --days 7 --issue     # upsert the `Flaky tests (last 7 days)` issue
  *   node tools/ci/flake-tally.mjs --base-red --hours 3 --issue      # open/refresh/close the `base-red` suspects issue
+ *   node tools/ci/flake-tally.mjs --base-red --since-last-success --issue   # window = since the last successful base-red run (the workflow's call)
  *
  * DAILY (2026-10-16, the CI/CD review #2333, flaky-test question): the nightly
  * is one run a day; the fleet's PR runs and the Pages train are hundreds, and
@@ -64,6 +65,14 @@ export const ISSUE_MARKER = "<!-- flake-tally: rewritten daily by .github/workfl
 export const ARTIFACT_PREFIX = "playwright-artifacts-";
 /** --base-red (2026-10-16 CI jobs review): a spec red on UNRELATED diffs within a short window is the base's, not a branch's. */
 const BASE_RED_HOURS = 3;
+/** This workflow's file: --since-last-success reads its own run history. */
+export const TALLY_WORKFLOW_FILE = "flake-tally.yml";
+/** --since-last-success: the window when no earlier successful base-red run is found (or the lookup fails). */
+export const BASE_RED_FALLBACK_HOURS = 24;
+/** --since-last-success: the widest window read, whatever the gap since the last success (API budget). */
+export const BASE_RED_MAX_HOURS = 24;
+/** --since-last-success: the window reaches this far before the last success's start, for runs that ended after it read. */
+export const BASE_RED_OVERLAP_HOURS = 1;
 /** A first-try failure on this many distinct branches in the window (the deploy branch counts as one). */
 const BASE_RED_BRANCHES = 3;
 export const BASE_RED_TITLE = "Base red suspects (auto)";
@@ -366,24 +375,76 @@ export function formatBaseRedBody(suspects, { runsExamined = 0, hours = BASE_RED
 }
 
 /**
- * Keep ONE open `base-red` issue: refresh it while suspects exist, create it
- * when the first appears, close it when the window is clean.
+ * What to do with the one `base-red` issue. Suspects: refresh the open issue
+ * or create one. No suspects: close the open issue only when every examined
+ * run was read in full; when any run produced a note (an API error, an
+ * unreadable job log) the window is not known to be clean, so the issue is
+ * kept open and untouched.
+ * @param {{ suspects: number, hasOpen: boolean, incomplete?: boolean }} state
+ * @returns {"update"|"create"|"close"|"keep"|"none"}
  */
-export async function syncBaseRedIssue(suspects, body, { token } = {}) {
+export function baseRedIssueAction({ suspects, hasOpen, incomplete = false }) {
+  if (suspects > 0) return hasOpen ? "update" : "create";
+  if (!hasOpen) return "none";
+  return incomplete ? "keep" : "close";
+}
+
+/**
+ * Keep ONE open `base-red` issue: refresh it while suspects exist, create it
+ * when the first appears, close it when the window is clean and was read in
+ * full (`incomplete` is true when any run's read produced a note).
+ */
+export async function syncBaseRedIssue(suspects, body, { token, incomplete = false } = {}) {
   const list = await githubApi("GET", `issues?state=open&labels=${encodeURIComponent(BASE_RED_LABEL)}&per_page=50`, { token });
   if (list.error) return { error: list.error };
   const hit = (list.json || []).find((i) => !i.pull_request && String(i.body || "").startsWith(BASE_RED_MARKER));
-  if (suspects.length) {
-    if (hit) {
-      const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ body, title: BASE_RED_TITLE }) });
-      return r.error ? { error: r.error } : { number: hit.number, updated: true };
-    }
+  const action = baseRedIssueAction({ suspects: suspects.length, hasOpen: !!hit, incomplete });
+  if (action === "update") {
+    const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ body, title: BASE_RED_TITLE }) });
+    return r.error ? { error: r.error } : { number: hit.number, updated: true };
+  }
+  if (action === "create") {
     const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title: BASE_RED_TITLE, body, labels: [BASE_RED_LABEL] }) });
     return r.error ? { error: r.error } : { number: r.json?.number, created: true };
   }
-  if (!hit) return { none: true };
+  if (action === "none") return { none: true };
+  if (action === "keep") return { number: hit.number, kept: true };
   const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ state: "closed", state_reason: "completed", body }) });
   return r.error ? { error: r.error } : { number: hit.number, closed: true };
+}
+
+/**
+ * The newest successful base-red run of this workflow, from a page of its runs
+ * (newest first). The workflow's run-name carries the mode ("Flake tally
+ * (base-red)"), so a daily run's success does not shorten the base-red window.
+ * The current run is excluded by id.
+ */
+export function pickLastBaseRedRun(runs, { currentRunId = null } = {}) {
+  return (runs || []).find((r) => r && r.conclusion === "success"
+    && /\(base-red\)/.test(String(r.display_title || r.name || ""))
+    && (currentRunId == null || String(r.id) !== String(currentRunId))) || null;
+}
+
+/**
+ * The base-red window in hours: from BASE_RED_OVERLAP_HOURS before the last
+ * successful base-red run's start until now, at least `minHours` and at most
+ * `maxHours`. With no earlier success (or an unparseable time) it is
+ * `fallbackHours`. A dropped or failed cron slot therefore widens the next
+ * read instead of leaving its runs unread.
+ */
+export function baseRedWindowHours({ lastSuccessAt = null, now = new Date(), minHours = BASE_RED_HOURS,
+  maxHours = BASE_RED_MAX_HOURS, fallbackHours = BASE_RED_FALLBACK_HOURS, overlapHours = BASE_RED_OVERLAP_HOURS } = {}) {
+  const t = lastSuccessAt ? Date.parse(lastSuccessAt) : NaN;
+  if (!Number.isFinite(t)) return { hours: Math.min(maxHours, fallbackHours), source: "fallback" };
+  const gap = (now.getTime() - t) / 36e5 + overlapHours;
+  return { hours: Math.min(maxHours, Math.max(minHours, Math.ceil(gap * 100) / 100)), source: "last-success" };
+}
+
+/** Look up the newest successful base-red run of this workflow -> { run } (run may be null) or { error }. */
+export async function lastSuccessfulBaseRedRun({ token, currentRunId = process.env.GITHUB_RUN_ID || null } = {}) {
+  const r = await githubApi("GET", `actions/workflows/${TALLY_WORKFLOW_FILE}/runs?status=success&per_page=50`, { token });
+  if (r.error) return { error: r.error };
+  return { run: pickLastBaseRedRun(r.json?.workflow_runs, { currentRunId }) };
 }
 
 /**
@@ -762,7 +823,12 @@ to stdout and appends it to $GITHUB_STEP_SUMMARY when set.
 --base-red     (implies --events all) read the last --hours N (default ${BASE_RED_HOURS}) and name the specs
                that failed first-try on ${BASE_RED_BRANCHES}+ branches, or on 2 incl. the deploy branch (a
                red on the base, not on one diff); with --issue, open / refresh / close
-               the \`${BASE_RED_LABEL}\` issue "${BASE_RED_TITLE}"`;
+               the \`${BASE_RED_LABEL}\` issue "${BASE_RED_TITLE}". It is never closed when
+               any run's read produced a note (an API error or an unreadable log)
+--since-last-success  (with --base-red) read from ${BASE_RED_OVERLAP_HOURS} h before the last successful
+               base-red run of ${TALLY_WORKFLOW_FILE} (${BASE_RED_FALLBACK_HOURS} h when none is found),
+               ${BASE_RED_HOURS}-${BASE_RED_MAX_HOURS} h; overrides --hours
+Per-run notes (API errors, skipped artifacts) always print to stderr.`;
 
 function parseArgs(argv) {
   const opt = (k, d) => {
@@ -782,17 +848,25 @@ function parseArgs(argv) {
     issue: argv.includes("--issue"),
     baseRed: argv.includes("--base-red"),
     hours: Math.max(1, Number(opt("--hours", BASE_RED_HOURS)) || BASE_RED_HOURS),
+    sinceLastSuccess: argv.includes("--since-last-success"),
     workDir: opt("--work-dir", path.join(ROOT, "artifacts", "flake-tally")),
     help: argv.includes("--help") || argv.includes("-h"),
   };
 }
 
-async function runFlakeTally(argv = process.argv.slice(2), { token } = {}) {
+export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}) {
   const args = parseArgs(argv);
   if (args.help) return { code: 0, text: USAGE };
   const auth = token !== undefined ? token : githubToken();
   if (!auth) return { code: 3, text: NO_TOKEN_HINT };
 
+  if (args.baseRed && args.sinceLastSuccess) {
+    const last = await lastSuccessfulBaseRedRun({ token: auth });
+    if (last.error) process.stderr.write(`[flake-tally] last successful base-red run lookup failed, using ${BASE_RED_FALLBACK_HOURS} h: ${last.error}\n`);
+    const w = baseRedWindowHours({ lastSuccessAt: last.run?.created_at || null });
+    args.hours = w.hours;
+    process.stderr.write(`[flake-tally] base-red window ${w.hours} h (${w.source === "last-success" ? `since run ${last.run.id} at ${last.run.created_at}` : "no earlier successful base-red run"})\n`);
+  }
   const listed = args.all ? await listAllRuns({ days: args.baseRed ? args.hours / 24 : args.days, token: auth })
     : await listScheduledRuns({ n: args.runs, branch: args.branch, token: auth });
   if (listed.error) return { code: 3, text: listed.error };
@@ -806,23 +880,30 @@ async function runFlakeTally(argv = process.argv.slice(2), { token } = {}) {
     process.stderr.write(`[flake-tally] run ${run.id} ${run.created_at} ${run.conclusion}\n`);
     const { events, notes } = await collectRunEvents(run, { token: auth, workDir: args.workDir, failedJobsOnly: args.all });
     all.push(...events);
-    if (notes.length) runNotes.push(`${run.id}: ${notes.join("; ")}`);
+    if (notes.length) {
+      const line = `${run.id}: ${notes.join("; ")}`;
+      runNotes.push(line);
+      process.stderr.write(`[flake-tally] note ${line}\n`);
+    }
   }
+  const notesText = runNotes.length ? `\nnotes (${runNotes.length} run(s) not read in full):\n` + runNotes.map((n) => `- ${n}`).join("\n") + "\n" : "";
 
   const rows = tallyEvents(all);
   if (args.baseRed) {
     const suspects = baseRedRows(rows);
     const body = formatBaseRedBody(suspects, { runsExamined: runs.length, hours: args.hours });
-    const issue = args.issue ? await syncBaseRedIssue(suspects, body, { token: auth }) : null;
+    const issue = args.issue ? await syncBaseRedIssue(suspects, body, { token: auth, incomplete: runNotes.length > 0 }) : null;
     const text = (suspects.length ? `base-red suspects (${suspects.length}):\n` + suspects.map((s) => `- ${s.spec} › ${s.test} — ${s.reason}`).join("\n")
       : `base-red: none in the last ${args.hours} h (${runs.length} failed runs read)`)
-      + (issue ? `\nissue: ${issue.error ? `ERROR ${issue.error}` : issue.none ? "none open, none needed" : `#${issue.number} ${issue.created ? "created" : issue.closed ? "closed" : "updated"}`}` : "") + "\n";
+      + (issue ? `\nissue: ${issue.error ? `ERROR ${issue.error}` : issue.none ? "none open, none needed"
+        : issue.kept ? `#${issue.number} kept open (${runNotes.length} run(s) not read in full)`
+          : `#${issue.number} ${issue.created ? "created" : issue.closed ? "closed" : "updated"}`}` : "") + "\n" + notesText;
     if (process.env.GITHUB_STEP_SUMMARY) { try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, text); } catch (_) { /* advisory */ } }
     return { code: issue && issue.error ? 3 : 0, text, suspects, issue, runsExamined: runs.length, notes: runNotes };
   }
   const proposals = args.propose || args.issue ? proposeRows(rows) : [];
   const quarantine = proposals.length ? quarantineRows(proposals, { schemaKeys: quarantineSchemaKeys() }) : [];
-  let md = formatMarkdownTable(rows, { runsExamined: runs.length, days: args.all ? args.days : null });
+  let md = formatMarkdownTable(rows, { runsExamined: runs.length, days: args.all ? args.days : null }) + notesText;
   if (args.propose) md += `\n## Proposed quarantine rows (${proposals.length})\n\n` + (proposals.length
     ? proposals.map((p) => `- \`${p.spec}\` › ${p.test} — ${p.reason}`).join("\n") + "\n\n```json\n" + JSON.stringify(quarantine, null, 2) + "\n```\n"
     : "None.\n");
