@@ -388,9 +388,6 @@
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -768,9 +765,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
@@ -1062,9 +1056,6 @@
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
-      ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
       ],
       "passByState": [
         "tests/unit/rival-attach-init.test.mjs",
