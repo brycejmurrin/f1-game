@@ -143,7 +143,7 @@ not tabled: they move with every edit and nothing reads them.
 | `fb-` | `tuner.css` | — |  |
 | `flag-` | `hud.css` | — |  |
 | `hud-` | `hud.css` | `helmet-visor.css`, `overlays.css`, `responsive.css`, `tokens.css`, `touch-controls.css`, `watch-transport.css` |  |
-| `in-` | `overlays.css` | `hud.css`, `tokens.css`, `touch-controls.css` |  |
+| `in-` | `overlays.css` | `hud.css`, `loading.css`, `tokens.css`, `touch-controls.css` |  |
 | `input-` | `hud.css` | — | pause input review and its static chart |
 | `ld-` | `loading.css` | — |  |
 | `limits-` | `hud.css` | — |  |
@@ -172,7 +172,7 @@ not tabled: they move with every edit and nothing reads them.
 | `sec-` | `hud.css` | — |  |
 | `sel-` | `editor.css` | `career-experience.css`, `career.css`, `carsetup.css`, `components.css`, `overlays.css`, `race-setup.css`, `select.css`, `tokens.css` |  |
 | `session-` | `race-setup.css` | — | `.session-summary` (below) |
-| `set-` | `settings-controls.css` | `appearance-studio.css`, `experience.css`, `race-setup.css`, `settings.css`, `tuner.css` |  |
+| `set-` | `settings-controls.css` | `appearance-studio.css`, `experience.css`, `race-setup.css`, `select.css`, `settings.css`, `tuner.css` |  |
 | `settings-` | `player-tools.css` | — |  |
 | `sf-` | `components.css` | `data.css`, `menu-destinations.css`, `photo-studio.css`, `race-setup.css`, `tuner.css` |  |
 | `sheet-` | `overlays.css` | `appearance-studio.css`, `career.css`, `carsetup.css`, `components.css`, `data.css`, `dialogs.css`, `editor.css`, `hud.css`, `photo-studio.css`, `player-tools.css`, `race-setup.css`, `select.css`, `settings.css`, `tuner.css` | the shared sheet head / body / foot |
@@ -308,7 +308,7 @@ missing class, a file that left, or a file that joined.
 - `.preset-row` — `settings-controls` + `tuner`
 - `.tune-label` — `components` + `race-setup` + `settings` + `settings-controls` + `tuner`
 - `.tune-row` — `garage-experience` + `photo-studio` + `settings` + `settings-controls` + `tuner`
-- `.set-row` — `appearance-studio` + `experience` + `race-setup` + `settings` + `settings-controls` + `tuner`
+- `.set-row` — `appearance-studio` + `experience` + `race-setup` + `select` + `settings` + `settings-controls` + `tuner`
 - `.pm-group` / `.pm-group-h` — `components` + `settings` + `settings-controls`. Pause-settings group and its heading.
 - `.pm-doors` — `components` + `player-tools` + `settings` + `settings-controls`
 - `.pm-groups` — `hud` + `settings` + `settings-controls`
