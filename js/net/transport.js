@@ -430,18 +430,12 @@ const NetTransport = (function () {
     const RESTART_DELAY_MS = 3000;    // a disconnect shorter than this usually heals itself
     const RESTART_RETRY_MS = 8000;    // answer applied, still not connected: offer again
     const RESTART_GATHER_MS = 4000;   // non-trickle like the invite: a partial gather beats none
-    // A courier result worth another try inside the grace: nobody answered yet
-    // ("expired") or no relay socket opened in RELAY_CHECK_MS ("no_relay", 6 s —
-    // a network switch takes longer than that to settle). Anything else (no
-    // WebSocket, no crypto) will not change by trying again.
-    const RESTART_RETRYABLE = { expired: 1, no_relay: 1 };
-    const RESTART_BACKOFF_MS = 1000;  // between courier tries: a no_relay can return at once
     const courier = opts.restartCourier !== undefined ? opts.restartCourier : nostrCourier();
     let everConnected = false;
     let restartTimer = null;
     let episode = null;               // { code, attempt, token } while an outage lasts
     let listener = null;              // answerer-only, last completed credentials
-    let carryAttempt = 0;             // the courier attempt a given-up episode reached (episodeEnded)
+    let resume = null;                // { code, attempt } of an episode that ended still down
     let iceRestarts = 0;
     function cancelRestart(ctx) {
       if (!ctx) return;
@@ -457,10 +451,9 @@ const NetTransport = (function () {
     }
     function endEpisode() {
       if (restartTimer) { clearTimeout(restartTimer); restartTimer = null; }
-      carryAttempt = 0;
       const pending = episode;
       cancelRestart(episode); cancelRestart(listener);
-      episode = listener = null;
+      episode = listener = resume = null;
       // A blip that healed before the answer came leaves our restart offer
       // pending; roll it back so the next episode starts from stable.
       if (pending && pc.signalingState === "have-local-offer" && ep.status === "open") {
@@ -506,14 +499,7 @@ const NetTransport = (function () {
         iceRestarts++;
         Log.info("net", "ice restart offer " + ctx.attempt);
         const r = await courier.offer(ctx.code + "R" + ctx.attempt, pc.localDescription.sdp, ctx.token);
-        if (!live(ctx)) return;
-        if (r && !r.ok && RESTART_RETRYABLE[r.error]) {
-          // Same attempt, so the answerer still listening on it meets this one.
-          await new Promise((resolve) => { restartTimer = setTimeout(resolve, RESTART_BACKOFF_MS); });
-          restartTimer = null;
-          continue;
-        }
-        if (!r || !r.ok || pc.signalingState !== "have-local-offer") return;
+        if (!live(ctx) || !r || !r.ok || pc.signalingState !== "have-local-offer") return;
         await pc.setRemoteDescription({ type: "answer", sdp: r.payload });
         if (!live(ctx)) return;
         ctx.attempt++;
@@ -553,12 +539,24 @@ const NetTransport = (function () {
         if (r && r.ok) {
           ctx.attempt++;
         }
-        else if (!r || !RESTART_RETRYABLE[r.error]) return;   // only a quiet or unreachable relay is worth another listen
-        else if (r.error === "no_relay") {
-          await new Promise((resolve) => { restartTimer = setTimeout(resolve, RESTART_BACKOFF_MS); });
-          restartTimer = null;
-        }
+        else if (!r || r.error !== "expired") return;   // only a quiet relay is worth another listen
       }
+    }
+    // An episode that ends while the pc is still down — a courier offer that
+    // came back no_relay mid network switch, a thrown createOffer, a listen
+    // that errored — must not hold `episode` for the rest of the outage, or no
+    // later state change ever starts another restart and the wire closes at
+    // the grace a restart would have beaten (#4998). Release it and try again
+    // after the usual delay on the same code and attempt (a failed offer never
+    // advanced the answerer either); the grace still bounds the whole outage.
+    function settleEpisode(ctx) {
+      if (episode !== ctx || ctx.token.cancelled || ep.status !== "open") return;
+      cancelRestart(ctx); episode = null;
+      const s = pc.connectionState;
+      if (!ctx.code || ctx.attempt >= 3 || !(s === "disconnected" || s === "failed")) return;
+      resume = { code: ctx.code, attempt: ctx.attempt };
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(beginRestart, RESTART_DELAY_MS);
     }
     function beginRestart() {
       restartTimer = null;
@@ -572,34 +570,19 @@ const NetTransport = (function () {
         if (old.code) {
           const ctx = episode = { code: old.code, attempt: old.attempt, token: { cancelled: false } };
           answerRestart(ctx).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); })
-            .finally(() => episodeEnded(ctx));
+            .finally(() => settleEpisode(ctx));
           return;
         }
       }
-      const ctx = episode = { code: null, attempt: carryAttempt, token: { cancelled: false } };
+      const ctx = episode = { code: null, attempt: 0, token: { cancelled: false } };
+      const was = resume; resume = null;
       restartCode().then((k) => {
         if (!k || !live(ctx)) return null;
         ctx.code = k.code;
+        if (was && was.code === k.code) ctx.attempt = was.attempt;
         return k.offerer ? offerRestart(ctx) : answerRestart(ctx);
       }).catch((e) => { Log.warn("net", "ice restart failed:", e && e.message); })
-        .finally(() => episodeEnded(ctx));
-    }
-    // AN EPISODE THAT GAVE UP MUST NOT BLOCK THE NEXT. `episode` is the
-    // one-at-a-time guard (beginRestart, onconnectionstatechange), so left set
-    // after its chain returned, no second restart ever ran while the race
-    // grace still had most of its 25 s. Cleared here; if the link is still
-    // down another episode is armed, from the attempt this one reached so
-    // both sides keep meeting on one courier code. Bounded by the grace,
-    // whose shutdown() ends everything.
-    function episodeEnded(ctx) {
-      if (episode !== ctx) return;
-      cancelRestart(ctx);
-      episode = null;
-      carryAttempt = ctx.attempt;
-      const s = pc.connectionState;
-      if (ep.status === "open" && courier && carryAttempt < 3 && (s === "disconnected" || s === "failed") && !restartTimer) {
-        restartTimer = setTimeout(beginRestart, RESTART_BACKOFF_MS);
-      }
+        .finally(() => settleEpisode(ctx));
     }
     function listenRestart(rotate = false) {
       // Only the original answerer listens while healthy. This is the same

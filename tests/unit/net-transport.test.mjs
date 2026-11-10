@@ -1123,54 +1123,36 @@ test("ICE failed after connecting rides the grace and restarts ICE through the c
   } finally { h.done(); }
 });
 
-// A no_relay at 6 s (the relays unreachable for a moment, e.g. mid network
-// switch) ended the restart, and `episode` stayed set, so no second attempt
-// ran inside the 25 s grace.
-function flakyOffers(errors) {
+test("a courier offer that fails (no_relay mid network switch) does not end ICE restarts for the outage (#4998)", async () => {
   const board = boardCourier();
-  const calls = [];
-  return Object.assign({}, board, {
-    calls,
+  let failNext = true;
+  const courier = {
+    ...board,
     offer: (code, sdp, token) => {
-      calls.push(code);
-      const err = errors.shift();
-      return err ? Promise.resolve({ ok: false, error: err }) : board.offer(code, sdp, token);
+      if (failNext) { failNext = false; board.offers.push({ code, sdp, token, failed: true }); return Promise.resolve({ ok: false, error: "no_relay" }); }
+      return board.offer(code, sdp, token);
     },
-  });
-}
-
-test("an ICE-restart offer the courier could not deliver (no_relay) is retried inside the grace", async () => {
-  const courier = flakyOffers(["no_relay"]);
+  };
   const h = restartPair(courier);
   try {
     await h.connect();
-    h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
+    h.a.setDisconnectGrace(25000);
+    h.b.setDisconnectGrace(25000);
     h.set(h.a, "failed"); h.set(h.b, "failed");
     h.advance(0);
-    assert.equal(await h.until(() => courier.calls.length === 1), true, "first offer sent");
+    assert.equal(await h.until(() => board.offers.length === 1), true, "the first restart offer went out");
     await h.flush();
-    h.advance(1000);   // the retry backoff
-    assert.equal(await h.until(() => h.a.stats().iceRestarts >= 1 && h.a.pc.signalingState === "stable"
-      && courier.calls.length >= 2), true, "the offer went again and the restart completed");
-    assert.equal(courier.calls[1], courier.calls[0], "the same attempt's code, so the listening answerer meets it");
-    assert.equal(h.a.status, "open");
-  } finally { h.done(); }
-});
-
-test("an ICE-restart episode that gave up does not block the next while the link is still down", async () => {
-  const courier = flakyOffers(["unsupported"]);   // not worth retrying in place
-  const h = restartPair(courier);
-  try {
-    await h.connect();
-    h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
-    h.set(h.a, "failed"); h.set(h.b, "failed");
-    h.advance(0);
-    assert.equal(await h.until(() => courier.calls.length === 1), true, "first offer sent");
+    assert.equal(h.a.stats().iceRestarts, 1);
+    // The network is back a few seconds later; nothing else changes state.
+    for (let i = 0; i < 4 && h.a.stats().iceRestarts < 2; i++) { h.advance(1000); await h.flush(); }
+    assert.equal(await h.until(() => h.a.stats().iceRestarts === 2 && h.a.pc.signalingState === "stable" &&
+      !!h.a.pc.currentRemoteDescription && h.a.pc.currentRemoteDescription.sdp === h.b.pc.currentLocalDescription.sdp), true,
+      "the offerer tries again inside the grace and the answer lands (restarts: " + h.a.stats().iceRestarts + ")");
+    assert.equal(board.offers[1].code, board.offers[0].code, "the retry stays on the attempt the answerer is listening for");
+    h.set(h.a, "connected"); h.set(h.b, "connected");
+    h.advance(30000);
     await h.flush();
-    h.advance(1000);   // a fresh episode is armed while connectionState stays failed
-    assert.equal(await h.until(() => courier.calls.length >= 2), true, "a second episode ran: " + courier.calls.length);
-    assert.equal(await h.until(() => h.a.stats().iceRestarts >= 2 && h.a.pc.signalingState === "stable"), true,
-      "…and completed the restart");
+    assert.equal(h.a.status, "open", "the recovered wire outlives the grace");
   } finally { h.done(); }
 });
 

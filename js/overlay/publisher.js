@@ -7,6 +7,7 @@ const OverlayPublisher = (function () {
   "use strict";
 
   const TICK_MS = 250;
+  const BATTLE_S = 1.0;   // Broadcast's battle threshold (js/race/broadcast.js BATTLE_S)
 
   function css(rgb) {
     return Array.isArray(rgb) && rgb.length >= 3
@@ -17,6 +18,23 @@ const OverlayPublisher = (function () {
     return t ? css(t.color) : "";
   }
 
+  // THE BATTLE from the brief rows' own intervals. field() brief rows carry no
+  // progress or speed, so OverlayFeed's progress scan saw 0 for every car and
+  // called P1·P2 a 0.00 s fight at any real gap. Same pick as Broadcast.battles:
+  // the closest running pair under BATTLE_S, tighter and further up the order first.
+  function battleOf(rows) {
+    let best = null, score = Infinity;
+    for (let i = 1; i < rows.length; i++) {
+      const a = rows[i - 1], b = rows[i];
+      if (!a || !b || a.retired || b.retired || a.inPit || b.inPit) continue;
+      const g = b.intervalS;
+      if (!Number.isFinite(g) || g < 0 || g >= BATTLE_S) continue;
+      const sc = g + i * 0.08;
+      if (sc < score) { score = sc; best = { ahead: String(a.code || a.id || "—"), behind: String(b.code || b.id || "—"), gapS: +g.toFixed(3) }; }
+    }
+    return best;
+  }
+
   // One OverlayFeed.frame input from the __apex reads. Pure: every source is passed in.
   function input(src) {
     const field = src.field && Array.isArray(src.field.positions) ? src.field : null;
@@ -25,7 +43,7 @@ const OverlayPublisher = (function () {
     const ranked = field ? field.positions.map((r) => ({
       pos: r.pos, code: r.code, team: teamColour(r.team, src.teams),
       intervalS: r.pos === 1 ? null : r.intervalS, gapToLeaderS: r.pos === 1 ? null : r.gapToLeaderS,
-      isPlayer: r.isPlayer, pit: !!r.retired,
+      isPlayer: r.isPlayer, pit: !!r.inPit, out: !!r.retired,
     })) : [];
     return {
       seq: src.seq | 0, t: field ? field.t : 0,
@@ -34,6 +52,7 @@ const OverlayPublisher = (function () {
       lap: field && field.player ? field.player.lap : 0,
       laps: (field && field.lapsTarget) || info.lapsTarget || 0,
       ranked,
+      battle: field ? battleOf(field.positions) : null,
       sectorLast: sec && sec.last, sectorBests: sec && sec.bests, fieldSectorBests: sec && sec.fieldBest,
       caption: src.caption || null,
     };
@@ -118,7 +137,7 @@ const OverlayPublisher = (function () {
     return bridge;
   }
 
-  return Object.freeze({ TICK_MS, css, input, tapCaptions, start, boot });
+  return Object.freeze({ TICK_MS, BATTLE_S, css, battleOf, input, tapCaptions, start, boot });
 })();
 Object.freeze(OverlayPublisher);
 if (typeof document !== "undefined" && !document.querySelector('main#overlay[role="region"]')) OverlayPublisher.boot();

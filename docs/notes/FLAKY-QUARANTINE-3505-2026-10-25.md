@@ -1,5 +1,7 @@
 # Flaky quarantine #3505, row 1: garage-livery-churn (2026-10-25)
 
+Summary: Flaky quarantine #3505 row 1: `garage-livery-churn` verdict and fix scope (Fleet B worker B·W1·L1).
+
 Fleet B worker B·W1·L1. Scope: row 1 of #3505 only. Fleet D keeps the
 menu-baseline and image-grade rows; the split is on the fleet bus at 40497cf.
 

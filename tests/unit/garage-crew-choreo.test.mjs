@@ -19,6 +19,7 @@ import vm from "node:vm";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -199,8 +200,23 @@ test("pit steps sit on PitLane.stopAnim's boundaries", () => {
   for (const n of ["0.15", "0.80", "0.12"]) assert.ok(anim.includes(n), `stopAnim still keys on ${n}`);
 });
 
-// The car-draw slide: wheels out 0.55 m from u .15 to .27, back .68 to .80 (pit-lane.js stopAnim).
-const slide = (u) => { const e = (t) => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); return 0.55 * (u < 0.5 ? e((u - 0.15) / 0.12) : e((0.80 - u) / 0.12)); };
+// The car-draw slide is the REAL PitLane.stopAnim(c).off (js/race/pit-lane.js), run
+// at a stop's u: a retime or a new travel there must move the crew's hands too.
+const slide = (() => {
+  const ctx = vm.createContext({ Math, Object, Array, Number, JSON, isFinite, Float32Array, window: null });
+  ctx.window = ctx;
+  seedLog(ctx);
+  ctx.Tracks = { sample: (_t, _s, out) => { out.hw = 7; return out; } };
+  for (const f of ["js/core/mat4.js", "js/race/pit-geom.js", "js/race/pit-lane.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const pits = vm.runInContext("PitLane", ctx).create({ track: { total: 5386, n: 1346, def: {} }, vTop: () => 60, cars: [], ranked: [], tyres: { on: () => true } });
+  const boxS = pits.zoneOf().boxS;
+  assert.ok(boxS > 0, "the stub lane has a box time");
+  return (u) => pits.stopAnim({ pitState: "box", pitT: boxS * (1 - u), pitWorked: 0 }).off;
+})();
+test("slide is stopAnim's wheel travel: off at the jack, fully out mid-hold, back on before the drop", () => {
+  assert.equal(slide(0.1), 0); assert.equal(slide(0.85), 0);
+  assert.ok(slide(0.5) > 0.5, `fully out mid-hold: ${slide(0.5)}`);
+});
 test("the tyre men's hands ride the wheel slide; gunners hold their guns; jacks pump while the car is up", () => {
   const { Choreo } = load(), out = Choreo.actors(12), len = Choreo.CLIPS.pit.len;
   for (let u = 0; u <= 0.84; u += 0.01) {

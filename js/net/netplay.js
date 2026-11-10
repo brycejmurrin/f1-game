@@ -139,7 +139,7 @@ const NetPlay = (function () {
   // lobby calls NetPlay.bindQuali / qualiReporters, and lapTimeOk reads QUALI_MAX_S.
   const {
     validQuali, validQualiLive, rateGate, bindQuali, qualiReporters,
-    QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, EVENT_WINDOW_MS,
+    QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS,
   } = QualiWire.create(EV);
   function validClassification(rows, cars) {
     if (!Array.isArray(rows) || !Array.isArray(cars) || rows.length !== cars.length) return false;
@@ -480,7 +480,8 @@ const NetPlay = (function () {
     }
 
     function bindSession(id, s) {
-      const qualiGate = rateGate(QUALI_RATE);
+      const hostGate = rateGate(QUALI_RATE), guestGate = rateGate(QUALI_GUEST_RATE);
+      const qualiGate = () => (role === "host" ? hostGate : guestGate)();
       // The host relays a guest's LAP and STRATEGY to every other guest, and a
       // receiver closes its link at EVENT_INBOX_CAP queued events (transport.js):
       // ungated, one guest's burst got the others disconnected. Per connection,
@@ -737,7 +738,11 @@ const NetPlay = (function () {
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
-      bindQuali(s, (d) => (role !== "host" || qualiGate()) && sendersOwnDriver(d), G);
+      // A guest trusts the host to speak for the field, but only for a driver
+      // in it: an unknown id would grow qualiLive / qualiPeers forever (#5012).
+      const seated = (d) => role === "host"
+        || remoteList().some((r) => r.car && r.car.driverId === d.driverId);
+      bindQuali(s, (d) => qualiGate() && sendersOwnDriver(d) && seated(d), G);
     }
 
     function handBackToAI(reason, id) {
@@ -1384,6 +1389,6 @@ const NetPlay = (function () {
   // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
   return { create, EV, strategyState, applyStrategy,
     clampWire, validQuali, bindQuali, qualiReporters,
-    QUALI_RATE, EVENT_WINDOW_MS, LAP_RATE, STRATEGY_RATE };
+    QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS, LAP_RATE, STRATEGY_RATE };
 })();
 Object.freeze(NetPlay);

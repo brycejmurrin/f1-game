@@ -2712,8 +2712,15 @@ test("HELLO keeps only the profile fields; guest SETTINGS skip unchanged snapsho
     const snap = initialGuestSettings({ laps: laps0 });
     s.deliver("settings", snap); s.deliver("settings", snap);
     assert.equal(h.G.raceLaps, 98, "an unchanged snapshot is not re-applied");
+    // Let the rolling window (EVENT_WINDOW_MS = 1000) empty, then burst 10 CHANGED snapshots synchronously:
+    // exactly HELLO_RATE (5) may apply. Count the applies by the raceLaps writes applySettings makes.
+    await new Promise((r) => setTimeout(r, 1050));
+    let lapsNow = h.G.raceLaps, lapWrites = 0;
+    Object.defineProperty(h.G, "raceLaps", { configurable: true, enumerable: true,
+      get: () => lapsNow, set: (v) => { lapWrites++; lapsNow = v; } });
     for (let n = 0; n < 10; n++) s.deliver("settings", initialGuestSettings({ laps: 5 + n % 2 }));
-    assert.ok(h.G.raceLaps === 98 || h.G.raceLaps === 5 || h.G.raceLaps === 6);
+    assert.equal(lapWrites, 5, "past 5 SETTINGS in a rolling second the rest are dropped");
+    assert.equal(h.G.raceLaps, 5, "the fifth (laps 5) is the last one applied");
   } finally { h.lobby.cancel(); }
 });
 
