@@ -77,8 +77,9 @@ branch shows 51 `sync-pr` merge commits against 112 PR merges.
 
 **5. Sessions cannot reliably write coordination state.** "classifier" appears in 23 PRs and 4 issues since Oct 31:
 `needs-owner` removal denied (#5197, #5184), claim comments on 7 issues refused (#5183), `land` denied (#5130),
-coordination comments refused (#5173, #5160, #5033). Item 7: held for comments and labels. A `ship-pr` refusal and
-"a steward reported red as green" were not found. The protocol asks every worker for 4–6 such writes per PR.
+coordination comments refused (#5173, #5160, #5033). Item 7: held for comments and labels. The `ship-pr` refusal reproduced in
+this review's own session: `node tools/ci/ship-pr.mjs --pr 5210` was denied by the classifier with no reason given,
+so this PR could not be flipped ready by its author. "A steward reported red as green" was not found. The protocol asks every worker for 4–6 such writes per PR.
 
 **6. Backlog state is wrong at the source.** 150 open issues, 115 `ready`, 24 of them real unclaimed work once
 `batched`, `blocked` and `epic` are removed. Item 10: held. Median `ready` age is 5.1 days. Item 8: partly held (19
