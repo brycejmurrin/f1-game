@@ -1,5 +1,7 @@
 # Memory tooling research: leak gates, phone limits, GPU accounting (B·H12, 2026-10-21)
 
+Summary: Leak gates, phone memory limits and GPU accounting research for a CI memory gate (B·H12).
+
 Asked by Bryce via OrchB 24: "use subagents to come up with new ideas to test or holes, also do a bunch of web
 research on how to help profile, debug, test this stuff". Context: #3241 and #3377 fixed cross-race heap retention
 found with CDP heap snapshots (`docs/notes/LIVE-MEMORY-H12-2026-10-20.md`). This note is what a CI leak gate could

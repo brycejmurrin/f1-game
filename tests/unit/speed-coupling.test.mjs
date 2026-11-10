@@ -80,6 +80,19 @@ test("straight coast (delta=0, vLat=0): couple is 0 so speed path is tip-identic
     trace.push(P.speed);
     assert.ok(P.speed <= u0 + 1e-9, "straight coast must not gain speed");
   }
+  // THE BEHAVIOUR: with the couple at zero, the speed path is the coast drag
+  // ALONE — every tick loses exactly COAST·dt (measured −6.005 m/s² on this
+  // pin; the 0.005 is the start straight's grade), with no couple term riding
+  // on top. A residual couple (a bias, a wrong sign on a zero term) shows here
+  // as a decel off COAST, even when it is too small to break "never gains".
+  const accel = [];
+  for (let i = 1; i < trace.length; i++) accel.push((trace[i] - trace[i - 1]) / DT);
+  for (let i = 0; i < accel.length; i++) {
+    assert.ok(Math.abs(accel[i] + COAST) < 0.02,
+      `tick ${i + 1}: straight-coast accel ${accel[i]} must be the coast drag −${COAST} alone`);
+    assert.ok(Math.abs(accel[i] - accel[0]) < 1e-6,
+      `tick ${i + 1}: straight-coast accel ${accel[i]} drifts from ${accel[0]} — a speed-dependent term crept in`);
+  }
   // Tip reference (seed 42, Monza pin, same settle): first/last coast samples.
   assert.ok(trace[0] > 40 && trace[0] < 46, `start ${trace[0]}`);
   assert.ok(trace[89] < trace[0] - 5, "material coast drop over 1.5 s");

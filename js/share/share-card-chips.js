@@ -21,21 +21,21 @@ const ShareCardChips = (function () {
 
   // `run` resolves to an outcome. DRAWING… while it works, then SHARED /
   // DOWNLOADED / SAVED, the label again on a cancel, UNAVAILABLE on a throw.
+  const LABEL = "SHARE CARD";
   function chip(id, run) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "sel-chip";
     btn.id = id;
-    btn.textContent = "SHARE CARD";
+    btn.textContent = LABEL;
     btn.onclick = async () => {
       if (btn.disabled) return;
       btn.disabled = true;
-      const label = btn.textContent;
       btn.textContent = "DRAWING…";
       try {
         const outcome = await run();
         btn.textContent = outcome === "shared" ? "SHARED" : outcome === "downloaded" ? "DOWNLOADED"
-          : outcome === "saved" ? "SAVED" : label;
+          : outcome === "saved" ? "SAVED" : LABEL;
       } catch (error) {
         Log.warn("ui", "share card failed: " + (error && error.message));
         btn.textContent = "UNAVAILABLE";

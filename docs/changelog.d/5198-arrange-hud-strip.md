@@ -1,0 +1,1 @@
+Fixed: the ARRANGE HUD editor bar is one compact 52 px strip of fixed-size 44 px controls that no longer grows with HUD SIZE, BUTTON SIZE or TEXT SIZE, and it docks to the screen edge away from the widget you are arranging instead of covering it

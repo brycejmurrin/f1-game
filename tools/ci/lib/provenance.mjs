@@ -28,11 +28,15 @@ export const DECISION_RE = /^\s*decision:/i;
 /** The login that performed an event or wrote a comment (`actor` on an event, `user` on a comment). Pure. */
 export const actorOf = (evt) => evt?.actor?.login ?? evt?.user?.login ?? null;
 
-/** Did `owner` perform this event or write this comment, in person (no GitHub App)? Pure. */
+/** Did `owner` perform this event or write this comment, in person (no GitHub App)? The API always sends
+ *  `performed_via_github_app`; a row without the field (or with any non-null value) is not the owner's. Pure. */
 export function byOwner(evt, owner = OWNER) {
   if (!evt || !owner) return false;
-  return actorOf(evt) === owner && !evt.performed_via_github_app;
+  return actorOf(evt) === owner && Object.hasOwn(evt, "performed_via_github_app") && evt.performed_via_github_app === null;
 }
+
+/** Was this comment edited after it was posted (`updated_at` later than `created_at`)? Pure. */
+export const isEdited = (c) => !!c?.updated_at && (Date.parse(c.updated_at) || 0) > (Date.parse(c.created_at || "") || 0);
 
 /** Why an event is not the owner's, for a gate's evidence line: "<login> via app <slug>" / "not the owner". Pure. */
 export function describeActor(evt) {
@@ -41,8 +45,8 @@ export function describeActor(evt) {
   return app ? `${who} via app ${app.slug || app.name || "?"}` : who;
 }
 
-/** A comment by the owner in person whose body starts with `decision:`. Pure. */
-export const isDecisionComment = (c, owner = OWNER) => byOwner(c, owner) && DECISION_RE.test(String(c?.body || ""));
+/** An unedited comment by the owner in person whose body starts with `decision:`. Pure. */
+export const isDecisionComment = (c, owner = OWNER) => byOwner(c, owner) && !isEdited(c) && DECISION_RE.test(String(c?.body || ""));
 
 /** The `labeled` / `unlabeled` events for one label, in the order given (the API lists oldest first). Pure. */
 export const labelEvents = (events, label) => (events || [])
@@ -70,7 +74,8 @@ export function ownerSet(labels, events, label, owner = OWNER) {
 
 const pathFor = (repo, tail) => (!repo || repo === REPO ? tail : `https://api.github.com/repos/${repo}/${tail}`);
 
-/** Every page of a list endpoint through the repo's GitHub client → { rows } | { error }. */
+/** Every page of a list endpoint through the repo's GitHub client → { rows } | { error }. A full last allowed page
+ *  is an error: rows past it (the newest, on an oldest-first list) would be unseen. */
 function readAll(pathQs, { request = githubApi, maxPages = 10 } = {}) {
   const rows = [];
   for (let page = 1; page <= maxPages; page++) {
@@ -78,9 +83,9 @@ function readAll(pathQs, { request = githubApi, maxPages = 10 } = {}) {
     if (r?.error) return { error: r.error };
     const batch = Array.isArray(r?.json) ? r.json : [];
     rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
+    if (batch.length < PAGE_SIZE) return { rows };
   }
-  return { rows };
+  return { error: `more than ${maxPages} pages of ${PAGE_SIZE}: the list is truncated` };
 }
 
 /** The issue/PR's events (labeled, unlabeled, closed, … oldest first), every page. { events } | { error }. */
