@@ -9,7 +9,8 @@
      - ScreenLooks.set / reset   (js/ui/screen-looks.js: pause, datahub, select,
        race, career, garage, designer, popups)
      - PauseOpts.setLayout / setSide / setDim   (screen "pauseOpts")
-     - TitleLayout.reset / set   (SHIPPED and UNDO only; no preset moves it)
+     - TitleLayout is NOT managed: no preset, SHIPPED included, moves or resets a
+       custom main-menu layout (#5060); TITLE LAYOUT › RESET is its one reset
    Every preset starts from SHIPPED (every managed knob at its default), so a
    preset is the same picture whatever was set before. CONFIRM QUIT is a safety
    behaviour, not a look, and is never touched; text size and UI SCALE are
@@ -44,7 +45,7 @@ const LayoutPresets = (function () {
   });
   const row = (screen, knob, value) => Object.freeze([screen, knob, value]);
   const PRESETS = Object.freeze([
-    Object.freeze({ id: "shipped", name: "SHIPPED", note: "Every screen as it ships.", set: Object.freeze([]) }),
+    Object.freeze({ id: "shipped", name: "SHIPPED", note: "Every screen look as it ships. Your main-menu layout stays yours.", set: Object.freeze([]) }),
     Object.freeze({ id: "thumb", name: "THUMB", note: "Two-thumb phone grip: the pause menu is a strip on the right edge, pop-ups and the circuit strip sit low, buttons are taller.",
       set: Object.freeze([
         row("pauseOpts", "layout", "sidebar"), row("pauseOpts", "side", "right"),
@@ -131,15 +132,10 @@ const LayoutPresets = (function () {
     if (has("PauseOpts")) for (const k in PAUSE_KNOBS) out["pauseOpts." + k] = PauseOpts[PAUSE_KNOBS[k].read]();
     return out;
   }
-  function titleShipped() {
-    if (!has("TitleLayout")) return true;
-    const a = TitleLayout.all();
-    return TitleLayout.isDefault(a.wide) && TitleLayout.isDefault(a.tall);
-  }
   /** Do the live knobs equal preset `id`'s picture? */
   function matches(id) {
     const want = expected(id);
-    if (!want || !titleShipped()) return false;
+    if (!want) return false;
     const got = actual();
     for (const k in want) if (got[k] !== want[k]) return false;
     return true;
@@ -165,7 +161,6 @@ const LayoutPresets = (function () {
   function resetAll() {
     for (const s of screens()) if (!ScreenLooks.isShipped(s.id)) ScreenLooks.reset(s.id);
     if (has("PauseOpts")) for (const k in PAUSE_KNOBS) setKnob("pauseOpts", k, PAUSE_KNOBS[k].def);
-    if (!titleShipped()) TitleLayout.reset();
   }
   /** The managed state, in owner terms, for UNDO. */
   function snapshot() {

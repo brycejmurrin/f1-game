@@ -184,7 +184,7 @@
 /* THE TAP LADDER IS TYPED so JS can READ it. All three are max(Npx,
    calc(24px / var(--ui-scale))) expressions; unregistered, getComputedStyle
    returns the raw token stream and every parseFloat() on it is NaN — which
-   is how tools/layout-audit.mjs measured every tap against a hardcoded 44
+   is how tools/ui/layout-audit.mjs measured every tap against a hardcoded 44
    for its whole life (its own comment block swears the opposite), and how
    js/game/menus.js's chip-height read silently pinned the circuit preview
    band to 40 at every scale and on every pointer. Registered <length>, the
@@ -270,10 +270,13 @@
      friends). Those want the roomier number, and a font-size that changed as the
      toolbar moved would be far worse than a few pixels of imprecision. */
   --gut: 12px;
-  --safe-t: calc(var(--sat) + var(--gut));
-  --safe-r: calc(var(--sar) + var(--gut));
-  --safe-b: calc(var(--sab) + var(--gut));
-  --safe-l: calc(var(--sal) + var(--gut));
+  /* The LARGER of the hardware inset and the gutter, never their sum (#5201). The inset is already clear space: adding
+     the gutter to it padded a landscape iPhone 67 px a side and 29 px at the bottom (718x356 of 852x393); max() gives
+     the box the OS calls safe, 734x372. An edge with no inset (desktop, the top in landscape) keeps the gutter. */
+  --safe-t: max(var(--sat), var(--gut));
+  --safe-r: max(var(--sar), var(--gut));
+  --safe-b: max(var(--sab), var(--gut));
+  --safe-l: max(var(--sal), var(--gut));
   /* Usable box inside hardware on full-screen menus (#overlay, .screen hosts).
      Any cap written against raw svh/vw must use these, not 100% of the
      viewport — viewport-fit=cover includes the notch and home indicator. */
@@ -283,7 +286,9 @@
      house unit for the same reason dvh is not — it changes while browser
      chrome shows and hides. */
   --safe-w: calc(100svw - var(--safe-l) - var(--safe-r));
-  --safe-h: calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b));
+  /* OWN px of a sheet zoomed by --ui-scale, like --svhz: the insets are painted px, so they are divided too (#5201;
+     `100 * --svhz - insets` subtracted painted px from own px and came up short by insets * (1 - 1/scale)). */
+  --safe-h: calc((100svh - var(--safe-t) - var(--safe-b)) / var(--ui-scale));
   /* Width tiers (layout-tokens.test.mjs). */
   --bp-phone: 480px;
   --bp-tablet: 700px;
@@ -699,7 +704,8 @@
    is the test game.js applies via Input.touchControlsNeeded(), where it sets
    the `desktop` class on <body>. */
 body:not(.desktop) {
-  --tap: max(52px, calc(24px / var(--ui-scale)));
+  /* 44 PAINTED px under 85 % (#5235): the floor term was 24, which let a 70 % phone paint 36 px rows. */
+  --tap: max(52px, calc(44px / var(--ui-scale)));
   /* Why: docs/notes/TOKENS-RATIONALE.md §R5. */
   --chip-h: max(48px, min(calc(52px / var(--ui-scale)), calc(52px * var(--ui-scale))), calc(24px / var(--ui-scale)));
   --tap-sm: max(36px, calc(24px / var(--ui-scale)));
@@ -859,6 +865,17 @@ body:not(.desktop) {
   --fs-micro: 18px; --fs-2: 20px; --fs-3: 21px; --fs-4: 22px; --fs-5: 23px; --fs-6: 26px;
   --hud-text-boost: 1.18;
 }
+/* 12 PAINTED px FLOOR (#5235). Menus zoom by --ui-scale, so under 86 % the 14 px rung painted below 12 (9.8 px at the
+   phone minimum of 70 %). Each max() is its rung at 86 % and above and 12 painted px below it. The literal rungs stay
+   above (tools/check/tree-counts.mjs reads --fs-micro's px there); :root loses to the presets, so LARGE has its own. */
+:root {
+  --fs-micro: max(14px, calc(12px / var(--ui-scale, 1)));
+  --fs-2: max(15px, calc(12px / var(--ui-scale, 1)));
+  --fs-3: max(16px, calc(12px / var(--ui-scale, 1)));
+  --fs-4: max(17px, calc(12px / var(--ui-scale, 1)));
+}
+:root[data-text-size="large"] { --fs-micro: max(16px, calc(12px / var(--ui-scale, 1))); --fs-2: max(17px, calc(12px / var(--ui-scale, 1))); }
+
 /* Why: docs/notes/TOKENS-RATIONALE.md §R9. */
 :root[data-cvd="deutan"],
 :root[data-cvd="protan"] {

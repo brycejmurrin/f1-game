@@ -55,48 +55,72 @@ test("ci.yml: behind-ship is a non-blocking PR-only step in the structural guard
 
 const wf = (f) => YAML.parse(fs.readFileSync(path.join(ROOT, ".github/workflows", f), "utf8"));
 
-// Run a workflow's shell with a fake `gh` on PATH that records its argv and
-// refuses `pr create` when told to: the step's BEHAVIOUR, not its text.
+// Run a step's shell with a fake `gh` on PATH that records its argv, refuses `pr create` when told to,
+// and answers `issue list` with ISSUE_ROW: the step's BEHAVIOUR, not its text.
 function runWithFakeGh(script, { refusePr, env = {} }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
   try {
     const log = path.join(dir, "gh.log");
     fs.writeFileSync(path.join(dir, "gh"), `#!/bin/sh
-echo "$*" >> "${log}"
+echo "GH_TOKEN=$GH_TOKEN $*" >> "${log}"
 case "$1 $2" in
   "pr create") ${refusePr ? 'echo "pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)" >&2; exit 1' : "exit 0"} ;;
-  "issue list") exit 0 ;;
+  "issue list") printf '%s' "$ISSUE_ROW"; exit 0 ;;
 esac
 exit 0
 `, { mode: 0o755 });
     const r = spawnSync("bash", ["-c", `set -euo pipefail\n${script}`], { cwd: dir, encoding: "utf8",
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://x", GITHUB_RUN_ID: "1", GIT_DIR: path.join(ROOT, ".git"), ...env } });
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://x", GITHUB_RUN_ID: "1",
+        RUNNER_TEMP: dir, GIT_DIR: path.join(ROOT, ".git"), ISSUE_ROW: "", PR_TOKEN: "", GH_TOKEN: "default", ...env } });
     const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
     return { code: r.status, calls, out: r.stdout + r.stderr };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
+const verbsOf = (calls) => calls.map((c) => c.split(" ").slice(1, 3).join(" "));
 
-test("fold workflows FAIL when gh pr create is refused, and open one issue instead of a warning (audit3 #5)", () => {
-  for (const [f, branch, extraEnv] of [
-    ["ratchets-fold.yml", "bot/ratchets-fold-1", { FOLD_BRANCH: "bot/ratchets-fold-1" }],
-    ["changelog-fold.yml", "bot/changelog-fold", {}],
+test("fold workflows open their PR through open-bot-pr with LAND_TOKEN, after pushing the branch", () => {
+  for (const [f, job, step, branch] of [
+    ["ratchets-fold.yml", "fold", "Fold", "$FOLD_BRANCH"],
+    ["changelog-fold.yml", "fold", "Fold", "bot/changelog-fold"],
+    ["knowledge-gc.yml", "gc", "Archive stale notes and push the branch", "$GC_BRANCH"],
   ]) {
     const w = wf(f);
     assert.equal(w.permissions.issues, "write", `${f}: the refusal issue needs issues: write`);
-    const run = w.jobs.fold.steps.find((st) => st.name === "Fold").run;
-    const at = run.indexOf("PR_TITLE=");
-    assert.ok(at > 0, `${f}: the PR block starts at PR_TITLE=`);
-    const tail = run.slice(at);
-    const refused = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: true, env: extraEnv });
-    assert.equal(refused.code, 1, `${f}: a refused PR ends the job red\n${refused.out}`);
-    const verbs = refused.calls.map((c) => c.split(" ").slice(0, 2).join(" "));
-    assert.deepEqual(verbs, ["pr create", "workflow run", "issue list", "issue create"],
-      `${f}: PR attempt, the branch's CI still dispatched, then ONE issue (${refused.calls.join(" | ")})`);
-    assert.ok(refused.calls[3].includes(`fold PR needs a hand (${branch})`), refused.calls[3]);
-    const ok = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: false, env: extraEnv });
-    assert.equal(ok.code, 0, `${f}: an opened PR ends green\n${ok.out}`);
-    assert.deepEqual(ok.calls.map((c) => c.split(" ").slice(0, 2).join(" ")), ["pr create", "workflow run"]);
+    const steps = w.jobs[job].steps;
+    const push = steps.find((st) => st.name === step);
+    assert.ok(push.run.includes(`echo "branch=${branch}"`), `${f}: the push step names its branch as an output`);
+    assert.doesNotMatch(push.run, /gh pr create/, `${f}: the PR opens in the shared action only`);
+    const open = steps.find((st) => st.name === "Open the PR");
+    assert.equal(open.uses, "./.github/actions/open-bot-pr");
+    assert.equal(open.with["pr-token"], "${{ secrets.LAND_TOKEN }}", `${f}: the default token may not create PRs here (#5177)`);
+    assert.equal(open.with.branch, `\${{ steps.${push.id}.outputs.branch }}`);
+    assert.doesNotMatch(open.with["issue-title"], /run_id|RUN_ID|\$/, `${f}: a stable issue title, so one issue collects every refusal`);
+    assert.equal(w.jobs[job].environment.name, "land");
   }
+});
+
+test("open-bot-pr: a refusal fails, dispatches CI and opens ONE issue; it re-pings only after a day", () => {
+  const action = YAML.parse(fs.readFileSync(path.join(ROOT, ".github/actions/open-bot-pr/action.yml"), "utf8"));
+  const run = action.runs.steps[0].run;
+  const base = { BRANCH: "bot/x", PR_TITLE: "t", PR_BODY: "b", ISSUE_TITLE: "fold PR needs a hand (bot/x)", WHAT: "x fold" };
+  const refused = runWithFakeGh(run, { refusePr: true, env: base });
+  assert.equal(refused.code, 1, `a refused PR ends the job red\n${refused.out}`);
+  assert.deepEqual(verbsOf(refused.calls), ["pr create", "workflow run", "issue list", "issue create"], refused.calls.join(" | "));
+  assert.ok(refused.calls[3].includes("fold PR needs a hand (bot/x)"), refused.calls[3]);
+  const old = new Date(Date.now() - 2 * 86400e3).toISOString(), fresh = new Date(Date.now() - 3600e3).toISOString();
+  const stale = runWithFakeGh(run, { refusePr: true, env: { ...base, ISSUE_ROW: `42 ${old}` } });
+  assert.equal(stale.code, 1);
+  assert.deepEqual(verbsOf(stale.calls), ["pr create", "workflow run", "issue list", "issue comment"], "an issue older than a day is re-pinged");
+  const quiet = runWithFakeGh(run, { refusePr: true, env: { ...base, ISSUE_ROW: `42 ${fresh}` } });
+  assert.equal(quiet.code, 1);
+  assert.deepEqual(verbsOf(quiet.calls), ["pr create", "workflow run", "issue list"], "an issue updated within the day is left alone");
+  const ok = runWithFakeGh(run, { refusePr: false, env: base });
+  assert.equal(ok.code, 0, ok.out);
+  assert.deepEqual(verbsOf(ok.calls), ["pr create", "workflow run"], "a default-token PR starts no CI, so CI is dispatched");
+  const land = runWithFakeGh(run, { refusePr: false, env: { ...base, PR_TOKEN: "pat" } });
+  assert.equal(land.code, 0, land.out);
+  assert.deepEqual(land.calls, ["GH_TOKEN=pat pr create --repo o/r --base claude/f1-game-project-26h3ng --head bot/x --title t --body b"],
+    "a LAND_TOKEN PR starts its own CI: no dispatch");
 });
 
 test("selected-verdict reds a PR on a touched js dir with no coverage; the train only warns (ci-7d C7)", () => {

@@ -564,11 +564,13 @@
           return;
         }
         if (_warmCanvasOnly) return;
-        (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1);
+        // r187 scissors a bound target by its OWN scissorTest, not renderer.setScissorTest (which gates the canvas).
+        const st0 = target.scissorTest;
+        (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1); target.scissorTest = true;
         setQuadMat(mat);
         renderer.setRenderTarget(target);
         renderer.autoClear = false;   // a clear (WebGPU loadOp) ignores the scissor
-        try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); }
+        try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); target.scissorTest = st0; }
         return;
       }
       setQuadMat(mat);
@@ -1281,11 +1283,9 @@
     // number of passes drawn; the chain's last-frame state is restored.
     function drawWarm(opts, frame) {
       const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest, mc = _mirComposites, n0 = _warmDraws;
-      const sc0 = renderer.getScissorTest();
       _warmCanvas = 0;
       try {
-        _scissorWarm = true;
-        renderer.setScissorTest(true);
+        _scissorWarm = true;   // runPass sets each target's own scissorTest + 1x1 rect
         present(opts, frame);
         // The other side of the upscale switch, canvas passes only: a render
         // scale crossing 1.0 mid-race swaps FXAA->canvas for SGSR->canvas.
@@ -1296,7 +1296,6 @@
       } finally {
         _warmCanvasOnly = false; _warmFlipUp = false;
         _scissorWarm = false;
-        renderer.setScissorTest(sc0);
         Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest; _mirComposites = mc;
       }
       return _warmDraws - n0;
