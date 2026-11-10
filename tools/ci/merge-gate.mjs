@@ -25,7 +25,8 @@
 //             failed job (`run_attempt` > 1) fails the row
 //   config    a diff touching a CONFIG_PATH (the harness, the gate's own code, the agent config; renames by either
 //             name) needs the `config-ok` label, last added by Bryce in person, and newer than the last push that
-//             touched a CONFIG_PATH (configPushState); any other diff passes. Replaces the hook "ask".
+//             touched a CONFIG_PATH (configPushState); any other diff passes. A package.json diff that is ONLY the
+//             generated `test:*` file lists (generatedPkgVerdict) does not count. Replaces the hook "ask".
 //   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
@@ -45,6 +46,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, DEPLOY } from "./github-api.mjs";
 import { planVerdict } from "./ready-gate.mjs";
+import { renderPkg } from "../gen/gen-test-groups.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { OWNER, byOwner, describeActor, labelEvents, newestLabelEvent } from "./lib/provenance.mjs";
 
@@ -190,6 +192,53 @@ export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP, suites
   if (!best) return { ...row(false, `no ${name} check-run${suites ? ` from ${CI_WORKFLOW}` : ""} on the head yet`), pending: true };
   if (best.status !== "completed") return { ...row(false, `${name} ${best.status}`), pending: true };
   return best.conclusion === "success" ? { ...row(true, `${name} success (check-run ${best.id})`), suite: best.check_suite?.id ?? null } : row(false, `${name} ${best.conclusion}`);
+}
+
+/** The one config path a generator owns in part: package.json's `test:*` scripts (tools/gen/gen-test-groups.mjs). */
+export const GENERATED_PKG = "package.json";
+const GROUP_KINDS = new Set(["node", "browser"]);
+
+/**
+ * Is the package.json diff ONLY the generated `test:*` file lists? Inputs are the texts at the merge base and the
+ * head. Holds when (1) the deploy branch's own generator (renderPkg) run on the head's tests/groups.json and the BASE
+ * package.json reproduces the head package.json byte for byte, so nothing outside the `test:*` scripts changed, and
+ * (2) every changed script belongs to a `node`/`browser` group whose kind and flags equal the base's, so only file
+ * lists moved (a `command` group, a new group, or a flag change stays a config edit). Any parse or generator error
+ * refuses. → { ok, evidence }. Pure.
+ */
+export function generatedPkgVerdict({ basePkg, headPkg, baseGroups, headGroups, render = renderPkg }) {
+  let bp, hp, bg, hg, expected;
+  try { bp = JSON.parse(basePkg); hp = JSON.parse(headPkg); bg = JSON.parse(baseGroups); hg = JSON.parse(headGroups); }
+  catch (e) { return row(false, `package.json / tests/groups.json unreadable: ${e.message}`); }
+  try { expected = render(hg, basePkg); } catch (e) { return row(false, `the test-groups generator refused the head's tests/groups.json: ${e.message}`); }
+  if (expected !== headPkg) return row(false, "package.json carries edits the test-groups generator does not reproduce");
+  const names = [...new Set([...Object.keys(bp.scripts || {}), ...Object.keys(hp.scripts || {})])].filter((k) => bp.scripts?.[k] !== hp.scripts?.[k]);
+  for (const k of names) {
+    const b = bg.groups?.[k], h = hg.groups?.[k];
+    if (!b) return row(false, `script ${k} has no group at the base (a new group is a config edit)`);
+    if (!GROUP_KINDS.has(b.kind) || (h && (h.kind !== b.kind || JSON.stringify(h.flags || []) !== JSON.stringify(b.flags || []))))
+      return row(false, `script ${k}: its group's kind or flags changed (only file lists are generated data)`);
+  }
+  return row(true, `package.json changes only generated test file lists (${names.join(", ") || "none"})`);
+}
+
+/** Read one file at `ref` through the contents API → its text, or null. */
+function fileAt(request, file, ref) {
+  const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
+  if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return null;
+  return Buffer.from(r.json.content, "base64").toString("utf8");
+}
+
+/** The generated-lists check for PR head `head` (merge base from compare). → { ok, evidence }. */
+export function generatedPkgCheck({ head, base, request }) {
+  const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+  const mb = cmp.json?.merge_base_commit?.sha;
+  if (cmp.error || !mb) return row(false, `merge base of ${head.slice(0, 8)} unreadable${cmp.error ? `: ${cmp.error}` : ""}`);
+  const texts = [["basePkg", "package.json", mb], ["headPkg", "package.json", head], ["baseGroups", "tests/groups.json", mb], ["headGroups", "tests/groups.json", head]]
+    .map(([k, f, ref]) => [k, fileAt(request, f, ref)]);
+  const missing = texts.filter(([, v]) => v == null).map(([k]) => k);
+  if (missing.length) return row(false, `could not read ${missing.join(", ")}`);
+  return generatedPkgVerdict(Object.fromEntries(texts));
 }
 
 /** Job conclusions that make an earlier attempt red (a cancelled or skipped job is not a failure). */
@@ -421,11 +470,18 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   }
   const files = listAll(`pulls/${pr}/files`, request);
   if (files.error) return { error: `files of PR #${pr}: ${files.error}` };
-  const changed = filePaths(files.rows);
+  let changed = filePaths(files.rows), generated = null;
+  // package.json whose only change is the generated test lists is not a config edit (adding a unit test touches it).
+  const pkgRow = files.rows.find((f) => f?.filename === GENERATED_PKG);
+  if (pkgRow && !pkgRow.previous_filename && configFiles(changed).includes(GENERATED_PKG)) {
+    generated = generatedPkgCheck({ head, base, request });
+    if (generated.ok) changed = changed.filter((f) => f !== GENERATED_PKG);
+  }
   const cfgLast = newestLabelEvent(ev.rows, CONFIG_LABEL);
   const needsPush = configFiles(changed).length && cfgLast?.event === "labeled" && byOwner(cfgLast, owner);
   const push = needsPush ? configPushState({ pr, head, headRef: pull.head?.ref || "", labelAt: cfgLast.created_at, request }) : null;
   rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
+  if (generated) rows.config = { ...rows.config, evidence: `${rows.config.evidence}; ${generated.ok ? generated.evidence : `package.json counted as a config edit: ${generated.evidence}`}` };
   let tip = "";
   if (!rows.open.ok) {
     for (const k of order.filter((r) => r === "gen" || r === "ratchets")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
