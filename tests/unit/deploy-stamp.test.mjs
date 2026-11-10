@@ -24,14 +24,17 @@ test("pages.yml stamps the generation from the commit count on a full-depth chec
   // tests/unit/deploy-staging-build.test.mjs pins the formula and the stamped bytes.
   assert.match(pages, /node tools\/desktop\/stage\.mjs --out _site --stamp-only --sha "\$PUBLISH_SHA"/);
   assert.match(pages, /apex-sha/, "provenance meta, because the deployed shell no longer equals the committed bytes");
+  // The stage job stamps (2026-11-10: staging left the job holding the Pages token).
+  const stageJob = pages.slice(pages.indexOf("\n  stage:"), pages.indexOf("\n  deploy:"));
+  assert.match(stageJob, /fetch-depth: 0/, "the stage job must check out full history or rev-list counts 1");
+  assert.match(stageJob, /build: \$\{\{ steps\.stamp\.outputs\.build \}\}/, "the stamped build is an output");
   const deployJob = pages.slice(pages.indexOf("\n  deploy:"), pages.indexOf("\n  verify-live:"));
-  assert.match(deployJob, /fetch-depth: 0/, "the deploy job must check out full history or rev-list counts 1");
-  assert.match(deployJob, /build: \$\{\{ steps\.stamp\.outputs\.build \}\}/, "the stamped build is an output for verify-live");
+  assert.match(deployJob, /build: \$\{\{ needs\.stage\.outputs\.build \}\}/, "deploy passes the stamped build on to verify-live");
 });
 
 test("pages.yml verifies the live site serves the stamped build", () => {
   assert.match(pages, /\n  verify-live:\n/);
-  assert.match(pages, /needs: deploy/);
+  assert.match(pages, /needs: \[stage, deploy\]/);
   // #2923: cache-bust + "never reached build" live in tools/ci/poll-live-shell.mjs;
   // pages.yml only invokes it (and skips verify-live.mjs when superseded).
   assert.match(pages, /node tools\/ci\/poll-live-shell\.mjs --url "\$PAGE_URL" --build "\$BUILD" --sha "\$GITHUB_SHA"/);

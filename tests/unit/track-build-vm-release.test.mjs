@@ -212,10 +212,15 @@ const STRIP = {
   //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
   // → #4967 outside-of-bend tier rows run their full chord (2026-11-09): same
   //   emission, longer risers enclose 5 fewer triangles; strip-after 255176 → 255181.
+  // → #5079 pit taper pocket capped (2026-11-10): the street barrier now runs
+  //   along the exit taper (nodes 37-41) at the lane wall instead of the 14 m
+  //   run-off default. Emission 274099 → 274383, strip-after 255181 → 255453.
   // → W21 #2204 curveTier midpoint-to-midpoint rows (2026-11-10): curved
   //   bleacher/scaffold rows span to their chord midpoints and rails take their
   //   own tier. Emission 274099 → 274135, strip-after 255181 → 255289.
-  monaco: { before: 274135, after: 255289 },
+  // → both together (merge of the tip into #5303, 2026-11-10): the two deltas add
+  //   exactly (+36 emitted, +108 strip-after on #5079's 274383/255453).
+  monaco: { before: 274419, after: 255561 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

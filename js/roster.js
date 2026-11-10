@@ -172,7 +172,8 @@
     "js/agent/apex-lifecycle.js",
     "js/perf/three-inspector.js",
     "js/agent/apex.js",
-    "js/agent/apex-bridge.js"
+    "js/agent/apex-bridge.js",
+    "js/agent/bridge-link.js"
   ],
     LAZY_EDGES: [
     [
