@@ -405,6 +405,9 @@
       "silence": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "swell": [
+        "tests/unit/crowd-audio.test.mjs"
+      ],
       "update": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",

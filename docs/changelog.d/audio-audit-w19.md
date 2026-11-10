@@ -5,3 +5,4 @@ Fixed: the backup engine sound (before the engine recording loads, or if it cann
 Fixed: the Spotify account check no longer says a Premium account is not Premium (Spotify stopped reporting the plan to apps in 2026); a "Premium required" playback refusal is what tells it now, and after the player rejects a session it no longer reports "Account OK".
 Fixed: with RADIO VOICE = SYSTEM on iPhone, race control, the coach and the engineer now get three distinct, ordinary voices instead of the first three alphabetically (one of them a novelty voice).
 Fixed: MY TRACKS no longer promises your files are kept forever; it asks the browser to keep them (persistent storage) after the first upload, since Safari can clear site storage after 7 days without a visit.
+Fixed: the crowd's cheer at the chequered flag now always plays; it was skipped when another cheer had sounded in the second before you crossed the line.
