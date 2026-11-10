@@ -111,7 +111,7 @@ ready.
 | W22 | HUD, broadcast and boot-cover bugs the unit VMs hide | `claude/audit-fix-hud-perf-covers` | #5296 | #5326 |
 | W23 | Data Hub feeds | `claude/audit-fix-data-hub` | #5298 | #5327 |
 | W24 | Service worker, offline play, install | `claude/audit-fix-pwa-offline` | #5300 | #5328 |
-| W25 | Agent tooling, MCP servers, headless hooks | `claude/audit-fix-agent-tooling` |  | #5329 |
+| W25 | Agent tooling, MCP servers, headless hooks | `claude/audit-fix-agent-tooling` | #5339 | #5329 |
 | W26 | AI pace and line, input paths, phone controller | `claude/audit-fix-ai-input` | #5336 | #5330 |
 | W27 | Reference docs, plans, docs guards | `claude/audit-fix-reference-docs` | #5290 | #5331 |
 | W28 | Desktop and mobile packaging | `claude/audit-fix-packaging` | #5293 | #5332 |
@@ -120,9 +120,9 @@ ready.
 | W31 | Spec and unit-test selection that lets a red merge | `claude/audit-fix-spec-selection` | #5304 | #5334 |
 | W32 | Browser specs that cannot fail | `claude/audit-fix-specs` | #5302 | #5334 |
 | W33 | Find and re-land fixes erased by the 2026-11-06 rollbacks | `claude/audit-rollback-reland` | #5348 | #5335 |
-| W34 | Bugs found by playing: cautions, DNF exit, practice picker, storage holes, Back and double tap | `claude/audit-fix-live-play` |  | #5335 |
+| W34 | Bugs found by playing: cautions, DNF exit, practice picker, storage holes, Back and double tap | `claude/audit-fix-live-play` | #5351 | #5335 |
 
-A blank PR cell means the worker had not opened one when this was written. Findings not yet assigned are tracked in issue #5335.
+Every work item has a pull request. Findings not yet assigned are tracked in issue #5335.
 
 ## Not assigned to a worker yet
 
