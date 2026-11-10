@@ -229,6 +229,29 @@ test("TiltRoll: the roll the phone sends is the roll the game would have read it
   assert.equal(TiltRoll.rollDeg(0, 20, -270), TiltRoll.rollDeg(0, 20, 90), "a negative angle wraps");
 });
 
+test("TiltRoll.screenAngle reads window.orientation before screen.orientation.angle, -90 as 270 (audit W26 row 9)", () => {
+  // iOS 16.4 Safari: landscape-right reported screen.orientation.angle 90 where Android
+  // Chrome reports 270 (WebKit bug 254863; w3c screen-orientation #247); window.orientation
+  // (-90) was right. The old order returned 90 and reversed tilt steering in that landscape.
+  const withGlobals = (g) => {
+    const ctx = vm.createContext({ Math, Number, ...g });
+    vm.runInContext(read("js/input/tilt-roll.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/input/tilt-roll.js") });
+    return vm.runInContext("TiltRoll", ctx);
+  };
+  const ios = withGlobals({ window: { orientation: -90 }, screen: { orientation: { angle: 90 } } });
+  assert.equal(ios.screenAngle(), 270, "the live globals: the legacy number wins and is normalised");
+  const android = withGlobals({ window: {}, screen: { orientation: { angle: 270 } } });
+  assert.equal(android.screenAngle(), 270, "no window.orientation: the screen API");
+  const lean = (R) => R.rollDeg(20, 0, R.screenAngle());
+  assert.ok(Math.abs(lean(ios) - lean(android)) < 1e-9 && lean(ios) < 0, "one lean, one sign on both phones: " + lean(ios));
+  const A = TiltRoll.screenAngle;
+  assert.equal(A({ orientation: 90 }, { orientation: { angle: 270 } }), 90, "the numeric legacy value is preferred");
+  assert.equal(A({ orientation: 0 }, { orientation: { angle: 90 } }), 0, "0 is a reading, not an absence");
+  assert.equal(A({ orientation: "90" }, { orientation: { angle: 90 } }), 90, "a non-number falls through to the screen API");
+  assert.equal(A({ orientation: NaN }, { orientation: { angle: -90 } }), 270, "both normalised to 0..359");
+  assert.equal(A(null, null), 0, "nothing reported: portrait");
+});
+
 // ---------------------------------------------------------------------------
 // The desktop half against the real Input
 // ---------------------------------------------------------------------------
@@ -279,11 +302,13 @@ test("the phone's pedals reach throttle()/braking() and their travel reaches the
   assert.equal(Input.throttle(), false); assert.equal(Input.braking(), false);
   phone.thr = 0.8; frame();
   assert.equal(Input.throttle(), true);
-  assert.equal(Input.throttleLevel(), 0.8, "an on-screen pedal reports how far it is pressed");
+  // The 0.1 resting-thumb dead zone is RESCALED like the pad's (padPedalLevel), not a gate.
+  const lvl = (v) => (v - 0.1) / 0.9;
+  assert.ok(Math.abs(Input.throttleLevel() - lvl(0.8)) < 1e-12, "an on-screen pedal reports how far it is pressed, past the dead zone");
   phone.thr = 0; phone.brk = 0.35; frame();
   assert.equal(Input.throttle(), false);
   assert.equal(Input.braking(), true);
-  assert.equal(Input.brakeLevel(), 0.35);
+  assert.ok(Math.abs(Input.brakeLevel() - lvl(0.35)) < 1e-12);
   phone.brk = 0.05; frame();
   assert.equal(Input.braking(), false, "a resting thumb (< 0.1) is not a brake");
   phone.brk = 0; phone.held = PhonePad.HELD.lookBack; frame();
@@ -805,15 +830,15 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(dom.gas.style["--travel"], "1.00", "the fill shows the travel it sends");
   dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 - 45 });   // slid 45 px up
   for (let i = 0; i < 3; i++) frame();
-  const eased = 1 - (45 - 12) / 90;
-  assert.ok(Math.abs(desk.Input.throttleLevel() - eased) < 0.02, `eased to ~${eased.toFixed(2)}, got ${desk.Input.throttleLevel()}`);
+  const eased = 1 - (45 - 12) / 90, easedLvl = (eased - 0.1) / 0.9;   // the host rescales past its 0.1 dead zone
+  assert.ok(Math.abs(desk.Input.throttleLevel() - easedLvl) < 0.02, `eased to ~${eased.toFixed(2)}, got ${desk.Input.throttleLevel()}`);
   assert.equal(dom.gas.style["--travel"], eased.toFixed(2));
   dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 + 60 });   // back down past the landing point: full again
   for (let i = 0; i < 3; i++) frame();
   assert.equal(desk.Input.throttleLevel(), 1);
   dom.gas.dispatch("pointermove", { clientY: -500 });   // dragged far off the top: the floor, not a release
   for (let i = 0; i < 3; i++) frame();
-  assert.ok(desk.Input.throttle() && Math.abs(desk.Input.throttleLevel() - 0.12) < 0.02, `floor ${desk.Input.throttleLevel()}`);
+  assert.ok(desk.Input.throttle() && Math.abs(desk.Input.throttleLevel() - (0.12 - 0.1) / 0.9) < 0.02, `floor ${desk.Input.throttleLevel()}`);
   assert.ok(dom.gas.classes.has("on"));
   dom.gas.dispatch("pointerup", {});
   for (let i = 0; i < 3; i++) frame();
@@ -970,6 +995,8 @@ function hostHarness(over = {}) {
     createInvite: async () => ({ ok: true, code: "OFFER" }),
     acceptAnswer: async () => ({ ok: true }),
     hostRoom: async (o) => { room.onJoiner = o.onJoiner; room.onFail = o.onFail; room.token = o.token; return { ok: true, stop: room.stop }; },
+    // The player taps ALLOW at once (the ALLOW / REJECT gate has its own tests below).
+    confirm: () => { ui.asked = (ui.asked || 0) + 1; return { result: Promise.resolve(true), dismiss() {} }; },
   }, over);
   // host() reads the page's Input; the harness's is handed through the global.
   globalThis.Input = desk.Input;
@@ -1327,6 +1354,8 @@ test('a phone connecting before hostRoom returns still closes the late room with
   let resolve, callbacks, stopped = 0;
   const h = hostHarness({hostRoom: o => {callbacks=o;return new Promise(r=>{resolve=r;});}});
   await settle(); await callbacks.onJoiner(null,'ANSWER');
+  assert.equal(h.ctl.state().phase,'confirming','the channel is up, the phone waits for ALLOW');
+  await settle();
   assert.equal(h.ctl.state().phase,'linked');
   resolve({ok:true,stop(){stopped++;}}); await settle();
   assert.equal(stopped,1); assert.equal(h.ctl.state().phase,'linked');
@@ -1520,7 +1549,7 @@ test("host(): private relay swaps one offer/answer and the linked phone can driv
   h.clock.t = 100;
   h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 }));
   h.hostEnd.pump(100);
-  assert.ok(h.Input.throttleLevel() > 0.79, "the accepted answer installs the real Input link");
+  assert.ok(h.Input.throttleLevel() > 0.77, "the accepted answer installs the real Input link");
   h.ctl.cancel(); assert.equal(h.hostEnd.status, "closed"); assert.equal(h.Input.remoteActive(), false);
 });
 
@@ -2086,5 +2115,235 @@ test("touch steering: strip width read once per gesture, aria-valuenow an intege
     assert.ok(aria.length <= 34, "an unchanged percent is not rewritten");
     steer.dispatch("pointerup", { pointerId: 5 });
     assert.equal(aria[aria.length - 1], "0");
+  } finally { ctl.cancel(); }
+});
+
+// ---------------------------------------------------------------------------
+// Audit W26 row 11 (2026-11-10): who may steer. ALLOW / REJECT on the game's
+// screen before a phone is accepted, a re-link bound to the admitted peer, the
+// phone kept off destructive menu controls, and the phone page's re-dial
+// answering a NEWER offer on a fresh transport (js/net swap `reanswer`).
+// ---------------------------------------------------------------------------
+
+// A confirm the test answers by hand: { answer(ok), dismissed }.
+function handConfirm() {
+  const asks = [];
+  const confirm = (text) => {
+    let settleIt;
+    const a = { text, dismissed: 0, result: new Promise((r) => { settleIt = r; }) };
+    a.answer = (ok) => settleIt(ok);
+    a.dismiss = () => { a.dismissed++; settleIt(false); };
+    asks.push(a);
+    return a;
+  };
+  return { asks, confirm };
+}
+const PEER_A = "a".repeat(32), PEER_B = "b".repeat(32);
+
+test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT closes it; cancel dismisses the ask (W26 row 11a)", async () => {
+  const c = handConfirm();
+  const h = hostHarness({ confirm: c.confirm });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "confirming");
+  assert.equal(c.asks.length, 1); assert.equal(h.ui.linkedN, 0, "not linked before the player says so");
+  assert.match(h.ui.said.at(-1), /ALLOW/);
+  assert.equal(h.room.stopped, 1, "one phone per room: the room closes while it asks");
+  h.clock.t = 100;
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 25, held: 0 }));
+  h.padEnd.send(NetTransport.EVENT, PhonePad.encodeEvent("navSelect"));
+  h.hostEnd.pump(50);
+  assert.equal(h.Input.remoteActive(), false, "its samples do not reach Input");
+  assert.equal(h.Input.throttle(), false);
+  assert.ok(h.ctl.state().stats.gated >= 2 && h.ctl.state().stats.admitted === false, JSON.stringify(h.ctl.state().stats));
+  c.asks[0].answer(true); await settle();
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
+  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 1, thr: 0.8, brk: 0, roll: 0, held: 0 }));
+  h.hostEnd.pump(100);
+  assert.ok(h.Input.throttle() && h.Input.throttleLevel() > 0.7, "ALLOWed: the phone drives");
+  h.ctl.cancel();
+
+  const r = handConfirm();
+  const no = hostHarness({ confirm: r.confirm });
+  await settle(); await no.room.onJoiner(null, "ANSWER"); await settle();
+  r.asks[0].answer(false); await settle();
+  assert.equal(no.ctl.state().phase, "lost"); assert.equal(no.ui.lostN, 1);
+  assert.equal(no.hostEnd.status, "closed", "a rejected phone's transport is closed");
+  assert.match(no.ui.said.at(-1), /^!Phone rejected/);
+  assert.equal(no.ui.linkedN, 0);
+
+  const d = handConfirm();
+  const gone = hostHarness({ confirm: d.confirm });
+  await settle(); await gone.room.onJoiner(null, "ANSWER"); await settle();
+  gone.ctl.cancel();
+  assert.equal(d.asks[0].dismissed, 1, "STOP PAIRING takes the ALLOW card down");
+  const e = handConfirm();
+  const drop = hostHarness({ confirm: e.confirm });
+  await settle(); await drop.room.onJoiner(null, "ANSWER"); await settle();
+  drop.padEnd.close(); await settle();
+  assert.equal(e.asks[0].dismissed, 1, "a phone that leaves while asked takes the card with it");
+  assert.equal(drop.ctl.state().phase, "lost");
+});
+
+test("host(): a re-link from the ALLOWed phone is let back in; another peer on the same code is asked again (W26 row 11b)", async () => {
+  const c = handConfirm();
+  const pairs = [];
+  const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(40 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
+  const drop = ([padEnd, hostEnd]) => { padEnd.status = hostEnd.status = "closed"; hostEnd._emit("close", "failed"); padEnd._emit("close", "failed"); };
+  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
+  const h = hostHarness({ rtc, confirm: c.confirm });
+  await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(c.asks.length, 1);
+  c.asks[0].answer(true); await settle();
+  hello(pairs[0], PEER_A);   // the phone names itself after ALLOW: still bound to this link
+  assert.equal(h.ctl.state().phase, "linked");
+  drop(pairs[0]); await settle();
+  assert.equal(h.ctl.state().phase, "waiting", "the same code is hosted again");
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ctl.state().phase, "connecting", "the re-link waits for the phone to name itself");
+  hello(pairs[1], PEER_A); await settle();
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(c.asks.length, 1, "the same phone is not asked twice");
+  drop(pairs[1]); await settle();
+  await h.room.onJoiner(null, "ANSWER-3"); await settle();
+  hello(pairs[2], PEER_B); await settle();
+  assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked");
+  assert.equal(c.asks.length, 2);
+  h.clock.t = 100;
+  pairs[2][0].send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  pairs[2][1].pump(20);
+  assert.equal(h.Input.remoteActive(), false, "and it cannot drive while asked");
+  h.ctl.cancel();
+});
+
+test("the codec carries the page's peer id in its hello, hex only (W26 row 11b)", () => {
+  const id = PhonePadCodec.makePeerId();
+  assert.match(id, /^[0-9a-f]{32}$/);
+  assert.notEqual(PhonePadCodec.makePeerId(), id);
+  assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, id)).id, id);
+  assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, "<script>")).id, undefined, "a junk id is dropped at encode");
+  assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "hi", side: "pad", p: 1, id: "zz" })).id, undefined, "and at decode");
+  assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeHello("host", false, true)), { t: "hi", side: "host", p: 1, haptics: false, steer: true, ack: true }, "no id: the hello is unchanged");
+});
+
+test("link(): with admit() the channel is open but deaf, its haptics and dash wait, and a refusal closes it as 'rejected' (W26 row 11a)", async () => {
+  const real = bootInput();
+  let hap = null;
+  const desk = { clock: real.clock, Input: Object.assign(Object.create(real.Input), {
+    setRemoteHaptics(fn) { hap = fn || null; real.Input.setRemoteHaptics(fn); }, remoteHaptics: () => hap }) };
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(12) });
+  padEnd.pump(0); hostEnd.pump(0);
+  let verdict, seenPeer = null, closedWhy = null, admitted = 0;
+  const huds = [];
+  padEnd.onMessage((ch, d) => { if (ch === NetTransport.STATE) huds.push(d); });
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => desk.clock.t, doc: null, hud: () => ({ gear: 3, kmh: 100, state: "race" }),
+    admit: (p) => { seenPeer = p; return new Promise((r) => { verdict = r; }); },
+    onAdmitted: () => { admitted++; }, onClose: (why) => { closedWhy = why; } });
+  padEnd.send(NetTransport.EVENT, PhonePad.encodeHello("pad", true, true, PEER_A));
+  desk.clock.t = 100; hostEnd.pump(10); link.pump(); padEnd.pump(100);
+  assert.equal(seenPeer.id, PEER_A, "the hello names the peer"); assert.equal(seenPeer.fp, null, "a loopback has no DTLS fingerprint");
+  assert.equal(desk.Input.remoteHaptics(), null, "no buzzing a phone nobody allowed");
+  assert.equal(huds.filter((d) => d.startsWith('["H"')).length, 0, "no dash to it either");
+  verdict(true); await settle();
+  assert.equal(admitted, 1); assert.equal(typeof desk.Input.remoteHaptics(), "function");
+  assert.equal(link.stats().admitted, true);
+
+  const [p2, h2] = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(13) });
+  p2.pump(0); h2.pump(0);
+  PhonePad.link(h2, { input: desk.Input, pump: false, doc: null, admit: () => false, onClose: (why) => { closedWhy = why; } });
+  await settle();
+  assert.equal(closedWhy, "rejected"); assert.equal(h2.status, "closed");
+  link.close();
+});
+
+test("ALLOW / REJECT card: touch-sized, fits a phone landscape, ignores a synthetic click (W26 row 11a)", async () => {
+  const mk = (tag) => {
+    const n = { tagName: tag.toUpperCase(), style: {}, attrs: {}, kids: [], listeners: {}, parentNode: null, textContent: "", id: "",
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      appendChild(c) { c.parentNode = this; this.kids.push(c); return c; },
+      removeChild(c) { this.kids = this.kids.filter((k) => k !== c); c.parentNode = null; },
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
+      click(e) { for (const f of this.listeners.click || []) f(e); } };
+    return n;
+  };
+  const doc = { body: mk("body"), createElement: mk };
+  const ask = PhonePad.askOnScreen(doc, "A phone joined.");
+  const box = doc.body.kids[0];
+  assert.equal(box.attrs.role, "alertdialog"); assert.equal(box.style.position, "fixed");
+  const card = box.kids[0];
+  assert.ok(parseInt(card.style.maxWidth, 10) <= 440 && card.style.maxHeight === "100%" && card.style.overflow === "auto", "fits 844x390 and scrolls if it must");
+  const buttons = card.kids[2].kids;
+  assert.deepEqual(buttons.map((b) => b.textContent), ["ALLOW", "REJECT"]);
+  for (const b of buttons) assert.ok(parseInt(b.style.minHeight, 10) >= 44 && parseInt(b.style.minWidth, 10) >= 44, "touch targets >= 44 px");
+  let settled = null; ask.result.then((v) => { settled = v; });
+  buttons[0].click({ isTrusted: false }); await settle();
+  assert.equal(settled, null, "the phone's SELECT is a synthetic click: not an ALLOW");
+  assert.equal(doc.body.kids.length, 1);
+  buttons[0].click({ isTrusted: true }); await settle();
+  assert.equal(settled, true); assert.equal(doc.body.kids.length, 0, "the card goes away");
+  const no = PhonePad.askOnScreen(doc, "x"); doc.body.kids[0].kids[0].kids[2].kids[1].click({ isTrusted: true });
+  assert.equal(await no.result, false);
+  assert.equal(await PhonePad.askOnScreen(null, "x").result, false, "no screen to ask on: nobody is allowed");
+});
+
+test("menu pad: a PHONE's SELECT will not press RESET / DELETE / IMPORT; XR (the local player) and plain buttons still do (W26 row 11c)", () => {
+  const { Input, sb } = bootInput();
+  const btn = (props) => ({ tagName: "BUTTON", disabled: false, clicks: 0, click() { this.clicks++; }, matches: () => true,
+    dispatchEvent: () => true, getAttribute(k) { return (this.attrs || {})[k] ?? null; }, ...props });
+  const all = [];
+  const layer = { tagName: "DIV", contains: (n) => all.includes(n), dispatchEvent: () => true };
+  sb.MenuNav = { activeLayer: () => layer, FOCUSABLE: "button" };
+  sb.UiLayers = { top: () => layer, navOpen: () => true, anyOpen: () => true };
+  const press = (b) => { all.push(b); sb.document.activeElement = b; return Input.remoteEvent("navSelect"); };
+  const blocked = [
+    btn({ id: "pm-keys-reset", textContent: "RESET KEYS" }),
+    btn({ className: "cr-slot-del armed", textContent: "DELETE?" }),
+    btn({ textContent: "IMPORT SHARE CODE" }),
+    btn({ id: "fb-del", textContent: "DEL" }),
+    btn({ textContent: "OK", dataset: { destructive: "" } }),
+    { ...btn({}), tagName: "INPUT", type: "file" },
+  ];
+  for (const b of blocked) { assert.equal(press(b), false, "refused: " + (b.textContent || b.type)); assert.equal(b.clicks, 0); }
+  const allowed = [btn({ textContent: "RESUME" }), btn({ id: "hud-delta", textContent: "DELTA" }), btn({ textContent: "CLEARANCE MODEL" }),
+    btn({ textContent: "RESET KEYS", dataset: { destructive: "false" } })];
+  for (const b of allowed) { assert.equal(press(b), true); assert.equal(b.clicks, 1, "pressed: " + b.textContent); }
+  sb.performance = { now: () => 500 };
+  Input.remoteSample({ source: "xr", steer: 0, thr: 0, brk: 0 });
+  const local = blocked[0]; local.clicks = 0;
+  assert.equal(press(local), true); assert.equal(local.clicks, 1, "the XR controllers are the player in the room");
+});
+
+test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH transport, the session moving with it (W26 row 11)", async () => {
+  const made = [];
+  const fake = () => {
+    const t = { status: "connecting", sent: [], closed: 0, handlers: {},
+      onMessage(f) { t.handlers.message = f; }, onClose(f) { t.handlers.close = f; }, onOpen(f) { t.handlers.open = f; },
+      close() { t.closed++; t.status = "closed"; }, send(ch, d) { t.sent.push(d); return true; }, pump() { return 0; },
+      stats: () => ({ connection: t.status === "open" ? "connected" : "new" }) };
+    made.push(t); return t;
+  };
+  let swapOpts = null;
+  const accepted = [];
+  const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), buttons: {}, hud: lcd() };
+  const ctl = PhonePad.pad(dom, { peerId: PEER_A, deps: {
+    rtc: fake, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+    swap: async (o) => { swapOpts = o; const ans = await o.reply("OFFER-1"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+    acceptInvite: async (t, invite) => { accepted.push([made.indexOf(t), invite]); return { ok: true, code: "ANS-" + invite }; },
+  } });
+  try {
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    assert.equal(swapOpts.reanswer, true, "the swap is asked to hand over a newer offer");
+    assert.equal(swapOpts.token.cancelled, false, "still listening while the first answer is unconnected");
+    // The relay replayed the dead link's offer; the game posts a newer one.
+    assert.equal(await swapOpts.reply("OFFER-2"), "ANS-OFFER-2");
+    assert.deepEqual(accepted, [[0, "OFFER-1"], [1, "OFFER-2"]], "an answered connection never takes a second offer");
+    assert.equal(made[0].closed, 1, "the superseded transport is closed");
+    assert.equal(ctl.state().linked, true, "the session moved to the fresh transport");
+    made[1].status = "open"; made[1].handlers.open();
+    assert.ok(dom.body.classes.has("linked"), "and it opens there");
+    assert.equal(JSON.parse(made[1].sent[0]).id, PEER_A, "its hello names the page");
+    assert.equal(swapOpts.token.cancelled, true, "a link that is up stops the rendezvous");
+    assert.equal(await swapOpts.reply("OFFER-3"), null, "an open link keeps its offer");
+    assert.equal(made.length, 2);
+    made[0].handlers.close && made[0].handlers.close("local");
+    assert.equal(ctl.state().linked, true, "the superseded session's close is not a drop");
   } finally { ctl.cancel(); }
 });

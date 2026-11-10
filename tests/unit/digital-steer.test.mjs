@@ -390,6 +390,29 @@ test("coalesced pointer samples move the finger only when they ARE the finger", 
   assert.ok(Input.debugState().touchSteer > 0, "the finger's own coalesced samples still land");
 });
 
+test("the coalesced path (Chromium, and Safari since 18.2) takes the FRESHEST touch sample and only for one finger (audit W26 row 10)", () => {
+  const { Input, onCanvas } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 8, clientX: 150 }] });
+  const touchMove = (xs, extra) => onCanvas("pointermove", Object.assign({ pointerType: "touch", isPrimary: true,
+    getCoalescedEvents: () => xs.map((clientX) => ({ clientX, pointerType: "touch" })) }, extra));
+  touchMove([300, 200, 170]);
+  const fresh = Input.debugState().touchSteer;
+  assert.ok(fresh > 0, "a right drag steers right: " + fresh);
+  touchMove([150, 400, 170]);
+  assert.equal(Input.debugState().touchSteer, fresh, "the LAST sample is the finger, not the widest one");
+  touchMove([400]);
+  assert.equal(Input.debugState().touchSteer, fresh, "a single sample is the event the touch path already has");
+  touchMove(null, { getCoalescedEvents: () => { throw new Error("detached"); } });
+  touchMove([400, 400], { isPrimary: false });
+  assert.equal(Input.debugState().touchSteer, fresh, "a throwing list and a non-primary pointer change nothing");
+  onCanvas("touchstart", { changedTouches: [{ identifier: 9, clientX: 600 }] });
+  const two = Input.debugState().touchSteer;
+  touchMove([150, 160]);
+  assert.equal(Input.debugState().touchSteer, two, "two fingers down: the coalesced path steps aside for the touch path");
+});
+
 test("re-entering TILT zeroes on a fresh reading, not the lean the player left tilt with", () => {
   const { Input, fire, clock } = boot();
   const lean = (deg) => { clock.t += 16; fire("deviceorientation", { beta: 0, gamma: deg }); };

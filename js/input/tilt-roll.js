@@ -3,7 +3,7 @@
    DEVICE frame, and a phone held sideways swaps which one is the roll the
    player means. js/input/input.js has always resolved that by rebuilding the
    gravity vector and taking the angle between screen-right and the rest,
-   per screen.orientation.angle. The PHONE AS CONTROLLER page
+   per the screen rotation (screenAngle, below). The PHONE AS CONTROLLER page
    (controller.html, js/input/phone-pad.js) needs the identical number on the
    phone, where input.js does not load, so the math lives here and both call
    it: a fix to one orientation case cannot drift between the two ends. */
@@ -33,13 +33,22 @@ const TiltRoll = (function () {
     return Math.atan2(h, v) / DEG;
   }
 
-  /** The screen rotation the browser reports, 0 when it reports nothing. */
-  function screenAngle() {
-    if (typeof screen !== "undefined" && screen.orientation &&
-        typeof screen.orientation.angle === "number") {
-      return screen.orientation.angle;
+  /** The screen rotation the browser reports (0/90/180/270), 0 when it reports nothing.
+   *  The legacy numeric `window.orientation` comes FIRST where it exists: iOS
+   *  16.4 Safari shipped `screen.orientation` with landscape angles swapped
+   *  (90 where Android Chrome reports 270; WebKit bug 254863, w3c
+   *  screen-orientation issue 247), which reversed tilt steering in one
+   *  landscape. `window.orientation` was right on those builds, and on the
+   *  browsers that report both they agree once its -90 is read as 270. */
+  function screenAngle(win, scr) {
+    const w = win !== undefined ? win : (typeof window !== "undefined" ? window : null);
+    const s = scr !== undefined ? scr : (typeof screen !== "undefined" ? screen : null);
+    if (w && typeof w.orientation === "number" && Number.isFinite(w.orientation)) {
+      return ((w.orientation % 360) + 360) % 360;
     }
-    if (typeof window !== "undefined" && typeof window.orientation === "number") return window.orientation;
+    if (s && s.orientation && typeof s.orientation.angle === "number" && Number.isFinite(s.orientation.angle)) {
+      return ((s.orientation.angle % 360) + 360) % 360;
+    }
     return 0;
   }
 
