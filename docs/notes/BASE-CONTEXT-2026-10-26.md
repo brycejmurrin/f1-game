@@ -1,5 +1,7 @@
 # Base context of a fresh Claude cloud session — 2026-10-26
 
+Summary: A fresh cloud session's first turn measured at ~98k tokens; feeds the launch-policy size stops.
+
 > **Historical record** (2026-10-26): the agent-fleet skill, its launch-policy caps and `fleet-core.md` this figure fed no longer exist; workers are launched by the dispatch Action (AGENTS.md §Coordination, skills `dispatcher` and `steward`).
 
 Supersedes: [Base-context audit — 2026-10-19](BASE-CONTEXT-AUDIT-2026-10-19.md) (its 50–60k base is now measured at ~98k).

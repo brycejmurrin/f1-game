@@ -1132,6 +1132,7 @@ test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed",
         assert.ok(fs.existsSync(path.join(ROOT, oldRel)), `docs/notes/${f} supersedes ${old}, which does not exist`);
         const back = read(oldRel).split("\n").filter((l) => /^Superseded by:/.test(l)).flatMap(links);
         assert.ok(back.includes(f), `${oldRel} needs a line "Superseded by: [..](${f})" — the old note must point at its replacement`);
+        // The built notes table (knowledge-gc.mjs --index) flags it from the Superseded by: line itself; a hand row must say it.
         const row = index.split("\n").find((l) => l.includes(`(notes/${path.posix.basename(old)})`));
         if (row) assert.match(row, /superseded/i, `docs/README.md's row for notes/${old} must say it is superseded (by ${f})`);
       }

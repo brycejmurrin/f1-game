@@ -1,5 +1,7 @@
 # Parallel work — subagents, worktrees, and the one thing that does not parallelise
 
+Summary: Where to spend concurrency: read-only fan-out is free, worktrees isolate FILES but not CPU, the browser suite is serial on 4 cores. Written after parallelism produced ten confident, entirely fake test failures.
+
 > **Historical record** (superseded): agents no longer run browser test groups locally at all (AGENTS.md rules 5 and 10), so the local Playwright concurrency advice below is history; CI runs the browser groups on the PR, and the current loop is AGENTS.md §The loop and docs/VERIFICATION.md.
 
 Where to spend concurrency in this repo, and where spending it makes things

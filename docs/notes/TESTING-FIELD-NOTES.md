@@ -1,5 +1,7 @@
 # Testing — operational field notes
 
+Summary: The operational field notes carved out of `TESTING.md`: boot walls on this box, the two-worker factor, the instruments that lie here, the real-GPU runs. Cited from `AGENTS.md` as "TESTING field notes".
+
 > **Historical record** (dated measurements): the local browser-run recipes below predate the rule that agents run no browser tests locally (AGENTS.md rules 5 and 10); CI runs them on the PR, and the current commands are in docs/VERIFICATION.md.
 
 > Carved out of [`../TESTING.md`](../TESTING.md) on 2026-09-03 (tree restructure
