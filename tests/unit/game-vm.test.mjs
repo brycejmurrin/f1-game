@@ -12,14 +12,20 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { evalRealRace } from "../helpers/eval-real-race.mjs";
+import { calibrate, scaledCap, describeBudget } from "../helpers/load-scaled-budget.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const finite = (o, keys) => { for (const k of keys) assert.ok(Number.isFinite(o[k]), `${k} not finite: ${o[k]}`); };
 
-let g;
-before(async () => { g = await createGame({ track: "monza" }); });
+let g, bootCal;
+// Calibrate this process's speed immediately before and after the boot it judges (load-scaled-budget.mjs).
+before(async () => {
+  const cal0 = calibrate();
+  g = await createGame({ track: "monza" });
+  bootCal = Math.max(cal0, calibrate());
+});
 after(() => { if (g) g.close(); });
 
 test("boots to __apex with no script errors", () => {
@@ -112,8 +118,17 @@ test("reset clears caution holds and queued debris without changing same-seed ro
 // still catches what this smoke test is for — a boot that hangs or turns
 // pathological — without flipping on how busy the machine is. A real
 // per-build budget needs a quiet, known box, which is what CI is for.
-test("boot and track build do not hang", () => {
-  assert.ok(g.bootMs + g.trackMs < 12000, `boot ${g.bootMs | 0} ms + track ${g.trackMs | 0} ms`);
+//
+// LOAD-SCALED (W29). 12 s still failed at machine load ~11 on 4 CPUs and passed
+// alone. The 12 s base now scales by a same-process calibration taken around
+// the boot (tests/helpers/load-scaled-budget.mjs), never below 12 s, and is
+// clamped at an absolute 60 s that only a real hang reaches.
+const BOOT_BASE_MS = 12000, BOOT_HARD_MS = 60000;
+test("boot and track build do not hang", (t) => {
+  const b = scaledCap({ baseCap: BOOT_BASE_MS, hardCap: BOOT_HARD_MS, calMs: bootCal });
+  const ms = g.bootMs + g.trackMs;
+  t.diagnostic(`boot+track ${ms | 0} ms; ${describeBudget(b)}`);
+  assert.ok(ms < b.cap, `boot ${g.bootMs | 0} ms + track ${g.trackMs | 0} ms; ${describeBudget(b)}`);
 });
 
 test("race(monza) + go() + 60 throttle steps: finite physState, speed > 0", () => {

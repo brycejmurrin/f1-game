@@ -1,5 +1,7 @@
 # Live memory over time on the phone profile (B·H12, 2026-10-20)
 
+Summary: Live JS heap and renderer memory across a 5-lap race, garage and menu round trips, and a track switch (B·H12).
+
 Fleet B perf hunt, lane "live-memory": JS heap and renderer memory across a 5-lap race,
 garage ↔ race ↔ menu round trips and a track switch, plus allocation rate and GC pauses,
 on the live build (apex-sha `2eda36c6`, deploy tip at measure time).

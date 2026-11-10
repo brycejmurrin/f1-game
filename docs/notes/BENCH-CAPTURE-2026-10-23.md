@@ -1,5 +1,7 @@
 # BENCHMARK profiling capture (apex26.bench/2), 2026-10-23
 
+Summary: BENCHMARK profiling capture (`apex26.bench/2`): `js/perf/bench-capture.js` records heap, logs and GPU data per leg.
+
 Bryce's ask (OrchA 26, 2026-10-23): "make these benchmark store way more info for profiling like heap, logs, gpu, etc".
 `js/perf/bench-capture.js` (BenchCapture) records it. `js/perf/bench-run.js` calls it from three places: legStart/legEnd around each leg,
 `step()` inside `measure()`, and `budget()` at finish. A leg that died under a reload gets `leg.crumb` from `recover()`.
