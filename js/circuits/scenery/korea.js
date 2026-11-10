@@ -88,6 +88,7 @@
         const f = k / n;
         const side = h < 0.71 ? -1 : 1;
         if (side === 1 && f > 0.15 && f < 0.24) return;   // mid back straight
+        if (side === -1 && f > 0.03 && f < 0.04) return;  // under K(0.104)'s fill, same lift slot (#5080)
         if (side === -1 && f > 0.28 && f < 0.34) return;  // T3 broadcast fill
         if (side === -1 && f > 0.38 && f < 0.49) return;  // T4–6 scrub
         if (side === 1 && f > 0.87 && f < 0.94) return;   // final-turn forecourt
