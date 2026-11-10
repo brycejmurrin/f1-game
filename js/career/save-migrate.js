@@ -46,8 +46,13 @@ const SaveMigrate = (function () {
   const TDEV_LIMIT = 8;
   const DEV_LIMIT = 12;
   const EXP_LIMIT = 40;
+  const FACILITY_LIMIT = 8;   // = career.js FACILITY_MAX (test-pinned)
 
   function clampTo(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+  // The ranges play can reach (docs/CAREER.md §Import ranges).
+  const MONEY_MAX = 1e9;
+  const SALARY_MAX = 1e5;
+  const salaryIn = (v) => clampTo(finiteNumber(v), 0, SALARY_MAX);
 
   // A sparse {key: number} map -> only the finite entries, clamped. Career
   // multiplies tdev into every AI car's pace and adds dev into every rating:
@@ -102,7 +107,7 @@ const SaveMigrate = (function () {
   // Only keys that are present: a stub row stays a stub (acceptOffer refuses it).
   function cleanOffer(o) {
     if ("years" in o) o.years = clampTo(Math.round(finiteNumber(o.years)), 1, 3);
-    if ("salary" in o) o.salary = Math.max(0, finiteNumber(o.salary));
+    if ("salary" in o) o.salary = salaryIn(o.salary);
     return o;
   }
 
@@ -224,7 +229,7 @@ const SaveMigrate = (function () {
   // `salary: "x"` or JSON exponent overflow (1e309); reject non-finite values.
   function cleanDeal(deal) {
     if (!deal || typeof deal !== "object" || Array.isArray(deal)) return null;
-    deal.salary = finiteNumber(deal.salary);
+    deal.salary = salaryIn(deal.salary);
     deal.bonusPt = finiteNumber(deal.bonusPt);
     deal.left = finiteNumber(deal.left);
     deal.years = finiteNumber(deal.years);
@@ -315,7 +320,7 @@ const SaveMigrate = (function () {
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = finiteNumber(career.year) | 0 || 2026;
-    career.money = finiteNumber(career.money);
+    career.money = clampTo(finiteNumber(career.money), 0, MONEY_MAX);
     career.rep = Math.max(0, Math.min(100, finiteNumber(career.rep)));
     // Driver identity is read by title/cards and by rating lookups. Keep a
     // malformed existing slot recoverable: JSON can persist objects/functions'
@@ -371,15 +376,15 @@ const SaveMigrate = (function () {
     career.objPick = career.objPick && typeof career.objPick === "object"
       && !Array.isArray(career.objPick) ? career.objPick : null;
     career.budgetLvl = Math.max(0, finiteNumber(career.budgetLvl) | 0);
-    career.facility = finiteNumber(career.facility) | 0;
+    career.facility = clampTo(finiteNumber(career.facility) | 0, 0, FACILITY_LIMIT);
     career.moves = rows(career.moves);
     // MY TEAM's hired seat: rows or null — `roster: {}` threw in wageBill().
     // Its numbers as cleanDeal's: wageBill() sums `salary`, and one "x" turned
     // career.money into NaN, saved as null and read back as 0.
     career.roster = Array.isArray(career.roster) ? rows(career.roster).map((d) => {
-      d.salary = finiteNumber(d.salary);
+      d.salary = salaryIn(d.salary);
       d.left = finiteNumber(d.left);
-      if (d.pending && typeof d.pending === "object" && !Array.isArray(d.pending)) d.pending.ask = finiteNumber(d.pending.ask);
+      if (d.pending && typeof d.pending === "object" && !Array.isArray(d.pending)) d.pending.ask = salaryIn(d.pending.ask);
       else d.pending = null;
       return d;
     }) : null;
@@ -426,6 +431,6 @@ const SaveMigrate = (function () {
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
-           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT }) };
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT }) };
 })();
 Object.freeze(SaveMigrate);

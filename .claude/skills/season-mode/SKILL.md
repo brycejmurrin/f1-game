@@ -12,7 +12,8 @@ locate with apex-lsp (skill code-nav).
 ## Gotchas
 
 - Career is **not** customisable: it races its stamped calendar (`Career.calendar()`, `Tracks.SEASON`
-  only when unstamped). Do not wire `SeasonCal` calendar reads into a career weekend, and do not edit
+  only when unstamped). A NEW season or career defaults to `SeasonCal.REAL_2026`; `Tracks.SEASON` is the
+  "24-ROUND" preset and the calendar of every save made before 2026-11-10 (docs/CAREER.md §Calendar). Do not wire `SeasonCal` calendar reads into a career weekend, and do not edit
   career saves or `Career.*` from here → **career-mode**.
 - A **format** gate of "not career" is a bug: it gives a one-off Grand Prix the season sprint distance
   and points table. Format applies in flow `"season"` only (table below).
@@ -26,7 +27,7 @@ locate with apex-lsp (skill code-nav).
 
 | Kind | When the player's config applies | Neutral otherwise |
 |---|---|---|
-| **Calendar** (`trackIds`, circuit ids, never indices) | flow is **not** `"career"` | career uses `Tracks.SEASON` |
+| **Calendar** (`trackIds`, circuit ids, never indices) | flow is **not** `"career"` | career uses its stamped `calIds` |
 | **Format** (`quali` / `sprint` / `sprintIds` / `laps` / `points` / `flPoint` / `drop`) | flow is **`"season"`** only | GP / TT / VS FRIEND keep one-off defaults |
 
 ## Workflow
