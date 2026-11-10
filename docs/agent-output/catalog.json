@@ -1184,6 +1184,15 @@
       ]
     },
     {
+      "path": "tools/ci/ready-sweep.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/release-provenance.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

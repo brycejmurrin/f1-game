@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -342,16 +343,26 @@ test("mouse free-look holds while the right button is held still", () => {
   assert.ok(live.freeLookState().yaw < b * 0.2, "Input reporting the button up recentres through tickRace");
 });
 
-test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched look-back all reset", () => {
-  const { CamFeel } = loadCamFeel();
-  CamFeel.setLookBackLatch(true);
-  CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, lookHeld: true });
-  assert.equal(CamFeel.shouldLookBack("cockpit", false), true, "latched at the flag");
-  CamFeel.follow("sp:chase", 1, 4, 0);
-  CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch();
-  assert.equal(CamFeel.shouldLookBack("cockpit", false), false, "the next race does not start looking backwards");
-  assert.equal(CamFeel.follow("sp:chase", 0, 4, 0.016), 0, "the speed-FOV follow starts fresh, not from the last race's top speed");
-  CamFeel.setLookBackLatch(false);
+test("snapGameCam is a cut: hang, speed-FOV follows, free-look and a latched look-back all reset", async () => {
+  // The REAL snapGameCam in the game VM (js/game.js, exposed on the G facade):
+  // latch a look-back, look round and build up a follow, then snap — the same
+  // CamFeel global game.js reads must come out of the cut clean.
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const CamFeel = g.sandbox.CamFeel;
+    CamFeel.setLookBackLatch(true);
+    CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, lookHeld: true });
+    assert.equal(CamFeel.shouldLookBack("cockpit", false), true, "latched at the flag");
+    CamFeel.tick({ mode: "cockpit", dt: 0.016, racing: true, mouseDx: 200, mouseHeld: true });
+    assert.ok(CamFeel.freeLookState().yaw > 10, "the drag looked right");
+    CamFeel.follow("sp:chase", 1, 4, 0);
+    g.G.snapGameCam();
+    assert.equal(CamFeel.shouldLookBack("cockpit", false), false, "the next race does not start looking backwards");
+    assert.equal(CamFeel.freeLookState().yaw, 0, "the glance does not carry over the cut");
+    assert.equal(CamFeel.follow("sp:chase", 0, 4, 0.016), 0, "the speed-FOV follow starts fresh, not from the last race's top speed");
+    CamFeel.setLookBackLatch(false);
+  } finally { g.close(); }
 });
 
 // A snap (startRace / restart → snapGameCam) must also zero the eased bend

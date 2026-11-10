@@ -1,5 +1,7 @@
 # Harness settings, measured and sourced — 2026-10-26
 
+Summary: Measured Claude Code harness costs (42k bare, +12k rulebook, +0.5–1k per MCP server), compaction/cache/hook settings to adopt, GitHub ruleset and preview options
+
 Lane R5 of the system-audit implementation (PR #3785). Goes one level deeper than the audit's §13 "harness"
 and "github" research sessions: every claim below is a quote from a doc fetched today (Claude Code 2.1.310 is
 what this container runs), a measurement taken today, or marked **verify in a pilot**. Raw doc copies and
