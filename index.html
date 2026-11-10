@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-Ai3Pp9pZNqXU2QgCUhK6D+0CurM9TkHgeTpYuiQhyZk=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-aFD/CxZpvSiJND872UnBXKopqk4nToZy2zSfEfoV1qI=' 'sha256-ne0xwyQK+L7h/bp0ePQHrGZbKsHCa09gdLTBZI0M478=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -280,7 +280,33 @@
   // of which would otherwise overwrite the one line that says WHY — leaving the
   // player looking at "SeasonCal is not defined" with no hint that the file
   // simply never arrived. First pin wins; nothing unpins.
-  var pinned = false;
+  var pinned = false, shows = 0;
+  // THE WAY OUT (#4994). An installed PWA has no reload button and no
+  // pull-to-refresh, so a dismiss-only card over a dead loop (LoopHealth at its
+  // fault cap) or a missing module left force-quit as the only exit. Those two
+  // cards carry RELOAD; a stopped loop also offers BACK TO MENU, which presses
+  // QUIT TO MENU and re-arms the loop (LoopHealth.recover). Buttons sit under
+  // the title, above the stack, so a long trace cannot push them off a phone.
+  function loopStopped() {
+    try { return typeof LoopHealth !== "undefined" && !!LoopHealth.state().stopped; } catch (e) { return false; }
+  }
+  function addButton(bar, id, label, fn) {
+    var b = document.createElement("button");
+    b.id = id; b.type = "button"; b.textContent = label;
+    b.style.cssText = "min-height:48px;min-width:132px;margin:0 12px 12px 0;padding:0 18px;border:0;"
+      + "border-radius:6px;background:#ffb3b3;color:#12060a;font:700 14px/1 ui-monospace,Menlo,Consolas,monospace";
+    b.onclick = function (ev) { try { ev.stopPropagation(); } catch (e) {} fn(); };
+    bar.appendChild(b);
+  }
+  function backToMenu() {
+    var seen = shows, ok = false;
+    // A quit that throws repaints this card through the error listener: keep it up.
+    try { var q = document.getElementById("pm-quit"); if (q) q.click(); } catch (e) {}
+    if (shows !== seen) return;
+    try { ok = LoopHealth.recover(); } catch (e) {}
+    var d = document.getElementById("__err_overlay");
+    if (ok && d) d.style.display = "none";
+  }
   function show(title, msg, stack, pin) {
     if (pinned && !pin) return;
     // scriptRetry is reloading with caches swept; downstream ReferenceErrors from
@@ -292,14 +318,30 @@
       if (!d) {
         d = document.createElement("div"); d.id = "__err_overlay";
         d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#12060a;color:#ffb3b3;"
-          + "font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:16px;overflow:auto;"
+          + "font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;overflow:auto;"
+          + "padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) "
+          + "max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));"
           + "white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text";
-        d.onclick = function () { d.style.display = "none"; };
+        // A dead loop's card stays: dismissing it left a frozen canvas and no way back to the buttons.
+        d.onclick = function () { if (!loopStopped()) d.style.display = "none"; };
         (document.body || document.documentElement).appendChild(d);
       }
       d.style.display = "block";
-      d.textContent = "⚠ " + title + "\n\n" + (msg || "") + "\n\n" + (stack || "")
-        + "\n\n(tap to dismiss · build " + (window.__APEX_BUILD || "?") + ")";
+      shows++;
+      var stopped = loopStopped();
+      var head = "⚠ " + title + "\n\n";
+      var rest = (stopped ? "The game loop has stopped.\n\n" : "") + (msg || "") + "\n\n" + (stack || "")
+        + "\n\n(" + (stopped ? "" : "tap to dismiss · ") + "build " + (window.__APEX_BUILD || "?") + ")";
+      // The ordinary card stays one text node, as it always was; only a card that needs buttons builds nodes.
+      d.textContent = head + rest;
+      if (pin || stopped) {
+        var bar = document.createElement("div");
+        addButton(bar, "__err_reload", "RELOAD", function () { try { location.reload(); } catch (e) {} });
+        if (stopped && !pinned) addButton(bar, "__err_menu", "BACK TO MENU", backToMenu);
+        d.textContent = head;
+        d.appendChild(bar);
+        d.appendChild(document.createTextNode(rest));
+      }
     } catch (e) {}
   }
   // Build number for the overlay footer — parsed from the shell generation meta
