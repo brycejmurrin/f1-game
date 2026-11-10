@@ -161,14 +161,24 @@ existing career keeps its list for every later season. A standalone season keeps
 frozen `config.trackIds`; a save from before that snapshot, with no stored `seasonCfg`,
 resumes on the 24-round list. Tests: `tests/unit/season-calendar-default.test.mjs`.
 The circuit picker's SEASON / CLASSICS chips still group by the `classic` flag.
+`fresh()` takes REAL_2026 only when every one of its 23 ids resolves in this build (else the 24).
+Qatar (27–29 Nov) and Abu Dhabi (4–6 Dec) were confirmed on 3 Oct by Domenicali and
+reaffirmed by the FIA on 20 Oct, with Imola only as a force-majeure stand-in (re-checked
+2026-11-10: [Gulf News](https://gulfnews.com/sport/formula-one-confirms-qatar-and-abu-dhabi-grands-prix-to-close-2026-season-as-planned-1.500698952),
+[The Race](https://www.the-race.com/formula-1/fia-adamant-f1-qatar-abu-dhabi-gp-will-go-ahead/)).
 
 **Prize money needs a classified car**, as points do: a retired (unclassified) or
 disqualified player — or MY TEAM's hired mate — is paid no prize for its listed place.
 
 **Import ranges.** `SaveMigrate` clamps a stored career's `money` to
 `[0, LIMITS.MONEY_MAX]` (1e9) and every salary (deal, offer, hire, pending ask) to
-`[0, LIMITS.SALARY_MAX]` (1e5); a backup import outside them is refused
-(`money-range` / `salary-range`) with nothing written.
+`[0, LIMITS.SALARY_MAX]` (1e5) and `facility` to `[0, LIMITS.FACILITY_MAX]`; a backup import
+outside the money and salary ranges is refused (`money-range` / `salary-range`) with nothing
+written. Why those numbers: the balance floors at 0 in `settleRound` and every spend checks it
+first; 1e9 is far above any season's income (or a run of GRANT top-ups) and far below 1e308,
+which a later `+=` turned into Infinity, saved as null and read back as 0. A salary (deal, offer
+or hire) is tens to a few hundred credits a round; `hireAsk`'s yearly raise compounds, so 1e5
+leaves decades of headroom. Finite-only checks let -5 and 1e308 import cleanly before this.
 
 Versioned (`CAREER_V`), migrated through a ladder of one function per version step,
 mirroring `migrateSeasonPoints`. Key fields:

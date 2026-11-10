@@ -45,11 +45,7 @@ const CareerBackup = (function () {
     if (v === null) return "invalid-version";
     return v > SaveMigrate.CAREER_V ? "newer-version" : null;
   }
-  // [0, SaveMigrate.LIMITS[key]]: the range migrateCareer clamps a stored save to.
-  function inRange(n, key) {
-    const hi = typeof SaveMigrate !== "undefined" && SaveMigrate.LIMITS ? SaveMigrate.LIMITS[key] : Infinity;
-    return Number.isFinite(n) && n >= 0 && n <= hi;
-  }
+  const inRange = (n, k) => Number.isFinite(n) && n >= 0 && n <= ((typeof SaveMigrate !== "undefined" && SaveMigrate.LIMITS || {})[k] ?? Infinity);
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
@@ -65,25 +61,13 @@ const CareerBackup = (function () {
       if (typeof m === "number" && !Number.isFinite(m)) return { ok: false, reason: "nan-money" };
       if (m != null && typeof m !== "number" && typeof m !== "string") return { ok: false, reason: "nan-money" };
       if (typeof m === "string" && m !== "" && !Number.isFinite(Number(m))) return { ok: false, reason: "nan-money" };
-      // Finite is not enough: -5 or 1e308 imported cleanly, and 1e308 + prize
-      // became Infinity -> null -> 0. Refuse what play cannot produce.
       if (m != null && m !== "" && !inRange(Number(m), "MONEY_MAX")) return { ok: false, reason: "money-range" };
     }
-    // Every salary the save will pay out: the contract, the offers on the table
-    // (acceptOffer signs them verbatim) and MY TEAM's hire (its pending ask too).
-    const salaries = [];
-    if (isObj(data.deal) && "salary" in data.deal) salaries.push(data.deal.salary);
-    if (Array.isArray(data.offers)) for (const o of data.offers) if (isObj(o) && "salary" in o) salaries.push(o.salary);
-    if (Array.isArray(data.roster)) for (const d of data.roster) {
-      if (!isObj(d)) continue;
-      if ("salary" in d) salaries.push(d.salary);
-      if (isObj(d.pending) && "ask" in d.pending) salaries.push(d.pending.ask);
-    }
-    // Numbers and numeric strings only: Number() on an object leaf throws, and
-    // migrateCareer already coerces any other shape (an object, "x") to 0.
-    const outside = (v) => (typeof v === "number" || (typeof v === "string" && v !== "" && Number.isFinite(Number(v))))
-      && !inRange(Number(v), "SALARY_MAX");
-    if (salaries.some(outside)) return { ok: false, reason: "salary-range" };
+    // Every salary paid out (deal, offers, hire, its ask); scalars only, migrateCareer coerces the rest.
+    const rows = (a) => (Array.isArray(a) ? a.filter(isObj) : []);
+    const pay = [data.deal && data.deal.salary, ...rows(data.offers).map((o) => o.salary),
+      ...rows(data.roster).flatMap((d) => [d.salary, isObj(d.pending) ? d.pending.ask : null])];
+    if (pay.some((v) => (typeof v === "number" || (typeof v === "string" && v !== "" && Number.isFinite(+v))) && !inRange(+v, "SALARY_MAX"))) return { ok: false, reason: "salary-range" };
     if (data.season != null && (typeof data.season !== "object" || Array.isArray(data.season))) {
       return { ok: false, reason: "season-not-object" };
     }
@@ -332,7 +316,6 @@ const CareerBackup = (function () {
       if (data.flavour != null && !FLAVOURS.includes(data.flavour)) return { ok: false, reason: "flavour-mismatch" };
       if ((data.flavour || "driver") !== target.flavour) return { ok: false, reason: "flavour-mismatch" };
       if (typeof SaveMigrate === "undefined" || !Number.isSafeInteger(SaveMigrate.CAREER_V)
-        // One version policy at every ingress: the envelope path accepts "2" too.
         || (data.v != null && (SaveMigrate.careerVersion(data.v) === null || SaveMigrate.careerVersion(data.v) > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
       envelope.slots.push({ flavour: target.flavour, i: target.i, data });
     }

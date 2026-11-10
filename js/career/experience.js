@@ -151,8 +151,7 @@ const CareerExperience = (function () {
     }
     story.appendChild(rail);
     const milestones = part("div", "milestones");
-    // An owner has no contract to run down (rollover never settles one for MY
-    // TEAM), so the tile read "1 season remaining" every year; the hub dropped it too.
+    // MY TEAM has no contract to run down.
     if (c.deal && c.flavour !== "myteam") {
       const contract = el("div");
       contract.append(el("strong", "", "Contract"), el("span", "", Career.goalLabel(c.deal.goal)),

@@ -46,15 +46,10 @@ const SaveMigrate = (function () {
   const TDEV_LIMIT = 8;
   const DEV_LIMIT = 12;
   const EXP_LIMIT = 40;
-  const FACILITY_LIMIT = 8;   // career.js FACILITY_MAX (pinned equal in season-calendar-default.test.mjs)
+  const FACILITY_LIMIT = 8;   // = career.js FACILITY_MAX (test-pinned)
 
   function clampTo(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
-  // THE RANGES PLAY CAN REACH. The balance floors at 0 in settleRound and every
-  // spend checks it first; the top is far above any season's income (or a run of
-  // GRANT top-ups) and far below 1e308, which a later `+=` turned into Infinity,
-  // saved as null and read back as 0. A salary (deal, offer or hire) is tens to
-  // a few hundred credits a round; hireAsk's yearly raise compounds, so the cap
-  // leaves decades of headroom. career-backup refuses an import outside them.
+  // The ranges play can reach (docs/CAREER.md §Import ranges).
   const MONEY_MAX = 1e9;
   const SALARY_MAX = 1e5;
   const salaryIn = (v) => clampTo(finiteNumber(v), 0, SALARY_MAX);

@@ -100,7 +100,7 @@ const Quali = (function () {
     // season round 1 at Monza (bug hunt 2026-09-27).
     let classMode = null;
     let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
-    const _kAnon = new WeakMap();   // id-less tracks: keyed on the object, weakly, so it pins nothing (#4343)
+    const _kAnon = new WeakMap();   // id-less tracks (#4343)
 
     // The circuit now loaded, in the same form persistOrder() stamps.
     function hereId() { return (G.track && G.track.def && G.track.def.id) || null; }
@@ -140,9 +140,7 @@ const Quali = (function () {
       // scope the whole time. quitToMenu() clears five other caches and never
       // knew about this one. A def id is all the invalidation needs; track-lights.js's
       // _postNodeMemo (a WeakMap keyed on track) is the same lesson.
-      // A track with no def id has nothing to key on, and two of them with the
-      // same sample count shared one cache (#4343): those key on the object
-      // through a WeakMap instead, which pins nothing.
+      // Id-less tracks key on the object (WeakMap), not a shared slot (#4343).
       const _kId = (track && track.def && track.def.id) || null;
       const anon = _kId == null && track && typeof track === "object";
       let kc = anon ? _kAnon.get(track) : (_kCacheTrack === _kId ? _kCache : null);
@@ -355,11 +353,7 @@ const Quali = (function () {
       // the field. Length alone lets duplicate rows through to order(), which
       // then grids the same car twice and omits another live car.
       let ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
-      // A DUEL races two cars of the field that QUALIFIED (startRace trims it
-      // after qualifying), so the saved order is the untrimmed field's. Read it
-      // against that field: every live car in it, no repeats, and only the live
-      // cars' rows kept, in the order they qualified. Without this a reload
-      // between qualifying and the race refused the order and reopened QUALI.
+      // A duel trims the field after qualifying: read the saved (full) order for the live pair.
       const duel = byId.size === 2 && G.cars.some((c) => c && c.duelRival);
       if (duel && new Set(ids).size === ids.length && [...byId.keys()].every((id) => ids.includes(id))) {
         raw = raw.filter((e, i) => byId.has(ids[i]));

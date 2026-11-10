@@ -170,10 +170,7 @@ function migrateSlots() {
     next[f]++;
   }
 }
-// A slot whose stored value this build cannot open: "newer" (a newer build's
-// save) or "damaged" (valid JSON migrateCareer rejects: an array, a scalar, an
-// invalid version marker). Either is OCCUPIED: it must never read as an empty
-// slot that New Career overwrites, nor lose the careerSlot pointer (B1 #4535).
+// "newer" | "damaged" (JSON migrateCareer rejects): OCCUPIED, never empty (B1 #4535).
 const blockedSlot = (f, i) => {
   const raw = store.get(slotKey(f, i), null);
   if (raw == null) return null;
@@ -188,8 +185,7 @@ const blockedReason = (f, i) => (blockedSlot(f, i) === "damaged" ? "damaged" : "
 const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); const pr = protectedRaw.get(key); if (typeof pr === "string" && store.raw && store.raw(key) === pr) c = JSON.parse(pr); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
 
 if (store.subscribe) store.subscribe((change) => {
-  // RETRY SAVE rewrites the live key from the store's failed-write record: the
-  // very object this module holds, so that local bump is not a foreign change.
+  // RETRY SAVE rewrites our own object: not a foreign change (#4823).
   if (change.local && career && change.key === liveSlotKey() && store.get(change.key, null) === career) {
     if (!careerConflict) armRevision();
     return;
@@ -230,9 +226,6 @@ function load(options) {
   pointerHeld = false;
   const wanted = [slotFlavour, slotIdx];
   career = readSlot(slotFlavour, slotIdx);
-  // The pointed slot holds a save this build cannot open (a stale cached shell
-  // meeting a newer save): play a fallback in memory but keep the pointer, or
-  // the build that CAN open it boots into the fallback career for good.
   const keepPointer = !career && unsupportedSlot(slotFlavour, slotIdx);
   if (!career)
     outer: for (const f of FLAVOURS)
@@ -421,9 +414,6 @@ function start(opts) {
   const flavour = flavourIn(o.flavour);
   // A new career may not overwrite a protected target, even through the public API.
   const free = firstFree(flavour);   // once — each call walks the slot store
-  // A FULL SET IS REFUSED, never overwritten: with no slot named and none free,
-  // falling back to the live slot replaced someone's career without a word.
-  // career-ui sends the player to the picker to choose which one goes.
   const target = o.slot != null ? slotIn(o.slot) : free;
   if (target < 0 || unsupportedSlot(flavour, target)) return null;
   const targetSave = readSlot(flavour, target);
@@ -497,9 +487,7 @@ function start(opts) {
     career.roster = [rosterEntry(hired, 1)];
   }
   career.year0 = YEAR0;
-  // The calendar SET, kept so every later season of this save races the same
-  // one: "real2026" (the default from 2026-11-10) or "24" (the list every save
-  // made before then was stamped with — an absent calSet reads as "24").
+  // calSet (absent = "24"): docs/CAREER.md §Calendar.
   career.calSet = o.calendar === "24" ? "24" : "real2026";
   stampCalendar(career.season, career.calSet);
   career.amb = ambIdx(o.amb);
@@ -1275,9 +1263,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const pos = order.indexOf(player) + 1;
   const team = teamOf(career.team);
   const scored = (c) => (c.classified != null ? !!c.classified : !c.retired);   // a DNF past 90 % distance is classified (endRace)
-  // PRIZE MONEY IS FOR A CLASSIFIED CAR, as points are: a retirement or a
-  // disqualification banked the prize for the place it was listed in. (endRace
-  // already sets classified = !dsq; the dsq read keeps a stray flag honest.)
+  // Prize and points need a classified, non-DSQ car.
   const paid = (c) => scored(c) && !c.dsq;
   const pts = paid(player) ? (table[pos - 1] || 0) : 0;
   const prize = paid(player) ? prizeFor(pos) : 0;
@@ -1592,7 +1578,7 @@ function hireDriver(code, years) {
 }
 // Whether the seat needs a decision before the season can start.
 function hirePending() {
-  const hire = career && career.roster && career.roster[0];   // null with no career loaded, as the sibling hooks
+  const hire = career && career.roster && career.roster[0];
   return hire && hire.pending ? Object.assign({ code: hire.code, name: hire.name,
     salary: hire.salary }, hire.pending) : null;
 }
@@ -1736,10 +1722,7 @@ function tallyOf(c) {
   return t;
 }
 
-// A season rollover edits ~140 lines of the career in place, so it is guarded like
-// scoreRound: refuse a stale revision up front, snapshot, and if the save is
-// refused restore in place (the `season` object stays game.js's live alias) so
-// RAM never shows a year that is not on disk.
+// Guarded like scoreRound: a refused save restores in place (season alias kept) (#4825).
 function rollover() {
   if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) {
     if (career && careerRevision != null && currentRevision() !== careerRevision) {
@@ -1898,7 +1881,7 @@ function rolloverApply() {
   s.roundPts = {}; delete s.lastFl;
   delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack; delete s.qualiMode;
   delete s.startedRound;   // markWeekendStarted's stamp: kept, it locked the same round's brief next year
-  stampCalendar(s, career.calSet);   // a new season adopts this build's version of the save's calendar set
+  stampCalendar(s, career.calSet);
   career.results = [];
   career.obj = null;
   career.objPick = null;
@@ -1917,13 +1900,11 @@ function rolloverApply() {
 function calIdsNow(set) {
   if (set === "real2026" && typeof SeasonCal !== "undefined" && SeasonCal.presetIds) {
     const real = SeasonCal.presetIds("real2026");
-    if (real.length && real.length === (SeasonCal.REAL_2026 || []).length) return real.slice();   // whole, or the 24
+    if (real.length && real.length === (SeasonCal.REAL_2026 || []).length) return real.slice();
   }
   const ids = (Tracks.SEASON || []).map((t) => t && t.id);
   return ids.length && ids.every((id) => typeof id === "string") ? ids : null;   // null: a stub catalogue without ids
 }
-// set: the career's calSet. Absent (every save from before 2026-11-10) is the
-// 24-round Tracks.SEASON list those saves were created with.
 function stampCalendar(season, set) {
   const ids = calIdsNow(set);
   if (ids) season.calIds = ids; else delete season.calIds;
