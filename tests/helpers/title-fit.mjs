@@ -24,14 +24,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 // `rows` is the composition a TOUCH boot paints with CONTINUE shown (#5213: under a finger a door
 // is at least 44 px, so the eight rows re-flow where eight 44 px rows do not fit the box): seven
-// rows (CAREER joins the retention row) in a 353-356 px box, all eight at 430, and five (play doors
-// four-up) in Safari's 254 px box; `floor` is false only where no row count fits and the fit wins.
-// Safari was that case while its box was 246 px (--safe-* = inset + gutter); since #5208 the box
-// edge is max(inset, gutter), the five-row tier takes the floor there (Pages run 42851972054).
-const ROWS7 = [3, 2, 2, 2, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4], ROWS5 = [3, 4, 4, 3, 4];
+// rows (CAREER joins the retention row) in a 353-356 px box, all eight at 430; `floor` is false
+// where no row count fits WITH EVERY WORD WHOLE and the fit wins. Safari's 254 px box (#5208's
+// max(inset, gutter) edge; it was 246) takes the five-row tier by door box, but PRACTICE's label
+// clips four-up (#5378: span 53 px in a 50 px box), so fits() rejects it and the unfloored eight
+// rows zoom down, as before the floor. judgeLabels holds the "every word whole" half.
+const ROWS7 = [3, 2, 2, 2, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
 export const GEOS = [
   { name: "852x393-standalone", w: 852, h: 393, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS7, floor: true },
-  { name: "852x283-safari", w: 852, h: 283, insets: { top: 0, left: 67, bottom: 21, right: 67 }, rows: ROWS5, floor: true },
+  { name: "852x283-safari", w: 852, h: 283, insets: { top: 0, left: 67, bottom: 21, right: 67 }, rows: ROWS8, floor: false },
   { name: "844x390", w: 844, h: 390, insets: { top: 0, left: 47, bottom: 21, right: 47 }, rows: ROWS7, floor: true },
   { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS8, floor: true },
 ];
@@ -259,7 +260,7 @@ export function judge(m, { offsets = false } = {}) {
  *  fails that, the 15.4 measured at fit 1 clears it with the room a machine's
  *  fonts can take back (#5152: never pin the fit). Where the cluster IS the
  *  track and the fit still sits under 1, the fit is paying for height alone
- *  (Safari's 283 before #5208: a 246 px box, fit 0.752, RACE at 11.6) and
+ *  (Safari's 283: the unfloored eight rows in a 254 px box, 246 before #5208) and
  *  the label follows it with every door (UI contract §3 rules 2–3: zoom
  *  scales type inside a fitted box; fit, never scroll); the track and the
  *  row pins are the guard there, and a label floor would only restate the
