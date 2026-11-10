@@ -473,11 +473,16 @@ test.describe("Time Trial — sector splits", () => {
       hudHidden: !!(document.getElementById("hud") && document.getElementById("hud").hidden)
         || document.body.classList.contains("hud-hidden"),
       docHidden: document.hidden === true,
+      // The seam (#5296 GameHud.secFlash + #5339 __apex.hudSecFlash): calls = flashSector
+      // calls, painted = HUD ticks that set .sec-flash. "absent" / no_seam until both land.
+      secFlash: typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
     }));
     await page.evaluate(() => window.__apex.freeze(false));
     const flashed = await page.waitForFunction(() => window.__secFlashSeen === true,
       null, { polling: 100, timeout: 5000 }).then(() => true, () => false);
-    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState }) });
+    const secFlashAfter = await page.evaluate(() =>
+      typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent");
+    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter }) });
     // NOT ASSERTED (W32 row 10, candidate game finding, listed in PR #5302).
     // With every game.js gate met (lap 1, forward entry, no incident, S1 2.8 s;
     // sectorLast[0] is written by the block that calls hud.flashSector(0)), a
