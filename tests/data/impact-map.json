@@ -18844,13 +18844,19 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "refreshBtnFit": [
+      "parseCaps": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "refreshFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
+      ],
+      "sizeRow": [
+        "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
         "tests/specs/ui-resize.spec.js",
