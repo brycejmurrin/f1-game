@@ -1443,6 +1443,13 @@ export function cssSpecs(changed) {
     specs.add("tests/specs/season.spec.js");
     specs.add("tests/specs/ui-audit.spec.js");
   }
+  // The smoke above is ONE boot at 844x390 on the default profile: it proves a control can be tapped, never how
+  // big it paints or whether a sheet fits a phone. The specs that MEASURE a stylesheet's surface at phone shapes
+  // ran only for a JS diff, so a pure-CSS change to the HUD, the pause sheet or the title could land with none of
+  // them (docs/notes/TEST-TRUTH-HUNT-2026-11-09.md G1). Route each sheet to the layout spec that measures it.
+  for (const [re, add] of CSS_LAYOUT_SPECS) {
+    if (files.some((f) => re.test(f))) for (const spec of add) specs.add(spec);
+  }
   return [...specs];
 }
 
@@ -1518,55 +1525,30 @@ export function pickAll(files) {
   return g;
 }
 
-// CSS ROUTES WITH ITS JS OWNER (audit W31 row 6). A css-only diff used to run
-// cssSpecs() alone: css/hud.css selected css-player-smoke and NOT
-// hud-layout.spec.js, while js/ui/hud.js selected the HUD's whole UI group.
-// A stylesheet breaks the same screens its owner draws, so each css file maps
-// to the js module(s) that own its DOM, and the diff is routed as if those had
-// changed too (cssSpecs() still adds its layout specs on top).
-// tests/unit/select-specs.test.mjs fails when a css/ file has no row here.
-export const CSS_OWNERS = [
-  [/^css\/(hud|fonts-hud|helmet-visor|touch-controls)\.css$/, /^js\/ui\/(hud[^/]*|dock-layout)\.js$/],
-  [/^css\/(carsetup|garage-experience|appearance-studio)\.css$/, /^js\/(garage\/setup-sheet|garage\/experience|ui\/appearance-studio)\.js$/],
-  [/^css\/(career|career-experience)\.css$/, /^js\/career\/(career-ui|experience)\.js$/],
-  [/^css\/(menus|title|menu-destinations|experience|components|tokens|select|responsive|overlays|dialogs|dialog-platform)\.css$/, /^js\/ui\/(title-menu|title-layout|menu-nav|modal|select-screen|experience)\.js$/],
-  [/^css\/(settings|settings-controls|player-tools)\.css$/, /^js\/ui\/(settings-tabs|setting-row|settings-search)\.js$/],
-  [/^css\/(loading|a11y-loading)\.css$/, /^js\/ui\/(loading-screen|loading-card)\.js$/],
-  [/^css\/race-setup\.css$/, /^js\/ui\/select-screen\.js$/],
-  [/^css\/track-detail\.css$/, /^js\/ui\/track-maps\.js$/],
-  [/^css\/editor\.css$/, /^js\/editor\/designer\.js$/],
-  [/^css\/tuner\.css$/, /^js\/camera\/tuner-panel\.js$/],
-  [/^css\/cockpit-preview\.css$/, /^js\/camera\/cockpit-preview\.js$/],
-  [/^css\/photo-studio\.css$/, /^js\/ui\/photo-studio\.js$/],
-  [/^css\/save-health\.css$/, /^js\/ui\/save-health\.js$/],
-  [/^css\/watch-transport\.css$/, /^js\/ui\/watch-transport\.js$/],
-  [/^css\/data\.css$/, /^js\/data\/hub\.js$/],
+/** Stylesheet -> the browser specs that measure what it lays out, at phone shapes. tokens/responsive/components
+ *  feed every surface, so they take all of them. A sheet not listed keeps the smoke only (its row says so in
+ *  tests/unit/select-specs.test.mjs, which also checks every css/ file is classified). */
+const HUD_LAYOUT = ["tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
+const SHEET_LAYOUT = ["tests/specs/ui-resize.spec.js"];
+const TITLE_LAYOUT = ["tests/specs/title-fit.spec.js"];
+const GARAGE_LAYOUT = ["tests/specs/garage-aero.spec.js"];
+export const CSS_LAYOUT_SPECS = [
+  [/^css\/(hud|touch-controls|helmet-visor|fonts-hud)\.css$/, HUD_LAYOUT],
+  [/^css\/(dialogs|dialog-platform|overlays|settings|settings-controls)\.css$/, SHEET_LAYOUT],
+  [/^css\/(title|menus|menu-destinations)\.css$/, TITLE_LAYOUT],
+  [/^css\/(garage-experience|carsetup)\.css$/, GARAGE_LAYOUT],
+  [/^css\/(tokens|responsive|components)\.css$/, [...HUD_LAYOUT, ...SHEET_LAYOUT, ...TITLE_LAYOUT, ...GARAGE_LAYOUT]],
 ];
-/** The js owner files of the changed css files (existing files only). */
-export function cssOwners(changed, root = ROOT) {
-  const css = changed.filter((f) => /^css\/.+\.css$/.test(f));
-  if (!css.length) return [];
-  const res = CSS_OWNERS.filter(([c]) => css.some((f) => c.test(f))).map(([, js]) => js);
-  if (!res.length) return [];
-  const out = new Set();
-  const walk = (rel) => {
-    for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
-      const f = `${rel}/${e.name}`;
-      if (e.isDirectory()) walk(f);
-      else if (res.some((re) => re.test(f))) out.add(f);
-    }
-  };
-  walk("js");
-  return [...out].sort();
-}
+/** Sheets whose surface no phone-shape layout spec measures yet: the smoke (and menu-baseline where listed) only. */
+export const CSS_SMOKE_ONLY = /^css\/(a11y-loading|appearance-studio|career-experience|career|cockpit-preview|data|editor|experience|loading|photo-studio|player-tools|race-setup|save-health|select|track-detail|tuner|watch-transport)\.css$/;
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.
   const changed = opts.files ?? changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
-  // A css file routes as its js owner too (CSS_OWNERS): `routing` is what the
-  // group map, the source pins and the extras see; `changed` stays the diff.
-  const owners = cssOwners(changed);
-  const routing = [...new Set([...changed, ...owners])];
+  // `routing` is what the group map, the source pins and the extras see. A css
+  // file does NOT route as its js owner: CSS_LAYOUT_SPECS keeps a css diff
+  // narrow (Bryce, decision on #5304, 2026-11-10: "option 1, tip wins").
+  const routing = changed;
   const g = pickAll(routing);   // Map: group -> reasons (pick-tests' native shape + EXTRA_ROUTES)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
@@ -1620,8 +1602,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // Docs-only PRs skip the selected matrix at the plan (required check
   // names still report). Never a pull_request paths filter: those leave
   // required checks pending.
-  // A css diff runs its layout specs AND its js owner's routing (CSS_OWNERS).
-  let candidates = lightDiff ? [] : kind === "css" ? [...new Set([...cssSpecs(changed), ...routed])] : routed;
+  let candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
   const reason = !changed.length ? "none"
     : lightDiff ? (kind === "css" ? "css" : "docs")
     : tracked.length ? "infra"
@@ -1652,7 +1633,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // `circuits` is set only when EVERY changed path is circuit-scoped: it is
   // what lets a per-circuit loop skip the other 51 circuits, so a diff that
   // also touches the engine must leave it empty (the whole fleet runs).
-  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, cssOwners: owners, groups: browserGroups,
+  const r = { reason, changed: changed.length, tracked, unmatched, floored, runner, groups: browserGroups,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };

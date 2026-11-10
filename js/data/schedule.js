@@ -296,19 +296,44 @@ const DataSchedule = (function () {
       return bar;
     }
 
-    function loadSchedule() {
+    // Next year's calendar is often unpublished on 1 January (Jolpica answers
+    // /2027.json with total "0"): show LAST season, labelled as such, rather
+    // than an empty tab. A finished season has no next race and nothing worth
+    // adding to a calendar, so it gets no NEXT tile and no ADD buttons.
+    function seasonItems() {
+      const year = new Date().getFullYear();
       return F1API.schedule().then((items) => {
+        if (items && items.length) return { items, year, lastSeason: false };
+        return Promise.resolve(F1API.schedule(year - 1)).then((prev) => ({
+          items: prev || [], year: year - 1, lastSeason: !!(prev && prev.length), wanted: year
+        }));
+      });
+    }
+
+    function loadSchedule() {
+      return seasonItems().then(({ items, year, lastSeason, wanted }) => {
         const wrap = el("div", "dh-tabbody");
         if (!items || !items.length) {
           wrap.appendChild(emptyMsg("No calendar data available yet."));
           return wrap;
         }
         const now = Date.now();
+        if (lastSeason) {
+          wrap.setAttribute("data-season", "last");
+          const note = el("p", null, `The ${wanted} calendar isn't published yet. Showing the ${year} season.`);
+          note.setAttribute("data-role", "last-season");
+          wrap.appendChild(note);
+          wrap.appendChild(el("h3", "dh-section", `LAST SEASON · ${year} CALENDAR`));
+          const grid = el("div", "dh-race-grid");
+          for (const r of items) grid.appendChild(raceRow(r, false));
+          wrap.appendChild(grid);
+          return wrap;
+        }
         const next = nextRace(items, now);
         let nextMarked = false;
         if (next) wrap.appendChild(nextTile(next, wrap));
         wrap.appendChild(icsBar(items, next));
-        wrap.appendChild(el("h3", "dh-section", `${new Date().getFullYear()} CALENDAR`));
+        wrap.appendChild(el("h3", "dh-section", `${year} CALENDAR`));
         const grid = el("div", "dh-race-grid");
         for (const r of items) {
           const isNext = !nextMarked && isUpcoming(r, now);

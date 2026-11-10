@@ -225,6 +225,7 @@ const NetTransport = (function () {
     // Cap matches the inbound EVENT inbox; terminal race-flow types may displace
     // the oldest queued critical so a late BYE/GO still leaves.
     const EVENT_OUT_CAP = 256;
+    const CLOSE_LINGER_MS = 500, CLOSE_POLL_MS = 25;   // shutdown("local"): let a BYE leave before pc.close()
     const EVENT_TERMINAL = { bye: 1, go: 1, qgo: 1, start: 1, result: 1 };
     let eventOut = [];   // critical EVENT payloads waiting for bufferedAmount to drain
 
@@ -246,11 +247,32 @@ const NetTransport = (function () {
       if (discTimer) { clearTimeout(discTimer); discTimer = null; }
       endEpisode();
       if (!drain) inbox.length = 0;
-      eventOut.length = 0;
+      const queued = eventOut;
+      eventOut = [];
       if (!drain) queuedState = queuedEvents = queuedBytes = 0;
+      // A LOCAL CLOSE LETS ITS LAST WORDS LEAVE. NetPlay.stop() sends BYE and
+      // closes in one breath, and pc.close() aborts the SCTP association with
+      // whatever is still buffered: the BYE was lost and the peer kept a ghost
+      // rival until its own timeout. So the backpressure queue is handed to the
+      // channel, and the pc closes once the send buffers drain (or after
+      // CLOSE_LINGER_MS). Nothing is accepted or delivered meanwhile: status is
+      // already "closed". A peer, failure or overflow close stays immediate.
+      const ev = chans[EVENT];
+      const buffered = () => CHANNELS.some((k) => chans[k] && chans[k].readyState === "open" && chans[k].bufferedAmount > 0);
+      if (reason === "local" && ev && ev.readyState === "open" && (queued.length || buffered())) {
+        for (const data of queued) { try { ev.send(data); } catch (e) { break; } }
+        const until = Date.now() + CLOSE_LINGER_MS;
+        const check = () => {
+          if (buffered() && Date.now() < until) { setTimeout(check, CLOSE_POLL_MS); return; }
+          closePc();
+        };
+        setTimeout(check, CLOSE_POLL_MS);
+      } else closePc();
+      if (!drain) ep._emit("close", reason);
+    }
+    function closePc() {
       for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) { /* already closing */ } }
       try { pc.close(); } catch (e) { /* already closing */ }
-      if (!drain) ep._emit("close", reason);
     }
 
     function peekEventType(data) {

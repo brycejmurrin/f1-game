@@ -409,9 +409,6 @@
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -789,9 +786,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
@@ -1083,9 +1077,6 @@
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
-      ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
       ],
       "passByState": [
         "tests/unit/rival-attach-init.test.mjs",
@@ -5619,6 +5610,7 @@
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
@@ -5763,6 +5755,7 @@
         "tests/unit/data-api-status.test.mjs"
       ],
       "schedule": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "sessionResult": [
@@ -6117,6 +6110,7 @@
     },
     "js/data/tab-utils.js": {
       "*": [
+        "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/data-results.test.mjs",
@@ -6219,6 +6213,9 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "gapLimitMs": [
+        "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "hasDrs": [
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "isGap": [
@@ -6942,6 +6939,9 @@
       "tick": [
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/fx/grade-tint.js": {
@@ -7137,6 +7137,9 @@
       ],
       "tintRGB": [
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/game.js": {
@@ -8052,6 +8055,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "create": [
+        "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
@@ -8132,6 +8136,12 @@
         "tests/unit/garage-crew-choreo.test.mjs"
       ],
       "phase": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "warm": [
         "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
@@ -9772,12 +9782,15 @@
         "tests/unit/lighting-rebuild.test.mjs"
       ],
       "persist": [
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+        "tests/unit/light-presets.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/weather-blend.test.mjs"
       ],
       "reapply": [
         "tests/unit/light-store-cond-layer.test.mjs"
       ],
       "reset": [
+        "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
@@ -10131,6 +10144,9 @@
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/tooling-fast-runner.test.mjs"
+      ],
+      "localProfile": [
+        "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "makeAnswer": [
         "tests/unit/lobby-codes.test.mjs",
@@ -10512,7 +10528,8 @@
         "tests/unit/net-session.test.mjs"
       ],
       "wireId": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ],
       "*": [
         "tests/unit/net-grid-separation.test.mjs",
@@ -10543,7 +10560,8 @@
       ],
       "strategyState": [
         "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs"
       ]
     },
     "js/net/transport.js": {
@@ -14373,6 +14391,7 @@
       "*": [
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/garage-before.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },
@@ -15153,7 +15172,8 @@
       ],
       "*": [
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/mirror-lights.test.mjs"
+        "tests/unit/mirror-lights.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/render/shared/post-common.js": {
@@ -15788,6 +15808,9 @@
       ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "labDprCap": [
+        "tests/unit/tlx-lite-lab.test.mjs"
       ],
       "lineIndex": [
         "tests/unit/tlx-fx-warm.test.mjs"
@@ -17989,6 +18012,9 @@
       "tick": [
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/hud-skin.js": {
@@ -18060,7 +18086,8 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/race-insights.test.mjs",
-        "tests/unit/race-radio.test.mjs"
+        "tests/unit/race-radio.test.mjs",
+        "tests/unit/service-worker.test.mjs"
       ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",
@@ -18162,7 +18189,8 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/tooling-fast-runner.test.mjs"
+        "tests/unit/tooling-fast-runner.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18419,7 +18447,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/select-specs.test.mjs"
+        "tests/unit/select-specs.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/modal.js": {
@@ -18859,6 +18888,9 @@
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "showStill": [
+        "tests/unit/hero-still-density.test.mjs"
+      ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
       ],
@@ -19249,6 +19281,7 @@
         "tests/unit/title-layout.test.mjs"
       ],
       "current": [
+        "tests/specs/title-fit.spec.js",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/title-layout.test.mjs"
@@ -19285,11 +19318,11 @@
       "shape": [
         "tests/unit/title-layout.test.mjs"
       ],
+      "slider": [
+        "tests/specs/title-fit.spec.js"
+      ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
-      ],
-      "*": [
-        "tests/specs/title-fit.spec.js"
       ]
     },
     "js/ui/title-menu.js": {
@@ -19349,7 +19382,8 @@
     },
     "js/ui/update-check.js": {
       "apply": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "blocksLazyLoad": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -19369,6 +19403,7 @@
       ],
       "markReady": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "onVisible": [
@@ -19379,7 +19414,8 @@
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "render": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "*": [
         "tests/unit/global-registry.test.mjs"

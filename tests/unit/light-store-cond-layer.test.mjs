@@ -1,11 +1,11 @@
 /* light-store-cond-layer.test.mjs — the conditional shipped layer ("*|<tod>"
  * in window.LightPresets) is the quality-ladder rung for condition-scoped
  * defaults (the ULTRA-night per-chunk lamps flip ships through it). Its
- * resolver reads NO preset id and no mobile flag (profiles.js condLayer), so
- * this suite pins exactly when the layer resolves:
- *   gfx.hasPerChunkLights  AND  the "*|<tod>" key matches the resolved
- *   time-of-day — at every quality preset and on mobile — and that a preset flip
- *   (GfxQuality.set, the real module) re-applies it live.
+ * resolver reads NO preset id, no mobile flag and no backend capability
+ * (profiles.js condLayer), so this suite pins exactly when the layer resolves:
+ * the "*|<tod>" key matches the resolved time-of-day — at every quality preset,
+ * on mobile and on every backend — and that a preset flip (GfxQuality.set, the
+ * real module) re-applies it live.
  * And, just as load-bearing: player layers come LATER, so a player edit —
  * including an explicit 0 — always wins, while dragging TO the layer's own
  * value stores nothing (put() dedups against base(), which includes the
@@ -84,38 +84,32 @@ test("'default' time-of-day resolves through track.def.night before matching the
   assert.equal(day.LT.perChunkLights, 0, "default on a day circuit is day — no layer");
 });
 
-test("EVERY preset gets the layer — flipped live through the real GfxQuality.set -> LightStore.reapply", () => {
+test("EVERY preset gets the layer, and a live GfxQuality.set -> LightStore.reapply keeps it", () => {
   // It used to be ULTRA-only, which shipped the rung to almost nobody: HIGH is
   // the same PerfGov tier 0 AND the desktop default preset, and nothing
   // measured ever separated the two. What bounds the cost now is the resolved
   // gate in game.js, which sheds on the governor's MEASURED tier instead of on
-  // which preset the player picked. The resolver reads no preset at all, so the
-  // flip itself is the observable: capability changes under a preset flip must
-  // be picked up by the reapply GfxQuality.set() triggers, with no manual apply().
-  const h = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: false, isMobile: false } });
-  assert.equal(h.LT.perChunkLights, 0, "capability off: no layer");
-  h.gfx.hasPerChunkLights = true;
-  assert.equal(h.LT.perChunkLights, 0, "the capability change alone re-derives nothing");
+  // which preset the player picked. The resolver reads no preset at all.
+  const h = loadStore({ presets: NIGHT_LAYER });
   for (const preset of ["low", "medium", "high", "ultra"]) {
-    h.gfx.hasPerChunkLights = false; h.store.apply();
-    assert.equal(h.LT.perChunkLights, 0);
-    h.gfx.hasPerChunkLights = true;
+    h.store.set("perChunkLights", 0.7); h.store.reset();   // leave LT off the layer value
     assert.equal(h.GfxQuality.set(preset, { noReload: true }), true);
     assert.equal(h.LT.perChunkLights, 0.3, preset + " must resolve the layer via the live reapply");
   }
 });
 
-test("MOBILE gets the layer too — capability is the only gate left", () => {
+test("no backend or device gate: every gfx (and none) resolves the layer", () => {
   // The isMobile exclusion was never measured (docs/LIGHTING-TUNER-SLIDERS.md
-  // says so outright) and meant a phone read 0 at every preset and every hour,
-  // i.e. the feature did not exist on mobile at all.
-  const mob = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: true, isMobile: true } });
-  assert.equal(mob.LT.perChunkLights, 0.3);
-  // Capability still gates: three.js cannot bind per-chunk sets.
-  const tlx = loadStore({ presets: NIGHT_LAYER, gfx: { hasPerChunkLights: undefined, isMobile: false } });
-  assert.equal(tlx.LT.perChunkLights, 0);
-  const none = loadStore({ presets: NIGHT_LAYER, gfx: null });
-  assert.equal(none.LT.perChunkLights, 0);
+  // says so outright) and meant a phone read 0 at every preset and every hour.
+  // The hasPerChunkLights gate was dead: GLX, TLX and WGX all publish true, so
+  // the resolver no longer reads gfx at all (game.js still sheds the cost).
+  for (const gfx of [{ hasPerChunkLights: true, isMobile: true }, { hasPerChunkLights: false, isMobile: false },
+    { hasPerChunkLights: undefined, isMobile: false }, null]) {
+    const h = loadStore({ presets: NIGHT_LAYER, gfx });
+    assert.equal(h.LT.perChunkLights, 0.3, JSON.stringify(gfx));
+  }
+  assert.doesNotMatch(readFileSync(join(ROOT, "js/lighting/profiles.js"), "utf8"), /hasPerChunkLights/,
+    "the resolver must not grow a backend gate back");
 });
 
 test("a player edit always wins — an explicit 0 beats the layer and persists sparsely", () => {

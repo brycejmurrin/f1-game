@@ -319,7 +319,8 @@ const HudRelative = (function () {
             // (unbounded slide landed REL on THROTTLE at phoneL 150%).
             const next = (box.right + 8) / z;
             const w = (doc.defaultView || (typeof window !== "undefined" ? window : null));
-            let limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
+            const vw = typeof GameHud !== "undefined" && GameHud.vp ? GameHud.vp()[0] : w ? w.innerWidth || 0 : 0;
+            let limit = w ? (vw - rr.width - 8) / z : next;
             const dockIds = ["btn-throttle", "btn-brake", "btn-ot", "btn-aero", "btn-boost"];
             for (let d = 0; d < dockIds.length; d++) {
               const de = doc.getElementById(dockIds[d]);
