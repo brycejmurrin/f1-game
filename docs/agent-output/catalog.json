@@ -1407,6 +1407,7 @@
       "outputPolicy": "job-status",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--format",
         "--quiet"
       ],
       "npmScripts": [
@@ -2537,6 +2538,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/bryce-phone.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/census-entry.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2746,6 +2752,11 @@
     },
     {
       "path": "tools/lib/session-contracts.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/shot-match.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -4168,6 +4179,15 @@
       ]
     },
     {
+      "path": "tools/ui/bryce-phone.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ui/circuit-axis.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
@@ -4281,6 +4301,16 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/issue-shots.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ui/layout-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -4346,6 +4376,15 @@
       "path": "tools/ui/menu-screens.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/phone-shot-diff.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/ui/probe-sheets-contract.mjs",

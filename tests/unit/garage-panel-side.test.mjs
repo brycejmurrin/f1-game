@@ -340,3 +340,15 @@ test("garage frames memoise the career sponsor + achievements on (store.rev, res
   assert.equal(h.calls.meta, 3);
   assert.equal(h.garageCtx().wins, 2, "and the tally follows the pushed win");
 });
+
+test('#4923: PANEL WIDTH above 100 % never narrows the ≥1800px sheet below its shipped 560px cap', () => {
+  const css = read('css/carsetup.css');
+  const at = css.indexOf('@media (min-width: 1800px)');
+  assert.ok(at > 0, 'the ultrawide block moved — re-point this test');
+  const block = css.slice(at, css.indexOf('\n}\n', at));
+  const rule = block.match(/:root\[data-look-garage-pw\] #carsetup \{\s*--cs-sheet-w:[^;]*calc\((\d+)px \* var\(--look-garage-pw, 1\)\)/);
+  assert.ok(rule, 'the ultrawide block needs its own pw-aware cap, or the 420px look-pw rule wins there');
+  const shipped = Number(block.match(/#carsetup \{\s*--cs-sheet-w:[^;]*, (\d+)px\)\);/)[1]);
+  for (const pw of [1.05, 1.1, 1.3]) assert.ok(Number(rule[1]) * pw > shipped, `pw ${pw} must widen past ${shipped}px`);
+  assert.ok(css.lastIndexOf(':root[data-look-garage-pw] #carsetup {') > at, 'the ultrawide pw rule must come after the generic one');
+});
