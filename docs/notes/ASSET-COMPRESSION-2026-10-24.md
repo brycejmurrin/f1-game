@@ -1,5 +1,7 @@
 # Asset compression survey (2026-10-24, A·H18)
 
+Summary: Asset compression survey (A·H18): inventory and what Pages gives for free, aimed at download size, GPU memory and decode time on Bryce's iPhone path.
+
 Lane brief: cut download size, GPU memory and decode time for every shipped
 asset, without visible or audible quality loss, measured on Bryce's iPhone path
 (TLX on three r186 WebGPU). This note has the inventory, what GitHub Pages

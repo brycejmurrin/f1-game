@@ -247,3 +247,14 @@ test("an unreadable DROPPED count fails closed with an honest message (#4481)", 
   seen.push([draft.ok, draft.warn.indexOf("unreadable") > 0]);
   assert.deepEqual(seen, [[false, true, false], [false, true, false], [false, false, true], [true, true]]);
 });
+
+// ---- #5241 G5: a green matrix that ran nothing ----
+test("#5241 G5: selected=success with a started shard that left no testcase, or no evidence, is red", () => {
+  assert.equal(selectedGateVerdict({ ...base }).ok, true);
+  const zero = selectedGateVerdict({ ...base, evidence: { started: ["a-1", "b-2"], junit: ["a-1"] } });
+  assert.equal(zero.ok, false);
+  assert.match(zero.reason, /b-2.*zero tests/);
+  assert.equal(selectedGateVerdict({ ...base, evidence: { started: [], junit: [] } }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, evidence: { started: ["a-1"], junit: ["a-1"], downloadFailed: true } }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, selected: "skipped", evidence: { started: [], junit: [] } }).ok, true, "an empty plan has no shard to prove");
+});

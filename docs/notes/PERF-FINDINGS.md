@@ -1,5 +1,7 @@
 # Performance findings — what was measured, what was taken, what is left
 
+Summary: **Start at §0: which instrument answers which perf question, and the three that lie on this box.** Then the four-way audit: what was measured, taken, reverted, and the recorded negative results. Its real content is which KINDS of finding survived measurement.
+
 A four-way static audit of the renderer, the game loop, the track build and the
 DOM/audio layer, plus the measurements that followed. It is written down because
 the audit's value is not the list — it is **which kinds of finding survived

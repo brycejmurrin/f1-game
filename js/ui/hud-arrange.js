@@ -23,6 +23,8 @@
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
   const MIN_CLASH = 3; // px of overlap on BOTH axes before a pair is a clash (touching is not)
+  const T = 44;        // every toolbar control's touch target, CSS px — fixed chrome, never scaled (#5198)
+  const BAR_H = T + 2 * 2 + 2 * 2;   // the one-row strip: 44 px controls + 2 px padding + 2 px border, each side = 52
   const finite = (value, fallback) => Number.isFinite(value) ? value : fallback;
 
   /** Pure: offsets {x, y} (share of the screen, %) after a drag of (dx, dy) screen px on a W x H screen. */
@@ -67,6 +69,35 @@ const HudArrange = (() => {
     return out;
   }
 
+  /** Pure: where the w x h toolbar docks inside `bounds` ({left, top, right, bottom}, the safe box) given the
+   *  painted rects [{id, l, t, r, b}] and the selected id. Six EDGE slots only (top / bottom x centre / left /
+   *  right): the old middle slot sat over the car and, for one rectangle, can never cover less of it than an edge.
+   *  Ranked, in order: the least area of the SELECTED widget covered (the player is judging it, #5198); the least
+   *  other HUD covered; the far side from the selected widget. Returns {l, t}. */
+  function barSlot(bounds, w, h, rects, sel) {
+    const W = bounds.right - bounds.left;
+    const cx = bounds.left + (W - w) / 2, top = bounds.top, bottom = bounds.bottom - h;
+    const slots = [
+      { l: cx, t: top }, { l: cx, t: bottom },
+      { l: bounds.left, t: top }, { l: bounds.right - w, t: top },
+      { l: bounds.left, t: bottom }, { l: bounds.right - w, t: bottom },
+    ];
+    const list = Array.isArray(rects) ? rects : [];
+    const own = list.find((r) => r && r.id === sel) || null;
+    const area = (q, r) => Math.max(0, Math.min(q.l + w, r.r) - Math.max(q.l, r.l)) * Math.max(0, Math.min(q.t + h, r.b) - Math.max(q.t, r.t));
+    let best = slots[0], bestKey = null;
+    for (const q of slots) {
+      let other = 0;
+      for (const r of list) if (r && r !== own) other += area(q, r);
+      const near = own ? -Math.hypot(q.l + w / 2 - (own.l + own.r) / 2, q.t + h / 2 - (own.t + own.b) / 2) : 0;
+      const key = [own ? area(q, own) : 0, other, near];
+      let better = !bestKey;
+      for (let i = 0; !better && i < key.length; i++) { if (key[i] !== bestKey[i]) { better = key[i] < bestKey[i]; break; } }
+      if (better) { best = q; bestKey = key; }
+    }
+    return { l: best.l, t: best.t };
+  }
+
   function create(G) {
     if (typeof document === "undefined" || typeof HudLayout === "undefined" || !HudLayout.ELEMENTS) return null;
     Log.info("ui", "HudArrange.create");
@@ -93,7 +124,21 @@ const HudArrange = (() => {
       return null;
     };
 
-    /* ---- the toolbar (built once; inline styles — the shell is not this module's to edit) ---- */
+    /* ---- the toolbar (built once; inline styles — the shell is not this module's to edit) ----
+       FIXED-SIZE CHROME, ONE STRIP (#5198). Every size below is a CSS px constant: the bar is an editing tool laid
+       over the HUD, so HUD SIZE, BUTTON SIZE and TEXT SIZE must not grow it (the CAM / PAUSE rule, #5179). It used
+       to ride --fs-micro (16 px at TEXT SIZE large) with wrapping rows and native selects, and on Bryce's iPhone
+       (852x393, insets 59/21/59, HUD 155 %, BUTTON 245 %) it painted ~715x217 over the widgets being arranged,
+       the selects as empty ~135x100 boxes. Now: one nowrap row of 44 px targets in a 52 px strip (BAR_H), selects
+       drawn by us (appearance none, explicit 44 px height: inline beats the coarse-pointer `select` floor in
+       css/components.css), the hint clamped to two short lines. It wraps only where one row cannot fit at all
+       (portrait), see placeBar. */
+    const ctl = "box-sizing:border-box;flex:none;height:" + T + "px;min-height:" + T + "px;max-height:" + T + "px;margin:0;" +
+      "font:inherit;font-weight:700;color:inherit;border:1px solid var(--text,#fff);border-radius:6px;";
+    const selectCss = ctl + "-webkit-appearance:none;appearance:none;padding:0 20px 0 8px;line-height:normal;" +
+      "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background-color:var(--bg,#111);" +
+      "background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);" +
+      "background-position:right 11px center,right 6px center;background-size:5px 5px;background-repeat:no-repeat;";
     function ensureBar() {
       if (bar || !document.body || !document.body.appendChild) return;
       bar = document.createElement("div");
@@ -102,29 +147,34 @@ const HudArrange = (() => {
       bar.setAttribute("aria-label", "Arrange HUD");
       bar.setAttribute("data-esc-close", "hud-arrange-done");
       bar.style.cssText = "position:fixed;z-index:9999;" +
-        "display:flex;flex-wrap:wrap;box-sizing:border-box;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
-        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:var(--fs-micro,13px);width:max-content;max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));overflow:auto;";
+        "display:flex;flex-wrap:nowrap;box-sizing:border-box;align-items:center;gap:4px;padding:2px 4px;border-radius:8px;" +
+        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);" +
+        "font-family:inherit;font-size:13px;line-height:1.15;letter-spacing:0.02em;width:max-content;" +
+        "max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));" +
+        "overflow-x:auto;overflow-y:hidden;scrollbar-width:none;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
         b.setAttribute("aria-label", aria);
-        b.style.cssText = "min-width:44px;min-height:44px;padding:0 10px;font:inherit;font-weight:700;background:none;color:inherit;border:1px solid var(--text,#fff);border-radius:6px;";
+        b.style.cssText = ctl + "min-width:" + T + "px;padding:0 8px;background:none;white-space:nowrap;";
         b.onclick = fn;
         return b;
       };
       nameEl = document.createElement("output");
       nameEl.id = "hud-arrange-name";
       nameEl.setAttribute("aria-label", "Selected element size");
-      nameEl.style.cssText = "font-weight:800;letter-spacing:0.06em;white-space:nowrap;max-width:34vw;overflow:hidden;text-overflow:ellipsis;";
+      nameEl.style.cssText = "flex:none;font-weight:800;white-space:nowrap;max-width:64px;overflow:hidden;text-overflow:ellipsis;";
       hintEl = document.createElement("span");
       hintEl.id = "hud-arrange-hint";
       hintEl.setAttribute("aria-live", "polite");
-      hintEl.style.cssText = "color:var(--dim,#bbb);white-space:normal;overflow-wrap:anywhere;flex:1 1 14rem;min-width:0;max-width:100%;";
+      // Two lines at most: the reason a row is greyed must still be READ on a phone (#2852), never grow the strip.
+      hintEl.style.cssText = "color:var(--dim,#bbb);font-size:11px;line-height:1.2;max-height:2.4em;overflow:hidden;" +
+        "white-space:normal;overflow-wrap:anywhere;flex:1 1 0;min-width:72px;";   // no inline display: [hidden] must still win
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
       picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
       picker.setAttribute("data-arrows", "own");
-      picker.style.cssText = "min-width:0;min-height:44px;max-width:100%;font:inherit;background:var(--bg,#111);color:inherit;";
+      picker.style.cssText = selectCss + "width:128px;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
       bar.appendChild(picker);
       const move = mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move");
@@ -136,17 +186,20 @@ const HudArrange = (() => {
       bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
       const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
       recover.setAttribute("aria-describedby", "hud-arrange-hint");
+      // The one long label wraps to two 11 px lines inside its 44 px box instead of widening the strip.
+      recover.style.whiteSpace = "normal"; recover.style.width = "72px"; recover.style.fontSize = "11px"; recover.style.padding = "0 4px";
       bar.appendChild(recover);
       bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
       visibilityRow = document.createElement("label");
-      visibilityRow.textContent = "VISIBILITY ";
+      // No visible "VISIBILITY" caption: the select names itself (aria-label) and paints SHOW / HIDE / AUTO.
+      visibilityRow.style.cssText = "display:flex;flex:none;align-items:center;";
       const visibilityPick = document.createElement("select");
       visibilityPick.id = "hud-arrange-vis";
       visibilityPick.setAttribute("aria-label", "Selected element visibility");
       visibilityPick.setAttribute("data-arrows", "own");
       // Its hint line carries the reason the row is greyed (UI audit 2026-10-18).
       visibilityPick.setAttribute("aria-describedby", "hud-arrange-hint");
-      visibilityPick.style.cssText = picker.style.cssText;
+      visibilityPick.style.cssText = selectCss + "width:76px;";
       visibilityRow.appendChild(visibilityPick);
       SettingRow.wire(visibilityRow, { values: [], read: () => HudLayout.visibility(selected)?.value || "", write: (value) => {
         flush(); HudLayout.setVisibility(selected, value); ghosts(); after();
@@ -157,31 +210,20 @@ const HudArrange = (() => {
       document.body.appendChild(bar);
       if (typeof TopModal !== "undefined" && TopModal.wireLayer) TopModal.wireLayer(bar);
     }
-    /* Prefer an edge, but use the middle when it covers less HUD content. */
+    /* Dock the strip to an edge away from the selected widget (#5198); see barSlot. */
     function placeBar(rects) {
       if (!bar) return;
       const bounds = HudLayout.screenBounds(window.innerWidth, window.innerHeight, 8);
       const W = Math.max(0, bounds.right - bounds.left), H = Math.max(0, bounds.bottom - bounds.top);
       bar.style.maxWidth = W + "px"; bar.style.maxHeight = H + "px";
+      // One row whenever one row fits; wrap only when it cannot (a portrait phone), never to "use" spare height.
+      bar.style.flexWrap = "nowrap";
+      if (bar.scrollWidth > W + 1) bar.style.flexWrap = "wrap";
       const size = bar.getBoundingClientRect();
-      const w = size.width, h = size.height, cx = bounds.left + (W - w) / 2, cy = bounds.top + (H - h) / 2;
-      // Score exactly the same screen-pixel boxes we paint. Safe areas can be
-      // asymmetric, so centring in innerWidth alone is not a usable slot.
-      const boxes = [
-        { l: cx, t: bounds.top }, { l: cx, t: bounds.bottom - h },
-        { l: bounds.right - w, t: bounds.top }, { l: bounds.left, t: bounds.bottom - h },
-        { l: cx, t: cy },
-      ];
-      let best = 0, bestA = Infinity;
-      for (let i = 0; i < boxes.length; i++) {
-        const q = boxes[i];
-        let a = 0;
-        for (const r of rects) a += Math.max(0, Math.min(q.l + w, r.r) - Math.max(q.l, r.l)) * Math.max(0, Math.min(q.t + h, r.b) - Math.max(q.t, r.t));
-        if (a < bestA) { bestA = a; best = i; }
-      }
+      const slot = barSlot(bounds, size.width, size.height, rects, selected);
       for (const k of ["top", "bottom", "left", "right"]) bar.style.removeProperty(k);
       bar.style.transform = "none";
-      bar.style.left = boxes[best].l + "px"; bar.style.top = boxes[best].t + "px";
+      bar.style.left = slot.l + "px"; bar.style.top = slot.t + "px";
     }
     function paintBar(clash, message, rects) {
       if (!bar) return;
@@ -194,7 +236,7 @@ const HudArrange = (() => {
       hintEl.textContent = message || (clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
         : off ? "hidden in the race \u00b7 SHOW brings it back"
         : visibility && visibility.value === "mixed" ? "some tower readouts are hidden"
-        : selected && !visibility ? "VISIBILITY: shown automatically with race events"
+        : selected && !visibility ? "shown automatically with race events"
         : "");
       hintEl.hidden = !hintEl.textContent;
       if (visibilityRow) {
@@ -611,6 +653,6 @@ const HudArrange = (() => {
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ STEP, MIN_CLASH, dragTo, placedOrig, pinchTo, stepSize, clashes, create });
+  return Object.freeze({ STEP, MIN_CLASH, BAR_H, dragTo, placedOrig, pinchTo, stepSize, clashes, barSlot, create });
 })();
 Object.freeze(HudArrange);

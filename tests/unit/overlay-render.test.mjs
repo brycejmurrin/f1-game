@@ -141,3 +141,40 @@ test("captions-only demo boots only its own overlay, even when the game TV HUD i
   assert.equal(root.querySelector(".ov-caption").querySelector("span").textContent, "That was a decisive move.");
   assert.deepEqual(dom.document.body.children, [root], "the demo mounts no global broadcast chrome outside its overlay");
 });
+
+test("a retired car reads OUT and a car in the pit lane PIT on the tower", () => {
+  const dom = makeDom();
+  const { Render, Feed } = load({ document: dom.document, setTimeout() { return 0; }, clearTimeout() {} });
+  const { root } = overlayRoot(dom);
+  const painter = Render.create(root, {});
+  painter.paint(Feed.frame({ seq: 1, state: "race", ranked: [
+    { code: "LEC", pos: 1, intervalS: null }, { code: "VER", pos: 2, intervalS: 0.5, inPit: true },
+    { code: "NOR", pos: 3, intervalS: 9, retired: true }] }));
+  assert.equal(painter.rows.slice(0, 3).map((r) => r.gap.textContent).join("|"), "LEADER|PIT|OUT");
+});
+
+test("a feed that goes silent for three full-frame intervals clears to the waiting card", () => {
+  const dom = makeDom();
+  const { Render, Feed } = load({ document: dom.document, setTimeout() { return 0; }, clearTimeout() {} });
+  const { root } = overlayRoot(dom);
+  const painter = Render.create(root, {});
+  let t = 0, armed = null;
+  const feed = Render.watch(painter, { now: () => t, setInterval: (fn, ms) => { armed = { fn, ms }; } });
+  assert.equal(armed.ms > 0 && armed.ms <= 1000, true, "the watchdog checks at least once a second");
+  assert.equal(Render.STALE_MS, 3 * Feed.FULL_MS);
+  const caption = root.querySelector(".ov-caption"), battle = root.querySelector(".ov-battle");
+  assert.equal(feed.check(), false, "no frame yet: nothing to expire");
+  feed.frame(Feed.frame({ seq: 1, state: "race", ranked: [{ code: "LEC", pos: 1 }, { code: "VER", pos: 2, intervalS: 0.4 }],
+    battle: { ahead: "LEC", behind: "VER", gapS: 0.4 }, caption: { id: "c1", who: "NOR", text: "Box", kind: "radio" } }));
+  assert.equal(battle.hidden, false);
+  assert.equal(painter.rows[0].el.hidden, false);
+  t = Render.STALE_MS - 1;
+  assert.equal(feed.check(), false, "still inside the window");
+  t = Render.STALE_MS + 1;
+  assert.equal(feed.check(), true);
+  assert.equal(battle.hidden, true, "the battle card is gone");
+  assert.equal(painter.rows[0].el.hidden, true, "the tower is gone");
+  assert.equal(caption.hidden, false);
+  assert.equal(caption.querySelector("span").textContent, "Waiting for a broadcast feed");
+  assert.equal(feed.check(), false, "expires once, not every tick");
+});
