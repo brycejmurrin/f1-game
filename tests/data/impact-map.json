@@ -6781,6 +6781,9 @@
       "dubinsWords": [
         "tests/unit/track-editor-geometry.test.mjs"
       ],
+      "enforceSpacing": [
+        "tests/unit/track-editor-geometry.test.mjs"
+      ],
       "menger": [
         "tests/unit/track-editor-geometry.test.mjs"
       ],
