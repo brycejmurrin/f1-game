@@ -181,18 +181,19 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
 
 // Gap 17 of the UI scaling contract note (2026-11-06, PR #5154): the car reserve is taken from the SAFE
 // box, so a notch cannot eat it. The formula row: 852 wide, UI SIZE 1.09, 59 px insets
-// (67 with --gut), PANEL WIDTH 135 %.
-test("the garage car reserve is measured from the safe box, not the viewport (852/1.09, 67 insets)", () => {
+// (the larger of inset and --gut since #5201), PANEL WIDTH 135 %.
+test("the garage car reserve is measured from the safe box, not the viewport (852/1.09, 59 insets)", () => {
   const css = read("css/carsetup.css");
   assert.doesNotMatch(css, /calc\(100 \* var\(--vwz\) - (320|420)px \/ var\(--ui-scale\)\)/,
     "no reserve may be subtracted from the raw viewport");
   const vw = 852, ui = 1.09, sal = 59, sar = 59, gut = 8, pw = 1.35, reserve = 320;
-  const safeW = vw - (sal + gut) - (sar + gut);
+  const safeW = vw - Math.max(sal, gut) - Math.max(sar, gut);
   const panel = (own) => Math.min(Math.max(410, own), 420 * pw);
   const old = panel((vw - reserve) / ui), now = panel((safeW - reserve) / ui);
-  const clear = (own) => (vw - (sar + gut) - own * ui) - sal;   // car's room left of the panel, past the notch
+  const clear = (own) => (vw - Math.max(sar, gut) - own * ui) - sal;   // car's room left of the panel, past the notch
   assert.equal(now, 410, "the floor binds once the insets are counted");
-  assert.ok(clear(old) < 200 && clear(now) > 270, `car clear of the notch: was ${clear(old).toFixed(0)}, now ${clear(now).toFixed(0)}`);
+  assert.ok(clear(old) < 210 && clear(now) > 280,   // 202 and 287 with max(inset, gut) (#5201; 186 and 271 when the gutter was added)
+    `car clear of the notch: was ${clear(old).toFixed(0)}, now ${clear(now).toFixed(0)}`);
 });
 
 test("narrow landscape garage keeps camera and aero controls reachable", () => {

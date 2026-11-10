@@ -3051,6 +3051,11 @@
       "presentation": "native",
       "preserve": "@c5"
     },
+    "tools/ui/profile-survey.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per cell (window, screen, scroll / unsafe / fat / clipped / off / tap counts or ERROR), the final '= done N cells, E errors' line, and the report path under artifacts/; a cell that errored is unmeasured, never clean."
+    },
     "tools/ui/reach-score.mjs": {
       "action": "keep-native",
       "presentation": "native",

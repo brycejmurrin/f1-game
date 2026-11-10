@@ -85,7 +85,7 @@ body[data-density="compact"] .dh-overlay { align-items: stretch; }
      why nothing caught it until the audit started simulating them.
      Sharing one custom property means the two can no longer disagree.
      Dividers use --svhz so UI SIZE cancels (zoom × 1svh/--ui-scale). */
-  --dh-safe-h: calc(100 * var(--svhz) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale) - 2 * var(--gut));
+  --dh-safe-h: calc(100 * var(--svhz) - (var(--safe-t) + var(--safe-b)) / var(--ui-scale));   /* the overlay's own padding (tokens.css --safe-*), in own px */
   min-height: clamp(300px, calc(100 * var(--svhz) - 60px / var(--ui-scale)), min(900px, var(--dh-safe-h)));
   max-height: var(--dh-safe-h);
   display: flex; flex-direction: column;
@@ -116,7 +116,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   /* Seven destinations at normal tab padding need ~900px; 760 wrapped WATCH &
      DRIVE + EXPORT onto a second row at 1280×800 (layout-audit 2026-10-06). */
   width: min(920px, 100%);
-  --dh-desk-h: min(880px, calc(100 * var(--svhz) - 2 * var(--gut) - var(--sat) / var(--ui-scale) - var(--sab) / var(--ui-scale)));
+  --dh-desk-h: min(880px, calc(100 * var(--svhz) - (var(--safe-t) + var(--safe-b)) / var(--ui-scale)));
   min-height: var(--dh-desk-h);
   max-height: var(--dh-desk-h);
   height: var(--dh-desk-h);
