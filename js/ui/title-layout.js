@@ -174,7 +174,23 @@ const TitleLayout = (function () {
       el.style.setProperty("--tf", tf.toFixed(3));
       const r = el.getBoundingClientRect();
       if (r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1)) > availH || r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1)) > availW) return false;
-      for (const b of el.querySelectorAll(".bigbtn")) if (b.scrollWidth > b.clientWidth + 1) return false;
+      // The door box can fit while its label is clipped (Safari 852×283, the 4-up
+      // row: PRACTICE's span is 53px in a 50px box, the button itself 80/80).
+      // A subtitle ellipsis is the designed clip and does not reject the tier.
+      for (const b of el.querySelectorAll(".bigbtn")) {
+        if (b.hidden || b.closest("[hidden]")) continue;
+        if (b.scrollWidth > b.clientWidth + 1) return false;
+        for (const s of b.querySelectorAll("span:not(.mb-sub)")) {
+          if (s.scrollWidth <= s.clientWidth + 1) continue;
+          const sub = s.querySelector(".mb-sub");
+          const label = s.querySelector(".mb-label");
+          if (sub && sub.clientWidth > 0 && sub.scrollWidth > sub.clientWidth + 1) {
+            if (label && label.scrollWidth > label.clientWidth + 1) return false;
+            continue;
+          }
+          return false;
+        }
+      }
       return true;
     };
     const tiers = current().layout === "grid" ? ["", "7", "5"] : [""];
