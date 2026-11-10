@@ -118,7 +118,7 @@ test("jump synchronises the HUD instead of depending on the next animation frame
   const apex = read("js/agent/apex.js");
   assert.match(game, /refreshHud:\s*\(\.\.\.a\)\s*=>\s*updateHud\(\.\.\.a\)/,
     "the shared facade must expose the real HUD updater through a deferred binding");
-  const jump = apex.match(/jump\(frac, speed, lateral\) \{[\s\S]*?\n  \},/);
+  const jump = apex.match(/jump\(frac, speed, lateral(?:, opts)?\) \{[\s\S]*?\n  \},/);
   assert.ok(jump, "jump body not found");
   assert.match(jump[0], /G\.refreshHud\(true\)/,
     "jump must force-publish its state to the HUD for frozen/headless probes");
@@ -133,13 +133,15 @@ test("jump synchronises the HUD instead of depending on the next animation frame
 test("the live __apex key list is the real surface, camera hooks included", () => {
   const live = LIVE;
   assert.ok(live.length > 200, `only ${live.length} live keys`);
-  for (const n of ["cameraState", "camera", "snapCam", "orbit", "visorScene", "race", "groundY"]) assert.ok(live.includes(n), n);
+  const liveSet = new Set(live);
+  for (const n of ["cameraState", "camera", "snapCam", "orbit", "visorScene", "race", "groundY"]) assert.ok(liveSet.has(n), n);
 });
 
 test("the source parse takes hooks()'s own return, not a nested helper's", () => {
   const names = sourceHooks().map((h) => h.name);
-  assert.ok(!names.includes("T") && !names.includes("tries"), "ApexCam clearShot's { T, tries } parsed as hooks");
-  for (const n of ["cameraState", "camera", "flybyCam", "dolly", "roadside"]) assert.ok(names.includes(n), n);
+  const nameSet = new Set(names);
+  assert.ok(!nameSet.has("T") && !nameSet.has("tries"), "ApexCam clearShot's { T, tries } parsed as hooks");
+  for (const n of ["cameraState", "camera", "flybyCam", "dolly", "roadside"]) assert.ok(nameSet.has(n), n);
 });
 
 test("a live hook assigned outside the api literal still gets an index row (visorScene)", () => {

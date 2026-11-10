@@ -63,14 +63,16 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `camState` | `camState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `carAt` | `carAt(i)` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `cars` | `cars()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
+| `classification` | `classification()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `corners` | `corners()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
-| `fieldState` | `fieldState()` | timing() sectorState() lapHistory() fieldState() |
+| `fieldLaps` | `fieldLaps()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
+| `fieldState` | `fieldState()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `gpuTimer` | `gpuTimer()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `groundY` | `groundY(f,l)` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `info` | `info()` | tracks() teams() info() |
 | `inputState` | `inputState()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `inspector` | `inspector(on)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
-| `lapHistory` | `lapHistory()` | timing() sectorState() lapHistory() fieldState() |
+| `lapHistory` | `lapHistory()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `lifecycle` | `lifecycle(o)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `lightState` | `lightState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `lightTune` | `lightTune()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
@@ -80,9 +82,9 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `pitSigns` | `pitSigns()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `probe` | `probe()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `scan` | `scan()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
-| `sectorState` | `sectorState()` | timing() sectorState() lapHistory() fieldState() |
+| `sectorState` | `sectorState()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `teams` | `teams()` | tracks() teams() info() |
-| `timing` | `timing()` | timing() sectorState() lapHistory() fieldState() |
+| `timing` | `timing()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `trackProfile` | `trackProfile()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `trackShape` | `trackShape()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `tracks` | `tracks()` | tracks() teams() info() |
@@ -92,23 +94,26 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `act` | `act({steer,throttle,brake},dt,n)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
+| `act` | `act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
 | `aiPlace` | `aiPlace(i,frac,v,x)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
-| `ceremony` | `ceremony(phase\|skip)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase\|skip) |
-| `clearInput` | `clearInput()` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
-| `go` | `go()` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase\|skip) |
+| `caution` | `caution({force})` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `ceremony` | `ceremony(phase\|skip)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `clearInput` | `clearInput()` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
+| `flagHold` | `flagHold(on)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `go` | `go()` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
 | `headless` | `headless(bool)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `jump` | `jump(frac,speed,x)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase\|skip) |
-| `park` | `park(f)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase\|skip) |
-| `race` | `race(id)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase\|skip) |
-| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase\|skip) |
+| `jump` | `jump(frac,speed,x,{keepLap})` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `park` | `park(f)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `race` | `race(id)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
+| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress |
 | `seed` | `seed(n)` | seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise |
 | `setEnergy` | `setEnergy(v)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
-| `setInput` | `setInput(o)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
+| `setInput` | `setInput(o)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
 | `setLap` | `setLap(n)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
 | `setPhysics` | `setPhysics(o)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
 | `setTimeOfDay` | `setTimeOfDay('night')` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `step` | `step(dt,n)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
+| `step` | `step(dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
+| `them` | `them(default1)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);… |
 | `weather` | `weather('wet')` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
 ## model
 

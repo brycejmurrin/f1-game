@@ -335,11 +335,11 @@ async function ghostSaved(page, trackId) {
       // Run the real countdown from the grid, then cross once to begin the
       // flying lap. Sampling staged points makes the regression deterministic.
       window.__apex.step(1 / 60, 480);
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
 
       for (const frac of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.999]) {
-        window.__apex.jump(frac, 80, 0);
+        window.__apex.jump(frac, 80, 0, { keepLap: true });
         window.__apex.step(1 / 60, frac === 0.999 ? 10 : 4);
       }
 
@@ -392,7 +392,7 @@ test.describe("Time Trial — sector splits", () => {
     await enterTT(page);
     const result = await page.evaluate(() => {
       window.__apex.go();
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
       return {
         timing: window.__apex.timing(),
@@ -412,7 +412,7 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.go();
       // Already on a flying lap — the S3→S1 wrap must stamp the split.
       window.__apex.setLap(1);
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
       return {
         timing: window.__apex.timing(),

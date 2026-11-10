@@ -187,9 +187,11 @@
       ]
     },
     "js/agent/apex-lobby.js": {
-      "*": [
-        "tests/unit/car-presentation-canary.test.mjs",
+      "tick": [
         "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "*": [
+        "tests/unit/car-presentation-canary.test.mjs"
       ]
     },
     "js/agent/apex-net.js": {

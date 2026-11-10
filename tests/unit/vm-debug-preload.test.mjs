@@ -64,6 +64,6 @@ test("fix() returns absolute when given a relative that exists", () => {
 test("hash index covers js/render/three/ (the TLX renderer) and skips only vendored trees", () => {
   const tlx = path.join(ROOT, "js/render/three/tlx.js");
   assert.equal(preload.byHash(fs.readFileSync(tlx, "utf8")), tlx);
-  for (const dir of ["vendor", "node_modules", "three-0.187.0"]) assert.match(dir, preload.VENDORED_DIR);
+  for (const dir of ["vendor", "node_modules", "three-0.187.0"]) assert.ok(preload.VENDORED_DIR.test(dir), dir);
   for (const dir of ["three", "render", "threejs-helpers"]) assert.doesNotMatch(dir, preload.VENDORED_DIR);
 });

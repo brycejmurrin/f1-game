@@ -1702,6 +1702,7 @@ const AgentView = (function () {
         }
         syncRenderAnchors(G.cars);
         update(dt);
+        ApexLobby.afterStep(G);   // the lap log fieldLaps() reads, as step()/act() keep it
         ran++;
 
         const sp = p.speed || 0;
@@ -1946,16 +1947,18 @@ const AgentView = (function () {
         },
         read: {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
-          timing: "timing() sectorState() lapHistory() fieldState()",
+          timing: "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()",
           rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)",
           geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },
         control: {
-          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)',
+          stage: 'race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) '
+               + "flagHold(on) caution({force}) — a jump deletes the lap in progress",
           reproduce: "seed(n) sets the sim seed; same seed + same inputs => same "
                    + "result. Pin it before any A/B or the comparison is noise",
-          drive: "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()",
+          drive: "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
+               + " — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1); dt*n runs as whole 1/60 steps",
           world: "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)",
           field: "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)",
         },

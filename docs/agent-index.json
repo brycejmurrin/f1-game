@@ -203,16 +203,28 @@
       "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
     },
     {
+      "name": "classification",
+      "group": "read",
+      "signature": "classification()",
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
+    },
+    {
       "name": "corners",
       "group": "read",
       "signature": "corners()",
       "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
     },
     {
+      "name": "fieldLaps",
+      "group": "read",
+      "signature": "fieldLaps()",
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
+    },
+    {
       "name": "fieldState",
       "group": "read",
       "signature": "fieldState()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "gpuTimer",
@@ -248,7 +260,7 @@
       "name": "lapHistory",
       "group": "read",
       "signature": "lapHistory()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "lifecycle",
@@ -308,7 +320,7 @@
       "name": "sectorState",
       "group": "read",
       "signature": "sectorState()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "teams",
@@ -320,7 +332,7 @@
       "name": "timing",
       "group": "read",
       "signature": "timing()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "trackProfile",
@@ -355,8 +367,8 @@
     {
       "name": "act",
       "group": "control",
-      "signature": "act({steer,throttle,brake},dt,n)",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "signature": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)",
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
     },
     {
       "name": "aiPlace",
@@ -365,22 +377,34 @@
       "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
     },
     {
+      "name": "caution",
+      "group": "control",
+      "signature": "caution({force})",
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
+    },
+    {
       "name": "ceremony",
       "group": "control",
       "signature": "ceremony(phase|skip)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "clearInput",
       "group": "control",
       "signature": "clearInput()",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
+    },
+    {
+      "name": "flagHold",
+      "group": "control",
+      "signature": "flagHold(on)",
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "go",
       "group": "control",
       "signature": "go()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "headless",
@@ -391,26 +415,26 @@
     {
       "name": "jump",
       "group": "control",
-      "signature": "jump(frac,speed,x)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "signature": "jump(frac,speed,x,{keepLap})",
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "park",
       "group": "control",
       "signature": "park(f)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "race",
       "group": "control",
       "signature": "race(id)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "reset",
       "group": "control",
       "signature": "reset(f,v,x,seed)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution({force}) — a jump deletes the lap in progress"
     },
     {
       "name": "seed",
@@ -428,7 +452,7 @@
       "name": "setInput",
       "group": "control",
       "signature": "setInput(o)",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
     },
     {
       "name": "setLap",
@@ -452,7 +476,13 @@
       "name": "step",
       "group": "control",
       "signature": "step(dt,n)",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
+    },
+    {
+      "name": "them",
+      "group": "control",
+      "signature": "them(default1)",
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() — throttle/brake are booleans; throttleLevel/brakeLevel 0..1 meter them (default 1);…"
     },
     {
       "name": "weather",

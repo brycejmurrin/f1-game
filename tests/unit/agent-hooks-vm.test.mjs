@@ -415,3 +415,117 @@ test("sheetFit is SheetShape.layoutProbe behind an element, a selector or the fi
   assert.equal(g.apex.sheetFit(), null, "no argument and no painted .sheet / .fit-managed answers null");
   assert.equal(g.apex.sheetFit(0), null, "a non-element, non-string argument answers null");
 });
+
+// ── W25 rows 9 and 11 (2026-11-10): lap integrity, replayable reset, the 1/60 step, spin's sign ──
+
+/* jump() 60 m before the line, then across it, banked the time since the last
+ * crossing as a lap: a 2.97-3.57 s best. A teleport is not a driven lap, so it
+ * is deleted; {keepLap:true} is the fixture opt-out. fieldLaps()/lapHistory()
+ * log both crossings, the deleted one valid:false. */
+test("jump() deletes the lap in progress, {keepLap:true} keeps it, and fieldLaps() logs both", async () => {
+  await load("monza", 0.05, 60);
+  const G = g.G, p = G.player, T = G.track.total;
+  const cross = () => { const from = p.lap; for (let i = 0; i < 600 && p.lap === from; i++) g.apex.step(1 / 60, 1); assert.equal(p.lap, from + 1, "never reached the line"); };
+  g.apex.setInput({ steer: 0, throttle: true });
+  p.lap = Math.max(p.lap, 1);
+  g.apex.jump((T - 60) / T, 70, 0);
+  cross();
+  assert.equal(isFinite(p.best), false, `a teleported lap set a best of ${p.best}`);
+  g.apex.step(1 / 60, 30);
+  g.apex.jump((T - 60) / T, 70, 0, { keepLap: true });
+  cross();
+  gt(p.lastLap, 0, "the opted-out lap is timed");
+  g.apex.clearInput();
+  const mine = g.apex.fieldLaps().find((r) => r.id === G.cars.indexOf(p));
+  const tail = mine.laps.slice(-2).map((l) => l.valid);
+  assert.equal(tail.join(), "false,true", JSON.stringify(mine.laps));
+  assert.equal(mine.laps.at(-1).time, +p.lastLap.toFixed(3));
+  assert.equal(g.apex.lapHistory().laps.slice(-2).map((l) => l.valid).join(), "false,true");
+});
+
+test("reset() without a seed replays the last seeded episode (the RNG stream is rewound)", async () => {
+  await load("monza", 0.05, 0);
+  const run = (seed) => {
+    if (seed === undefined) g.apex.reset(0, 0, 0); else g.apex.reset(0, 0, 0, seed);
+    g.apex.setInput({ steer: 0, throttle: true });
+    const st = [];
+    for (let k = 0; k < 3; k++) { g.apex.step(1 / 60, 60); st.push(g.G.cars.map((c) => c.prog.toFixed(4)).join(",")); }
+    return st.join("|");
+  };
+  run(7);   // warm-up: the first episode after a load still differs (pre-existing, not this row)
+  const seeded = run(7), unseeded = run(), again = run(7);
+  g.apex.clearInput();
+  assert.equal(again, seeded, "fixture: the same seed replays");
+  assert.equal(unseeded, seeded, "reset() without a seed continued the draw stream");
+});
+
+test("step(dt) runs whole 1/60 physics steps: 1/120 x 240 and 1/30 x 60 equal 1/60 x 120", async () => {
+  await load("monza", 0.05, 0);
+  const prog = (dt, n) => { g.apex.reset(0, 0, 0, 7); g.apex.setInput({ steer: 0, throttle: true }); g.apex.step(dt, n); return Array.from(g.G.cars, (c) => c.prog); };
+  prog(1 / 60, 120);   // warm-up episode (see the reset() test above)
+  const ref = prog(1 / 60, 120), half = prog(1 / 120, 240), dbl = prog(1 / 30, 60);
+  g.apex.clearInput();
+  assert.deepEqual(half, ref, "a 120 Hz step is not the game physics");
+  assert.deepEqual(dbl, ref);
+  truthy(g.record.console.some((c) => /runs as whole 1\/60/.test(c[1])), "the quantisation warns");
+});
+
+test("step() in results routes to the finished-car loop when game.js exposes it", async () => {
+  await load("monza", 0.05, 0);
+  const G = g.G, calls = [];
+  G.state = "results";
+  G.stepResultsField = (dt) => calls.push(dt);
+  try { g.apex.step(1 / 30, 2); } finally { delete G.stepResultsField; G.state = "race"; }
+  assert.deepEqual(calls, [1 / 60, 1 / 60, 1 / 60, 1 / 60]);
+});
+
+test("spin(+deg) turns the nose LEFT (counter-clockwise from above), as its doc now says", async () => {
+  await load("monza", 0.03, 40);
+  g.apex.setInput({ steer: 0, throttle: false });
+  g.apex.spin(15);
+  g.apex.step(1 / 60, 30);
+  g.apex.clearInput();
+  lt(g.G.player.x, -1, `x ${g.G.player.x}: + x is right of the centreline`);
+});
+
+test("classification() orders a live field and caution({force}) flies a scripted flag", async () => {
+  await load("monza", 0.05, 0);
+  const c = g.apex.classification();
+  assert.equal(c.final, false);
+  assert.equal(c.rows.length, g.G.cars.length);
+  assert.deepEqual(c.rows.map((r) => r.pos), c.rows.map((_, i) => i + 1));
+  truthy(c.rows.every((r) => r.status === "running" || r.status === "retired"));
+  assert.equal(g.apex.caution({ force: 2, cause: "test" }).level, 0, "the hold lands on the next tick");
+  g.apex.step(1 / 60, 1);
+  assert.equal(g.apex.caution().level, 2);
+  g.apex.caution({ force: 0 });
+  assert.equal(g.apex.caution().level, 0, "force:0 releases at once");
+});
+
+// W25 row 10: headless races never raised a flag, so the safety-car queue had no VM test.
+// caution({force:3}) flies the SC by script; the AI field must close up behind it at SC pace
+// and race again once force:0 hands the flag back. Measured on monza (seed 1): the largest
+// gap between consecutive AI cars went 74 m -> 34 m in 75 s, top AI speed 55 -> 30 m/s, and
+// back to 49 m/s within 10 s of the release.
+test("caution({force:3}) queues the AI field behind the safety car and force:0 releases it", async () => {
+  await load("monza", 0.05, 60);
+  const ai = () => g.G.cars.filter((c) => !c.retired && !c.isPlayer && !c.human);
+  const maxGap = () => {
+    const p = ai().map((c) => c.prog).sort((a, b) => b - a);
+    let m = 0; for (let i = 1; i < p.length; i++) m = Math.max(m, p[i - 1] - p[i]);
+    return m;
+  };
+  const vMax = () => Math.max(...ai().map((c) => c.speed));
+  g.apex.step(1 / 60, 60 * 40);
+  const greenGap = maxGap(), greenV = vMax();
+  g.apex.caution({ force: 3, cause: "test" });
+  g.apex.step(1 / 60, 60 * 75);
+  assert.equal(g.apex.caution().level, 3);
+  const scGap = maxGap(), scV = vMax();
+  lt(scGap, greenGap * 0.7, `queue closes: ${scGap.toFixed(0)} m vs ${greenGap.toFixed(0)} m green`);
+  lt(scV, greenV * 0.7, `SC pace: ${scV.toFixed(1)} vs ${greenV.toFixed(1)} m/s green`);
+  g.apex.caution({ force: 0 });
+  g.apex.step(1 / 60, 60 * 10);
+  assert.equal(g.apex.caution().level, 0);
+  gt(vMax(), scV * 1.3, "the field races again after the release");
+});
