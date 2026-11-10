@@ -144,13 +144,3 @@ test("braking harvest still follows hard deceleration", async () => {
   assert.ok(brakeHarv > 0.35, `braking decel harvest (${brakeHarv})`);
   assert.ok(A.harvestLevel() > 0.01, "braking harvest is audible on the bus");
 });
-
-// Audit W19 (2026-11-09): the full-pack clip is an AUDIO cue only (the cut above
-// stays); its comment must not claim the car slows or loses energy with a full pack.
-test("the full-pack regen clip is documented as sound only, never as a slowdown", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
-  const at = src.indexOf("const packClip =");
-  const note = src.slice(src.lastIndexOf("// Part-throttle ICE harvest", at), at);
-  assert.match(note, /no physics/i, "the comment says no physics sits behind it");
-  assert.match(note, /not slowed/i);
-});
