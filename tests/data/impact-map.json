@@ -19147,6 +19147,9 @@
       "shape": [
         "tests/unit/title-layout.test.mjs"
       ],
+      "slider": [
+        "tests/specs/title-fit.spec.js"
+      ],
       "vars": [
         "tests/unit/title-layout.test.mjs"
       ],

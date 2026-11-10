@@ -220,3 +220,11 @@ density / shape lines of the inline boot.
    landscape phone falls to at `body[data-density="normal"]`; a fresh profile and a stored WIDTH got different row
    counts. PR #5213 replaced the gates with one viewport-keyed block (UI contract §4.1) and made the TITLE LAYOUT
    sliders stop at the box edge. Not established: which stored value put the phone at density `normal`.
+8. **2026-11-10, the touch paint floor (PR #5213).** With the phone's stored UI SIZE 61 % and BUTTONS SIZE 60 the
+   eight rows painted 16.8-22.2 px tall with 6.1-8.9 px labels (852×393, 852×368, 844×390). Under `(pointer: coarse)`
+   the doors' combined zoom now has a floor: a SIZE under 100 paints as 100, a door is 44 px there and a label 12. Fit
+   still wins the height, by re-flowing first: `fit()` tries eight rows, then seven (CAREER on the retention row), then
+   five (play doors four-up), and only when none takes the floor (a STACK, Safari's 246 px box at UI SIZE 109 % with
+   CONTINUE) turns it off (`[data-home-floor="off"]`) and zooms the unfloored eight rows down. So a touch phone at
+   393 px shows seven rows, a 430 px one all eight. Storage is not rewritten; BUTTONS SIZE's low end is the floor and
+   its number the painted size. A mouse is unchanged.

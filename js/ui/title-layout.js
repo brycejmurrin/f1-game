@@ -160,6 +160,43 @@ const TitleLayout = (function () {
   const FIT_TOKENS = ["--tf", "--tf-dx", "--tf-dy"];
   let fitRaf = 0;
   function fitClear(el) { for (const k of FIT_TOKENS) el.style.removeProperty(k); }
+  // THE TOUCH PAINT FLOOR (#5213; css/menu-destinations.css): under a finger on a short landscape
+  // screen a door never paints under 44 px, so a cluster too tall for the box RE-FLOWS (eight rows,
+  // seven, five) before anything shrinks; only when no row count fits (or one would clip a word)
+  // does the fit win, with the floor off.
+  const touchHome = () => { try { return phoneWide() && win().matchMedia("(pointer: coarse)").matches; } catch (_) { return false; } };
+  const floored = () => { const e = doc && doc.getElementById("menu-buttons"); return !!e && touchHome() && e.getAttribute("data-home-floor") !== "off"; };
+  /** BUTTONS SIZE's low end: 100 while the floor holds (a smaller SIZE would paint as 100 anyway). */
+  const sizeMin = (part) => (part === "btns" && floored() ? 100 : LIM.size[0]);
+  function floorTier(el, availW, availH) {
+    el.removeAttribute("data-home-rows"); el.removeAttribute("data-home-floor");
+    if (!touchHome()) return;
+    const tier = (t) => { if (t) el.setAttribute("data-home-rows", t); else el.removeAttribute("data-home-rows"); };
+    const fits = (tf) => {
+      el.style.setProperty("--tf", tf.toFixed(3));
+      const r = el.getBoundingClientRect();
+      if (r.height * Math.max(1, el.scrollHeight / (el.clientHeight || 1)) > availH || r.width * Math.max(1, el.scrollWidth / (el.clientWidth || 1)) > availW) return false;
+      for (const b of el.querySelectorAll(".bigbtn")) if (b.scrollWidth > b.clientWidth + 1) return false;
+      return true;
+    };
+    const tiers = current().layout === "grid" ? ["", "7", "5"] : [""];
+    for (const t of tiers) { tier(t); if (fits(1)) { el.style.removeProperty("--tf"); return; } }
+    // A SIZE over the floor that no row count takes: the row count that paints the biggest doors,
+    // held (--tf) between the floor and the request, so hold() stops the slider there (never a
+    // bigger SIZE painting smaller doors: export profile, 105 -> 110 fell to 34 px rows, 2026-11-10).
+    const floor = 100 / Math.max(100, current().btns.size);
+    let best = 0, bestT = "";
+    if (floor < 1) for (const t of tiers) {
+      tier(t);
+      if (!fits(floor)) continue;
+      let lo = floor, hi = 1;
+      for (let i = 0; i < 5; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; }
+      if (lo > best) { best = lo; bestT = t; }
+    }
+    tier(bestT);
+    if (best) el.style.setProperty("--tf", best.toFixed(3));
+    else { el.style.removeProperty("--tf"); el.setAttribute("data-home-floor", "off"); }
+  }
   function fit() {
     if (!doc || typeof getComputedStyle !== "function") return;
     const ov = doc.getElementById("overlay");
@@ -174,7 +211,8 @@ const TitleLayout = (function () {
     if (!(availW > 0 && availH > 0)) return;
     for (const el of pieces) {
       fitClear(el);
-      let tf = 1, r = el.getBoundingClientRect();
+      if (el.id === "menu-buttons") floorTier(el, availW, availH);
+      let tf = parseFloat(el.style.getPropertyValue("--tf")) || 1, r = el.getBoundingClientRect();
       for (let pass = 0; pass < FIT_PASSES && r.height > 0 && tf > FIT_MIN; pass++) {
         // A scroller's rect is its clipped box; scrollHeight / clientHeight (both
         // in the piece's own zoomed units) says how much content hides behind it.
@@ -253,6 +291,7 @@ const TitleLayout = (function () {
         while (hi - lo > 1) { p.size = (lo + hi) >> 1; if (held()) hi = p.size; else lo = p.size; }
         p.size = v; v = lo;
       }
+      v = Math.max(v, sizeMin(part));   // the floor's edge, as the box's: not stored, the thumb stops
     }
     else if (k === "x") v += pull(g("--tf-dx"), root.clientWidth);
     else v += pull(g("--tf-dy"), root.clientHeight);
@@ -346,7 +385,9 @@ const TitleLayout = (function () {
       const inp = el("input", { id, type: "range", min: String(LIM[k][0]), max: String(LIM[k][1]), step: "1",
         attrs: { "aria-label": `${part === "btns" ? "Buttons" : part === "title" ? "Title" : "Car drawing"} ${NAMES[k].toLowerCase()}` } });
       const paint = () => {
-        const n = current()[part][k];
+        let n = current()[part][k];
+        // The range is what the screen can paint and the number is the painted size (#5229's rule).
+        if (k === "size") { inp.min = String(sizeMin(part)); n = Math.max(n, sizeMin(part)); }
         if (d.activeElement !== inp) inp.value = String(n);
         out.textContent = pctTxt(k, n);
       };
@@ -602,7 +643,7 @@ const TitleLayout = (function () {
     const E = ed.els;
     if (!E || !ed.on) return;
     const p = current()[ed.sel];
-    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + p.size + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
+    E.name.textContent = PIECES[ed.sel] + " · " + SHAPE_NAMES[shape()] + " · " + Math.max(p.size, sizeMin(ed.sel)) + "%" + (fitted(ed.sel) ? " (SCREEN FULL)" : "") +
       (ed.sel === "btns" ? " · " + (p.width ? p.width + "% WIDE" : "AUTO WIDTH") : "");
     E.wDn.disabled = E.wUp.disabled = ed.sel !== "btns";
     const car = byId("title-car"), r = car ? car.getBoundingClientRect() : null;

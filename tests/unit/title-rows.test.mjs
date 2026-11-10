@@ -1,6 +1,7 @@
 /* title-rows.test.mjs — the phone-landscape title is ONE composition (#5199).
    CSS-source pins for the PHONE LANDSCAPE HOME block in css/menu-destinations.css;
-   tests/specs/title-fit.spec.js measures the painted rows (1/2/2/2/2/2/3/4). */
+   tests/specs/title-fit.spec.js measures the painted rows (1/2/2/2/2/2/3/4 with a mouse or where
+   eight 44 px rows fit; under a finger in a shorter box the #5213 floor re-flows them). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -63,4 +64,20 @@ test("a slider stops at the edge: the box's answer is stored, not the request", 
   assert.match(js, /l = hold\(set\(l\), part, k\);/, "the fold's sliders");
   assert.match(js, /hold\(set\(l\), ed\.sel, k\);/, "the editor's steps and keys");
   assert.match(js, /hold\(hold\(h, d\.part, "x"\), d\.part, "y"\); else hold\(h, d\.part, "size"\);/, "the editor's drags");
+});
+
+test("the touch paint floor: 44 px doors under a finger, re-flow before shrink, the slider starts at the floor (#5213)", () => {
+  const floor = block.slice(block.indexOf("@media (pointer: coarse) {"));
+  const F = `${P}:not([data-home-floor="off"])`;
+  assert.ok(block.includes("@media (pointer: coarse) {"), "the floor is for a finger; a mouse keeps the composition");
+  assert.ok(floor.includes(`${F} {\n  --home-b: max(1, var(--ui-compact-scale));\n  zoom: calc(var(--home-b) * max(1, var(--tl-btns-size, 1)) * var(--tf, 1));`), "a SIZE under 100 paints as 100: the floor is on the combined zoom");
+  assert.ok(floor.includes(`${F} .bigbtn { min-height: calc(44.2px / var(--home-b)); }`), "every door is 44 painted px at the floor");
+  assert.equal((floor.match(/calc\(var\(--fs-micro\) \* \.86 \/ var\(--home-b\)\)/g) || []).length, 2, "the two small-label rows are held to 12 px (--fs-micro x .86)");
+  assert.ok(floor.includes(`${P}[data-home-rows] #menu-retention { display: contents; }`) && floor.includes(`${P}[data-home-rows="5"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }`), "seven rows, then five");
+  const js = fs.readFileSync(path.join(ROOT, "js/ui/title-layout.js"), "utf8");
+  assert.match(js, /if \(el\.id === "menu-buttons"\) floorTier\(el, availW, availH\);\n      let tf = parseFloat\(el\.style\.getPropertyValue\("--tf"\)\) \|\| 1/, "the re-flow runs before the fit shrinks anything");
+  assert.match(js, /for \(const t of tiers\) \{ tier\(t\); if \(fits\(1\)\)/, "row counts are tried at the full request first");
+  assert.match(js, /else \{ el\.style\.removeProperty\("--tf"\); el\.setAttribute\("data-home-floor", "off"\); \}/, "the fit wins only when no row count takes the floor");
+  assert.match(js, /if \(k === "size"\) \{ inp\.min = String\(sizeMin\(part\)\); n = Math\.max\(n, sizeMin\(part\)\); \}/, "range = what paints, number = the painted size");
+  assert.match(js, /v = Math\.max\(v, sizeMin\(part\)\);/, "a request under the floor is not stored");
 });

@@ -460,6 +460,34 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #
 :root[data-title-btns="stack"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: minmax(0, 1fr); }
 :root[data-title-btns="stack"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { flex-direction: column; }
 :root[data-title-btns="row"]:not([hidden]) :where(body[data-shape="wide"]) #overlay #menu-buttons { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+/* TOUCH PAINT FLOOR (#5213). Measured 2026-11-10 with Bryce's live export (UI
+   SIZE 61 %, BUTTONS SIZE 60, WIDTH 49) at 852x393, 852x368 and 844x390: the
+   eight rows painted 16.8-22.2 px tall with 6.1-8.9 px labels in y 8..175 --
+   the right shape, too small to hit. Under a finger the doors' combined zoom
+   (UI SIZE x BUTTONS SIZE x fit) has a floor: a SIZE under 100 paints as 100,
+   every door is 44 px at that floor (44.2 own px / the UI factor: a rounded
+   zoomed row never lands under 44) and no label under 12 (--fs-micro x .86).
+   Storage is not
+   rewritten; position and WIDTH stay the player's. Eight 44 px rows do not
+   fit a 356 px box, so the fit in js/ui/title-layout.js RE-FLOWS before it
+   shrinks: [data-home-rows="7"] puts CAREER on the retention row, "5" also
+   lays the eight play doors four-up. Where even that cannot fit (a STACK, a
+   very short window) the fit wins: [data-home-floor="off"] is the unfloored
+   composition above, zoomed down. A mouse keeps that composition as it was. */
+@media (pointer: coarse) {
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons:not([data-home-floor="off"]) {
+  --home-b: max(1, var(--ui-compact-scale));
+  zoom: calc(var(--home-b) * max(1, var(--tl-btns-size, 1)) * var(--tf, 1));
+}
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn { min-height: calc(44.2px / var(--home-b)); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--fs-micro) * .74 * var(--ui-compact-text, 1)), calc(var(--fs-micro) * .86 / var(--home-b))); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--fs-micro) * .64 * var(--ui-compact-text, 1)), calc(var(--fs-micro) * .86 / var(--home-b))); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons[data-home-rows] #menu-hero { flex-direction: row; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons[data-home-rows] #menu-retention { display: contents; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons[data-home-rows] #mb-career { flex: 1 1 0; }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons[data-home-rows="5"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons[data-home-rows="5"] #menu-explore { display: contents; }
+}
 }
 @media (max-height: 519px) and (min-aspect-ratio: 1/1) and (prefers-reduced-motion: reduce) {
   body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons .bigbtn:active { transform: skewX(-6deg); }
