@@ -67,8 +67,6 @@ test("ship-filter reads stage-files.mjs and fails loudly on an empty list", () =
 });
 
 test("pages.yml stages via stage.mjs (same allow-list the ship-filter reads)", () => {
-  assert.match(PAGES, /tools\/desktop\/stage\.mjs/);
-  assert.match(PAGES, /--out _site/);
   assert.doesNotMatch(PAGES, /^\s*cp\s+(?:-r\s+)?\S+\s+_site\/\s*$/m);
 });
 

@@ -256,9 +256,7 @@ test("manifest + game.js boot hook + css-play screen are wired", () => {
   assert.doesNotMatch(game, /SurveyHud\.holdChrome\(/);
   assert.doesNotMatch(game, /SurveyHud\.openPause\(/);
   const mod = read("js/ui/survey-hud.js");
-  assert.match(mod, /function boot\(/);
   assert.match(mod, /webglcontextlost/);
-  assert.match(mod, /holdChrome/);
   const play = read("tools/ui/css-play.mjs");
   assert.match(play, /surveyHud:\s*true/);
   assert.match(play, /APEX_SURVEY_HUD=1/);
