@@ -62,14 +62,22 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), "../../..");
 // that only MENTIONS speed is not linted for it.
 // (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2 — tools rewritten before the move.)
 const SPEED_READ = /\.speed\b/;
+
+/** Every module path the manifest loads: FULL, every DEFERRED list, and EVERY `LAZY_*` export that is a list of
+ *  file paths (the `*_EDGES` pair lists are not), deduplicated in manifest order. Derived, not hand-copied: the
+ *  hand-copied roster this replaced had silently dropped six lazy lists (66 modules, all of js/race/*).
+ *  TODO: switch to the shared all-lazy-rosters helper in tools/manifest.cjs once it lands. */
+export function rosterFiles(manifest = MANIFEST) {
+  const lists = [manifest.FULL, ...Object.values(manifest.DEFERRED || {})];
+  for (const [k, v] of Object.entries(manifest)) {
+    if (/^LAZY_/.test(k) && Array.isArray(v) && v.length && v.every((f) => typeof f === "string")) lists.push(v);
+  }
+  return [...new Set(lists.flat())];
+}
+
 export function defaultFiles(root = ROOT) {
   const data = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
-  const rostered = [
-    ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
-    ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET, ...(MANIFEST.LAZY_EDITOR || []),
-    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []),
-  ];
+  const rostered = rosterFiles();
   const files = [];
   for (const rel of rostered) {
     if (data.has(rel)) continue;

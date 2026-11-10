@@ -279,6 +279,18 @@ export function zeroSpacingSheets(all = sheets()) {
     .sort();
 }
 
+/** Every module path the manifest loads: FULL, every DEFERRED list, and EVERY `LAZY_*` export that is a list of
+ *  file paths (the `*_EDGES` pair lists are not), deduplicated. Derived, not hand-copied: the hand-copied roster
+ *  this replaced had silently dropped six lazy lists (66 modules, all of js/race/*).
+ *  TODO: switch to the shared all-lazy-rosters helper in tools/manifest.cjs once it lands. */
+export function manifestModules(manifest = createRequire(import.meta.url)("../manifest.cjs")) {
+  const lists = [manifest.FULL, ...Object.values(manifest.DEFERRED || {})];
+  for (const [k, v] of Object.entries(manifest)) {
+    if (/^LAZY_/.test(k) && Array.isArray(v) && v.length && v.every((f) => typeof f === "string")) lists.push(v);
+  }
+  return [...new Set(lists.flat())];
+}
+
 /** Manifest modules (every js/ file tools/manifest.cjs loads, circuits and
  *  scenery excluded — they are data, gated per circuit by verify-track and the
  *  sweeps) that NOTHING under tests/ names: not by path, not by basename, not
@@ -288,11 +300,7 @@ export function zeroSpacingSheets(all = sheets()) {
 export function zeroRefModulesReport(corpus) {
   const manifest = createRequire(import.meta.url)("../manifest.cjs");
   const mods = new Set();
-  for (const list of [manifest.FULL, ...Object.values(manifest.DEFERRED), manifest.LAZY_AGENT,
-    manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET, manifest.LAZY_EDITOR || [],
-    manifest.LAZY_XR || [], manifest.LAZY_CAM_EDITOR || [],
-    manifest.LAZY_CAREER_UI || [], manifest.LAZY_UI_PRESETS || [], manifest.LAZY_RESULTS_SHEET || []])
-    for (const f of list) if (typeof f === "string" && f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
+  for (const f of manifestModules(manifest)) if (f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
   if (corpus === undefined) {
     const files = [];
     (function walk(dir) {
