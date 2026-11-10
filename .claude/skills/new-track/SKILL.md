@@ -1,8 +1,5 @@
 ---
 name: new-track
-paths:
-  - "js/circuits/**"
-  - "js/track/**"
 description: "Use when adding a circuit or changing its layout, geometry, metadata, bridges or elevation (hill, crest, dip) in js/circuits/, or the in-game TRACK DESIGNER. Not corner/grade diagnosis → agent-view; matching the real place → survey-track; props → scenery-dress."
 ---
 
@@ -23,7 +20,7 @@ manifest contract live in [AGENTS.md §Layout](../../../AGENTS.md#layout).
 ## Track-definition schema
 
 Required keys: `id` (= filename), `name`, `gp`, `country`, `night`, `classic`, `theme`,
-`lengthKm`, `baseHW`, and `path: { len, pts }` (the real centreline from
+`lengthKm`, `baseHW`, `tyreSeverity` (`tests/unit/tyre-model.test.mjs` reads it from every def file), and `path: { len, pts }` (the real centreline from
 `tools/track/import-circuit-path.mjs`). Optional: `reverse`/`startFrac`, `street`, `banked`,
 `pal`, `sectors`/`turns` (racing-lap fracs), dressing rows (`furniture`, `kit`, `standSet`,
 `barrier`, `cityStyle`), `bridges`, `elevations`. The annotated def with every field →

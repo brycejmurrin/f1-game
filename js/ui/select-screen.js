@@ -382,6 +382,11 @@ function driverLabel(d, placeholderNum) {
   return (placeholderNum && !(d.num > 1)) ? last : "#" + d.num + " " + last;
 }
 
+/** Team-tile crest bitmap edge for a device pixel ratio: 32 CSS px x dpr x 1.5, never under 48 or over 128. */
+function swatchPx(dpr) {
+  const d = +dpr > 0 ? +dpr : 1;
+  return Math.max(48, Math.min(128, Math.round(32 * 1.5 * d)));
+}
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
@@ -399,7 +404,10 @@ function teamSwatch(t) {
   // wall and the car share.
   if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
     const c = document.createElement("canvas");
-    c.width = 48; c.height = 48;
+    // Backing store follows the panel: .tm-colour is a 32 CSS px box (css/select.css), so the fixed 48 px
+    // this used to be put 48 texels on 99 device px on a DPR-3 phone (measured 0.49 px per device px,
+    // docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F4). x1.5 covers a zoomed sheet; 128 bounds 22 tiles.
+    c.width = c.height = swatchPx(typeof window !== "undefined" ? window.devicePixelRatio : 1);
     c.setAttribute("aria-hidden", "true");
     LiveryTex.paintSwatch(c.getContext("2d"), crestId, liv || { c1, c2 }, c.width, c.height);
     sw.appendChild(c);

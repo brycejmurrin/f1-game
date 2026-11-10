@@ -638,3 +638,52 @@ test("the quali sheet prints pole with three decimals, like its gaps", () => {
   assert.equal(table.children[0].children[3].textContent, "1:21.163");
   assert.equal(table.children[1].children[3].textContent, "+0.004");
 });
+
+test("a duel's trimmed field restores the saved order of the field that qualified (W18 #7)", () => {
+  // startRace trims a duel to [player, rival] AFTER qualifying, so the order
+  // saved for CONTINUE names the whole field. A reload then refused it (id count
+  // mismatch) and reopened QUALIFYING.
+  const me = car("p1", "VER", "Verstappen", "rb", true);
+  const rival = Object.assign(car("p3", "LEC", "Leclerc", "me", false), { duelRival: true });
+  const { q } = loadQuali({
+    cars: [me, rival],
+    season: {
+      round: 0,
+      qualiOrder: [
+        { id: "p3", t: 70.1, human: false },
+        { id: "p2", t: 70.5, human: false },
+        { id: "p1", t: 71.0, human: true },
+      ],
+    },
+  });
+  const grid = q.order([me, rival]);
+  assert.ok(grid, "the saved order is accepted for the trimmed field");
+  assert.deepEqual(JSON.parse(JSON.stringify(grid.map((c) => c.driverId))), ["p3", "p1"], "in the order they qualified");
+});
+
+test("outside a duel a saved order naming a car no longer in the field is still refused", () => {
+  const me = car("p1", "VER", "Verstappen", "rb", true);
+  const other = car("p3", "LEC", "Leclerc", "me", false);
+  const { q } = loadQuali({
+    cars: [me, other],
+    season: { round: 0, qualiOrder: [{ id: "p3", t: 70.1 }, { id: "p2", t: 70.5 }, { id: "p1", t: 71.0, human: true }] },
+  });
+  assert.equal(q.order([me, other]), null);
+});
+
+// #4343: the |curvature| cache keyed on track.def.id alone, so two id-less tracks
+// with the same sample count shared one cache and the second lap was the first's.
+test("id-less tracks with the same sample count do not share the curvature cache (#4343)", () => {
+  const { q, ctx } = loadQuali();
+  ctx.Tracks.curvature = (t) => t.k;
+  const c = car("p1", "VER", "Verstappen", "rb", true);
+  const straight = { n: 80, total: 4000, k: 0 };
+  const twisty = { n: 80, total: 4000, k: 0.02 };
+  const tS = q.carLap(c, straight, 1);
+  const tT = q.carLap(c, twisty, 1);
+  assert.ok(tT > tS * 1.05, `the twisty track is slower: ${tT} vs ${tS}`);
+  assert.equal(q.carLap(c, straight, 1), tS, "and the first track still reads its own cache");
+  // Tracks with ids still key on the id (unchanged path).
+  const a = { n: 80, total: 4000, k: 0, def: { id: "x" } };
+  assert.equal(q.carLap(c, a, 1), tS);
+});
