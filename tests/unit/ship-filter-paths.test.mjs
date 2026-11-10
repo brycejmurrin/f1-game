@@ -28,18 +28,18 @@ const EXPECTED_STAGED_NAMES = [
   "sw.js", "vendor", "version.json",
 ];
 
-/** Same emission the ship-filter job uses (sorted names, one per line). */
+/** The ship-filter step's run: block, as ci.yml has it. */
+function shipFilterStep() {
+  return (CI.split("      - name: Does this diff change anything that ships?\n")[1] || "").split("\n      - name: ")[0];
+}
+
+/** Run the REAL emission program the ship-filter step embeds
+ *  (`node --input-type=module -e '…' > "$PATHS_FILE"`), not a copy of it, so
+ *  an edit to the step's program is what this test executes. */
 function emitStagedPathList() {
-  const r = spawnSync(
-    process.execPath,
-    ["--input-type=module", "-e", `
-      import { stagedNames } from "./tools/desktop/stage-files.mjs";
-      const names = [...stagedNames()].sort();
-      if (!names.length) process.exit(1);
-      process.stdout.write(names.join("\\n") + "\\n");
-    `],
-    { cwd: ROOT, encoding: "utf8" },
-  );
+  const m = shipFilterStep().match(/node --input-type=module -e '([^']*)' > "\$PATHS_FILE"/);
+  assert.ok(m, "the ship-filter step emits the staged list with `node --input-type=module -e '…' > \"$PATHS_FILE\"`");
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", m[1]], { cwd: ROOT, encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr || r.stdout || "emit failed");
   return r.stdout.trim().split("\n").filter(Boolean);
 }

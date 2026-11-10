@@ -17,6 +17,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -60,21 +61,75 @@ function loadReadouts(units) {
   return { R: ctx.R, AO };
 }
 
-test("wheel LCD and HUD plate print the same number for one dash km/h (km/h and mph)", () => {
-  assert.match(DRAW, /HudReadouts\.spdDigits\(dash\)/);
-  assert.match(MESH, /HudReadouts\.spdDigits\(kph\)/);
+// THE TWO READOUTS, RUN. The HUD half is hud.js's own paintInstruments (the
+// #hud-speed-n write); the wheel half is the REAL CarDraw.drawCockpitRig
+// (tests/helpers/car-draw-vm.mjs), whose LCD digits are read back from the
+// getSpeedDigit meshes it draws. Both through the real HudReadouts, so a skew
+// on either side (a stray scale, a second rounding) prints two numbers.
+function hudSpeedText(units) {
+  const begin = HUD.indexOf("function paintInstruments(player) {");
+  const end = HUD.indexOf("\n}", begin) + 2;
+  assert.ok(begin >= 0 && end > begin, "hud.js paintInstruments");
+  const { R } = loadReadouts(units);
+  const writes = [];
+  const ctx = vm.createContext({
+    Math, IDLE_RPM: 1000, MAX_RPM: 10000, _redline: false, _rpmPct: -1,
+    clamp: (n, lo, hi) => Math.max(lo, Math.min(n, hi)),
+    HudElements: { isOn: (id) => id === "speed" },
+    document: { body: { classList: { contains: () => false } } },
+    G: { dashKph: DASH }, _ro: R,
+    els: { gear: "gear", rpmFill: "rpm", tach: "tach", speed: "speed" },
+    speedUnitEl: () => "unit",
+    hText: (el, v) => writes.push([el, v]), hStyle() {}, hToggle() {},
+  });
+  vm.runInContext(HUD.slice(begin, end), ctx, { filename: absSrc("js/ui/hud.js") });
+  return (speed) => {
+    writes.length = 0;
+    ctx.paintInstruments({ rpm: 5000, gear: 4, speed });
+    const w = writes.find(([el]) => el === "speed");
+    assert.ok(w, "paintInstruments wrote #hud-speed-n");
+    return String(w[1]);
+  };
+}
+function wheelLcdText(units) {
+  const v = carDrawVm({ cam: "cockpit", carMesh: { getSpeedDigit: (d) => ({ carMesh: "getSpeedDigit", d }) } });
+  const { ctx, G } = v;
+  const { AO } = loadReadouts(units);
+  ctx.AppearanceOpts = AO;
+  vm.runInContext(RO.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/hud-readouts.js") });
+  ctx.CockpitOpts = { wheel: () => "f1", interior: () => "carbon", wheelHasScreen: () => true,
+    layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), haloSize: () => 2, body: () => "standard" };
+  ctx.Car3D.cockpitMirrorGlass = () => [];
+  Object.assign(G, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: DASH, raceT: 0 });
+  v.field(() => 1000);
+  const c = Object.assign(G.player, { gear: 4, rpm: 5000, energy: 0 });
+  const digits = [];
+  G.gfx.draw = (mesh) => { if (mesh && mesh.carMesh === "getSpeedDigit") digits.push(mesh.d); };
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  return (speed) => {
+    digits.length = 0;
+    c.speed = speed;
+    v.carDraw.drawCockpitRig(c, base, 1 / 60, {}, false);
+    assert.ok(digits.length >= 1, "the f1 wheel LCD drew its speed digits");
+    return digits.join("");
+  };
+}
+// A dash scale that is NOT the identity, so a readout that skips it shows up.
+const DASH = (v) => v * 3.6 * 1.04;
+
+test("the wheel LCD draws the digits #hud-speed-n shows, for the same car speed (km/h and mph)", () => {
   for (const units of ["kmh", "mph"]) {
-    const { R } = loadReadouts(units);
-    for (let dash = -30; dash <= 420; dash += 0.173) {
-      const wheel = R.spdDigits(dash);
-      const hud = R.spdPlate(Math.max(0, dash)).n;
-      assert.equal(hud, wheel, `${units} @ ${dash.toFixed(3)} dash km/h`);
+    const hud = hudSpeedText(units), lcd = wheelLcdText(units);
+    for (let speed = -8; speed <= 300; speed += 0.731) {
+      assert.equal(lcd(speed), hud(speed), `${units} @ ${speed.toFixed(3)} m/s`);
     }
-    assert.equal(R.spdPlate(300).unit, units === "mph" ? "MPH" : "KPH");
-    assert.equal(R.spdDigits(-5), 0, "LCD clamp 0");
   }
+  const { R } = loadReadouts("kmh");
+  assert.equal(R.spdPlate(300).unit, "KPH");
+  assert.equal(loadReadouts("mph").R.spdPlate(300).unit, "MPH");
+  assert.equal(R.spdDigits(-5), 0, "LCD clamp 0");
   // Clamp is on the DISPLAY integer (after mph convert), so pin it in km/h.
-  assert.equal(loadReadouts("kmh").R.spdDigits(1500), 999, "LCD clamp 999");
+  assert.equal(R.spdDigits(1500), 999, "LCD clamp 999");
 });
 
 test("hidden instruments skip visual derivation and resume with current values and redline state", () => {

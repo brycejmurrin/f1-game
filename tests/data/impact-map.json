@@ -2652,6 +2652,7 @@
       "drawCockpitRig": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "drawMirrorCar": [
@@ -2779,7 +2780,6 @@
       "*": [
         "tests/specs/quali.spec.js",
         "tests/unit/global-registry.test.mjs",
-        "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -3247,6 +3247,7 @@
       ],
       "*": [
         "tests/unit/body-styles.test.mjs",
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/share-code.test.mjs"
@@ -5395,6 +5396,7 @@
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
+        "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel-row.test.mjs",
@@ -6083,6 +6085,7 @@
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/data-results.test.mjs",
+        "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs"
       ]
@@ -6168,6 +6171,7 @@
       ],
       "create": [
         "tests/unit/data-hub-picker.test.mjs",
+        "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs"
       ],
@@ -6199,6 +6203,7 @@
         "tests/unit/lap-format-rollover.test.mjs"
       ],
       "timeAtDist": [
+        "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/telemetry-trace.test.mjs"
       ]
     },
@@ -6209,11 +6214,13 @@
       "create": [
         "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs"
       ],
       "paintFrame": [
         "tests/unit/data-hardening-4477.test.mjs",
+        "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "playAnim": [
@@ -6224,9 +6231,6 @@
       ],
       "updateTextSummary": [
         "tests/unit/telemetry-trace.test.mjs"
-      ],
-      "*": [
-        "tests/unit/delta-sign-colour.test.mjs"
       ]
     },
     "js/data/telemetry-render.js": {
@@ -7733,7 +7737,6 @@
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
-        "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
@@ -12385,6 +12388,9 @@
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/race-radio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/radio-duration.test.mjs"
       ]
     },
     "js/race/broadcast.js": {
@@ -14487,6 +14493,7 @@
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "setAlphaWrite": [
@@ -14534,7 +14541,6 @@
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/service-worker.test.mjs",
         "tests/unit/sw-build-meta.test.mjs",
@@ -14673,6 +14679,10 @@
     },
     "js/render/glx/soft.js": {
       "awaitSoftPresent": [
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/renderer-soft-lifecycle.test.mjs"
+      ],
+      "blitIfDue": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
@@ -15823,6 +15833,7 @@
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -16432,6 +16443,7 @@
       ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/render-effective-res.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs"
       ],
@@ -17754,6 +17766,7 @@
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs"
       ],
       "invalidateLaneRects": [
@@ -17761,7 +17774,8 @@
       ],
       "radioPaintedCollapse": [
         "tests/unit/hud-metrics-layout.test.mjs",
-        "tests/unit/hud-radio-slot.test.mjs"
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-status-stack.test.mjs"
       ],
       "radioTopSlot": [
         "tests/unit/hud-metrics-layout.test.mjs"
@@ -17953,6 +17967,7 @@
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/race-insights.test.mjs",
@@ -17977,13 +17992,16 @@
       ],
       "hStyle": [
         "tests/unit/hud-fit-idempotent.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs"
       ],
       "hText": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "hToggle": [
-        "tests/unit/hud-radio-slot.test.mjs"
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs",
+        "tests/unit/hud-status-stack.test.mjs"
       ],
       "hlKey": [
         "tests/unit/hud-dock-btn-cache.test.mjs"
@@ -18049,7 +18067,6 @@
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",
-        "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/node-plan.test.mjs",
@@ -18807,6 +18824,7 @@
       "*": [
         "tests/specs/menu-survey.spec.js",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/settings-export.test.mjs"

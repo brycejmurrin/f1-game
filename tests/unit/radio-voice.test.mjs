@@ -28,6 +28,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { announceLife } from "../helpers/announce-life.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
 // last assertion (measured 2026-09-24: this file sat idle for most of its run).
@@ -158,11 +159,14 @@ test("no shipped radio line outlives its card", () => {
   // assertion that keeps the feature honest as the corpus grows.
   const files = ["js/game.js", "js/race/engineer.js", "js/race/pit-lane.js", "js/race/driving-coach.js",
     "js/race/race-insights.js", "js/race/session-records.js"];
+  // The card's life comes from the REAL banner (js/race/announce-banner.js
+  // showAnnounce, run): a shorter floor or pad there shortens every budget here.
+  const cardLife = announceLife(RV);
   let checked = 0, refused = [];
   for (const f of files) {
     for (const m of read(f).matchAll(/announce\(\s*"([^"]{4,})"\s*,\s*([\d.]+)\s*(?:,\s*"([a-z-]+)")?\s*\)/g)) {
       const [, msg, dur, kind] = m;
-      const life = Math.max(3, (+dur || 1.6) + 0.5);
+      const life = cardLife(msg, +dur, kind || "race");
       const p = P({ msg, life, kind: kind || "race" });
       checked++;
       if (!p.speak) refused.push(`${f}: "${msg}" (${p.reason})`);

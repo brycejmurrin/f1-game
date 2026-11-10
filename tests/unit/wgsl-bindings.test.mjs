@@ -224,11 +224,32 @@ test("cloudShadow: the second cloud octave runs only after the edge0 early-out",
 });
 
 test("cloudShadow edge0 early-out is exact: it fires only where the full smoothstep is 0 (float32)", () => {
+  // Every constant of the model below is READ from the shipped WGSL, not typed
+  // in: a JS copy of 0.2501 stayed green when the shader's margin dropped to
+  // 0.10 and the early-out began zeroing real cloud shadow.
+  const lit = loadChunks().LIT;
+  const body = (name) => { const [a, b] = fnSpan(lit, name); return stripComments(lit.slice(a, b)); };
+  const NUM = "(-?\\d+(?:\\.\\d+)?)";
+  const grab = (src, what, pattern) => {
+    const m = new RegExp(pattern.replace(/#/g, NUM)).exec(src);
+    assert.ok(m, `${what}: statement not found — the WGSL moved; re-derive the model`);
+    return m.slice(1).map(Number);
+  };
+  const cs = body("cloudShadow"), h = body("hash21");
+  const [E0A, E0B] = grab(cs, "edge0", "let edge0 = # - cover \\* #;");
+  const [S1Z, W1] = grab(cs, "octave 1", "let s1 = # \\+ # \\* svnoise\\(cp\\);");
+  const [MARGIN] = grab(cs, "early-out", "if \\(s1 \\+ # <= edge0\\) \\{ return 0\\.0; \\}");
+  const [W2, FREQ, OFF] = grab(cs, "octave 2", "let s = s1 \\+ # \\* svnoise\\(cp \\* # \\+ #\\);");
+  const [E1] = grab(cs, "smoothstep", "return smoothstep\\(edge0, #, s\\) \\* cover;");
+  const [HX, HY] = grab(h, "hash21 scale", "fract\\(p_in \\* vec2<f32>\\(#, #\\)\\)");
+  const [HD] = grab(h, "hash21 dot", "dot\\(p, p \\+ #\\)");
+  // svnoise is a mix of fract() hashes, so it is < 1: octave 2 adds < W2.
+  assert.ok(MARGIN >= W2, `early-out margin ${MARGIN} must cover octave 2's ${W2} (svnoise <= 1)`);
   const f = Math.fround;
   const fract = (x) => f(x - Math.floor(x));
   const hash21 = (x, y) => {
-    let px = fract(f(x * f(123.34))), py = fract(f(y * f(456.21)));
-    const d = f(f(px * f(px + f(45.32))) + f(py * f(py + f(45.32))));
+    let px = fract(f(x * f(HX))), py = fract(f(y * f(HY)));
+    const d = f(f(px * f(px + f(HD))) + f(py * f(py + f(HD))));
     px = f(px + d); py = f(py + d);
     return fract(f(px * py));
   };
@@ -244,12 +265,12 @@ test("cloudShadow edge0 early-out is exact: it fires only where the full smooths
   const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   for (let n = 0; n < 20000; n++) {
     const x = f(rnd() * 400 - 200), y = f(rnd() * 400 - 200), cover = f(0.002 + rnd() * 0.998);
-    const edge0 = f(0.54 - f(cover * 0.4));
-    const s1 = f(0.5 * svnoise(x, y));
-    const s = f(s1 + f(0.25 * svnoise(f(f(x * 2.03) + 1.7), f(f(y * 2.03) + 1.7))));
-    if (f(s1 + 0.2501) <= edge0) {
+    const edge0 = f(f(E0A) - f(cover * f(E0B)));
+    const s1 = f(f(S1Z) + f(f(W1) * svnoise(x, y)));
+    const s = f(s1 + f(f(W2) * svnoise(f(f(x * f(FREQ)) + f(OFF)), f(f(y * f(FREQ)) + f(OFF)))));
+    if (f(s1 + f(MARGIN)) <= edge0) {
       fired++;
-      assert.equal(f(smooth(edge0, 0.92, s) * cover), 0, `x=${x} y=${y} cover=${cover}`);
+      assert.equal(f(smooth(edge0, f(E1), s) * cover), 0, `x=${x} y=${y} cover=${cover}`);
     }
   }
   assert.ok(fired > 1000, `the early-out fires on a real share of samples (${fired}/20000)`);

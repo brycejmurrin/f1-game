@@ -345,6 +345,8 @@
     "// dispatch: the Actions dispatcher's pure plan over fixture GitHub state (ready launches and their addresses, provenance-gated priority/pause, caps, claims, stale → needs-owner + CONTINUE, codex 6 h, hold, deploy red, nudges, needs-decision digests, Board) and the fire path with a stubbed fetch; no network; < 0.5 s.",
     "tests/unit/dispatch.test.mjs",
     "tests/unit/docs-integrity.test.mjs",
+    "// Every DOM id literal in js/** exists (index.html, its own page, or a derived runtime creator), and shell-ids RUNTIME_IDS cannot go stale. ~1.5 s.",
+    "tests/unit/dom-id-literals.test.mjs",
     "// Decorrelated DriverRatings.BASE + skill()/overall personality pins.",
     "tests/unit/driver-ratings-personality.test.mjs",
     "tests/unit/driving-coach.test.mjs",
