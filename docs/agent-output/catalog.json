@@ -1184,6 +1184,15 @@
       ]
     },
     {
+      "path": "tools/ci/ready-sweep.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/release-provenance.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1407,6 +1416,7 @@
       "outputPolicy": "job-status",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--format",
         "--quiet"
       ],
       "npmScripts": [
@@ -2537,6 +2547,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/bryce-phone.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/census-entry.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2746,6 +2761,11 @@
     },
     {
       "path": "tools/lib/session-contracts.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/shot-match.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -4069,6 +4089,11 @@
       ]
     },
     {
+      "path": "tools/track/verify-track-baseline.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/track/verify-track.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -4126,6 +4151,15 @@
       "nativeOutputFlagMentions": [
         "--json",
         "--out"
+      ]
+    },
+    {
+      "path": "tools/ui/bryce-phone.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
       ]
     },
     {
@@ -4242,6 +4276,16 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/issue-shots.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ]
+    },
+    {
       "path": "tools/ui/layout-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -4307,6 +4351,15 @@
       "path": "tools/ui/menu-screens.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/phone-shot-diff.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/ui/probe-sheets-contract.mjs",
@@ -4615,7 +4668,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-planning.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-btn-cache.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout-hidden.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/layout-presets.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/overlay-publisher.test.mjs tests/unit/overlay-render.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
+      "command": "node --test --test-timeout=900000 tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/apex-diag-canvas.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-planning.test.mjs tests/unit/career-readslot-quota.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-btn-cache.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout-hidden.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/layout-presets.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/overlay-publisher.test.mjs tests/unit/overlay-render.test.mjs tests/unit/pause-opts.test.mjs tests/unit/post-fx-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race-tab-no-race.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs"
     },
     {
       "name": "test:steering-unit",

@@ -59,7 +59,6 @@ const BenchRun = (function () {
   function save(p) { try { const t = JSON.stringify(p); const s = store(); if (s) s.rawSet(KEY, t); else localStorage.setItem(KEY, t); } catch (_) { /* blocked storage: the run cannot cross a reload */ } }
   function clear() { try { const s = store(); if (s) s.rawDel(KEY); else localStorage.removeItem(KEY); } catch (_) { /* blocked storage */ } }
 
-  // ---- pure: tests/unit/bench-run.test.mjs --------------------------------------------------------------------
   function median(a) {
     const v = a.filter((x) => x != null && Number.isFinite(+x)).map(Number).sort((x, y) => x - y);
     if (!v.length) return null;
@@ -132,7 +131,6 @@ const BenchRun = (function () {
       prefs, show: false, facts: null, legs: t.legs.map((l) => Object.assign({}, l, { state: "pending" })) };
   }
 
-  // ---- renderer path ------------------------------------------------------------------------------------------
   const RP = () => (typeof RendererPicker !== "undefined" ? RendererPicker : null);
   function readPrefs() {
     const s = store();
@@ -147,7 +145,6 @@ const BenchRun = (function () {
   function pathPrefs(path, base) { return path ? { backend: "three", threePath: path === "webgl2" ? "1" : "0" } : base; }
   function liveApi() { try { return (RP() && RP().liveThreeApi()) || (RP() && RP().liveBackend()) || null; } catch (_) { return null; } }
 
-  // ---- the run --------------------------------------------------------------------------------------------------
   function stillRunning() { const p = load(); return !!(p && p.state === "running"); }
   // Screen Wake Lock: a hands-free run must not let the phone sleep. The browser drops the lock whenever the page hides,
   // so it is asked for again on visible and on every post-reload resume. Unsupported = silent; refused = one hint.
@@ -478,11 +475,9 @@ const BenchRun = (function () {
     return true;
   }
 
-  // ---- results file ----------------------------------------------------------------------------------------------
   function resultText() { const p = load(); return p && p.state !== "running" ? JSON.stringify(p) : ""; }
   function fileName(p) { return "apex26-bench-" + (p.test || "run") + "-" + String(p.finishedAt || p.startedAt || "").replace(/[:.]/g, "-").slice(0, 19) + ".json"; }
 
-  // ---- the page (#bench, index.html) -----------------------------------------------------------------------------
   const doc = () => (typeof document !== "undefined" ? document : null);
   function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
   function btn(label, cls, fn) { const b = el("button", cls, label); b.type = "button"; b.addEventListener("click", (e) => { e.stopPropagation(); fn(); }); return b; }

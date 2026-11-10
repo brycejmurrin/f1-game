@@ -1,5 +1,7 @@
 # Ratchet raise fragments — why `ratchets.json` stopped conflicting (2026-10-15, #2291)
 
+Summary: Why ratchets.json still fought after one-entry-per-line: two PRs growing ONE module wrote two absolutes on one line (#2231/#2242/#2254/#2289); per-branch delta fragments in `tests/data/ratchets.d/`, `--fold`, and the GitHub merge-driver citation (#2291).
+
 ## What conflicted (measured)
 `git merge-tree --write-tree` of each PR head against the deploy tip `b8add7aa`, 2026-10-15 ~22:10Z:
 

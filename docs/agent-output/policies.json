@@ -771,6 +771,11 @@
       "presentation": "native",
       "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan; missing fleet-block field on a cursor/ branch"
     },
+    "tools/ci/ready-sweep.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "STALE/DRIFTED rows with their cites; the ready over|within cap row; = ready-sweep verdict; exit 3 unreadable GitHub"
+    },
     "tools/ci/release-provenance.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -1701,6 +1706,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/bryce-phone.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Library: the preset object, store entries and read-back mismatches are returned, never printed."
+    },
     "tools/lib/census-entry.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1895,6 +1905,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
+    },
+    "tools/lib/shot-match.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Library: match rows and the summary are returned, never printed."
     },
     "tools/lib/solid-in-road.cjs": {
       "action": "no-direct-output",
@@ -2866,6 +2881,11 @@
       "presentation": "shared-levels",
       "preserve": "LGPL attribution, imported status/IDs and actual write receipts; prose currently accompanies --json."
     },
+    "tools/track/verify-track-baseline.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
     "tools/track/verify-track.cjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -2910,6 +2930,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "AUDIT / TOTALS / SKIPPED / CELL / BYSCREEN / CLEAN lines and exit status (2 bad argument or missing file); output is bounded by --top and a per-cell cap, so it is already compact"
+    },
+    "tools/ui/bryce-phone.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The preset lines or JSON, every read-back mismatch and the final = bryce-phone verdict line."
     },
     "tools/ui/circuit-axis.mjs": {
       "action": "no-direct-output",
@@ -3006,6 +3031,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/issue-shots.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per image (file, pixel size, window, px per CSS px), failed downloads with their status, the = issue-shots line."
+    },
     "tools/ui/layout-audit.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -3045,6 +3075,11 @@
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c2"
+    },
+    "tools/ui/phone-shot-diff.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The screen factor, every DIFFERENT SIZE row with its score, the unmatched list and the = phone-shot-diff line."
     },
     "tools/ui/probe-sheets-contract.mjs": {
       "action": "keep-native",
