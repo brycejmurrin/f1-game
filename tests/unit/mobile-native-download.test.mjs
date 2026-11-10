@@ -549,3 +549,14 @@ test("missing or failing retention operations cannot block sharing", async () =>
     assert.equal(shares.length, 1);
   }
 });
+
+test("Android FileProvider exposes only the cache folder NativeDownload shares from", () => {
+  const xml = readFileSync(join(ROOT, "mobile/android/app/src/main/res/xml/file_paths.xml"), "utf8")
+    .replace(/<!--[\s\S]*?-->/g, "");
+  const src = readFileSync(join(ROOT, "js/core/native-download.js"), "utf8");
+  const exportDir = src.match(/EXPORT_DIR = "([^"]+)"/)[1];
+  assert.match(src, /CACHE_DIR = "CACHE"/, "exports are written to Directory.CACHE (cache-path)");
+  const roots = [...xml.matchAll(/<([a-z-]+-path)\b([^>]*)\/>/g)].map((m) => ({ tag: m[1], path: /path="([^"]*)"/.exec(m[2])[1] }));
+  assert.deepEqual(roots, [{ tag: "cache-path", path: exportDir + "/" }],
+    "one cache-path root at EXPORT_DIR; no external-path / '.' roots");
+});
