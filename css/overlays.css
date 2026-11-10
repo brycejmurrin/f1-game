@@ -1116,17 +1116,19 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
    109 %) the tools track is ~137 own px; ten tiles at 4-up are three rows of
    --tap-paint (147), at 5-up two rows (97); the 44-painted tile floor keeps
    even a three-row practice tray (11 tiles, 125) inside the track. */
-body[data-density="compact"][data-shape="wide"] #pausemenu {
-  --sheet-w: min(calc(760px * var(--look-pause-w, 1)), 100%);
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu {
+  /* 760 own px, and never under 620 PAINTED: at UI SIZE 51 % a 760 card is 388 px
+     of an 852 px window (#5200: use the width). 100% (the safe box) still caps it. */
+  --sheet-w: min(calc(max(760px, 620px / var(--ui-scale)) * var(--look-pause-w, 1)), 100%);
   --pm-door: max(var(--tap), var(--tap-paint), var(--tap-paint-at), calc(var(--tap-0) * var(--look-pause-btn, 0)));
   justify-items: center;
 }
 /* SIDEBAR's full-height strip and WIDE's bottom dock are geometry: the phone
    card keeps its own height; a player's VERTICAL POSITION still moves it. */
-body[data-density="compact"][data-shape="wide"] #pausemenu > .sheet { height: auto; }
-:root[data-pause-layout="sidebar"]:not([data-look-pause-vpos]):has(> body[data-density="compact"][data-shape="wide"]) #pausemenu { align-items: center; }
-body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-head { display: none; }
-body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu > .sheet { height: auto; }
+:root[data-pause-layout="sidebar"]:not([data-look-pause-vpos]):has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu { align-items: center; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-head { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1135,43 +1137,43 @@ body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body {
 }
 /* The race line shares the doors' row and never grows it: strong + detail,
    the objective and pit lines stay in the tray's own cards. */
-body[data-density="compact"][data-shape="wide"] #pm-race-context {
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context {
   grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; align-content: center;
   gap: 0 var(--gap); padding-block: calc(var(--gap) / 3);
   min-height: 0; max-height: var(--pm-door); overflow: hidden;
 }
-body[data-density="compact"][data-shape="wide"] #pm-race-context > span { display: inline; }
-body[data-density="compact"][data-shape="wide"] #pm-race-context > small { display: none; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); position: static; height: auto; margin: 0; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-restart { grid-area: restart; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-settings { grid-area: settings; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context > span { display: inline; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pm-race-context > small { display: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); position: static; height: auto; margin: 0; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-restart { grid-area: restart; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-settings { grid-area: settings; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 5; align-content: start; flex-basis: auto; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details > summary { min-height: max(40px, calc(44px / var(--ui-scale))); padding: calc(var(--gap) / 6); }   /* gap/6 inline (~2px): MESSAGES is 3px wider than a 5-up tile's text box at gap/3 */
 /* The 5-up tile label steps down one notch: in the Home Screen and Safari windows the 59 px insets leave a 393 own px
    tray, and MESSAGES at TEXT large (74 px) is 3 px wider than a 5-up tile's 71 px text box (CI on ec39facd and
    354334ed, A and C; D's 456 px tray fits at full size). 0.92 x --fs-micro is 14.7 px at TEXT large (MESSAGES 68).
    A flat step, not a container unit: `min(--fs-micro, 3.75cqi)` fit here but CI's Chromium kept the full size after a
    layout switch (the SIDEBAR cell). The contract lets type scale, never a label overflow (#5153 §3 rule 3). */
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors button,
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
-body[data-density="compact"][data-shape="wide"] #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
-body[data-density="compact"][data-shape="wide"] #pausemenu #pm-quit::before { content: none; }
-body[data-density="compact"][data-shape="wide"] #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors button,
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quick-doors > details { font-size: calc(var(--fs-micro) * 0.92); }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu #pm-quit::before { content: none; }
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
 /* The doors outside the tray paint the touch comfort floor, not the compact
    one; COMPACT (the layout that spends the least height) takes the chip floor. */
-body[data-density="compact"][data-shape="wide"] #pausemenu .sheet-body > button:not(.as-tbtn) { min-height: var(--pm-door); flex: none; min-width: 0; }
-:root[data-pause-layout="compact"]:has(> body[data-density="compact"][data-shape="wide"]) #pausemenu {
+body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausemenu .sheet-body > button:not(.as-tbtn) { min-height: var(--pm-door); flex: none; min-width: 0; }
+:root[data-pause-layout="compact"]:has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu {
   --pm-door: max(var(--tap-paint), var(--chip-h), calc(var(--chip-h-0) * var(--look-pause-btn, 0)));
 }
 /* SIDE RIGHT (and SIDEBAR on its right edge): RESUME under the right thumb. */
-:root[data-pause-side="right"]:has(> body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+:root[data-pause-side="right"]:has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu .sheet-body {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
   grid-template-areas: "settings restart ctx" "tools tools resume" "tools tools quit";
 }
 /* WIDE: the doors along the bottom edge in one row, the tray above them, so the
    race keeps the top of the screen (the layout's own align-items: end stands). */
-:root[data-pause-layout="wide"]:has(> body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+:root[data-pause-layout="wide"]:has(> body:is([data-density="compact"][data-shape="wide"], [data-pause-short])) #pausemenu .sheet-body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas: "ctx ctx ctx ctx" "tools tools tools tools" "resume restart settings quit";
