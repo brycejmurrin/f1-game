@@ -32,7 +32,7 @@ export const WCAG_MIN = 24;
 export const COMFY_FALLBACK = 44;
 export const TAP_SLACK = 0.5;
 // Bump when the rule changes, so cached cells (menu-mock's cellCache) re-measure.
-export const TAP_RULE_VERSION = 1;
+export const TAP_RULE_VERSION = 2;
 
 /** The two floors, from the body's computed `--tap` string ("52px", "" when unset). */
 export function readFloors(tapVar) {
@@ -77,6 +77,17 @@ export function measureTapTarget(el, root) {
   return { box, w: css.w, h: css.h, zoom };
 }
 
+/** In-page: is `el` rendered at all? A control inside a CLOSED <details> keeps a real
+ *  getBoundingClientRect() and ordinary display/visibility/opacity (the hiding is
+ *  `content-visibility: hidden` on the ::details-content pseudo-element, which no
+ *  ancestor walk can see), so a sweep that tests only those three judges controls
+ *  nobody can see or tap: 16 of fit-audit's 17 "tap targets" on SETTINGS › DISPLAY
+ *  (docs/notes/GEOMETRY-TRUTH-HUNT-2-2026-11-10.md T2). checkVisibility() is the
+ *  question being asked; an engine without it falls back to the old answer. */
+export function isRendered(el) {
+  return typeof el.checkVisibility !== "function" || el.checkVisibility();
+}
+
 export const TAP_FLOOR_SRC = `(() => {
   if (window.__apexTap && window.__apexTap.v === ${TAP_RULE_VERSION}) return true;
   const WCAG_MIN = ${WCAG_MIN}, COMFY_FALLBACK = ${COMFY_FALLBACK}, TAP_SLACK = ${TAP_SLACK};
@@ -85,11 +96,13 @@ export const TAP_FLOOR_SRC = `(() => {
   ${toCssPx.toString()}
   ${judgeTap.toString()}
   ${measureTapTarget.toString()}
+  ${isRendered.toString()}
   window.__apexTap = {
     v: ${TAP_RULE_VERSION}, WCAG_MIN, TAP_SLACK,
     floors: () => readFloors(getComputedStyle(document.body).getPropertyValue("--tap")),
     measure: measureTapTarget,
     judge: judgeTap,
+    rendered: isRendered,
   };
   return true;
 })()`;
