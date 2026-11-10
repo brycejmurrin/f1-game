@@ -13,7 +13,27 @@ const CareerRestorePoints = (function () {
     const getDisk = () => safe(() => opts.localStorage || (typeof localStorage !== "undefined" && localStorage));
     const now = opts.now || (() => Date.now());
     const previews = new WeakMap();
-    let opening = null, sequence = 0;
+    let opening = null, handle = null, sequence = 0;
+    // iOS drops the connection behind a suspended page, often with no close
+    // event: a throwing transaction() or an UnknownError abort is the only
+    // sign. Forget that handle and run the operation once more on a fresh one.
+    const LOST = { lost: true };
+    const lost = (e) => !!e && (e.name === "InvalidStateError" || e.name === "UnknownError");
+    const ended = (tx, ev) => lost(tx.error) || lost(ev && ev.target && ev.target.error);
+    function invalidate(db) {
+      if (handle !== db) return;
+      handle = null; opening = null;
+      try { db.close(); } catch (_) { /* already closed */ }
+    }
+    async function withDb(run, unavailable, failed) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const db = await open(); if (!db) return unavailable;
+        const out = await new Promise((resolve) => { try { run(db, resolve); } catch (_) { resolve(LOST); } });
+        if (out !== LOST) return out;
+        invalidate(db);
+      }
+      return failed;
+    }
     const captureHealth = new Map(), captureOwners = new Map();
     function health() {
       return [...captureHealth].map(([key, value]) => Object.assign({ flavour: key.split(".")[0], slot: +key.split(".")[1] }, value));
@@ -29,7 +49,7 @@ const CareerRestorePoints = (function () {
         const finish = (db) => {
           if (settled) { if (db) { try { db.close(); } catch (_) { /* late handle */ } } return; }
           settled = true; if (timer !== null) clearTimeout(timer);
-          if (db) db.onversionchange = () => { db.close(); opening = null; };
+          if (db) { handle = db; db.onclose = db.onversionchange = () => invalidate(db); }
           resolve(db);
         };
         try {
@@ -87,22 +107,19 @@ const CareerRestorePoints = (function () {
         return result;
       };
       if (!json) return finish(refused("invalid-or-too-large"));
-      const db = await open(); if (!db) return finish(refused("history-unavailable"));
-      return new Promise((resolve) => {
-        let tx, result = null;
-        try {
-          tx = db.transaction("slots", "readwrite"); const os = tx.objectStore("slots"), req = os.get(key);
-          req.onsuccess = () => {
-            const items = validItems(req.result && req.result.items, flavour);
-            if (items[0] && items[0].json === json) { result = { ok: true, durable: true, id: items[0].id, duplicate: true }; return; }
-            const at = now(), id = at.toString(36) + "-" + (++sequence).toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-            items.unshift({ id, at, reason, json });
-            os.put({ k: key, items: items.slice(0, LIMIT) }); result = { ok: true, durable: true, id };
-          };
-          tx.oncomplete = () => resolve(result || refused("history-write-failed"));
-          tx.onerror = tx.onabort = () => resolve(refused("history-write-failed"));
-        } catch (_) { resolve(refused("history-write-failed")); }
-      }).then(finish);
+      return finish(await withDb((db, resolve) => {
+        let result = null;
+        const tx = db.transaction("slots", "readwrite"), os = tx.objectStore("slots"), req = os.get(key);
+        req.onsuccess = () => {
+          const items = validItems(req.result && req.result.items, flavour);
+          if (items[0] && items[0].json === json) { result = { ok: true, durable: true, id: items[0].id, duplicate: true }; return; }
+          const at = now(), id = at.toString(36) + "-" + (++sequence).toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+          items.unshift({ id, at, reason, json });
+          os.put({ k: key, items: items.slice(0, LIMIT) }); result = { ok: true, durable: true, id };
+        };
+        tx.oncomplete = () => resolve(result || refused("history-write-failed"));
+        tx.onerror = tx.onabort = (ev) => resolve(ended(tx, ev) ? LOST : refused("history-write-failed"));
+      }, refused("history-unavailable"), refused("history-write-failed")));
     }
     function validItems(items, flavour) {
       if (!Array.isArray(items)) return [];
@@ -113,14 +130,12 @@ const CareerRestorePoints = (function () {
     function parse(json) { try { return JSON.parse(json); } catch (_) { return null; } }
     async function read(flavour, i) {
       const key = slotKey(flavour, i); if (!key) return { ok: false, reason: "invalid-slot", items: [] };
-      const db = await open(); if (!db) return { ok: false, reason: "history-unavailable", items: [] };
-      return new Promise((resolve) => {
-        try {
-          const r = db.transaction("slots", "readonly").objectStore("slots").get(key);
-          r.onsuccess = () => resolve({ ok: true, items: validItems(r.result && r.result.items, flavour) });
-          r.onerror = () => resolve({ ok: false, reason: "history-read-failed", items: [] });
-        } catch (_) { resolve({ ok: false, reason: "history-read-failed", items: [] }); }
-      });
+      const failed = { ok: false, reason: "history-read-failed", items: [] };
+      return withDb((db, resolve) => {
+        const tx = db.transaction("slots", "readonly"), r = tx.objectStore("slots").get(key);
+        r.onsuccess = () => resolve({ ok: true, items: validItems(r.result && r.result.items, flavour) });
+        r.onerror = (ev) => resolve(ended(tx, ev) ? LOST : failed);
+      }, { ok: false, reason: "history-unavailable", items: [] }, failed);
     }
     async function list(flavour, i) {
       const r = await read(flavour, i);

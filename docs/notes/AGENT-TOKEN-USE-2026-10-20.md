@@ -1,5 +1,7 @@
 # Where Cursor agents spend tokens, and what was built (2026-10-20)
 
+Summary: Where Cursor cloud agents spend tokens: nine in-flight runs plus 56 cached ones read through `cursor-agents.mjs`, result characters as the input-token proxy.
+
 Method: nine Cursor cloud runs in flight (a Fleet D wave: five UI surveys, two experiments, two audits, one hunter), read with
 `tools/ci/cursor-agents.mjs` (`transcript`, `call`) over the run stream's replay so far (capped at 12 s per run), plus the 56
 cached runs from earlier. "Result characters" are the stored size of tool results in the stream, a proxy for input tokens: the

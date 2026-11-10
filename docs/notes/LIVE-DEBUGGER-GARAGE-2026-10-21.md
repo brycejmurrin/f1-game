@@ -1,5 +1,7 @@
 # Live debugger hunt — garage lag on TLX (B·H30, B·H32, 2026-10-21)
 
+Summary: Garage lag on TLX: choppy while dragging, in livery select, edit, team and part changes (B·H30, B·H32).
+
 Ask (Bryce, ~19:08Z via OrchB 26): "I still feel real lag when in the garage with three js web gpu and
 selecting liveries editing them changing teams etc". Asked in session (AskUserQuestion, ~19:20Z): every
 action lags (livery select, livery edit, team change, part switch); the shape is **choppy while dragging**;
