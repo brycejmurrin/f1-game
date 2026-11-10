@@ -46,9 +46,10 @@ test("each backend's resize() sizes the present buffer from the CAPPED dpr (eval
   assert.equal(evalAt(wgx, { WGX_MINIMAL: false, WGX_LITE: false }), 2, "WGX full at DPR 3");
 });
 
-test("RESOLUTION ships at MED (scale 0.75) on a coarse-pointer device and AUTO elsewhere (#5166: was LOW)", () => {
+test("RESOLUTION ships at AUTO everywhere; a phone's AUTO is capped at MED's 0.75 (#5227; #5166: was a MED pin)", () => {
   const src = read("js/ui/scale.js");
-  assert.match(src, /const defaultResMode = \(\) => \(coarseUi\(\) \? "med" : "auto"\);/);
+  assert.match(src, /const defaultResMode = \(\) => "auto";/);
+  assert.match(src, /const PHONE_AUTO_CEIL = 0\.75;/);
   assert.match(src, /\{ id: "low",\s+label: "LOW",\s+v: 0\.5\s+\}/);
   assert.match(src, /\{ id: "med",\s+label: "MED",\s+v: 0\.75\s+\}/);
   assert.match(src, /\{ id: "high",\s+label: "HIGH",\s+v: 1\.0\s+\}/);

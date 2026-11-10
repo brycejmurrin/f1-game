@@ -9,12 +9,15 @@ const F1API = (function () {
   // URLs hardcoded /2026/ would have kept serving that season forever without
   // ever erroring — the worst kind of bug, because it looks like it works.
   // Computed per call, not once at load, so a tab left open across New Year
-  // rolls over instead of pinning the year it booted in. Not Ergast's
-  // `/current` alias: this sandbox's proxy blocks api.jolpi.ca, so it could
-  // not be verified here — a safe swap once someone confirms it responds.
+  // rolls over instead of pinning the year it booted in. Jolpica is reachable
+  // and also answers Ergast's `/current` alias (checked 2026-11-10); the clock
+  // year stays because the caller needs the year it asked for to label a
+  // fallback, and `current` would hide which season answered.
   //
   // Between Jan 1 and the opener, the standings endpoints return an empty
-  // list — correct, and every caller already handles it.
+  // list (js/data/standings.js falls back to last season), and next year's
+  // calendar may not be published yet: /2027.json answered `total: "0"` on
+  // 2026-11-10 (js/data/schedule.js falls back to last season too).
   const season = () => String(new Date().getFullYear());
   const MINUTE = 60 * 1000;
   const HOUR = 60 * MINUTE;
@@ -23,6 +26,11 @@ const F1API = (function () {
   const TTL_LATEST = 10 * MINUTE;
   const TTL_HISTORIC = 7 * 24 * HOUR;
   const SESSION_FROZEN_MS = 6 * HOUR;
+  // Jolpica pages every list: no `limit` means 30 rows (MRData.limit "30"),
+  // and its documented maximum is 100. Ask for 100 and page by MRData.total so
+  // a 31st race or driver is never cut off silently.
+  const JOLPICA_LIMIT = 100;
+  const JOLPICA_MAX_PAGES = 10;
   let latestSessionKey = null;
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
@@ -34,6 +42,31 @@ const F1API = (function () {
   }
   function str(v) { return (typeof v === "string" && v.length) ? v : null; }
   function arr(v) { return Array.isArray(v) ? v : []; }
+
+  // Every row of a paged Jolpica list. `rowsOf(json)` picks the list out of one
+  // page; pages are fetched while the rows held are fewer than MRData.total
+  // (offset = rows held, so a server that caps a page below `limit` still
+  // pages right). Cached pages are never mutated: the merge is a new array.
+  function jolpicaRows(path, ttl, rowsOf) {
+    const base = JOLPICA + path + "?limit=" + JOLPICA_LIMIT;
+    const page = function (offset) { return request(offset ? base + "&offset=" + offset : base, ttl); };
+    return page(0).then(function (first) {
+      const rows = arr(rowsOf(first)).slice();
+      const total = num(first && first.MRData && first.MRData.total);
+      let pages = 1;
+      function more() {
+        if (total == null || rows.length >= total || pages >= JOLPICA_MAX_PAGES) return { first, rows };
+        pages++;
+        return page(rows.length).then(function (json) {
+          const next = arr(rowsOf(json));
+          if (!next.length) return { first, rows };
+          for (let i = 0; i < next.length; i++) rows.push(next[i]);
+          return more();
+        });
+      }
+      return more();
+    });
+  }
 
   function jRaces(json) {
     return arr(json && json.MRData && json.MRData.RaceTable && json.MRData.RaceTable.Races);
@@ -60,13 +93,22 @@ const F1API = (function () {
     return out;
   }
 
-  function schedule() {
-    return request(JOLPICA + "/" + season() + ".json", TTL_SCHEDULE).then(function (json) {
-      return jRaces(json).map(function (r) {
+  // `year` (optional) asks for another season — the Schedule tab shows last
+  // season while next year's calendar is unpublished. An EMPTY answer is not
+  // kept for TTL_SCHEDULE (24 h): it is the one answer that changes the day
+  // the calendar is published, so it is dropped from the cache and asked again.
+  function schedule(year) {
+    const y = year != null ? String(year | 0) : season();
+    const path = "/" + y + ".json";
+    return jolpicaRows(path, y < season() ? TTL_HISTORIC : TTL_SCHEDULE, jRaces).then(function (page) {
+      if (!page.rows.length) forget(JOLPICA + path + "?limit=" + JOLPICA_LIMIT);
+      return page.rows.map(function (r) {
         const c = (r && r.Circuit) || {};
         const loc = c.Location || {};
         return {
+          season: num(r && r.season) || num(y),
           round: num(r && r.round),
+          circuitId: str(c.circuitId),
           name: str(r && r.raceName),
           circuit: str(c.circuitName),
           locality: str(loc.locality),
@@ -85,7 +127,7 @@ const F1API = (function () {
   // (js/data/standings.js). A finished season never changes: TTL_HISTORIC.
   function standingsUrl(year, what) {
     const y = year != null ? String(year | 0) : season();
-    return { url: JOLPICA + "/" + y + "/" + what + ".json", ttl: y < season() ? TTL_HISTORIC : TTL_STANDINGS };
+    return { path: "/" + y + "/" + what + ".json", ttl: y < season() ? TTL_HISTORIC : TTL_STANDINGS };
   }
 
   // Jolpica embeds the season on StandingsLists[0]. A proxy or stale CDN that
@@ -104,10 +146,12 @@ const F1API = (function () {
 
   function driverStandings(year) {
     const q = standingsUrl(year, "driverstandings");
-    return request(q.url, q.ttl).then(function (json) {
+    return jolpicaRows(q.path, q.ttl, function (json) {
       const sl = jStandingsList(json);
-      if (!standingsSeasonOk(sl, year)) return [];
-      return arr(sl && sl.DriverStandings).map(function (s) {
+      return sl && sl.DriverStandings;
+    }).then(function (page) {
+      if (!standingsSeasonOk(jStandingsList(page.first), year)) return [];
+      return page.rows.map(function (s) {
         const d = (s && s.Driver) || {};
         // The feed lists a season's constructors in the order the driver drove for
         // them (2025: Lawson ["Red Bull", "RB F1 Team"]), so the current team is the LAST.
@@ -129,10 +173,12 @@ const F1API = (function () {
 
   function constructorStandings(year) {
     const q = standingsUrl(year, "constructorstandings");
-    return request(q.url, q.ttl).then(function (json) {
+    return jolpicaRows(q.path, q.ttl, function (json) {
       const sl = jStandingsList(json);
-      if (!standingsSeasonOk(sl, year)) return [];
-      return arr(sl && sl.ConstructorStandings).map(function (s) {
+      return sl && sl.ConstructorStandings;
+    }).then(function (page) {
+      if (!standingsSeasonOk(jStandingsList(page.first), year)) return [];
+      return page.rows.map(function (s) {
         const cons = (s && s.Constructor) || {};
         return {
           pos: num(s && s.position),
@@ -182,7 +228,10 @@ const F1API = (function () {
       type: str(s.session_type),
       circuit: str(s.circuit_short_name),
       country: str(s.country_name),
-      dateStart: str(s.date_start)
+      dateStart: str(s.date_start),
+      // OpenF1 sends the scheduled end (/sessions date_end); the LIVE badge's
+      // window is start − 30 min … end + 30 min, OpenF1's own live window.
+      dateEnd: str(s.date_end)
     };
     if (out.sessionKey !== null && out.dateStart) sessionDates[out.sessionKey] = out.dateStart;
     return out;
@@ -327,6 +376,25 @@ const F1API = (function () {
     return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       return a.length ? intervalValues(a) : null;
+    });
+  }
+
+  // Whole-session snapshots in the delta shape ({values, cursor}), read through
+  // the cache (sessionTtl): a FINISHED session's LIVE tab paints from these
+  // instead of re-downloading several MB per build, and the cursor they carry
+  // seeds the delta requests that follow. Same URL as positions()/intervals().
+  function sessionPositions(sessionKey) {
+    const url = OPENF1 + "/position?session_key=" + encodeURIComponent(sessionKey);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      const a = arr(list);
+      return { values: positionValues(a), cursor: cursorOf(a) };
+    });
+  }
+  function sessionIntervals(sessionKey) {
+    const url = OPENF1 + "/intervals?session_key=" + encodeURIComponent(sessionKey);
+    return request(url, sessionTtl(sessionKey)).then(function (list) {
+      const a = arr(list);
+      return { values: intervalValues(a), cursor: cursorOf(a) };
     });
   }
 
@@ -549,8 +617,10 @@ const F1API = (function () {
     weather,
     positions,
     livePositions,
+    sessionPositions,
     intervals,
     liveIntervals,
+    sessionIntervals,
     sessionDrivers,
     sessionResult,
     fastestLap,

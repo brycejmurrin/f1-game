@@ -234,9 +234,10 @@ driver spread (`SKILL_SPAN`, 0.0232 × pace/100) stays below it, so the car stil
 ## Team development
 
 `team.stats` and `TIER_V` are never mutated. `career.tdev[teamId]` is an additive
-delta in stat points (±8 → ±2% pace via `TDEV_TO_PACE`, ~7.7 of the compressed `TIER_V`
-steps — about twice the whole tier ladder; that multiplier was not compressed with the
-ladder, and the number is a balance call), folded into one new per-car field baked in
+delta in stat points (`TDEV_TO_PACE` 0.25 % a point). A winter reaches `TDEV_REACH` = ±3
+(±0.75 % pace, ~2.9 of the compressed `TIER_V` steps; that multiplier was not compressed
+with the ladder, and the number is a balance call); `TDEV_MAX` ±8 is only the clamp an
+imported save is held to (#5047). Folded into one new per-car field baked in
 `makeCars()`:
 
 ```js
@@ -258,6 +259,9 @@ Two gates, not one:
 
 1. **Ownership** — `career.owned`. Every cost-0 option is always owned, and
    `Parts.DEFAULTS` are all cost-0, so a legal car is guaranteed by construction.
+   The list holds OWNERSHIP KEYS, `Parts.ownId(opt)` = `opt.own || opt.id`: brakes
+   Sport owns as `sport_brakes` because suspension also has a `sport` (#5043). A save
+   holding the bare `sport` keeps both rows (SaveMigrate `cleanParts` grants the key).
 2. **A fitted-cost cap** — `Career.budget()`, a MULTIPLE of the team's own works
    car (`BUDGET_MULT`, level 0 = exactly that car), clipped by the
    catalog-derived `budgetCap()` ceiling described under *Two sinks* below.
@@ -653,9 +657,11 @@ come last.
    the whole drift, craft and consistency half. Per-axis deltas, clamped **±12**.
    Experience is bumped +4 a year against its **own 0..40 cap** (per-axis dev deltas carry the ± clamp), because it is cumulative:
    at ±12 a rookie would stall four seasons in and freeze the growth term forever.
-3. **Team development.** `tdev = clamp(round(tdev * 0.5 + shove), ±8)`, where
+3. **Team development.** `tdev = Career.tdevStep(tdev, shove)` = `clamp(roundHalfTowardZero(tdev * 0.5 + shove), ±8)`, where
    `shove = clamp((expectedConstructorPos - actualPos) * 0.5, ±2)`. Without the halving
    a team that gets ahead compounds forever and the grid ossifies after three seasons.
+   Rounding is symmetric (#5047): ±1 decays to 0 on an on-target season, and a climb
+   tops out at ±`TDEV_REACH` (3) both ways — `Math.round` gave +4 but −3, and kept +1 forever.
 4. **Driver market.** 0–2 swaps a year (`rnd(year, "mkt", "n")`), each trading a top
    team's weakest driver for the best in the midfield, and stopping early when nobody
    has earned the move. Only deltas are stored, in `career.seats`; `career.dev` entries
@@ -690,14 +696,15 @@ materially the same build, so near the top the seat you hold stops changing your
 car and the contract ladder terminates with it.
 
 **An era is a legality filter, not a confiscation.** `Regulations.ERAS` names
-three catalog categories per era; the dearest `BAN_TOP` options in each go
-illegal for `ERA_SEASONS`. `career.owned` is never touched — a part you
+three catalog categories per era; the dearest `BAN_TOP` stat CLASSES in each go
+illegal for `ERA_SEASONS` — a class is every priced option with the same cost and
+stats, so a STYLE row or SIGNATURE twin goes with the part it copies (#5038). `career.owned` is never touched — a part you
 researched is *not legal this era*, and it comes back when the era lapses.
 
 | | |
 |---|---|
 | era length | `ERA_SEASONS` = 4 |
-| options taken per category | `BAN_TOP` = 2 |
+| stat classes taken per category | `BAN_TOP` = 2 |
 | first era | `open` — restricts nothing, so the first build is never interrupted |
 
 **Why it reaches the whole grid.** `Parts._resolve()` consults

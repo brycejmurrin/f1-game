@@ -409,9 +409,6 @@
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
@@ -789,9 +786,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
-      ],
       "inspect": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
@@ -1083,9 +1077,6 @@
       "emitFieldSfx": [
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
-      ],
-      "idle": [
-        "tests/unit/audio-tune.test.mjs"
       ],
       "passByState": [
         "tests/unit/rival-attach-init.test.mjs",
@@ -3707,6 +3698,7 @@
       "isOptionAvailable": [
         "tests/specs/parts-catalog.spec.js",
         "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
@@ -3724,6 +3716,9 @@
       ],
       "optLabel": [
         "tests/unit/i18n-parts-career.test.mjs"
+      ],
+      "ownId": [
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "resolveSetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3941,6 +3936,7 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "*": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs"
       ]
     },
@@ -4077,6 +4073,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -4105,6 +4102,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4134,6 +4132,7 @@
         "tests/unit/career-seat-rollover.test.mjs"
       ],
       "freeMoney": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "goalLabel": [
@@ -4188,6 +4187,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -4235,6 +4235,7 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "owned": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "paceMult": [
@@ -4264,7 +4265,8 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "research": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "rollover": [
         "tests/unit/career-ai-dev.test.mjs",
@@ -4366,6 +4368,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4383,6 +4386,9 @@
       ],
       "tallyOf": [
         "tests/unit/career-seat-rollover.test.mjs"
+      ],
+      "tdevStep": [
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "teamStandings": [
         "tests/unit/career-legends.test.mjs",
@@ -4494,6 +4500,7 @@
       "*": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs"
       ]
@@ -4529,6 +4536,7 @@
       "migrateCareer": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/save-migrate.test.mjs",
         "tests/unit/share-code.test.mjs"
@@ -5129,6 +5137,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
@@ -5291,6 +5300,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
@@ -5415,6 +5425,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -5762,6 +5773,7 @@
         "tests/unit/data-api-status.test.mjs"
       ],
       "schedule": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "sessionResult": [
@@ -5813,6 +5825,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -6116,6 +6129,7 @@
     },
     "js/data/tab-utils.js": {
       "*": [
+        "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/data-results.test.mjs",
@@ -6148,6 +6162,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -6220,6 +6235,9 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "gapLimitMs": [
+        "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "hasDrs": [
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "isGap": [
@@ -6942,6 +6960,9 @@
       "tick": [
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/fx/grade-tint.js": {
@@ -7137,6 +7158,9 @@
       ],
       "tintRGB": [
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/game.js": {
@@ -10825,7 +10849,6 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
-        "tests/unit/scale-defaults.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "*": [
@@ -11938,6 +11961,7 @@
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
@@ -15174,7 +15198,8 @@
       ],
       "*": [
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/mirror-lights.test.mjs"
+        "tests/unit/mirror-lights.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/render/shared/post-common.js": {
@@ -18014,6 +18039,9 @@
       "tick": [
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/hud-skin.js": {
@@ -18191,7 +18219,8 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/tooling-fast-runner.test.mjs"
+        "tests/unit/tooling-fast-runner.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18445,6 +18474,9 @@
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/modal.js": {
@@ -18766,6 +18798,9 @@
       "applyBtnScale": [
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "applyResMode": [
+        "tests/unit/perf-governor.test.mjs"
+      ],
       "create": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -18778,6 +18813,7 @@
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
       "*": [
