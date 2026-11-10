@@ -80,6 +80,23 @@ focus landed on `#soundbtn` and typed text never reached the box. The box is now
 never inert), a window-capture `focusin` listener keeps that trap from seeing focus inside it, and a PASTE button
 reads the clipboard directly. Same probe after the fix: focus stays on the input and the text arrives.
 
+## 5b. Linking from the installed Home Screen app (2026-11-09, #5259)
+
+The installed app launches from the manifest's fixed `start_url` and has its own storage, so the URL route above never
+reached the app Bryce plays. SETTINGS › **CLAUDE LINK…** (`js/agent/bridge-link.js`, `tests/unit/bridge-link.test.mjs`)
+links it in place: issue number (default the open thread), the token once for that storage, LINK. It writes
+`?apex=1&bridge=<n>` with `history.replaceState` (no navigation), loads the agent surface, and `apex-bridge.js` boots
+from that address unchanged. UNLINK or the badge's TAP TO END takes the issue back out; a cold launch starts from
+`start_url`, unlinked.
+
+Chosen over an in-scope `location` navigation because it depends on nothing WebKit decides for a standalone window:
+no load, no scope check, no service-worker shell fetch, and the running game keeps its state. Navigation is still
+exercised later by the bridge's own `reload` / `path` / `bench` commands (an in-scope reload of that address).
+Measured in Chromium at 852×393 touch with a stored UI SIZE of 51 %: the door paints 398×51 px with 16 / 14 px type (its
+neighbours 198×35 with 10.7 px), the panel 560×224 px centred, every control 48 px tall, typed text stays in the token
+box, LINK → `CLAUDE LINK · 0 · TAP TO END`, UNLINK → address back to the start URL. Not proven anywhere but his
+phone: the standalone window, its storage, the keyboard and the safe-area insets (59/21/59 is an emulation figure).
+
 ## 6. Live runs
 
 | date (Pacific) | build (`facts.sha`) | device | path | scene | fps | p50 / p95 / p99 ms | over 33 ms |

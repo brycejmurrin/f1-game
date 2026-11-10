@@ -118,6 +118,8 @@
     "// ...and the branch audit it deletes by: ancestry, the merge-tree dry merge",
     "// and line presence, pinned against real git in a throwaway repo. ~1 s.",
     "tests/unit/branch-audit.test.mjs",
+    "// BridgeLink (SETTINGS > CLAUDE LINK, #5259): in-app link of the phone bridge for the installed Home Screen app. Entry state machine, token only in storage + Authorization, in-place link with standalone emulated posts the real hello, UNLINK restores the address. VM + fake fetch, ~0.1 s.",
+    "tests/unit/bridge-link.test.mjs",
     "// Phone browser MCP over streamable HTTP (token gate + tools/list) and the",
     "// reuse/start decision for its public tunnel. Pure Node, no Chromium.",
     "tests/unit/browser-http-mcp.test.mjs",
