@@ -174,7 +174,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots + session when-variants. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
 | `garage-departure-motion.js` | `GarageDepartureMotion` | LAZY_RACE_SESSION | Blender-authored departure transforms. |
-| `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
+| `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors, lane identity counts and the OpenF1 live-window test. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | paced API transport: bounded bodies, cache, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
 | `telemetry-model.js` | `DataTelemetryModel` | LAZY_DATA | telemetry channels, lane identities and GPS/distance interpolation. |
@@ -714,6 +714,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 | `apex-bridge.js` | `ApexBridge` | LAZY_AGENT | ApexBridge: drive the live game on a real phone from a Claude session, through one GitHub issue. |
+| `bridge-link.js` | `BridgeLink` | LAZY_AGENT | BridgeLink: start the phone bridge (js/agent/apex-bridge.js) from INSIDE the running app (#5259). |
 
 **`js/circuits/`**
 
@@ -1375,23 +1376,31 @@ Jolpica `https://api.jolpi.ca/ergast/f1/` + OpenF1 `https://api.openf1.org/v1`.
 All methods return Promises of SIMPLIFIED plain objects (not raw API shapes).
 Separate OpenF1 and Jolpica queues: min 400 ms between requests per provider, localStorage cache
 (`apex26.api.<url>` -> `{t, data}`), TTLs: schedule 24 h, standings/results
-1 h, openf1 latest-session 10 min, finished session data 7 d. On 429 or
-network error: serve stale cache if present, else reject. Never auto-poll.
+1 h, openf1 latest-session 10 min, finished session data 7 d (an EMPTY calendar
+is not cached). On 429, 5xx or network error: serve stale cache if present, else
+reject — never on 401/403, OpenF1's live window (30 min before a session until
+30 min after it ends), where `ensureSession` falls back to the stored latest
+session and the session tabs show a LIVE SESSION IN PROGRESS card
+(`DataTabUtils.liveLockout(err)`, keyed on `err.status`). Every Jolpica list asks
+`?limit=100` and pages by `MRData.total` (the default page is 30 rows). Never auto-poll.
 
 ```
-F1API.schedule()              -> [{round, name, circuit, locality, country, date, time, hasSprint}]
-F1API.driverStandings()       -> [{pos, points, wins, name, code, number, team}]
-F1API.constructorStandings()  -> [{pos, points, wins, name}]
-F1API.latestSession()         -> {sessionKey, name, type, circuit, country, dateStart} | null
+F1API.schedule(year?)         -> [{season, round, circuitId, name, circuit, locality, country, date, time, hasSprint, sessions}]
+F1API.driverStandings(year?)  -> [{pos, points, wins, name, code, number, team}]
+F1API.constructorStandings(year?) -> [{pos, points, wins, name}]
+F1API.latestSession(ttl?)     -> {sessionKey, name, type, circuit, country, dateStart, dateEnd} | null
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver
+F1API.sessionPositions / sessionIntervals(sessionKey) -> {values, cursor}  // cached whole session
+F1API.livePositions / liveIntervals(sessionKey, sinceISO) -> {values, cursor}  // uncached delta
 F1API.sessionDrivers(sessionKey) -> [{num, code, name, team, color}] | null
 F1API.locationData(sessionKey, driverNumber, startISO, endISO, options?) -> [{x, y, date}]
      options.cache=false bypasses raw-response reads/writes and stale fallback.
 F1API.sessionResult(sessionKey)  -> [{pos, num, laps, points, dnf, dns, dsq, duration, gap}]
      duration/gap are a NUMBER for practice/sprint/race and a [Q1,Q2,Q3] ARRAY for
      qualifying; a lapped finisher's gap can be a string ("+1 LAP"). Empty [] when the
-     session has published nothing yet — OpenF1 answers 200 {detail:"No results found."}.
+     session has published nothing yet — OpenF1 answers HTTP 404 {detail:"No results found."},
+     which the transport resolves as [].
 ```
 
 ## js/data/ — the hub and its tabs
@@ -1416,7 +1425,7 @@ global directly and load before hub.js.
 | `schedule.js` | `DataSchedule` | SCHEDULE |
 | `standings.js` | `DataStandings` | STANDINGS (drivers + constructors) |
 | `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker; qualifying adds OVERALL / Q1 / Q2 / Q3 round views) |
-| `live.js` | `DataLive` | LIVE (30 s refresh loop) |
+| `live.js` | `DataLive` | LIVE (30 s refresh loop; a COMPLETED session's first build reads the cached whole-session snapshots, then deltas) |
 | `telemetry.js` | `DataTelemetry` | TELEMETRY (trace viewer/map/playback; also returns `closeTelemPopup` — the shell closes the popup on tab switch / hub close) |
 | `export.js` | `DataExport` | EXPORT dev tool (GPS traces → ZIP) |
 

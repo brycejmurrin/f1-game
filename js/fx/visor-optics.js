@@ -419,7 +419,11 @@ const VisorOptics = (function () {
 
   function _size() {
     if (typeof window === "undefined") return false;
-    const w = Math.max(1, window.innerWidth | 0), h = Math.max(1, window.innerHeight | 0);
+    // The layout viewport (ICB) the fixed 100% layer is laid out in, not inner*: a Home Screen landscape launch can hold
+    // the portrait inner* pair with no resize to follow, and a 393x852 store stretched over the 852x393 box bent the
+    // port (#5201). No layout (unit harness): inner*.
+    const de = document.documentElement, bw = de ? de.clientWidth | 0 : 0, bh = de ? de.clientHeight | 0 : 0, box = bw > 0 && bh > 0;
+    const w = Math.max(1, box ? bw : window.innerWidth | 0), h = Math.max(1, box ? bh : window.innerHeight | 0);
     if (w === _w && h === _h && (!_cv || _cv.width === w)) return false;
     _w = w; _h = h;
     if (_cv) { _cv.width = w; _cv.height = h; }   // 1 css px per device px: the layer is soft light, never detail

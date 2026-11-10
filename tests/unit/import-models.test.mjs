@@ -194,6 +194,39 @@ test("import-models samples indexed (colour-type 3) Kenney-style colormaps", asy
   }
 });
 
+test("importExitCode: a partial import exits 0, an import where every file was skipped exits 2", async () => {
+  const { importExitCode } = await import("../../tools/gen/import-models.mjs");
+  assert.equal(importExitCode([{ id: "a", verts: 6 }, { id: "b", skipped: "no triangle geometry" }]), 0,
+    "one unsupported file in a pack must not sink the rest");
+  assert.equal(importExitCode([{ id: "a", skipped: "no triangle geometry" }, { id: "b", skipped: "over --max-verts 40000" }]), 2);
+  assert.equal(importExitCode([{ id: "a", verts: 6 }]), 0);
+});
+
+test("the importer CLI exits 2 when every model file fails, and 0 with the good file beside a bad one", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
+  const bad = path.join(tmp, "bad"), mixed = path.join(tmp, "mixed"), out = path.join(tmp, "out");
+  for (const d of [bad, mixed, out]) fs.mkdirSync(d, { recursive: true });
+  try {
+    // A glTF with a scene and no meshes: importFile throws "no triangle geometry".
+    const empty = JSON.stringify({ asset: { version: "2.0" }, scene: 0, scenes: [{ nodes: [0] }], nodes: [{}] });
+    fs.writeFileSync(path.join(bad, "empty.gltf"), empty);
+    buildFixture(mixed);
+    fs.writeFileSync(path.join(mixed, "empty.gltf"), empty);
+    const run = (src) => cp.spawnSync(process.execPath,
+      [path.join(ROOT, "tools", "gen", "import-models.mjs"), src, "--mat", "CONCRETE", "--height", "12", "--prefix", "x_"],
+      { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
+    const allBad = run(bad);
+    assert.equal(allBad.status, 2, `every file skipped must fail the run:\n${allBad.stdout}${allBad.stderr}`);
+    assert.match(allBad.stdout, /imported 0\/1/);
+    assert.match(allBad.stderr, /none of the 1 model file\(s\) imported/);
+    const partial = run(mixed);
+    assert.equal(partial.status, 0, `a partial import keeps the good models:\n${partial.stdout}${partial.stderr}`);
+    assert.match(partial.stdout, /imported 1\/2/);
+    const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
+    assert.ok(man.models.x_building && !man.models.x_empty, "only the good model is recorded");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("--scale keeps a kit's relative sizes: a uniform metres-per-unit factor when --height is 0", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
   const src = path.join(tmp, "pack"), out = path.join(tmp, "out");

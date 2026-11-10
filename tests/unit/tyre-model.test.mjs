@@ -93,6 +93,29 @@ test("an AI plan overrides a MY TEAM mate's saved starting tyre", () => {
   assert.equal(T.startRecord(player).id, "wet_full", "a player's reference plan must not choose their set");
 });
 
+test("wear OFF: a car on its own garage slick is fitted the weather's tread at the lights (no pit lane, no recourse)", () => {
+  // Measured in the VM (silverstone, rain, TYRE WEAR off): player grip 0.72 on the
+  // garage slick against an AI field at 0.97, PitLane.enabled() false all race.
+  const slick = TYRES.find((o) => !o.wetTread), inter = TYRES.find((o) => o.wetTread === 1);
+  const G = { lapsTarget: 5, track: { total: 5386, def: {} }, LAT_MAX: 22, raceTyreWear: "off" };
+  const s = T.create(G);
+  assert.equal(s.on(), false);
+  const player = { human: true, tyreOpt: slick };
+  assert.equal(s.startRecord(player, 2).tread, 2, "rain, no stop possible: full wets");
+  assert.equal(s.startRecord(player, 1).tread, 1, "damp: intermediates");
+  assert.equal(s.startRecord(player, 0).id, slick.id, "dry: the garage set");
+  const mate = { human: false, tyreOpt: slick, tyreClass: "soft" };
+  assert.equal(s.startRecord(mate, 2).tread, 2, "a MY TEAM mate carries the same garage slick");
+  if (inter) assert.equal(s.startRecord({ human: true, tyreOpt: inter }, 2).id, inter.id, "a treaded set of their own stays theirs");
+  // …and the session fits it: the car's explicit tread follows the record.
+  const car = { human: true, tyreOpt: slick, tread: 0 };
+  s.fit(car, s.startRecord(car, 2));
+  assert.equal(car.tread, 2);
+  // Wear ON keeps the driver's choice: the stop is the recourse.
+  s.setLevel("real");
+  assert.equal(s.startRecord(player, 2).id, slick.id, "wear on: the player's own set, whatever the sky");
+});
+
 test("an AI car starts a WET race on the tread the weather wants, not the plan's slick", () => {
   // The planner sequences dry classes only; with no tread the whole field
   // lined up on slicks and was armed for the weather on the first tick.
@@ -1248,4 +1271,18 @@ test("physical set age keeps pre-line pit adjustment across a red-flag scoring r
   assert.equal(c.tyreWear, 0.4);
   c.lap++; c.prog += total;
   assert.equal(s.lapsOn(c), 2, "the next physically driven lap still ages the adjusted set normally");
+});
+
+test("lapsLeft measures the wear rate over the laps AND the part-lap driven on the set", () => {
+  // n / w with whole-lap n and continuous w read (n + 1) / n high late in a lap: at 2.95 laps
+  // and wear 0.54 the set has 2.5 laps left, not 1.7 (VM: every AI boxed wet-for-wet on that).
+  const G = { lapsTarget: 5, track: { total: 1000, def: {} }, LAT_MAX: 22, raceTyreWear: "real" };
+  const s = T.create(G); s.setLevel("real");
+  const c = { human: false, lap: 0, prog: 0, tread: null };
+  s.fit(c, T.classRecord("wet"));
+  c.lap = 3; c.prog = 2950; c.tyreWear = 0.54;
+  const left = s.lapsLeft(c);
+  assert.ok(Math.abs(left - (2.95 / 0.54) * 0.46) < 1e-9, `2.95 laps for 0.54 of the set: ${left}`);
+  c.prog = 2000;   // at the line the whole-lap count is exact, as before
+  assert.ok(Math.abs(s.lapsLeft(c) - (2 / 0.54) * 0.46) < 1e-9);
 });
