@@ -324,13 +324,13 @@ let season = SeasonCal.load();      // standalone owner adds score maps, config 
 // together with the rationale that tuned them; game.js destructures them once
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
-        GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
-        WT_LONG, LOAD_SENS, DOWNFORCE, X_OPEN_RATE, X_CLOSE_RATE,
+        GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT,
+        WT_LONG, DOWNFORCE, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
-        LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
+        LONG_GRIP, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, REGEN_FULL_V,
-        OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
-        TOW_RANGE, TOW_FADE, TOW_HALF_W, BLOCKER_HALF_W } = PhysicsConsts;
+        OT_GAP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
+        TOW_RANGE, TOW_FADE, TOW_HALF_W } = PhysicsConsts;
 // X_VMAX_GAIN_*/X_DF_LOSS_*/X_COAST_CUT_*/DRAIN_*/REGEN_LO|HI/OT_TIME_* now
 // live behind PaceMath (js/race/pace-math.js) — it reads PhysicsConsts itself.
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
@@ -1842,10 +1842,7 @@ GarageScene.init(gfx);
 // Transient FX particle pool (tyre smoke / sparks / kickup / rain spray) —
 // js/fx/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
-const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
-        getBrakeRing, drawRearLights, drawMirrorLights,
-        getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
-        getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
+const { getCarDecalMesh, drawRearLights, drawMirrorLights } = CarMesh;
 // Reusable { dy, roll } scratches for Tracks.banking — one for the physics step,
 // one for the render loop (both called once per car per frame) so banking() no
 // longer allocates a fresh object ~23×/frame.
@@ -1954,7 +1951,7 @@ async function loadTrackStepped(idx, live) {
   try { if (raceArmedSentinel()) PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
   let built = null;
   try {
-    if (typeof gfx !== "undefined" && gfx && gfx.warmSettled) { await gfx.warmSettled(); if (gfx.cancelWarmRetry) gfx.cancelWarmRetry(); } dropTrackWorld(); // a mid-warm free only queues the road depth caster; render paints nothing until that warm settles
+    if (typeof gfx !== "undefined" && gfx && gfx.warmSettled) { await gfx.warmSettled(); if (gfx.cancelWarmRetry) gfx.cancelWarmRetry(); if (!live()) return false; } dropTrackWorld(); // superseded during the warm: the world is the newer selection's to free. A mid-warm free only queues the road depth caster; render paints nothing until that warm settles
     // apex26.buildWorker (default ON when multi-core): off the main thread for
     // IN-SESSION track switches only (state race/count). Cold race entry from
     // the menu stays on the paced build — quiet A/B showed worker+replay
@@ -3512,7 +3509,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
 // stay here (the garage and the setup preview share them via deps).
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
-const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
+const { teamMesh, teamBodyMesh, playerBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
         warmCarAssetsAsync, prepareMenuCarAssets } = carDraw;
 _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove the crew mesh submitted
@@ -4145,7 +4142,7 @@ function drivingLineApi(trk) {
 let rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals (recreated after ensureAudio)
 let carSfx = CarSfx.create(G);           // tyre scrub, lock-up, surface, pit limiter (recreated after ensureAudio)
 // Photo mode (js/camera/photo-cam.js) and lighting tuner (js/lighting/tuner-panel.js).
-const photomode = Photomode.create(G), { updatePhotoCam, enterPhotoMode, exitPhotoMode } = photomode, { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
+const photomode = Photomode.create(G), { updatePhotoCam, exitPhotoMode } = photomode, { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
 CamTune.bindContext(() => ({ track: G.track?.def?.id, car: ((G.state === "race" || G.state === "count") && G.player?.team?.id) || Teams.LIST[G.teamIdx]?.id }));
 const { closeCamTuner } = CamTunerPanel.create(G);
@@ -4154,7 +4151,7 @@ const { closeCamTuner } = CamTunerPanel.create(G);
 const flybyPanel = FlybyPanel.create(G);
 reloadFlybyShots();          // the menu's warm-up frames fly the saved list too
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
-const { applySteerTuning } = SteerTuning.create(G);
+SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
 // inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
 DebrisWorld.create(G);
@@ -4705,7 +4702,7 @@ function update(dt) {
       // In a session the guest waits (briefly, and boundedly) for the host's
       // classification rather than publishing its own — see awaitingResult.
       if (netPlay.awaitingResult()) resultT = 0.05;
-      else { resultT = 0; RaceCeremony.want(true); endRace(); }   // a natural flag arms the ceremony (default on; afterClassify gates eligibility, SKIP stays)
+      else { resultT = 0; RaceCeremony.want(true); endRace(); return; }   // a natural flag arms the ceremony (default on; afterClassify gates eligibility, SKIP stays); return: no engine/brake-cue/rival audio over the results sheet
     }
   }
 
@@ -5235,7 +5232,7 @@ function updateCar(c, dt, ranked) {
   // and the separate pit ribbon remain road, even outside the main half-width.
   let surfaceMu; let brakeDecel; let onThrottle; S.hw = hw; S.slopeSin = slopeSin; S.slopeNose = slopeNose; S.mods = mods; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.perfMul = perfMul; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.cautionV = cautionV; S.deploy = deploy; S.otFree = otFree; S.braking = braking; S.brakeLvl = brakeLvl; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.accelCeil = accelCeil;
   updateCarLongitudinal(c, dt, ranked, S); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
-  if (S.recordInput) Object.assign(S.recordInput, { throttle: onThrottle, brake: !!braking, throttleLevel: throttleLvl, brakeLevel: brakeLvl, aero: !!c.xOn });
+  const ri = S.recordInput; if (ri) { ri.throttle = onThrottle; ri.brake = !!braking; ri.throttleLevel = throttleLvl; ri.brakeLevel = brakeLvl; ri.aero = !!c.xOn; }   // field writes, not an Object.assign literal: no allocation per recorded tick
 
   // --- lateral ---
   let steer, gripScale; let latFac; let kerbGrip; let bankMu; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;

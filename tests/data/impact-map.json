@@ -7195,6 +7195,7 @@
         "tests/unit/field-lod.test.mjs"
       ],
       "dropTrackWorld": [
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/ghost.test.mjs"
       ],
       "enableTilt": [
@@ -7206,6 +7207,7 @@
         "tests/specs/wake-lock.spec.js",
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/ghost.test.mjs",
         "tests/unit/race-flow-vm.test.mjs",
@@ -7636,6 +7638,7 @@
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/engineer.test.mjs",
+        "tests/unit/game-state-audit-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/marshal-panels.test.mjs",

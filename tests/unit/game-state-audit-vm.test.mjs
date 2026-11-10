@@ -110,3 +110,16 @@ test("#10 a tyre-wear level changed after boot survives a quit to the menu", asy
     assert.equal(G.tyres.setLevel(), other, `quit reset the tyre level to the boot value ${boot}`);
   } finally { G.raceTyreWear = boot; }
 });
+
+// The code survey's two flow items (W2 follow-up). Neither is observable in the
+// VM — audio is silent there and gfx has no warm to await — so pin the source.
+test("survey: update() returns after a natural-flag endRace (no engine / brake-cue / rival audio over the results)", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /RaceCeremony\.want\(true\); endRace\(\); return; \}/, "update() must return after endRace()");
+});
+test("survey: loadTrackStepped re-checks live() after the warm await, before it frees the world", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const i = src.indexOf("await gfx.warmSettled();"), j = src.indexOf("dropTrackWorld();", i);
+  assert.ok(i > 0 && j > i, "the warm await and the free must both be there");
+  assert.match(src.slice(i, j), /if \(!live\(\)\) return false;/, "a superseded build must not free the world a newer selection wants");
+});
