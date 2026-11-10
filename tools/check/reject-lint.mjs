@@ -85,7 +85,9 @@ function recvName(obj) {
 /** Sites in one source where a promise-returning call discards its rejection. */
 export function lintSource(src, file = "<src>") {
   let ast;
-  try { ast = espree.parse(src, { ecmaVersion: 2022, loc: true }); }
+  // "latest", not a pinned year: a file using newer syntax (a /v regex, `using`)
+  // must not fall out of the lint as a parse error that reads as zero sites.
+  try { ast = espree.parse(src, { ecmaVersion: "latest", loc: true }); }
   catch (e) { return { file, parseError: e.message, sites: [] }; }
 
   // A call is OWNED when its value goes somewhere: awaited, returned, assigned,
@@ -141,14 +143,18 @@ export function lintAll(root = ROOT) {
   return out;
 }
 
+/** Failures under `root`: every discarded-rejection site PLUS every file the lint
+ *  could not parse — an unparsed file is unlinted, so it can never count as clean. */
 export function count(root = ROOT) {
-  return lintAll(root).reduce((a, r) => a + r.sites.length, 0);
+  return lintAll(root).reduce((a, r) => a + r.sites.length + (r.parseError ? 1 : 0), 0);
 }
 
-function main() {
-  const rows = lintAll();
+export function main(root = ROOT) {
+  const rows = lintAll(root);
   const n = rows.reduce((a, r) => a + r.sites.length, 0);
+  const parseErrors = rows.filter((r) => r.parseError).length;
   console.log(`promise-returning calls whose rejection escapes to the overlay: ${n}`);
+  if (parseErrors) console.log(`files the lint could not parse (each is a FAILURE — unlinted, not clean): ${parseErrors}`);
   for (const r of rows) {
     if (r.parseError) { console.log(`  PARSE ${r.file}: ${r.parseError}`); continue; }
     for (const s of r.sites) console.log(`  ${r.file}:${s.line}  ${s.call} — ${s.api}`);
@@ -157,7 +163,11 @@ function main() {
     console.log("\nFix: keep the try/catch (a bad receiver still throws) and add the");
     console.log("rejection arm — const p = x.foo(); if (p && p.catch) p.catch(() => {});");
   }
-  process.exitCode = n ? 1 : 0;
+  process.exitCode = n || parseErrors ? 1 : 0;
+  return process.exitCode;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const i = process.argv.indexOf("--root");          // --root <dir>: lint <dir>/js (tests point it at a fixture)
+  main(i > 0 && process.argv[i + 1] ? path.resolve(process.argv[i + 1]) : ROOT);
+}

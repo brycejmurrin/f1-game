@@ -58,7 +58,6 @@ const HudInputs = (function () {
   let sampledPlayer = null, sampledGear = null, sampledLap = null;
   let review = null, reviewCanvas = null, reviewNote = null;
 
-  // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
   const win = typeof window !== "undefined" ? window : null;
   let root = null, cv = null, ctx2 = null, gearEl = null, lastGear = null;
