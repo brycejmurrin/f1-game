@@ -24,7 +24,6 @@ export const GENERATORS = [
   "./gen-hooks-table.mjs",
   "./gen-flags-table.mjs",
   "./gen-arch-table.mjs",
-  "../docs/gen-coverage-table.mjs",
   "../docs/gen-agent-index.mjs",
 ];
 

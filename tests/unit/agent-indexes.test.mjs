@@ -1,7 +1,9 @@
 /* agent-indexes.test.mjs — generated hook index, coverage page, impact map, per-hook help.
  *
- * Both generators are deterministic: a fresh render matches the committed
- * file, and a one-byte drift is not "identical". `help <hook>` prints one
+ * Both generators are deterministic: a fresh render of the index matches the
+ * committed file, and a one-byte drift is not "identical". The coverage page is
+ * built on demand into artifacts/ (never committed since 2026-11-10), so it is
+ * pinned by determinism and by its write path, not against a committed copy. `help <hook>` prints one
  * index row and does not boot. Hook names are a bijection with a live
  * agentHelp() from the game VM.
  *
@@ -24,8 +26,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const node = process.execPath;
 
-test("coverage page and agent index match a fresh render", () => {
-  assert.equal(firstDiff(read("docs/TESTING-COVERAGE.md"), renderCoverage()), "identical");
+test("coverage page renders the same twice, and the agent index matches a fresh render", () => {
+  assert.equal(firstDiff(renderCoverage(), renderCoverage()), "identical");
   const index = buildIndex();
   assert.equal(firstDiff(read("docs/agent-index.json"), renderIndex(index)), "identical");
   assert.equal(firstDiff(read("docs/AGENT-HOOKS.md"), renderHookPage(index)), "identical");
@@ -40,15 +42,21 @@ test("a drifted generated page fails the staleness comparison", () => {
   assert.notEqual(firstDiff(impact.replace('"narrowOnly": true', '"narrowOnly": false'), impact), "identical");
 });
 
-test("generator --check is clean, and an unknown flag does not write", () => {
-  for (const tool of ["tools/docs/gen-coverage-table.mjs", "tools/docs/gen-agent-index.mjs"]) {
-    const ok = spawnSync(node, [path.join(ROOT, tool), "--check"], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
-    assert.equal(ok.status, 0, `${tool} --check\n${ok.stdout}${ok.stderr}`);
-  }
-  const page = path.join(ROOT, "docs/TESTING-COVERAGE.md");
+test("agent-index --check is clean; the coverage page builds into artifacts/ only, and an unknown flag writes nothing", () => {
+  const ok = spawnSync(node, [path.join(ROOT, "tools/docs/gen-agent-index.mjs"), "--check"], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
+  assert.equal(ok.status, 0, `gen-agent-index --check\n${ok.stdout}${ok.stderr}`);
+  const cov = path.join(ROOT, "tools/docs/gen-coverage-table.mjs");
+  const built = spawnSync(node, [cov], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const page = path.join(ROOT, "artifacts/TESTING-COVERAGE.md");
+  assert.equal(firstDiff(fs.readFileSync(page, "utf8"), renderCoverage()), "identical");
+  assert.equal(spawnSync("git", ["ls-files", "--", "docs/TESTING-COVERAGE.md"], { cwd: ROOT, encoding: "utf8" }).stdout.trim(), "",
+    "the retired committed copy must not come back");
   const before = fs.readFileSync(page);
-  const bad = spawnSync(node, [path.join(ROOT, "tools/docs/gen-coverage-table.mjs"), "--chek"], { cwd: ROOT, encoding: "utf8" });
-  assert.equal(bad.status, 2);
+  for (const flag of ["--chek", "--check"]) {
+    const bad = spawnSync(node, [cov, flag], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(bad.status, 2, `${flag}: a built page has nothing to check against`);
+  }
   assert.deepEqual(fs.readFileSync(page), before);
 });
 

@@ -1457,11 +1457,7 @@
       "path": "tools/docs/gen-coverage-table.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "npmScripts": [
-        "gen:check",
-        "gen:docs"
-      ]
+      "interpreter": "node"
     },
     {
       "path": "tools/docs/knowledge-gc.mjs",
@@ -4078,11 +4074,11 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
     },
     {
       "name": "gen:docs",
-      "command": "node tools/gen/gen-tools-readme.mjs && node tools/gen/gen-slider-doc.mjs && node tools/gen/gen-hooks-table.mjs && node tools/gen/gen-flags-table.mjs && node tools/gen/gen-arch-table.mjs && node tools/docs/gen-coverage-table.mjs && node tools/docs/gen-agent-index.mjs && node tools/gen/gen-output-surface.mjs && node tools/gen/gen-locales.mjs"
+      "command": "node tools/gen/gen-tools-readme.mjs && node tools/gen/gen-slider-doc.mjs && node tools/gen/gen-hooks-table.mjs && node tools/gen/gen-flags-table.mjs && node tools/gen/gen-arch-table.mjs && node tools/docs/gen-agent-index.mjs && node tools/gen/gen-output-surface.mjs && node tools/gen/gen-locales.mjs"
     },
     {
       "name": "memory:list",

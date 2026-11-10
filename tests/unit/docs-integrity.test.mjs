@@ -244,6 +244,9 @@ const SOURCE_EXEMPT = new Map([
   // manifest records where it would slot in. It is legitimately absent until
   // someone bakes a profile.
   ["js/track/circuit-elevations.js", /bake-elevation|manifest\.cjs|track\/tracks\.js|docs-integrity/],
+  // A RETIRED generator output (tools/lib/generated-paths.mjs RETIRED_PATHS, 2026-11-10): deleted from git on
+  // purpose. The conflict cure and its tests must name the old path to take its deletion on an old branch.
+  ["docs/TESTING-COVERAGE.md", /generated-paths\.mjs|ci\/deploy\.mjs|gen-coverage-table\.mjs|deploy-tool\.test\.mjs|agent-indexes\.test\.mjs|docs-integrity/],
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
