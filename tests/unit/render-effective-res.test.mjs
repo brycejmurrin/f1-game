@@ -22,9 +22,10 @@ test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsew
   assert.match(read("docs/GFX-CONTRACT.md"), /capped 1\.5 mobile \/ 2/);   // the seam's contract doc
 });
 
-test("RESOLUTION ships at MED (scale 0.75) on a coarse-pointer device and AUTO elsewhere (#5166: was LOW)", () => {
+test("RESOLUTION ships at AUTO everywhere; a phone's AUTO is capped at MED's 0.75 (#5227; #5166: was a MED pin)", () => {
   const src = read("js/ui/scale.js");
-  assert.match(src, /const defaultResMode = \(\) => \(coarseUi\(\) \? "med" : "auto"\);/);
+  assert.match(src, /const defaultResMode = \(\) => "auto";/);
+  assert.match(src, /const PHONE_AUTO_CEIL = 0\.75;/);
   assert.match(src, /\{ id: "low",\s+label: "LOW",\s+v: 0\.5\s+\}/);
   assert.match(src, /\{ id: "med",\s+label: "MED",\s+v: 0\.75\s+\}/);
   assert.match(src, /\{ id: "high",\s+label: "HIGH",\s+v: 1\.0\s+\}/);

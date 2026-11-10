@@ -289,7 +289,10 @@ export const MAX_OVERFLOW_SHARDS = 11;
 // routes the whole suite; at 4 career-season, career-hub and props-over-road
 // ran nowhere. Measured on --since <merge-base>: 4 -> 3 skipped, 5 -> 2,
 // 6 -> 1, 7 -> 0 (58 shards, +6 jobs).
-export const MAX_SPILL_SHARDS = 7;
+// 7 -> 8 (2026-11-10, #5368, Bryce: "you fix 5368"): the same whole-suite route
+// (`--files tests/helpers/fixtures.js` on tip 7ad0ee9) ran props-over-road (52 tests)
+// nowhere at 7. Measured with MAX_OVER_BUDGET_SHARDS 9: spill 7 -> 1 dropped, 8 -> 0.
+export const MAX_SPILL_SHARDS = 8;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -302,7 +305,10 @@ export const MAX_SPILL_SHARDS = 7;
 // its own allowance of this many TARGET_SHARD_SEC jobs. Only what that pool
 // cannot afford is left in overBudgetSpecs, by name, and on a pull request a
 // name is a red verdict.
-export const MAX_OVER_BUDGET_SHARDS = 8;
+// 8 -> 9 (2026-11-10, #5368, Bryce: "you fix 5368"): a tests/helpers/fixtures.js
+// change (whole-suite route, tip 7ad0ee9) DROPPED new-hooks.spec.js (540 s/test) with
+// the pool full at 8. Measured with MAX_SPILL_SHARDS 8: over-budget 8 -> 1 dropped, 9 -> 0.
+export const MAX_OVER_BUDGET_SHARDS = 9;
 
 // THE JOB'S WORST CASE IS BOUNDED BY --max-failures, NOT BY "EVERY TEST TIMES
 // OUT" (2026-09-29). ci.yml runs the selection with --max-failures=3, so a job

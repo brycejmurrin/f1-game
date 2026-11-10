@@ -103,6 +103,11 @@ test.describe("shipped defaults", () => {
         pinned: keys.filter((k) => localStorage.getItem(k) != null),
         backend: typeof GLX !== "undefined" ? GLX.backend : undefined,
         hasAdapter,
+        // What the BOOT's own capped probe saw (renderer-boot), and what it bound: the authority, not the
+        // uncapped probe above, which runs long after boot and can find an adapter the boot timed out on.
+        bootAdapterWhy: (() => { try { return sessionStorage.getItem("apex26.gfxAdapterWhy"); } catch (_) { return null; } })(),
+        bound: (() => { try { return sessionStorage.getItem("apex26.gfxBound"); } catch (_) { return null; } })(),
+        fallbackWhy: (() => { try { return sessionStorage.getItem("apex26.gfxFallbackWhy"); } catch (_) { return null; } })(),
         tyreWear: store("tyreWear"),
         wind: typeof Wind !== "undefined" ? Wind.level() : null,
       };
@@ -111,7 +116,15 @@ test.describe("shipped defaults", () => {
     // Unset backend: TLX when a GPU adapter resolves (this launch enables
     // software WebGPU), otherwise renderer-boot's GLX fallback, which is also
     // what a player without WebGPU gets (tlx-probes.spec.js asserts the same).
-    if (s.hasAdapter) expect(s.backend, JSON.stringify(s)).toBe("three");
+    // The boot's own probe decides: it found an adapter → TLX, with no fallback reason. It found none (null, threw,
+    // or its 4 s cap under a loaded runner) → the unset default binds GLX, which is what that player gets too.
+    // A later uncapped requestAdapter() finding one does not change what this boot saw (first CI run, 2026-11-10).
+    if (s.bootAdapterWhy == null && s.hasAdapter) {
+      expect(s.backend, JSON.stringify(s)).toBe("three");
+      expect(s.fallbackWhy, JSON.stringify(s)).toBeNull();
+    } else if (s.bootAdapterWhy != null) {
+      expect(s.backend, JSON.stringify(s)).toBeUndefined();
+    }
     expect(s.tyreWear, "TYRE WEAR ships on").toBe("real");
     if (s.wind !== null) expect(s.wind, "WIND ships on").toBe("real");
     expect(pageErrors).toEqual([]);

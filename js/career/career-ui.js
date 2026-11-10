@@ -1387,7 +1387,7 @@ function create(G) {
       row("Goal", Career.goalLabel(preview.deal.goal)), row("Fitted budget cap", preview.currentCap + " → " + preview.cap + " cr"),
       row("Retained credits / facility", preview.retained.money + " cr / level " + preview.retained.facility));
     card.appendChild(el("p", "cg-p", "Your personal driver development is retained. " + (preview.moving ? "The destination works build replaces your researched and fitted parts." : "Your researched and fitted parts are retained.")));
-    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id); if (opt) return Parts.optLabel(cat.id, opt); } return id; };
+    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id) || cat.options.find((o) => o.own === id); if (opt) return Parts.optLabel(cat.id, opt); } return id; };   // lostResearch holds ownership keys (Parts.ownId)
     for (const [cat, id] of Object.entries(preview.resolvedFitted)) {
       card.appendChild(row(cat, label(preview.currentFitted[cat]) + " → " + label(id)));
       if (preview.fitted[cat] !== id) card.appendChild(el("p", "cg-p", "Works research retained: " + label(preview.fitted[cat]) + "; current regulations substitute " + label(id) + " on the car."));
