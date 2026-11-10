@@ -163,6 +163,9 @@ export function ceilingsFrom(measured, prev = {}) {
     doc: "Owner-phone acceptance ceilings (issue #5262): the EXACT number of painted-size violations per cell (window@UI SIZE) and screen, measured by `node tools/ui/bryce-paint.mjs --write` and asserted by tests/specs/bryce-phone-paint.spec.js. taps = controls painting under 44 px; text = text nodes painting under 12 px; outside = items crossing the safe box; blocked = controls covered at their centre; scroll = the page scrolls. A count may only go DOWN (the spec fails above and below it). The small-UI-SIZE reds wait on decision #5235. Never raise a number to get green.",
     floors: { tap: 44, text: 12 },
     kinds: [...PAINT_KINDS],
+    // Known offenders: "cell screen kind" → the issue that fixes them. Hand-written, kept across --write; the exact
+    // ratchet does the rest (a fix fails "below the recorded ceiling" until that PR lowers the count to 0).
+    ...(prev.known ? { known: prev.known } : {}),
     cells: Object.fromEntries(Object.keys(cells).sort().map((k) => [k, cells[k]])),
   };
 }

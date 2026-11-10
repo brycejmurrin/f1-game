@@ -11,11 +11,20 @@
     "blocked",
     "scroll"
   ],
+  "known": {
+    "safari@40 title outside": "#5385",
+    "safari@51 title outside": "#5385",
+    "standalone@40 title outside": "#5385",
+    "standalone@51 title outside": "#5385",
+    "standalone@61 title outside": "#5385",
+    "w844@40 title outside": "#5385",
+    "w844@51 title outside": "#5385"
+  },
   "cells": {
     "safari@109": {
       "title": {
-        "taps": 17,
-        "text": 17,
+        "taps": 1,
+        "text": 5,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -65,15 +74,15 @@
     },
     "safari@40": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 15,
-        "text": 25,
+        "text": 27,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -116,9 +125,9 @@
     },
     "safari@51": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
@@ -131,7 +140,7 @@
       },
       "garage": {
         "taps": 1,
-        "text": 20,
+        "text": 21,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -159,16 +168,16 @@
       },
       "results": {
         "taps": 4,
-        "text": 23,
+        "text": 25,
         "outside": 0,
-        "blocked": 1,
+        "blocked": 2,
         "scroll": 0
       }
     },
     "safari@61": {
       "title": {
-        "taps": 18,
-        "text": 20,
+        "taps": 1,
+        "text": 5,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -182,7 +191,7 @@
       },
       "garage": {
         "taps": 1,
-        "text": 18,
+        "text": 19,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -218,8 +227,8 @@
     },
     "standalone@109": {
       "title": {
-        "taps": 17,
-        "text": 17,
+        "taps": 1,
+        "text": 5,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -269,15 +278,15 @@
     },
     "standalone@40": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 15,
-        "text": 27,
+        "text": 29,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -311,31 +320,31 @@
         "scroll": 0
       },
       "results": {
-        "taps": 6,
-        "text": 38,
+        "taps": 7,
+        "text": 39,
         "outside": 0,
-        "blocked": 2,
+        "blocked": 1,
         "scroll": 0
       }
     },
     "standalone@51": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 16,
-        "text": 22,
+        "text": 24,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "garage": {
         "taps": 1,
-        "text": 22,
+        "text": 23,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -371,15 +380,15 @@
     },
     "standalone@61": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 6,
-        "text": 17,
+        "text": 18,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -422,8 +431,8 @@
     },
     "w844@109": {
       "title": {
-        "taps": 17,
-        "text": 17,
+        "taps": 1,
+        "text": 5,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -473,15 +482,15 @@
     },
     "w844@40": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 15,
-        "text": 27,
+        "text": 29,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -515,24 +524,24 @@
         "scroll": 0
       },
       "results": {
-        "taps": 6,
-        "text": 38,
+        "taps": 7,
+        "text": 39,
         "outside": 0,
-        "blocked": 2,
+        "blocked": 1,
         "scroll": 0
       }
     },
     "w844@51": {
       "title": {
-        "taps": 18,
-        "text": 28,
-        "outside": 0,
+        "taps": 1,
+        "text": 5,
+        "outside": 7,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 16,
-        "text": 22,
+        "text": 24,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
@@ -575,15 +584,15 @@
     },
     "w844@61": {
       "title": {
-        "taps": 18,
-        "text": 20,
+        "taps": 1,
+        "text": 5,
         "outside": 0,
         "blocked": 0,
         "scroll": 0
       },
       "select": {
         "taps": 6,
-        "text": 17,
+        "text": 18,
         "outside": 0,
         "blocked": 0,
         "scroll": 0

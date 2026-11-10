@@ -69,10 +69,11 @@ test("planRun: the default plan is every window × the UI SIZE axis × the seven
 
 test("ceilingsFrom keeps counts only, merges into the previous file and never records an unmeasured screen", () => {
   const p = summarisePaint(RAW);
-  const out = ceilingsFrom({ "safari@61": { title: p, hud: { error: "x" } } }, { cells: { "w844@40": { title: { taps: 9, text: 9, outside: 0, blocked: 0, scroll: 0 } } } });
+  const out = ceilingsFrom({ "safari@61": { title: p, hud: { error: "x" } } }, { known: { "w844@40 title outside": "#5385" }, cells: { "w844@40": { title: { taps: 9, text: 9, outside: 0, blocked: 0, scroll: 0 } } } });
   assert.deepEqual(Object.keys(out.cells), ["safari@61", "w844@40"]);
   assert.deepEqual(out.cells["safari@61"], { title: { taps: 1, text: 1, outside: 1, blocked: 0, scroll: 0 } });
   assert.deepEqual(out.floors, { tap: 44, text: 12 });
+  assert.deepEqual(out.known, { "w844@40 title outside": "#5385" }, "hand-written known offenders survive --write");
 });
 
 test(`${CEILINGS_FILE} records every acceptance cell and screen, with whole non-negative counts of the five kinds`, () => {
