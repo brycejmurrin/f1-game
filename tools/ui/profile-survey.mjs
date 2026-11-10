@@ -2,7 +2,7 @@
 // #5201. Every menu-screens.mjs screen at the UI-contract windows (As = A with a stale portrait inner*), seeded from
 // tests/data/settings-defaults-export.json: scrollers, controls outside the safe box, fat controls. Parent only (one browser).
 // Usage: node tools/ui/profile-survey.mjs [A,C,D,As] [screenA,screenB|*]   env SURVEY_ROOT=<tree to serve> SURVEY_OUT=<dir under artifacts/>
-// Output: artifacts/profile-survey/report-<windows>.json + one JPEG per cell. Insets are injected as --sa* before first layout.
+// Output: artifacts/profile-survey/report-<windows>.json + one JPEG per cell. Insets are injected as --sa* before first layout. Results: docs/notes/VIEWPORT-ASSUMPTIONS-2026-11-10.md.
 import fs from "node:fs";
 import path from "node:path";
 import { devices } from "playwright";
