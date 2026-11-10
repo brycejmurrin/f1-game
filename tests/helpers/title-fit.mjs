@@ -36,6 +36,12 @@ export const GEOS = [
   { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS8, floor: true },
 ];
 
+/** No door paints a clipped label (#5378: Safari 852x283's five-row tier fit by door box while
+ *  PRACTICE's label span was 53 px in a 50 px box). The rows pin follows from this rule. */
+export function judgeLabels(m) {
+  return m.doors.filter((d) => d.clip).map((d) => `door ${d.id} clips its label`);
+}
+
 /** The touch paint floor (#5213): every door at least 44 px tall and its label at least 12 px. */
 export function judgeFloor(m) {
   const bad = [];
@@ -168,7 +174,15 @@ export function measureInPage() {
     const r = R(b);
     if (!(r.h > 0 && r.w > 0) || getComputedStyle(b).visibility === "hidden") continue;
     const hit = document.elementFromPoint((r.l + r.r) / 2, (r.t + r.b) / 2);
-    doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, fs: Math.round(parseFloat(getComputedStyle(b).fontSize) * (parseFloat(getComputedStyle(mb).zoom) || 1) * 100) / 100, hit: !!hit && (hit === b || b.contains(hit)) });
+    // A label span wider than its box is a clipped word; the subtitle's ellipsis (.mb-sub) is the
+    // designed clip, unless the .mb-label beside it clips too (#5378's rule in TitleLayout fits()).
+    const over = (e) => !!e && e.clientWidth > 0 && e.scrollWidth > e.clientWidth + 1;
+    let clip = over(b);
+    for (const sp of b.querySelectorAll("span:not(.mb-sub)")) {
+      if (clip || !over(sp)) continue;
+      clip = !over(sp.querySelector(".mb-sub")) || over(sp.querySelector(".mb-label"));
+    }
+    doors.push({ id: b.id || (b.textContent || "").trim().slice(0, 18), ...r, clip, fs: Math.round(parseFloat(getComputedStyle(b).fontSize) * (parseFloat(getComputedStyle(mb).zoom) || 1) * 100) / 100, hit: !!hit && (hit === b || b.contains(hit)) });
   }
   const de = document.documentElement;
   const cols = cs.gridTemplateColumns.split(/\s+/).map(parseFloat).filter((n) => n > 0);
