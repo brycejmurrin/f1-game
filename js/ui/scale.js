@@ -32,6 +32,21 @@ const UiScale = (() => {
   // rate at a pinned scale is held by PerfGov's stage 2 (the feature-shed ladder and the 45 Hz step),
   // which runs whether or not the resolution stage is pinned (js/perf/governor.js tick()).
   const defaultResMode = () => (coarseUi() ? "med" : "auto");
+  // A stored LOW on a phone from before #5166 is not proof of a choice: LOW WAS the phone default
+  // (2026-09-08..11-09) and a settings file saved then carried it as a value (perDevice null only from
+  // 2026-10-04), so importing one pinned it; nothing ever recorded "picked". Bryce's export holds
+  // resMode:"low" outside `changed`, and the 3D view stayed at LOW after #5193 (#5198). Run ONCE per
+  // device (resSchema): a phone's stored LOW goes back to the default; a desktop's never was a default,
+  // so it stays. A LOW picked after this runs is kept. Decision record: PR for #5198 part 3.
+  const RES_SCHEMA = 2;
+  function migrateResMode(store, coarse) {
+    if (store.get("resSchema", 1) >= RES_SCHEMA) return false;
+    const reset = !!coarse && store.get("resMode", defaultResMode()) === "low";
+    if (reset) store.set("resMode", undefined);   // undefined REMOVES the key; null would store "null" and read as AUTO
+    store.set("resSchema", RES_SCHEMA);
+    if (reset) Log.info("ui", "resMode: implicit phone LOW -> default " + defaultResMode());
+    return reset;
+  }
   function create(G) {
     Log.info("ui", "UiScale.create");
     const { $, els, store } = G;
@@ -118,6 +133,8 @@ const UiScale = (() => {
     // never spent growing something the player did not touch (BUTTON SIZE down grew the gear cluster back).
     const pinPainted = (key) => { const r = rowFor(key); if (typeof store.get(key, null) === "number" && r.value < scalePct(key)) store.set(key, r.value); };
     const fromSlider = (key, v) => { const r = rowFor(key); return Math.max(r.min, Math.min(r.max, scaleSnap(+v || scaleDefaultFor(key), key))); };
+    let uiRowAgain = 0;
+    const applyUiRow = () => applyScale("uiScale", "--ui-scale", "pm-uiscale");
     function applyScale(key, prop, inputId) {
       const stored = store.get(key, null);
       // The CSS custom property drives the ACTUAL on-screen size — it must read the
@@ -131,8 +148,14 @@ const UiScale = (() => {
       // and no part of the travel is dead. The STORED wish is left alone until the player moves the slider.
       let r = rowFor(key);
       const root = document.documentElement, want = typeof stored === "number" ? String(r.value / 100) : "";
-      if (cssWas[prop] !== want) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
+      const wrote = cssWas[prop] !== want;
+      if (wrote) { cssWas[prop] = want; if (want) root.style.setProperty(prop, want); else root.style.removeProperty(prop); }
       if (key === "uiScale") r = rowFor(key);   // its label names the sheet's zoom, which the write above just moved
+      // The sheet's computed zoom can still read the OLD value on the turn --ui-scale lands (sheet-shape.js roomOwn;
+      // CI 42753025608: "125% · this menu 100%" stayed). Read the row again on the next frame and 250 ms after the last write.
+      if (key === "uiScale" && wrote && typeof requestAnimationFrame === "function" && typeof setTimeout === "function") {
+        requestAnimationFrame(applyUiRow); clearTimeout(uiRowAgain); uiRowAgain = setTimeout(applyUiRow, 250);
+      }
       const input = $(inputId);
       if (input) { input.min = String(r.min); input.max = String(r.max); input.value = String(r.value); }
       const out = $(`${inputId}-v`); if (out && out.textContent !== r.label) out.textContent = r.label;
@@ -263,7 +286,7 @@ const UiScale = (() => {
     }
     // SheetShape re-shapes the sheet (density, fit) after the slider moves: rebuild the UI SIZE row when it does.
     if (typeof MutationObserver === "function" && uiSheet()) {
-      new MutationObserver(() => applyScale("uiScale", "--ui-scale", "pm-uiscale")).observe(uiSheet(), { attributes: true });
+      new MutationObserver(applyUiRow).observe(uiSheet(), { attributes: true });
     }
     function setScale(key, prop, v) {
       if (v !== undefined) {
@@ -286,6 +309,7 @@ const UiScale = (() => {
     // other half of the HIGH graphics preset above. Same question
     // Input.touchControlsNeeded() asks, asked directly (coarseUi, above) so
     // this module keeps no dependency on the input stack.
+    migrateResMode(store, coarseUi());
     let resMode = store.get("resMode", defaultResMode());
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
@@ -413,5 +437,5 @@ const UiScale = (() => {
   }
   const UI_PHONE_MIN = 70;   // #5235
   btnFitLabel.sizeRow = sizeRow; btnFitLabel.parseCaps = parseCaps;   // exported on the return line once #5205 (which edits it) lands
-  return { create, defaultResMode, btnFitLabel };
+  return { create, defaultResMode, migrateResMode, RES_SCHEMA, btnFitLabel };
 })();
