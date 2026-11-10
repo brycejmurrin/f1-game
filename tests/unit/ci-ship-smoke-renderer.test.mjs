@@ -405,13 +405,14 @@ test("staged-boot honors the SwiftShader opt-out for renderer env as well as set
 });
 
 
-function runMesaFixture(t, sudoBody) {
+function runMesaFixture(t, sudoBody, dpkgQueryBody = "return 1") {
   const root = fs.mkdtempSync(path.resolve("scratch/mesa-action-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const yml = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
   const script = yml.split("      run: |\n")[1].split("\n").map(line => line.replace(/^        /, "")).join("\n")
     .replaceAll("/tmp/.X11-unix/X99", path.join(root, "missing-display"));
-  const prelude = `sudo() { ${sudoBody}; }; Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };`;
+  // dpkg-query is stubbed too: the fixture must not read the host's package database.
+  const prelude = `sudo() { ${sudoBody}; }; dpkg-query() { ${dpkgQueryBody}; }; Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };`;
   const r = spawnSync("bash", ["-e", "-c", prelude + "\n" + script], {
     encoding: "utf8", timeout: 2000,
     env: { ...process.env, GITHUB_ENV: path.join(root, "env"), RUNNER_TEMP: root },
@@ -430,4 +431,33 @@ test("Mesa retries share a total deadline instead of exhausting the caller job",
   const {r} = runMesaFixture(t, "echo APT-CALL; SECONDS=$((SECONDS + 300)); return 1");
   assert.notEqual(r.status, 0);
   assert.equal((r.stdout.match(/APT-CALL/g) || []).length, 1, "no retry after setup budget is spent");
+});
+
+test("Mesa setup repairs a dpkg its own cap interrupted instead of failing every retry", (t) => {
+  // Job 129623589272: the 180 s cap killed attempt 1 mid-dpkg, then attempts 2 and 3 died on
+  // "E: dpkg was interrupted" with budget left and no spec ran. The stub models that state:
+  // a killed install leaves `interrupted`; only `dpkg --configure -a` clears it and completes
+  // the packages; an apt call while interrupted fails as the real one does.
+  const sudo = [
+    'case "$*" in',
+    '  *"apt-get update"*) if [ -e "$RUNNER_TEMP/interrupted" ]; then echo "E: dpkg was interrupted"; return 100; fi; return 0 ;;',
+    '  *"apt-get install"*) echo INSTALL-CALL; if [ -e "$RUNNER_TEMP/interrupted" ]; then echo "E: dpkg was interrupted"; return 100; fi; touch "$RUNNER_TEMP/interrupted"; return 124 ;;',
+    '  *"dpkg --configure -a"*) echo CONFIGURE-CALL; rm -f "$RUNNER_TEMP/interrupted"; touch "$RUNNER_TEMP/configured"; return 0 ;;',
+    "esac",
+  ].join("\n");
+  const dpkgQuery = '[ -e "$RUNNER_TEMP/configured" ] && echo "install ok installed"';
+  const {r} = runMesaFixture(t, sudo, dpkgQuery);
+  assert.equal((r.stdout.match(/INSTALL-CALL/g) || []).length, 1, "one install; the repair completes it:\n" + r.stdout + r.stderr);
+  assert.equal((r.stdout.match(/CONFIGURE-CALL/g) || []).length, 1, r.stdout);
+  assert.equal(r.stdout.includes("apt could not install Mesa/Xvfb"), false, r.stdout);
+  // Setup got past apt: the fixture's display is absent by construction, so the script ends on that check.
+  assert.equal(r.stdout.trim().split("\n").at(-1), "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s", r.stdout);
+});
+
+test("Mesa setup still fails when the repair cannot complete the packages", (t) => {
+  const sudo = 'case "$*" in *"dpkg --configure -a"*) echo CONFIGURE-CALL; return 1 ;; *) echo APT-CALL; return 100 ;; esac';
+  const {r} = runMesaFixture(t, sudo);
+  assert.notEqual(r.status, 0);
+  assert.equal(r.stdout.includes("::error::mesa-xvfb: apt could not install Mesa/Xvfb within 300 s and up to 3 attempts"), true, r.stdout);
+  assert.equal((r.stdout.match(/CONFIGURE-CALL/g) || []).length, 3, "a repair after each failed attempt");
 });
