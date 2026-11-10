@@ -502,10 +502,11 @@ test("neither end of the complex lies in a corner: the exit closes before the fi
       assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `nurburgring: cornering at s=${s | 0} (sOut ${p.sOut | 0} + grow ${p.grow})`);
     assert.ok(p.exitRoadM >= P.EXIT_ROAD_MIN, `the exit road is at least ${P.EXIT_ROAD_MIN} m (${p.exitRoadM})`);
   }
-  // Where the straight cannot hold even the minimum (Mosport 24 m, Jerez 48 m)
+  // Where the straight cannot hold even the minimum (Mosport 24 m; Jerez was 48 m
+  // until #5078 moved its line onto the real start straight)
   // the exit sits on the floor, not at 130. (The ENTRY is clamped to
   // ENTRY_MIN the same way and may still open in a corner on such a circuit.)
-  for (const id of ["mosport", "jerez"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
+  for (const id of ["mosport"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
   // A long straight keeps the full exit — the rule only bites where a corner does.
   assert.equal(buildOnce("monza").pit.exitM, P.EXIT_M);
 });

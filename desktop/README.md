@@ -1,11 +1,25 @@
 # Apex 26 — desktop (Electron) spike
 
-Installable shell around the **same static site** GitHub Pages ships. The game
-keeps its no-build-step IIFE modules; packaging stages runtime files, then
-Electron serves them over a privileged `app://apex/` origin.
+Installable shell around the static site GitHub Pages ships (three.js on
+WebGPU first, WebGL2 fallback). The game keeps its no-build-step IIFE modules;
+`npm run stage` runs `tools/desktop/stage.mjs`, the same stager and allow-list
+the Pages deploy runs, then Electron serves the result over a privileged
+`app://apex/` origin.
 
-**Pinned runtime:** Electron **44.4.5** (Chromium 152). v45 is alpha — stay on
-stable until a deliberate bump.
+**Same bytes as Pages — only with root deps.** The stage minifies `js/` with
+terser from the REPO ROOT's `node_modules`. Without a root `npm ci` a pull
+request or local stage ships `js/` unminified and logs a `::warning::`; a
+release build (`APEX_RELEASE_BUILD=1`, a tag, or any non-PR GitHub Actions
+event) fails instead (`tools/desktop/minify.mjs` `unminifiedPolicy`). The
+version stamp is this checkout's commit count, as on Pages.
+
+**Never released.** No Windows or macOS pack, installer or release build has
+ever run (every desktop CI run to date was an Ubuntu pull-request pack-smoke).
+
+**Pinned runtime:** Electron **44.10.2** (Chromium 152.0.7977.169, Node
+24.22.2; released 2026-11-03). It clears GHSA-x562-297c-g43g (fixed in 44.5.0)
+and GHSA-jr5w-w6x2-84p9 (fixed in 44.9.1). Re-run `npm audit` in `desktop/`
+before any release; stay on the newest patch of the pinned major.
 
 ## Why electron-builder (not Electron Forge)
 
@@ -55,7 +69,37 @@ Builder config lives in `desktop/electron-builder.config.cjs` (appId/productName
 from `desktop/lib/identity.cjs`). Release `npm run pack` / `dist:*` keep
 `EnableNodeCliInspectArguments` and `grantFileProtocolExtraPrivileges` **off**.
 `npm run pack:test` (inspect on). Soft-GL and `no-sandbox` are env opt-ins
-(`APEX_DESKTOP_SOFT_GL`, `APEX_DESKTOP_NO_SANDBOX`) — never implied by `CI=`.
+(`APEX_DESKTOP_SOFT_GL`, `APEX_DESKTOP_NO_SANDBOX`) for an **unpackaged** run
+only (`npm start`, `npm run smoke`) — never implied by `CI=`. A packaged build
+(`app.isPackaged`) ignores them and logs that it did (`lib/debug-flags.cjs`);
+the packaged Playwright suite passes the same Chromium switches as argv.
+
+## What is and is not protected
+
+Builds are **unsigned** (`identity: null`, `signAndEditExecutable: false`) and
+have **no update channel** (`publish: null`): a player gets a fix only by
+downloading a new installer by hand.
+
+Fuses flipped at pack time (Electron 44 fuses; none needs a certificate):
+
+| Fuse | Setting | Effect |
+| --- | --- | --- |
+| `runAsNode` | off | `ELECTRON_RUN_AS_NODE` cannot turn the app into a Node runtime |
+| `nodeOptions` | off | `NODE_OPTIONS` / `NODE_EXTRA_CA_CERTS` ignored |
+| `nodeCliInspect` | off (on in `pack:test` only) | `--inspect*` and `SIGUSR1` ignored |
+| `onlyLoadAppFromAsar` | on | app code loads only from `app.asar` |
+| `embeddedAsarIntegrityValidation` | on | macOS + Windows: `app.asar` whose header hash does not match the hash embedded at pack time is refused. Linux: not supported, no effect |
+| `grantFileProtocolExtraPrivileges` | off | `file://` gets no extra privileges (the game uses `app://`) |
+| `cookieEncryption` | on | cookies encrypted with the OS key store (macOS needs a signed app for the Keychain; unsigned it is untested) |
+
+What this does **not** protect: without code signing, nothing verifies the
+binary itself. Someone who can write to the install folder can flip the fuses
+back, edit the embedded asar hash (Info.plist on macOS, an exe resource on
+Windows) or replace the executable. The staged site in `resources/site/` is
+outside the asar and is **not** integrity-checked on any OS. Windows
+SmartScreen and macOS Gatekeeper will warn on (or, on macOS, block) these
+unsigned downloads. The fuses stop ambient misuse (an environment variable, a
+command-line flag, a stray `app/` folder); they are not tamper-proofing.
 
 ## Protocol (`app://apex/`)
 
@@ -108,7 +152,8 @@ npm run dist:linux    # AppImage + unpacked dir
 npm run pack          # unpacked dir only (faster check)
 ```
 
-Artifacts land in `desktop/dist/`. They are **unsigned**.
+Artifacts land in `desktop/dist/`. They are **unsigned** (see §What is and is
+not protected).
 
 ## CI
 

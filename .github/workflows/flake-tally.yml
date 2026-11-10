@@ -14,15 +14,22 @@ name: Flake tally
 # is a PR with an owner and the evidence run (AGENTS.md rule 9).
 #
 # BASE-RED DETECTOR (2026-10-16, CI jobs review): the same job runs every 2 h in
-# `base-red` mode over the last 3 h of failed runs and opens, refreshes or
-# closes ONE issue labelled `base-red` when a spec failed first-try on 3+
-# unrelated branches (or on 2 including a train). menu-keyboard was red on
+# `base-red` mode over the failed runs since 1 h before the last SUCCESSFUL
+# base-red run (3 h at least, 24 h at most, 24 h when none is found: GitHub
+# drops many 2-hourly cron slots, and a fixed 3 h window left their runs
+# unread) and opens, refreshes or closes ONE issue labelled `base-red` when a
+# spec failed first-try on 3+ unrelated branches (or on 2 including a train).
+# It never closes the issue when any run's read produced a note (an API error
+# or an unreadable log); notes print in the log and the step summary. The
+# run-name carries the mode so the lookup skips daily runs. menu-keyboard was red on
 # unrelated diffs for over an hour (7 PR runs, 3 trains, ~1,000 job-min) and the
 # daily tally read it hours later. Advisory: a label and an issue block nothing.
 #
 # Least privilege: issues: write for the issues, actions: read for runs,
 # artifacts and job logs, contents: read for the checkout. The token is
 # GITHUB_TOKEN; an issue edit made with it starts no workflow run.
+run-name: Flake tally (${{ github.event.schedule == '17 */2 * * *' && 'base-red' || inputs.mode || 'daily' }})
+
 on:
   schedule:
     - cron: "19 6 * * *"
@@ -34,7 +41,7 @@ on:
         default: "2"
         type: string
       mode:
-        description: "daily tally, or the 3 h base-red detector"
+        description: "daily tally, or the base-red detector (since its last successful run)"
         default: "daily"
         type: choice
         options: [daily, base-red]
@@ -68,7 +75,7 @@ jobs:
           MODE: ${{ github.event.schedule == '17 */2 * * *' && 'base-red' || inputs.mode || 'daily' }}
         run: |
           if [ "$MODE" = base-red ]; then
-            node tools/ci/flake-tally.mjs --base-red --hours 3 --issue --work-dir "$RUNNER_TEMP/flake-tally"
+            node tools/ci/flake-tally.mjs --base-red --since-last-success --issue --work-dir "$RUNNER_TEMP/flake-tally"
           else
             node tools/ci/flake-tally.mjs --events all --days "$DAYS" --propose --issue --work-dir "$RUNNER_TEMP/flake-tally"
           fi
