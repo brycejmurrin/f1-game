@@ -55,10 +55,10 @@ test("enforceSpacing: a protected tangent crowding index 0 at the seam survives;
   assert.notEqual(out.indexOf(tangent), -1, "the protected tangent is kept");
   for (let i = 0; i < out.length; i++) { const p = out[i], q = out[(i + 1) % out.length]; assert.ok(Math.hypot(q[0] - p[0], q[1] - p[1]) >= 8, `spacing holds at ${i}`); }
   // Unprotected, or with index 0 itself protected, the old rule stands: the last point goes.
-  assert.ok(!S.enforceSpacing(pts, 8).includes(tangent), "unprotected last point is merged into index 0");
+  assert.equal(S.enforceSpacing(pts, 8).indexOf(tangent), -1, "unprotected last point is merged into index 0");
   const both = S.enforceSpacing(pts, 8, new Set([0, 8]));
   assert.equal(both[0], pts[0], "a protected index 0 is kept");
-  assert.ok(!both.includes(tangent));
+  assert.equal(both.indexOf(tangent), -1);
 });
 
 test("polyline tools: RDP, resample, Catmull, Menger, rotate, project, hull", () => {
