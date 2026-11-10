@@ -9370,6 +9370,9 @@
       "fmtLap": [
         "tests/unit/phone-pad.test.mjs"
       ],
+      "makePeerId": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "padUrl": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-pad.test.mjs"
@@ -9404,6 +9407,12 @@
       ]
     },
     "js/input/phone-pad.js": {
+      "admit": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "askOnScreen": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
       "cancel": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
@@ -9482,6 +9491,9 @@
     },
     "js/input/tilt-roll.js": {
       "rollDeg": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "screenAngle": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "*": [

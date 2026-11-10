@@ -181,9 +181,11 @@ const InputPadMenu = (function () {
     // way MenuNav's own first arrow press would, so the NEXT press has a target.
     // "One focus visual should always be visible" (research note §8) applies to
     // A as much as to a direction — and to the menu-open seed in padNavPoll.
-    function padActivate() {
+    // `guard(el)` true = refuse this control (the phone's SELECT on a destructive one).
+    function padActivate(guard) {
       const focused = padFocusableInLayer();
       if (focused) {
+        if (typeof guard === "function" && guard(focused)) return false;
         // A click on a focused range/number jumps the thumb to the click
         // coordinate — not "confirm this control". Left/Right already own it.
         const ty = (focused.type || "").toLowerCase();
@@ -283,6 +285,26 @@ const InputPadMenu = (function () {
       releaseDirection() { padNavDir = null; }, reset };
   }
 
-  return { create };
+  /* DESTRUCTIVE CONTROLS. A paired phone is a remote: it may walk every menu,
+     but RESET / DELETE / IMPORT / ERASE / WIPE / CLEAR / REMOVE / FORGET take a
+     tap on the game's own screen. An element opts in with data-destructive
+     (any value but "false") and out with data-destructive="false"; without
+     the attribute its id, class, name, aria-label and text are read for those
+     words, so the shell's RESET KEYS, the career DELETE / IMPORT cards and
+     the settings IMPORT SHARE CODE are covered without a list to keep. A file
+     picker is an import by definition. */
+  const DESTRUCTIVE_RE = /(?:^|[^a-z])(reset|delete|del|import|erase|wipe|clear|remove|forget)(?![a-z])/i;
+  function isDestructive(el) {
+    if (!el || typeof el !== "object") return false;
+    const attr = (n) => (typeof el.getAttribute === "function" ? el.getAttribute(n) : null);
+    const flag = el.dataset && el.dataset.destructive !== undefined ? el.dataset.destructive : attr("data-destructive");
+    if (flag != null) return String(flag).toLowerCase() !== "false";
+    if (el.tagName === "INPUT" && String(el.type || "").toLowerCase() === "file") return true;
+    const cls = typeof el.className === "string" ? el.className : "";
+    const words = [el.id, cls, el.name, attr("aria-label"), el.textContent].filter((v) => typeof v === "string").join(" ");
+    return DESTRUCTIVE_RE.test(words);
+  }
+
+  return { create, isDestructive };
 })();
 Object.freeze(InputPadMenu);
