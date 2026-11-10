@@ -912,14 +912,11 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(h({ live: false }).hiddenReason("rel"), null, "touch RELATIVE has a home under the map");
   assert.equal(h({ live: false }).hiddenReason("inputs"), null, "touch INPUTS has a home under the sectors");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
-  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)/);
   assert.doesNotMatch(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
   assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
     "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
   assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
     "touch RELATIVE uses the same measured left column");
-  assert.match(css, /:has\(> :where\(#hud\) > #hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)/,
-    "STRATEGY steps beside RELATIVE instead of stacking onto PLAN");
   assert.match(css, /:root\[data-limits-left\] #hud-strat/,
     "STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,

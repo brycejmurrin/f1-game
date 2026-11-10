@@ -3,17 +3,10 @@
  * intensity), js/race/race-control.js (the safety car), js/lighting/* (the
  * darker sky) and the render half of js/game.js (strikes, spray).
  *
- * WHAT A STORM IS HERE. Heavy rain is > 7.6 mm/h (AMS glossary,
- * https://glossary.ametsoc.org/wiki/Rain). On the ROAD it is no wetter than
- * rain — standing water is standing water — so grip and tread treat it as full
- * rain (asRain; TyreModel owns the grip and is not told about storms). What a
- * storm takes away is VISIBILITY: the floor and diffuser throw the water up into
- * a plume the car behind drives blind through
- * (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/),
- * which is why race control starts a storm race behind the safety car and
- * neutralises one that a storm rolls over (the FIA's 2025 Belgian GP: formation
- * lap, red flag for visibility, restart behind the SC —
- * https://www.the-race.com/formula-1/belgian-grand-prix-delayed-red-flag-rain-visibility.md).
+ * WHAT A STORM IS HERE. On the ROAD it is no wetter than rain, so grip and tread
+ * treat it as full rain (asRain; TyreModel is not told about storms). What it
+ * takes is VISIBILITY (the spray plume), which is why race control starts a
+ * storm race behind the safety car and neutralises one a storm rolls over.
  *
  * LIGHTNING IS A FUNCTION OF (seed, clock). The clock is cut into SLOT-second
  * windows; each window holds at most one strike, at an offset hashed from the

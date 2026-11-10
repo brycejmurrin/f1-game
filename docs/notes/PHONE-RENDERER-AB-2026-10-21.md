@@ -1,5 +1,7 @@
 # Phone renderer A/B: TLX vs GLX (B·H23, 2026-10-21)
 
+Summary: Phone renderer A/B, TLX versus GLX, measurements only; switching the default waits for Bryce (B·H23).
+
 Bryce, 2026-10-21 05:12Z: "Keep both but let's test and side by side first." The question is whether phones
 should default to GLX (plain WebGL2) instead of TLX (three.js). This note holds the measurements. Switching the
 default is a later PR, after Bryce decides.
