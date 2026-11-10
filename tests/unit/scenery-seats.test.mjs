@@ -3,6 +3,8 @@
 // each measured in this VM on the base and failing there:
 //   #5080 qatar: 53 of 620 green verges dropped whole by modelGroup's mid-box
 //         road test, though 45 never touch the tarmac (now trimmed per cell).
+//         Each cell of a patch the road hit must also clear the road's
+//         footprint height-blind (montreal 26 faces under the hairpin).
 //   #5086 a crowd standing on a tread rejBox passed as "below the road" came
 //         0.1-0.3 m under ANOTHER section's asphalt (estoril 12, shanghai 8).
 //   #5088 props seated from the road frame float or sink on slopes (cota
@@ -31,6 +33,35 @@ test("qatar's green verges near a kerb are trimmed, not dropped whole (#5080)", 
     assert.ok(t.modelDiagnostics.suppressed.some((s) => /superseded by the pit complex/.test(s.reason)),
       "qatar's sand aprons are still superseded by the pit complex");
   } finally { e.trim(m0); e.release(t); }
+});
+
+test("a trimmed patch draws no cell under the asphalt of an embanked road (#5080)", () => {
+  // rejBox skips a box whose top is >0.3 m under the road, so the per-cell
+  // guard alone kept drape faces inside the road's footprint, under its
+  // asphalt: montreal-park-lawn-r-10 26 faces 1.5-1.6 m under the hairpin,
+  // nurburgring 18, monza 5 (0 on the base, where the patches were dropped whole).
+  const e = ctx(), bad = [];
+  for (const id of ["montreal", "nurburgring", "monza"]) {
+    const m0 = e.mark(), t = e.Tracks.build(def(id));
+    try {
+      for (const p of H.shipped(e.prims.slice(m0), e.liveBufs)) {
+        if (p.buf !== t.propsGeo || p.name !== "emit") continue;
+        if (p.maxX - p.minX > 30 || p.maxZ - p.minZ > 30 || p.maxY - p.minY > 4) continue;
+        const x = (p.minX + p.maxX) / 2, z = (p.minZ + p.maxZ) / 2;
+        for (let i = 0; i < t.n; i++) {
+          const j = (i + 1) % t.n, dx = t.px[j] - t.px[i], dz = t.pz[j] - t.pz[i], L2 = dx * dx + dz * dz;
+          const ex = x - t.px[i], ez = z - t.pz[i];
+          if (L2 < 0.01 || ex * ex + ez * ez > 2500) continue;
+          const s = Math.max(0, Math.min(1, (ex * dx + ez * dz) / L2));
+          const lat = Math.hypot(ex - s * dx, ez - s * dz), w = t.hw[i] + (t.hw[j] - t.hw[i]) * s;
+          const under = p.maxY - (t.py[i] + (t.py[j] - t.py[i]) * s);
+          // under the asphalt, not under a bridge span 3 m or more up
+          if (lat < w && under < 3) { bad.push(`${id} frac ${(i / t.n).toFixed(3)} lat ${lat.toFixed(1)}/${w.toFixed(1)} top ${under.toFixed(2)}`); break; }
+        }
+      }
+    } finally { e.trim(m0); e.release(t); }
+  }
+  assert.deepEqual(bad, [], `${bad.length} draped faces inside the road footprint: ${bad.join("; ")}`);
 });
 
 test("no crowd body stands flush under another road section (#5086)", () => {
