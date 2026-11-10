@@ -34,12 +34,34 @@ const PAUSE = { "pm-resume": { min: 44 }, "pm-restart": { min: 44 }, "pm-setting
 
 test.use({ viewport: { width: W, height: H }, hasTouch: true });
 
-/** Inject `css`, judge `named`, remove it: the judge must name `want`. */
-async function mutationIsCaught(page, css, named, want) {
-  const tag = await page.addStyleTag({ content: css });
+/**
+ * Break the page, judge `named`, restore it: the judge must name `want` (an id, or a list: any of them).
+ * The override goes on as an INLINE `!important` style on every `sel` match. An injected <style> lost to the
+ * sheets' layered `!important` sizing (#mb-race kept its 47 px on 6c356f1; the shrunk pause sheet passed the
+ * judge on CI 7d7bdc7). Every inline mutation below was measured live on 5cd74c2 to take effect.
+ * @param {import("@playwright/test").Page} page
+ * @param {string} sel
+ * @param {Record<string, string>} props
+ */
+async function mutationIsCaught(page, sel, props, named, want) {
+  const n = await page.evaluate(({ sel, props }) => {
+    const els = [...document.querySelectorAll(sel)];
+    for (const el of els) {
+      el.dataset.mutSaved = el.getAttribute("style") || "";
+      for (const [k, v] of Object.entries(props)) el.style.setProperty(k, v, "important");
+    }
+    return els.length;
+  }, { sel, props });
+  expect(n, `the mutation selector ${sel} matches the page`).toBeGreaterThan(0);
   const bad = await judgeNamed(page, named, INSETS);
-  await tag.evaluate((n) => n.remove());
-  expect(bad.some((b) => b.startsWith(want + ":")), `the judge goes red on \`${css}\` (it said ${JSON.stringify(bad)})`).toBe(true);
+  await page.evaluate((sel) => {
+    for (const el of document.querySelectorAll(sel)) {
+      const was = el.dataset.mutSaved; delete el.dataset.mutSaved;
+      if (was) el.setAttribute("style", was); else el.removeAttribute("style");
+    }
+  }, sel);
+  const wants = Array.isArray(want) ? want : [want];
+  expect(bad.some((b) => wants.some((w) => b.startsWith(w + ":"))), `the judge goes red on ${sel} ${JSON.stringify(props)} (it said ${JSON.stringify(bad)})`).toBe(true);
 }
 
 const tapCentre = async (page, id) => {
@@ -69,15 +91,13 @@ test("named controls exist, paint and take a tap in TITLE, SETTINGS, RACE and PA
   // TITLE
   await expect(page.locator("#mb-race")).toBeVisible({ timeout: BOOT_MS });
   expect(await judgeNamed(page, TITLE, INSETS), "TITLE doors").toEqual([]);
-  // A transform, not `height`: the title sheet's layered `!important` sizing beats an unlayered override (measured
-  // on 6c356f1), and the point is a door that PAINTS 8 px tall, however it got there.
-  await mutationIsCaught(page, "#mb-race{transform:scaleY(.17)!important}", TITLE, "mb-race");
+  await mutationIsCaught(page, "#mb-race", { height: "8px", "min-height": "0", "padding-block": "0" }, TITLE, "mb-race");
 
   // SETTINGS from the title, BACK by a tap
   await tapCentre(page, "mb-settings");
   await expect(page.locator("#pmsettings")).toBeVisible();
   expect(await judgeNamed(page, SETTINGS, INSETS), "SETTINGS (title)").toEqual([]);
-  await mutationIsCaught(page, "#pm-settings-close{visibility:hidden!important}", SETTINGS, "pm-settings-close");
+  await mutationIsCaught(page, "#pm-settings-close", { visibility: "hidden" }, SETTINGS, "pm-settings-close");
   await tapCentre(page, "pm-settings-close");
   await expect(page.locator("#pmsettings")).toBeHidden();
 
@@ -89,15 +109,18 @@ test("named controls exist, paint and take a tap in TITLE, SETTINGS, RACE and PA
   await expect(page.locator("#loading")).toBeHidden({ timeout: BOOT_MS });
   expect(await page.evaluate(() => window.__apex.inputState().steerMode), "the export steers with buttons").toBe("buttons");
   expect(await judgeNamed(page, RACE, INSETS), "RACE controls").toEqual([]);
-  await mutationIsCaught(page, "#btn-throttle{transform:translateY(400px)!important}", RACE, "btn-throttle");
-  await mutationIsCaught(page, "#pausebtn{width:130px!important;height:130px!important;max-width:none!important;max-height:none!important}", RACE, "pausebtn");
+  await mutationIsCaught(page, "#btn-throttle", { transform: "translateY(400px)" }, RACE, "btn-throttle");
+  await mutationIsCaught(page, "#pausebtn", { width: "130px", height: "130px", "max-width": "none", "max-height": "none" }, RACE, "pausebtn");
 
   // PAUSE, opened the way a thumb does
   await tapCentre(page, "pausebtn");
   await expect(page.locator("#pausemenu")).toBeVisible();
   expect(await judgeNamed(page, PAUSE, INSETS), "PAUSE doors").toEqual([]);
-  await mutationIsCaught(page, "#pausemenu #pm-resume{display:none!important}", PAUSE, "pm-resume");
-  await mutationIsCaught(page, "#pausemenu .sheet{max-height:120px!important;overflow:hidden!important}", PAUSE, "pm-resume");
+  await mutationIsCaught(page, "#pm-resume", { display: "none" }, PAUSE, "pm-resume");
+  // The #5200 shape: the doors' grid squeezed to 120 px, so the doors overlap (measured live on 5cd74c2: RESUME's
+  // centre lands on #pm-quit). The grid, not `.sheet`: an inline max-height on `.sheet` left the card at 210 px.
+  // Which door loses its centre depends on the grid, so any pause door named is the catch.
+  await mutationIsCaught(page, "#pausemenu .sheet-body", { "max-height": "120px", overflow: "hidden" }, PAUSE, Object.keys(PAUSE));
 
   // SETTINGS from PAUSE, BACK returns to PAUSE, RESUME returns to the race
   await tapCentre(page, "pm-settings");
