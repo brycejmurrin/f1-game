@@ -16,7 +16,7 @@ SDK fix is included. Existing main-repo gateway, lifecycle manager, MCP contract
 checker and SDK 1.32.2 lockfile were reused. Canonical environment/package sources
 now live under `tools/environment/`; old toolchain source entrypoints resolve by
 compatibility links, with previous files preserved outside Git. See
-[the environment contract](../../tools/environment/ENVIRONMENT.md).
+the environment contract (tools/environment/, deleted 2026-11-10; git history).
 
 Fresh host tool discovery in this session exposed neither F1 apex_status/
 apex_doctor nor Plugin Creator/Management/import tools. These capabilities cannot

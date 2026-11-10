@@ -2078,6 +2078,11 @@
       "roster": "LAZY_AGENT"
     },
     {
+      "path": "js/agent/bridge-link.js",
+      "global": "BridgeLink",
+      "roster": "LAZY_AGENT"
+    },
+    {
       "path": "js/audio/announcer-recorded.js",
       "global": "RecordedAnnouncer",
       "roster": "LAZY_AUDIO"

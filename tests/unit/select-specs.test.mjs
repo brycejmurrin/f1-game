@@ -965,7 +965,8 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   // Retries come from the plan: 0 on every leg but a quarantined spec's own
   // (R3-CI-HEALTH-4; tests/unit/flaky-quarantine.test.mjs pins that half).
   assert.equal(SELECTED_GATE.retries, 0);
-  assert.match(yml, new RegExp(`--retries=\\$\\{\\{ matrix\\.retries \\|\\| 0 \\}\\} --timeout=${ms} --max-failures=${MAX_FAILURES}`),
+  assert.match(yml, /RETRIES: \$\{\{ matrix\.retries \|\| 0 \}\}/, "the plan's retries reach the step through env");
+  assert.match(yml, new RegExp(`--retries="\\$RETRIES" --timeout=${ms} --max-failures=${MAX_FAILURES}`),
     `ci.yml's selected step does not run --retries=<plan> --timeout=${ms} --max-failures=${MAX_FAILURES}`);
   // The cap is DERIVED per job by shardCapMin and handed over through the
   // matrix; it must clear the budgeted job's worst case, which --max-failures
@@ -983,7 +984,8 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   const selectJob = /\n  select:\n[\s\S]*?\n  selected:\n/.exec(yml)?.[0] || "";
   // The JOB's `if:` (the ship-filter STEP inside it sits out the fast tier on purpose since 2026-10-15).
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
-  assert.ok(selectJob && selectJobIf && !/concurrency_key == ''/.test(selectJobIf),
+  // No `if:` at all (since 2026-11-10, the dead fast_tier_run guard went) runs on every event, the Pages call included.
+  assert.ok(selectJob && !/concurrency_key == ''/.test(selectJobIf),
     "the select job must not skip itself on the Pages call — exact-commit deploys need the change-aware gate too");
 });
 

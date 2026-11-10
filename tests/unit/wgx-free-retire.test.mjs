@@ -293,10 +293,10 @@ function makeGpuHarness(opts = {}) {
                 Object.defineProperty(o, "device", { value: "", enumerable: false });
                 return o;
               })()
+            // Chrome 140+ shape: the fallback flag lives on GPUAdapterInfo (webgpu-lifecycle.test.mjs covers both).
             : (opts.softAdapter
-              ? {}
+              ? { isFallbackAdapter: true }
               : { vendor: "test", architecture: "test", device: "mock-gpu" }),
-          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
