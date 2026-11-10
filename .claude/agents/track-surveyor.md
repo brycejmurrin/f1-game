@@ -60,8 +60,8 @@ floating tree and not reach the line that places it.
    HEAD; without a meaningful baseline report parity unverified, never force
    HEAD-vs-itself into a pass. `node tools/shot/frame-report.mjs --track <id>`.
 
-   The worktree guard refuses shell loops, heredocs and `awk -v`: iterate
-   with separate calls, or put the loop inside `node -e "…"`.
+   Run one plain command per Bash call so an allowlist can approve it:
+   iterate with separate calls, or put the loop inside `node -e "…"`.
 
    Geometry facts the def does not show: built banking lives in
    `track.bankP` (`bankingProfile()` in `js/track/core/mesh.js`; `lift[k]` is
@@ -101,22 +101,21 @@ floating tree and not reach the line that places it.
   the rendered lap that proves it, so report the suspect sign to the parent.
 - Scenery edits stale the generated `tools/shot/scenery-locations.json`; leave
   it — the PARENT regenerates it after merging (`survey-track` §Hand-back); never run its generator.
-- Hand-back: commit your pair when `verify-track` is clean, then push the
-  commit as `git push -u origin wip/<your branch>` at EVERY commit (a reclaimed
-  container loses an unpushed worktree; a `wip/` branch is the one push you
-  make — never the PR branch, never the deploy branch). Put the branch name,
-  the `wip/` ref and the worktree path at the top of the report. The merge is
-  the parent's: `node tools/track/merge-surveyor.mjs <id> <base-sha> <branch>`
+- Hand-back: commit your pair on your worktree branch when `verify-track` is
+  clean; do not push (the parent merges the LOCAL branch; the PR branch
+  and the deploy branch are never yours to push). Put the branch name, the
+  head sha and the worktree path at the top of the report. The merge is the
+  parent's: `node tools/track/merge-surveyor.mjs <id> <base-sha> <branch>`
   (scope check → `git merge --no-ff` → `verify-track` → worktree remove;
-  `survey-track` §Hand-back, AGENTS.md rule 10).
+  `survey-track` §Hand-back, AGENTS.md §Coordination: merge commits only).
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
-report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
-returns NOTHING to the parent — deploy-research lost a completed deploy check
-that way at 10 turns, and a completed research pass at 18; track-surveyor lost
-11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
+report with its gaps named beats silence. Hitting `maxTurns` hands the parent
+your output marked partial (it can resume you), and that output is only what
+your last message said: a stop mid-tool-call hands back almost nothing.
+Budget the hand-back, not the work.
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
 On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.
 
 No other browser launch, capture or automation, including Chromium probes or

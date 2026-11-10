@@ -18,8 +18,8 @@ The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
 
 - Session only: `mcp-browser-guard.sh` refuses every `mcp__js-debugger__*` call
-  inside a subagent, status reads included (AGENTS.md rule 10); a subagent may use
-  only the shell `list-tools` / `status` below.
+  inside a subagent, status reads included (AGENTS.md rule 10). No hook covers the shell
+  wrapper: by that rule a subagent uses only its `list-tools` / `status` (references/setup.md).
 - One browser at a time: never beside a Playwright test run, `playwright-official`
   `browser_*` or chrome-devtools. Attached here, profile with `debugger_profile`
   (cpu / heap / hitch; references/tools.md) instead of opening chrome-devtools.
@@ -41,8 +41,8 @@ Logpoints, exception logs, listener/instance counts, `debugger_run` side effects
 - "Stop here and show me the locals" → `debugger_break {breakpoints, trigger}`: stack, cause and
   locals in one reply, paused with a token (or `resume:true`).
 - A `condition` is an expression evaluated IN the paused frame: write `c.speed`, not `speed`. A
-  condition that throws never pauses, and `debugger_break` just times out (default 10 s, max
-  `timeoutMs:30000`), so dry-run it with `debugger_collect` (same expression as a logpoint) first.
+  condition that throws never pauses, and `debugger_break` just times out (its `timeoutMs`;
+  `list-tools` gives default and max), so dry-run it with `debugger_collect` (same expression as a logpoint) first.
   A per-car function (`updateCar` runs for every car, every tick) needs `c.isPlayer &&` (a VS FRIEND rival is also `c.human`); worked
   in-race example: [references/step-loop.md](references/step-loop.md) §Pause the player at a speed.
 - "How often, with what values" on a running page → `debugger_collect {logpoints, trigger}`.

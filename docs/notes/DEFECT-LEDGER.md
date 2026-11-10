@@ -2,6 +2,11 @@
 
 Summary: The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8).
 
+> **Historical record — nothing updates this file.** It has no owner and its newest
+> entry is dated 2026-10-14; rows below may be stale or fixed. Open defects live in
+> GitHub issues with the `bug` label. Corrected 2026-11-10: the "No CSP" row (index.html
+> carries one) and the `Career.isOwned` mention (the function is `Career.owned(teamId)`).
+
 > Carved out of `ARCHITECTURE-REVIEW.md` §7-8 on 2026-09-03 (tree
 > restructure Phase 5). The standing assessment — the founding bet, the physics
 > authority, the `G` façade, the renderer seam, the lessons — stays there; this
@@ -1538,7 +1543,7 @@ on the 08-18 perf-hunt board, not this register.
   `sheetshape` thresholds via `localBox` (clientWidth, engine-safe). **Data hub
   now scales:** `.dh-card { zoom: var(--ui-scale) }` with `--svhz`-based heights;
   telemetry scrubber uses `CssZoom.viewportRect`.
-- **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
+- ~~**No CSP.**~~ FIXED: `index.html` carries a `Content-Security-Policy` `<meta>` (written by `tools/gen/gen-shell.mjs`, `CSP_DIRECTIVES`; corrected 2026-11-10).
 
 ### 2026-09-16 — a guard suite that EDITED the thing it guards (ratchets)
 
@@ -2664,8 +2669,8 @@ Deferred with reasoning, none lost:
   **never existed in this branch's history** (they live only on a non-ancestor
   commit — the catalogue was written against a different lineage), and its claim
   that `assets.js` consumes `gltf.js` is false today. Most entries resolved to
-  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` is live through
-  three skill docs' console use, `TrackSpline.centerline()` and the authored-
+  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` was cited by three
+  skill docs' console use but does not exist (it is `Career.owned(teamId)`; corrected 2026-11-10), `TrackSpline.centerline()` and the authored-
   `segs` path are dormant **by design** (eval-time destructure, 25 circuits
   carry `segs:`, the new-track skill documents it), and the SRTM elevation
   branch is a guarded feature slot with a shipping bake tool. What was genuinely

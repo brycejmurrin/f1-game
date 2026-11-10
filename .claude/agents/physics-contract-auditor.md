@@ -55,7 +55,7 @@ that says where it stopped is safe, one that implies completeness is not.
    open their own `if (c.human) {` player branch (`updateCarLongitudinal()`
    splits per line); `setCarRole()` sets the flag. Find them with
    `grep -nE "^function updateCar|if \(!?c\.human\)" js/game.js` (line numbers drift). For each site, assign **exactly one** column from
-   `docs/PHYSICS.md` / AGENTS.md:
+   `docs/PHYSICS.md` §Curvature channels:
    - **AI-only** — field cars, not the player
    - **assist-gated** — behind `drivingHelp` / `ROAD_FOLLOW` / racing line
    - **broadcast-only** — cameras, HUD, commentary
@@ -73,12 +73,12 @@ SITE  file:line  symbol  column:AI-only|assist-gated|broadcast-only|surface|BLOC
 End with `vstd-invariant: pass|fail`, `curvature-channels: pass|fail` and `covered: <paths>  not covered: <paths>`.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
-report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
-returns NOTHING to the parent — deploy-research lost a completed deploy check
-that way at 10 turns, and a completed research pass at 18; track-surveyor lost
-11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
+report with its gaps named beats silence. Hitting `maxTurns` hands the parent
+your output marked partial (it can resume you), and that output is only what
+your last message said: a stop mid-tool-call hands back almost nothing.
+Budget the hand-back, not the work.
 
-Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.
 On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.
 In a linked worktree: verify a session-known file from the parent prompt
 exists; if it does not, STOP.

@@ -6,7 +6,7 @@
 2. shipped `js/lighting/presets.js` `"*"`
 3. shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`)
 4. shipped `"track|tod|weather"`
-5. shipped `"*|tod"` — only when `gfx.hasPerChunkLights` (all presets/device classes)
+5. shipped `"*|tod"` — when `condLayer` in `js/lighting/profiles.js` says it applies (all presets/device classes)
 6. localStorage `"*"`
 7. localStorage **`track|tod|weather`**
 
@@ -21,10 +21,10 @@
 
 ## localStorage and live sliders
 
-Live slider edits write the **current condition** key (`LightStore.set` → `profiles[key()]`), not
-global `"*"`. localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the LIGHTING
-TUNER drops the current track/tod/weather back to shipped. Legacy `"*"` profiles may still win;
-clear that key if a global override sticks.
+Live slider edits write the **current condition** key (`set()` → `profiles[keyFor(id, key())]` in
+`js/lighting/profiles.js`; sun knobs land in the `|dry` slot), not global `"*"`; `lightTune()`
+persists the same way. localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
+LIGHTING TUNER (`reset()`) drops the current track/tod/weather and the legacy player `"*"` layer.
 
 ## One condition, every circuit
 

@@ -129,17 +129,21 @@ const pairs = loadPairs(TARGET);
 const merged = { ...shipped };
 let wrote = 0, knobs = 0;
 
-// Which ids a per-track key would FALL BACK to if it dropped a knob. The "*"
-// layers are what js/lighting/profiles.js resolves through before the per-condition map,
-// so a knob equal to its slider default is only safely droppable when no "*"
-// layer sets it — otherwise dropping it hands the condition the "*" value and
-// silently reverts a deliberate edit back to default. Matters now that a real
-// person's overrides come through here and not only agent proposals.
-function starSets(key, id) {
-  if (key === "*" || key.startsWith("*|")) return false;
-  const tod = key.split("|")[1];
-  return !!((shipped["*"] && shipped["*"][id] !== undefined) ||
-    (shipped["*|" + tod] && shipped["*|" + tod][id] !== undefined));
+// What a key would FALL BACK to if it dropped a knob. js/lighting/profiles.js
+// (`base()`) resolves default → "*" → shared "*|<tod>|<wx>" stamp → per-track
+// key, so a per-track value is only redundant when it equals what the "*" and
+// "*|tod|wx" layers below it already resolve to — dropping a knob set back to
+// its slider default while a stamp sets it hands the condition the stamp's
+// value and silently reverts the edit. "*|<tod>" (the cond layer) is kept as a
+// do-not-drop signal, as before.
+function fallback(key, id, d) {
+  if (key === "*") return d.def;
+  const parts = key.split("|");
+  const star = shipped["*"] && shipped["*"][id] !== undefined ? shipped["*"][id] : d.def;
+  if (parts[0] === "*") return parts.length === 3 || STAR.has(id) ? star : d.def;
+  if (shipped["*|" + parts[1]] && shipped["*|" + parts[1]][id] !== undefined) return undefined;
+  const shared = shipped["*|" + parts[1] + "|" + parts[2]];
+  return shared && shared[id] !== undefined ? shared[id] : star;
 }
 
 for (const { file, key, vals, delta } of pairs) {
@@ -148,7 +152,7 @@ for (const { file, key, vals, delta } of pairs) {
   if (!vals || typeof vals !== "object" || Array.isArray(vals)) {
     errors.push(`${file}: ${key} is not a knob map`); continue;
   }
-  const clean = {};
+  const clean = {}, reset = [];
   for (const [id, v] of Object.entries(vals)) {
     const d = TUNE.get(id);
     const err = knobError(id, v, TUNE);
@@ -160,10 +164,10 @@ for (const { file, key, vals, delta } of pairs) {
       errors.push(`${file}: ${key}.wetness must not be baked — leave AUTO; use ssrDryNight/ssrDryDay for dry sheen`);
       continue;
     }
-    // Redundant with the fallback, so leaving it out keeps the file small —
-    // but only where the fallback really is the default (see starSets).
-    if (d.def !== undefined && v === d.def && !starSets(key, id)) continue;
-    if (key !== "*" && STAR.has(id) && shipped["*"] && shipped["*"][id] === v) continue;
+    // Redundant with the fallback, so leaving it out keeps the file small. A
+    // DELTA that sets a pinned knob back to its fallback must also UNPIN it,
+    // or Object.assign below keeps the old pin and the reset is lost.
+    if (v === fallback(key, id, d)) { reset.push(id); continue; }
     clean[id] = v;
   }
   // WITHIN a key the two shapes mean different things, and conflating them
@@ -176,11 +180,14 @@ for (const { file, key, vals, delta } of pairs) {
   //   two, not deleting six. It may never delete a condition either — an empty
   //   map cannot occur (the export filters them) and honouring one would let a
   //   paste wipe a shipped profile it never mentioned.
-  if (!Object.keys(clean).length) {
+  const unpin = delta && merged[key] ? reset.filter((id) => id in merged[key]) : [];
+  if (!Object.keys(clean).length && !unpin.length) {
     if (!delta) delete merged[key];
     continue;
   }
   merged[key] = delta ? Object.assign({}, merged[key], clean) : clean;
+  for (const id of unpin) delete merged[key][id];
+  if (!Object.keys(merged[key]).length) delete merged[key];
   wrote++;
   knobs += Object.keys(clean).length;
 }
