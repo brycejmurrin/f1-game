@@ -52,12 +52,13 @@ test("agent-index --check is clean; the coverage page builds into artifacts/ onl
   assert.equal(firstDiff(fs.readFileSync(page, "utf8"), renderCoverage()), "identical");
   assert.equal(spawnSync("git", ["ls-files", "--", "docs/TESTING-COVERAGE.md"], { cwd: ROOT, encoding: "utf8" }).stdout.trim(), "",
     "the retired committed copy must not come back");
-  const before = fs.readFileSync(page);
-  for (const flag of ["--chek", "--check"]) {
-    const bad = spawnSync(node, [cov, flag], { cwd: ROOT, encoding: "utf8" });
-    assert.equal(bad.status, 2, `${flag}: a built page has nothing to check against`);
-  }
-  assert.deepEqual(fs.readFileSync(page), before);
+  fs.writeFileSync(page, "stale\n");
+  const check = spawnSync(node, [cov, "--check"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(check.status, 0, "--check renders the page and passes: there is no committed copy to drift\n" + check.stdout + check.stderr);
+  const bad = spawnSync(node, [cov, "--chek"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(bad.status, 2);
+  assert.equal(fs.readFileSync(page, "utf8"), "stale\n", "neither --check nor an unknown flag writes");
+  assert.equal(spawnSync(node, [cov], { cwd: ROOT, encoding: "utf8" }).status, 0, "rebuild the page");
 });
 
 test("help physState prints that hook and no other", () => {

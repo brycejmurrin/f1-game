@@ -27,7 +27,10 @@
  * conflict cures by taking the deletion (deploy.mjs cureableConflicts).
  * tests/unit/test-groups.test.mjs keeps the real guard: every suite has a row.
  *
- *   node tools/docs/gen-coverage-table.mjs     # writes artifacts/TESTING-COVERAGE.md
+ *   node tools/docs/gen-coverage-table.mjs           # writes artifacts/TESTING-COVERAGE.md
+ *   node tools/docs/gen-coverage-table.mjs --check   # renders it, writes nothing: there is no committed copy to
+ *                                                    # drift, and `gen:check` keeps the flag so package.json is
+ *                                                    # untouched (12 open PRs edit it; a script edit conflicts)
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -105,10 +108,15 @@ export function renderCoverage() {
 
 function main() {
   const argv = process.argv.slice(2);
-  const gated = argGate(argv, { allowed: [], tool: "tools/docs/gen-coverage-table.mjs" });
+  const gated = argGate(argv, { tool: "tools/docs/gen-coverage-table.mjs" });
   if (gated !== null) return gated;
+  const page = renderCoverage();
+  if (argv.includes("--check")) {
+    process.stdout.write(`${TARGET}: renders (${Buffer.byteLength(page, "utf8")} bytes); built on demand, nothing committed to check\n`);
+    return 0;
+  }
   fs.mkdirSync(path.join(ROOT, path.dirname(TARGET)), { recursive: true });
-  return emit(TARGET, renderCoverage(), []);
+  return emit(TARGET, page, []);
 }
 
 if (isMain(import.meta.url)) process.exit(main());

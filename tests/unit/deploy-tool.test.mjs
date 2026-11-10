@@ -341,8 +341,8 @@ test("two sides that each add a unit file merge clean with no derived follow-up"
       `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(await m.mergeDeployTip());`],
       { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     assert.doesNotMatch(out, /AGENTS\.md|TESTING\.md|PREPUSH-GATE-LADDER/, "no ladder doc needed re-deriving: " + out);
-    assert.doesNotMatch(out, /TESTING-COVERAGE\.md/, "the coverage page is built, not committed: " + out);
-    assert.equal(out.trim(), "merged", "a unit file on each side needs no regenerated follow-up: " + out);
+    // The verdict is the last line (npm run gen's own output precedes it): "merged", no "regenerated …" clause.
+    assert.equal(out.trim().split("\n").pop(), "merged", "a unit file on each side needs no regenerated follow-up: " + out);
     assert.notEqual(g("log", "-1", "--format=%s"), REGEN_MESSAGE);
     assert.equal(g("log", "-1", "--format=%P").split(" ").length, 2, "HEAD is the merge itself");
     const check = genCheck();
