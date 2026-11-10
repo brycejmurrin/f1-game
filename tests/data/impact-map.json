@@ -6078,6 +6078,7 @@
     },
     "js/data/tab-utils.js": {
       "*": [
+        "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/data-results.test.mjs",
