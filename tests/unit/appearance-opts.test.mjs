@@ -267,6 +267,15 @@ test("APP ICON accepts CLASSIC and sets A-F, rejects the rest, and persists", ()
   assert.equal(load({ stored: { appIcon: "E" } }).M.appIcon(), "E");
 });
 
+test("a studio snapshot without appIcon keeps the chosen APP ICON (#5059)", () => {
+  const { M, written, rows } = load({ stored: { appIcon: "E" } });
+  M.restore({ uiTheme: "light", menuAccent: "cyan" });                 // the studio's VISUAL_KEYS carry no appIcon
+  assert.equal(M.appIcon(), "E");
+  assert.equal(rows.get("pm-appicon")._painted, "E");
+  assert.deepEqual(written, {});
+  M.restore({ appIcon: "B" }); assert.equal(M.appIcon(), "B", "an explicit appIcon still restores");
+});
+
 test("profile restore updates live appearance caches and rows without another persistence batch", () => {
   const { M, written, dataset, rows } = load();
   M.restore({ uiTheme: "light", menuAccent: "cyan", hudAccent: "violet", menuAccentHex: "#ffffff", hudAccentHex: "#123456",

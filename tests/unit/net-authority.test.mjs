@@ -343,13 +343,24 @@ test("a HOST drops a QUALI naming no driver at all", () => {
   assert.deepEqual(G.caughtQuali, []);
 });
 
-test("a GUEST accepts the host's QUALI for any driver", () => {
-  // Guest side there is nothing to narrow to: the only connection is the
-  // host's, and the host legitimately speaks for the whole field — in a room
-  // of three or more, another guest's time can only arrive via the host.
+test("a GUEST accepts the host's QUALI for any SEATED driver, never an unseated id (#5012)", () => {
+  // Guest side the only connection is the host's, and the host legitimately
+  // speaks for the whole field — in a room of three or more, another guest's
+  // time can only arrive via the host. But only for a driver IN the field: an
+  // unknown id grew qualiPeers / qualiLive for the whole session.
   const { G, s } = started("guest");
+  s.deliver("quali", { driverId: "drv1", t: 60.5 });
   s.deliver("quali", { driverId: "anyone-at-all", t: 60.5 });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+  for (let i = 0; i < 100; i++) s.deliver("qlive", { driverId: "x" + i, t: 1, frac: 0 });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 60.5 }]);
+  assert.deepEqual(G.caughtQLive, [], "no phantom driver reaches the live clock");
+});
+
+test("a GUEST rate-limits the host's QUALI/QLIVE at the room's window (#5012)", () => {
+  const { G, s } = started("guest");
+  for (let i = 0; i < 500; i++) s.deliver("qlive", { driverId: "drv1", t: 1, frac: 0 });
+  assert.ok(G.caughtQLive.length > 12, "a guest allows more than one driver's window (the host relays the room)");
+  assert.ok(G.caughtQLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + G.caughtQLive.length + ")");
 });
 
 test("lobby relay hook sees only sender-bound, normalized qualifying events", () => {
@@ -375,11 +386,11 @@ test("lobby relay hook sees only sender-bound, normalized qualifying events", ()
 // on as a number — by NetPlay.bindQuali, which BOTH phases register.
 test("a QUALI whose t is a numeric string arrives as a NUMBER; junk and implausible laps never arrive", () => {
   const { G, s } = started("guest");                 // guest: no sender binding to get in the way
-  s.deliver("quali", { driverId: "x", t: "70.125" });
-  assert.deepEqual(G.caughtQuali, [{ driverId: "x", t: 70.125 }]);
+  s.deliver("quali", { driverId: "drv1", t: "70.125" });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "drv1", t: 70.125 }]);
   assert.equal(typeof G.caughtQuali[0].t, "number");
   for (const t of [true, "abc", NaN, Infinity, -5, 0, 5, 20, 3600, 1e9, null, undefined, {}, []]) {
-    s.deliver("quali", { driverId: "x", t });
+    s.deliver("quali", { driverId: "drv1", t });
   }
   assert.equal(G.caughtQuali.length, 1, "nothing outside (20 s, 1 h) or non-numeric reaches the game");
   assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: "61" }), { driverId: "d", t: 61 });
@@ -387,10 +398,10 @@ test("a QUALI whose t is a numeric string arrives as a NUMBER; junk and implausi
   assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: 61, junk: "x".repeat(99) }), { driverId: "d", t: 61 }, "extra peer fields are dropped, not relayed");
   assert.equal(NetPlay.validQuali("61"), null);
   // QLIVE is bounded rather than refused — it is a clock, not a grid input.
-  s.deliver("qlive", { driverId: "x", t: "12.5", frac: "2" });
-  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "x", t: 12.5, frac: 1 });
-  s.deliver("qlive", { driverId: "x", t: NaN, frac: -1 });
-  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "x", t: 0, frac: 0 });
+  s.deliver("qlive", { driverId: "drv1", t: "12.5", frac: "2" });
+  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "drv1", t: 12.5, frac: 1 });
+  s.deliver("qlive", { driverId: "drv1", t: NaN, frac: -1 });
+  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "drv1", t: 0, frac: 0 });
 });
 
 test("QLIVE is bound to the sender on the host the same way", () => {
@@ -608,11 +619,13 @@ test("LOBBY phase: no HELLO filed means no claim at all", async () => {
 test("LOBBY phase: the same coercion applies before the hand-off", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
   try {
-    peerSays("quali", { driverId: "anyone", t: "70" });
-    peerSays("quali", { driverId: "anyone", t: true });
-    peerSays("quali", { driverId: "anyone", t: 4000 });
+    peerSays("hello", { team: "bravo", driver: 1 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "anyone", t: 70 }], "one validation site for both phases");
+    peerSays("quali", { driverId: "bravo:1", t: "70" });
+    peerSays("quali", { driverId: "bravo:1", t: true });
+    peerSays("quali", { driverId: "bravo:1", t: 4000 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 70 }], "one validation site for both phases");
   } finally { lobby.cancel(); }
 });
 
@@ -648,15 +661,33 @@ test("LOBBY phase: QLIVE is bound to the sender the same way", async () => {
   } finally { lobby.cancel(); }
 });
 
-test("LOBBY phase: a guest accepts the host's QUALI for any driver", async () => {
-  // Guest side there is nothing to narrow to: its one connection is the
-  // host's, which legitimately speaks for the whole field — another guest's
-  // time can only ever arrive through it.
+test("LOBBY phase: a guest accepts the host's QUALI for any driver a HELLO seated, and nobody else (#5012)", async () => {
+  // Guest side its one connection is the host's, which legitimately speaks
+  // for the whole field — another guest's time can only ever arrive through
+  // it. But a driverId no HELLO seated is a phantom: it grew qualiLive /
+  // qualiPeers without bound and filled the quali sheet.
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
   try {
-    peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
+    peerSays("hello", { team: "bravo", driver: 1 });
     await settle();
-    assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
+    peerSays("quali", { driverId: "bravo:1", t: 60.5 });
+    peerSays("quali", { driverId: "anyone-at-all", t: 60.5 });
+    for (let i = 0; i < 20; i++) peerSays("qlive", { driverId: "x" + i, t: 1, frac: 0 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "bravo:1", t: 60.5 }]);
+    assert.deepEqual(G.caughtQLive, [], "no phantom driver reaches the live clock");
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: a guest rate-limits the host's QUALI/QLIVE at the room's window (#5012)", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  try {
+    peerSays("hello", { team: "bravo", driver: 1 });
+    await settle();
+    for (let i = 0; i < 300; i++) peerSays("qlive", { driverId: "bravo:1", t: 1, frac: 0 });
+    await settle();
+    assert.ok(G.caughtQLive.length > NetPlay.QUALI_RATE, "a guest allows the room's window, not one driver's");
+    assert.ok(G.caughtQLive.length <= NetPlay.QUALI_GUEST_RATE, "a flood is capped (got " + G.caughtQLive.length + ")");
   } finally { lobby.cancel(); }
 });
 
@@ -726,6 +757,8 @@ test("LOBBY phase: a guest whose HELLO claims the HOST's seat cannot post the ho
 test("LOBBY phase: a guest drops a relayed QUALI naming its OWN seat", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");   // local seat alpha:0
   try {
+    peerSays("hello", { team: "bravo", driver: 1 });   // the host's own seat
+    await settle();
     peerSays("quali", { driverId: "alpha:0", t: 61.0 });
     peerSays("quali", { driverId: "bravo:1", t: 62.0 });
     await settle();

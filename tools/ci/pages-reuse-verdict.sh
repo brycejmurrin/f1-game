@@ -52,6 +52,15 @@
 # on 2026-10-14; the fast-tier reuse (`fast_run`) went with the deploy-branch
 # fast tier on 2026-10-16 (pages.yml runs on push, CI/CD review #2333).
 #
+# FULL GUARDS, FIRST ATTEMPT (2026-11-10). Two more things a green run must
+# show. Its tooling A record (the `apex-guards` annotation, written by
+# tools/ci/reuse-draft-fast.sh --record) must say `mode=full`: a PR whose diff
+# touches no tooling runs the guards narrowed to `--changed`, which proves
+# nothing about this tree as a whole. And its `run_attempt` must be 1: a run
+# that passed only on a re-run failed on this tree at least once (commit
+# e8082307 shipped that way: perf-hot-bench.test.mjs failed attempt 1 of run
+# 42730286157). Such a run is not reused; the train runs the gate.
+#
 # A pull_request run tests GitHub's merge ref, not the PR head. That is still
 # sound here: this only reuses such a run when merging the base into the head
 # produced the head's own tree, so the earlier, older base merged into it the
@@ -91,9 +100,10 @@ reuse_invalidated() {
   done <<< "$paths"
   return 1
 }
-# gate_ran <run-id>: prints `yes` only when the run's jobs show the full gate
-# ran and passed (see the header). Paginated: a full gate's selected matrix
-# can push the job list past one page. Any lookup failure prints nothing.
+# gate_ran <run-id>: prints `yes <tooling-A job id>` only when the run's jobs
+# show the full gate ran and passed (see the header). Paginated: a full gate's
+# selected matrix can push the job list past one page. Any lookup failure
+# prints nothing.
 gate_ran() {
   gh api "repos/$REPO/actions/runs/$1/jobs?per_page=100" --paginate 2>/dev/null | node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
@@ -106,7 +116,20 @@ gate_ran() {
         && !rows.some((r) => r.name === name && r.conclusion !== "success");
       const smoke = rows.filter((r) => r.name.startsWith("Smoke ("));
       if (ok("CI") && ok("Per-circuit geometry sweeps") && ok("Selected specs (verdict)")
-          && smoke.length > 0 && smoke.every((r) => r.conclusion === "success")) process.stdout.write("yes");
+          && smoke.length > 0 && smoke.every((r) => r.conclusion === "success")) {
+        const a = jobs.filter((j) => String(j.name || "").replace(/^ci \/ /, "") === "Structural guards (tooling A)");
+        if (a.length === 1 && a[0].conclusion === "success" && a[0].id) process.stdout.write(`yes ${a[0].id}`);
+      }
+    });' || true
+}
+# guards_full <job-id>: prints `yes` when that tooling A job's record says it ran
+# the whole guards floor (`mode=full`). A missing or unreadable record is not full.
+guards_full() {
+  gh api "repos/$REPO/check-runs/$1/annotations?per_page=100" 2>/dev/null | node -e '
+    let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+      let rows = []; try { rows = JSON.parse(s); } catch (_) { return; }
+      const r = (Array.isArray(rows) ? rows : []).find((a) => a && a.title === "apex-guards");
+      if (r && /^mode=full base=([0-9a-f]{40}|none)$/.test(String(r.message || "").trim())) process.stdout.write("yes");
     });' || true
 }
 
@@ -143,14 +166,23 @@ for c in $candidates; do
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
         (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
         (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
-      for (const r of runs.filter(gate)) console.log(`${r.id} ${r.path} ${r.event} ${r.html_url || r.id}`);
+      for (const r of runs.filter(gate)) console.log(`${r.id} ${Number(r.run_attempt) || 1} ${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
-  while read -r id path event url; do
+  while read -r id attempt path event url; do
     [ -n "$id" ] || continue
+    if [ "$attempt" != 1 ]; then
+      say "run $id ($path $event) passed on attempt $attempt, not its first — not a gate"
+      continue
+    fi
     # Concluded success is not enough: the gate jobs must have RUN and passed
     # (a draft PR's fast tier, a smoke-only or reused Pages run all skip them).
-    if [ "$(gate_ran "$id")" != yes ]; then
+    ran="$(gate_ran "$id")"
+    if [ "${ran%% *}" != yes ]; then
       say "run $id ($path $event) concluded success but its gate jobs (CI, sweeps, selected verdict, smoke) did not all run and pass — not a gate"
+      continue
+    fi
+    if [ "$(guards_full "${ran#yes }")" != yes ]; then
+      say "run $id ($path $event): its guards record is not mode=full (narrowed, reused or unrecorded) — not a gate"
       continue
     fi
     say "REUSING the gate: $c already passed $path $event"
