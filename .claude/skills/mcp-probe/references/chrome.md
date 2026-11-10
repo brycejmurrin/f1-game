@@ -172,11 +172,13 @@ roots`. Per client:
 
 - `cdmcp-cli.py` / `cdmcp-measure.py`: answer `roots/list` with the repo root, so
   `<repo>/artifacts/...` works.
-- `probe-mcp.py`: no `roots/list` handler, so `/tmp` only.
+- `probe-mcp.py`: no `roots/list` handler, so it cannot write repo paths: do not
+  use it for file-writing tools.
 - The session-attached `mcp__chrome-devtools__*` client: untested. Try
   `<repo>/artifacts/heap/...` first.
 
-Only on `Access denied`, write to `/tmp/<name>` and copy it into `artifacts/` at once.
+On `Access denied`, switch to a client that answers `roots/list` (`cdmcp-cli.py`);
+never fall back to `/tmp` (AGENTS.md §Critical conventions).
 
 Full recipes + measured LCP/heap/a11y numbers:
 `docs/research/CHROME-DEVTOOLS-MCP.md`.
@@ -185,6 +187,8 @@ Full recipes + measured LCP/heap/a11y numbers:
 
 Regression coverage, anything that must assert-and-gate, the full spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
-framework, no parallelism, no reporter. Use Playwright (`tools/ci/test-bg.mjs`).
+framework, no parallelism, no reporter. That is the PR's CI: groups for a change
+from `node tools/ci/pick-tests.mjs`, one group on the pushed branch with
+`node tools/ci/remote-group.mjs <group>` (no local spec runs, AGENTS.md rule 5).
 
 ---

@@ -7,7 +7,7 @@ Playwright hang after a mid-run `version.json` bump.
 
 - Workflow
 - Common mistakes
-- Trace: "WGX/TLX not available offline after install"
+- Trace: "TLX not available offline after install"
 - Diagnose: players still get the old shell until hard-refresh
 
 ## Workflow
@@ -67,7 +67,8 @@ Playwright hang after a mid-run `version.json` bump.
   `index.html` (not `?v=` JS). If buttons/layout are old while in-race HUD
   updated, the installed shell did not reload.
 - Adding a DEFERRED file to `index.html` — breaks the opt-in load model.
-- Forgetting the `sw.js` optional entry — first TLX/WGX boot misses cache.
+- Forgetting the `sw.js` optional entry — first TLX boot misses cache. (WGX missing offline before
+  first use is by design: `isRuntimeOnlyOptional`.)
 - Promoting vendor/fonts to essential — the install fails on one unreachable
   optional path (GLX and the career UI are required via `isRequiredLazy`; TLX/vendor are critical optional dependencies).
 - Judging "still stale" from the committed `version.json` / `apex-build` meta — the deploy
@@ -81,19 +82,20 @@ Playwright hang after a mid-run `version.json` bump.
   in `tooling-fast`) and `gen-shell --check`.
 - Editing `js/` during an in-flight browser test.
 
-## Trace: "WGX/TLX not available offline after install"
+## Trace: "TLX not available offline after install"
 
 `sw.js` `install`: GLX (`js/render/glx/`) and the career UI (`isRequiredLazy`) → `required` (aborts install on miss);
-everything else in `optional` (WGX, TLX, vendor, fonts) → `stamped` (`?v=<build>`
+runtime-only doors (`isRuntimeOnlyOptional`: WGX, editor, XR, camera editors) are skipped, by design;
+everything else in `optional` (TLX, vendor, scenery, fonts) → `stamped` (`?v=<build>`
 key for `js/render/{glx,webgpu,three}/` etc.), pooled, misses swallowed and
 logged once as `precache: N of M optional assets not cached`. The seed is the
 `@gen-shell:sw-optional` block, from `swOptionalFiles()` in `gen-shell.mjs`
 (`DEFERRED` + `LAZY_*`). Unit pins: seed presence = `load-order.test.mjs`;
 optional-miss tolerance = `service-worker.test.mjs`. Install VM tests also pin GLX promotion and stamped lazy-group keys;
-`offline-precache-check.cjs` provides separate native offline boot evidence. Node checks: `node --test tests/unit/load-order.test.mjs`,
+`tools/check/offline-precache-check.cjs` is native offline boot evidence (Chromium; no npm script or CI group runs it: parent only). Node checks: `node --test tests/unit/load-order.test.mjs`,
 `node tools/gen/gen-shell.mjs --check`. Verdict to record: seed present + check
 clean = precache list is fine; a remaining miss is a stamping/timeout
-(`OPTIONAL_ASSET_MS` 4 s) issue, verified only by the browser check.
+(`OPTIONAL_ASSET_MS`) issue, verified only by the browser check.
 
 ## Diagnose: players still get the old shell until hard-refresh
 

@@ -25,10 +25,10 @@ path.
 
 ## Probe
 
-`node tools/gfx/gfx-probe.mjs --backend three [--tlx-webgpu --lavapipe] <track>`
+`node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe <track>`
 — `gpuErrors` must be 0 (parent session only: it launches Chromium). The gate
-runs the WebGPU leg on lavapipe on purpose; `--hardware` refuses a fallback
-adapter. Add `--tod night` for a lighting-dependent defect.
+runs the WebGPU leg on lavapipe on purpose (drop both flags only for a WebGL2-pin
+look); `--hardware` refuses a fallback adapter. Add `--tod night` for a lighting-dependent defect.
 
 ## Look differs from GLX/WGX
 

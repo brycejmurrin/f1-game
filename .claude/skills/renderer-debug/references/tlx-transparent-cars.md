@@ -1,6 +1,6 @@
 # Transparent / see-through cars (TLX)
 
-Cause: the lit fragment writes the SSR car-paint tag (0.35) into ALPHA
+Cause: the lit fragment writes the SSR car-paint tag into ALPHA
 (`ctx.ssrTag` in `js/render/three/tsl-lit.js`). three's WebGL backend
 (`WebGLBackend.init()`) hardcodes `alpha: true` and ignores `alpha:false`, so an
 alpha-composited canvas shows the page through the cars. GLX cannot hit this: it

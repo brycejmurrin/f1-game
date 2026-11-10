@@ -161,7 +161,7 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   const placed = [...over.selected, ...over.overflow, ...over.spill, ...over.oversize, ...over.skipped].map((s) => s.file);
   assert.equal(placed.length, 21, "every spec lands in exactly one bucket");
   assert.equal(new Set(placed).size, 21);
-  assert.equal(MAX_SPILL_SHARDS, 7, "the measured spill allowance stays bounded");
+  assert.equal(MAX_SPILL_SHARDS, 8, "the measured spill allowance stays bounded (7 -> 8, #5368)");
 });
 
 test("full oversize slots carry expensive suites before a smaller hoisted failure (PR #1289)", () => {

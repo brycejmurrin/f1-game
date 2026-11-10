@@ -1042,6 +1042,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // and in renderer-picker.js long after its only writer left game.js, which
     // is what the WRITER check below now catches.)
     "apex26.gfxProbeStrikes",
+    // The canary's retirement record (#4995): RESET returns to the default renderer, so its notice goes too.
+    "apex26.gfxRetired",
     // The last boot's BOUND backend (renderer-boot.js start()): steers only the next
     // boot's early backend preload (guessBackend). A RESET that kept it would preload
     // the old path's group once; dropping it costs nothing.
@@ -4099,8 +4101,7 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
 // RendererBoot.start() itself, booted in a VM: the canary's strike ledger
 // across cold boots that share one localStorage. `bindPick` = the deferred
 // backend's create() succeeds; GLX always attaches.
-function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [] } = {}) {
-  const ss = new Map();
+function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [], ss = new Map(), build = undefined } = {}) {
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
     localStorage: {
@@ -4122,6 +4123,7 @@ function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, 
   });
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
+  if (build !== undefined) ctx.__APEX_BUILD = build;
   seedLog(ctx);
   if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx, { filename: absSrc("js/render/gfx.js") });
   vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/renderer-boot.js") });
@@ -4208,6 +4210,64 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   assert.equal(boot.bound, false);
   assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "the second consecutive strike retires the pick");
   assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "retiring resets the ledger");
+});
+
+test("a retired pick leaves a record every later boot can read, and only while WEBGL2 is still the pick (#4995)", async () => {
+  // Two app kills inside the first race load retire TLX/WebGPU. The reason used
+  // to live in sessionStorage on the retiring boot only, so the next cold launch
+  // showed WEBGL2 as the player's own choice with nothing to say otherwise.
+  const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxBackendProbe", "three"], ["apex26.gfxProbeStrikes", "three:1"]]);
+  let ss = new Map();
+  let boot = await rendererBootRun(ls, { ss, build: 4321 }).start();
+  assert.equal(boot.bound, false);
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "second strike: the pick is retired");
+  assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "the record names the backend and the build that retired it");
+  // A cold launch: new sessionStorage, no probe, a plain webgl2 pick.
+  ss = new Map();
+  boot = await rendererBootRun(ls, { ss, build: 4400 }).start();
+  assert.equal(boot.bound, false);
+  assert.match(ss.get("apex26.gfxFallbackWhy") || "", /^retired: three .*build 4321/,
+    "diag().env.backendFallback still says why WebGL2 is drawing on the next launch");
+  assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "reading the record does not spend it");
+  // Any other stored pick (a hand pick clears the record itself; an import or the bridge does not) makes it stale.
+  ls.set("apex26.gfxBackend", "three");
+  ss = new Map();
+  boot = await rendererBootRun(ls, { ss }).start();
+  assert.equal(boot.bound, true);
+  assert.equal(ls.has("apex26.gfxRetired"), false, "a record that no longer matches the pick is dropped");
+  // A webgl2 pick made by hand, with no record, owes no reason.
+  const plain = new Map([["apex26.gfxBackend", "webgl2"]]);
+  ss = new Map();
+  await rendererBootRun(plain, { ss }).start();
+  assert.equal(ss.has("apex26.gfxFallbackWhy"), false);
+  assert.equal(plain.has("apex26.gfxRetired"), false);
+});
+
+test("SETTINGS names a retirement and offers the way back; a hand pick or RESET clears it (#4995)", () => {
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "three:4321" }, gpu: {} });
+  const note = a.byId["pm-renderer-retired"], btn = a.byId["pm-renderer-retry"];
+  assert.ok(note && !note.hidden, "the notice is shown");
+  assert.match(note.textContent, /Switched to WEBGL2 automatically: THREE\.JS .*build 4321/);
+  assert.equal(btn.textContent, "TRY THREE.JS AGAIN");
+  assert.equal(btn.tagName, "BUTTON");
+  btn.onclick();
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "three", "TRY AGAIN restores the retired pick");
+  assert.equal(a.ls.getItem("apex26.gfxRetired"), null, "and answers the notice");
+  assert.equal(a.timers.length > 0, true, "through the same reload path as a hand pick");
+
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "three:4321" }, gpu: {} });
+  assert.equal(b.G.applyBackend("webgpu", b.byId["pm-renderer"]), true);
+  assert.equal(b.ls.getItem("apex26.gfxRetired"), null, "any hand pick clears the record");
+
+  const c = bootPicker({ ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "three:4321" }, gpu: {} });
+  assert.ok(c.G.clearRendererStorage().includes("apex26.gfxRetired"), "RESET RENDERER clears it too");
+
+  for (const ls of [{ "apex26.gfxBackend": "webgl2" }, { "apex26.gfxBackend": "three", "apex26.gfxRetired": "three:4321" },
+    { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "garbage" }]) {
+    const d = bootPicker({ ls, gpu: {} });
+    const n = d.byId["pm-renderer-retired"];
+    assert.ok(!n || n.hidden, "no notice without a record that matches a webgl2 pick: " + JSON.stringify(ls));
+  }
 });
 
 test("the strike ledger is per backend: one death each on two backends retires neither (#3514)", async () => {

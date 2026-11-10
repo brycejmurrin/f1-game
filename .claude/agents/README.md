@@ -12,9 +12,9 @@ as the cross-file **surface-reviewer**; earlier folds: `worktree-regression-chec
 | Agent | Use when |
 |---|---|
 | **Explore** | Open-ended codebase search: files by pattern, keyword greps, a JS symbol through apex-lsp, "where / how does X work" with `path:line` evidence, at the thoroughness the caller names (quick / medium / very thorough). Named to override Claude Code's built-in Explore, which inherits the session's model; this one runs on Haiku at `effort: medium` and, like the built-in, without CLAUDE.md. Read-only by `tools:` and `readonly-bash.sh`. |
-| **deploy-research** | Post-deploy liveness, shipped-JS marker checks, exact-byte asset hashes and headers, public-web / track reference research via the host fetch tool (WebFetch / hosted TinyFish). Read-only; no Chrome, no Playwright, never the in-repo tinyfish wrapper (egress-blocked). |
+| **deploy-research** | Post-deploy liveness, shipped-JS marker checks, exact-byte asset hashes and headers, public-web / track reference research via `curl` and the host fetch tools (WebFetch / WebSearch). Read-only; no Chrome, no Playwright, never the in-repo tinyfish wrapper (egress-blocked). |
 | **verify-agent** | Run `tools/ci/verify-change.mjs --fast` against the current tree and report the JSON verdict; `--base <ref>` repeats it on an ephemeral worktree at the session SHA / deploy tip and answers "same-red / new-on-session / already-red-on-ref". WGX edits also get `wgx-validate.mjs --static`. Read-only but for that one worktree (its hook exception); never starts Playwright / `--wait`; names leftover `batches` as notRun. |
-| **track-surveyor** | Survey + improve ONE circuit with the track CLIs (not the `apex_*` MCP wraps, which read the main checkout): writes only the circuit pair (`tools/hooks/surveyor-scope.sh`), in its own worktree (`isolation: worktree`), pushes a `wip/<branch>` at each commit, verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. The parent merges with `node tools/track/merge-surveyor.mjs <id> <base> <branch>`. No browser runs. |
+| **track-surveyor** | Survey + improve ONE circuit with the track CLIs (not the `apex_*` MCP wraps, which read the main checkout): writes only the circuit pair (`tools/hooks/surveyor-scope.sh`), in its own worktree (`isolation: worktree`), commits on its local worktree branch (no push), verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. The parent merges with `node tools/track/merge-surveyor.mjs <id> <base> <branch>`. No browser runs. |
 | **physics-contract-auditor** | Read-only `curvature-channels.test.mjs` gate first, then `Tracks.curvature` / arc-derivative column classification (AI-only / assist-gated / broadcast / surface); `vstd-lint` only for a named speed-comparison scope. No Playwright. |
 | **ci-red-triage** | A red `ci.yml` / `pages.yml` run: names test, assertion, lane, base verdict, and stale `gen:check` / agent-index drift (prescribe `npm run gen`); for Pages, the nested `ci / …` job and the merge since the last green Pages run. Read-only; never re-runs locally. |
 | **prior-art-scout** | Step 0 of a hunt or audit: greps `docs/notes/DEFECT-LEDGER.md`, `docs/BUGS.md`, hunt/survey notes and `git log` for one slice or topic and returns ≤ 30 `KNOWN` rows — the do-not-re-report list. Haiku, 12 turns; never judges whether an item is still true. |
@@ -71,9 +71,10 @@ variables inside `bash -c`, an absolute interpreter path writing a file,
 pre-commit `gen:check` are the backstops, and no card pretends otherwise.
 `readonly:` and `is_background:` were Cursor-only keys Claude Code ignored;
 they are gone. "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
-Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html
-write ban is hook-enforced." stays as every card's last line: the one
-reminder of what the hooks do.
+Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write
+is its `tools:` list, not a hook." stays as every card's last line: no hook
+refuses a subagent's js/ or css/ write (protect-files guards generated files
+and, in a worktree, its `SHARED` list).
 
 ## Models — one home
 

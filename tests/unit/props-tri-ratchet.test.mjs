@@ -37,6 +37,9 @@ const require = createRequire(import.meta.url);
 // 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
 // Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
 // chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
+// 2026-11-10 W5 (#5279): Magny-Cours 249802 -> 240416 (-3.8 %): the Adelaide and
+// Lycée kits moved onto their corners and three treeline/poplar runs were trimmed
+// clear of the relocated stands.
 // 2026-10-09: Silverstone 398229 -> 422978 (+6.2 %): Racing Kit light posts, banner towers,
 // camera pods and radar (baked CC0 models), generic lamp posts (furniture.lamp "post")
 // and far-hedgerow understorey bushes — the survey found the circuit using 7 of 77 models.
@@ -58,6 +61,10 @@ const require = createRequire(import.meta.url);
 // bend were cut short (gaps) and inside rows were not. Rows on the outside now run their full chord, which
 // keeps rows that were dropped under 1 m and lengthens crowd bands (speckle per ~6 m). Measured, not widened:
 // abudhabi 283451 -> 285519 (+0.73 %), catalunya 187691 -> 188873 (+0.63 %), jerez 202989 -> 205360 (+1.17 %).
+// 2026-11-10 (#5080 #5088, PR #5254): a groundPatch the road hits is trimmed per cell instead of dropped
+// whole, so qatar draws 51 green verges the base dropped. Sochi's plaza strips are draped groundPatches
+// (6 columns of cells and skirts) instead of flat road-frame boxes. Measured, not widened:
+// qatar 193250 -> 194966 (+0.89 %), sochi 199785 -> 202847 (+1.53 %).
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

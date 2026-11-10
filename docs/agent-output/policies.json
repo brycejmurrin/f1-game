@@ -581,6 +581,11 @@
       "presentation": "shared-levels",
       "preserve": "One CREATE_SESSION / CURSOR_LAUNCH / ARCHIVE_SESSION line per planned action and the labels it sets; --apply is the only mode that writes"
     },
+    "tools/ci/file-verdict-reporter.mjs": {
+      "action": "protocol-only",
+      "presentation": "native",
+      "preserve": "A node --test reporter module: one JSON object of per-file event counts to its destination; never a command"
+    },
     "tools/ci/fixture-consumer-audit.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2417,6 +2422,41 @@
       "preserve": "Facing-dot tolerance, every grown circuit and JSON precision."
     },
     "tools/track/coplanar-baseline.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-frames.cjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Every offender row with its circuit, kind, stable key and offset metres; --baseline JSON is the test's shrink-only allowlist."
+    },
+    "tools/track/corner-names/jerez.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/kyalami.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/magny_cours.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/mexico.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/miami.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
+    "tools/track/corner-names/montreal.json": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c7"

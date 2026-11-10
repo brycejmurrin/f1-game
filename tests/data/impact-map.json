@@ -747,6 +747,7 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "*": [
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -1643,11 +1644,6 @@
         "tests/unit/director.test.mjs"
       ]
     },
-    "js/camera/drive-lens.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
     "js/camera/extra-rigs.js": {
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
@@ -1668,6 +1664,10 @@
       ]
     },
     "js/camera/feel.js": {
+      "apply": [
+        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/director.test.mjs"
+      ],
       "applyFreeLook": [
         "tests/unit/camera-feel.test.mjs"
       ],
@@ -1699,6 +1699,9 @@
       ],
       "modeFov": [
         "tests/unit/camera-feel.test.mjs"
+      ],
+      "read": [
+        "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
         "tests/unit/camera-feel.test.mjs"
@@ -2027,6 +2030,12 @@
       ]
     },
     "js/camera/fov-mode.js": {
+      "modeBoost": [
+        "tests/unit/fov-fit.test.mjs"
+      ],
+      "modeFov": [
+        "tests/unit/fov-fit.test.mjs"
+      ],
       "*": [
         "tests/unit/director.test.mjs"
       ]
@@ -3859,7 +3868,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "recoveryEnvelope": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "revisionOf": [
         "tests/unit/career-backup.test.mjs"
@@ -3871,7 +3881,8 @@
         "tests/unit/save-durability.test.mjs"
       ],
       "validate": [
-        "tests/unit/career-backup.test.mjs"
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "wipeAllSlots": [
         "tests/unit/career-backup.test.mjs",
@@ -3937,7 +3948,8 @@
       ],
       "*": [
         "tests/unit/career-parts-regs.test.mjs",
-        "tests/unit/career-readslot-quota.test.mjs"
+        "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ]
     },
     "js/career/career-ui-boot.js": {
@@ -4044,7 +4056,8 @@
       ],
       "calendar": [
         "tests/unit/career-experience.test.mjs",
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "chooseObjective": [
         "tests/unit/career-settle.test.mjs"
@@ -4080,11 +4093,13 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "deleteSlot": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "driverOverride": [
@@ -4108,6 +4123,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4125,7 +4141,9 @@
         "tests/unit/career-round2.test.mjs"
       ],
       "firstFree": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "freeAgents": [
         "tests/unit/career-hire-rating.test.mjs",
@@ -4169,13 +4187,15 @@
       ],
       "hirePending": [
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/career-seat-rollover.test.mjs"
+        "tests/unit/career-seat-rollover.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "identityValue": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs"
       ],
       "inCareer": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4197,6 +4217,7 @@
         "tests/unit/save-durability.test.mjs",
         "tests/unit/save-migrate.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/share-card-data.test.mjs",
@@ -4249,6 +4270,9 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
+      "prizeFor": [
+        "tests/unit/career-settle.test.mjs"
+      ],
       "renewHire": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -4277,6 +4301,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/share-card-data.test.mjs"
       ],
       "rolloverMarket": [
@@ -4285,11 +4310,13 @@
       "round": [
         "tests/unit/career-settle.test.mjs",
         "tests/unit/parts-ladder.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "roundsTotal": [
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "save": [
         "tests/unit/career-backup.test.mjs",
@@ -4303,6 +4330,7 @@
       ],
       "saveStatus": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs",
@@ -4318,7 +4346,8 @@
       ],
       "seasonDone": [
         "tests/unit/career-round2.test.mjs",
-        "tests/unit/career-settle.test.mjs"
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "seasonsElapsed": [
         "tests/unit/career-settle.test.mjs"
@@ -4334,7 +4363,8 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-determinism.test.mjs",
-        "tests/unit/career-settle.test.mjs"
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "settleSponsor": [
         "tests/unit/career-settle.test.mjs"
@@ -4353,6 +4383,7 @@
       "slots": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs"
       ],
@@ -4369,11 +4400,13 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-parts-regs.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
@@ -4400,7 +4433,8 @@
       "trackIndex": [
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
-        "tests/unit/season-cal.test.mjs"
+        "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "upgradeBudget": [
         "tests/unit/career-settle.test.mjs"
@@ -4458,6 +4492,9 @@
         "tests/unit/career-round2.test.mjs"
       ],
       "garageMetadata": [
+        "tests/unit/career-experience.test.mjs"
+      ],
+      "mount": [
         "tests/unit/career-experience.test.mjs"
       ],
       "objectiveStatus": [
@@ -4564,6 +4601,7 @@
     "js/career/season-cal.js": {
       "applyConfig": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -4589,7 +4627,9 @@
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "config": [
+        "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "conflicted": [
@@ -4608,6 +4648,7 @@
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
@@ -4619,7 +4660,8 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-round2.test.mjs",
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "gpName": [
         "tests/unit/season-cal.test.mjs"
@@ -4634,8 +4676,12 @@
         "tests/unit/career-backup.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
+      "legacyIds": [
+        "tests/unit/season-calendar-default.test.mjs"
+      ],
       "list": [
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "load": [
         "tests/specs/season-format.spec.js",
@@ -4647,6 +4693,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
@@ -4679,7 +4726,8 @@
         "tests/unit/season-cal.test.mjs"
       ],
       "presetIds": [
-        "tests/unit/season-cal.test.mjs"
+        "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "quali": [
         "tests/unit/season-cal.test.mjs"
@@ -4714,6 +4762,7 @@
       "rounds": [
         "tests/unit/career-round2.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "save": [
@@ -4727,6 +4776,7 @@
       ],
       "saveStatus": [
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs"
@@ -4758,7 +4808,8 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/quali-persist.test.mjs",
-        "tests/unit/season-cal.test.mjs"
+        "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs"
       ],
       "*": [
         "tests/specs/boot-guard.spec.js",
@@ -4992,6 +5043,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -5510,6 +5562,7 @@
         "tests/unit/rival-contact-sfx.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/setup-tune.test.mjs",
         "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-code.test.mjs",
@@ -5690,6 +5743,7 @@
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
@@ -5830,6 +5884,7 @@
         "tests/unit/legends.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ]
     },
@@ -7145,7 +7200,8 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "sceneFromG": [
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
         "tests/unit/visor-optics.test.mjs"
@@ -9693,6 +9749,7 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs",
         "tests/unit/puddles.test.mjs",
+        "tests/unit/skill-progressive.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -9769,6 +9826,7 @@
         "tests/unit/night-washout-presets.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/skill-progressive.test.mjs",
         "tests/unit/validation-cli.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ]
@@ -10873,6 +10931,7 @@
     },
     "js/perf/loop-health.js": {
       "reload": [
+        "tests/unit/err-overlay-fatal.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
@@ -12418,6 +12477,7 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "*": [
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/wheel-state.test.mjs"
@@ -13336,7 +13396,8 @@
       ],
       "carLap": [
         "tests/unit/flying-start.test.mjs",
-        "tests/unit/quali-pace-parity-vm.test.mjs"
+        "tests/unit/quali-pace-parity-vm.test.mjs",
+        "tests/unit/quali-persist.test.mjs"
       ],
       "clear": [
         "tests/unit/career-backup.test.mjs",
@@ -14391,13 +14452,6 @@
         "tests/unit/ratchets.test.mjs"
       ]
     },
-    "js/race/wx-hash.js": {
-      "*": [
-        "tests/unit/forecast.test.mjs",
-        "tests/unit/rain-cells.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
-      ]
-    },
     "js/render/gfx.js": {
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14872,6 +14926,7 @@
       ],
       "*": [
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -16621,6 +16676,7 @@
     "js/roster.js": {
       "*": [
         "tests/unit/agent-scope-hooks.test.mjs",
+        "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
@@ -16768,6 +16824,7 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/harness-display.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs"
       ]
     },
@@ -17291,6 +17348,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -17525,12 +17583,6 @@
       ],
       "simulateLinear": [
         "tests/unit/cvd-palette.test.mjs"
-      ]
-    },
-    "js/ui/debris-opts.js": {
-      "*": [
-        "tests/unit/debris-opts.test.mjs",
-        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/deep-link.js": {
@@ -18687,6 +18739,7 @@
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
@@ -18920,6 +18973,12 @@
       ],
       "showStill": [
         "tests/unit/hero-still-density.test.mjs"
+      ],
+      "swatchPx": [
+        "tests/unit/team-swatch-density.test.mjs"
+      ],
+      "teamSwatch": [
+        "tests/unit/team-swatch-density.test.mjs"
       ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
