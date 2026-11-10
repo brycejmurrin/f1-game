@@ -1,5 +1,7 @@
 # Codex archive mining — 2026-10-26
 
+Summary: Codex Cloud transcripts, 2026-10-01 → 17 (410 threads, 73.6k commands, 421 tool-h): the gate runs 211 node files twice, dead gates restart from zero, 468 MB of connector CI polling, nudges and needless questions; 12 ranked findings with OPEN/STALE status
+
 What OpenAI Codex Cloud sessions on this repo spent their time on, 2026-10-01 → 10-17, and which of those costs the
 current tree still carries. Bryce shared a private Drive folder ("Codex Archives Private 2026-10-26") holding a 61-part
 export of Codex transcripts plus a generic findings report; he asked to "dig into the raw archives" and then "use

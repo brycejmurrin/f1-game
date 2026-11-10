@@ -734,18 +734,18 @@ const NetLobby = (function () {
       // same reasoning as HELLO above), and seat exclusivity makes team:seat
       // a driver identity; the id format is seasonDriverId's
       // (js/core/store.js): "team:driver". No profile yet means no claim —
-      // HELLO is sent at connect, long before anyone can drive a lap. On a
-      // guest there is nothing to narrow to: its one connection is the host's,
-      // and the host legitimately speaks for the whole field.
+      // HELLO is sent at connect, long before anyone can drive a lap. A guest's
+      // one connection is the host's, which speaks for the whole (seated) field.
       // NEVER THE LOCAL SEAT, either role: a peer whose HELLO claimed this
       // player's team:seat (or a relay naming it) must not post a time over
       // the one this player drives — qualiDriven() would take it as theirs.
       function sendersOwnDriver(d) {
         const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
         if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
-        if (role !== "host") return true;
-        // Per-connection QUALI+QLIVE cap (host relays each event to every guest).
-        if (!underRate(qualiTimes, QUALI_RATE)) return false;
+        // Per-connection QUALI+QLIVE cap; a guest's one link relays the room, and
+        // only a driver some HELLO seated is accepted (#5012).
+        if (!underRate(qualiTimes, role === "host" ? QUALI_RATE : NetPlay.QUALI_GUEST_RATE)) return false;
+        if (role !== "host") return [..._peers.values()].some((p) => p && typeof p.team === "string" && d.driverId === p.team + ":" + (p.driver || 0));
         const p = _peers.get(id);
         return !!(p && p.team && d.driverId != null
           && d.driverId === p.team + ":" + (p.driver || 0));

@@ -1,5 +1,7 @@
 # Live debugger — cockpit / helmet finishes (B·H33, 2026-10-21)
 
+Summary: Do paint finishes reach the cockpit and helmet cameras on TLX, GLX and WGX (B·H33).
+
 Lane: do paint finishes reach the COCKPIT and HELMET cameras, on TLX (three.js, default), GLX and WGX; and
 the steering wheel's finish as seen from the seat. Branch `cursor/live-debug-cockpit-1-b5e3`.
 Bryce's grant (orchestrator session, 2026-10-21 ~21:02Z): "proving cockpit and helmet views such that paint

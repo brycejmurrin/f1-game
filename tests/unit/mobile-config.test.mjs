@@ -89,7 +89,6 @@ test("gitignore covers www, Gradle build, local.properties, public assets", () =
 });
 
 test("index.html skips SW registration on Capacitor as well as Electron", () => {
-  assert.match(html, /nativeCap/);
   assert.match(html, /Capacitor\.isNativePlatform/);
   assert.match(html, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
 });
