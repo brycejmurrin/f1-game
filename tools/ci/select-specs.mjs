@@ -1251,6 +1251,10 @@ export const SOURCE_AFFECTED = [
   // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
   ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
   [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
+  // THE SHIPPED RENDERER (audit W31 row 12, 2026-11-10): every other driven race
+  // to the flag runs GLX, so a three.js-WebGPU reload after the finish shipped
+  // unseen. Any renderer, loop or vendored-library edit runs the unpinned spec.
+  [/^(js\/render\/|js\/game\.js$|vendor\/)/, "tests/specs/shipped-defaults.spec.js"],
 ];
 
 /** Specs that prove nothing about a particular module: they boot the page or

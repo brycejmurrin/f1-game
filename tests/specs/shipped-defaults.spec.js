@@ -48,6 +48,49 @@ async function awaitGrid(page) {
 }
 
 test.describe("shipped defaults", () => {
+  // FIRST, on purpose (coordinator, 2026-11-10): on the default backend (three.js
+  // WebGPU) the tab reloaded to the title a few seconds after every race finish —
+  // a caught TypeError in three's vertex-layout key after the car-shadow mirror
+  // sweep nulls arrays, which renderer-boot answers with apex26.gfxTlxFail and a
+  // reload. Every other driven race to the flag runs GLX, so nothing saw it.
+  // Expected RED on the deploy branch until PR #5270 lands; it is not quarantined.
+  test("a race on the shipped renderer finishes and the results sheet stays up (no TLX-fail reload)", TAG, async ({ page, pageErrors, consoleLines }) => {
+    let navigations = 0;
+    await boot(page);
+    page.on("framenavigated", (f) => { if (f === page.mainFrame()) navigations++; });
+    await page.evaluate(() => { window.__shippedMarker = 1; window.__apex.race("monza"); });
+    await awaitGrid(page);
+    await page.evaluate(() => {
+      const a = window.__apex;
+      a.go();
+      for (let i = 0; i < 60 * 3; i++) { a.setInput({ steer: 0, throttle: true, brake: false }); a.step(1 / 60, 1); }
+      a.clearInput();
+    });
+    expect(await page.evaluate(() => window.__apex.finishRace())).toBeTruthy();
+    await expect(page.locator("#results")).toBeVisible();
+    // The reload came "a few seconds" after the flag: hold the results screen 20 s
+    // with the renderer running (headless off), then look again.
+    await page.evaluate(() => window.__apex.headless(false));
+    // Wait FOR the failure: a reload drops the marker or leaves results. Only a
+    // timeout (the 20 s passed with neither) is the pass; anything else is a fail.
+    const broke = await page.waitForFunction(() => window.__shippedMarker !== 1
+      || !window.__apex || window.__apex.info().state !== "results", null, { polling: 250, timeout: 20_000 })
+      .then(() => "left the results screen", (e) => (/Timeout/i.test(String(e && e.message)) ? null : String(e && e.message)));
+    expect(broke, "within 20 s of the flag").toBeNull();
+    const after = await page.evaluate(() => ({
+      marker: window.__shippedMarker === 1,
+      state: window.__apex && window.__apex.info().state,
+      tlxFail: (() => { try { return localStorage.getItem("apex26.gfxTlxFail"); } catch (_) { return "unreadable"; } })(),
+    }));
+    expect(navigations, "the page navigated or reloaded on the results screen").toBe(0);
+    expect(after.marker, "the page was reloaded (window state lost)").toBe(true);
+    expect(after.state).toBe("results");
+    await expect(page.locator("#results")).toBeVisible();
+    expect(after.tlxFail, "renderer-boot recorded a TLX failure").toBeNull();
+    expect(consoleLines.filter((l) => /present failed/.test(l)), "TLX present failed").toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
+
   test("boots the shipped renderer with wear and wind on and no pin written", TAG, async ({ page, pageErrors }) => {
     await boot(page);
     const s = await page.evaluate(async (keys) => {
