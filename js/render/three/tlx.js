@@ -1958,10 +1958,13 @@ const TLX = (function () {
         if (window.TLXShaders && TLXShaders.chunked) {
           // isWebGPU feeds the pack's vertex-format rule (tlx-chunked.js
           // packAttr `fmt24`): WebGPU has no 1- or 3-wide 8/16-bit formats.
+          // LP-01 repair ledger (_mirrorLedger is declared further down; this runs only at a release, after create).
+          const noteNulled = (a) => _mirrorLedger.note(a);
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
             releaseGeometry,
             releaseAttribute,
+            noteNulled,
           });
         }
       } catch (e) {
@@ -4414,6 +4417,7 @@ const TLX = (function () {
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the
           // evidence (a real-hardware A/B, gpu-census 26 vs 27) and for the
           // mechanism I asserted and could NOT substantiate.
+          _mirrorLedger.note(a);   // LP-01: the class is kept so a null-mirror throw can be repaired
           a.array = null;
         };
         const atts = g.attributes;
@@ -4434,7 +4438,8 @@ const TLX = (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
       let _mirrorSweepAt = 0, _carMirrorAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1 };
+      const _mirrorLedger = mirrorLedger();   // every attribute a mirror release nulled (LP-01 repair)
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1, repaired: 0 };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -4953,6 +4958,16 @@ const TLX = (function () {
       // written to webgl2 (session skip + reload if even classic dies).
       // postOnly: the failure may be the post chain alone and the canvas repaint
       // below still paints on TLX — then the session stays bound to three.
+      // LP-01: true when `e` is a freed-mirror read and at least one nulled mirror was repaired (logged once).
+      let _nullMirrorLogged = false;
+      const nullMirrorSkip = (e) => {
+        if (_deviceLost || !isNullMirrorError(e)) return false;
+        const n = _mirrorLedger.repair();
+        if (!n) return false;
+        _mirrorStat.repaired += n;
+        try { if (!_nullMirrorLogged) { _nullMirrorLogged = true; Log.warn("gfx", "TLX: freed vertex mirror read by three; repaired", n, "attribute(s), frame skipped —", e); } } catch (_) { /* Log optional */ }
+        return true;
+      };
       const refuseTab = () => {
         const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
         try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
@@ -6612,7 +6627,14 @@ const TLX = (function () {
               paintCanvas(this);
             }
             painted = true;
-          } catch (e) { persistFail(e, !!post); }
+          } catch (e) {
+            // LP-01 (#4900): a freed CPU mirror read by three's vertex-layout key is ONE geometry's defect, not the
+            // device's. Repair every nulled mirror (zero-length view of its own class; the GPU buffer is intact)
+            // and skip only this frame: the ladder below would strip post/lit/sky for good and, at its last rung,
+            // reload the tab out of the results screen ("Graphics reset").
+            if (!nullMirrorSkip(e)) persistFail(e, !!post);
+            else painted = true;
+          }
           // Post-only death: same materials, canvas (the 1269 intent). The chain is
           // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
@@ -6634,7 +6656,7 @@ const TLX = (function () {
           if (!painted) {
             dropTo(2, rawUnlitMat);
             try { paintCanvas(this); painted = true; }
-            catch (e) { persistFail(e); refuseTab(); }
+            catch (e) { if (nullMirrorSkip(e)) painted = true; else { persistFail(e); refuseTab(); } }   // refuseTab: a real refusal only
           }
           _presentN++;
           _presentMs += (_presentAcc - _presentMs) * 0.1; _presentAcc = 0;
@@ -7004,7 +7026,8 @@ const TLX = (function () {
                         // as "the fix does nothing" (PERF-FINDINGS 2m).
                         mirror: { sweeps: _mirrorStat.sweeps, geos: _mirrorStat.geos,
                                   freedMB: _mirrorStat.freedMB, drains: _mirrorStat.drains,
-                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate } };
+                                  chunks: _mirrorStat.chunks, gate: _mirrorStat.gate,
+                                  carSh: _mirrorStat.carSh, repaired: _mirrorStat.repaired } };   // LP-01: null-mirror repairs
             try {
               const inf = renderer && renderer.info;
               if (inf) {
@@ -7142,6 +7165,44 @@ const TLX = (function () {
   // (getInternalformatParameter — many GPUs render RGBA16F but not
   // multisampled RGBA16F). Native WebGPU stays single-sample: core WebGPU
   // cannot resolve a depth attachment.
+  // LP-01 / #4900. three r187 rebuilds a pipeline's vertex-layout key from EVERY attribute's array
+  // (WebGPUAttributeUtils.getVertexBufferLayout: array.BYTES_PER_ELEMENT; _getVertexFormat: array.constructor) and
+  // its node builder types an attribute from array.constructor, so a mirror freed to null throws on the next
+  // render-state change of any draw that holds it. The ledger records each nulled attribute with its array class;
+  // repair() gives every one still null a zero-length view of that class. Only UPLOADED attributes are nulled
+  // (releaseGeoMirrors' uploaded(), the chunked release's lit-draw gate), so the view never reaches createAttribute
+  // (gpu-census 26's zero-byte buffer was an index / never-uploaded chunk), and the GPU buffer draws unchanged.
+  function mirrorLedger() {
+    let refs = [];
+    return {
+      note(a) {
+        if (!a || !a.array) return;
+        a.__tlxArrayCtor = a.array.constructor;
+        refs.push(typeof WeakRef === "function" ? new WeakRef(a) : { deref: () => a });
+      },
+      repair() {
+        let n = 0;
+        const keep = [];
+        for (const r of refs) {
+          const a = r.deref();
+          if (!a) continue;
+          if (a.array == null) { a.array = new (a.__tlxArrayCtor || Float32Array)(0); n++; }
+          else keep.push(r);
+        }
+        refs = keep;
+        return n;
+      },
+      size: () => refs.length,
+    };
+  }
+  // A TypeError from reading a property of a null array (V8: "Cannot read properties of null (reading 'X')";
+  // WebKit: "null is not an object (evaluating '….X')"), X one of the array reads above.
+  function isNullMirrorError(e) {
+    if (!e || e.name !== "TypeError") return false;
+    const m = String(e.message || "");
+    return /null/.test(m) && /BYTES_PER_ELEMENT|constructor|byteLength/.test(m);
+  }
+
   // #game's data-engine label: the revision the vendored bundle reports, never a hand-kept number (it said r185
   // under r187).
   function engineLabel(THREE, api) {

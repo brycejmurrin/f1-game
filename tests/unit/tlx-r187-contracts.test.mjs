@@ -209,3 +209,74 @@ test("batched flush: disposeShared destroys each shared attribute once, then dis
   assert.match(code(fnSource(TLX, "flushChunkedOwnership() {")), /flushOwnershipRelease\(_ownershipFreeBatch\);\s*if \(chunkedSys && chunkedSys\.disposeShared\) chunkedSys\.disposeShared\(_ownershipFreeBatch\);/,
     "tlx.js flushes the batch through disposeShared");
 });
+
+// ── LP-01 / #4900: the post-race "Graphics reset" reload ─────────────────────────────────────────────────────────
+// Live play (headless Chromium, software WebGPU, 9 of 9): sweepCarShadowMirrors → releaseGeoMirrors nulled the
+// car casters' uploaded arrays; seconds after the finish the next render-state change re-resolved a pipeline,
+// getVertexBufferLayout read null.BYTES_PER_ELEMENT, both fallback rungs threw the same, and refuseTab() reloaded
+// the tab out of the results screen. The REAL releaseGeoMirrors + sweepCarShadowMirrors (tlx.js, verbatim) and the
+// REAL mirrorLedger / isNullMirrorError run here against r187's real WebGPU vertex-layout key.
+let _ledger = null;   // lazy: a tree without the ledger fails only the tests that need it
+const LEDGER = new Proxy({}, { get: (_, k) => (_ledger || (_ledger = new Function(`${fnSource(TLX, "function mirrorLedger() {")}; ${fnSource(TLX, "function isNullMirrorError(e) {")}; return { mirrorLedger, isNullMirrorError };`)()))[k] });
+function sweepRig(renderer) {
+  const run = new Function("THREE", "renderer", "_mirrorLedger", `"use strict";
+    const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0 };
+    let _carMirrorAt = 0; const _carShReg = [];
+    ${fnSource(TLX, "function releaseGeoMirrors(g) {")}
+    ${fnSource(TLX, "function sweepCarShadowMirrors(now) {")}
+    return { sweep: sweepCarShadowMirrors, reg: (g) => _carShReg.push(new WeakRef(g)), stat: _mirrorStat };`);
+  const ledger = TLX.includes("function mirrorLedger() {") ? LEDGER.mirrorLedger() : { note() {}, repair: () => 0 };
+  return { ...run(THREE, renderer, ledger), ledger };
+}
+function carCaster(be) {
+  const { attrs, geos: [g] } = sharedGeos(1);
+  g.__tlxDrawnBatch = 0;   // drawn once (the sweep's precondition)
+  for (const a of Object.values(attrs)) be.get(a).buffer = {};   // uploaded: what releaseGeoMirrors' uploaded() reads
+  return { g, attrs };
+}
+
+test("LP-01: on the WebGPU backend the car-caster sweep leaves every array, so a pipeline re-resolve after the race does not throw", () => {
+  const renderer = new THREE.WebGPURenderer({ canvas: makeFakeGL().canvas });
+  const be = renderer.backend;
+  const layout = (g) => be.attributeUtils.getVertexBufferLayoutCacheKey({ getAttributes: () => Object.values(g.attributes) });
+  const rig = sweepRig(renderer), { g, attrs } = carCaster(be);
+  const key = layout(g);
+  rig.reg(g);
+  rig.sweep(5000);
+  for (const a of Object.values(attrs)) assert.ok(a.array && a.array.length, "the sweep kept the mirror on WebGPU");
+  assert.equal(rig.stat.carSh, 0, "nothing counted as freed");
+  assert.equal(layout(g), key, "the re-resolve (getRenderCacheKey → getVertexBufferLayout) builds the same key");
+});
+
+test("LP-01: a nulled mirror's throw is recognised and repaired to a zero-length view of its own class", () => {
+  const be = new THREE.WebGPURenderer({ canvas: makeFakeGL().canvas }).backend;
+  const layout = (g) => be.attributeUtils.getVertexBufferLayoutCacheKey({ getAttributes: () => Object.values(g.attributes) });
+  const { g, attrs } = carCaster(be);
+  const key = layout(g), ledger = LEDGER.mirrorLedger();
+  for (const a of Object.values(attrs)) { ledger.note(a); a.array = null; }   // what a WebGL2-leg release does
+  let err = null;
+  try { layout(g); } catch (e) { err = e; }
+  assert.ok(err, "r187 throws on the nulled mirror");
+  assert.equal(LEDGER.isNullMirrorError(err), true, `recognised: ${err && err.message}`);
+  assert.equal(LEDGER.isNullMirrorError(Object.assign(new TypeError("null is not an object (evaluating 'e.array.BYTES_PER_ELEMENT')"))), true, "WebKit's wording");
+  assert.equal(LEDGER.isNullMirrorError(new Error("GPU device lost")), false, "a device loss is not this");
+  assert.equal(LEDGER.isNullMirrorError(new TypeError("undefined is not a function")), false);
+  assert.equal(ledger.repair(), 3, "every nulled attribute repaired");
+  assert.equal(layout(g), key, "the same layout key: same class, so same stride and format");
+  assert.equal(attrs.normal.array.constructor, Int16Array, "its own class, not a guess");
+  assert.equal(attrs.normal.array.length, 0, "the CPU copy stays released");
+  assert.equal(ledger.repair(), 0, "idempotent");
+});
+
+test("LP-01: present() repairs and skips the frame instead of descending the ladder, and refuseTab only on a real refusal", () => {
+  const src = code(TLX);
+  assert.match(src, /\} catch \(e\) \{\s*if \(!nullMirrorSkip\(e\)\) persistFail\(e, !!post\);\s*else painted = true;\s*\}/,
+    "the main present catch tries the repair before the post-only / unlit / raw rungs");
+  assert.match(src, /catch \(e\) \{ if \(nullMirrorSkip\(e\)\) painted = true; else \{ persistFail\(e\); refuseTab\(\); \} \}/,
+    "the last rung repairs before it reloads");
+  const skip = src.slice(src.indexOf("const nullMirrorSkip = (e) => {"), src.indexOf("const refuseTab = () => {"));
+  assert.match(skip, /if \(_deviceLost \|\| !isNullMirrorError\(e\)\) return false;/, "a device loss still takes the reload path");
+  assert.match(skip, /if \(!n\) return false;/, "nothing repaired → the ladder runs as before");
+  assert.match(src, /_mirrorLedger\.note\(a\);[^\n]*\n\s*a\.array = null;/, "releaseGeoMirrors records what it nulls");
+  assert.match(CHUNKED.replace(/^[ \t]*\/\/.*$/gm, ""), /ctx\.noteNulled\(atts\[k\]\); atts\[k\]\.array = null;/, "and so does the chunked release");
+});

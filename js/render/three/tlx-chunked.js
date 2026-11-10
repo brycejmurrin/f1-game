@@ -813,7 +813,7 @@
       // Releasing chunk mirrors is therefore only sound if EVERY chunk has been
       // uploaded first. Nothing establishes that today.
       const atts = mesh.chunks[0].geo.attributes;
-      for (const k in atts) if (atts[k]) atts[k].array = null;
+      for (const k in atts) if (atts[k]) { if (ctx && ctx.noteNulled) ctx.noteNulled(atts[k]); atts[k].array = null; }
       // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index
       // buffer from the array's byte length, so freeing them yields a ZERO-BYTE
       // index buffer: "Index range ... does not fit in index buffer size (0)",

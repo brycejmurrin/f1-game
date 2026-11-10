@@ -15687,6 +15687,9 @@
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
       ],
+      "isNullMirrorError": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -15715,6 +15718,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-mat-key-memo.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "mirrorLedger": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "mirrorWarmGate": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -15874,6 +15880,9 @@
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "sweepCarShadowMirrors": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "sweepGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"
