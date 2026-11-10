@@ -9,91 +9,16 @@
   "jeddah": [
     "kit:jeddah:pit-building"
   ],
-  "korea": [
-    "ground-patch-144"
-  ],
   "madrid": [
     "madrid-monumental-r-3",
     "madrid-skyline-midrise-7"
   ],
-  "montreal": [
-    "montreal-park-lawn-r-0",
-    "montreal-park-lawn-r-10",
-    "montreal-pit-lawn-l-1"
-  ],
-  "monza": [
-    "monza-rettifilo-2024-margin-149",
-    "monza-rettifilo-gravel"
-  ],
-  "nurburgring": [
-    "nurburgring-arena-gravel",
-    "nurburgring-schumacher-gravel"
-  ],
-  "portimao": [
-    "portimao-service-mid-shelf",
-    "portimao-verge-t11-r"
-  ],
   "qatar": [
-    "qatar-green-verge-0-1",
-    "qatar-green-verge-1000-1",
-    "qatar-green-verge-1004-1",
-    "qatar-green-verge-1008-1",
-    "qatar-green-verge-1020-1",
-    "qatar-green-verge-1024-1",
-    "qatar-green-verge-1092-1",
-    "qatar-green-verge-1096-1",
-    "qatar-green-verge-1140--1",
-    "qatar-green-verge-1144--1",
-    "qatar-green-verge-1148--1",
-    "qatar-green-verge-1152--1",
-    "qatar-green-verge-1156--1",
-    "qatar-green-verge-1300-1",
-    "qatar-green-verge-1304-1",
-    "qatar-green-verge-132--1",
-    "qatar-green-verge-136--1",
-    "qatar-green-verge-140--1",
-    "qatar-green-verge-244-1",
-    "qatar-green-verge-248-1",
-    "qatar-green-verge-256-1",
     "qatar-green-verge-260-1",
-    "qatar-green-verge-4-1",
-    "qatar-green-verge-52-1",
-    "qatar-green-verge-544-1",
-    "qatar-green-verge-548-1",
-    "qatar-green-verge-552-1",
-    "qatar-green-verge-556-1",
-    "qatar-green-verge-56-1",
-    "qatar-green-verge-560-1",
-    "qatar-green-verge-564-1",
-    "qatar-green-verge-568-1",
-    "qatar-green-verge-60-1",
-    "qatar-green-verge-624--1",
-    "qatar-green-verge-632--1",
-    "qatar-green-verge-640--1",
-    "qatar-green-verge-644--1",
-    "qatar-green-verge-692-1",
-    "qatar-green-verge-784-1",
-    "qatar-green-verge-788-1",
-    "qatar-green-verge-796-1",
-    "qatar-green-verge-8-1",
-    "qatar-green-verge-800-1",
-    "qatar-green-verge-828-1",
-    "qatar-green-verge-832-1",
-    "qatar-green-verge-840-1",
-    "qatar-green-verge-900--1",
-    "qatar-green-verge-904--1",
-    "qatar-green-verge-908--1",
-    "qatar-green-verge-912--1",
-    "qatar-green-verge-916--1",
-    "qatar-green-verge-920--1",
-    "qatar-green-verge-996-1"
+    "qatar-green-verge-908--1"
   ],
   "sepang": [
     "sepang-shade-walk-t1"
-  ],
-  "shanghai": [
-    "shanghai-svc-300-l",
-    "shanghai-svc-440-r"
   ],
   "zandvoort": [
     "north-sea-1",
@@ -101,8 +26,5 @@
     "north-sea-5",
     "zandvoort-beach-terrace-0",
     "zandvoort-surf-1"
-  ],
-  "zolder": [
-    "ground-patch-883"
   ]
 }
