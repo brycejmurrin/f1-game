@@ -5,7 +5,7 @@
 // headless project's launch args. B·H14 2026-10-21 (docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md, I4).
 // @doc Time one race entry: boot, race() → track flip, settle, stages, Log records; APEX_PIN / APEX_PROFILE knobs.
 //
-//   npx serve -l 3456 .                       # or: python3 -m http.server 3456 --bind 127.0.0.1
+//   node tools/serve.mjs                      # 127.0.0.1:3456
 //   node tools/perf/race-entry-timer.mjs <label> [track]            # default track monza
 //   APEX_PIN=webgl2 node tools/perf/race-entry-timer.mjs glx monza  # apex26.gfxBackend pinned (webgl2 | three)
 //   APEX_PROFILE=artifacts/perf/entry.cpuprofile node tools/perf/race-entry-timer.mjs prof monza

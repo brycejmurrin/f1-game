@@ -3483,6 +3483,12 @@
       ]
     },
     {
+      "path": "tools/serve.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/shot/ab-gallery.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",

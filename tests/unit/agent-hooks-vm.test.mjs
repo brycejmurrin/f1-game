@@ -543,3 +543,20 @@ test("finishRace() calls the current G.endRace, not a boot-time capture", async 
     assert.equal(g.apex.info().state, "results");
   } finally { g.G.endRace = orig; }
 });
+
+// Live-play audit 2026-11: at the title GameAudio is the eager stub (no profiles()), and
+// audio() threw a TypeError instead of the documented no_audio answer; carState()[i].best
+// was Infinity before a lap, the only non-finite number any hook returned.
+test("audio() at the title answers no_audio, and carState() holds only finite numbers or null", async () => {
+  const fresh = await createGame({});
+  try {
+    const a = fresh.apex.audio();
+    assert.equal(a.ok, false);
+    assert.equal(a.error, "no_audio");
+  } finally { fresh.close(); }
+  await load("monza", 0.05, 40);
+  const cs = g.apex.carState();
+  assert.equal(cs[0].best, null, "no lap yet: best is null, not Infinity");
+  const bad = cs.flatMap((o) => Object.entries(o)).filter(([, v]) => typeof v === "number" && !Number.isFinite(v));
+  assert.equal(bad.length, 0, JSON.stringify(bad));
+});

@@ -1217,7 +1217,9 @@ rev-to-pitch SPAN rather than offsetting it, and it is clamped strictly
 positive for exactly that reason.
 
 ### `audio() → {profile, profiles, voice, voices, tune, range, defaults, layers, rate, limiterDepth, windLevel, gravelDepth, brakeLevel, wastegate, debug}`
-Everything about the current engine sound in one read. `rate` is the live
+Everything about the current engine sound in one read. Before the audio engine loads (the
+title runs a stub), `audio()` and the `audioTune`/`audioProfile`/`audioLayer` setters return
+`{ok:false, error:"no_audio"}`. `rate` is the live
 `playbackRate` (ground-truth pitch — perceived pitch scales linearly with it),
 `limiterDepth` the rev-limiter chop's depth, `windLevel` the airflow layer's
 gain, `gravelDepth` the crank-rate roughness swing on the engine gain,
@@ -1755,6 +1757,8 @@ The WHOLE per-car state for every car, raw and unrounded, in `cars[]` order —
 where `cars()` returns a curated slice and `carAt()` a curated slice of one car.
 Strings, objects and functions are skipped: a car's team record, driver name and
 launch plan are identity, not episode state.
+A non-finite number is returned as `null` — `best` is `null` until the car sets a
+lap (internally `Infinity`), so every number in the snapshot is finite.
 
 It exists for one question: **did `reset()` leave anything behind?** An episode
 creates per-car fields that outlive it unless reset() removes them, and several

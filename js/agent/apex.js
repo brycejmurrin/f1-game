@@ -107,8 +107,10 @@ function apiHook(base, path, fix) {
   return F1API.request(base + path, 0, { cache: false });
 }
 
-const noAudio = () => (typeof GameAudio === "undefined"
-  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
+// The eager title stub (js/audio/stub.js, `_stub: true`) counts as not loaded: it has no
+// profiles()/voices()/tune(), so a hook reading them threw at the title.
+const noAudio = () => (typeof GameAudio === "undefined" || GameAudio._stub
+  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded (title stub)", fix: "start a race, or open a menu that loads audio" }
   : null);
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
@@ -935,7 +937,8 @@ const api = {
   // diff that matters.
   carState: () => G.cars.map((c) => {
     const o = {};
-    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    // A non-finite number (best = Infinity before a lap is set) is null: JSON would turn it into null anyway.
+    for (const k in c) { const v = c[k]; if (typeof v === "boolean") o[k] = v; else if (typeof v === "number") o[k] = Number.isFinite(v) ? v : null; }
     return o;
   }),
   cars: () => G.cars.map((c, i) => ({
