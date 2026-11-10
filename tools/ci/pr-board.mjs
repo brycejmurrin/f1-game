@@ -42,6 +42,7 @@
  *
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows, for the skill
+ *   node tools/ci/pr-board.mjs --brief      # one line per PR: what an orchestrator acts on
  *   node tools/ci/pr-board.mjs --pr 1234    # one PR
  *   node tools/ci/pr-board.mjs --alarm      # only the stall alarm: READY > 12 h, green, no hold, no push
  *
@@ -227,6 +228,29 @@ export function render(result, { now = Date.now() } = {}) {
 }
 
 /**
+ * `--brief`: one line per PR, the fields an orchestrator acts on and nothing else (2026-11-10: it piped `--json`
+ * through an ad-hoc `node -e` on every cycle). `#n STATE CI SUGGEST | sha7 | plan d/n | owner | why | now: …`.
+ * `sync` is the optional { [number]: needsSync verdict } the CLI gathers for SYNC/FIX rows.
+ */
+export function brief(result, { sync = {} } = {}) {
+  const lines = result.rows.map((r) => {
+    const plan = !r.plan || r.plan.state === "none" ? "-" : `${r.plan.items - r.plan.open.length}/${r.plan.items}`;
+    const now = (r.plan?.open || []).find((t) => /^\*\*now:\*\*/.test(t));
+    const sv = sync[r.number];
+    const flags = [r.hold && "HOLD", r.mergeHold && "MERGE-HOLD", r.armed && "armed", r.mergeableState === "dirty" && "conflict", r.failing?.length && `red: ${clip(r.failing.join(", "), 60)}`,
+      sv && (sv.ok ? `sync ${sv.verdict}` : "sync unknown")].filter(Boolean);
+    return [`#${r.number} ${r.draft ? "draft" : "ready"}${r.land ? "+land" : ""} ci=${r.ci} gate=${r.gate} → ${r.suggest}`,
+      (r.sha || "").slice(0, 7) || "-", `plan ${plan}`, clip(String(r.owner || "-").replace(/^claude:/, ""), 44), clip(String(r.title || ""), 48),
+      ...(flags.length ? [flags.join("; ")] : []), ...(r.why ? [clip(String(r.why), 80)] : []),
+      ...(now ? [clip(now.replace(/^\*\*now:\*\*\s*/, "now: "), 110)] : [])].join(" | ");
+  });
+  const count = (k) => result.rows.filter((r) => r.suggest === k).length;
+  const tally = SUGGESTIONS.filter((k) => count(k)).map((k) => `${count(k)} ${k}`).join(", ");
+  lines.push(`= pr-board: ${result.rows.length} open${tally ? ` (${tally})` : ""}`);
+  return lines.join("\n");
+}
+
+/**
  * Gather every open PR into the deploy branch and evaluate. GET requests only,
  * through tools/lib/pr-snapshot.mjs (conditional GETs: a 304 on an unchanged
  * PR is free against the rate limit). Injectable `request` (a `pathQs` ->
@@ -317,24 +341,28 @@ export function alarmLines(rows, opts = {}) {
 }
 
 function parseArgs(argv) {
-  const out = { json: false, only: null, alarm: false };
+  const out = { json: false, only: null, alarm: false, brief: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
     else if (a === "--alarm") out.alarm = true;
+    else if (a === "--brief") out.brief = true;
     else if (a === "--pr") {
       const n = Number(argv[++i]);
       if (!Number.isInteger(n) || n < 1) return { error: `--pr needs a positive integer (got ${argv[i]})` };
       out.only = n;
     } else return { error: `unknown arg: ${a}` };
   }
+  if (out.brief && (out.json || out.alarm)) return { error: "--brief is its own output; drop --json / --alarm" };
   return out;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json] [--pr <n>] [--alarm]
+  exitIfHelp(argv, `usage: node tools/ci/pr-board.mjs [--json | --brief] [--pr <n>] [--alarm]
 
+--brief prints ONE line per PR (state, ci, gate, suggestion, sha7, plan done/total, owner session, flags, why, the Plan's now: item)
+and a \`= pr-board: <n> open (<tally>)\` line: what an orchestrator acts on, ~1 KB for 7 PRs against ~10 KB of --json.
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 the legacy fleet-status report on pre-2026-10-27 PRs, the lane:<host> label (LANE)
@@ -366,7 +394,8 @@ Exit 0 printed, 1 --alarm hit, 2 bad args, 3 API/token.`);
   for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch, { request: snapshot.get });
   snapshot.save();
   const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
-  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
+  if (args.brief) console.log(brief(v, { sync }));
+  else if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)) }, null, 2));
   else {
     console.log(render(v));
     for (const n of Object.keys(sync)) console.log(`#${n} ${syncLine(n)}`);
