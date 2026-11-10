@@ -9749,6 +9749,9 @@
       "buildLightTunePanel": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
+      "closeLightTuner": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+      ],
       "create": [
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
