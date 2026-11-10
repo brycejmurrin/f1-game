@@ -212,13 +212,15 @@ test('coverage cache remeasures same-sized dock changes and panel identity, but 
   const canvas = { clientWidth: 1000, clientHeight: 700, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 700 }) };
   let panel = { clientWidth: 400, clientHeight: 700, getBoundingClientRect: () => { reads++; return { left: side === 'right' ? 600 : 0, top: 0, width: 400, height: 700 }; } };
   const c = vm.createContext({ $: id => id === 'game' ? canvas : id === 'cs-inner' ? panel : null, home: { active: false }, setupPreviewSpin: false,
-    arriving: null, window: {}, document: { documentElement: { getAttribute: () => side } }, _covKey: '', _covPanel: null, _covCanvas: null, _covCam: null,
+    arriving: null, window: {}, document: { documentElement: { getAttribute: () => side } }, _covNow: [], _covWas: [], _covPanel: null, _covCanvas: null, _covCam: null,
     _covX: 0, _covY: 0, _covPr: {}, _covCr: {}, _stampRect: (out, v) => Object.assign(out, v), panelCover: pr => ({ x: pr.left ? .4 : -.4, y: 0 }),
   });
   vm.runInContext('function frame(){' + source.slice(start, end) + ' return panelFrac; }', c);
   assert.equal(c.frame(), .4); assert.equal(c.frame(), .4); assert.equal(reads, 1);
   side = 'left'; assert.equal(c.frame(), -.4); assert.equal(reads, 2);
   panel = { ...panel }; c.frame(); assert.equal(reads, 3);
+  // #4974: the per-frame stamp is scalars in reused arrays, never a joined key string.
+  assert.ok(!/\+ "x" \+|\+ "\|" \+/.test(source.slice(start, end)), 'the turntable coverage stamp must not build a string every frame');
 });
 test('deferred garage builds cannot run after hide or clear a newer visit busy state', () => {
   const dom = makeDom(), queue = []; let builds = 0;
