@@ -428,8 +428,8 @@ const DesignerCanvas = (function () {
     }
     // Keyboard: the canvas owns its arrows while a point is selected
     // (js/ui/menu-nav.js stands aside for a focused <canvas> unless it says
-    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] / Tab walk the
-    // selection; Escape clears it.
+    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] walk the
+    // selection; Escape clears it. Tab is the browser's: focus leaves the map.
     function cycleSel(dir) {
       const N = base.length; if (!N) return;
       hover = -1;
@@ -450,7 +450,6 @@ const DesignerCanvas = (function () {
         case "ArrowDown": dz = step; break;
         case "[": cycleSel(-1); ev.preventDefault(); return;
         case "]": cycleSel(1); ev.preventDefault(); return;
-        case "Tab": cycleSel(ev.shiftKey ? -1 : 1); ev.preventDefault(); return;
         case "Escape": if (sel >= 0 || span >= 0) { sel = -1; span = -1; tellSelect(); render(); ev.preventDefault(); } return;
         case "Delete": case "Backspace": if (pickOnly) return; if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
         case "Enter": case " ": if (sel >= 0 && hooks.onPick) { ev.preventDefault(); hooks.onPick(sel, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey }); } return;

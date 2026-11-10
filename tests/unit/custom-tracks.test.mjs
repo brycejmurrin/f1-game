@@ -16,6 +16,10 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootEditor } from "../helpers/editor-vm.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { cssRules, ruleFor } from "../helpers/css-rules.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -259,16 +263,34 @@ test("toRaw hands the factory what a circuit file would author", () => {
   assert.equal(T.get("nope"), T.PRESETS.parkland, "unknown preset → parkland");
 });
 
-test("the picker knows the custom tail (source contract)", () => {
-  const src = read("js/ui/select-screen.js");
-  assert.match(src, /\["custom", "MY CIRCUITS"\]/, "a MY CIRCUITS chip");
-  assert.match(src, /filter === "season"\) return !\(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
-  assert.match(src, /filter === "custom"\) return !!t\.custom/, "MY CIRCUITS shows only customs");
-  assert.match(src, /trb trb-custom/, "the CUSTOM badge");
-  assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
-  assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
-  assert.match(read("js/net/lobby-settings.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index without a circuit body");
-  assert.match(read("js/core/lazy-bundles.js"), /!def\.scenery && !sceneryResident/, "ensureScenery fetches nothing for an inline closure");
+// The custom tail of the picker, run as behaviour over the real registry (a
+// saved design installed by CustomTracks into the engine's Tracks.LIST). The
+// other three surfaces that once rode a source regex here are behaviour tests
+// beside their modules: the season shelf (setup-screens-state "never offers a
+// custom circuit"), the VS FRIEND guest (lobby-settings "a custom LIST index
+// without a circuit body is refused") and ensureScenery (lazy-bundles-prefetch
+// "inline scenery closure fetches nothing").
+test("the picker's filters and tile know a custom circuit (select-screen trackInFilter / trackTile over the real LIST)", () => {
+  const ev = bootEditor({ customTracks: { v: 1, items: [design()] } });
+  const sel = read("js/ui/select-screen.js");
+  const dom = makeDom();
+  const sb = { document: dom.document, G: { daily: null }, favList: () => [], Flags: { svg: () => "" }, A11yOpts: undefined };
+  const filters = /^const trackFilters = .*;$/m.exec(sel);
+  assert.ok(filters, "the chip table");
+  vm.runInNewContext(filters[0].replace(/^const/, "var") + "\n" + fnSource(sel, "function trackInFilter(") + "\n" + fnSource(sel, "function trackTile("), sb, { filename: absSrc("js/ui/select-screen.js") });
+  assert.ok(sb.trackFilters.some(([id, label]) => id === "custom" && label === "MY CIRCUITS"), "a MY CIRCUITS chip");
+  const L = ev.Tracks.LIST, custom = L.filter((t) => t.custom), classic = L.find((t) => t.classic && !t.custom);
+  assert.equal(custom.length, 1, "the saved design is on the LIST");
+  const ids = (f) => [...L.filter((t) => sb.trackInFilter(t, f, [])).map((t) => t.id)];
+  assert.deepEqual(ids("custom"), [custom[0].id], "MY CIRCUITS shows only customs");
+  assert.equal(ids("season").includes(custom[0].id), false, "SEASON hides customs…");
+  assert.equal(ids("season").includes(classic.id), false, "…and classics");
+  assert.ok(ids("all").includes(custom[0].id), "ALL keeps it");
+  const tile = sb.trackTile(custom[0], L.indexOf(custom[0]));
+  assert.equal(tile.dataset.kind, "custom");
+  const badges = [...tile.querySelectorAll(".trb")].map((b) => b.textContent);
+  assert.deepEqual(badges, ["CUSTOM"], "the CUSTOM badge, alone");
+  assert.ok(ruleFor(cssRules(read("css/race-setup.css")), ".trb-custom"), "…styled");
 });
 
 test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {

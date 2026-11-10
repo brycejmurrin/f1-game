@@ -104,10 +104,12 @@ const TrackCodec = (function () {
     return Uint8Array.from(out);
   }
   // Lap fractions on the storage lattice (k / 65535). CustomTracks' frac()
-  // rounds 0.9999995 UP to exactly 1.0 and keeps it, but maps an incoming 1.0
-  // to 0 — so 1.0 rides as 65535 (not wrapped to 0) and 65535 decodes a
-  // quarter-step below 1, which that sanitiser rounds back to the sender's
-  // 1.0 (and a wrap-to-0 sanitiser to 0). Either way the round trip is exact.
+  // wraps a closed-loop 1.0 (and anything that rounds to it) to 0, so for a
+  // plain fraction 65535 and 0 are the same place. The one value that must
+  // NOT wrap is the full-lap width zone {s0: 0, s1: 1}: 1.0 rides as 65535 and
+  // decodes a quarter-step below 1 (CustomTracks' HWZ_FULL_END), which the
+  // hwZone sanitiser turns back into the s1 = 1 sentinel; every other field's
+  // frac() wraps it to 0, the same value the sender stored.
   const u16frac = (f) => { if (!Number.isFinite(f)) return 0; if (f < 0 || f > 1) f = ((f % 1) + 1) % 1; return Math.min(65535, Math.round(f * 65535)); };
   const fracU16 = (v) => (v === 65535 ? (65535 - 0.25) / 65535 : v / 65535);
 
