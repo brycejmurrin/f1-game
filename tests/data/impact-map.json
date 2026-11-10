@@ -5615,6 +5615,7 @@
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
@@ -8046,6 +8047,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "create": [
+        "tests/unit/deploy-stamp.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"

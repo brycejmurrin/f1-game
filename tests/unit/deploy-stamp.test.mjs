@@ -12,7 +12,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { STAGE_ROOT_FILES } from "../../tools/desktop/stage-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const pages = fs.readFileSync(path.join(ROOT, ".github/workflows/pages.yml"), "utf8");
@@ -181,4 +183,68 @@ test("staged title CSS preloads carry the same SHA-256 integrity as their styles
     assert.ok(/rel="stylesheet" href="fx\/a\.css\?v=[0-9a-f]{12}"/.test(html) && html.includes(`integrity="${want}"`));
     assert.equal(run("--check").status, 0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---- Coverage (2026-11-09 audit, W1): the stamp must cover EVERY root page that carries `?v=` tags: overlay.html
+// deployed `?v=dev` keys with no SRI while --check passed. (Every lazy roster: tests/unit/deploy-staging.test.mjs, #4992.)
+const runAt = (dir, ...args) => spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", ...args, "--root", dir, "--json"], { cwd: ROOT, encoding: "utf8" });
+const stageDir = (tag) => { fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true }); return fs.mkdtempSync(path.join(ROOT, "scratch", tag)); };
+const put = (dir, rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
+const shell = (dir) => {
+  put(dir, "fx/shell.js", "// shell\n");
+  put(dir, "index.html", `<head><meta name="apex-build" content="1695"><script src="fx/shell.js?v=dev"></script></head>`);
+  put(dir, "version.json", '{"build":1695}');
+};
+
+test("every staged root .html page is stamped (overlay.html included) and --check fails on a staged ?v=dev", () => {
+  const dir = stageDir("pages-cover-");
+  try {
+    shell(dir);
+    put(dir, "fx/a.js", "console.log('a');\n");
+    const pages = STAGE_ROOT_FILES.filter((f) => f.endsWith(".html") && f !== "index.html");
+    assert.deepEqual(["overlay.html"].filter((p) => !pages.includes(p)), [], "the allow-list ships overlay.html");
+    for (const p of pages) put(dir, p, `<script src="fx/a.js?v=dev"></script>\n`);
+    assert.equal(runAt(dir, "--apply").status, 0);
+    // Each page's one tag, parsed: a real ?v= key and the SRI of fx/a.js's actual bytes.
+    const sri = "sha256-" + createHash("sha256").update(fs.readFileSync(path.join(dir, "fx/a.js"))).digest("base64");
+    const stamped = pages.map((p) => {
+      const tag = /<script src="fx\/a\.js\?v=([^"]+)"([^>]*)>/.exec(fs.readFileSync(path.join(dir, p), "utf8"));
+      return [p, tag ? tag[1] !== "dev" : "no tag", tag ? (/integrity="([^"]+)"/.exec(tag[2]) || [])[1] : null];
+    });
+    assert.deepEqual(stamped, pages.map((p) => [p, true, sri]), "every staged page is keyed and carries the file's SRI");
+    assert.equal(runAt(dir, "--check").status, 0);
+    // A root page outside the allow-list, staged with a dev key: --check names it.
+    put(dir, "stray.html", `<script src="fx/a.js?v=dev"></script>\n`);
+    const check = runAt(dir, "--check");
+    assert.equal(check.status, 1);
+    assert.ok(JSON.parse(check.stdout).assetMismatches.some((m) => m.page === "stray.html" && m.actual === "dev"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the repo check still reads overlay.html (its tags stay ?v=dev in the tree)", () => {
+  const r = spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", "--json"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const overlayTags = (fs.readFileSync(path.join(ROOT, "overlay.html"), "utf8").match(/\?v=dev"/g) || []).length;
+  assert.ok(overlayTags > 0);
+  const indexTags = (fs.readFileSync(path.join(ROOT, "index.html"), "utf8").match(/\b(?:src|href)="[^"?#]+\?v=[A-Za-z0-9._-]+"/g) || []).length;
+  assert.ok(JSON.parse(r.stdout).tagCount >= indexTags + overlayTags, "overlay.html's tags are counted");
+});
+
+test("ScriptLoader logs a warning when the stamped shell has no integrity key for a lazy file", async () => {
+  const loader = fs.readFileSync(path.join(ROOT, "js/core/script-loader.js"), "utf8");
+  const warnings = [], appended = [];
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: 1 }, setTimeout, clearTimeout,
+    Log: { warn: (_cat, msg) => warnings.push(msg) },
+    document: {
+      getElementById: (id) => id === "apex-lazy-integrity" ? { tagName: "SCRIPT", type: "application/json", textContent: "{}" } : null,
+      createElement: () => ({ dataset: {}, remove() {} }),
+      head: { appendChild: (el) => appended.push(el) },
+    },
+  });
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;", ctx, { filename: path.join(ROOT, "js/core/script-loader.js") });
+  const ok = await ctx.ScriptLoader.create().load(["js/garage/exterior.js"], [], { strict: true });
+  assert.equal(ok, false);
+  assert.equal(appended.length, 0, "a refused file is never injected");
+  assert.ok(warnings.some((w) => /no integrity key/.test(w) && w.includes("js/garage/exterior.js")), JSON.stringify(warnings));
 });
