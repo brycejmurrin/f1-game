@@ -188,6 +188,12 @@ const blockedReason = (f, i) => (blockedSlot(f, i) === "damaged" ? "damaged" : "
 const readSlot = (f, i) => { const key = slotKey(f, i); let c = store.get(key, null); const pr = protectedRaw.get(key); if (typeof pr === "string" && store.raw && store.raw(key) === pr) c = JSON.parse(pr); return migrateCareer(c && JSON.parse(JSON.stringify(c))); };
 
 if (store.subscribe) store.subscribe((change) => {
+  // RETRY SAVE rewrites the live key from the store's failed-write record: the
+  // very object this module holds, so that local bump is not a foreign change.
+  if (change.local && career && change.key === liveSlotKey() && store.get(change.key, null) === career) {
+    if (!careerConflict) armRevision();
+    return;
+  }
   if (!change.foreign) return;
   if (change.restoredBatch) {
     const keys = Array.isArray(change.keys) ? change.keys : [];
@@ -287,6 +293,7 @@ function save(options) {
     // refusing the stale write is the only lossless choice.
     const now = currentRevision();
     if (careerConflict || (careerRevision != null && now !== careerRevision)) {
+      careerConflict = true;
       lastSave = { ok: false, durable: false, reason: "conflict" };
       return career;
     }
