@@ -28,8 +28,9 @@ const GarageCrewChoreo = (function () {
     const list = MIX[dir === "out" ? "out" : "in"], n = Number.isFinite(visit) ? Math.floor(visit) : 0;
     return list[((n % list.length) + list.length) % list.length];
   }
-  // CLIPS above is the eager index (pickers, labels, timing); a clip PLAYS once its key tables, the lazy
-  // js/garage/garage-data.js, have landed: has() is that, known() only the index.
+  // CLIPS above is the eager index (pickers, labels, timing); a clip PLAYS once
+  // its key tables (the lazy js/garage/garage-data.js) have landed. has() tests
+  // that, known() only the index.
   const known = (id) => typeof id === "string" && Object.prototype.hasOwnProperty.call(CLIPS, id);
   const keys = (id) => known(id) && typeof GarageData !== "undefined" && GarageData.CLIPS ? GarageData.CLIPS[id] || null : null;
   const has = (id) => !!keys(id);
@@ -74,19 +75,27 @@ const GarageCrewChoreo = (function () {
   // from the hands to its pivot, so a pump is the hands moving, not a mesh.
   function createProps(gfx, stripe) {
     const GUN = [0.10, 0.10, 0.11], ALLOY = [0.62, 0.63, 0.66], RED = [0.72, 0.12, 0.08], RUBBER = [0.035, 0.035, 0.04];
-    let a = acc();
-    block(a, 0, 0, .02, .055, .07, .10, GUN); block(a, 0, -.09, -.03, .028, .055, .03, GUN);
-    tube(a, [0, 0, .11], [0, 0, .30], .04, ALLOY, 8); block(a, 0, .075, 0, .03, .008, .06, stripe);
-    const gun = gfx.createMesh(a); a = acc();
-    block(a, 0, 0, .02, .13, .085, .012, [0.05, 0.06, 0.08]); block(a, 0, 0, .033, .11, .07, .002, [0.25, 0.45, 0.7]);
-    const tablet = gfx.createMesh(a); a = acc();
-    for (const x of [-.17, .17]) tube(a, [x - .04, .07, 1.12], [x + .04, .07, 1.12], .07, RUBBER, 10);
-    tube(a, [-.17, .07, 1.12], [.17, .07, 1.12], .02, ALLOY, 6); block(a, 0, .12, 1.12, .06, .06, .05, RED);
-    const base = gfx.createMesh(a); a = acc();
-    block(a, 0, 0, 0, .2, .04, .09, RED); tube(a, [0, -.04, -.06], [0, -.14, -.16], .028, RED, 6);
-    const saddle = gfx.createMesh(a); a = acc();
-    tube(a, [0, 0, 0], [0, 1, 0], .026, ALLOY, 8);
-    const span = gfx.createMesh(a);
+    const mesh = (build) => { const a = acc(); build(a); return gfx.createMesh(a); };
+    const gun = mesh((a) => {
+      block(a, 0, 0, .02, .055, .07, .10, GUN);                        // body
+      block(a, 0, -.09, -.03, .028, .055, .03, GUN);                   // grip
+      tube(a, [0, 0, .11], [0, 0, .30], .04, ALLOY, 8);                // socket
+      block(a, 0, .075, 0, .03, .008, .06, stripe);
+    });
+    const tablet = mesh((a) => {
+      block(a, 0, 0, .02, .13, .085, .012, [0.05, 0.06, 0.08]);
+      block(a, 0, 0, .033, .11, .07, .002, [0.25, 0.45, 0.7]);        // screen
+    });
+    const base = mesh((a) => {                                         // the jack's wheels and frame
+      for (const x of [-.17, .17]) tube(a, [x - .04, .07, 1.12], [x + .04, .07, 1.12], .07, RUBBER, 10);
+      tube(a, [-.17, .07, 1.12], [.17, .07, 1.12], .02, ALLOY, 6);
+      block(a, 0, .12, 1.12, .06, .06, .05, RED);
+    });
+    const saddle = mesh((a) => {
+      block(a, 0, 0, 0, .2, .04, .09, RED);
+      tube(a, [0, -.04, -.06], [0, -.14, -.16], .028, RED, 6);
+    });
+    const span = mesh((a) => tube(a, [0, 0, 0], [0, 1, 0], .026, ALLOY, 8));
     return { gun, tablet, base, saddle, span, m: new Float32Array(16), w: new Float32Array(16) };
   }
   function freeProps(p, gfx) {

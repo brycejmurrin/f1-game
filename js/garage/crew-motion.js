@@ -1,4 +1,5 @@
-/* Blender-authored guide motion. Regenerate with tools/garage/author-crew-motion.py.
+/* Blender-authored guide motion: the KEYS block is written by
+ * tools/garage/author-crew-motion.py --write-runtime; the rest is hand code.
  * Rigid articulated meshes share the garage's livery materials; no skinning,
  * asynchronous asset load, or per-frame mesh generation is needed. */
 const GarageCrewMotion = (function () {
@@ -10,18 +11,25 @@ const GarageCrewMotion = (function () {
   // @blender-motion:end
   const acc = GarageCrewDraw.acc;
   const THIGH = 0.43, SHIN = 0.44, ARM = 0.30;
+  // The eight channels at u in [0, 1] (non-finite reads as 1), linear between keys.
   function sample(u, out) {
-    const p = Math.max(0, Math.min(1, Number.isFinite(u) ? u : 1)) * (KEYS.length - 1), a = Math.floor(p), b = Math.min(a + 1, KEYS.length - 1), f = p - a;
+    const p = Math.max(0, Math.min(1, Number.isFinite(u) ? u : 1)) * (KEYS.length - 1);
+    const a = Math.floor(p), b = Math.min(a + 1, KEYS.length - 1), f = p - a;
     for (let i = 0; i < 8; i++) out[i] = KEYS[a][i] + (KEYS[b][i] - KEYS[a][i]) * f;
     return out;
   }
   // Replay the authored planted gait over arbitrary travel, in 1.35 m cycles.
   // Positive distance retreats along local -z; negative distance walks forward.
+  // The clip is authored on a smoothstep clock, so the cycle phase is inverted
+  // through smoothstep (16 bisection steps) to find the clip time.
   function walking(distance, out) {
-    const v=((distance/1.35)%1+1)%1;
-    let lo=0,hi=1;
-    for(let i=0;i<16;i++){const u=(lo+hi)/2;if(u*u*(3-2*u)<v)lo=u;else hi=u;}
-    return sample((lo+hi)/2,out);
+    const v = ((distance / 1.35) % 1 + 1) % 1;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 16; i++) {
+      const u = (lo + hi) / 2;
+      if (u * u * (3 - 2 * u) < v) lo = u; else hi = u;
+    }
+    return sample((lo + hi) / 2, out);
   }
   // The parts are GarageCrewDraw.body's lofts (tools/gen/blender/crew-body.py), in
   // the frames part() places: the fore carries the glove and fist past the wrist.
@@ -29,11 +37,14 @@ const GarageCrewMotion = (function () {
     const mesh = {}, add = (name, data) => { mesh[name] = gfx.createMesh(data); };
     for (const name of ["torso", "upper", "fore", "thigh", "shin", "boot"]) add(name, GarageCrewDraw.body.build(acc(), name, c1, c2));
     const a = acc(); helmet(a, [0, 0, 0], c1, c2); add("head", a);
-    return { mesh, m: new Float32Array(16), pm: new Float32Array(16), parent: null, walk: new Float32Array(8), signal: new Float32Array(8), joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
+    // Scratch buffers reused every frame: matrices, sampled channels, IK outputs.
+    return { mesh, m: new Float32Array(16), pm: new Float32Array(16), parent: null, walk: new Float32Array(8), signal: new Float32Array(8),
+      joint: new Float32Array(2), knee: new Float32Array(3), x: 0, z: 0, cy: 1, sy: 0 };
   }
   function free(rig, gfx) {
     if (!rig) return 0;
-    const names = Object.keys(rig.mesh); for (const name of names) gfx.freeMesh(rig.mesh[name]);
+    const names = Object.keys(rig.mesh);
+    for (const name of names) gfx.freeMesh(rig.mesh[name]);
     return names.length;
   }
   // Two-bone IK in the figure's YZ plane. Feet remain at Blender's authored
@@ -45,26 +56,40 @@ const GarageCrewMotion = (function () {
     out[0] = y + uy * along + uz * h * bend; out[1] = z + uz * along - uy * h * bend;
     return out;
   }
-  // Three-dimensional knee solve keeps an ankle planted as the torso turns.
-  function leg(x,y,z,tx,ty,tz,out) {
-    const dx=tx-x,dy=ty-y,dz=tz-z,raw=Math.hypot(dx,dy,dz),d=Math.max(.001,Math.min(THIGH+SHIN-.0001,raw));
-    const ux=dx/raw,uy=dy/raw,uz=dz/raw,along=(THIGH*THIGH-SHIN*SHIN+d*d)/(2*d),h=Math.sqrt(Math.max(0,THIGH*THIGH-along*along)),n=Math.sqrt(1-uz*uz);
-    out[0]=x+ux*along-uz*ux*h/n;out[1]=y+uy*along-uz*uy*h/n;out[2]=z+uz*along+n*h;return out;
+  // Three-dimensional knee solve keeps an ankle planted as the torso turns: from
+  // hip (x, y, z) to ankle (tx, ty, tz) the knee bends along the part of +z
+  // (forward) perpendicular to the hip-ankle line.
+  function leg(x, y, z, tx, ty, tz, out) {
+    const dx = tx - x, dy = ty - y, dz = tz - z, raw = Math.hypot(dx, dy, dz), d = Math.max(.001, Math.min(THIGH + SHIN - .0001, raw));
+    const ux = dx / raw, uy = dy / raw, uz = dz / raw;
+    const along = (THIGH * THIGH - SHIN * SHIN + d * d) / (2 * d), h = Math.sqrt(Math.max(0, THIGH * THIGH - along * along)), n = Math.sqrt(1 - uz * uz);
+    out[0] = x + ux * along - uz * ux * h / n;
+    out[1] = y + uy * along - uz * uy * h / n;
+    out[2] = z + uz * along + n * h;
+    return out;
   }
-  function part(rig, gfx, name, x, y, z, dy, dz, length, opts, dx=0, footYaw=null) {
-    const m=rig.m,cy=rig.cy,sy=rig.sy,d=Math.hypot(dx,dy,dz),nx=dx/d,ny=dy/d,nz=dz/d;
-    const h=Math.hypot(dx,dy),xx=h>.00001?Math.abs(dy)/h:1,xy=h>.00001?-(dy<0?-1:1)*dx/h:0,zx=xy*nz,zy=-xx*nz,zz=xx*ny-xy*nx;
-    m[0]=cy*xx;m[1]=xy;m[2]=-sy*xx;m[3]=0;
-    m[4]=(cy*dx+sy*dz)/length;m[5]=dy/length;m[6]=(-sy*dx+cy*dz)/length;m[7]=0;
-    m[8]=cy*zx+sy*zz;m[9]=zy;m[10]=-sy*zx+cy*zz;m[11]=0;
-    m[12]=rig.x+cy*x+sy*z;m[13]=y;m[14]=rig.z-sy*x+cy*z;m[15]=1;
-    if(footYaw!==null) { const c=Math.cos(footYaw),s=Math.sin(footYaw);m[0]=c;m[1]=0;m[2]=-s;m[4]=0;m[5]=1;m[6]=0;m[8]=s;m[9]=0;m[10]=c; }
+  // Draw part `name` from its proximal joint (x, y, z) along (dx, dy, dz), the
+  // span scaled to `length`, in the figure's frame (rig.x/z, yaw cos/sin cy/sy).
+  // footYaw (a boot) replaces the rotation with a plain yaw.
+  function part(rig, gfx, name, x, y, z, dy, dz, length, opts, dx = 0, footYaw = null) {
+    const m = rig.m, cy = rig.cy, sy = rig.sy, d = Math.hypot(dx, dy, dz), nx = dx / d, ny = dy / d, nz = dz / d;
+    const h = Math.hypot(dx, dy), xx = h > .00001 ? Math.abs(dy) / h : 1, xy = h > .00001 ? -(dy < 0 ? -1 : 1) * dx / h : 0;
+    const zx = xy * nz, zy = -xx * nz, zz = xx * ny - xy * nx;
+    m[0] = cy * xx; m[1] = xy; m[2] = -sy * xx; m[3] = 0;
+    m[4] = (cy * dx + sy * dz) / length; m[5] = dy / length; m[6] = (-sy * dx + cy * dz) / length; m[7] = 0;
+    m[8] = cy * zx + sy * zz; m[9] = zy; m[10] = -sy * zx + cy * zz; m[11] = 0;
+    m[12] = rig.x + cy * x + sy * z; m[13] = y; m[14] = rig.z - sy * x + cy * z; m[15] = 1;
+    if (footYaw !== null) {
+      const c = Math.cos(footYaw), s = Math.sin(footYaw);
+      m[0] = c; m[1] = 0; m[2] = -s; m[4] = 0; m[5] = 1; m[6] = 0; m[8] = s; m[9] = 0; m[10] = c;
+    }
     // rig.parent (GarageCrewChoreo.draw): the in-race stop places the crew in the car's grounded basis.
-    gfx.draw(rig.mesh[name],rig.parent?GarageCrewDraw.mul(rig.pm,rig.parent,m):m,opts);
+    gfx.draw(rig.mesh[name], rig.parent ? GarageCrewDraw.mul(rig.pm, rig.parent, m) : m, opts);
   }
   function draw(rig, gfx, x, z, yaw, pose, side, opts) {
     rig.x = x; rig.z = z; rig.cy = Math.cos(yaw); rig.sy = Math.sin(yaw);
-    const walk = Number.isFinite(pose.walkDistance) ? walking(pose.walkDistance, rig.walk) : sample(pose.door, rig.walk), time = Number.isFinite(pose.seconds) ? pose.seconds : 0;
+    const walk = Number.isFinite(pose.walkDistance) ? walking(pose.walkDistance, rig.walk) : sample(pose.door, rig.walk);
+    const time = Number.isFinite(pose.seconds) ? pose.seconds : 0;
     const cue = sample(pose.calm ? 0 : (time / 2 + side * .17) % 1, rig.signal);
     const ready = Math.max(0, Math.min(1, (pose.door - .8) * 5)), custom = Number.isFinite(pose.handY);
     // walk[6]=lean, walk[7]=sway. Sway shifts hips only so planted feet stay put.

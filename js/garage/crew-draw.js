@@ -73,17 +73,17 @@ const GarageCrewDraw = (function () {
     const R = g.length, raw = [];
     // Which way is out depends on the axis and on whether the rings climb or
     // descend (the helmet's run crown-down): measure it against the axis.
-    let out_ = 0;
+    let outward = 0;
     for (let i = 0; i < R - 1; i++) {
       const row = [], r = spec.rings[i], o = spec.axis === "z" ? [r[3], r[4], r[0]] : [r[3], r[0], r[4]];
       for (let j = 0; j < n; j++) {
         const c = cross(sub(g[i + 1][j + 1], g[i][j]), sub(g[i][j + 1], g[i + 1][j])), m = sub(g[i + 1][j + 1], o);
-        out_ += c[0] * m[0] + c[1] * m[1] + c[2] * m[2];
+        outward += c[0] * m[0] + c[1] * m[1] + c[2] * m[2];
         row.push(c);
       }
       raw.push(row);
     }
-    const flip = out_ >= 0 ? 1 : -1;
+    const flip = outward >= 0 ? 1 : -1;
     // Smooth normals: each grid vertex averages its quads' diagonal normals.
     const qn = raw.map((row) => row.map((c) => [c[0] * flip, c[1] * flip, c[2] * flip]));
     const nrm = (i, j) => {
@@ -96,6 +96,7 @@ const GarageCrewDraw = (function () {
       const l = Math.hypot(s[0], s[1], s[2]) || 1;
       return [s[0] / l, s[1] / l, s[2] / l];
     };
+    // One vertex per grid point and paint slot, so slot borders stay crisp.
     const seen = new Map();
     const vert = (i, j, slot) => {
       const k = (i * (n + 1) + j) * 8 + slot;
@@ -108,10 +109,12 @@ const GarageCrewDraw = (function () {
       seen.set(k, at);
       return at;
     };
+    // A ring with both radii 0 is collapsed to a point (a closed end).
+    const closed = (i) => spec.rings[i][1] === 0 && spec.rings[i][2] === 0;
     for (let i = 0; i < R - 1; i++) for (let j = 0; j < n; j++) {
       const s = slotOf(spec, i, j), a = vert(i, j, s), b = vert(i + 1, j, s), c = vert(i + 1, j + 1, s), d = vert(i, j + 1, s);
-      // Skip the zero-area half of a quad on a closed (collapsed) ring.
-      const closedLo = spec.rings[i][1] === 0 && spec.rings[i][2] === 0, closedHi = spec.rings[i + 1][1] === 0 && spec.rings[i + 1][2] === 0;
+      // Skip the zero-area half of a quad on a closed ring.
+      const closedLo = closed(i), closedHi = closed(i + 1);
       if (flip > 0) { if (!closedHi) out.idx.push(a, b, c); if (!closedLo) out.idx.push(a, c, d); }
       else { if (!closedHi) out.idx.push(a, c, b); if (!closedLo) out.idx.push(a, d, c); }
     }
