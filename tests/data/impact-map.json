@@ -18852,6 +18852,9 @@
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "showStill": [
+        "tests/unit/hero-still-density.test.mjs"
+      ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
       ],
