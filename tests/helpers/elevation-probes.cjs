@@ -85,13 +85,15 @@ const GRADIENT = async function gradient(g, o, state) {
     if (s > up) { up = s; upAt = c.f; }
   }
 
-  A.jump(dnAt, flatMax, 0);
-  A.setInput({ steer: 0, throttle: true });
-  let maxV = 0;
+  A.jump(dnAt, 40, 0); A.setInput({ steer: 0, throttle: true }); A.step(1 / 60, 1);
+  const vTop = A.physState().vmaxNow;
+  A.jump(dnAt, vTop, 0);
+  let maxV = 0, vmaxPeak = vTop;
   for (let i = 0; i < 150; i++) {
     A.step(1 / 60, 1);
     const p = A.physState();
     maxV = Math.max(maxV, p.speed);
+    vmaxPeak = Math.max(vmaxPeak, p.vmaxNow);
     if (!Number.isFinite(p.speed) || !Number.isFinite(p.s) || !Number.isFinite(p.x)) finite = false;
   }
 
@@ -116,7 +118,7 @@ const GRADIENT = async function gradient(g, o, state) {
   }
   A.clearInput();
   A.setPhysics({ roadFollow: 0 });   // restore the shipped default
-  return { relief: true, dn, up, maxV, flatMax, flatSteps, flatAt: +flatAt.toFixed(3),
+  return { relief: true, dn, up, maxV, vTop, vmaxPeak, flatMax, flatSteps, flatAt: +flatAt.toFixed(3),
            climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
 };
 

@@ -18,6 +18,7 @@ import {
   captureCanvasDataUrl, sampleXrEye, IWER_VENDOR, IWER_VERSION,
 } from "../helpers/iwer-install.mjs";
 import fs from "fs";
+import { frameContent, screenshotPixels } from "../helpers/visual-oracle.js";
 
 test.describe.configure({ mode: "serial" });
 
@@ -467,10 +468,11 @@ test("stereo viewports: left width > 0; non-blank canvas capture; flat mode afte
   // Soft: under some soft-present paths #game may be empty; prefer #game-soft.
   const url = dataUrl || await captureCanvasDataUrl(page, "#game-soft");
   expect(url && url.startsWith("data:image/png")).toBeTruthy();
-  // A blank canvas also encodes to a valid PNG; a PNG of drawn content is far
-  // larger than the ~100 B an empty one costs.
+  // A blank canvas also encodes to a valid PNG: decode it and read the pixels
+  // (PNG size tracks compression, not content).
   const png = Buffer.from(url.split(",")[1], "base64");
-  expect(png.length, "captured canvas must carry content, not an empty PNG").toBeGreaterThan(2000);
+  expect(frameContent(await screenshotPixels(page, png)).nonblank,
+    "captured canvas must carry content, not a blank frame").toBe(true);
 
   await endVr(page);
 

@@ -131,8 +131,12 @@ test.describe("Spa track-owned foundation migration", () => {
         cells.get(key).push(sample);
       }
 
+      // pairs[name] counts the triangle/sample hits each scan measured: a
+      // missing mesh returns 0, which is a clean pass over nothing.
+      const pairs = {};
       const scan = (name, bandOnly) => {
         const mesh = caps[name];
+        pairs[name] = 0;
         if (!mesh?.pos || !mesh?.idx) return 0;
         let max = 0;
         const { pos, idx } = mesh;
@@ -157,6 +161,7 @@ test.describe("Spa track-owned foundation migration", () => {
                 const u = (d11 * d20 - d01 * d21) / denominator;
                 const v = (d00 * d21 - d01 * d20) / denominator;
                 if (u < -0.02 || v < -0.02 || u + v > 1.02) continue;
+                pairs[name]++;
                 const surfaceY = ay + u * (cy - ay) + v * (by - ay);
                 const over = surfaceY - sample.y;
                 if (bandOnly ? over > 0.2 && over < 5 : over > 0.1)
@@ -172,9 +177,16 @@ test.describe("Spa track-owned foundation migration", () => {
         road: scan("road", false),
         terrain: scan("terrain", false),
         props: Math.max(scan("props", true), scan("glass", true)),
+        pairs,
       };
     });
 
+    // A missing mesh scans as 0, a clean pass over nothing: each scan must hit
+    // samples. Measured road 9000, terrain 510, props+glass 25 (headless VM,
+    // 2026-11-10); the floor is > 0.
+    expect(overlaps.pairs.road).toBeGreaterThan(0);
+    expect(overlaps.pairs.terrain).toBeGreaterThan(0);
+    expect(overlaps.pairs.props + overlaps.pairs.glass).toBeGreaterThan(0);
     expect(overlaps.road).toBeLessThanOrEqual(0.18);
     expect(overlaps.terrain).toBeLessThanOrEqual(0.18);
     expect(overlaps.props).toBeLessThanOrEqual(0.20);

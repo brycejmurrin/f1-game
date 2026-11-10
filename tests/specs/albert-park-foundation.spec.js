@@ -68,6 +68,9 @@ test("Albert Park water, ground and walls stay safe", async ({ racePage, pageErr
   expect(result.water?.indices).toBeGreaterThan(0);
   expect(result.badGeometry).toEqual([]);
   expect(result.spanClearances.every((clearance) => clearance >= 4.8)).toBe(true);
+  // A null gap passes the every() below, so an all-null ladder would measure
+  // nothing. All 10 probes read terrain (headless VM, 2026-11-10).
+  expect(result.ground.filter(({ gap }) => gap !== null)).toHaveLength(10);
   expect(result.ground.every(({ gap }) => gap === null || gap <= 0.18)).toBe(true);
   expect(result.walls.anyNaN).toBe(false);
   expect(result.walls.minOverHw).toBeGreaterThan(-1.5);

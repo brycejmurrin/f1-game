@@ -27,8 +27,25 @@ async function waitReady(page) {
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
+// Land every FINITE CSS animation / transition (a sheet's open fade, a button's
+// state transition) on its end state — what the old fixed settles before a
+// capture stood for. finish() is synchronous and throws on an infinite one (a
+// pulsing cue), which is left running. Finished rather than waited for: headless
+// Chromium does not reliably tick sheet animations (ui-scale.spec.js open()).
+async function awaitUiSettled(page) {
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) { try { a.finish(); } catch (_) { /* infinite */ } }
+  });
+}
+// The game has RENDERED `n` more frames (cameraState().renderFrame, the render
+// loop's own counter): a jump()/snapCam() pose is on screen, not just in state.
+async function awaitRenderFrames(page, n = 2) {
+  const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+  await page.waitForFunction(({ f0, n }) => window.__apex.cameraState().renderFrame >= f0 + n,
+    { f0, n }, { polling: 100, timeout: BOOT_MS });
+}
 async function shot(page, name) {
-  await page.waitForTimeout(250);
+  await awaitUiSettled(page);
   await page.screenshot({ path: galleryPath("menu-survey", `${name}.png`), fullPage: false });
 }
 // Fire a button's click handler in-page (bypasses canvas hit-test flakiness).
@@ -52,21 +69,38 @@ async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   // peers on this fixture all read BOOT_MS, which carries the 11-33 s boot
   // measurement behind it.
   await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
-  await page.waitForTimeout(200);
+  await awaitUiSettled(page);   // the sheet's open transition has landed
 }
-// Cycle a labelled toggle in-page until its text contains `want`.
-// Settings choices are setting rows (js/ui/setting-row.js): `#<id>-sel` is a
-// native select whose options are the values. Pick the option whose label
-// contains `want` the way a player would (change event), then return the
-// selected label (the old cycle helper returned the button label, and the
-// callers still `toContain` it).
+// Pick the option of a settings row (js/ui/setting-row.js: `#<id>-sel` is a
+// native select whose options are the values) whose label contains `want`, the
+// way a player would (change event), then WAIT FOR THE GAME TO STORE IT and
+// return the selected label. Returning the label alone proved nothing: this
+// helper set `sel.value` itself, so the label it read back was the one it had
+// just selected whether or not the game took the change. The stored setting is
+// written only by the row's write() (the game's own handler).
+const STORED = {
+  "pm-steer": ["steerMode", (v) => v],
+  "pm-gears": ["manual", (v) => v === "manual"],
+  "pm-res": ["resMode", (v) => v],
+  "as-music": ["music", (v) => v === "on"],
+  "as-sound": ["sfx", (v) => v === "on"],
+};
 async function cycleTo(page, id, want) {
-  await page.evaluate(({ id, want }) => {
+  const map = STORED[id];
+  if (!map) throw new Error(`cycleTo: no stored-setting mapping for #${id}`);
+  const value = await page.evaluate(({ id, want }) => {
     const sel = document.getElementById(id + "-sel");
     const opt = [...sel.options].find((o) => o.textContent.toUpperCase().includes(want.toUpperCase()));
-    if (opt && sel.value !== opt.value) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    // Dispatch even when it is already selected: write() then stores the
+    // default too, so the wait below has a value to read.
+    if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    return opt ? opt.value : null;
   }, { id, want });
-  await page.waitForTimeout(120);
+  expect(value, `#${id} has an option labelled ${want}`).not.toBeNull();
+  const [key, expected] = [map[0], map[1](value)];
+  await page.waitForFunction(({ key, expected }) =>
+    JSON.stringify(GameStore.store.get(key)) === JSON.stringify(expected),
+  { key, expected }, { polling: 50, timeout: 5000 });
   return page.evaluate((id) => {
     const sel = document.getElementById(id + "-sel");
     return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
@@ -136,7 +170,6 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
       music: document.getElementById("as-music-sum").textContent.toUpperCase(),
       sound: document.getElementById("as-sound-sum").textContent.toUpperCase(),
     }))).toEqual({ music: expect.stringContaining("OFF"), sound: expect.stringContaining("OFF") });
-    await page.waitForTimeout(120);
     await shot(page, "portrait-34-settings-sound-music-off");
   });
 
@@ -160,11 +193,10 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     // sheet was never broken, the budget was. Sibling waits on this fixture all
     // read BOOT_MS, which carries the 11-33 s SwiftShader boot measurement.
     await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: BOOT_MS });
-    await page.waitForTimeout(400);
     // The tuner actually built its TUNE_DEFS slider rows, not just an empty shell.
-    expect(await page.evaluate(() =>
+    await expect.poll(() => page.evaluate(() =>
       document.querySelectorAll("#lt-rows input[type=range]").length
-    )).toBeGreaterThan(0);
+    ), { timeout: 10000 }).toBeGreaterThan(0);
     await shot(page, "portrait-36-lighting-tuner");
   });
 });
@@ -180,7 +212,10 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
       document.getElementById("pm-resume").click();
       window.__apex.jump(0.1, 50, 0); window.__apex.snapCam();
     });
-    await page.waitForTimeout(500);
+    // Resumed (both sheets down) and the jumped pose has rendered.
+    await page.waitForFunction(() => document.getElementById("pausemenu").hidden
+      && document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 10000 });
+    await awaitRenderFrames(page, 2);
   }
 
   test("40 HUD — touch controls", async ({ page }) => {
@@ -205,9 +240,9 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
-    await page.waitForTimeout(300);
+    await awaitRenderFrames(page, 2);   // the jumped pose is on screen
     await page.evaluate(() => document.body.classList.add("hud-hidden"));
-    await page.waitForTimeout(300);
+    // (the expects below auto-wait on the hud-hidden layout)
     // hud-hidden strips the readouts and shows the restore eye (css/touch-controls.css).
     // On .desktop the whole #hud goes. On touch the race resumes under HUD: OFF, so the
     // dock's driving buttons and PAUSE stay; only the readouts hide (hunt3 7-F2).
@@ -230,13 +265,12 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
-    await page.waitForTimeout(300);
+    await awaitRenderFrames(page, 2);   // the jumped pose is on screen
     await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent
     await page.locator("#campicker").waitFor({ state: "visible" });
     // The grid built a button per camera mode and highlights exactly the current one.
     expect(await page.locator("#campicker button").count()).toBeGreaterThanOrEqual(10);
     expect(await page.locator("#campicker button.active").count()).toBe(1);
-    await page.waitForTimeout(300);
     await shot(page, "landscape-43-camera-picker");
   });
 });

@@ -104,8 +104,15 @@ async function toTitle(page) {
     if (ov) { ov.hidden = false; ov.style.removeProperty("display"); }
     document.body.classList.remove("in-race");
   }, OVERLAY_IDS);
-  await page.waitForTimeout(150);
+  // No settle (was 150 ms): every write above is synchronous, and TopModal's
+  // MutationObserver mirror is a microtask that has run before evaluate resolves.
 }
+
+// The screen each title/select door opens. The click handlers swap screens in
+// a vt() callback (a view transition or its 60 ms fallback) or after a lazy
+// bundle, so open() waits for THIS element to show, not for a fixed beat.
+const OPENS = { "mb-race": "select", "sel-car": "carsetup", "sel-go": "race-settings",
+  "mb-help": "howtoplay", "mb-settings": "pmsettings", "mb-career": "career" };
 
 // Clicks are dispatched in-page rather than through locators on purpose: the
 // sheets open with a CSS animation that headless Chromium does not reliably
@@ -113,13 +120,17 @@ async function toTitle(page) {
 // a screen that is, as far as the DOM is concerned, already open.
 async function open(page, ids) {
   for (const id of ids) {
+    const screen = OPENS[id];
+    if (!screen) throw new Error(`open(): no screen mapped for #${id} — add it to OPENS`);
     await page.evaluate((i) => document.getElementById(i)?.click(), id);
-    await page.waitForTimeout(250);
+    await page.waitForFunction((sid) => { const el = document.getElementById(sid); return !!el && !el.hidden; },
+      screen, { polling: 100, timeout: BOOT_MS });
   }
+  // finish() lands every finite animation's end state synchronously, and the
+  // probes read layout through getBoundingClientRect, which forces it: no settle.
   await page.evaluate(() => {
     for (const a of document.getAnimations()) { try { a.finish(); } catch { /* infinite */ } }
   });
-  await page.waitForTimeout(150);
 }
 
 // Every visible control in `rootSel`, with the box it actually PAINTS —
@@ -1015,13 +1026,18 @@ test.describe("UI scale", () => {
       window.__apex.headless(true);
       window.__apex.go(); window.__apex.jump(0.3, 50);
     });
-    await page.waitForTimeout(600);
+    // No settle (was 600 ms): go() makes the state "race" synchronously, and
+    // jump() then runs refreshHud(true) — a forced, synchronous HUD tick with its
+    // fitHud pass (js/agent/apex.js) — before this evaluate returns.
 
     const CLUSTERS = [".hud-top", ".hud-bottom", "#minimap", ".dock"];
     let dockSeen = false;
     for (const pct of SCALES) {
-      await page.evaluate((p) => window.__apex.hudScale(p), pct);
-      await page.waitForTimeout(200);
+      // The fit caps (--hud-z-*) follow HUD SIZE on the next 10 Hz HUD tick;
+      // re-jumping to the same spot forces that tick synchronously (jump() ->
+      // refreshHud(true), the idiom camera() uses for hud-layout.spec) instead
+      // of sleeping for it (was 200 ms).
+      await page.evaluate((p) => { window.__apex.hudScale(p); window.__apex.jump(0.3, 50); }, pct);
       const boxes = await page.evaluate((sels) => {
         const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
         return sels.map((s) => {

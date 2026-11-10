@@ -45,8 +45,9 @@ export const TRACK_HARD_MS = 300000;
  * to "ok" / "err:<message>" from __apex.race()'s thenable. With it the build is
  * ready only once THAT start settled: on a reused page `info().track` is the
  * PREVIOUS world and is non-null at once (bug hunt 3 X1). Without it, the old
- * predicate. */
+ * predicate. `opts.delay(ms)` is the pause between polls (default a Node timer). */
 export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = TRACK_HARD_MS, opts = {}) {
+  const delay = opts.delay || nodeDelay;
   const started = Date.now();
   let lastSeen = -1, lastMoved = started;
   const raceFlag = opts.raceFlag || null;
@@ -77,7 +78,10 @@ export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = T
         `track build exceeded the ${hardMs}ms hard cap while still reporting progress ` +
         `(latest Log id ${s.n}). Not a stall — something is building without ever finishing.`);
     }
-    await page.waitForTimeout(100);
+    // The poll interval of a progress loop (it tracks Log ids across polls, so
+    // it cannot be one waitForFunction): a Node timer (`opts.delay`, injectable
+    // for the unit test), like awaitApexBoot below.
+    await delay(100);
   }
 }
 

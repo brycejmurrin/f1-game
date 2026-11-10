@@ -13,6 +13,7 @@
 // tests/helpers/shared-page.js has the mechanics.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
+import { frameContent, screenshotPixels } from "../helpers/visual-oracle.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
@@ -299,6 +300,8 @@ test.describe("Car setup catalog — screenshots", () => {
     await openSetup(page, "mclaren", { draw: true });
     await expect(page.locator("#carsetup")).toBeVisible();
     const png = await page.screenshot({ path: galleryPath("parts-catalog", "catalog-portrait.png") });
-    expect(png.length, "a captured frame, not an empty buffer").toBeGreaterThan(1000);
+    // A DOM sheet, not a canvas: decode the capture and require real contrast
+    // (a byte count passes for any valid PNG of a blank page).
+    expect(frameContent(await screenshotPixels(page, png)).nonblank, "a captured frame, not a blank page").toBe(true);
   });
 });
