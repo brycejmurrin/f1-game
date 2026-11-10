@@ -8127,6 +8127,12 @@
       ],
       "phase": [
         "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "warm": [
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/pit-signs.js": {
@@ -14367,6 +14373,7 @@
       "*": [
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/garage-before.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },
@@ -18051,7 +18058,8 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/race-insights.test.mjs",
-        "tests/unit/race-radio.test.mjs"
+        "tests/unit/race-radio.test.mjs",
+        "tests/unit/service-worker.test.mjs"
       ],
       "fitHud": [
         "tests/specs/hud-layout.spec.js",
@@ -18844,6 +18852,9 @@
         "tests/unit/select-screen-fixes.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "showStill": [
+        "tests/unit/hero-still-density.test.mjs"
+      ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
       ],
@@ -19333,7 +19344,8 @@
     },
     "js/ui/update-check.js": {
       "apply": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "blocksLazyLoad": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -19353,6 +19365,7 @@
       ],
       "markReady": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
       "onVisible": [
@@ -19363,7 +19376,8 @@
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "render": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "*": [
         "tests/unit/global-registry.test.mjs"
