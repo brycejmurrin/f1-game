@@ -1,5 +1,6 @@
 // apex-tools-mcp.test.mjs — apex-tools MCP (local CLI wrap).
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network.
+import "../helpers/git-fixture-env.mjs";
 import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
