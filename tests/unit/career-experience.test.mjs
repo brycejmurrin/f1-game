@@ -207,6 +207,6 @@ test("the season story's Contract tile is a driver's: MY TEAM has no contract to
     career.mount(G, c, {}, null);
     return text(panes["cr-right"]);
   };
-  assert.match(story("driver"), /1 season remaining/);
-  assert.doesNotMatch(story("myteam"), /season remaining|Contract/);
+  assert.equal(/1 season remaining/.test(story("driver")), true, "a driver sees the contract tile");
+  assert.equal(/season remaining|Contract/.test(story("myteam")), false, "an owner does not");
 });

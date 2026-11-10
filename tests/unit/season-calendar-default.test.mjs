@@ -102,8 +102,8 @@ test("REAL_2026 is whole in this build, 23 rounds, and is a new season's default
   deq([...SeasonCal.config().trackIds], real, "no stored setup: the new season is 2026 REAL");
   assert.equal(SeasonCal.fresh().sprint, false, "the default sets the calendar, not the sprint format");
   // The rounds the audit named: the 24-round list is the one with Bahrain/Jeddah.
-  for (const id of ["zandvoort", "catalunya", "sepang", "qatar", "abudhabi"]) assert.ok(real.includes(id), id);
-  for (const id of ["bahrain", "jeddah", "istanbul", "portimao"]) assert.ok(!real.includes(id), id);
+  for (const id of ["zandvoort", "catalunya", "sepang", "qatar", "abudhabi"]) assert.equal(real.includes(id), true, id);
+  for (const id of ["bahrain", "jeddah", "istanbul", "portimao"]) assert.equal(real.includes(id), false, id);
   assert.equal(OLD_24.length, 24);
 });
 
@@ -209,7 +209,7 @@ test("Bryce's exported profile carries no career or season, so it changes nothin
   const raw = JSON.parse(read("tests/data/settings-defaults-export.json"));
   const keys = JSON.stringify(Object.keys(raw.values || raw.settings || raw));
   assert.ok(!/career\.(driver|myteam)|"season"/.test(keys), "the export excludes saves (its `excluded` note)");
-  assert.match(String(raw.excluded || ""), /career, season/);
+  assert.equal(/career, season/.test(String(raw.excluded || "")), true);
 });
 
 // ── start() never overwrites a full set ───────────────────────────────────────
