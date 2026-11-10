@@ -556,8 +556,7 @@ test("breakpoint/logpoint URL guidance recommends the query-less form; page-JS t
   for (const name of ["debugger_breakpoint", "debugger_logpoint"]) {
     const url = byName[name].inputSchema.properties.url.description;
     assert.doesNotMatch(url, /including query|^Exact script URL/, name);
-    assert.match(url, /WITHOUT the \?v= query/, name);
-    assert.match(url, /bare repo path/, name);
+    assert.equal(url.startsWith("Script URL WITHOUT the ?v= query (matches the script under any query), or a bare repo path"), true, name);
   }
   for (const name of ["debugger_breakpoint", "debugger_logpoint", "debugger_instances", "debugger_evaluate", "debugger_run"]) {
     assert.equal(byName[name].annotations.readOnlyHint, false, name);

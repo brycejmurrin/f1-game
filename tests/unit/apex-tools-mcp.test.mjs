@@ -3241,7 +3241,7 @@ test("apex_graph_parity refuses a base that is the working tree itself; dryRun s
     const r = callCli("apex_graph_parity", args, { APEX_MCP_MOCK: "" });
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "bad_args", r.stdout.slice(0, 600));
-    assert.match(body.message, /working tree itself.*vacuously/);
+    assert.equal(body.message.startsWith('apex_graph_parity: base "HEAD" is the working tree itself'), true, body.message);
     assert.equal(body.argv, undefined, "refused before graph-parity.cjs spawns");
   }
   assert.equal(JSON.parse(callCli("apex_graph_parity", { base: "HEAD", id: "monza", dryRun: true }, { APEX_MCP_MOCK: "" }).stdout).dryRun, true);

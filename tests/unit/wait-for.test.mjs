@@ -26,7 +26,7 @@ test("the default --timeout is foreground-safe: a bare call is not refused (W25 
   assert.equal(capForeground(a.timeoutMin, false).error, undefined);
   const r = spawnSync(process.execPath, ["tools/ci/wait-for.mjs", "--file-nonempty", "package.json"], { encoding: "utf8", env: { ...process.env, APEX_WAIT_BACKGROUND: "" } });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /= wait held/);
+  assert.equal(r.stdout.trim(), "= wait held");
 });
 
 test("every example in wait-for.mjs's header parses and passes the foreground cap", () => {
