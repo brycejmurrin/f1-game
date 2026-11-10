@@ -760,6 +760,24 @@ async function bootAgentSurface() {
   catch (e) { Log.warn("game", "bootAgentSurface failed: " + (e && e.message)); }
 }
 
+// LAZY_DEV (#4978): flag-gated diagnostics (GfxDebug) out of the boot wall.
+// Injected only when a flag asks; the module self-installs once it evaluates.
+let _devLoad = null;
+function wantDevPanels() {
+  try { return typeof DevFlags !== "undefined" && !!DevFlags.get("gfxdebug"); }
+  catch (_) { return false; }
+}
+function bootDevPanels() {
+  const files = ApexRoster.LAZY_DEV || [];
+  if (_devLoad || !files.length || !wantDevPanels()) return _devLoad;
+  _devLoad = loadBackendScripts(files, [], { strict: true }).catch((e) => {
+    Log.warn("game", "dev panels failed to load: " + (e && e.message));
+    _devLoad = null;
+    return false;
+  });
+  return _devLoad;
+}
+
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited at boot, on
 // purpose: awaiting it here would put the 338 KB straight back on the
 // critical path. Nothing in a menu resolves lighting — applyRaceSettings()
@@ -921,6 +939,8 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
+// After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
+bootDevPanels();
 return { ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };

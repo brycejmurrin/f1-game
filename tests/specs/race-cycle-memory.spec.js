@@ -30,7 +30,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, waitFrames } from "../../tools/lib/mem-census.mjs";
 import {
-  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues,
+  HEAP_SLOPE_HARD_MB, HEAP_SLOPE_SOFT_MB, AUDIO_SLOPE_SOFT_MB, WARM_CYCLES, CONFIRM_CYCLES, STRICT, postWarmSlope, robustHeapSlope, cycleCensusIssues, gpuWrapperCounts, domLeakCounters, contextScopeCount, wrapperGrowth, censusBlindness,
 } from "../helpers/race-cycle-memory.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
@@ -77,6 +77,30 @@ async function menuQuiet(page) {
   return Date.now() - t0;
 }
 
+// A RELOAD IS NOT A CENSUS (#5175). A mid-race reload (TLX/GLX context-loss recovery, the loop-health stall
+// watchdog, the renderer claim) re-creates the document, and the census then reads a fresh title page as "no
+// renderer, no track hooks". Count document loads in sessionStorage (it survives a reload) and stash the reason at
+// pagehide, so a reload fails as itself, with the reload keys and the last warnings, not as three census strings.
+function reloadWatchInitScript() {
+  try { sessionStorage.setItem("rcm.loads", String(Number(sessionStorage.getItem("rcm.loads") || 0) + 1)); } catch (_) { /* blocked storage */ }
+  addEventListener("pagehide", () => {
+    try {
+      const keys = {};
+      for (const k of ["apex26.ctxLostNotice", "apex26.ctxLostNeedReload", "apex26.ctxLostExhausted", "apex26.stallReloads", "apex26.gfxClaimFail"]) {
+        const v = sessionStorage.getItem(k); if (v != null) keys[k] = v;
+      }
+      let info = null, tail = [];
+      try { info = window.__apex.info(); } catch (_) { /* not booted */ }
+      try { tail = Log.records({ level: "warn", limit: 8 }).map((r) => `${r.ns}: ${r.msg}`.slice(0, 240)); } catch (_) { /* no Log */ }
+      sessionStorage.setItem("rcm.unload", JSON.stringify({ state: info && info.state, track: info && info.track, keys, tail }));
+    } catch (_) { /* blocked storage */ }
+  });
+}
+async function expectNoReload(page, loads0, where) {
+  const r = await page.evaluate(() => ({ loads: Number(sessionStorage.getItem("rcm.loads") || 0), unload: sessionStorage.getItem("rcm.unload") }));
+  expect(r.loads, `page reloaded mid-race (${where}): ${r.unload}`).toBe(loads0);
+}
+
 async function flagToMenu(page) {
   await page.evaluate(() => window.__apex.finishRace());
   await page.waitForFunction(() => window.__apex.info().state === "results", null, { polling: 200, timeout: 60000 });
@@ -95,19 +119,24 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
     try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}   // as track-switch-memory: TLX init can exceed 8 s on a busy runner
   });
   await page.addInitScript(censusInitScript);
+  await page.addInitScript(reloadWatchInitScript);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("HeapProfiler.enable");
   await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
   await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
 
+  const loads0 = await page.evaluate(() => Number(sessionStorage.getItem("rcm.loads") || 0));
   const readings = [];
   /** @type {Map<number, { heapMB: number|null, audioMB: number|null }>} */
   const menuByCycle = new Map();
+  /** Per-cycle WebGPU wrapper counts + DOM counters at the final menu (#4778). */
+  const wrapperSeries = [];
   const log = (row) => { readings.push(row); mkdirSync("artifacts/logs", { recursive: true }); writeFileSync("artifacts/logs/race-cycle-memory.json", JSON.stringify(readings, null, 1)); };
   let lastCycle = CYCLES;
   for (let cycle = 1; cycle <= lastCycle; cycle++) {
     for (const id of CIRCUITS) {
       await raceAndDrive(page, id);
+      await expectNoReload(page, loads0, `cycle ${cycle}, ${id} race`);
       const built = await censusAfterGc(page, cdp);
       log({ cycle, id, at: "race", ...built });
       expect(cycleCensusIssues(built), "race census must observe the requested renderer and usable counters").toEqual([]);
@@ -116,6 +145,7 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
 
       await flagToMenu(page);
       const quietMs = id === CIRCUITS[CIRCUITS.length - 1] ? await menuQuiet(page) : null;
+      await expectNoReload(page, loads0, `cycle ${cycle}, menu after ${id}`);
       const menu = await censusAfterGc(page, cdp);
       log({ cycle, id, at: "menu", quietMs, ...menu });
       expect(cycleCensusIssues(menu), "menu census must observe the requested renderer and usable counters").toEqual([]);
@@ -123,6 +153,9 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
       // Final menu of the cycle (last circuit) feeds the post-warm slope series.
       if (id === CIRCUITS[CIRCUITS.length - 1]) {
         menuByCycle.set(cycle, { heapMB: menu.heapMB, audioMB: menu.audioMB });
+        const ctx = await contextScopeCount(cdp);
+        wrapperSeries.push({ cycle, wrappers: await gpuWrapperCounts(cdp), contexts: ctx.count, contextsBlind: ctx.blind, contextNames: ctx.names, dom: await domLeakCounters(cdp) });
+        log({ cycle, at: "wrappers", ...wrapperSeries[wrapperSeries.length - 1] });
         // A first pair over the hard bound may be one odd reading (dip or step): race CONFIRM_CYCLES more and let
         // the robust slope decide below. A clean pair costs nothing extra.
         if (cycle === CYCLES && lastCycle === CYCLES && postWarmSlope(menuByCycle, CYCLES).heapHardFail) lastCycle = CYCLES + CONFIRM_CYCLES;
@@ -163,6 +196,18 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
     ).toBeLessThanOrEqual(HEAP_SLOPE_HARD_MB);
   }
   const softMsgs = [];
+  // Wrapper objects (#4778): post-warm pair must be flat per class. Soft unless STRICT, like the heap slope.
+  const wg = wrapperGrowth(wrapperSeries, CYCLES);
+  test.info().annotations.push({ type: "gpu-wrapper-series", description: JSON.stringify(wrapperSeries) });
+  // CI observation (#4778): which API the census really saw, and whether the wrapper counts were non-null.
+  const lastRow = readings.filter((r) => r.at === "menu").pop() || {};
+  const api = lastRow.backend && lastRow.backend.api;
+  const wrapperObserved = wrapperSeries.length > 0 && wrapperSeries.every((r) => r.wrappers && Object.values(r.wrappers).some((v) => typeof v === "number"));
+  // A channel the census could not see is SAID, never gated as a zero (wrapperGrowth skips non-numbers).
+  const blind = censusBlindness(wrapperSeries, api);
+  test.info().annotations.push({ type: "gpu-wrapper-observed", description: JSON.stringify({ api, wrapperObserved, blind }) });
+  if (blind.length) softMsgs.push(`census blind: ${blind.join("; ")}`);
+  if (!wg.ok) softMsgs.push(`wrapper growth cycle${CYCLES}−cycle${CYCLES - 1}: ${wg.issues.join("; ")}`);
   if (slope.heapSoftFail) {
     softMsgs.push(`heap slope ${slope.heapDelta} MiB > soft ${HEAP_SLOPE_SOFT_MB} (MEMORY-TOOLING nightly; post-warm after ${WARM_CYCLES})`);
   }

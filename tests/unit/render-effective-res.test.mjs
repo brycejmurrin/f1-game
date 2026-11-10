@@ -1,6 +1,7 @@
 /* render-effective-res.test.mjs — the effective 3D resolution rule and its one-call readout (#5166).
  * Bryce's iPhone (852×393 CSS, DPR 3) drew 639×295: present = CSS × min(DPR, cap) with the cap 1.5 on
- * mobileTier (2 otherwise), then × renderScale, and RESOLUTION defaults to LOW (0.5) on a touch device.
+ * mobileTier (2 otherwise), then × renderScale; RESOLUTION defaulted to LOW (0.5) on a touch device and
+ * defaults to MED (0.75, 959×443 on that phone) since the #5166 decision.
  * The numbers were the same on the Nov 2 tree, the pre-rollback tip and the Nov 7 tip, so this file pins
  * the RULE (a change to any of these lines is a resolution-vs-frame-time trade: say so in the PR) and the
  * `__apex.renderScale().effective` readout that lets the phone bridge measure the device in one call.
@@ -21,9 +22,9 @@ test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsew
   assert.match(read("js/render/gfx.js"), /capped 1\.5 mobile \/ 2/);
 });
 
-test("RESOLUTION ships at LOW (scale 0.5) on a coarse-pointer device and AUTO elsewhere", () => {
+test("RESOLUTION ships at MED (scale 0.75) on a coarse-pointer device and AUTO elsewhere (#5166: was LOW)", () => {
   const src = read("js/ui/scale.js");
-  assert.match(src, /const defaultResMode = \(\) => \(coarseUi\(\) \? "low" : "auto"\);/);
+  assert.match(src, /const defaultResMode = \(\) => \(coarseUi\(\) \? "med" : "auto"\);/);
   assert.match(src, /\{ id: "low",\s+label: "LOW",\s+v: 0\.5\s+\}/);
   assert.match(src, /\{ id: "med",\s+label: "MED",\s+v: 0\.75\s+\}/);
   assert.match(src, /\{ id: "high",\s+label: "HIGH",\s+v: 1\.0\s+\}/);

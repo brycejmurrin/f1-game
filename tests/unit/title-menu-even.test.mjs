@@ -545,3 +545,33 @@ test("Daily history populates the Saves and Data blueprint, keeps classes separa
   data = { days: [] }; api["refresh"]();
   assert.equal(history.querySelector("li").textContent, "No saved Daily laps yet. Complete a valid Daily lap to start your history.");
 });
+
+// #5010 second item: nothing repainted the DAILY door when an installed app resumed on the
+// title after the day rolled over, so it named yesterday's circuit while a tap opened today's.
+test("the DAILY door repaints when the page becomes visible on a new day, and only then", () => {
+  const nodes = {};
+  const el = (id) => (nodes[id] = { id, textContent: "", hidden: false, attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k] ?? null; }, querySelector: () => null });
+  el("mb-daily"); el("mb-daily-sub");
+  const listeners = {};
+  const doc = { visibilityState: "visible", documentElement: { dataset: {} }, addEventListener: (t, fn) => { listeners[t] = fn; }, getElementById: () => null };
+  let day = "2026-11-05", plans = 0;
+  const ctx = vm.createContext({ document: doc, Log: { info() {} }, Career: { data: () => null }, Tracks: { SEASON: [] } });
+  vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
+  const api = vm.runInContext("TitleMenu.create", ctx)({
+    $: (id) => nodes[id] || null, store: { raw: () => null },
+    daily: { dayKey: () => day, plan: () => (plans++, { trackName: day === "2026-11-05" ? "Monza" : "Suzuka", weather: "dry" }), liveStreak: () => 0 },
+    openCareerSlots() {}, openCareer() {}, openDailyPicker() {},
+  });
+  api["refresh"]();
+  assert.equal(nodes["mb-daily-sub"].textContent, "Monza · DRY");
+  assert.equal(typeof listeners.visibilitychange, "function", "a visibilitychange handler is armed");
+  const before = plans;
+  listeners.visibilitychange();
+  assert.equal(plans, before, "same day: no repaint");
+  day = "2026-11-06";
+  doc.visibilityState = "hidden"; listeners.visibilitychange();
+  assert.equal(nodes["mb-daily-sub"].textContent, "Monza · DRY", "a hidden page does not repaint");
+  doc.visibilityState = "visible"; listeners.visibilitychange();
+  assert.equal(nodes["mb-daily-sub"].textContent, "Suzuka · DRY", "the new day's plan is on the door");
+});

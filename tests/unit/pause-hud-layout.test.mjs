@@ -121,26 +121,36 @@ test("the phone pause card (#5153 gap 10) is keyed on the body's own density + s
   assert.match(thumb, /body:not\(\[data-density="compact"\]\[data-shape="wide"\]\) #pausemenu > \.sheet \{/);
 });
 
-test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warning never is", () => {
-  let now = 0;
-  const { banner, shown } = openBanner({ profile: "broadcast", now: () => now });
+test("a queued INFO card older than ANN_STALE_MS of race time is dropped at the drain; a warning never is", () => {
+  const { banner, shown } = openBanner({ profile: "broadcast" });
   banner.announce("HOLD", 5, "penalty-hit");
   shown.length = 0;
   banner.announce("UP TO P5", 2, "info");
   banner.announce("TRACK LIMITS", 2, "warning");
-  now = 9000;
-  banner.tick(10);
+  banner.tick(9);
   assert.deepEqual(shown, ["TRACK LIMITS"], "the warning plays; the stale position call is dropped");
   banner.tick(10);
   assert.deepEqual(shown, ["TRACK LIMITS"], "UP TO P5 never reads out 9 s late");
-  now = 0;
-  const fresh = openBanner({ profile: "broadcast", now: () => now });
+  const fresh = openBanner({ profile: "broadcast" });
   fresh.banner.announce("HOLD", 5, "penalty-hit");
   fresh.banner.announce("TYRES AT 50%", 2, "info");
   fresh.shown.length = 0;
-  now = 3000;
-  fresh.banner.tick(10);
+  fresh.banner.tick(6);
   assert.deepEqual(fresh.shown, ["TYRES AT 50%"], "a fresh info card still plays");
+});
+
+// #5068: the age was wall clock (performance.now), and tick() does not run while the
+// race is paused, so a pause over 8 s dropped every queued engineer card for good.
+test("a pause longer than ANN_STALE_MS does not age the queued info cards", () => {
+  let now = 0;
+  const { banner, shown } = openBanner({ profile: "broadcast", now: () => now });
+  banner.announce("HOLD", 5, "penalty-hit");
+  banner.announce("TYRES AT 50%", 2, "info");
+  shown.length = 0;
+  banner.tick(2);
+  now = 60000;   // a minute in the pause menu: no ticks, wall clock moves on
+  banner.tick(4);
+  assert.deepEqual(shown, ["TYRES AT 50%"], "the queued card plays after the pause");
 });
 
 test("a full announce queue sheds comm and coach so a box call can queue", () => {

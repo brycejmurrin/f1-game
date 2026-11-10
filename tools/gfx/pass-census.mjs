@@ -18,7 +18,7 @@
 // Each pass is keyed by its render target (name + size) or "canvas"; `render.drawCalls` and `.triangles`
 // are summed per key per frame and averaged over the measured frames.
 //
-//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--json PATH]
+//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--webgpu] [--json PATH]
 //        [--camera chase|helmet|...] [--park] [--tune knob=value]...
 //
 // Output: one table row per pass key: frames it ran in (of N), mean draw calls and triangles per frame it
@@ -26,13 +26,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--camera MODE] [--park] [--tune knob=value]... [--json PATH]
   --by-object attributes each pass's triangles to object groups (the mesh's userData flags: tlxLgRoad, tlxBatch, ...), for the mirror and main passes.
+  --webgpu runs three's WebGPU backend on Mesa lavapipe (CI Lavapipe shard) instead of the WebGL2 pin.
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
   --park freezes the normal camera at 10% of the track, pins tier/resolution, and preserves the real fog/distance budgets (free cameras disable them).
   --tune applies a numeric lighting knob after staging; repeatable (e.g. --tune fogDensityMul=3.625).
@@ -55,6 +56,9 @@ const MOBILE = argv.includes("--mobile");
 const BY_OBJECT = argv.includes("--by-object");
 const CAMERA = flag("--camera", null);
 const PARK = argv.includes("--park");
+// --webgpu: three's WebGPU backend (Bryce's iPhone path) on Mesa lavapipe. Needs the lvp ICD; SwiftShader cannot run it.
+// Software skips batches (skipBatches: true), so counts are exact for the deterministic scenario but not equal to hardware.
+const WEBGPU = argv.includes("--webgpu");
 const TUNES = {};
 for (let i = 0; i < argv.length; i++) if (argv[i] === "--tune" || argv[i].startsWith("--tune=")) {
   const value = argv[i] === "--tune" ? argv[++i] : argv[i].slice(7);
@@ -66,16 +70,16 @@ const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
 
 /** Page-side init script: force TLX onto three's WebGL2 path and (unless --real-link) stub program links. */
-function initScript({ stub, mobile }) {
+function initScript({ stub, mobile, webgpu }) {
   try {
     if (mobile) localStorage.setItem("apex26.forceMobileTier", "1");
     localStorage.setItem("apex26.gfxBackend", "three");
-    localStorage.setItem("apex26.tlxForceGL", "1");
+    localStorage.setItem("apex26.tlxForceGL", webgpu ? "0" : "1");
     localStorage.setItem("apex26.gfxBootStepMs", "45000");
     sessionStorage.setItem("apex26.wgxCapture", "0");
   } catch (_) { /* blocked storage: the defaults still run TLX */ }
   window.__TEST_MODE = true;
-  if (!stub) return;
+  if (!stub || webgpu) return;
   for (const C of [window.WebGL2RenderingContext, window.WebGLRenderingContext]) {
     if (!C) continue;
     const P = C.prototype;
@@ -96,7 +100,7 @@ function installWrap() {
   if (!r || r.__passCensus) return !!r;
   const rows = [];
   const orig = r.render.bind(r);
-  r.__passCensus = { rows, on: false };
+  r.__passCensus = { rows, on: false, seen: 0 };
   // three's `info.render.drawCalls` / `.triangles` accumulate across the passes of ONE frame and reset when the
   // next frame starts (info.autoReset), so a pass's own count is the delta around its render() call; a value
   // that went DOWN means a reset happened inside the call, and the after-value is then the pass's count.
@@ -118,6 +122,7 @@ function installWrap() {
     };
   }
   r.render = function (scene, camera) {
+    r.__passCensus.seen++;   // every top-level render() call, measured or not: the readiness signal on software WebGPU
     const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
     { const t = r.getRenderTarget && r.getRenderTarget(); curKey = t ? ((t.texture && t.texture.name) || t.name || "rt") + " " + t.width + "x" + t.height : "canvas"; }
     const out = orig(scene, camera);
@@ -134,10 +139,10 @@ function installWrap() {
 
 async function main() {
   const srv = await startStaticServer(ROOT);
-  const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
+  const browser = await launchChromium((WEBGPU ? { args: [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new", "--disable-background-timer-throttling"], env: { ...process.env, ...WEBGPU_LAVAPE_ENV } } : { args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] }));
   try {
     const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
-    await ctx.addInitScript(initScript, { stub: !REAL_LINK, mobile: MOBILE });
+    await ctx.addInitScript(initScript, { stub: !REAL_LINK, mobile: MOBILE, webgpu: WEBGPU });
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e).slice(0, 200)));
@@ -161,6 +166,17 @@ async function main() {
       for (let i = 0; i < 5; i++) await new Promise(r => requestAnimationFrame(r));
     }, { park: PARK, tunes: TUNES });
     await page.evaluate(installWrap);
+    // Software WebGPU compiles pipelines lazily, so frames can lag the rAF count far behind. Measure only once
+    // three itself reports frames advancing, else the window records nothing.
+    if (WEBGPU) {
+      const advanced = await page.waitForFunction(() => {
+        const pc = window.renderer.__passCensus;
+        if (!pc) return false;
+        if (pc.seen0 == null) pc.seen0 = pc.seen;
+        return pc.seen >= pc.seen0 + 5;
+      }, null, { timeout: 180000, polling: 500 }).then(() => true, () => false);
+      if (!advanced) console.error("webgpu: renderer.render() was not called 5 times within 180s of the wrap");
+    }
     const rows = await page.evaluate(async ({ n, by }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       const r = window.renderer, pc = r.__passCensus;
@@ -181,7 +197,7 @@ async function main() {
       callsPerFrame: +(e.calls / rows.frames).toFixed(1), trisPerFrame: Math.round(e.tris / rows.frames),
     })).sort((a, b) => b.trisPerFrame - a.trisPerFrame);
     const total = table.reduce((s, e) => ({ calls: s.calls + e.callsPerFrame, tris: s.tris + e.trisPerFrame }), { calls: 0, tris: 0 });
-    console.log(`pass-census ${track} (${FRAMES} frames, ${REAL_LINK ? "real" : "stubbed"} links)`);
+    console.log(`pass-census ${track} (${FRAMES} frames, ${WEBGPU ? "webgpu" : REAL_LINK ? "real" : "stubbed"} links)`);
     console.log("pass".padEnd(34) + "ran/frame  calls/render  tris/render  calls/frame  tris/frame");
     for (const e of table) {
       console.log(e.pass.padEnd(34) + String(e.perFrameRan).padStart(9) + String(e.callsPerRender).padStart(14) + String(e.trisPerRender).padStart(13) + String(e.callsPerFrame).padStart(13) + String(e.trisPerFrame).padStart(12));
@@ -196,11 +212,16 @@ async function main() {
       if (!byObj.length) console.log("(no renderObject calls seen: this three build does not expose renderer.renderObject)");
     }
     const summary = { track, frames: rows.frames, backend: backend.api, forceWebGL: backend.forceWebGL,
-      stubbedLinks: !REAL_LINK, mobileTier: MOBILE, parked: PARK, tunes: TUNES,
+      stubbedLinks: !REAL_LINK && !WEBGPU, requestedWebgpu: WEBGPU, skipBatches: WEBGPU ? true : undefined, mobileTier: MOBILE, parked: PARK, tunes: TUNES,
       callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
     console.log("= pass-census " + JSON.stringify(summary));
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, byObject: byObj, errors }, null, 2)); }
-    if (!table.length) { console.error("no render() calls recorded"); process.exitCode = 1; }
+    if (WEBGPU && backend.api !== "webgpu") { console.error("--webgpu asked for the WebGPU backend but three fell back to " + backend.api); process.exitCode = 1; }
+    if (!table.length) {
+      const diag = await page.evaluate(() => { const r = window.renderer; return { frame: r && r.info.render.frame, calls: r && r.info.render.calls, seen: r && r.__passCensus ? r.__passCensus.seen : null, state: (() => { try { return window.__apex.info(); } catch (e) { return String(e); } })(), wrapped: !!(r && r.__passCensus), recorded: r && r.__passCensus ? r.__passCensus.rows.length : null, rafHz: null }; }).catch((e) => ({ error: String(e) }));
+      console.error("no render() calls recorded; diag " + JSON.stringify(diag).slice(0, 1500));
+      process.exitCode = 1;
+    }
   } finally {
     await browser.close().catch(() => {});
     await srv.close?.();

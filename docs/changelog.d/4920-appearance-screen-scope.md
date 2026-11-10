@@ -1,0 +1,1 @@
+Fixed: in Settings › Appearance with the PAUSE or HUD preview and scope THIS SCREEN, RESET SCOPE, the FOCUS and BROADCAST presets and APPLY PROFILE now change the pause menu layout, side and dim and the HUD style instead of reporting success and leaving them as they were

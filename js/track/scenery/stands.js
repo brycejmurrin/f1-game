@@ -67,7 +67,15 @@ const SceneryStands = (function () {
         κ = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
       }
       // Hairpin / fold ceiling: never longer than the curvature-scaled arc.
-      const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 + κ * lat));
+      // This κ is the x-z cross product, NEGATIVE on a left turn (the opposite of
+      // the track's +k = LEFT), and lat is +right, so the outside of a bend is
+      // κ·lat < 0 (#4967, measured: every row whose neighbour chord exceeds
+      // `spacing` has κ·lat < 0). `1 + κ·lat` shortened outside rows instead,
+      // more for every tier further back. κ is measured on the ANCHOR curve
+      // (offset xAnchor), whose arc is already longer; back it out to the
+      // centreline's before scaling `spacing` (a centreline step) to `lat`.
+      const κ0 = κ / Math.max(0.05, 1 + κ * xAnchor);
+      const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 - κ0 * lat));
       const c = Math.min(cMin, curveCap);
       if (!(c > 1.0)) return { seg: 0, b: [a.r, a.u, a.t] };
       // The (1 − factor) pad is capped at 4 cm: a full 2 % of a ~4 m chord left
@@ -370,7 +378,8 @@ const SceneryStands = (function () {
         for (let t = 0; t < tiers; t++) {
           const a = anchor(k, side, gap + t * tierDepth);
           const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + t * tierDepth));
-          const row = curveTier(a, kn, 0, tierDepth * 0.465, 0.98, spacing, side, gap, k);
+          // #4967: the curve cap is measured at THIS tier's lateral, not the base gap.
+          const row = curveTier(a, kn, 0, tierDepth * 0.465, 0.98, spacing, side, gap + t * tierDepth, k);
           if (row.seg <= 0) continue;
           const b = row.b;
           seg = row.seg;
@@ -388,7 +397,7 @@ const SceneryStands = (function () {
         if (opts.roof && seg > 0) {
           const aR = anchor(k, side, gap + (tiers - 0.5) * tierDepth);
           const knR = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + (tiers - 0.5) * tierDepth));
-          const roof = curveTier(aR, knR, 0, tierDepth * 0.65, 0.98, spacing, side, gap, k);
+          const roof = curveTier(aR, knR, 0, tierDepth * 0.65, 0.98, spacing, side, gap + (tiers - 0.5) * tierDepth, k);
           const bR = roof.b, rSeg = roof.seg || seg;
           const ry = base + (tiers - 1) * rise + 2.6;
           if (!rejBox(vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1], bR)) {

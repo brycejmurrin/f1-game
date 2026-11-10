@@ -1476,7 +1476,8 @@
         "tests/unit/cockpit-wheel-finish.test.mjs"
       ],
       "*": [
-        "tests/unit/cockpit-preview.test.mjs"
+        "tests/unit/cockpit-preview.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/camera/cockpit-opts.js": {
@@ -1723,7 +1724,8 @@
       "tick": [
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
       ],
       "tickRace": [
         "tests/unit/camera-feel.test.mjs",
@@ -5157,6 +5159,7 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/gfx-debug-overlay.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -10733,6 +10736,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
+        "tests/unit/scale-defaults.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "*": [
@@ -16569,6 +16573,7 @@
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-tabs.test.mjs",
         "tests/unit/stage-minify.test.mjs"
       ]
     },
@@ -17026,7 +17031,8 @@
         "tests/unit/marshal-post-grounding.test.mjs",
         "tests/unit/rendergeom-graph.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
-        "tests/unit/scenery-kits.test.mjs"
+        "tests/unit/scenery-kits.test.mjs",
+        "tests/unit/stand-tier-curve-cap.test.mjs"
       ]
     },
     "js/track/scenery/structures.js": {
@@ -17140,6 +17146,9 @@
       ],
       "setFocus": [
         "tests/unit/a11y-opts.test.mjs"
+      ],
+      "*": [
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/appearance-opts.js": {
@@ -17356,7 +17365,8 @@
     },
     "js/ui/debris-opts.js": {
       "*": [
-        "tests/unit/debris-opts.test.mjs"
+        "tests/unit/debris-opts.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/deep-link.js": {
@@ -17445,6 +17455,7 @@
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/settings-tabs.test.mjs",
         "tests/unit/store-key-types.test.mjs"
       ]
     },
@@ -18497,7 +18508,8 @@
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "*": [
-        "tests/unit/light-store-perchunk-pin.test.mjs"
+        "tests/unit/light-store-perchunk-pin.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/quali-sheet.js": {
@@ -18910,6 +18922,12 @@
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "flushLazy": [
+        "tests/unit/settings-tabs.test.mjs"
+      ],
+      "lazy": [
+        "tests/unit/settings-tabs.test.mjs"
+      ],
       "mark": [
         "tests/unit/settings-open-perf.test.mjs"
       ],
@@ -19219,13 +19237,17 @@
         "tests/unit/service-worker.test.mjs"
       ],
       "onVisible": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/followup-update-check.test.mjs"
       ],
       "prepareLazyLoad": [
         "tests/unit/a11y-pwa-pass.test.mjs"
       ],
       "render": [
         "tests/unit/a11y-pwa-pass.test.mjs"
+      ],
+      "*": [
+        "tests/unit/global-registry.test.mjs"
       ]
     },
     "js/ui/watch-transport.js": {
@@ -19410,7 +19432,8 @@
       ],
       "*": [
         "tests/unit/load-order.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/xr/xr-plan.js": {
