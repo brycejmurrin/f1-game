@@ -1,5 +1,7 @@
 # Occlusion probe — proving what is actually in front of what
 
+Summary: Proving which mesh hides which, mechanically: patch `GLX.createMesh`/`begin`/`draw`, rasterise into a JS depth buffer, attribute every lost pixel to a `part()` name.
+
 A screenshot tells you something looks wrong. It does not tell you which mesh
 did it, and on a first-person camera the obvious suspect is usually innocent.
 This doc is the instrument that answers the question mechanically: **rasterise

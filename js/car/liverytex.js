@@ -1319,31 +1319,15 @@ const LiveryTex = (function () {
     return t <= 0 ? 0 : (SUN.r / FLANK.zLen) * Math.sqrt(t);
   }
   // How much of the flank the bull claims. Its HEIGHT is chosen and its LENGTH
-  // derived from the traced path's own aspect through the flank's anisotropy —
-  // 1.24 m over 304 px along the car against 0.47 m over 160 px down it, so a
-  // length picked in metres and a height picked in pixels gave a bull 113 % of
-  // the region tall, clipped to a white blob. Published because the SIDE
-  // designs have to clear it.
-  // It hangs from `top`, not from the crease, and the two numbers answer to
-  // opposite ends of the band. Hung at 0.04 it filled to 0.84 and buried the
-  // crease strip — the one a cover design can always use, where the real RB22
-  // carries its sponsor names — under a metre of bull, which pushed every side
-  // design aft of the whole animal and so behind the rear wheel. Standing it on
-  // the sidepod line instead (top 0.26, h 0.74) freed that strip and cost the
-  // ANIMAL: the flank's bottom corner is not on camera. From the garage side
-  // view the sidepod eats the band below v ~0.81 forward of u 0.2, so a bull
-  // reaching v 0.99 lost 19 % of its ink and 36 % of its HEAD, which is the low
-  // forward part of a charging silhouette — the head went and the rump stayed.
-  // Both ends are now inside what the camera keeps: shorter (h), hung just
-  // below the lettering strip (top), and its lowest hoof — at 0.96 of the bbox
-  // — lands at v 0.81. Measured, not eyeballed: the `(crown)` row of
-  // tools/car/spine-station.mjs --occlude reports 2 % of the ink hidden.
-  // …and then the RB22 look asked for more: a bigger bull whose TOP stands on
-  // the ridge, so each flank's bull runs up over the shoulder and the pair
-  // meet on the spine (flankBull paints the crown half). The top is the
-  // ridge itself (s 0), the bottom v 0.60 of the flank, which keeps the
-  // derived length (0.88 m at the path's 0.557 aspect) ending at z -1.60 —
-  // where the rear tyre starts to stand over the flank from a side camera.
+  // derived from the traced path's aspect through the flank's anisotropy (1.24 m
+  // over 304 px along vs 0.47 m over 160 px down — mixing units once gave a bull
+  // 113 % of the region tall). Published because the SIDE designs must clear it.
+  // The TOP stands on the ridge (s 0), so each flank's bull runs over the
+  // shoulder and the pair meet on the spine (flankBull paints the crown half);
+  // the bottom is v 0.60 of the flank, which ends the derived length (0.88 m at
+  // the path's 0.557 aspect) at z -1.60, where the rear tyre starts to cover the
+  // flank from a side camera. Lower placements lost the head under the sidepod
+  // (below v ~0.81 forward of u 0.2) — check with tools/car/spine-station.mjs --occlude.
   const BULL = { h: (0.49) / FLANK.sLen, u0: 0.05, top: -FLANK.sTop / FLANK.sLen };
   // A team with NO traced bull wears its lockup as a square badge in the
   // bull's slot (v 0.30 .. 0.82): a badge cannot cross the shoulder.

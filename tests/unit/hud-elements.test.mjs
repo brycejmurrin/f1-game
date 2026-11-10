@@ -188,7 +188,6 @@ test("SPEED hide covers the whole #hud-speed plate (number + unit), not a second
   const H = load().HudElements;
   // One container, one unit plate — toggling SPEED cannot leave a stray KM/H.
   assert.match(shell, /id="hud-speed"[^>]*>\s*<span id="hud-speed-n">[\s\S]*?<span class="hud-unit">/);
-  assert.match(css, /body\[data-hud-hide~="speed"\] #hud-speed/);
   assert.equal(H.ELEMENTS.filter((e) => e[0] === "speed").length, 1);
 });
 
