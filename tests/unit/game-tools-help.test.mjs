@@ -43,6 +43,8 @@ const CASES = [
   ["tools/shot/shot.mjs", /shot\.mjs/],
   ["tools/car/livery-contrast.mjs", /livery-contrast/],
   ["tools/net/rtc-e2e.mjs", /rtc-e2e/],
+  // W25 row 13 (2026-11): the three-peer sibling had no --help at all and ran the whole handshake.
+  ["tools/net/rtc-e2e-3p.mjs", /rtc-e2e-3p/],
   ["tools/track/graph-parity.cjs", /graph-parity/],
   ["tools/gfx/glx-call-census.mjs", /glx-call-census/],
   ["tools/gen/gen-shell.mjs", /gen-shell/],

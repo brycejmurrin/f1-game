@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC } from "../../tools/ci/wait-for.mjs";
+import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC, DEFAULT_TIMEOUT_MIN } from "../../tools/ci/wait-for.mjs";
 import { readStatus, waitStatus, stamp } from "../../tools/lib/deploy-status.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "wf-"));
@@ -15,7 +15,29 @@ test("parseArgs: conditions, both flag spellings, defaults", () => {
   const a = parseArgs(["--load-below", "2.8", "--file-nonempty=x.log", "--pid-gone", "42", "--timeout=5"]);
   assert.deepEqual(a.conds, [{ kind: "load", max: 2.8 }, { kind: "file", path: "x.log" }, { kind: "pid", pid: 42 }]);
   assert.equal(a.timeoutMin, 5);
-  assert.equal(parseArgs(["--pid-gone", "1"]).timeoutMin, 30);
+  assert.equal(parseArgs(["--pid-gone", "1"]).timeoutMin, DEFAULT_TIMEOUT_MIN);
+});
+
+test("the default --timeout is foreground-safe: a bare call is not refused (W25 row 13)", () => {
+  // It defaulted to 30 min (1800 s) against its own 590 s foreground cap, so
+  // `wait-for.mjs --pid-gone 1` exited 2 without waiting.
+  const a = parseArgs(["--pid-gone", "1"]);
+  assert.ok(a.timeoutMin * 60 <= FOREGROUND_CAP_SEC, `default ${a.timeoutMin} min exceeds the cap`);
+  assert.equal(capForeground(a.timeoutMin, false).error, undefined);
+  const r = spawnSync(process.execPath, ["tools/ci/wait-for.mjs", "--file-nonempty", "package.json"], { encoding: "utf8", env: { ...process.env, APEX_WAIT_BACKGROUND: "" } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /= wait held/);
+});
+
+test("every example in wait-for.mjs's header parses and passes the foreground cap", () => {
+  const src = fs.readFileSync("tools/ci/wait-for.mjs", "utf8");
+  const ex = [...src.matchAll(/^\/\/ +node tools\/ci\/wait-for\.mjs (.+?)(?:\s+#.*)?$/gm)].map((m) => m[1]);
+  assert.ok(ex.length >= 4, `found ${ex.length} examples`);
+  for (const line of ex) {
+    const argv = [...line.matchAll(/'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2]).map((t) => (t === "<sha>" ? "0da70c389" : t));
+    const a = parseArgs(argv);
+    assert.equal(capForeground(a.timeoutMin, a.background).error, undefined, `header example refused: ${line}`);
+  }
 });
 
 test("parseArgs: unknown flag, no condition, bad numbers are usage errors", () => {

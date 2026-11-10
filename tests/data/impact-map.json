@@ -154,8 +154,12 @@
       ]
     },
     "js/agent/apex-cam.js": {
+      "clearShot": [
+        "tests/unit/hooks-documented.test.mjs"
+      ],
       "hooks": [
-        "tests/unit/apex-cam-fallback.test.mjs"
+        "tests/unit/apex-cam-fallback.test.mjs",
+        "tests/unit/hooks-documented.test.mjs"
       ],
       "*": [
         "tests/unit/camera-defaults.test.mjs",
@@ -214,6 +218,7 @@
         "tests/unit/flying-start.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/hooks-documented.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",

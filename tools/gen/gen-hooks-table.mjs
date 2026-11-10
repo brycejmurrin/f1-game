@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * gen-hooks-table.mjs — the `__apex` hook index block in docs/DEBUG-HOOKS.md.
- * @doc Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`.
+ * @doc Regenerates the `__apex` hook index in `docs/DEBUG-HOOKS.md` from the live `__apex` keys (VM boot) + source; `--check`.
  * @skill agent-view
  *
  * docs/DEBUG-HOOKS.md calls itself the full reference and is 150 KB of hand
@@ -9,11 +9,17 @@
  * without reading the whole file. This generator owns ONE block —
  * `<!-- GENERATED: hooks-table -->` … `<!-- /GENERATED -->` — and lists:
  *
- *   1. every top-level key of `const api = {…}` in js/agent/apex.js (methods,
- *      `async` methods, arrow/function values, and namespaces such as tiltSim),
- *      with its signature AS WRITTEN IN SOURCE (parameter names, defaults,
- *      rest) and a one-line summary taken from the comment immediately above
- *      the hook when there is one;
+ *   1. every key of the LIVE `__apex` object — `Object.keys(__apex)` after a
+ *      headless boot (tools/lib/game-vm.cjs createGame) — so the SET of hooks
+ *      is what the game really exposes, peeled clusters (ApexCam, ApexNet, …)
+ *      included. Each row's signature AS WRITTEN IN SOURCE (parameter names,
+ *      defaults, rest) and its one-line summary (the comment immediately above
+ *      the hook) come from `const api = {…}` in js/agent/apex.js or the object
+ *      a peeled file's `hooks()` returns. A source-parsed name that is not live
+ *      is a parser bug and throws (2026-11: the first `return {` inside ApexCam
+ *      `hooks()` was a nested helper's, so the index listed `T` and `tries` and
+ *      dropped 18 camera hooks while `--check` passed); a live name with no
+ *      source entry still gets a row;
  *   2. the agent-view surface as `agentHelp()` in js/agent/agentview.js
  *      describes it (perceive / detail / know / act), evaluated from source.
  *
@@ -27,7 +33,8 @@
  *   node tools/gen/gen-hooks-table.mjs --check    # exit 1 when committed ≠ generated
  */
 import { createRequire } from "node:module";
-import { emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
+import { argGate, emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
+import { ensureBuilt } from "./ensure-built.mjs";
 
 const require = createRequire(import.meta.url);
 const espree = require("espree");
@@ -122,7 +129,9 @@ function peeledHooks(spread) {
   const src = readRepo(file);
   const ast = parse(src);
   const fn = find(ast, (n) => n.type === "FunctionDeclaration" && n.id && n.id.name === "hooks");
-  const ret = fn && find(fn.body, (n) => n.type === "ReturnStatement" && n.argument && n.argument.type === "ObjectExpression");
+  // A DIRECT statement of hooks()'s body, never a deep search: a helper declared
+  // inside hooks() (ApexCam's clearShot returns `{ T, tries }`) comes first.
+  const ret = fn && fn.body.body.find((n) => n.type === "ReturnStatement" && n.argument && n.argument.type === "ObjectExpression");
   if (!ret) throw new Error(`${file}: could not find the object returned by hooks()`);
   return ret.argument.properties.map((p) => {
     if (p.type !== "Property") throw new Error(`${file}:${p.loc.start.line}: unexpected ${p.type} in the hook object`);
@@ -130,7 +139,21 @@ function peeledHooks(spread) {
   });
 }
 
-export function collectHooks() {
+/**
+ * The live hook names: `Object.keys(__apex)` after a headless boot of the game
+ * (tools/lib/game-vm.cjs; ~1 s with car meshes stubbed). Builds the gitignored
+ * BUILT_PATHS first (js/track/circuit-meta.js), which the boot reads.
+ * @returns {Promise<string[]>}
+ */
+export async function liveHookNames() {
+  ensureBuilt();
+  const { createGame } = require("../lib/game-vm.cjs");
+  const g = await createGame({ carMeshes: false });
+  try { return Object.keys(g.apex); } finally { g.close(); }
+}
+
+/** Hooks as parsed from source, in `api` order with peeled clusters inlined. */
+export function sourceHooks() {
   const src = readRepo(APEX);
   const ast = parse(src);
   const decl = find(ast, (n) => n.type === "VariableDeclarator" && n.id.type === "Identifier" && n.id.name === "api"
@@ -147,6 +170,22 @@ export function collectHooks() {
     hooks.push({ name: keyName(p), line: p.loc.start.line, ...s, summary });
   }
   return hooks;
+}
+
+/**
+ * Reconcile the live key list with the source parse: one row per LIVE name, in
+ * live order. Throws when the parse found a name the game does not expose.
+ * @param {string[]} live Object.keys(__apex)
+ */
+export function collectHooks(live) {
+  if (!Array.isArray(live) || !live.length) throw new Error("collectHooks(live): need the live __apex key list");
+  const parsed = sourceHooks();
+  const liveSet = new Set(live);
+  const bogus = parsed.filter((h) => !liveSet.has(h.name)).map((h) => `${h.file || APEX}:${h.line} ${h.name}`);
+  if (bogus.length) throw new Error(`source parse found names that are not live __apex hooks (parser bug?): ${bogus.join(", ")}`);
+  const byName = new Map(parsed.map((h) => [h.name, h]));
+  return live.map((name) => byName.get(name)
+    || { name, sig: name, kind: "live", summary: "live key set outside `api` (e.g. `js/game.js` bindAgent after `ApexApi.create`)" });
 }
 
 /** Fold a string-concatenation expression into its text. */
@@ -177,14 +216,14 @@ export function collectAgentSurface() {
   return groups;
 }
 
-export function renderBlock() {
-  const hooks = collectHooks();
+export function renderBlock(live) {
+  const hooks = collectHooks(live);
   const agent = collectAgentSurface();
   const nAsync = hooks.filter((h) => h.kind === "async").length;
   const out = [
     "## Hook index",
     "",
-    `_Generated by \`node tools/gen/gen-hooks-table.mjs\` from \`const api = {…}\` in \`js/agent/apex.js\` (${hooks.length} hooks, ${nAsync} async) and \`agentHelp()\` in \`js/agent/agentview.js\`. Signatures are as written in source; the summary is the comment directly above each hook. The sections below this index are the hand-written reference and are required for every hook (\`tests/unit/hooks-documented.test.mjs\`); \`--check\` guards this block (\`tests/unit/generated-docs.test.mjs\`)._`,
+    `_Generated by \`node tools/gen/gen-hooks-table.mjs\` from the live \`Object.keys(__apex)\` of a headless boot (${hooks.length} hooks, ${nAsync} async), with signatures from \`const api = {…}\` in \`js/agent/apex.js\` and the peeled \`hooks()\` files (\`js/agent/apex-cam.js\`, \`apex-net.js\`, \`apex-track.js\`, \`apex-lobby.js\`), and \`agentHelp()\` in \`js/agent/agentview.js\`. Signatures are as written in source; the summary is the comment directly above each hook. The sections below this index are the hand-written reference and are required for every hook (\`tests/unit/hooks-documented.test.mjs\`); \`--check\` guards this block (\`tests/unit/generated-docs.test.mjs\`)._`,
     "",
     "| Hook | Summary |",
     "|---|---|",
@@ -201,13 +240,15 @@ export function renderBlock() {
   return out.join("\n");
 }
 
-export function render(existing) {
-  return replaceBlock(existing, "hooks-table", renderBlock());
+export function render(existing, live) {
+  return replaceBlock(existing, "hooks-table", renderBlock(live));
 }
 
 if (isMain(import.meta.url)) {
   try {
-    process.exitCode = emit(TARGET, render(readRepo(TARGET)));
+    const gated = argGate(process.argv.slice(2));   // --help / a bad flag answer before the boot
+    if (gated !== null) process.exitCode = gated;
+    else process.exitCode = emit(TARGET, render(readRepo(TARGET), await liveHookNames()));
   } catch (e) {
     process.stderr.write(String(e.message || e) + "\n");
     process.exitCode = 2;
