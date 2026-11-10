@@ -5,7 +5,7 @@
    `store.raw(key)`, so without this file the shipped default is a literal
    argument spread across js/game.js, js/audio/panel.js,
    js/input/steer-tuning.js, js/race/driving-coach.js, js/race/race-control.js,
-   js/ui/debris-opts.js and js/perf/metrics-overlay.js. "Make my settings the
+   js/ui/post-fx-opts.js and js/perf/metrics-overlay.js. "Make my settings the
    defaults" is then a hunt through those files for one literal each, with
    nothing checking that js/ui/settings-export.js's SPEC still agrees — and SPEC's
    agreement is what makes the CHANGED list in an exported settings file true.

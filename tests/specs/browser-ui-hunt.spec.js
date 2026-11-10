@@ -125,6 +125,10 @@ async function dataReady(page) {
       cursor: "2026-09-13T06:10:00Z",
     });
     F1API.liveIntervals = () => Promise.resolve({ values: {}, cursor: "2026-09-13T06:10:00Z" });
+    // A finished session (this meta has no dateEnd, so it is COMPLETED) seeds its
+    // first Live build from the whole-session snapshots (live.js liveFeedRequests).
+    F1API.sessionPositions = F1API.livePositions;
+    F1API.sessionIntervals = F1API.liveIntervals;
     F1API.fastestLap = () => Promise.resolve(null);
     DataHub.init(document.getElementById("datahub"));
     DataHub.open();

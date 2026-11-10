@@ -1611,6 +1611,7 @@
         "tests/unit/road-under-floor.test.mjs",
         "tests/unit/scenery-ground-audit.test.mjs",
         "tests/unit/scenery-grounding.test.mjs",
+        "tests/unit/scenery-seats.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
@@ -2224,11 +2225,6 @@
     {
       "path": "js/camera/director.js",
       "global": "Director",
-      "roster": "tag"
-    },
-    {
-      "path": "js/camera/drive-lens.js",
-      "global": "DriveLens",
       "roster": "tag"
     },
     {
@@ -4237,11 +4233,6 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/wx-hash.js",
-      "global": "WxHash",
-      "roster": "tag"
-    },
-    {
       "path": "js/render/gfx.js",
       "global": "Gfx",
       "roster": "tag"
@@ -4704,11 +4695,6 @@
     {
       "path": "js/ui/cvd-palette.js",
       "global": "CvdPalette",
-      "roster": "tag"
-    },
-    {
-      "path": "js/ui/debris-opts.js",
-      "global": "DebrisOpts",
       "roster": "tag"
     },
     {

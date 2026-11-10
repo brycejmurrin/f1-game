@@ -747,6 +747,7 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "*": [
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -1643,11 +1644,6 @@
         "tests/unit/director.test.mjs"
       ]
     },
-    "js/camera/drive-lens.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
     "js/camera/extra-rigs.js": {
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
@@ -1668,6 +1664,10 @@
       ]
     },
     "js/camera/feel.js": {
+      "apply": [
+        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/director.test.mjs"
+      ],
       "applyFreeLook": [
         "tests/unit/camera-feel.test.mjs"
       ],
@@ -1699,6 +1699,9 @@
       ],
       "modeFov": [
         "tests/unit/camera-feel.test.mjs"
+      ],
+      "read": [
+        "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
         "tests/unit/camera-feel.test.mjs"
@@ -4992,6 +4995,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -10871,6 +10875,7 @@
     },
     "js/perf/loop-health.js": {
       "reload": [
+        "tests/unit/err-overlay-fatal.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
@@ -12416,6 +12421,7 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "*": [
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/wheel-state.test.mjs"
@@ -14387,13 +14393,6 @@
         "tests/unit/ratchets.test.mjs"
       ]
     },
-    "js/race/wx-hash.js": {
-      "*": [
-        "tests/unit/forecast.test.mjs",
-        "tests/unit/rain-cells.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
-      ]
-    },
     "js/render/gfx.js": {
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14864,6 +14863,7 @@
       ],
       "*": [
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -16611,6 +16611,7 @@
     "js/roster.js": {
       "*": [
         "tests/unit/agent-scope-hooks.test.mjs",
+        "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
@@ -17282,6 +17283,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -17516,12 +17518,6 @@
       ],
       "simulateLinear": [
         "tests/unit/cvd-palette.test.mjs"
-      ]
-    },
-    "js/ui/debris-opts.js": {
-      "*": [
-        "tests/unit/debris-opts.test.mjs",
-        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/deep-link.js": {
@@ -18673,6 +18669,7 @@
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",

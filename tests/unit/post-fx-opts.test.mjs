@@ -48,9 +48,9 @@ function load(stored = {}) {
   return { M: vm.runInContext("PostFxOpts", ctx), rows, stored };
 }
 
-test("it claims pm-ssao and pm-godrays, and the shell declares both rows with their selects", () => {
+test("it claims pm-debris, pm-ssao and pm-godrays (DEBRIS is PostFxOpts.debris), and the shell declares both rows with their selects", () => {
   const { rows } = load();
-  assert.deepEqual([...rows.keys()], ["pm-ssao", "pm-godrays"]);
+  assert.deepEqual([...rows.keys()], ["pm-debris", "pm-ssao", "pm-godrays"]);
   for (const [id, label] of [["pm-ssao", "AMBIENT OCCLUSION"], ["pm-godrays", "GOD-RAYS"]]) {
     assert.ok(SHELL.includes(`id="${id}"`), id + " must exist in index.html");
     assert.ok(SHELL.includes(`id="${id}-sel"`), id + "-sel must exist — SettingRow needs the select");
