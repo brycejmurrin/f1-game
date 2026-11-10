@@ -4,7 +4,11 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "qatar",
-    pit: { side: -1 },   // the pit complex (TrackPit): this circuit's own garages stand on the left of the main straight
+    // The pit complex (TrackPit) on the driver's RIGHT of the main straight: the
+    // FIA 2025 Qatar GP pit-lane drawing (doc 4, 27 Nov 2025, p.3) branches the
+    // lane off the inside of T16 with the F1 garages beyond it — the infield of
+    // this clockwise lap. It was -1 (left), the grandstand side.
+    pit: { side: 1 },
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.3 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -49,11 +53,17 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors/turns as RACING-LAP fractions (post startFrac/reverse), never
+    // fmap'd — tools/track/rotate-markings.cjs re-seats turns when the start
+    // line moves. turns: one apex (built-centreline curvature peak) per corner
+    // of the FIA event-map numbering, turns[0] = T1. Source: FIA 2025 Qatar GP
+    // Race Director doc 4 "Event Notes - Circuit Map. Pit Lane Drawing, ..."
+    // (27 Nov 2025, 16 corners); the 2026 document is not out yet. T1 R, T2 L,
+    // T3 R, T4 R, T5 R, T6 L, T7 R, T8 L, T9 R, T10 L, T11 L, T12 R, T13 R,
+    // T14 R, T15 L, T16 R. sectors are NOT re-derived from that map (FIA: S1
+    // 80 m before T6, S2 75 m before T12).
     sectors: [0.3, 0.65],
-    turns: [0.1013, 0.1158, 0.1588, 0.2778, 0.3103, 0.3168, 0.3663, 0.3738, 0.4333, 0.5068, 0.5443, 0.6983, 0.7368, 0.7963, 0.8778, 0.8888],
+    turns: [0.1157, 0.1588, 0.2077, 0.2782, 0.3168, 0.3665, 0.4332, 0.4659, 0.5067, 0.5445, 0.6046, 0.6610, 0.6981, 0.7374, 0.7967, 0.8887],
     furniture: { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [0.90, 0.95, 1.0], sparse: true },
     kit: { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "airfence", board: "monopole", gantry: "portal",     camera: "monopole",  hoarding: "led" },
     standSet: ["sandstone", "steel", "concrete"],

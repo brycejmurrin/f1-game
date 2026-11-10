@@ -1,5 +1,8 @@
 /* Apex 26 — ZOLDER circuit definition (data only). Retired circuit (`classic: true`).
    Belgian GP 1973-1984. Pine heath in Limburg; Gilles Villeneuve was killed here in qualifying in 1982.
+   LAYOUT: this trace is the MODERN (2002-present, ~4.01 km) circuit with its
+   chicanes, not the ~4.26 km layout the Belgian GP used 1975-1984, which no
+   longer exists on the ground (docs/tracks/zolder.md, geometry caveat).
 
    Centreline: OpenStreetMap (ODbL-1.0), stitched by tools/track/stitch-osm-ring.mjs
    and projected by tools/track/import-circuit-path.mjs. The bacinger/f1-circuits
@@ -30,7 +33,12 @@
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
-    startFrac: 0.1226,
+    // 2026-11-10: the line moved from 0.1226 (BEFORE the final chicane) to the
+    // pit straight AFTER it — the real start/finish. Node 23 of 106: 244 m past
+    // the chicane, 324 m to the first corner, grid max |k| 0.00029.
+    // The new resample phase exposed a 6.4 m node radius in the final chicane
+    // (centreline-kinks, #2209): path.pts[15] moved 1 m (z 74.8 -> 75.8) clears it.
+    startFrac: 0.2170,
     sceneryStartFrac: 0.0000,
     name: "ZOLDER",
     gp: "Belgian GP",
@@ -61,18 +69,20 @@
     },
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the 10 strongest curvature peaks of THIS centreline in lap order,
+    // turns: the 10 strongest curvature peaks of THIS centreline in lap order
+    // (re-seated onto the same physical apexes when the line moved 2026-11-10; not
+    // yet one-per-real-corner),
     // 10 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
     sectors: [0.36, 0.613],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0240, 0.0376, 0.1911, 0.2771, 0.4105, 0.5591, 0.7066, 0.7230, 0.7675, 0.8790],
+    turns: [0.0873, 0.1725, 0.3059, 0.4544, 0.6018, 0.6189, 0.6630, 0.7743, 0.9198, 0.9328],
     furniture: { tree: "fir", fol: [0.15, 0.31, 0.19], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["concrete", "steel", "darkSteel"],
-    path: { len: 4004, pts: [[-433.1,493.4],[-554,446.2],[-561.5,440],[-565.8,432.8],[-567.1,428],[-567,422.1],[-565.5,418.2],[-559.6,410.2],[-515.3,380.8],[-502.6,370.1],[-494.9,361],[-473.8,330.9],[-463.8,321.1],[-121.4,89],[-117,82.2],[-115,74.8],[-113.3,65.3],[-127.7,44.1],[-132.2,35.6],[-131.7,29.9],[-129.2,23.9],[-125.6,16.7],[-118,7.4],[72.7,-114.4],[330.8,-282.9],[344.8,-295],[358,-308.9],[366.7,-320.2],[370,-334],[367.9,-352.8],[360,-374.8],[355.6,-383.6],[341.1,-405],[313.7,-441.8],[244,-539.8],[237.8,-553.2],[230,-578.2],[228.7,-590.7],[230,-604.8],[233.5,-615.6],[243.2,-628.2],[248.5,-632.7],[271.1,-644.5],[289.1,-649.7],[341.5,-658.8],[367.4,-660.6],[385.5,-658.9],[395.3,-656.6],[414.6,-649.1],[432.1,-639.3],[446.2,-628.2],[460.6,-613.5],[474.8,-593.9],[558.6,-439.5],[563.9,-424.5],[566.8,-408.1],[567.1,-399.2],[566.5,-391.3],[563.1,-376.9],[557.9,-364.2],[549.3,-350.7],[540.2,-340.8],[526.9,-330.4],[181.2,-93.1],[75.3,-24.3],[68,-18.2],[63.7,-10.9],[64.4,-7.2],[71.8,9.3],[71.1,16.5],[5.5,121],[-54,234.5],[-61.3,251.1],[-66.3,263.6],[-73.8,293.7],[-76.2,337.7],[-74.2,353.7],[-70.9,369.2],[-62.3,398.8],[-43.9,454.2],[-29.9,488.5],[-29.3,492.9],[-30.2,501.3],[-34.1,505.1],[-48.3,513.9],[-52.7,519],[-54.2,524.9],[-52.8,533.3],[-42.3,553.4],[-38,566.4],[-38,578.2],[-39.4,584.1],[-44,594.3],[-48.2,598.9],[-119.8,651.8],[-128.5,655.7],[-149.7,660.2],[-159.9,660.6],[-178.1,658],[-191,653.7],[-200.5,648.9],[-215.1,637.5],[-303.4,560.1],[-325.3,543.2],[-345,530.9],[-363.2,521.9]] },
+    path: { len: 4004, pts: [[-433.1,493.4],[-554,446.2],[-561.5,440],[-565.8,432.8],[-567.1,428],[-567,422.1],[-565.5,418.2],[-559.6,410.2],[-515.3,380.8],[-502.6,370.1],[-494.9,361],[-473.8,330.9],[-463.8,321.1],[-121.4,89],[-117,82.2],[-115,75.8],[-113.3,65.3],[-127.7,44.1],[-132.2,35.6],[-131.7,29.9],[-129.2,23.9],[-125.6,16.7],[-118,7.4],[72.7,-114.4],[330.8,-282.9],[344.8,-295],[358,-308.9],[366.7,-320.2],[370,-334],[367.9,-352.8],[360,-374.8],[355.6,-383.6],[341.1,-405],[313.7,-441.8],[244,-539.8],[237.8,-553.2],[230,-578.2],[228.7,-590.7],[230,-604.8],[233.5,-615.6],[243.2,-628.2],[248.5,-632.7],[271.1,-644.5],[289.1,-649.7],[341.5,-658.8],[367.4,-660.6],[385.5,-658.9],[395.3,-656.6],[414.6,-649.1],[432.1,-639.3],[446.2,-628.2],[460.6,-613.5],[474.8,-593.9],[558.6,-439.5],[563.9,-424.5],[566.8,-408.1],[567.1,-399.2],[566.5,-391.3],[563.1,-376.9],[557.9,-364.2],[549.3,-350.7],[540.2,-340.8],[526.9,-330.4],[181.2,-93.1],[75.3,-24.3],[68,-18.2],[63.7,-10.9],[64.4,-7.2],[71.8,9.3],[71.1,16.5],[5.5,121],[-54,234.5],[-61.3,251.1],[-66.3,263.6],[-73.8,293.7],[-76.2,337.7],[-74.2,353.7],[-70.9,369.2],[-62.3,398.8],[-43.9,454.2],[-29.9,488.5],[-29.3,492.9],[-30.2,501.3],[-34.1,505.1],[-48.3,513.9],[-52.7,519],[-54.2,524.9],[-52.8,533.3],[-42.3,553.4],[-38,566.4],[-38,578.2],[-39.4,584.1],[-44,594.3],[-48.2,598.9],[-119.8,651.8],[-128.5,655.7],[-149.7,660.2],[-159.9,660.6],[-178.1,658],[-191,653.7],[-200.5,648.9],[-215.1,637.5],[-303.4,560.1],[-325.3,543.2],[-345,530.9],[-363.2,521.9]] },
   }
   );
 })();

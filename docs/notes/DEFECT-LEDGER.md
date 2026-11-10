@@ -3922,6 +3922,11 @@ moved. Any later frame fix on monza re-blesses the same way.
   behind the garages on +1; suzuka's pits are on -1 (grandstand guides), so its
   main stand moved to +1 and race control/hospitality behind the -1 garages —
   which also un-reds suzuka-foundation.spec (its crown was superseded).
+  **SUZUKA REOPENED AND RE-FIXED 2026-11-10 (W12):** the -1 call was wrong. The
+  FIA 2026 Japanese GP event document (circuit map v8 + pit-lane drawing,
+  fia.com 2026_japanese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf)
+  puts the pit lane and garages on the driver's RIGHT (+1, the Esses side);
+  `pit.side` is now 1 and the scenery mirrored (`PIT = 1, STAND = -PIT`).
 - Baselines: clip lowered on 24 circuits, coplanar on 3; nothing went up.
 - OPEN, next campaign (plan workstream B): props flush on terrain, the coplanar
   FIGHT_MAX 150 -> 300 m window (~520 spots), the road ribbon folding on corner

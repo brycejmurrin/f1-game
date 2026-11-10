@@ -205,7 +205,13 @@ const Ghost = (function () {
     trackId = id; context = eventContext;
     storageId = context == null ? id : "v2:" + id + ":" + context;
     const g = loadStore()[storageId];
-    const good = valid(g);
+    // A lap recorded before the circuit's start line moved replays from the old
+    // line (s is arc from the line): drop it rather than race a misplaced ghost.
+    if (g && lineStale(id, g)) {
+      Log.info("car", `ghost ${storageId} predates a start-line move; dropped`);
+      clear(storageId);
+    }
+    const good = valid(g) && !lineStale(id, g);
     if (good) touch(g);
     queueRepair();
     best = good ? g : null;
@@ -214,6 +220,9 @@ const Ghost = (function () {
     Log.info("car", `ghost load ${id}${best ? " ok" : " none"}`);
   }
 
+  const lineRev = (id) => (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.lineRev) ? SaveSchemaRegistry.lineRev(id) : 0;
+  const lineStale = (id, g) => typeof SaveSchemaRegistry !== "undefined" && !!SaveSchemaRegistry.lapDataStale
+    && SaveSchemaRegistry.lapDataStale(id, g);
   function hasGhost() { return !!best; }
   function bestTime() { return best ? best.time : Infinity; }
   // Export a detached lap for GhostShare. The portable guest path must never
@@ -221,6 +230,7 @@ const Ghost = (function () {
   function snapshot() {
     if (!best) return null;
     const out = { time: best.time, t: best.t.slice(), s: best.s.slice(), x: best.x.slice() };
+    if (best.lineRev) out.lineRev = best.lineRev;
     if (best.meta && typeof best.meta === "object") out.meta = Object.assign({}, best.meta);
     return out;
   }
@@ -325,6 +335,8 @@ const Ghost = (function () {
     rec = null;
     if (lapTime >= bestTime()) return false;
     const next = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
+    const rev = lineRev(trackId);
+    if (rev) next.lineRev = rev;
     if (!valid(next)) return false;
     best = next;
     if (meta && typeof meta === "object") best.meta = meta;

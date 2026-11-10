@@ -24,8 +24,9 @@ The GP loop runs clockwise, so the infield (pits, paddock, Kentagon) is the
 `0.4612`/`0.4748` Hawthorns, `0.5323` Westfield, `0.6362` Dingle Dell,
 `0.8323`/`0.8448` Sheene/Stirlings, `0.9137` Clark Curve.
 
-**Frame debt:** `startFrac` 0.1226 with `sceneryStartFrac: 0` leaves residual
-`_sceneryShift` ≈ 0.836. Brabham / pit / stand / Kentagon props use `sl()` so
+**Frame debt:** `startFrac` 0.2736 (moved 2026-11-10 from 0.1226, which sat on the
+Stirlings-Clearways link, onto the Brabham straight — `docs/tracks/START-LINES.md`
+"Moved 2026-11-10") with `sceneryStartFrac: 0` leaves residual `_sceneryShift` ≈ 0.690. Brabham / pit / stand / Kentagon props use `sl()` so
 they travel with the line; bowl banking stays in the authoring frame. Probe
 before moving any `K()`.
 

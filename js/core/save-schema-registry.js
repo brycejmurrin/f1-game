@@ -251,8 +251,23 @@ const SaveSchemaRegistry = (function () {
 
   // PREFIX / EXACT / validators stay module-private: resolve/validateKey/
   // ingestSettingsSpec are the only external seams (save-schema-registry tests).
+  // START/FINISH LINE REVISIONS. A lap recording keyed to arc distance from
+  // the line (the positional ghost, `ghost.v1`: { t, s, x }) is wrong — not
+  // just slower — once a circuit's start line moves: replayed, it starts on the
+  // old line. Bump a circuit's revision whenever its `startFrac` moves; Ghost
+  // stamps new laps with the current revision and drops an entry stamped older
+  // (an unstamped entry is revision 0). Lap TIMES (ttlb.*) are the same loop and
+  // stay valid; input ghosts are build-stamped and invalidate on their own.
+  //   1: donington, brands_hatch, zolder — 2026-11-10, line moved onto the real
+  //      pit straight (docs/tracks/START-LINES.md "Moved 2026-11-10").
+  const LINE_REV = Object.freeze({ donington: 1, brands_hatch: 1, zolder: 1 });
+  function lineRev(trackId) { return LINE_REV[trackId] | 0; }
+  function lapDataStale(trackId, entry) {
+    return !!entry && typeof entry === "object" && ((entry.lineRev | 0) < lineRev(trackId));
+  }
+
   return {
-    resolve, validateKey, noteWrite, ingestSettingsSpec,
+    resolve, validateKey, noteWrite, ingestSettingsSpec, lineRev, lapDataStale,
     get strict() { return strict; },
     set strict(v) { strict = !!v; },
     get settingsSpec() { return _settings; },

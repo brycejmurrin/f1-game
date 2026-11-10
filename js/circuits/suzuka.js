@@ -4,7 +4,9 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "suzuka",
-    pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
+    pit: { side: 1 },   // the pit complex (TrackPit): driver's RIGHT on the main straight, on the Esses
+    // side — FIA 2026 Japanese GP Circuit Map (pit lane drawn west of the S/F straight) and Pit
+    // Lane drawing (garages beyond the working lane). Was -1 (grandstand-guide reading).
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.3 m off centreline, 1 node before vertex 0.
     // 0.6125 also measures straight (mean |k| 0.00330 over 120 m) but
@@ -56,25 +58,28 @@
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // racing arc 0.919-0.965 Casio chicane
     ],
     bankZones: [
-      // Racing-frame fracs, each on a curated apex (turns[i]). Re-keyed +0.6198
+      // Racing-frame fracs, each on an apex; turns[i] is the 0-based index into the FIA-numbered turns. Re-keyed +0.6198
       // when the scenery shift went, so the banked road did not move. The old
       // labels (T1/T2, Spoon, 130R, final corner) named where the UNSHIFTED
       // numbers pointed, not where the banks actually shipped.
-      { frac: 0.6820, angleDeg: 4.0, widthM: 260 },   // Spoon exit (turns[14])
-      { frac: 0.9504, angleDeg: 3.5, widthM: 220 },   // Casio exit / final corner (turns[17])
-      { frac: 0.1392, angleDeg: 3.5, widthM: 150 },   // T2 (turns[1])
-      { frac: 0.2747, angleDeg: 3.5, widthM: 170 },   // Esses (turns[5])
-      { frac: 0.4213, angleDeg: 4.0, widthM: 80 },    // Degner-to-hairpin (turns[9])
-      { frac: 0.4760, angleDeg: 7.0, widthM: 100 },   // hairpin (turns[10])
-      { frac: 0.5479, angleDeg: 4.0, widthM: 240 },   // 200R (turns[12])
+      { frac: 0.6820, angleDeg: 4.0, widthM: 260 },   // Spoon exit, FIA T14 (turns[13])
+      { frac: 0.9504, angleDeg: 3.5, widthM: 220 },   // Casio exit / final corner, FIA T18 (turns[17])
+      { frac: 0.1392, angleDeg: 3.5, widthM: 150 },   // FIA T2 (turns[1])
+      { frac: 0.2747, angleDeg: 3.5, widthM: 170 },   // Esses, FIA T6 (turns[5])
+      { frac: 0.4213, angleDeg: 4.0, widthM: 80 },    // Degner 2, FIA T9 (turns[8])
+      { frac: 0.4760, angleDeg: 7.0, widthM: 100 },   // under-bridge kink before the hairpin, FIA T10 (turns[9])
+      { frac: 0.5479, angleDeg: 4.0, widthM: 240 },   // 200R, FIA T12 (turns[11])
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors: timing splits. turns: one apex per corner of the FIA 2026 event-map numbering
+    // ("2026 Japanese Grand Prix - Competition Notes - Circuit Map, Pit Lane Drawing, ...", T1-T18;
+    // T7 Dunlop, T8/T9 Degner, T11 hairpin (left), T12 200R, T13/T14 Spoon, T15 130R,
+    // T16/T17 Casio chicane, T18 final curve), each on its curvature peak, as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.703],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.32, 0.68])
-    turns: [0.1198, 0.1392, 0.1890, 0.2104, 0.2339, 0.2754, 0.2968, 0.3404, 0.3930, 0.4213, 0.4753, 0.4988, 0.5472, 0.6537, 0.6820, 0.8549, 0.9275, 0.9511],
+    turns: [0.1198, 0.1392, 0.1890, 0.2104, 0.2339, 0.2754, 0.2968, 0.3930, 0.4213, 0.4753, 0.4988, 0.5472, 0.6537, 0.6820, 0.8549, 0.9275, 0.9364, 0.9511],
     furniture: { tree: "broad", fol: [0.24, 0.46, 0.24], lamp: "none" },  // mixed Japanese hill forest
     kit: { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "banner",    gantry: "truss",      camera: "lattice",   hoarding: "banner" },
     standSet: ["navy", "orange", "steel"],  // Honda crown orange; navy no longer clashes with Silverstone

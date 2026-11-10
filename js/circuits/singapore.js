@@ -109,7 +109,7 @@
       { s: 0.3800, halfM: 120, rise: 2.5 },
     ],
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
-      { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // racing arc 0.378-0.429 T1-T3
+      { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // racing arc 0.378-0.429 FIA T8-T9
       { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // racing arc 0.846-0.874 bridge link
       { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // racing arc 0.692-0.716 Esplanade
       { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // racing arc 0.578-0.601 final corners
@@ -125,15 +125,21 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors/turns: sector splits + turn apexes as RACING-LAP fractions (post
+    // startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs re-seats
+    // turns when the start line moves. turns = the FIA 2026 event-map numbering
+    // ("2026 Singapore Grand Prix - Competition Notes - Circuit Map, Pit Lane
+    // Drawing and Emergency Exits Map", T1-T19): one apex per FIA corner, in FIA
+    // order, each at the built centreline's |k| peak. T4 is the gentle left on
+    // the run to T5; T6 the Raffles Boulevard kink (|k| ~0.005); T12 the left
+    // before the unnumbered right kink into the T13 hairpin; T15 the left after
+    // T14. The sector splits are not re-checked against the FIA intermediates.
     // Mirrored (f -> 1-f, re-sorted) when singapore gained `reverse: true`: these
     // are RACING-lap fractions, which the header says are never fmap'd, so they
     // had to move by hand or all 19 apexes would sit on the wrong corners. The
     // physical apex positions are unchanged — only which corner you meet first.
     sectors: [0.331, 0.68],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.34, 0.68])
-    turns: [0.0629, 0.0809, 0.0914, 0.1739, 0.1814, 0.3409, 0.3839, 0.4259, 0.5179, 0.5414, 0.5484, 0.5574, 0.5829, 0.6004, 0.7104, 0.8579, 0.8714, 0.9299, 0.9499],
+    turns: [0.0628, 0.0815, 0.0913, 0.1206, 0.1817, 0.2706, 0.3407, 0.3839, 0.4254, 0.5175, 0.5412, 0.5575, 0.6007, 0.7107, 0.7604, 0.8582, 0.8712, 0.9299, 0.9495],
     barrier: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.52, 0.54, 0.58], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red; night = floodlit grey concrete (the near-black navy vanished against the road at night)
     furniture: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "truss",      camera: "scaffold",  hoarding: "led" },

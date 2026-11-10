@@ -29,122 +29,90 @@ const X_ZONE_STEP = 8;                          // m between curvature samples
 // straight (r >= ~700 m), and the length test then does the rest.
 const X_ZONE_K = 0.0014;
 
-// HOW MANY zones each circuit really has. Authored, because zone placement is
-// an FIA decision and not a property of the geometry — measured, the curvature
-// scan below disagrees almost everywhere: baku 8 against 2, qatar 4 against 1,
-// imola 7 against 1, spa 7 against 5. Moving the threshold cannot fix it in
-// either direction:
+// HOW MANY zones each circuit has, and WHICH straights they are, from the FIA
+// Race Director's 2026 event documents ("Circuit Map, Pit Lane Drawing, ..."):
+// each map's STRAIGHT MODE table lists zones as "Xm after Tn - ZONE An". The
+// count, the pair and the document URL per circuit are the sourced fixture
+// tests/data/aero-zones-fia-2026.json; tests/unit/aero-zone-tables.test.mjs
+// holds this file to it. Re-checked 2026-11-10 (the old table here was
+// "deliberately NOT independently re-researched": monza 2 against the FIA's 4,
+// singapore 4 against 5, spa/shanghai/zandvoort with zones on the wrong
+// straights). Rows marked PROVISIONAL have no 2026 FIA document yet (the
+// event has not run): their count is the last FIA DRS list and stands until
+// the 2026 map is published. A circuit with NO entry keeps the pure length
+// filter — right ONLY for the retired classics. Every Tracks.SEASON and
+// REAL_2026 circuit must have an entry (#3557).
 //
-//   * 2026 zones are placed for ENERGY HARVESTING, not overtaking, so several
-//     sit on short connectors far below any sensible straight-length bar. F1
-//     calls the Hungaroring "notorious for its relative lack of straights"; it
-//     carries four.
-//   * Lusail has a ~1 km straight and is allowed exactly ONE.
-//   * The FIA's real test is a THREE-SECOND duration at expected speed plus a
-//     per-corner safety veto — a time rule with an override, not a distance one.
-//
-// COUNTS ONLY, deliberately. Zones were first authored as (fromTurn, toTurn)
-// pairs so each row could be checked against its source quote, and that FAILED
-// validation: 35 of 68 resolved spans came out short or curved (catalunya
-// T3->T4 as 26 m, abudhabi T5->T6 as 45 m). The cause is that def.turns numbers
-// corners as "the N strongest curvature peaks in lap order", which is not
-// reliably FIA turn numbering — gentle corners fall below the cut and chicanes
-// merge. Boundaries built on that numbering are not trustworthy, so only the
-// well-sourced half of the research is encoded here: the count. Placement stays
-// with the geometry, which keeps the N longest qualifying straights.
-//
-// A circuit with NO entry keeps the pure length filter — right ONLY for the
-// retired classics, which have no FIA zone list under either ruleset. Every
-// Tracks.SEASON and REAL_2026 circuit must have an entry
-// (tests/unit/aero-zone-tables.test.mjs), so a new calendar circuit cannot
-// silently race the scan (#3557). Sources for the four added then:
-//   madrid 2 (2026 FIA SM zones: start/finish straight, T3->T4)
-//     https://www.planetf1.com/news/fia-spanish-grand-prix-2026-madring-active-aero
-//   sepang 4 (2026 FIA SM zones for the relocated Bahrain GP)
-//     https://www.planetf1.com/news/fia-bahrain-grand-prix-2026-sepang-active-aero
-//   istanbul 2 (last FIA list, 2021 DRS: T9->T11 approach, T14->T1)
-//     https://www.fia.com/sites/default/files/2021_turkish_grand_prix_-_preview.pdf
-//   portimao 2 (last list, 2021 DRS: main straight, T4->T5)
-//     https://en.wikipedia.org/wiki/2021_Portuguese_Grand_Prix
+// A zone exists where the FIA says, not only where it is longer than three
+// seconds: 2026 zones are placed for ENERGY HARVESTING, so some sit on short
+// connectors (the Hungaroring carries four). The 210 m filter therefore
+// applies only to the classics.
 const ZONE_COUNT = {
   monaco: 0, suzuka: 2, albert_park: 5, shanghai: 4, miami: 3, montreal: 4,
   catalunya: 4, redbull: 4, silverstone: 4, spa: 5, hungaroring: 4,
-  bahrain: 3, jeddah: 3, imola: 1, zandvoort: 2, monza: 2, baku: 2,
-  singapore: 4, cota: 2, mexico: 3, interlagos: 2, vegas: 2, qatar: 1,
-  abudhabi: 2, madrid: 2, sepang: 4, istanbul: 2, portimao: 2,
+  bahrain: 3, jeddah: 3, imola: 1, zandvoort: 2, monza: 4, baku: 2,
+  singapore: 5, cota: 2, mexico: 3, interlagos: 2,
+  vegas: 2, qatar: 1, abudhabi: 2,          // PROVISIONAL: last FIA DRS count (2025), no 2026 map yet
+  madrid: 2, sepang: 4, istanbul: 2, portimao: 2,
 };
 
-// WHICH straights, expressed as the turns that bound them — the half of the
-// research ZONE_COUNT's own comment calls "not encoded". Turn numbers from
-// "the N strongest curvature peaks in lap order" are not FIA-equivalent, so a
-// hard-coded (fromTurn, toTurn) pair could name the wrong straight (35 of 68
-// spans came out short or curved — catalunya T3->T4 as 26 m, abudhabi T5->T6
-// as 45 m).
+// WHICH straights: each zone as [fromTurn, toTurn] — the FIA corner it starts
+// after and the corner it runs to (1-based into def.turns, T1 = turns[0]; a
+// pair naming the last turn and T1 wraps across the line). Valid because, for
+// every circuit marked FIA below, def.turns is the FIA 2026 event-map
+// numbering, one apex per numbered corner (W12, 2026-11-10).
 //
-// Per `docs/tracks/START-LINES.md` every circuit below has a verified start line (line on a straight, first apex hand-checked), so
-// `def.turns[0]` really is Turn 1 and the array runs in physical order. That
-// makes turn-pair authoring safe again — with deliberate omissions that stay
-// count-only on ZONE_COUNT's N-longest fallback: BAHRAIN (no located start
-// coordinate yet), JEDDAH (spans not re-keyed after a start-line move), and
-// MADRID, SEPANG, ISTANBUL, PORTIMAO (counts sourced, start lines not verified).
+// A pair resolves to EVERY straight run between the two apexes, merged into
+// one span: a real zone runs from the exit of Tn to the braking point of the
+// next braking corner, through any flat kink between (Kemmel at Spa, the
+// Raffles Boulevard kink at Singapore, Woodcote at Silverstone, the T5 kink at
+// Shanghai). The first version picked the single longest run per pair and
+// needed an occurrence index whenever a kink split a straight.
 //
-// Each pair is the turn BEFORE the straight and the turn AFTER it (1-based, T1
-// meaning `def.turns[0]`; a pair naming the last turn and T1 wraps across the
-// line). A THIRD element picks the Nth-longest straight in that turn-bounded
-// window when two separate straights share the same bounding pair (a mild kink
-// between them too weak to register its own turn peak) — only albert_park needs
-// it, for the two short straights both bounded by T10/T11.
-//
-// Deliberately NOT independently re-researched corner-by-corner: `ZONE_COUNT`
-// above is the sourced fact (a published zone COUNT); this table names exactly
-// the turns bounding the straights the existing N-longest-by-length selection
-// already picks for that count, verified byte-identical in
-// `tools/track/aero-zone-turns.cjs`'s derivation and by `tests/unit/aero-zones-turns.test.mjs`.
-// So it does not change which straight is selected anywhere it applies — it
-// only makes the selection ROBUST to a future geometry change (a new curvature
-// scan parameter, an extra dense sample) that would otherwise silently move a
-// zone by re-sorting `runs`, and it gives a future correction (a real published
-// "DRS zone is between Turn 4 and Turn 5" claim) something to be checked
-// against instead of a bare distance.
+// Not curated by W12 (their def.turns belong to another worker or have no 2026
+// source): miami, montreal, mexico (W5 circuits), imola, vegas, abudhabi — their
+// rows are the old geometry-derived pairs, kept until their turns are FIA-numbered.
 const AERO_ZONE_TURNS = {
-  suzuka: [[15, 16], [18, 1]],
-  albert_park: [[2, 3], [10, 11], [10, 11, 2], [11, 12], [14, 1]],
-  shanghai: [[10, 11], [14, 15], [15, 16], [16, 1]],
+  suzuka: [[14, 15], [18, 1]],                                    // FIA 2026 JPN: after T14, T18
+  albert_park: [[2, 3], [5, 6], [8, 9], [10, 11], [14, 1]],       // FIA 2026 AUS: after T14, T2, T5, T8, T10
+  shanghai: [[4, 6], [10, 11], [13, 14], [16, 1]],                // FIA 2026 CHN: after T16, T4 (through the T5 kink), T10, T13
   miami: [[11, 12], [17, 18], [19, 1]],
   montreal: [[8, 9], [11, 12], [13, 14], [14, 1]],
-  catalunya: [[2, 3], [4, 5], [8, 9], [14, 1]],
-  redbull: [[1, 2], [2, 3], [8, 9], [10, 1]],
-  silverstone: [[5, 6], [8, 9], [14, 15], [18, 1]],   // re-derived when `turns` became the 18 curvature peaks (2026-09-24)
-  spa: [[1, 2], [4, 5], [9, 10], [11, 12], [19, 1]], // 2025 GP numbering; same five physical straight intervals
-  hungaroring: [[1, 2], [3, 4], [11, 12], [14, 1]], // re-keyed to 14 physical corners; gameplay intervals retained
-  imola: [[13, 14]], // physical Acque Minerali exit → Alta approach; authored gameplay zone
-  zandvoort: [[11, 12], [14, 1]],
-  monza: [[10, 11], [11, 1]],   // [9,10] bounded no straight, so the WHOLE table was dropped
-  baku: [[2, 3], [20, 1]],
-  singapore: [[8, 9], [14, 15], [15, 16], [19, 1]],
-  cota: [[10, 11], [20, 1]],
+  catalunya: [[3, 4], [5, 7], [9, 10], [14, 1]],                  // FIA 2026 ESP-BCN: after T14, T3, T5 (through T6), T9
+  redbull: [[1, 3], [3, 4], [8, 9], [10, 1]],                     // FIA 2026 AUT: after T10, T1 (through T2), T3, T8
+  silverstone: [[5, 6], [7, 9], [14, 15], [18, 1]],               // FIA 2026 GBR: after T18, T5, T7 (through Woodcote), T14
+  spa: [[1, 2], [4, 5], [15, 16], [17, 18], [19, 1]],             // FIA 2026 BEL: after T19, T1, T4, T15, T17
+  hungaroring: [[1, 2], [3, 4], [11, 12], [14, 1]],               // FIA 2026 HUN: after T14, T1, T3, T11
+  imola: [[13, 14]],
+  zandvoort: [[10, 11], [14, 1]],                                 // FIA 2026 NED: after T14, T10
+  monza: [[3, 4], [7, 8], [10, 11], [11, 1]],                     // FIA 2026 ITA: after T11, T3, T7, T10
+  baku: [[2, 3], [20, 1]],                                        // FIA 2026 AZE: after T20, T2
+  singapore: [[5, 7], [9, 10], [13, 14], [15, 16], [19, 1]],      // FIA 2026 SGP: after T19, T5 (through T6), T9, T13, T15
+  cota: [[11, 12], [20, 1]],                                      // FIA 2026 USA: after T20, T11
   mexico: [[3, 4], [11, 12], [17, 1]],
-  interlagos: [[2, 3], [15, 1]],
-  vegas: [[5, 6], [13, 14]],
-  qatar: [[16, 1]],
-  abudhabi: [[4, 5], [16, 1]],
+  interlagos: [[3, 4], [14, 1]],                                  // FIA 2026 BRA: after T14 (through the T15 kink), T3
+  vegas: [[5, 6], [13, 14]],                                      // PROVISIONAL
+  qatar: [[16, 1]],                                               // PROVISIONAL: FIA 2025 QAT DRS, after T16
+  abudhabi: [[4, 5], [16, 1]],                                    // PROVISIONAL
 };
 
-function turnsBounding(turns, total, run) {
-  const f0 = (run.start / total) % 1, f1 = (run.end / total) % 1;
-  let before = -1;
-  for (let i = 0; i < turns.length; i++) { if (turns[i] <= f0) before = i; else break; }
-  const after = turns.findIndex((t) => t >= f1);
-  return [before < 0 ? turns.length : before + 1, after < 0 ? 1 : after + 1];
-}
-
-function runForTurnPair(runs, turns, total, entry) {
-  const [fromT, toT, occ] = entry;
-  const matches = runs.filter((r) => {
-    const [f, t] = turnsBounding(turns, total, r);
-    return f === fromT && t === toT;
-  }).sort((a, b) => b.len - a.len);
-  return matches[(occ || 1) - 1] || null;
+// Every straight run lying between apex `fromT` and apex `toT`, merged.
+function spanForTurnPair(runs, turns, total, entry) {
+  const [fromT, toT] = entry;
+  if (!(fromT >= 1 && fromT <= turns.length && toT >= 1 && toT <= turns.length) || fromT === toT) return null;
+  const a = (((turns[fromT - 1] % 1) + 1) % 1) * total;
+  let b = (((turns[toT - 1] % 1) + 1) % 1) * total;
+  if (b <= a) b += total;
+  let s0 = Infinity, s1 = -Infinity;
+  for (const r of runs) {
+    let s = r.start, e = r.end;
+    while (e <= a) { s += total; e += total; }
+    s = Math.max(s, a); e = Math.min(e, b);       // clip: an apex inside a run bounds it
+    if (e - s > 1e-6) { if (s < s0) s0 = s; if (e > s1) s1 = e; }
+  }
+  if (!(s1 > s0)) return null;
+  const start = s0 % total;
+  return { start, end: start + (s1 - s0), len: s1 - s0 };
 }
 
 /** THE ZONES A RACE ACTUALLY USES, as a pure function of a BUILT track.
@@ -182,7 +150,7 @@ function zonesFor(track) {
   const turnPairs = AERO_ZONE_TURNS[id];
   if (turnPairs && track.def.turns && track.def.turns.length) {
     const resolved = turnPairs
-      .map((entry) => runForTurnPair(runs, track.def.turns, total, entry))
+      .map((entry) => spanForTurnPair(runs, track.def.turns, total, entry))
       .filter(Boolean);
     if (resolved.length === turnPairs.length) return resolved.sort((a, b) => a.start - b.start);
     /* ALL-OR-NOTHING, AND IT USED TO BE SILENT. One unresolvable pair discards
@@ -251,7 +219,7 @@ function create(G) {
   return { build, at, ahead, get zones() { return zones; } };
 }
 
-  // X_ZONE_* / X_STRAIGHT_T / runForTurnPair stay file-local: zonesFor + the
+  // X_ZONE_* / X_STRAIGHT_T / spanForTurnPair stay file-local: zonesFor + the
   // tables are the public surface (tests/ui hard-code the metre constants).
   return {
     create, zonesFor, ZONE_COUNT, AERO_ZONE_TURNS,

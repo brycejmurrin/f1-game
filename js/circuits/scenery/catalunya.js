@@ -442,7 +442,7 @@
         cameraTower(K(s), side, gap, { h: 14, col: [0.60, 0.62, 0.66] });
       }
       if (circuitKit) {
-        // Marshal shelter at the T5 braking point (La Caixa already has a post).
+        // Marshal shelter on the T3-exit straight before the T4 (Repsol) braking zone (La Caixa already has a post).
         circuitKit.marshalShelter({
           id: "kit:catalunya:t5-marshal", frac: 0.300, side: 1, gap: 10, size: [3, 3, 3],
         });

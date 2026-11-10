@@ -53,7 +53,7 @@ where the parkland, the woods and most of the spectator banking live.
 - The Craner drop must read as a genuine fall in the terrain, not a flat curve.
 - Mature broadleaf parkland trees, well spaced, not forest.
 - Buildings are small and low — this is not a Grand Prix facility (except the Hollywood stand, which is the one large permanent structure).
-- Frame debt: `startFrac` 0.9072 with residual `_sceneryShift` ≈ 0.10. Pit/S-F rows use `sl()`; corner landmarks stay in the authored frame. Do not edit `startFrac` / `sceneryStartFrac` without a full probe.
+- Frame debt: `startFrac` 0.2577 (moved 2026-11-10 from 0.9072, which sat before the Esses, onto the pit straight before Redgate — `docs/tracks/START-LINES.md` "Moved 2026-11-10") with residual `_sceneryShift` ≈ 0.714. Pit/S-F rows use `sl()`; corner landmarks stay in the authored frame. Do not edit `startFrac` / `sceneryStartFrac` without a full probe.
 
 ## 7. Sourced vs uncertain
 

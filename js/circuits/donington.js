@@ -30,7 +30,12 @@
     // sceneryStartFrac keeps the dressing on the v0 origin it was authored
     // against, so props, landmarks and corner boards stay on their real corners
     // while only the line and grid move.
-    startFrac: 0.9072,
+    // 2026-11-10: the line moved from 0.9072 (on the Starkey straight before the
+    // Esses) to the PIT STRAIGHT between Goddards and Redgate — the real start/finish.
+    // Node 25 of 97: the 182 m grid is fully straight (max |k| 0.00017) and Redgate
+    // turn-in is 124 m ahead; node 24 puts the grid back into Goddards. sl()-keyed
+    // pit/S-F scenery moves with it; everything else stays on sceneryStartFrac.
+    startFrac: 0.2577,
     sceneryStartFrac: 0.0000,
     name: "DONINGTON",
     gp: "European GP",
@@ -57,14 +62,16 @@
     },
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors/turns: sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the 11 strongest curvature peaks of THIS centreline in lap order,
+    // turns: the 11 strongest curvature peaks of THIS centreline in lap order
+    // (re-seated onto the same physical apexes when the line moved 2026-11-10; not
+    // yet one-per-real-corner),
     // 11 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
     sectors: [0.333, 0.645],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0410, 0.1636, 0.2671, 0.4185, 0.4315, 0.5525, 0.6135, 0.6686, 0.7776, 0.8565, 0.8860],
+    turns: [0.0351, 0.0482, 0.1687, 0.2299, 0.2851, 0.3936, 0.4729, 0.5020, 0.6576, 0.7801, 0.8835],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],

@@ -19,6 +19,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -58,6 +59,8 @@ function createHarness(opts = {}) {
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
+  if (opts.registry) vm.runInContext(readFileSync(join(ROOT, "js", "core", "save-schema-registry.js"), "utf8"), ctx,
+    { filename: absSrc("js/core/save-schema-registry.js") });
   vm.runInContext(readFileSync(join(ROOT, "js", "core", "store.js"), "utf8"), ctx);
   const src = readFileSync(join(ROOT, "js", "car", "ghost.js"), "utf8");
   vm.runInContext(src, ctx);
@@ -74,6 +77,25 @@ function createHarness(opts = {}) {
     disk: store,
   };
 }
+
+test("a ghost recorded before its circuit's start line moved is dropped, a new one is stamped and kept", () => {
+  // s is arc from the line: an old donington ghost would replay from the old
+  // line (SaveSchemaRegistry.LINE_REV, the 2026-11-10 start-line moves).
+  const lap = { time: 1, t: [0, .1, .2, .3, .4, .5, .6, .7, .8, .9], s: [0, 20, 40, 60, 80, 100, 120, 140, 160, 180], x: Array(10).fill(0) };
+  const disk = { "apex26.ghost.v1": JSON.stringify({ donington: lap, monza: lap }) };
+  const h = createHarness({ disk, registry: true });
+  h.Ghost.setTrack("donington");
+  assert.equal(h.Ghost.hasGhost(), false, "the pre-move donington ghost must not load");
+  h.Ghost.setTrack("monza");
+  assert.equal(h.Ghost.hasGhost(), true, "a circuit whose line did not move keeps its ghost");
+  h.Ghost.setTrack("donington");
+  h.Ghost.startLap();
+  for (let i = 0; i < 10; i++) h.Ghost.record(i * 0.1, i * 20, 0);
+  assert.equal(h.Ghost.finishLap(1.0), true);
+  assert.equal(h.Ghost.snapshot().lineRev, 1, "a new lap carries the current line revision");
+  h.Ghost.setTrack("monza"); h.Ghost.setTrack("donington");
+  assert.equal(h.Ghost.hasGhost(), true, "the re-recorded ghost survives a reload");
+});
 
 test("Ghost lap recording and playback basics", () => {
   const { Ghost } = createHarness();

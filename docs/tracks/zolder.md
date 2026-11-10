@@ -4,7 +4,8 @@
 
 > **GEOMETRY CAVEAT: this trace is the 2002-present 4.010 km layout. Formula One raced the 4.262 km, 15-turn version used from 1975 to 1985; that configuration no longer exists on the ground.**
 
-> **FRAME DEBT:** `startFrac` 0.1226 / `sceneryStartFrac` 0 → `_sceneryShift` ≈ 0.844.
+> **FRAME DEBT:** `startFrac` 0.2170 (moved 2026-11-10 from 0.1226, which sat BEFORE the final
+> chicane, onto the pit straight after it) / `sceneryStartFrac` 0 → `_sceneryShift` ≈ 0.740.
 > Pit / S/F landmarks use `sl()`; corner props stay on authored `K()`. Do not
 > retune frame keys without a per-circuit probe (`docs/tracks/START-LINES.md`).
 

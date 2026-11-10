@@ -31,13 +31,13 @@
     ],
     pal: { zenith: [0.5, 0.62, 0.76], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.0032, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
     bankZones: [
-      { frac: 0.0133, angleDeg: 5.0, widthM: 200 },   // T1-2-3 spiral
+      { frac: 0.0133, angleDeg: 5.0, widthM: 200 },   // built ~0.10: T3 (exit of the T1-2 spiral)
       { frac: 0.1433, angleDeg: 3.0, widthM: 110 },
       { frac: 0.2134, angleDeg: 4.0, widthM: 250 },
       { frac: 0.2888, angleDeg: 3.5, widthM: 180 },
-      { frac: 0.4431, angleDeg: 4.0, widthM: 300 },   // the long left onto the back straight
-      { frac: 0.7326, angleDeg: 3.0, widthM: 100 },   // T13 hairpin
-      { frac: 0.9985, angleDeg: 4.0, widthM: 280 },   // final corner onto the pit straight
+      { frac: 0.4431, angleDeg: 4.0, widthM: 300 },   // built ~0.53: T12-T13 right onto the back straight
+      { frac: 0.7326, angleDeg: 3.0, widthM: 100 },   // built ~0.82: T14 hairpin
+      { frac: 0.9985, angleDeg: 4.0, widthM: 280 },   // built ~0.09: T2 (spiral); frac zones are pre-rotation (_sceneryShift)
     ],
     // Elevations use source-trace fractions. The Jiading site is reclaimed marsh
     // — flat by F1 standards but engineered with ~6 m of long-wavelength relief
@@ -52,11 +52,13 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // turns: FIA 2026 event-map numbering (T1-T16), one apex per FIA corner at the
+    // built curvature peak — source: FIA "2026 Chinese Grand Prix - Competition Notes -
+    // Circuit Map, Pit Lane Drawing, Emergency Exits Map ..." (circuit map, p.2).
+    // RACING-LAP fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.68],
-    turns: [0.0371, 0.0880, 0.1286, 0.2328, 0.3029, 0.3362, 0.3635, 0.3842, 0.4100, 0.4292, 0.5193, 0.5452, 0.5644, 0.5880, 0.8221, 0.8908],
+    turns: [0.0377, 0.0879, 0.1019, 0.1285, 0.1883, 0.2326, 0.3028, 0.3634, 0.4099, 0.4291, 0.5192, 0.5332, 0.5643, 0.8227, 0.8331, 0.8907],
     barrier: { a: [0.90, 0.12, 0.14], b: [0.95, 0.95, 0.96], c: [0.97, 0.80, 0.12], night: [0.22, 0.10, 0.13], tyre: [0.90, 0.12, 0.14] },  // China red/white + gold
     furniture: { tree: "broad", fol: [0.24, 0.42, 0.22], lamp: "post",  lc: [0.90, 0.96, 1.0] },
     kit: { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "truss",      camera: "monopole",  hoarding: "panel" },

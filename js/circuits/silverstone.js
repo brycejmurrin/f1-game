@@ -70,11 +70,14 @@
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors: sector splits; turns: one apex per corner in the FIA 2026 event-map
+    // numbering (FIA "2026 British Grand Prix - Circuit Map, Pit Lane Drawing, Emergency
+    // Exits Map and Red Zone", p.2, T1 Abbey .. T18), turns[0] = T1, each at the built
+    // centreline curvature peak (Copse T9: midpoint of its twin peaks). RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
-    turns: [0.0705, 0.1095, 0.1526, 0.1780, 0.2101, 0.3402, 0.3620, 0.4199, 0.5229, 0.6140, 0.6324, 0.6612, 0.6838, 0.7105, 0.8556, 0.9384, 0.9507, 0.9802],  // Abbey Farm Village Loop Aintree Brooklands Luffield Woodcote Copse Maggotts Becketts(3) Chapel Stowe Vale Club(2) — curvature-peak apexes
+    turns: [0.0705, 0.1095, 0.1533, 0.1766, 0.2101, 0.3415, 0.3628, 0.4203, 0.5229, 0.6146, 0.6324, 0.6605, 0.6865, 0.7118, 0.8569, 0.9384, 0.9507, 0.9808],  // T1 Abbey, T2 Farm, T3 Village, T4 Loop, T5 Aintree, T6 Brooklands, T7 Luffield, T8 Woodcote, T9 Copse, T10 Maggotts, T11-T13 Becketts, T14 Chapel, T15 Stowe, T16 Vale, T17-T18 Club
     furniture: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "post", treeCrown: "vase" },  // English oak copses, mid-green. 22% of "broad" crowns turn autumn gold/rust (build-props.js plantTree); set furniture.autumn: 0 once PR #2075 lands. Every other species costs +2.6% props tris (over the ratchet).
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["navy", "steel", "alu"],  // Silverstone blue
