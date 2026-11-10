@@ -128,6 +128,8 @@ const NetPlay = (function () {
     return Number.isFinite(n) && n >= 1 ? Math.min(top, Math.floor(n)) : top;
   }
   let G_lapsTarget = () => 0;   // bound to the façade in create()
+  // Host ingress caps per guest connection, per EVENT_WINDOW_MS (bindSession).
+  const LAP_RATE = 4, STRATEGY_RATE = 8;
   function lapTimeOk(t, total) {
     return Number.isFinite(t) && t > (total > 0 ? total / SPEED_LIMIT : 0) && t < QUALI_MAX_S;
   }
@@ -479,6 +481,12 @@ const NetPlay = (function () {
 
     function bindSession(id, s) {
       const qualiGate = rateGate(QUALI_RATE);
+      // The host relays a guest's LAP and STRATEGY to every other guest, and a
+      // receiver closes its link at EVENT_INBOX_CAP queued events (transport.js):
+      // ungated, one guest's burst got the others disconnected. Per connection,
+      // like QUALI; a real client sends one LAP a lap and STRATEGY at ~1 Hz plus
+      // a few phase changes in a pit stop.
+      const lapGate = rateGate(LAP_RATE), strategyGate = rateGate(STRATEGY_RATE);
       function sendersOwnDriver(d, legacyLap = false) {
         if (sessionKinds.get(id) === SpectatePolicy.SPECTATOR) return false;
         if (role !== "host") return true;
@@ -551,6 +559,7 @@ const NetPlay = (function () {
           // A spectator may negotiate protocol compatibility, but never owns a
           // car, race control or a result. Ignore every gameplay declaration.
           if (role === "host" && sessionKinds.get(id) === SpectatePolicy.SPECTATOR && name !== EV.MODEL) return;
+          if (role === "host" && ((name === EV.LAP && !lapGate()) || (name === EV.STRATEGY && !strategyGate()))) return;
           if (name === EV.MODEL) {
             if (!d || d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
               // ONE INCOMPATIBLE PEER IS ONE RIVAL, NOT THE SESSION — the rule
@@ -1375,6 +1384,6 @@ const NetPlay = (function () {
   // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
   return { create, EV, strategyState, applyStrategy,
     clampWire, validQuali, bindQuali, qualiReporters,
-    QUALI_RATE, EVENT_WINDOW_MS };
+    QUALI_RATE, EVENT_WINDOW_MS, LAP_RATE, STRATEGY_RATE };
 })();
 Object.freeze(NetPlay);

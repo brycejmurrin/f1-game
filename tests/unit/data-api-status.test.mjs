@@ -1415,6 +1415,30 @@ test("driverStandings refuses a body whose StandingsLists season disagrees with 
   assert.equal(legacy.length, 1);
 });
 
+test("driverStandings names a mid-season mover's CURRENT team (the last Constructors entry)", async () => {
+  // Jolpica 2025: Lawson ["Red Bull", "RB F1 Team"], Tsunoda the reverse — move order.
+  const body = { MRData: { StandingsTable: { StandingsLists: [{ season: "2025", DriverStandings: [
+    { position: "10", points: "38", wins: "0", Driver: { givenName: "Liam", familyName: "Lawson", code: "LAW" },
+      Constructors: [{ name: "Red Bull" }, { name: "RB F1 Team" }] },
+    { position: "17", points: "30", wins: "0", Driver: { givenName: "Yuki", familyName: "Tsunoda", code: "TSU" },
+      Constructors: [{ name: "RB F1 Team" }, { name: "Red Bull" }] },
+    { position: "20", points: "0", wins: "0", Driver: { givenName: "No", familyName: "Team", code: "NOT" } },
+  ] }] } } };
+  const context = vm.createContext({
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body) }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  const rows = await context.api.driverStandings(2025);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].team, "RB F1 Team", "Lawson drives for RB now, not the team he left");
+  assert.equal(rows[1].team, "Red Bull", "Tsunoda moved up to Red Bull");
+  assert.equal(rows[2].team, null, "no Constructors still yields no team");
+});
+
 test("constructorStandings also refuses a mismatched StandingsLists season", async () => {
   const body = {
     MRData: {

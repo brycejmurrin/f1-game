@@ -77,6 +77,46 @@ const LobbyRoster = (function () {
     return row;
   }
 
-  return { TEAM_OF, css, span, replace, summaryRow, rosterDriverName, rosterTeamShort, rosterSeatRow };
+  // HELLO is stored and relayed to guests: keep only localProfile() fields (+ from/rank).
+  function cleanHello(p) {
+    if (!p || typeof p !== "object") return null;
+    const out = { team: p.team, driver: p.driver, parts: null };
+    if (p.from != null) out.from = p.from;
+    if (p.rank != null) out.rank = p.rank;
+    if (p.parts && typeof p.parts === "object") {
+      out.parts = {};
+      for (const k of Object.keys(p.parts).slice(0, 24)) if (["string", "number"].includes(typeof p.parts[k])) out.parts[k] = p.parts[k];
+    }
+    return out;
+  }
+  // The profile inside an invite or answer CODE is the same peer-written object
+  // as a HELLO, and the host relays stored entries to every new arrival: it is
+  // cleaned the same way. It never carries a relay tag — `from`/`rank` are the
+  // host's word on a HELLO, and a code has no host to speak for it.
+  function cleanCodeProfile(p) {
+    const out = cleanHello(p);
+    if (out) { delete out.from; delete out.rank; }
+    return out;
+  }
+
+  // THE SEAT A HOST-SIDE CONNECTION MAY SPEAK FOR, as "team:driver" (the
+  // driverId QUALI carries), or null. A seat two guests both claim is settled
+  // after the fact by join rank (the lobby's resolveSeatClash: the earlier keeps
+  // it), and until the later one moves both HELLOs sit in `peers`. Keyed on the
+  // seat alone, the later claimant's QUALI overwrote the holder's time: so only
+  // the earliest-ranked claimant holds it, and never the host's own seat.
+  function heldSeat(peers, id, mySeat, rankOf) {
+    const p = peers.get(id);
+    if (!p || !p.team) return null;
+    const driver = p.driver || 0, seat = p.team + ":" + driver;
+    if (seat === mySeat) return null;
+    for (const [k, o] of peers) {
+      if (k !== id && o && o.team === p.team && (o.driver || 0) === driver && rankOf(k) < rankOf(id)) return null;
+    }
+    return seat;
+  }
+
+  return { TEAM_OF, css, span, replace, summaryRow, rosterDriverName, rosterTeamShort, rosterSeatRow,
+    cleanHello, cleanCodeProfile, heldSeat };
 })();
 Object.freeze(LobbyRoster);

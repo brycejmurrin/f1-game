@@ -1087,6 +1087,57 @@ test("ICE failed after connecting rides the grace and restarts ICE through the c
   } finally { h.done(); }
 });
 
+// A no_relay at 6 s (the relays unreachable for a moment, e.g. mid network
+// switch) ended the restart, and `episode` stayed set, so no second attempt
+// ran inside the 25 s grace.
+function flakyOffers(errors) {
+  const board = boardCourier();
+  const calls = [];
+  return Object.assign({}, board, {
+    calls,
+    offer: (code, sdp, token) => {
+      calls.push(code);
+      const err = errors.shift();
+      return err ? Promise.resolve({ ok: false, error: err }) : board.offer(code, sdp, token);
+    },
+  });
+}
+
+test("an ICE-restart offer the courier could not deliver (no_relay) is retried inside the grace", async () => {
+  const courier = flakyOffers(["no_relay"]);
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.set(h.b, "failed");
+    h.advance(0);
+    assert.equal(await h.until(() => courier.calls.length === 1), true, "first offer sent");
+    await h.flush();
+    h.advance(1000);   // the retry backoff
+    assert.equal(await h.until(() => h.a.stats().iceRestarts >= 1 && h.a.pc.signalingState === "stable"
+      && courier.calls.length >= 2), true, "the offer went again and the restart completed");
+    assert.equal(courier.calls[1], courier.calls[0], "the same attempt's code, so the listening answerer meets it");
+    assert.equal(h.a.status, "open");
+  } finally { h.done(); }
+});
+
+test("an ICE-restart episode that gave up does not block the next while the link is still down", async () => {
+  const courier = flakyOffers(["unsupported"]);   // not worth retrying in place
+  const h = restartPair(courier);
+  try {
+    await h.connect();
+    h.a.setDisconnectGrace(25000); h.b.setDisconnectGrace(25000);
+    h.set(h.a, "failed"); h.set(h.b, "failed");
+    h.advance(0);
+    assert.equal(await h.until(() => courier.calls.length === 1), true, "first offer sent");
+    await h.flush();
+    h.advance(1000);   // a fresh episode is armed while connectionState stays failed
+    assert.equal(await h.until(() => courier.calls.length >= 2), true, "a second episode ran: " + courier.calls.length);
+    assert.equal(await h.until(() => h.a.stats().iceRestarts >= 2 && h.a.pc.signalingState === "stable"), true,
+      "…and completed the restart");
+  } finally { h.done(); }
+});
+
 test("with no courier, ICE failed after connecting closes at the grace end, not at once", async () => {
   const h = restartPair(null);
   try {

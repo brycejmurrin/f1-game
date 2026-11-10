@@ -256,7 +256,10 @@ The dead data channel cannot carry that exchange, so it crosses the Nostr
 bus (`NetNostr.directExchange`) sealed under a code hashed from the last
 negotiation's two `ice-pwd` values, which only the peers hold. It starts 3 s
 into `disconnected` or at once on `failed`, re-offers at most twice, and a
-heal before the answer rolls the pending offer back. `stats().iceRestarts`
+heal before the answer rolls the pending offer back. A courier try that found
+no relay (`no_relay`) or no answer (`expired`) is retried on the same attempt's
+code, and an episode that gave up clears itself so another can start while the
+link is still down inside the grace. `stats().iceRestarts`
 counts them. A pc that never connected still closes on `failed` at once.
 
 ### `js/net/netplay.js` — `NetPlay`
@@ -319,7 +322,16 @@ declaring {cornering: 9} would simply be faster — and a declared setup over
 `Parts.BUDGET` resolves as the team's factory setup, because every top-tier id
 at once is a legal set of ids no garage would let a player afford. HELLO and
 READY are rate-limited per connection (five a second each; the rest are
-dropped). Its transport factory is
+dropped), as are the events the host relays to the other guests: QUALI+QLIVE
+(12 a second together), QABORT (2), and in the race LAP (4) and STRATEGY (8).
+A QUALI or QABORT counts only for the seat its connection HOLDS: when two
+guests claim one seat, the earlier joiner's (the one the clash leaves in
+place). A profile carried inside an invite or answer code is cleaned like a
+HELLO before it is stored. A code join answers a NEWER offer the host posts
+(by the host's created_at) on a fresh pc while its first answer is still
+unconnected, because a relay can replay an offer the host already used. A
+relay refusing our event for its timestamp is reported as this device's clock
+being off. Its transport factory is
 injectable: an RTCPeerConnection whose ICE never completes spins forever, so a
 test that builds one HANGS rather than fails (__apex.lobbyFake)
 

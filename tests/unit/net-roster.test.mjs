@@ -518,16 +518,51 @@ test("host: a lapped fin preceding the winner's interpolated pose waits, then re
 });
 
 test("host: lap times outside what can be driven never reach the car", () => {
-  const { sA, carA } = hostWithGuest();
   // total 5000 m / 200 m/s wire ceiling = 25 s is the floor; QUALI_MAX_S the roof.
+  // One connection per value: a guest's LAPs are rate-gated (NetPlay.LAP_RATE),
+  // and this test is about the VALUE check, not the burst.
   for (const bad of [0.001, 10, 25, 3600, 1e9, -5, "x"]) {
+    const { sA, carA, net } = hostWithGuest();
     sA.deliver("lap", { lap: 2, time: bad, best: bad, code: carA.code });
     assert.notEqual(carA.lastLap, bad, `time ${bad} refused`);
     assert.notEqual(carA.best, bad, `best ${bad} refused`);
+    net.stop();
   }
+  const { sA, carA } = hostWithGuest();
   sA.deliver("lap", { lap: 2, time: 88.1, best: 87.5, code: carA.code });
   assert.equal(carA.lastLap, 88.1);
   assert.equal(carA.best, 87.5);
+});
+
+// A guest's burst must not reach the others: each relayed event is one more in
+// their EVENT inbox, and a receiver closes its link past EVENT_INBOX_CAP (256).
+test("host: a guest's LAP and STRATEGY bursts are rate-gated per connection before the relay", () => {
+  const { G, net, sA, sB, carA } = hostWithGuest();
+  assert.ok(NetPlay.LAP_RATE > 0 && NetPlay.LAP_RATE < 20 && NetPlay.STRATEGY_RATE > 0 && NetPlay.STRATEGY_RATE < 20);
+  const laps = () => sB.sent.filter((m) => m.t === "lap").length;
+  for (let i = 0; i < 300; i++) sA.deliver("lap", { lap: 2, time: 88.1, best: 87.5, code: carA.code });
+  assert.equal(laps(), NetPlay.LAP_RATE, "one window's worth reaches guest B, not 300");
+  // The gate is per connection: guest B's own LAP still lands while A is gated.
+  const carB = G.cars.find((c) => c !== carA && c.human && !c.local);
+  sB.deliver("lap", { lap: 2, time: 90.5, best: 90.5, code: carB.code });
+  assert.equal(carB.lastLap, 90.5, "B is not throttled by A's burst");
+  // STRATEGY: the host's model handshake gives each guest an epoch first.
+  G.track.def = { id: "monza" };
+  const mA = { physics: null, strategy: null }, epochOf = (s) => (s.sent.find((m) => m.t === "model") || {}).d;
+  const hostModel = epochOf(sA);
+  assert.ok(hostModel && hostModel.epoch, "fixture: the host sent its MODEL");
+  Object.assign(mA, hostModel, { epoch: "guest-a", ack: true });
+  sA.deliver("model", mA); sB.deliver("model", Object.assign({}, hostModel, { epoch: "guest-b", ack: true }));
+  const strategyTo = (s) => s.sent.filter((m) => m.t === "strategy").length;
+  const before = strategyTo(sB);
+  const wire = G.wireId(carA);
+  for (let i = 0; i < 300; i++) {
+    sA.deliver("strategy", Object.assign(NetPlay.strategyState(carA, wire, "monza"), { epoch: hostModel.epoch, pitState: i % 2 ? "in" : null }));
+  }
+  const relayed = strategyTo(sB) - before;
+  assert.ok(relayed > 0, "fixture: an accepted STRATEGY is relayed");
+  assert.ok(relayed <= NetPlay.STRATEGY_RATE, `at most one window's worth relayed, got ${relayed}`);
+  net.stop();
 });
 
 // ── 3+ players: the host relays LAP (star, not mesh) ────────────────────────

@@ -233,6 +233,19 @@ test("a qabort outside friend quali does nothing", async () => {
   } finally { lobby.cancel(); }
 });
 
+test("the host drops a guest's QABORT flood: each one is a QUALI relayed to every other guest", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const laps = [];
+  G.onPeerQuali = (q) => laps.push(q);
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    for (let i = 0; i < 200; i++) peerSays("qabort", null);
+    await sleep(120);
+    assert.ok(laps.length >= 1, "the first still releases the host's wait");
+    assert.ok(laps.length <= 2, "a flood is capped per connection (got " + laps.length + ")");
+  } finally { lobby.cancel(); }
+});
+
 test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", async () => {
   const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
   let live = 0, driven = 0;
