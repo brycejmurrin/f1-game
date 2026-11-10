@@ -8066,6 +8066,12 @@
       ],
       "phase": [
         "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/garage-crew-choreo.test.mjs"
+      ],
+      "warm": [
+        "tests/unit/garage-crew-choreo.test.mjs"
       ]
     },
     "js/garage/pit-signs.js": {
@@ -14280,6 +14286,7 @@
       "*": [
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/garage-before.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs"
       ]
     },

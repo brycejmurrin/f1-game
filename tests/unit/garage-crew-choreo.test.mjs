@@ -254,6 +254,34 @@ test("PitCrewAnim draws the player's stop, deterministically, and leaves AI cars
   assert.equal(Pit.draw({ ...G, pits: { stopAnim: () => ({ u: -1, lift: 0, off: 0 }) } }, c, base, {}), false);
 });
 
+test("PitCrewAnim.warm builds the player's rig ahead of the stop: the box frame builds no mesh (#5051)", () => {
+  const { Pit, gfx, meshes } = load();
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 0, 4, 1]);
+  const { c, G } = raceCtx(Pit, 0.5); G.gfx = gfx;
+  const idle = meshes.length;
+  assert.equal(Pit.warm(G, { ...c, isPlayer: false }), false, "an AI car has no animated crew to warm");
+  assert.equal(meshes.length, idle);
+  // Under the lights the car is on the grid, not in its box: warm must not wait for pitState.
+  assert.equal(Pit.warm(G, { ...c, pitState: "none" }), true);
+  const rig = meshes.length - idle;
+  assert.ok(rig >= 8, `the rig is the stop's whole mesh build: ${rig}`);
+  assert.equal(Pit.warm(G, c), true);
+  assert.equal(meshes.length, idle + rig, "a second warm (a restart's countdown) is a cache hit");
+  assert.equal(Pit.draw(G, c, base, {}), true);
+  assert.equal(meshes.length, idle + rig, "BUDGET 0: the first box frame creates no mesh after a warm");
+  assert.equal(Pit.setEnabled(false), false);
+  assert.equal(Pit.warm(G, c), false, "the A/B switch off builds nothing");
+  Pit.setEnabled(true);
+});
+
+test("car-draw.js queues the crew warm behind the grid's own pieces and drains it through PitCrewAnim.warm", () => {
+  const src = read("js/car/car-draw.js");
+  assert.equal(src.split("_deferredCarWarm.push({ c: p, crew: true })").length - 1, 2, "both warm paths (sync and stepped) queue it");
+  assert.ok(/else if \(it\.crew && typeof PitCrewAnim !== "undefined"\) PitCrewAnim\.warm\(G, it\.c\);/.test(src), "drainDeferredCarWarm builds it");
+  const stepped = src.slice(src.indexOf("_deferredCarWarm.length = 0;"));
+  assert.ok(stepped.indexOf("crew: true") > 0, "queued after the stepped path resets the queue, or the reset would drop it");
+});
+
 test("PitCrewAnim frees the evicted rigs' meshes when a third team colour arrives (perf hunt 9)", () => {
   const { Pit, gfx } = load();
   let made = 0, freed = 0;
