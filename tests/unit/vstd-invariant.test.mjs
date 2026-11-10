@@ -263,13 +263,6 @@ const ALLOWED = [
     code: "if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {",
     why: "not a car speed at all: run.speed is the replay playback RATE (1x, 2x), above which the commentator cannot keep up",
   },
-  // Surfaced 2026-11 when the lint's roster stopped being hand-copied and picked up the six lazy lists it had
-  // dropped (LAZY_RACE_SESSION etc.). Pre-existing, not new code; shrink-only — delete the row if the site goes.
-  {
-    file: "js/race/cooldown-lap.js", expr: "(s.speed || 0) <= PARK_SPEED",
-    code: "if (s.atBox || (s.inPitLane && (s.speed || 0) <= PARK_SPEED)) {",
-    why: "crawl/standstill ceiling (PARK_SPEED 2.5 m/s, 'parked at box') in the pit lane, which is speed-limited, not pace-scaled",
-  },
 ];
 
 // ── open findings ─────────────────────────────────────────────────────────────

@@ -12596,9 +12596,6 @@
       ],
       "tick": [
         "tests/unit/cooldown-lap.test.mjs"
-      ],
-      "*": [
-        "tests/unit/vstd-invariant.test.mjs"
       ]
     },
     "js/race/daily-challenge.js": {
