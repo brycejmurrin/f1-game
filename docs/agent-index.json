@@ -1611,6 +1611,7 @@
         "tests/unit/scenery-grounding.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
+        "tests/unit/stand-curve-gap-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
         "tests/unit/track-themes-build.test.mjs",

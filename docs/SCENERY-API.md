@@ -492,6 +492,18 @@ point-anchored with a straight `len` box, which at Curva Grande or Parabolica
 cuts the chord instead of the road. All four `indexSolid()` their own footprint,
 so treelines and the roadside scatter no longer grow through them.
 
+**On a bend (#2204).** Each row is one box per `along()` station, sized by
+`curveTier` (js/track/scenery/stands.js). On a moderate bend a row is aimed along
+its neighbour chord and spans midpoint to midpoint, half the chord to the previous
+station and half to the next, so neighbouring rows meet even where the anchors 40–54 m
+back are irregular. Contract: on the outside of a bend a joint closes to ≤ 0.5 m,
+or to `tier depth × step turn − 0.4 m` where that wedge is deeper than the 0.8 m a row
+may overlap its neighbour (clip-audit's 1 m severe gate). Rows past a hairpin's
+centre of curvature (`|κ·spacing| ≥ 0.55`, or a reversed chord on the inside) stay
+under the 1.85× fold cap and may open. Measured on the emitted boxes by
+`tests/helpers/stand-gaps.cjs`: `stand-curve-gap.test.mjs` (jerez, catalunya,
+silverstone) and `stand-curve-gap-fleet.test.mjs` (every circuit that calls one).
+
 | Model | Builds | `opts` |
 |---|---|---|
 | `bleacher` | planks on a bolted frame + back guard rail. No shell, no roof, no fascia. | `{rows, rise, setback, frame:"steel"\|"timber", frameCol, plankCol, riserCol, crowd, density, rail, step, lift}` |

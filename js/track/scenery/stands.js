@@ -57,7 +57,7 @@ const SceneryStands = (function () {
         const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
         swing = Math.max(swing, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
       }
-      if (!(cMin < Infinity)) return { seg: 0, b: [a.r, a.u, a.t] };
+      if (!(cMin < Infinity)) return { seg: 0, off: null, b: [a.r, a.u, a.t] };
       let κ = 0;
       if (kn.length >= 2) {
         const prev = kn[1], next = kn[0];
@@ -75,12 +75,75 @@ const SceneryStands = (function () {
       // (offset xAnchor), whose arc is already longer; back it out to the
       // centreline's before scaling `spacing` (a centreline step) to `lat`.
       const κ0 = κ / Math.max(0.05, 1 + κ * xAnchor);
-      const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 - κ0 * lat));
-      const c = Math.min(cMin, curveCap);
-      if (!(c > 1.0)) return { seg: 0, b: [a.r, a.u, a.t] };
+      const arc = 1 - κ0 * lat;
+      // The 1.85 ceiling is the FOLD guard: a row aimed along its own tangent
+      // (the sharp-bend branch below) or on the INSIDE must not stretch across
+      // an apex. A row on the OUTSIDE of a moderate bend is aimed along the
+      // neighbour chord, and that chord is already the exact length that meets
+      // its neighbours: no cap there. Capping it (at 1.85x, then at the local
+      // arc ratio) opened 4-12 m gaps behind Jerez's 10-row terraces, where the
+      // anchors 26-54 m back are irregular (consecutive chords 13.5, 22.7, 25.8,
+      // 13.9 m) and the local κ under-reads them (W30 / #2204, 2026-11-10).
+      // FOLDED: past the centre of curvature the row's neighbour chord runs
+      // BACKWARDS against the station's tangent (or nearly across it) — that,
+      // not the local κ, is the fold the cap exists for. An unfolded chord-aimed
+      // row on the INSIDE was capped to spacing x arc too: 1.5 m boxes on 8 m
+      // stations at Jerez's 0.89 terrace, where the anchor kinks over-read κ.
+      let folded = true;
+      if (nbr.length >= 2) {
+        const fx = nbr[0][0] - nbr[1][0], fy = nbr[0][1] - nbr[1][1], fz = nbr[0][2] - nbr[1][2];
+        // The chord's SIGN against a.t is not a fold by itself (the aim below
+        // flips a reversed chord: a stand authored s1 < s0, a tier anchor), so
+        // on the OUTSIDE (arc > 1, which cannot be past the centre) only a
+        // chord across the tangent counts; inside, a reversed one does too.
+        const dt = (fx * a.t[0] + fy * a.t[1] + fz * a.t[2]), fl = Math.hypot(fx, fy, fz) || 1;
+        folded = (arc > 1 ? Math.abs(dt) : dt) < 0.5 * fl;
+      }
+      const chordAimed = nbr.length >= 2 && Math.abs(κ * spacing) < 0.55;
+      const curveCap = chordAimed && !folded && arc >= 0.9 ? Infinity : spacing * Math.max(0.15, Math.min(1.85, arc));
+      // MIDPOINT TO MIDPOINT (chord-aimed rows). A row's box should run from
+      // the midpoint of its chord to the previous station to the midpoint of
+      // its chord to the next one: those midpoints are where its neighbours'
+      // boxes end too, so the joints close. The box axis is already their
+      // difference (next - prev, the chord aim below); its length is
+      // |p_next - p_prev| / 2 and its centre (2p + p_prev + p_next) / 4 — off
+      // the station by `off`, a sagitta as much as a slide along t. A box
+      // CENTRED on the station and sized to its SHORTER chord (the old rule)
+      // left half the difference open on the long side wherever the chords
+      // differ: 239 of 1508 Jerez row pairs over the 0.5 m contract, max
+      // 12.3 m, where consecutive back-row chords run 13.5, 22.7, 25.8, 13.9 m
+      // (W30 / #2204, 2026-11-10). Spanning (cN + cP) / 2 along t instead
+      // overshoots both midpoints on a kink (buenos_aires: rows 1.6 m into the
+      // next station's, clip-audit severe).
+      // The ends are measured at the row's centre and both edges: on a bend the
+      // edge with the longer span would open by the wedge (row depth x turn).
+      // Sized to it, the short edge overlaps instead, inside the mass; that
+      // overlap is held to JOINT_OVERLAP so a ~30 deg step cannot drive a row
+      // >= 1 m into its neighbour (clip-audit severe). No swing shortening: that
+      // is for a row aimed along its own tangent, whose corners swing into the
+      // neighbour. A tangent-aimed row (sharp bend, or a lone neighbour at the
+      // first / last station) keeps the old symmetric rule.
+      const JOINT_OVERLAP = 0.8;
+      let c, off = null, swingCut = halfW * swing;
+      if (chordAimed && !folded && arc >= 0.9) {
+        const prev = kn[1], next = kn[0];
+        let lMin = Infinity, lMax = 0;
+        for (const e of [0, -halfW, halfW]) {
+          const pp = at(prev, latFromAnchor + e), pn = at(next, latFromAnchor + e);
+          const le = Math.hypot(pn[0] - pp[0], pn[1] - pp[1], pn[2] - pp[2]) / 2;
+          lMin = Math.min(lMin, le); lMax = Math.max(lMax, le);
+        }
+        c = Math.min(lMax, lMin + JOINT_OVERLAP, curveCap);
+        const pp = at(prev, latFromAnchor), pn = at(next, latFromAnchor);
+        off = [(pp[0] + pn[0] - 2 * p[0]) / 4, (pp[1] + pn[1] - 2 * p[1]) / 4, (pp[2] + pn[2] - 2 * p[2]) / 4];
+        swingCut = 0;
+      } else {
+        c = Math.min(cMin, curveCap);
+      }
+      if (!(c > 1.0)) return { seg: 0, off: null, b: [a.r, a.u, a.t] };
       // The (1 − factor) pad is capped at 4 cm: a full 2 % of a ~4 m chord left
       // 7 cm between bays, and a legless bay's rows then hang free (ground-audit).
-      const l = (c - halfW * swing) - (1 - factor) * Math.min(c, 2);
+      const l = (c - swingCut) - (1 - factor) * Math.min(c, 2);
       let t = a.t;
       if (nbr.length >= 2 && Math.abs(κ * spacing) < 0.55) {
         let tx = nbr[0][0] - nbr[1][0], ty = nbr[0][1] - nbr[1][1], tz = nbr[0][2] - nbr[1][2];
@@ -99,10 +162,12 @@ const SceneryStands = (function () {
       let u = [uu[0] / ul, uu[1] / ul, uu[2] / ul];
       if (u[0] * a.u[0] + u[1] * a.u[1] + u[2] * a.u[2] < 0) {
         u = [-u[0], -u[1], -u[2]];
-        return { seg: l < 1.0 ? 0 : l, b: [[-r[0], -r[1], -r[2]], u, t] };
+        return { seg: l < 1.0 ? 0 : l, off, b: [[-r[0], -r[1], -r[2]], u, t] };
       }
-      return { seg: l < 1.0 ? 0 : l, b: [r, u, t] };
+      return { seg: l < 1.0 ? 0 : l, off, b: [r, u, t] };
     };
+    // A curveTier box's centre: the station point moved by its midpoint offset.
+    const tierAt = (pt, ct) => (ct && ct.off ? vadd(pt, ct.off, 1) : pt);
     let bandSeq = 0;
     const crowdBand = (c, b, side, thick, h, len, pal, dens, seed) => {
       if (len <= 0.5) return;
@@ -172,7 +237,7 @@ const SceneryStands = (function () {
         const mid = curveTier(a, kn, side * depth / 2, setback / 2, 0.98, spacing, side, gap, k);
         const seg = mid.seg, b = mid.b;
         if (seg <= 0) return;
-        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+        if (rejBox(tierAt(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2), mid),
                    [depth, topH, seg], b)) return;
         const backLat = side * (rows - 0.5) * setback;
         out._mat = timber ? MAT.WOOD : MAT.METAL;
@@ -192,15 +257,15 @@ const SceneryStands = (function () {
         if (topH > 2.5 && Math.abs(backLat) > 1.2) {
           const braceCol = [frameCol[0] * 0.9, frameCol[1] * 0.9, frameCol[2] * 0.92];
           for (const sgn of [-1, 1]) {
-            const midP = vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45);
+            const midP = tierAt(vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45), mid);
             addBox(out, vadd(midP, b[2], sgn * seg * 0.42),
                    [Math.abs(backLat) * 0.95, 0.10, 0.10], braceCol, b);
           }
         }
         for (let r = 0; r < rows; r++) {
           const lat = side * r * setback, y = lift + 0.6 + r * rise;
-          const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
           const row = curveTier(a, kn, lat, setback / 2, 0.98, spacing, side, gap, k);
+          const rc = tierAt(vadd(vadd(a.c, a.r, lat), a.u, y), row.seg ? row : mid);
           const rs = row.seg || seg, rb = row.b;
           out._mat = timber ? MAT.WOOD : MAT.METAL;
           addBox(out, rc, [setback * 1.05, 0.16, rs], plankCol, rb);                     // tread plank
@@ -216,8 +281,11 @@ const SceneryStands = (function () {
         }
         if (opts.rail !== false) {
           out._mat = timber ? MAT.WOOD : MAT.METAL;
-          addBox(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.55),
-                 [0.18, 0.16, seg], frameCol, b);
+          // Its own tier at the back lateral: sized from the mid-depth tier it
+          // fell short on the outside of a bend (the rows behind it reach further).
+          const rail = curveTier(a, kn, backLat, 0.09, 0.98, spacing, side, gap, k);
+          addBox(out, tierAt(vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.55), rail.seg ? rail : mid),
+                 [0.18, 0.16, rail.seg || seg], frameCol, rail.seg ? rail.b : b);
         }
         out._mat = 0;
       }, `bleacher|${side}|${gap}|${rows}|${rise}|${setback}|${lift}|${step}`);
@@ -247,12 +315,12 @@ const SceneryStands = (function () {
         const mid = curveTier(a, kn, side * depth / 2, setback / 2, 0.98, spacing, side, gap, k);
         const seg = mid.seg, b = mid.b;
         if (seg <= 0) { bay++; return; }
-        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+        if (rejBox(tierAt(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2), mid),
                    [depth, topH, seg], b)) { bay++; return; }
         for (let r = 0; r < rows; r++) {
           const lat = side * r * setback, y = 1.2 + r * rise;
-          const rc = vadd(vadd(a.c, a.r, lat), a.u, y);
           const row = curveTier(a, kn, lat, setback / 2, 0.98, spacing, side, gap, k);
+          const rc = tierAt(vadd(vadd(a.c, a.r, lat), a.u, y), row.seg ? row : mid);
           const rs = row.seg || seg, rb = row.b;
           out._mat = MAT.WOOD;
           addBox(out, rc, [setback * 1.02, 0.18, rs], deck, rb);                         // deck plank
@@ -268,8 +336,9 @@ const SceneryStands = (function () {
         out._mat = MAT.METAL;
         const backLat = side * (rows - 0.5) * setback;
         addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, -0.4), 0.13, topH + 1.6, tube, 5, b);  // back standard
-        addBox(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.9),
-               [0.11, 0.11, seg], tube, b);                                              // handrail
+        const rail = curveTier(a, kn, backLat, 0.06, 0.98, spacing, side, gap, k);       // own tier at the back lateral
+        addBox(out, tierAt(vadd(vadd(a.c, a.r, backLat), a.u, topH + 0.9), rail.seg ? rail : mid),
+               [0.11, 0.11, rail.seg || seg], tube, rail.seg ? rail.b : b);             // handrail
         // One leaning ledger per bay reads as the full X-brace at speed.
         addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45),
                [Math.abs(backLat) + 0.6, 0.13, 0.13], tube, b);
@@ -278,7 +347,7 @@ const SceneryStands = (function () {
             : [[0.88, 0.86, 0.82], [0.80, 0.26, 0.22]];
           addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 1.4), 0.10, 2.6, tube, 5, b);
           out._mat = MAT.FABRIC;
-          addBox(out, vadd(vadd(a.c, a.r, backLat * 0.45), a.u, topH + 3.6),
+          addBox(out, tierAt(vadd(vadd(a.c, a.r, backLat * 0.45), a.u, topH + 3.6), mid),
                  [Math.abs(backLat) + 1.6, 0.22, seg], aw[bay % aw.length], b);
         }
         out._mat = 0;
@@ -306,22 +375,22 @@ const SceneryStands = (function () {
         const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
         const rowAt = (back) => {
           const ct = curveTier(a, kn, back, dep / 2, 0.98, spacing, side, gap, k);
-          return ct.seg < 1.2 ? { seg: 0, b: ct.b } : ct;
+          return ct.seg < 1.2 ? { seg: 0, off: null, b: ct.b } : ct;
         };
         const mid = rowAt(side * depth / 2);
         if (mid.seg <= 0) return;
-        if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
+        if (rejBox(tierAt(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2), mid),
                    [depth, topH, mid.seg], mid.b)) return;
         out._mat = MAT.CONCRETE;
         if (opts.retainer !== false) {
           const ret = rowAt(0);
-          addBox(out, vadd(a.c, a.u, 1.0), [0.9, 2.2, ret.seg || mid.seg], concAlt, ret.b);
+          addBox(out, tierAt(vadd(a.c, a.u, 1.0), ret.seg ? ret : mid), [0.9, 2.2, ret.seg || mid.seg], concAlt, ret.b);
         }
         for (let r = 0; r < rows; r++) {
           const back = side * (1.0 + r * dep), up = 1.4 + r * rise;
-          const tc = vadd(vadd(a.c, a.r, back), a.u, up);
           const row = rowAt(back);
           if (row.seg <= 0) continue;
+          const tc = tierAt(vadd(vadd(a.c, a.r, back), a.u, up), row);
           out._mat = MAT.CONCRETE;
           addBox(out, tc, [dep, rise + 0.3, row.seg], r & 1 ? conc : concAlt, row.b);
           crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), row.b, side, dep * 0.6, 1.1, row.seg - 1.6,
@@ -330,14 +399,14 @@ const SceneryStands = (function () {
         const topBack = side * (1.0 + rows * dep);
         const backRow = rowAt(topBack);
         const tbSeg = backRow.seg || mid.seg;
-        const bb = backRow.b;
+        const bb = backRow.b, bShift = backRow.seg ? backRow : mid;
         if (opts.backWall !== false) {
           out._mat = MAT.CONCRETE;
           // The wall stands rows*dep beyond the anchor, where the verge can fall away. At full
           // length neighbouring walls overlapped and carried each other; cut to the chord they
           // stand alone, so take the foot down to the lowest terrain under the wall (jerez's
           // Angel Nieto bowl wrap floated 1.2-1.3 m, ground-audit --why).
-          const wc = vadd(a.c, a.r, topBack);
+          const wc = tierAt(vadd(a.c, a.r, topBack), bShift);
           let drop = 0;
           if (typeof terrainYAt === "function") {
             for (const o of [-0.5, 0, 0.5]) {
@@ -351,7 +420,7 @@ const SceneryStands = (function () {
         }
         if (opts.cut) {
           out._mat = 0;
-          addPrism(out, vadd(vadd(a.c, a.r, topBack), a.u, topH),
+          addPrism(out, tierAt(vadd(vadd(a.c, a.r, topBack), a.u, topH), bShift),
                    [6, 3.4, tbSeg], opts.cutCol || [0.52, 0.32, 0.22], bb);
         }
         out._mat = 0;
@@ -381,28 +450,31 @@ const SceneryStands = (function () {
           // #4967: the curve cap is measured at THIS tier's lateral, not the base gap.
           const row = curveTier(a, kn, 0, tierDepth * 0.465, 0.98, spacing, side, gap + t * tierDepth, k);
           if (row.seg <= 0) continue;
-          const b = row.b;
+          const b = row.b, ac = tierAt(a.c, row);
           seg = row.seg;
           const h = base + t * rise;
-          if (rejBox(vadd(a.c, a.u, h / 2), [tierDepth * 0.93, h, seg], b)) continue;
+          if (rejBox(vadd(ac, a.u, h / 2), [tierDepth * 0.93, h, seg], b)) continue;
           out._mat = MAT.CONCRETE;
-          addBox(out, vadd(a.c, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
+          addBox(out, vadd(ac, a.u, h * 0.5), [tierDepth * 0.93, h, seg],
                  t % 2 ? shell[0] : shell[1], b);                                        // riser
-          crowdBand(vadd(a.c, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
+          crowdBand(vadd(ac, a.u, h + 0.85), b, side, tierDepth * 0.8, 1.6, seg - 1.0,
                     opts.crowd, dens, k * 3.1 + t * 31.7 + side * 2.3);
           out._mat = 0;
-          addBox(out, vadd(a.c, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg + 0.5],
+          // seg, not seg + 0.5: with neighbouring tiers now meeting (#2204),
+          // the 0.5 m overhang laid two lips' tops in one plane (mexico's
+          // bowl, ground-audit flatCoplanar 0 -> 8).
+          addBox(out, vadd(ac, a.u, h + 1.85), [tierDepth * 0.86, 0.32, seg],
                  fascia, b);                                                             // fascia lip
         }
         if (opts.roof && seg > 0) {
           const aR = anchor(k, side, gap + (tiers - 0.5) * tierDepth);
           const knR = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap + (tiers - 0.5) * tierDepth));
           const roof = curveTier(aR, knR, 0, tierDepth * 0.65, 0.98, spacing, side, gap + (tiers - 0.5) * tierDepth, k);
-          const bR = roof.b, rSeg = roof.seg || seg;
+          const bR = roof.b, rSeg = roof.seg || seg, rc0 = tierAt(aR.c, roof.seg ? roof : null);
           const ry = base + (tiers - 1) * rise + 2.6;
-          if (!rejBox(vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1], bR)) {
+          if (!rejBox(vadd(rc0, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1], bR)) {
             out._mat = MAT.METAL;
-            addBox(out, vadd(aR.c, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1],
+            addBox(out, vadd(rc0, aR.u, ry), [tierDepth * 1.3, 0.5, rSeg + 1],
                    opts.roofCol || [0.19, 0.19, 0.23], bR);
           }
         }
