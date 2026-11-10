@@ -20,7 +20,7 @@ Load from the SKILL.md index when the task needs this detail.
 
 2. **Prefer loopback for the game-wire and countdown layers.** Loopback removes ICE,
    so it cannot reproduce a pairing that never connects: signalling/ICE goes straight to
-   the real-RTC evidence (SKILL.md §First evidence, step 6).
+   the real-RTC evidence (SKILL.md §First evidence, then step 6 below).
    - Use `NetTransport.loopback()` via `__apex.netLoopback()` to remove real ICE
      and wall-clock timing.
    - Pass `nowMs`, then drive `__apex.netTick(nowMs)` explicitly.
@@ -103,10 +103,10 @@ Load from the SKILL.md index when the task needs this detail.
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
-   - Then ONE spec for the symptom, backgrounded (AGENTS.md rule 4): `node tools/ci/test-bg.mjs --spec tests/specs/multiplayer-<lobby|room|scan|seats|session|roles|npeer|scan-cancel>.spec.js`.
-     The whole `net` group (`tests/groups.json`) is `node tools/ci/remote-group.mjs net` on the pushed branch; a subagent reports browser runs as not run.
-   - Use real RTC scripts only for browser/ICE behavior that loopback cannot
-     exercise.
+   - The browser specs (`tests/specs/multiplayer-*.spec.js`) are the `net` group: CI runs them on the PR, or
+     `node tools/ci/remote-group.mjs net` on the pushed branch. Never locally (AGENTS.md rule 5).
+   - The real-RTC scripts (`tools/net/rtc-e2e*.mjs`) boot Chromium: a parent-session diagnosis aid for ICE
+     behaviour loopback cannot exercise, not a pre-push gate; a subagent never runs them.
 
 ## "Build mismatch" though both are on the live build
 
@@ -124,7 +124,7 @@ So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-wor
 Connected is not seated: the link can be up while `NetPlay.start()` never bound a rival. Trace in order, stop at the first broken link:
 1. `__apex.net()`: `{ active: false }` means start failed or never ran. Read `reason`, and `__apex.logs({ns:"net"})` for `play start fail no_slot|no_track|already_active|no_transport` (`netplay.js` `start()`). 
    `no_slot` = `pickRemoteSlot` found no free car (empty `G.cars`, or the rival's profile team is absent from THIS grid); the lobby then says "Could not find a grid slot" and quits to menu (`lobby.js` `finishStart`).
-2. `active: true` but `remotes: []`: no seat. `slotFallback` is `"team"` (right team, other seat), `"any"` (profile-less join, loopback) or `"profile-miss"` (named profile matched nobody; `docs/DEBUG-HOOKS.md` lists only the first two). A profile-less join happens when HELLO had not arrived: check the lobby's peers/profile.
+2. `active: true` but `remotes: []`: no seat. `slotFallback` is `"team"` (right team, other seat), `"any"` (profile-less join, loopback) or `"profile-miss"` (named profile matched nobody). A profile-less join happens when HELLO had not arrived: check the lobby's peers/profile.
 3. `remotes` has an entry but `wire` is `-1`: `G.wireId(c)` found no team index; every packet for it is dropped.
 4. Seated but not drawn where expected: `separateGrid()` lays the humans by `wireId` from the local P12 (skipped when `G.gridPreOrdered`); a grid that differs per peer stacks the rival inside you (`net-grid-separation.test.mjs`).
 5. Posed then gone: `net().stale` lists wire ids silent past `STALE_MS` (`netplay.js`); `owns()` is false for them and the local AI drives the car until a packet returns. `stale` plus `buffered: 0` = packets not arriving, so go to the "never moves" trace.
@@ -145,11 +145,8 @@ Offline (no browser), single files:
 Three peers use a **star topology**: guest B and guest C each connect to the
 host; the host **relays** snapshots between them (no direct B↔C link). Invites
 are **sequential** — mint one invite, accept, then `lobbyInviteAnother()` for
-the next guest. Prefer the dedicated script:
-
-```sh
-npm run rtc:e2e-3p
-```
+the next guest. The dedicated script `npm run rtc:e2e-3p` boots Chromium (parent
+session only; a diagnosis aid, not a gate).
 
 Background-tab throttling can stall WebRTC timers in a real browser — for
 reliable 3-player debugging use `__apex.headless(true)` or the headless RTC
@@ -172,6 +169,6 @@ scripts above rather than three background tabs.
   must be typed so the UI can fall back to link/QR.
 - Creating several host invites simultaneously; the lobby intentionally makes
   invites sequential so pasted answers are matchable by humans.
-- Running browser net tests before `test:net-unit`, making deterministic unit
-  failures look like WebRTC flake.
+- Requesting the `net` browser group before `test:net-unit` is green, making
+  deterministic unit failures look like WebRTC flake.
 - Debugging a guest stuck mid-countdown as an ICE problem: see step 4 (countdown consumption).

@@ -1,4 +1,4 @@
-// REAL REPLAY audio: real team radio is caption-only (docs/DECISIONS.md D-031) and the engine
+// REAL REPLAY audio: real team radio is caption-only (docs/DECISIONS.md D-032) and the engine
 // voice of a puppet. Split from real-replay-vm.test.mjs (M1-15).
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,7 +9,7 @@ import { transportReplay, audioHarness } from "../helpers/real-replay-fixtures.m
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-// TEAM RADIO IS CAPTION-ONLY (D-031). The replay used to hot-link OpenF1's recording_url
+// TEAM RADIO IS CAPTION-ONLY (D-032). The replay used to hot-link OpenF1's recording_url
 // (real broadcast audio) and play it through three fallbacks; now the message is a caption,
 // status().radio carries the source link for the transport, and nothing is fetched or played.
 test("WATCH real team radio is a caption with a source link: no Audio, no fetch, no media clip", () => {

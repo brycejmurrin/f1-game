@@ -589,7 +589,7 @@ test('camera-only fixture strips remote radio audio without mutating source and 
   assert.equal(original.radio[0].url, 'https://remote.invalid/radio.mp3');
   assert.equal(sanitized.script.radio[0].url, undefined); assert.equal(sanitized.script.radio[0].t, 10);
   assert.equal(sanitized.offline.removedRadioUrls, 1); assert.equal(sanitized.offline.captionsPreserved, true);
-  // Real team radio is caption-only (docs/DECISIONS.md D-031): the replay has no audio player
+  // Real team radio is caption-only (docs/DECISIONS.md D-032): the replay has no audio player
   // left for any URL to reach, sanitized or not.
   const source = readFileSync(resolve(ROOT, 'js/race/real-replay.js'), 'utf8');
   assert.doesNotMatch(source, /function playRadio|new Audio\(|playWatchMedia|radioMediaClip/);

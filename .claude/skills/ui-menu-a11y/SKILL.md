@@ -1,7 +1,5 @@
 ---
 name: ui-menu-a11y
-paths:
-  - "css/**"
 description: "Use when menus, settings or dialogs misbehave: Escape or back, focus, keyboard navigation, screen readers, scrolling, UI scale, touch layout, or a cramped landscape phone screen. Not for: one element's styling → css-play; the whole-UI review → survey-ui-matrix; driving input → input-controls."
 ---
 
@@ -29,9 +27,9 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 
 ## Default-first visual verification
 
-Bryce's profile first — 844×390 landscape, touch (AGENTS.md §Coordination): one cell is
+Bryce's profile first — 844×390 landscape, touch (AGENTS.md §Critical conventions): one cell is
 `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens=<id>` (parent only; the default
-`ios-iphone-landscape` is 852×393, not his phone). Then shipped settings, stress cases labelled separately:
+viewport `ios-iphone-landscape` is not his phone — `--help`). Then shipped settings, stress cases labelled separately:
 **survey-ui-matrix** `references/verification.md` §Default-first visual verification (one copy).
 
 ## Quick Reference
@@ -42,15 +40,14 @@ Layer gate, dialog seam, `data-esc-close` door, `MenuNav`, `SheetShape`, `AriaSt
 and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below.
 
 ```sh
-node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
+node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css   # the groups this edit needs
 node --test tests/unit/menu-a11y-audit.test.mjs   # STATIC Escape/door/layer pins, no browser; behaviour needs the specs
-node tools/ci/test-bg.mjs --spec tests/specs/menu-keyboard.spec.js   # BROWSER, one spec, background; also ui-button-touch, ui-scale
-node tools/ci/remote-group.mjs ui          # the whole `ui` group, on the PUSHED branch
-node tools/ci/test-bg.mjs --spec tests/specs/ui-audit.spec.js   # BROWSER: captures — read the PNGs
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the local floor
+node tools/ci/remote-group.mjs ui          # behaviour (menu-keyboard, ui-button-touch, ui-scale), on the PUSHED branch
 ```
 
-`tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
+No browser spec runs locally (AGENTS.md rule 5): the PR run covers the picked groups. `tests/specs/ui-audit.spec.js`
+(group `gallery`) asserts nothing — it is a capture harness; read its PNGs from the CI artifacts.
 FLOWS (door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
 844×390 touch: `node tools/ui/flows.mjs [--checks=…] [--diff=<old flows.json>]` (parent-only browser; `--list`/`--help` none).
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
@@ -102,8 +99,8 @@ Keep the player's ordinary click/keypress separate. Then use:
 The oracle requires the remembered node to be disconnected and a unique new
 matching node to hold sampled focus. A different expected selector permits an
 intentional focus transfer. Same-node reinsertion never proves replacement.
-Sampling runs every50ms; target changes, mismatches and gaps over100ms restart
-the stability window. Timelines retain64samples plus omission counts. Missing
+Target changes, mismatches and sampling gaps restart the stability window; the poll
+interval, gap limit and timeline cap live in `sampleFocus` (`tools/ui/explorer/browser.mjs`). Missing
 witnesses, unobserved replacement, measured wrong focus and incomplete sampling
 are distinct outcomes. A sampling gap is unmeasured time, not proof of a UI defect.
 

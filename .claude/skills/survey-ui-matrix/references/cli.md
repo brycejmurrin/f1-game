@@ -1,6 +1,6 @@
 # UI-matrix CLIs: commands, flags, axes, which tool
 
-Every `layout-audit.mjs` / `menu-mock.mjs` call except `--help` is parent-only (SKILL.md §Gotchas).
+Every call below is parent-only, `--help` included for layout-audit/fit-audit (SKILL.md §Gotchas).
 
 ## Contents
 - layout-audit commands
@@ -13,12 +13,12 @@ Every `layout-audit.mjs` / `menu-mock.mjs` call except `--help` is parent-only (
 ## layout-audit commands
 
 ```sh
-# NO BROWSER (exits before any launch; all but --help still parent-only): --help, --list, --report, --diff
+# NO BROWSER (exits before any launch; still parent-only): --help, --list, --report, --diff
 node tools/ui/layout-audit.mjs --help
 node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (counts are in its output)
 # BROWSER (Chromium, as do fit-audit/menu-fit below unless --help; /proc/loadavg < 3, no Playwright run live;
 #   at >= 3 reap your own Chrome (AGENTS.md rule 7), wait once, else report the cells unmeasured):
-node tools/ui/layout-audit.mjs --survey          # 6 title-path screens @852x393 + shots (npm run ui:survey): NOT Bryce's cell, NOT every screen
+node tools/ui/layout-audit.mjs --survey          # title-path screens + shots (npm run ui:survey): NOT Bryce's cell, NOT every screen
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
 node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
@@ -33,8 +33,8 @@ plan the matrix with `--list`.
 ## Flags
 
 From `node tools/ui/layout-audit.mjs --help`: `--screens=a,b` / `--viewports=ios-*` (wildcard = prefix),
-`--scale=100,130` (percent, 40-200), `--circuits=`, `--shots`, `--dom`, `--lang=TAG`, `--json`,
-`--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME` (default `ios-iphone-landscape`), `--survey`,
+`--scale=100,130` (percent; range in `ui-scale-axis.mjs`), `--circuits=`, `--shots`, `--dom`, `--lang=TAG`, `--json`,
+`--jobs=N`, `--gallery`, `--screen=ID` + `--viewport=NAME` (default in `--help`), `--survey`,
 `--force`, `--report` (summarize the last gallery), `--diff=BEFORE.json [--after=F]` (no browser; exit 1 on a
 new finding), `--out=DIR`.
 
@@ -50,7 +50,7 @@ evidence in the report, never full matrix green.
 - scale = `--scale=` percent (axis code: `tools/ui/ui-scale-axis.mjs`);
 - no ultrawide row exists: add one to `VIEWPORTS` (`tools/ui/menu-screens.mjs`).
 
-Viewports are catalog names only (shortest is 852x344). For a free-form size such as 568x320:
+Viewports are catalog names only (`--list`). For a free-form size such as 568x320:
 
 - full catalog of screens: add a `VIEWPORTS` row in `tools/ui/menu-screens.mjs`, then
   `node tools/ui/layout-audit.mjs --viewports=<new-name> --scale=125`;
@@ -68,12 +68,12 @@ truncation and tap targets on longer labels before translating real locales.
 
 | tool | role |
 |---|---|
-| `menu-mock.mjs` | look fast (~1-2 s a cell), not a number of record |
+| `menu-mock.mjs` | look fast, not a number of record |
 | `layout-audit.mjs` | numbers of record: geometry matrix, gallery, diff |
 | `fit-audit.mjs` | type/spacing floors (`--sizes=`, `--scale=`; no exit code) |
 | `menu-fit.mjs` | `--safe=` notch insets only (deprecated otherwise) |
 | `reach-score.mjs` | offline (no browser): two-thumb reach zone of each screen's primary, tap share per zone, dead space, from `--dom` dumps or an inspection (`--in DIR --svg`) |
-| `test:baseline` | 6 pixel PNGs, identity check |
+| `test:baseline` | CI group `baseline` (`menu-baseline.spec.js` PNGs, identity); on a pushed branch `node tools/ci/remote-group.mjs baseline` |
 | `flows.mjs` | interaction FLOWS, not layout: door/Escape, double-tap bleed, focus, Back, persistence, search, rotation, D-pad; `--diff=<old flows.json>` exits 1 on a pass → fail |
 
 ## menu-mock: the fastest look at the menus
@@ -84,9 +84,9 @@ labelled boxes (controls yellow, tap/off-screen red), `index.md` with tap / off-
 per cell and a `sheet.jpg`; a warm re-run is served from the content-hash cache. Look-fast only.
 
 ```sh
-node tools/ui/menu-mock.mjs                                                                  # title,settings,racesettings,results,quali,pause @ 844x390
+node tools/ui/menu-mock.mjs                                                                  # its default screens @ Bryce's phone (header comment)
 node tools/ui/menu-mock.mjs --screens=select,garage --viewports='ios-*,desktop-1280x800' --format jpeg
-node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 --list         # cells, no browser (parent-only)
+node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 --list         # cells, no browser
 ```
 
 Shared pieces (held rAF, boxes, CDP capture, contact sheet, content-hash cache) live in `tools/lib/ui-mock-core.mjs`.

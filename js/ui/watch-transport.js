@@ -125,7 +125,7 @@ const WatchTransport = (function () {
       const caption = node("div", "caption");
       caption.appendChild(node("span", "name", desc.name));
       caption.appendChild(node("span", "event"));
-      // REAL TEAM RADIO is caption-only (docs/DECISIONS.md D-031): the replay never fetches or
+      // REAL TEAM RADIO is caption-only (docs/DECISIONS.md D-032): the replay never fetches or
       // plays the recording; this link opens the published clip at its source in a new tab.
       const radio = node("a", "radio", "LISTEN AT SOURCE ↗");
       radio.target = "_blank"; radio.rel = "noopener noreferrer"; radio.hidden = true;

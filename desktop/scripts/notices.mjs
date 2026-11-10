@@ -65,7 +65,7 @@ export const COMPONENTS = [
   { name: "Lucide icons", group: "fonts", licence: "assets/icons/lucide-LICENSE.txt", url: "https://lucide.dev", use: "menu icons" },
 ];
 
-/** The live data feeds (docs/DECISIONS.md D-031: both are non-commercial). */
+/** The live data feeds (docs/DECISIONS.md D-032: both are non-commercial). */
 export const DATA_SOURCES = [
   { name: "Jolpica F1", url: "https://github.com/jolpica/jolpica-f1", licence: "CC BY-NC-SA 4.0", use: "schedule and standings (the Ergast-compatible API)" },
   { name: "OpenF1", url: "https://openf1.org", licence: "CC BY-NC-SA 4.0", use: "results, live timing, telemetry, WATCH replays and team radio captions" },

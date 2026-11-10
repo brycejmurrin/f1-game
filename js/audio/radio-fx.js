@@ -440,7 +440,7 @@ var GameAudioRadioFx = (function () {
     };
   }
   // No WATCH media player: real team radio in WATCH is caption-only (docs/DECISIONS.md
-  // D-031); the broadcast recordings are never fetched or played.
+  // D-032); the broadcast recordings are never fetched or played.
   return { create };
 })();
 Object.freeze(GameAudioRadioFx);

@@ -330,7 +330,7 @@ const RealReplay = (function () {
       if (reel && reel.length) cutTo(reel[0]);
       // THE COMMENTARY (js/race/race-radio.js): the replay's highlights are the
       // news, told with the REAL drivers' names. Real team radio is caption-only
-      // (docs/DECISIONS.md D-031): nothing of the broadcast audio is fetched or played.
+      // (docs/DECISIONS.md D-032): nothing of the broadcast audio is fetched or played.
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching({
         nameOf: (c) => { const f = run && run.cars.get(c); return f && f.d && typeof RadioLines !== "undefined" ? RadioLines.surname(f.d) : null; },
       });
@@ -559,7 +559,7 @@ const RealReplay = (function () {
         if (h.t > run.T) break;
         run.eventCursor++;
         if (h.t < run.T - CAPTION_S) continue;   // seeked past: not news any more
-        // TEAM RADIO IS CAPTION-ONLY (D-031): the card names the driver and the
+        // TEAM RADIO IS CAPTION-ONLY (D-032): the card names the driver and the
         // transport links out to the source; the recording is never fetched or played.
         if (h.kind === "radio") { caption(h.text, "info"); run.radio = h; continue; }
         // SPOKEN when the commentator can keep up (<= 2x): the commentary card
@@ -644,7 +644,7 @@ const RealReplay = (function () {
       return { T: +run.T.toFixed(2), duration: run.duration, paused: run.paused, speed: run.speed, follow: followed && followed.d ? followed.d.code : null, reel: run.reel ? run.reel.length : 0, reelIdx: run.reelIdx,
                highlights: run.list.length, fit: run.fit ? { rms: +run.fit.rms.toFixed(2), refl: run.fit.refl } : null, finished: run.finished,
                cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null,
-               // The last team radio message as text plus its source link (caption-only, D-031).
+               // The last team radio message as text plus its source link (caption-only, D-032).
                radio: run.radio && run.T - run.radio.t <= RADIO_LINK_S ? { text: run.radio.text, lap: run.radio.lap, url: run.radio.url || "" } : null };
     }
 

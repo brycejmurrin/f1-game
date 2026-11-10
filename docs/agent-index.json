@@ -2229,11 +2229,6 @@
       "roster": "tag"
     },
     {
-      "path": "js/camera/drive-lens.js",
-      "global": "DriveLens",
-      "roster": "tag"
-    },
-    {
       "path": "js/camera/extra-rigs.js",
       "global": "ExtraRigs",
       "roster": "tag"
@@ -4239,11 +4234,6 @@
       "roster": "tag"
     },
     {
-      "path": "js/race/wx-hash.js",
-      "global": "WxHash",
-      "roster": "tag"
-    },
-    {
       "path": "js/render/gfx.js",
       "global": "Gfx",
       "roster": "tag"
@@ -4706,11 +4696,6 @@
     {
       "path": "js/ui/cvd-palette.js",
       "global": "CvdPalette",
-      "roster": "tag"
-    },
-    {
-      "path": "js/ui/debris-opts.js",
-      "global": "DebrisOpts",
       "roster": "tag"
     },
     {

@@ -152,7 +152,7 @@ test('reselecting a pending schedule then changing tabs retires superseded compl
   assert.equal(disposed, 39);
 });
 
-// D-031: both feeds are CC BY-NC-SA 4.0; the tab that shows their data credits them.
+// D-032: both feeds are CC BY-NC-SA 4.0; the tab that shows their data credits them.
 test('a tab showing feed data carries the data-source line with the licence', async () => {
   const h = harness(true);
   h.hub.open('schedule');

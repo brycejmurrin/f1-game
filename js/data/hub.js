@@ -544,7 +544,7 @@ const DataHub = (function () {
     return el("div", "dh-footnote", txt);
   }
 
-  // THE DATA SOURCE LINE under every tab's data (docs/DECISIONS.md D-031): both
+  // THE DATA SOURCE LINE under every tab's data (docs/DECISIONS.md D-032): both
   // feeds are CC BY-NC-SA 4.0, which asks for the credit and the licence wherever
   // their data is shown, and for non-commercial use only.
   const FEEDS = {
