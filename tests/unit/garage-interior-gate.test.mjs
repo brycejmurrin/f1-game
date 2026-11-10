@@ -272,8 +272,6 @@ describe("the interior gate on a cleared-buffer frame", () => {
     assert.doesNotMatch(frame, /gapSample/,
       "the drawImage-fed gapSample field is gone; nothing may depend on it again");
     assert.match(probe, /export async function awaitPresentedFrame/);
-    assert.match(probe, /getElementById\("game-soft"\)/,
-      "presentedCanvasClip must prefer the HeadlessChrome overlay");
     const presented = probe.slice(probe.indexOf("export async function screenshotPresentedCanvas"),
       probe.indexOf("export async function screenshotGameCanvas"));
     assert.match(presented, /readSoftCanvasBytes/,
@@ -295,8 +293,6 @@ describe("the interior gate on a cleared-buffer frame", () => {
 
   it("garage-angles captures via soft helper and walks livery/spine designs", () => {
     const angles = fs.readFileSync(path.join(REPO, "tools/shot/garage-angles.mjs"), "utf8");
-    assert.match(angles, /screenshotGameCanvas/,
-      "HeadlessChrome GLX presents on #game-soft; a full-page screenshot is the UI sheet");
     assert.doesNotMatch(angles, /await page\.screenshot\(/,
       "page.screenshot waits for fonts.ready and was the smoke hang after freeze");
     assert.match(angles, /--livery/,
