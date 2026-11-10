@@ -747,6 +747,7 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "*": [
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -1643,11 +1644,6 @@
         "tests/unit/director.test.mjs"
       ]
     },
-    "js/camera/drive-lens.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
     "js/camera/extra-rigs.js": {
       "pickRival": [
         "tests/unit/extra-rigs.test.mjs"
@@ -1668,6 +1664,10 @@
       ]
     },
     "js/camera/feel.js": {
+      "apply": [
+        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/director.test.mjs"
+      ],
       "applyFreeLook": [
         "tests/unit/camera-feel.test.mjs"
       ],
@@ -1699,6 +1699,9 @@
       ],
       "modeFov": [
         "tests/unit/camera-feel.test.mjs"
+      ],
+      "read": [
+        "tests/unit/phone-pad.test.mjs"
       ],
       "resetFollow": [
         "tests/unit/camera-feel.test.mjs"
@@ -3697,6 +3700,7 @@
       "isOptionAvailable": [
         "tests/specs/parts-catalog.spec.js",
         "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
@@ -3714,6 +3718,9 @@
       ],
       "optLabel": [
         "tests/unit/i18n-parts-career.test.mjs"
+      ],
+      "ownId": [
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "resolveSetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3931,6 +3938,7 @@
         "tests/unit/career-regulations.test.mjs"
       ],
       "*": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs"
       ]
     },
@@ -4067,6 +4075,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-experience.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -4095,6 +4104,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4124,6 +4134,7 @@
         "tests/unit/career-seat-rollover.test.mjs"
       ],
       "freeMoney": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "goalLabel": [
@@ -4178,6 +4189,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -4225,6 +4237,7 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "owned": [
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "paceMult": [
@@ -4254,7 +4267,8 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "research": [
-        "tests/unit/career-cross-tab.test.mjs"
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "rollover": [
         "tests/unit/career-ai-dev.test.mjs",
@@ -4356,6 +4370,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
@@ -4373,6 +4388,9 @@
       ],
       "tallyOf": [
         "tests/unit/career-seat-rollover.test.mjs"
+      ],
+      "tdevStep": [
+        "tests/unit/career-parts-regs.test.mjs"
       ],
       "teamStandings": [
         "tests/unit/career-legends.test.mjs",
@@ -4484,6 +4502,7 @@
       "*": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs"
       ]
@@ -4519,6 +4538,7 @@
       "migrateCareer": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/save-migrate.test.mjs",
         "tests/unit/share-code.test.mjs"
@@ -4974,6 +4994,7 @@
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/game-vm.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/profile-lib.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -5119,6 +5140,7 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
@@ -5281,6 +5303,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
@@ -5405,6 +5428,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -5803,6 +5827,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -6138,6 +6163,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
@@ -6934,6 +6960,9 @@
       "tick": [
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/fx/grade-tint.js": {
@@ -7129,6 +7158,9 @@
       ],
       "tintRGB": [
         "tests/unit/visor-optics.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/game.js": {
@@ -10818,7 +10850,6 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
         "tests/unit/road-reflection-transition.test.mjs",
-        "tests/unit/scale-defaults.test.mjs",
         "tests/unit/thermal-drift.test.mjs"
       ],
       "*": [
@@ -10843,6 +10874,7 @@
     },
     "js/perf/loop-health.js": {
       "reload": [
+        "tests/unit/err-overlay-fatal.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "*": [
@@ -11931,6 +11963,7 @@
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
@@ -12387,6 +12420,7 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "*": [
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/wheel-state.test.mjs"
@@ -14357,13 +14391,6 @@
         "tests/unit/ratchets.test.mjs"
       ]
     },
-    "js/race/wx-hash.js": {
-      "*": [
-        "tests/unit/forecast.test.mjs",
-        "tests/unit/rain-cells.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
-      ]
-    },
     "js/render/gfx.js": {
       "create": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14834,6 +14861,7 @@
       ],
       "*": [
         "tests/unit/ci-gate-selection.test.mjs",
+        "tests/unit/global-registry.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -15160,7 +15188,8 @@
       ],
       "*": [
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/mirror-lights.test.mjs"
+        "tests/unit/mirror-lights.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/render/shared/post-common.js": {
@@ -16580,6 +16609,7 @@
     "js/roster.js": {
       "*": [
         "tests/unit/agent-scope-hooks.test.mjs",
+        "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
@@ -17250,6 +17280,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/node-plan.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -17484,12 +17515,6 @@
       ],
       "simulateLinear": [
         "tests/unit/cvd-palette.test.mjs"
-      ]
-    },
-    "js/ui/debris-opts.js": {
-      "*": [
-        "tests/unit/debris-opts.test.mjs",
-        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/deep-link.js": {
@@ -17996,6 +18021,9 @@
       "tick": [
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/hud-relative.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/hud-skin.js": {
@@ -18170,7 +18198,8 @@
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/select-specs.test.mjs",
-        "tests/unit/tooling-fast-runner.test.mjs"
+        "tests/unit/tooling-fast-runner.test.mjs",
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/key-binds.js": {
@@ -18424,6 +18453,9 @@
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "*": [
+        "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
     "js/ui/modal.js": {
@@ -18634,6 +18666,7 @@
         "tests/unit/post-fx-opts.test.mjs"
       ],
       "read": [
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
@@ -18745,6 +18778,9 @@
       "applyBtnScale": [
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "applyResMode": [
+        "tests/unit/perf-governor.test.mjs"
+      ],
       "create": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -18752,12 +18788,19 @@
         "tests/unit/render-effective-res.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
-      "refreshBtnFit": [
+      "parseCaps": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "refreshFit": [
         "tests/unit/hud-feel.test.mjs"
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
+      ],
+      "sizeRow": [
+        "tests/unit/hud-feel.test.mjs"
       ],
       "*": [
         "tests/specs/real-profile-dock.spec.js",

@@ -1208,7 +1208,7 @@ var PitLane = (function () {
       // got one plan whatever was fitted — "hard, BOX L11" for a hypersoft that
       // is gone by lap 4 — and its two-compound guarantee was about a tyre the
       // car was not on. A wet set or no car: the planner picks, as before.
-      const rec = player && car ? TyreModel.startRecord(car) : null;   // what gridUp is about to fit (c.tyre is last race's)
+      const rec = player && car ? (G.tyres && G.tyres.startRecord ? G.tyres.startRecord(car, TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness())) : TyreModel.startRecord(car)) : null;   // what gridUp is about to fit (c.tyre is last race's): the weather's tread on a wet grid (#5251)
       const start = rec && !(rec.tread > 0) ? classOfCode(rec.code) : null;
       // An AI's taste is its roll widened by its temper (AiDrive.tasteRoll):
       // a rookie gambles, a veteran runs the book. Kept on the plan, so the
