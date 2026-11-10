@@ -36,6 +36,16 @@ const BACKEND_FILES = ApexRoster.DEFERRED;
 // whether a DEFERRED backend actually took the canvas on THIS load.
 const STRIKE_KEY = "apex26.gfxProbeStrikes";
 let _backendBound = false;
+// THE RETIREMENT RECORD (#4995): "<backend>:<build>", written with the second-
+// strike rewrite of the pick. Two iOS app kills inside the first race load are
+// enough to retire TLX/WebGPU, and without this the next cold launch showed
+// WEBGL2 as if the player had chosen it. RendererPicker reads it for the
+// SETTINGS notice and its TRY AGAIN button; a hand pick or RESET clears it.
+const RETIRED_KEY = "apex26.gfxRetired";
+function retiredWhy(raw) {
+  const m = /^(three|webgpu):(\d+)$/.exec(raw || "");
+  return m ? "retired: " + m[1] + " never presented a frame on two starts in a row (build " + m[2] + "); WebGL2 is the pick until a renderer is picked by hand" : "";
+}
 function strikesFor(raw, backend) {
   if (raw == null) return 0;
   const m = /^([a-z0-9]+):(\d+)$/.exec(raw);
@@ -243,6 +253,14 @@ try {
   // still reverts; a probe still armed at the NEXT boot means create() or
   // present() never completed last time.
   const PROBE_KEY = "apex26.gfxBackendProbe";
+  // A record only speaks for the webgl2 pick it wrote: any other stored pick
+  // (a settings import, the agent bridge) makes it stale. While it stands, every
+  // boot says why WebGL2 is drawing, not just the boot that retired the pick.
+  try {
+    const retired = localStorage.getItem(RETIRED_KEY);
+    if (retired && localStorage.getItem("apex26.gfxBackend") !== "webgl2") localStorage.removeItem(RETIRED_KEY);
+    else if (retired) why = retiredWhy(retired);
+  } catch (_) { /* blocked storage: no record to read */ }
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
   // skipClaim = this tab already claimed-and-died; the probe is leftover from
@@ -270,6 +288,7 @@ try {
       localStorage.removeItem(PROBE_KEY);
       if (retire) {
         localStorage.setItem("apex26.gfxBackend", "webgl2");
+        localStorage.setItem(RETIRED_KEY, armed + ":" + ((typeof window !== "undefined" && window.__APEX_BUILD) || 0));
         localStorage.removeItem(STRIKE_KEY);
       } else localStorage.setItem(STRIKE_KEY, armed + ":" + strikes);
     } catch (_) { /* the in-memory revert above still holds for this load */ }
