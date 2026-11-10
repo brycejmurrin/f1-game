@@ -57,6 +57,12 @@ let _ltPrevTOD = null, _ltPrevWx = null;
 // drops it, and restoring the weather alone left a MIXED race frozen at its
 // current stage — grip included (TyreModel.wetness reads the arc).
 let _ltPrevArc, _ltArcSaved = false;
+// NOT IN A VS FRIEND RACE (#5041): the net pause does not stop the sim, so a
+// chip there is a live change the rival never sees — a WEATHER chip moves this
+// phone's grip and tyre temperatures mid-race, a TIME chip rebuilds the track.
+// The chips stand down while a net session is live; the sliders stay (they
+// only touch this phone's picture).
+const netLive = () => !!(G.netPlay && typeof G.netPlay.active === "function" && G.netPlay.active());
 const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
 const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
 function refreshLtPreviewActive() {
@@ -87,7 +93,7 @@ function buildLtPreview() {
     ids.forEach((id, i) => {
       const btn = document.createElement("button");
       btn.className = "opt-btn lt-preview-btn"; btn.id = prefix + id; btn.textContent = labels[i];
-      btn.onclick = () => { onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
+      btn.onclick = () => { if (netLive()) return; onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
       row.appendChild(btn);
     });
     host.appendChild(row);
@@ -430,6 +436,7 @@ $("pm-lighting").onclick = () => {
   _ltPrevWx = weather();
   _ltPrevArc = G.weatherArc; _ltArcSaved = true;
   refreshLtPreviewActive();
+  $("lt-preview").hidden = netLive();
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath

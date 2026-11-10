@@ -1374,7 +1374,9 @@ body[data-density="compact"] {
   }
   .dh-tpopup-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dh-tpopup-sub { font-size: var(--fs-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dh-tpopup .dh-close { width: 34px; height: 34px; font-size: var(--fs-4); border-radius: var(--r-sm); }
+  /* --tap-paint, not 34px: this rule outranks the hub's compact ✕ size and painted the
+     player's only exit 37x52 at 844x390 (#5069); 52 painted px on both axes now. */
+  .dh-tpopup .dh-close { width: var(--tap-paint); height: var(--tap-paint); font-size: var(--fs-4); border-radius: var(--r-sm); }
   .dh-tpopup .dh-legend { gap: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-1); margin-top: -4px; }
   .dh-tpopup .dh-legend-item { padding: 2px 4px; }
   .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
