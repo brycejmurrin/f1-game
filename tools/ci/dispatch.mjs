@@ -40,7 +40,8 @@
 // issue launches only when the owner's account authored it or added `ready` (in person or through an agent); launch
 // claims and nudges count only when github-actions[bot] wrote them and their stamp is not in the future; the Board and
 // Dispatch issues are the numbers pinned in dispatch.json (`boardIssue`, `dispatchIssue`).
-// Task rules: (1) `ready` issues without `claimed` → one worker each, `priority` (Bryce's) first, newest next, within
+// Task rules: (1) `ready` issues without `claimed` → one worker each (a `batch` issue is the ONE launch for its
+// `batched` members, and waits for what its "## Merge order" lands after), `priority` (Bryce's) first, newest next, within
 // maxLaunchesPerRun, maxLiveWorkers (launch comments younger than launchClaimHours) and maxLaunchesPerDay (launch
 // comments in the last 24 h), and none at all while landQueueMax or more open non-draft PRs carry `land` (LANDING
 // BACKPRESSURE; rules 2 and 3 drain the queue and are never paused); (2) an open PR with no push and no comment for
@@ -208,6 +209,44 @@ export function unmergedPrerequisites(p, prs) {
   for (const re of PREREQ_RES) for (const m of text.matchAll(re)) { const n = Number(m[1]); if (n !== Number(p.number) && open.has(n)) out.add(n); }
   return [...out].sort((a, b) => a - b);
 }
+const sectionOf = (body, name) => {
+  const out = []; let on = false;
+  for (const line of String(body || "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/)) {
+    if (/^##\s/.test(line)) on = line.replace(/^##\s+/, "").trim().toLowerCase() === name;
+    else if (on) out.push(line);
+  }
+  return out;
+};
+const nums = (text) => [...String(text).matchAll(/#(\d{1,6})\b/g)].map((m) => Number(m[1]));
+/** A batch issue's members: the first `#n` of each top-level bullet under "## Members" (issue-batching's body). Pure. */
+export function batchMembers(body) {
+  return [...new Set(sectionOf(body, "members").map((l) => /^[-*]\s+#(\d{1,6})\b/.exec(l)?.[1]).filter(Boolean).map(Number))];
+}
+/** What a batch issue's "## Merge order" says it lands after: every `#n` in the bullets under a "lands after" line,
+ *  parentheticals dropped ("#5118 (batch perf-tooling) (#5056 row 1)" names #5118 only). Pure. */
+export function batchLandsAfter(body) {
+  const out = new Set(); let on = false;
+  for (const line of sectionOf(body, "merge order")) {
+    if (/^[-*]\s/.test(line)) { if (on) for (const n of nums(line.replace(/\([^()]*\)/g, ""))) out.add(n); }
+    else if (line.trim()) on = /\blands\s+\**after\b/i.test(line);
+  }
+  return [...out];
+}
+/** The entries of `batchLandsAfter` that have NOT landed: an open PR, an open issue, or an open batch issue with a
+ *  member still open (a batch whose members are all closed has landed even while its own issue is open). `issues` and
+ *  `prs` hold only OPEN ones, so a number in neither has landed or closed. Pure. */
+export function batchWaits(batch, issues, prs) {
+  const openIssue = new Map(issues.map((i) => [Number(i.number), i]));
+  const openPr = new Set(prs.filter((p) => !p.state || p.state === "open").map((p) => Number(p.number)));
+  return batchLandsAfter(batch.body).filter((n) => {
+    if (n === Number(batch.number)) return false;
+    if (openPr.has(n)) return true;
+    const i = openIssue.get(n);
+    if (!i) return false;
+    const ms = has(i, "batch") ? batchMembers(i.body) : [];
+    return ms.length ? ms.some((m) => openIssue.has(m)) : true;
+  }).sort((a, b) => a - b);
+}
 /** Why a takeover would collide with a live pusher, or "": a commit in the last `hours` by someone who is neither the PR's
  *  author nor a Claude identity, or a lane:cursor PR with a push in that window (the newest commit date; updated_at when the
  *  commits were not fetched). #4187: the worker lost 57 min to a live Cursor agent. Pure. */
@@ -355,7 +394,14 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
   const landQueue = prs.filter((p) => !p.draft && has(p, "land")).length;
   const queueFull = Number.isFinite(config.landQueueMax) && landQueue >= config.landQueueMax;
   if (queueFull) skip("issue launches paused", `${landQueue} PRs waiting to land (max ${config.landQueueMax}) — land before starting more`);
-  const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision") && !has(i, "epic"))
+  // A batch issue (`batch`) is the ONE launch for its members: a member (`batched`, or listed under the batch's "## Members")
+  // is never launched on its own, and the batch waits for what its "## Merge order" says it lands after.
+  const batchOf = new Map();
+  for (const b of issues) if (has(b, "batch")) for (const n of batchMembers(b.body)) if (!batchOf.has(n)) batchOf.set(n, b.number);
+  const isMember = (i) => has(i, "batched") || batchOf.has(Number(i.number));
+  const members = issues.filter((i) => has(i, "ready") && !has(i, "claimed") && isMember(i));
+  if (members.length) skip(`${members.length} batched issue(s)`, "fixed by their batch issue's ONE PR, never launched on their own");
+  const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision") && !has(i, "epic") && !isMember(i))
     .sort((a, b) => (ownerLabel(b, "priority") - ownerLabel(a, "priority")) || (t(b.updated_at) - t(a.updated_at)));
   for (const i of ready) if (has(i, "priority") && !ownerLabel(i, "priority")) ignored.push(why(i, "priority"));
   for (const i of ready.filter((x) => !trustedReady(x, owner))) ignored.push(`ready on #${i.number} (neither authored nor labelled by ${owner})`);
@@ -365,10 +411,12 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     for (const n of closingIssues(p.body, config.repo)) linkedPrs.set(n, [...(linkedPrs.get(n) || []), p.number]);
   }
   for (const i of queueFull ? [] : ready.filter((x) => trustedReady(x, owner))) {
-    const linked = linkedPrs.get(Number(i.number));
-    if (linked) { skip(`issue #${i.number}`, `already has open PR ${linked.map((n) => `#${n}`).join(", ")}`); continue; }
+    const linked = linkedPrs.get(Number(i.number)) || (has(i, "batch") ? [...new Set(batchMembers(i.body).flatMap((n) => linkedPrs.get(n) || []))] : []);
+    if (linked.length) { skip(`issue #${i.number}`, `already has open PR ${linked.map((n) => `#${n}`).join(", ")}`); continue; }
     const l = liveLaunch(i.comments, now, claimH);
     if (l) { skip(`issue #${i.number}`, `launched ${l.host} ${ageLabel(l.at, now)} ago (live claim)`); continue; }
+    const waits = has(i, "batch") ? batchWaits(i, issues, prs) : [];
+    if (waits.length) { skip(`issue #${i.number}`, `batch lands after ${waits.map((n) => `#${n}`).join(", ")} (its Merge order): launch when they have landed`); continue; }
     if (has(i, "lane:cursor")) { skip(`issue #${i.number}`, "lane:cursor: Cursor launches retired (2026-11-03); relabel to dispatch a Claude worker"); continue; }
     launch("issue", i.number, `[Worker] #${i.number} ${i.title}`.slice(0, 120), i.number);
   }

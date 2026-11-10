@@ -269,6 +269,17 @@ const PauseOpts = (function () {
         return !blocked;
       },
     });
+    // THE PHONE CARD'S SECOND KEY (#5200). css/overlays.css lays the pause card out as one
+    // wide, scroll-free card on body compact + wide, which is own px: a landscape phone at
+    // UI SIZE <= 65 % is "normal" there and fell back to the 420 card, which scrolled and
+    // lost RESUME. The window itself being short is zoom-blind, so stamp it from the media
+    // query (the layout viewport: never stale inner*, UI contract 2026-11-06 rule 1).
+    const mq = typeof matchMedia === "function" ? matchMedia("(orientation: landscape) and (max-height: 500px)") : null;
+    if (mq && document.body && document.body.toggleAttribute) {
+      const stamp = () => document.body.toggleAttribute("data-pause-short", !!mq.matches);
+      stamp();
+      if (mq.addEventListener) mq.addEventListener("change", stamp);
+    }
     pm.addEventListener("click", onPauseClick, true);
     pm.addEventListener("pointerup", onPausePointerUp, true);
     document.addEventListener("keydown", onPauseKey, true);

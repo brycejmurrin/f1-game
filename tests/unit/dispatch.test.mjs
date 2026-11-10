@@ -7,7 +7,7 @@ import fs from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
+  planDispatch, batchMembers, batchLandsAfter, DEFAULT_CONFIG, parseHandoff, liveLaunch, activityAt, applyPlan, loadConfig, BOARD_MARKER, LAUNCH_RE, NUDGE_RE,
   DIGEST_MARKER, ANTHROPIC_VERSION, readState, getAll, landProblem, main, renderPlan, launchRecheck, fireWorker, claimComment,
   addressOf, closingIssues, isDispatchComment, PROVENANCE_LABELS,
 } from "../../tools/ci/dispatch.mjs";
@@ -78,6 +78,31 @@ test("rule 1: a launch comment younger than launchClaimHours is a live claim (no
     issue(14, ["ready", "lane:cursor"]), issue(15, ["ready"], { body: "Sub-issue of #13" })] }), cfg(), NOW);
   assert.deepEqual(p.launches.map((l) => l.number), [15]);
   assert.deepEqual(skips(p), ["issue #14: lane:cursor: Cursor launches retired (2026-11-03); relabel to dispatch a Claude worker"]);
+});
+
+test("rule 1: a batch and its members yield ONE launch; a member is never launched alone; a batch honours its Merge order", () => {
+  const body = (members, after = "No open PR and no other batch edits these files: this batch can start now.") =>
+    ["One PR fixes every member.", "", "## Members", ...members.flatMap((n) => [`- #${n} — a bug`, "  - tools/ci/dispatch.mjs:1 see #999"]), "", "## Shared files", "- `tools/ci/dispatch.mjs`", "",
+      "## Merge order", after, "", "sync once after each PR named above.", "", "## Notes", "#998 also edits this and lands after."].join("\n");
+  const after = (...lines) => ["This batch lands **after**:", ...lines].join("\n");
+  const batch = (n, members, on = {}) => issue(n, ["ready", "batch"], { body: body(members, on.after), ...on });
+  // 11 is a member by label and by listing; 12 lost its `batched` label but is listed; 13 is `batched` with no batch in sight.
+  const members = [issue(11, ["ready", "batched"]), issue(12, ["ready"]), issue(13, ["ready", "batched"])];
+  const one = planDispatch(state({ issues: [board(), batch(10, [11, 12]), ...members] }), cfg(), NOW);
+  assert.deepEqual(one.launches.map((l) => l.address), ["ISSUE 10"], "the batch, not its members");
+  assert.deepEqual(skips(one), ["3 batched issue(s): fixed by their batch issue's ONE PR, never launched on their own"]);
+  assert.deepEqual([batchMembers(body([11, 12])), batchLandsAfter(body([11]))], [[11, 12], []], "sub-bullets and Notes name no member and no prerequisite");
+  assert.deepEqual(batchLandsAfter(body([11], after("- PR #50 (game.js), PR #51 and PR #52 (tlx.js)", "- #20 (batch other) (#21 row 1: the stub)"))), [50, 51, 52, 20]);
+  // An open PR that closes a member is the batch's PR: no second launch.
+  const linked = planDispatch(state({ issues: [board(), batch(10, [11, 12]), ...members], prs: [pr(40, { body: "Closes #11 #12", updated_at: ago(0.1) })] }), cfg(), NOW);
+  assert.deepEqual([linked.launches.length, skips(linked).at(-1)], [0, "issue #10: already has open PR #40"]);
+  // Merge order: waits for an open PR and for an open batch with an open member; a closed PR, a closed issue and a
+  // batch whose members are all closed have landed.
+  const waits = (prs, issues) => planDispatch(state({ issues: [board(), batch(10, [11], { after: after("- PR #50 (game.js)", "- #20 (batch other) (game.js)") }), issue(11, ["ready", "batched"]), ...issues], prs }), cfg(), NOW);
+  const held = waits([pr(50, { updated_at: ago(0.1) })], [batch(20, [21], { labels: ["ready", "batch", "claimed"] }), issue(21, ["ready", "batched"])]);
+  assert.deepEqual([held.launches.length, skips(held).at(-1)], [0, "issue #10: batch lands after #20, #50 (its Merge order): launch when they have landed"]);
+  assert.deepEqual(waits([], [batch(20, [21], { labels: ["batch", "claimed"] })]).launches.map((l) => l.address), ["ISSUE 10"], "#50 merged, #20's members all closed");
+  assert.deepEqual(waits([], []).launches.map((l) => l.address), ["ISSUE 10"], "everything it names has landed");
 });
 
 test("rule 2: a PR silent 2 h gets needs-owner and ONE CONTINUE PR <n> takeover; a comment is activity; this tool's own comments are not", () => {
