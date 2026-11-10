@@ -31,6 +31,11 @@ test("isDecisionComment: Bryce's `decision:` comment (any case, leading space) c
   assert.equal(isDecisionComment(paraphrase), false, "an app write quoting Bryce is a relay, not a decision");
   assert.equal(isDecisionComment({ ...decision, body: "I think the decision: land" }), false, "mid-sentence is not the channel");
   assert.equal(isDecisionComment({ ...decision, performed_via_github_app: { slug: "claude" } }), false);
+  const { performed_via_github_app: _gone, ...noField } = decision;
+  assert.equal(isDecisionComment(noField), false, "a row without performed_via_github_app is not his");
+  assert.equal(byOwner({ ...byBryce, performed_via_github_app: undefined }), false);
+  assert.equal(isDecisionComment({ ...decision, updated_at: "2026-11-03T15:00:00Z" }), false, "an edited decision: comment is not a decision");
+  assert.equal(isDecisionComment({ ...decision, updated_at: decision.created_at }), true, "updated_at = created_at is unedited");
 });
 
 test("label events: filtered by name, the owner's subset, the newest one, and ownerSet needs both the label and Bryce's own add", () => {
@@ -63,4 +68,6 @@ test("readIssueEvents / readIssueComments paginate through the injected client a
   assert.equal(calls[0], "https://api.github.com/repos/other/repo/issues/7/comments?per_page=100&page=1", "another repo goes by full URL");
   assert.deepEqual(readIssueEvents("brycejmurrin/f1-game", 1, { request: () => ({ error: "HTTP 403" }) }), { error: "HTTP 403" });
   assert.deepEqual(readIssueEvents("brycejmurrin/f1-game", 1, { request: () => ({ json: null }) }), { events: [] }, "a non-array body is an empty list");
+  const full = () => ({ json: Array.from({ length: PAGE_SIZE }, (_, i) => ({ id: i })) });
+  assert.deepEqual(readIssueEvents("brycejmurrin/f1-game", 1, { request: full, maxPages: 2 }), { error: "more than 2 pages of 100: the list is truncated" }, "a full last page fails closed");
 });
