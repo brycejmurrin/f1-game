@@ -2866,6 +2866,11 @@
       "presentation": "shared-levels",
       "preserve": "LGPL attribution, imported status/IDs and actual write receipts; prose currently accompanies --json."
     },
+    "tools/track/verify-track-baseline.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
     "tools/track/verify-track.cjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",

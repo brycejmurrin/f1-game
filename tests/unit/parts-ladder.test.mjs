@@ -19,7 +19,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
-import { liveSet, dominated, visibleRows, sweepLadder, LADDER } from "../../tools/car/parts-ladder.mjs";
+import { liveSet, dominated, visibleRows, sweepLadder, runLadder, LADDER } from "../../tools/car/parts-ladder.mjs";
+import { sweepExitCode } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const M = loadParts();
@@ -137,4 +138,42 @@ test("liveSet is deterministic and exact in price", () => {
   assert.ok(liveSet([...opts, gift]).has("__gift"), "a free, strictly better row scored dead");
   assert.equal(dominated([...opts, trap]).filter((d) => d.dead.id === "__trap").length, 1);
   assert.ok(LADDER.SAMPLES >= 1000, "the weight sweep must be dense enough to trust");
+});
+
+// ---- the CLI's exit code (2026-11-10) --------------------------------------
+// `--json` returned before the trap verdict (a trap exited 0), and an unknown
+// --team fell through to "no filter" / an unknown --cats to zero rows, both
+// passing. A stub catalog with one planted trap holds all three.
+function trapCatalog() {
+  const Parts = { isOptionAvailable: () => true, CATALOG: [{ id: "aero", options: [
+    { id: "base", cost: 0 },
+    { id: "good", cost: 100, speed: 1.05, accel: 1.02, cornering: 1.03, braking: 1.01 },
+    { id: "trap", cost: 150, speed: 1.01, accel: 1.0, cornering: 1.0, braking: 1.0 },
+  ] }] };
+  return { Parts, Teams: M.Teams };
+}
+const quiet = { log: () => {}, err: () => {} };
+
+test("runLadder: a paid trap is exit 1 with and without --json", () => {
+  const out = [];
+  assert.equal(runLadder(["--json"], { M: trapCatalog(), log: (s) => out.push(s), err: () => {} }), 1);
+  assert.deepEqual(JSON.parse(out[0])[0].traps.map((t) => t.dead.id), ["trap"], "the JSON is still printed");
+  assert.equal(runLadder([], { M: trapCatalog(), ...quiet }), 1);
+  assert.equal(runLadder(["--json"], { M, ...quiet }), 0, "the shipped catalog has no trap");
+});
+
+test("runLadder: an unknown --team or --cats is a usage error naming it", () => {
+  const errs = [];
+  const err = (s) => errs.push(s);
+  assert.equal(runLadder(["--team=nope"], { M, log: () => {}, err }), 2);
+  assert.equal(runLadder(["--cats=wheels,nope,nada", "--json"], { M, log: () => {}, err }), 2);
+  assert.match(errs[0], /unknown --team nope/);
+  assert.match(errs[1], /unknown --cats nope, nada/);
+  assert.equal(runLadder(["--team=mclaren", "--cats=wheels"], { M, ...quiet }), 0);
+});
+
+test("parts-sweep: INVISIBLE or BROKEN anywhere is exit 1 (its --json used to return first)", () => {
+  assert.equal(sweepExitCode([{ cls: "OK" }, { cls: "BASELINE" }, { cls: "COLOUR-ONLY" }]), 0);
+  assert.equal(sweepExitCode([{ cls: "OK" }, { cls: "INVISIBLE" }]), 1);
+  assert.equal(sweepExitCode([{ cls: "BROKEN" }]), 1);
 });

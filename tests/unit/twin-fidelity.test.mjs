@@ -5,9 +5,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { MUTANTS, needleReport, parseTap, verdictFor, planFidelity, runFidelity } from "../../tools/check/twin-fidelity.mjs";
+import {
+  MUTANTS, needleReport, parseTap, verdictFor, planFidelity, runFidelity,
+  withMutant, makeShadowTree, sweepStaleShadows,
+} from "../../tools/check/twin-fidelity.mjs";
 
 const MATRIX = JSON.parse(fs.readFileSync(new URL("../data/mutants.json", import.meta.url), "utf8"));
 
@@ -124,4 +130,61 @@ test("the fidelity CLI reports an unknown selector as a caller error", () => {
   assert.match(r.stderr, /unknown mutant id.*no-such-mutant/);
   assert.doesNotMatch(r.stdout, /0\/0|^PASS /m);
   assert.doesNotMatch(r.stderr, /\n\s+at /, "a typo needs no stack trace");
+});
+
+// Mutants used to be written into the REAL js/ file and restored in a `finally`
+// that SIGINT or a spawn timeout skips — leaving broken product code in the tree.
+// A run now mutates a shadow copy; the real file must be byte-identical while
+// the mutant is live, not merely after the restore.
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const sha = (abs) => crypto.createHash("sha256").update(fs.readFileSync(abs)).digest("hex");
+
+test("a run never modifies the real source — the mutant lives only in the shadow tree", () => {
+  const m = MUTANTS[0];
+  const real = path.join(ROOT, m.file);
+  const before = sha(real);
+  const seen = [];
+  const log = console.log;
+  console.log = () => {};
+  let code;
+  try {
+    code = runFidelity([m.id], {
+      spec: (spec, cwd) => {
+        assert.equal(sha(real), before, "the REAL file changed while the mutant was applied");
+        assert.notEqual(path.resolve(cwd), path.resolve(ROOT), "the spec must run inside the shadow tree");
+        const shadowSrc = fs.readFileSync(path.join(cwd, m.file), "utf8");
+        assert.ok(shadowSrc.includes(m.replace) && !shadowSrc.includes(m.find), "the shadow copy carries the mutant");
+        assert.ok(fs.existsSync(path.join(cwd, spec)), "the spec resolves inside the shadow");
+        seen.push(cwd);
+        return new Map(Object.entries(m.catchers).map(([name, mustFail]) => [name, !mustFail]));
+      },
+    });
+  } finally { console.log = log; }
+  assert.equal(code, 0);
+  assert.equal(seen.length, 1);
+  assert.equal(sha(real), before);
+  assert.ok(!fs.existsSync(seen[0]), "the shadow tree is removed after the run");
+});
+
+test("withMutant refuses to run without a shadow, or to write through a linked dir", () => {
+  const m = MUTANTS[0];
+  assert.throws(() => withMutant(m, () => 0), /shadow tree/);
+  assert.throws(() => withMutant({ ...m, file: ["docs", "fixture.md"].join("/") }, () => 0, "/nonexistent"), /LINKED/);
+});
+
+test("a shadow left by a killed run is swept by the next one", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "twin-fidelity-"));
+  try {
+    fs.mkdirSync(path.join(root, "js"));
+    fs.writeFileSync(path.join(root, "js", "a.js"), "const A = 1;\n");
+    const deadPid = 2 ** 22 + 12345;            // above any pid_max: never alive
+    const stale = path.join(root, "artifacts", "twin-fidelity", `tree-${deadPid}`);
+    fs.mkdirSync(stale, { recursive: true });
+    const t = makeShadowTree(root);
+    assert.ok(!fs.existsSync(stale), "the dead run's shadow is gone");
+    assert.equal(fs.readFileSync(path.join(t.dir, "js", "a.js"), "utf8"), "const A = 1;\n");
+    assert.ok(!fs.lstatSync(path.join(t.dir, "js")).isSymbolicLink(), "code dirs are real copies");
+    t.dispose();
+    assert.deepEqual(sweepStaleShadows(root), []);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

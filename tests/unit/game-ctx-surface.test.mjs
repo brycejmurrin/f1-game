@@ -32,7 +32,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   checkParity, checkElsParity, scanGameCtx, scanDts, scanGameEls, scanDtsEls,
-  collectUsage, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc,
+  collectUsage, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc, factoryCoverage,
 } from "../../tools/check/check-gctx.mjs";
 
 /* Members game.js publishes that NOTHING reads — the other direction of drift, and
@@ -154,4 +154,25 @@ test("tsc accepts every module's use of G against types/game-ctx.d.ts", (t) => {
   assert.deepEqual(r.errors, [],
     "a module reads a G member that does not exist, or writes one declared readonly — " +
     "the locations above are real js/ file:line, not the generated shadow");
+});
+
+test("a method-shorthand create(G) factory is scanned like `function create(G)`", () => {
+  // js/perf/soak-run.js and bench-run.js return `{ create(G) { … } }`; the scanner
+  // used to match only `function create(`, so a bad member read in them was clean.
+  const src = "const SoakRun = (() => { let _G = null;\n" +
+    "  return { create(G) { void G.zzNotAMember; _G = G; return this; } };\n})();\n";
+  const hits = collectUsage("js/perf/soak-run.js", src);
+  assert.ok(hits.some((h) => h.kind === "read" && h.names[0] === "zzNotAMember"),
+    "the method-shorthand create(G) parameter was not resolved — its G reads are unchecked");
+  const prop = "const X = (() => ({ create: function (G) { G.zzW = 1; } }))();\n";
+  assert.ok(collectUsage("<fixture>", prop).some((h) => h.kind === "write" && h.names[0] === "zzW"));
+  const files = ctxModuleFiles();
+  for (const rel of ["js/perf/soak-run.js", "js/perf/bench-run.js"]) {
+    assert.ok(files.includes(rel), `${rel} receives G from game.js and must be under the usage check`);
+  }
+});
+
+test("every global handed the ctx is covered by the usage leg", () => {
+  assert.deepEqual(factoryCoverage(), [],
+    "a module receives G but its create() is not scanned — teach isCreateFn() the new shape");
 });

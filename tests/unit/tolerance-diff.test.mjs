@@ -49,7 +49,7 @@ test("a test-only PR passes unless --always; production files are js/ css/ index
   assert.equal(check(d).findings.length, 1, "still reported");
 });
 
-test("an excepted row passes; a stale or reasonless row is reported", () => {
+test("an excepted row passes; a stale (rotten) or reasonless row FAILS; an idle row is only listed", () => {
   const d = diff("tests/specs/physics-fixes.spec.js", "expect(x).toBeCloseTo(1.5, 3);", "expect(x).toBeCloseTo(1.5, 1);");
   const ok = check(d, { exceptions: [{ file: "tests/specs/physics-fixes.spec.js", line: "toBeCloseTo(1.5, 1)", reason: "sensor quantised to 0.1 by #1234" }] });
   assert.equal(ok.fail, false);
@@ -58,9 +58,68 @@ test("an excepted row passes; a stale or reasonless row is reported", () => {
   const noReason = check(d, { exceptions: [{ file: "tests/specs/physics-fixes.spec.js", line: "toBeCloseTo(1.5, 1)" }] });
   assert.equal(noReason.fail, true, "a row without a reason excuses nothing");
   assert.equal(noReason.staleExceptions.length, 1);
-  const stale = check(d, { exceptions: [{ file: "tests/specs/steering.spec.js", line: "x", reason: "r" }] });
+  const stale = check(d, { exceptions: [{ file: "tests/specs/steering.spec.js", line: "x", reason: "r" }], readSource: () => null });
   assert.equal(stale.fail, true);
   assert.equal(stale.staleExceptions.length, 1);
+  // a clean diff: a rotten row (file gone / text gone) still fails on its own; an idle row that is true of the tree passes
+  const clean = diff("tests/unit/ratchets.test.mjs", "a", "b");
+  const rotten = check(clean, { exceptions: [{ file: "tests/unit/ratchets.test.mjs", line: "x < 9", reason: "r" }], readSource: () => "x < 3" });
+  assert.equal(rotten.fail, true, "a row whose text left the file is stale and fails");
+  assert.equal(rotten.staleExceptions.length, 1);
+  assert.equal(check(clean, { exceptions: [{ file: ["tests/unit", "gone.test.mjs"].join("/"), line: "x", reason: "r" }], readSource: () => null }).fail, true);
+  const idle = check(clean, { exceptions: [{ file: "tests/unit/ratchets.test.mjs", line: "x < 9", reason: "r" }], readSource: () => "ok(x < 9)" });
+  assert.equal(idle.fail, false);
+  assert.deepEqual([idle.staleExceptions.length, idle.idleExceptions.length], [0, 1]);
+});
+
+test("the shipped exception rows are not stale against the tree", () => {
+  const r = check("", { exceptions: loadExceptions() });
+  assert.deepEqual(r.staleExceptions, [], "delete rotten rows from tests/data/tolerance-exceptions.json");
+});
+
+// Every loosening shape the guard knows, seeded: removed lines -> added lines. Each must go red next to a
+// production edit, and the same edit run backwards (a tightening) must stay green.
+const BOUND_SRC = "const MAX_DRIFT = 2;\nassert.ok(drift <= MAX_DRIFT);\nconst MIN_GRIP = 0.8;\nexpect(grip).toBeGreaterThan(MIN_GRIP);\nconst LAPS = 3;\nfor (let i = 0; i < LAPS; i++) run(i);\n";
+const SEEDS = [
+  ["toBeCloseTo digits", ["expect(x).toBeCloseTo(1.5, 3);"], ["expect(x).toBeCloseTo(1.5, 1);"]],
+  ["< raised", ["assert.ok(err < 0.5);"], ["assert.ok(err < 2);"]],
+  ["<= raised", ["assert.ok(v <= 3);"], ["assert.ok(v <= 5);"]],
+  ["toBeLessThan raised", ["expect(n).toBeLessThan(10);"], ["expect(n).toBeLessThan(12);"]],
+  ["toBeLessThanOrEqual raised", ["expect(n).toBeLessThanOrEqual(10);"], ["expect(n).toBeLessThanOrEqual(12);"]],
+  ["toBeGreaterThan lowered", ["expect(n).toBeGreaterThan(5);"], ["expect(n).toBeGreaterThan(1);"]],
+  ["toBeGreaterThanOrEqual lowered", ["expect(n).toBeGreaterThanOrEqual(5);"], ["expect(n).toBeGreaterThanOrEqual(1);"]],
+  [">= lowered", ["assert.ok(v >= 30);"], ["assert.ok(v >= 20);"]],
+  ["named tolerance grown", ["const TOL = 0.01;"], ["const TOL = 0.5;"]],
+  ["message edited on the same line", ['assert.ok(err < 0.01, "drift too big");'], ['assert.ok(err < 0.05, "drift within budget");']],
+  ["comment inserted above", ["assert.ok(err < 0.01);"], ["// the new solver is noisier", "assert.ok(err < 0.05);"]],
+  ["uppercase exponent", ["assert.ok(err < 1E-6);"], ["assert.ok(err < 1E-3);"]],
+  ["leading-dot number", ["assert.ok(err < .01);"], ["assert.ok(err < .05);"]],
+  ["literal-first upper bound", ["assert.ok(0.01 > err);"], ["assert.ok(0.05 > err);"]],
+  ["multiplied tolerance", ["assert.ok(err < TOL * 2);"], ["assert.ok(err < TOL * 4);"]],
+  ["unnamed ceiling constant", ["const MAX_DRIFT = 2;"], ["const MAX_DRIFT = 5;"]],
+  ["unnamed floor constant", ["const MIN_GRIP = 0.8;"], ["const MIN_GRIP = 0.5;"]],
+  ["scaled lower bound", ["expect(v).toBeGreaterThan(ref * 0.9);"], ["expect(v).toBeGreaterThan(ref * 0.7);"]],
+];
+const seeded = (rem, add) => [
+  "diff --git a/tests/unit/x.test.mjs b/tests/unit/x.test.mjs", "--- a/tests/unit/x.test.mjs", "+++ b/tests/unit/x.test.mjs", "@@ -1 +1 @@",
+  ...rem.map((l) => `-${l}`), ...add.map((l) => `+${l}`),
+  "diff --git a/js/game.js b/js/game.js", "--- a/js/game.js", "+++ b/js/game.js", "@@ -5 +5 @@", "-let a = 1;", "+let a = 2;",
+].join("\n");
+for (const [name, rem, add] of SEEDS) {
+  test(`seeded loosening is red: ${name}; its tightening is green`, () => {
+    const loose = check(seeded(rem, add), { readSource: () => BOUND_SRC });
+    assert.equal(loose.fail, true, JSON.stringify(loose.findings));
+    assert.equal(loose.findings.length, 1, JSON.stringify(loose.findings));
+    const tight = check(seeded(add.filter((l) => !l.startsWith("//")), rem), { readSource: () => BOUND_SRC });
+    assert.deepEqual(tight.findings, [], "tightening must stay green");
+  });
+}
+
+test("a constant used only as a loop bound, an edited message alone, and a moved comment are not findings", () => {
+  const none = (rem, add) => check(seeded(rem, add), { readSource: () => BOUND_SRC }).findings;
+  assert.deepEqual(none(["const LAPS = 3;"], ["const LAPS = 9;"]), []);
+  assert.deepEqual(none(['assert.ok(err < 0.01, "a");'], ['assert.ok(err < 0.01, "b 0.5");']), []);
+  assert.deepEqual(none(["// old note", "assert.ok(err < 0.05);"], ["assert.ok(err < 0.01); // new note 9"]), []);
 });
 
 test("parseDiff keeps files and hunks apart; the shipped exceptions file parses", () => {

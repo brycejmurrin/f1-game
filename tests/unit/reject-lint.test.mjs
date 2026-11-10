@@ -31,7 +31,14 @@
 // unambiguous, so a hit is always real.
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { lintSource, count } from "../../tools/check/reject-lint.mjs";
+
+const TOOL = fileURLToPath(new URL("../../tools/check/reject-lint.mjs", import.meta.url));
 
 test("a discarded promise API inside try{} is flagged", () => {
   const { sites } = lintSource(`function f(){ try { ctx.close(); } catch (e) {} }`);
@@ -96,6 +103,25 @@ test("guarding the rejection still clears the guarded spellings", () => {
 test("a parse failure is reported, never swallowed as clean", () => {
   const r = lintSource(`function f( {`);
   assert.ok(r.parseError, "a file the lint cannot parse must not read as zero sites");
+});
+
+test("modern syntax parses — the parser is not pinned to an old ecmaVersion", () => {
+  // A /v-flag regex (ES2024) used to be a PARSE row that hid the site beside it.
+  const r = lintSource("const re = /[a]/v;\nfunction f(){ try { ctx.close(); } catch (e) {} }");
+  assert.equal(r.parseError, null);
+  assert.equal(r.sites.length, 1);
+});
+
+test("an unparseable js/ file fails the run (non-zero exit), it is not counted clean", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "reject-lint-"));
+  try {
+    fs.mkdirSync(path.join(root, "js"));
+    fs.writeFileSync(path.join(root, "js", "bad.js"), "function f( {\n  try { ctx.close(); } catch (e) {}\n");
+    assert.equal(count(root), 1, "a parse error must count as a failure");
+    const r = spawnSync(process.execPath, [TOOL, "--root", root], { encoding: "utf8" });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /PARSE js\/bad\.js/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test("js/ is clean — no rejection reaches the overlay", () => {

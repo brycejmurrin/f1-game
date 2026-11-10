@@ -44,3 +44,28 @@ test("--dry-run prints the plan and runs nothing; usage on a bad call", () => {
   assert.equal(run("monza").status, 2, "missing arguments");
   assert.equal(run("--help").status, 0);
 });
+
+// 2026-11-10: both tools validated the id with /^[a-z0-9-]+$/, which refused the
+// seven circuits with an underscore — their hand-back could never run. The id is
+// now checked against the manifest roster: every real id passes, an unknown one is usage.
+test("an underscore circuit id is accepted; an id not in the roster is usage (merge-surveyor and surveyor-scope)", async () => {
+  const { isCircuitId } = await import("../../tools/track/merge-surveyor.mjs");
+  const { createRequire } = await import("node:module");
+  const { CIRCUITS } = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const underscored = CIRCUITS.filter((id) => id.includes("_"));
+  assert.ok(underscored.includes("albert_park") && underscored.length >= 7, "the roster still carries underscore ids");
+  for (const id of CIRCUITS) assert.ok(isCircuitId(id), id);
+  assert.equal(isCircuitId("nosuch"), false);
+  const r = run("albert_park", "0000000", "no-such-branch-xyz", "--dry-run");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^= plan verify: node tools\/track\/verify-track\.cjs albert_park$/m);
+  assert.equal(run("nosuch", "0000000", "b", "--dry-run").status, 2, "an id not in the roster is usage");
+  const SCOPE = path.join(ROOT, "tools/track/surveyor-scope.mjs");
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
+  const sc = (id) => spawnSync(process.execPath, [SCOPE, id, head, head], { cwd: ROOT, encoding: "utf8" });
+  const ok = sc("watkins_glen");
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /= scope ok \(0 files, 0 outside watkins_glen\)/);
+  assert.equal(sc("nosuch").status, 2);
+  assert.equal(sc("Monza!").status, 2);
+});

@@ -20,9 +20,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadAtlas, sweepAtlas, AREA_FLOOR } from "../../tools/car/livery-contrast.mjs";
+import { loadAtlas, sweepAtlas, sweepAll, pickTeams, AREA_FLOOR } from "../../tools/car/livery-contrast.mjs";
 import { paintAt } from "../../tools/car/crest-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -574,4 +575,18 @@ test("the shoulder shelf never lands on its own saddle (ferrari, audi: shipped s
     }
   }
   assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+test("an unknown --team is refused by name, not swept as zero teams and passed", () => {
+  // `--team=nope` filtered Teams.LIST to [], swept nothing, found no failure and
+  // exited 0 (2026-11-10). sweepAll over no team is exactly that silent pass.
+  assert.equal(sweepAll(A, { teams: [] }).length, 0);
+  assert.throws(() => pickTeams(A, "nope"), /unknown --team nope/);
+  assert.throws(() => pickTeams(A, "ferrari,nope,nada"), /unknown --team nope, nada/);
+  assert.throws(() => pickTeams(A, ""), /unknown --team/);
+  assert.deepEqual([...pickTeams(A, "ferrari,haas").map((t) => t.id)], ["ferrari", "haas"]);
+  assert.equal(pickTeams(A, null), A.Teams.LIST);
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/car/livery-contrast.mjs"), "--team=nope"], { encoding: "utf8", timeout: 30000 });
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /unknown --team nope/);
 });

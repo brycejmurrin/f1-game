@@ -4069,6 +4069,11 @@
       ]
     },
     {
+      "path": "tools/track/verify-track-baseline.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/track/verify-track.cjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",

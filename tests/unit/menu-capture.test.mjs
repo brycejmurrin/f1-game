@@ -131,3 +131,40 @@ test("layout-audit --diff flags a new finding, credits a fix, and never counts a
     assert.equal(green.status, 0, green.stderr || green.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("layout-audit --diff with NOTHING compared is not a pass (all skipped, or no rows)", async () => {
+  // It printed `= diff ok: 0 cells compared` and exited 0 (2026-11-10).
+  const { diffAudits, formatDiff, diffVerdict } = await import("../../tools/ui/audit-diff.mjs");
+  const skippedOnly = { rows: [{ screen: "title", viewport: "v1", skipped: "timeout" }] };
+  const empty = { rows: [] };
+  for (const [b, a] of [[skippedOnly, skippedOnly], [empty, empty], [{ rows: [{ screen: "title", viewport: "v1" }] }, skippedOnly]]) {
+    const d = diffAudits(b, a);
+    assert.equal(d.compared, 0);
+    assert.equal(diffVerdict(d), "EMPTY");
+    assert.match(formatDiff(d).at(-1), /^= diff EMPTY: 0 cells compared/);
+  }
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "audit-diff-test-"));
+  try {
+    const f = path.join(dir, "skipped.json");
+    fs.writeFileSync(f, JSON.stringify(skippedOnly));
+    const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ui/layout-audit.mjs"), "--diff", f, "--after=" + f], { encoding: "utf8" });
+    assert.equal(r.status, 1, r.stderr || r.stdout);
+    assert.match(r.stdout, /^= diff EMPTY/m);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("fit-audit's verdict: an error cell, any finding, or an empty matrix is a red", async () => {
+  // fit-audit skipped a cell whose MEASURE threw and never set an exit code
+  // (2026-11-10). fitVerdict is the pure half the browser loop feeds.
+  const { fitVerdict } = await import("../../tools/ui/fit-audit.mjs");
+  const vp = { width: 852, height: 393 };
+  const clean = { screen: "menu", viewport: vp, tap: [], spacing: [], type: [], overflow: [], marker: [] };
+  assert.equal(fitVerdict([clean]).code, 0);
+  const err = fitVerdict([clean, { screen: "select", viewport: vp, error: "Execution context was destroyed" }]);
+  assert.equal(err.code, 1);
+  assert.equal(err.errors.length, 1);
+  assert.match(err.errors[0], /select 852x393: Execution context/);
+  assert.equal(fitVerdict([{ ...clean, tap: [{ el: "#x", w: 20, h: 20, sev: "under-floor" }] }]).code, 1);
+  assert.equal(fitVerdict([]).code, 1, "no cell measured is not clean");
+});

@@ -10647,6 +10647,9 @@
       "summarize": [
         "tests/unit/bench-capture.test.mjs",
         "tests/unit/bench-run.test.mjs"
+      ],
+      "*": [
+        "tests/unit/game-ctx-surface.test.mjs"
       ]
     },
     "js/perf/gfx-debug-overlay.js": {
@@ -11180,7 +11183,8 @@
         "tests/unit/soak-run.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs"
       ]
     },
     "js/perf/spans.js": {
@@ -12531,6 +12535,9 @@
       ],
       "tick": [
         "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "*": [
+        "tests/unit/vstd-invariant.test.mjs"
       ]
     },
     "js/race/daily-challenge.js": {
@@ -14955,6 +14962,9 @@
       ],
       "walk": [
         "tests/unit/assets-pack.test.mjs"
+      ],
+      "*": [
+        "tests/unit/gltf-selftest.test.mjs"
       ]
     },
     "js/render/shared/glx-facade.js": {
@@ -16588,6 +16598,7 @@
       "*": [
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/float-audit-harness.test.mjs",
         "tests/unit/track-shot-survey.test.mjs"
       ]
     },

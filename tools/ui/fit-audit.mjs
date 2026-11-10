@@ -272,6 +272,23 @@ const MEASURE = function (rootSel) {
   return out;
 };
 
+const KINDS = ["tap", "spacing", "type", "overflow", "marker"];
+/** The matrix's verdict. A cell whose MEASURE threw ({ error }) was never
+ *  judged, so it cannot pass; a cell with any finding is red, as the summary's
+ *  "clean" line says. An empty matrix measured nothing (an exit 0 there used to
+ *  read as a pass). Pure: the browser loop feeds it rows, a unit test feeds it
+ *  stubs. */
+export function fitVerdict(rows) {
+  const errors = rows.filter((r) => r && r.error).map((r) => `${r.screen} ${r.viewport ? `${r.viewport.width}x${r.viewport.height}` : ""}: ${r.error}`);
+  let findings = 0;
+  for (const r of rows) if (r && !r.error) for (const k of KINDS) findings += Array.isArray(r[k]) ? r[k].length : 0;
+  const measured = rows.filter((r) => r && !r.error).length;
+  const ok = rows.length > 0 && !errors.length && !findings;
+  return { ok, code: ok ? 0 : 1, cells: rows.length, measured, errors, findings };
+}
+
+const IS_MAIN = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (IS_MAIN) {
 const srv = await startStaticServer(ROOT);
 const totals = new Map();
 const rows = [];
@@ -336,4 +353,9 @@ try {
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, "audit.json"), JSON.stringify(report, null, 2));
   if (argv.includes("--json")) console.log(JSON.stringify(report));
+  const v = fitVerdict(rows);
+  if (v.errors.length) console.error(`fit-audit: ${v.errors.length} cell(s) not measured:\n  ${v.errors.join("\n  ")}`);
+  if (!v.ok) console.error(`fit-audit: FAIL — ${v.findings} finding(s), ${v.errors.length} error cell(s), ${v.measured}/${v.cells} measured`);
+  process.exitCode = v.code;
 } finally { await shutdown(); }
+}
