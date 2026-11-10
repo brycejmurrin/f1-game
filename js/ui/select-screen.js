@@ -1140,13 +1140,10 @@ watchHero(document.getElementById("sel-hero"));
 // glyph; a circuit with no still keeps the hero's own gradient. The token
 // guards a slow decode landing after the player has already moved on.
 let stillToken = 0;
-// The hero is the screen's width less its gutters on every layout, so the browser picks by 100vw x DPR:
-// a DPR-3 phone (852 CSS px = 2556 device px) takes the 1600 px file, a DPR-1 window under 800 px the
-// small one. With the 800 px file alone the phone drew 0.33 source px per device px (#5223).
+// Hero ~ full width: a DPR-3 phone takes the 1600 px file (#5223). STILL_1X_ONLY have no 2x file.
 const STILL_SIZES = "100vw";
-// Circuits that keep their 800 px still with no 2x file (#5223 decision): asking for a missing file costs a 404.
 const STILL_1X_ONLY = ["baku", "estoril", "imola", "watkins_glen", "zolder"];
-/** srcset for a circuit still (tools/gen/track-stills.mjs stillFiles); "" = the 800 px file only (Save-Data, 2G, no 2x file). */
+/** "" = the 800 px file only (no 2x file, Save-Data, 2G). */
 function stillSrcset(id, conn) {
   if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
   const base = "assets/stills/" + id;
@@ -1164,8 +1161,7 @@ function showStill(t) {
   img.hidden = true;
   img.dataset.id = t.id;
   img.onload = () => { if (token === stillToken) img.hidden = false; };
-  // A circuit whose 2x file is missing must not lose its picture: drop the srcset and ask for the
-  // 800 px file alone, once. Only that second failure hides the still.
+  // A failed 2x load retries the 800 px file once; only a second failure hides the still.
   img.onerror = () => {
     if (token !== stillToken) return;
     if (img.getAttribute("srcset")) { img.removeAttribute("srcset"); img.removeAttribute("sizes"); img.src = src; return; }
