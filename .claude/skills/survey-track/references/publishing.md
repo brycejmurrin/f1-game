@@ -1,7 +1,7 @@
 # Parent brief and evidence publication
 
 - Brief checklist: every frame incl. storm weather; a "Code & scenery deep-dive"
-  section (emitter counts with verified file:line); the source branch/commit and
+  section (emitter counts with the verified file and symbol); the source branch/commit and
   published evidence URL.
 - New capture output stays under ignored `artifacts/` or `scratch/`. Publish with
   `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish`

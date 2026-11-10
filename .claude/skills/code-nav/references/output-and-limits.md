@@ -9,19 +9,19 @@
   - `[use]`: a read or call.
 - "N definitions (+M export/alias rows)": N real declarations. Several
   same-named top-level functions (`wrapS`) are all listed, never one guessed.
-  For references, a name with more than 4 unrelated declarations (`create`:
-  170) is refused, because following one would be a guess. Pass `Head.member`
+  For references, a name with more unrelated declarations than `AMBIGUOUS`
+  (`tools/mcp/lsp-mcp.mjs`; e.g. `create`) is refused, because following one would be a guess. Pass `Head.member`
   or `file`+`line` instead. A case slip gets "did you mean TLX (…)?".
 - `lsp_callers` follows `const lerp = M4.lerp` to the local calls, marked
-  `(via lerp)`. Counted the plain way, `M4.lerp` has 11 alias lines; its real
-  callers are 112 calls in 53 functions.
+  `(via lerp)`. Counted the plain way, `M4.lerp` shows only its alias lines; the
+  callers view counts the real calls behind them.
 - "N of them through a destructure or alias": text counts include those rows,
   which grep would miss.
 - "text match: …" in the header: the checker cannot type the symbol, so the
   rows come from text, following destructures. That happens for `window.X`
-  globals (`PhysicsConsts`, `CssZoom`) and for files ending in
-  `module.exports = X` (`ghost.js`, `ghost-share.js`, `input-ghost.js`,
-  `forecast.js`, `share-code.js`), which the checker scopes to their own file.
+  globals (`PhysicsConsts`, `CssZoom`), for files ending in
+  `module.exports = X` (e.g. `ghost.js`), which the checker scopes to their own
+  file, and for repeated top-level `var X` IIFEs; the header says which.
 - An error such as "has no member" or "not found" is the answer; the next step is
   SKILL.md §Which call (on a miss).
 - Long output pages: the footer names the next `offset`, and `format: "concise"`
@@ -35,9 +35,9 @@
 
 ## Limits (measured 2026-10-18, `docs/notes/LSP-MCP-2026-10-18.md`)
 
-- The first call takes ~1–2 s (project load). After that it's 7–70 ms, and up to
-  ~155 ms for text answers over `G`. `tsc` holds ~400 MB, starts on the first
-  call and exits after 10 idle minutes (`APEX_LSP_IDLE_MS`).
+- The first call pays the project load; later calls are fast (timings and memory
+  in the note). `tsc` starts on the first call and exits after an idle timeout
+  (`APEX_LSP_IDLE_MS`).
 - JS parameters are optional to the checker: TS2554 catches too many
   arguments, never too few. TS2339 (property missing) is filtered out as noise.
 - A façade passed under another name (`create(ctx)`) is not followed. In this
