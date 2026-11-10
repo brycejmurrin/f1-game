@@ -15,7 +15,7 @@ Bright, high-sun daylight with a soft humid haze flattening the horizon. Lush pa
 - Miami pastels: teal `[0.20, 0.80, 0.78]`, coral `[1.0, 0.55, 0.45]`, pink `[1.0, 0.65, 0.80]`
 
 ## 3. Elevation
-Essentially flat (built on level reclaimed land). The only real change is the engineered tech sector under the Florida Turnpike overpasses (~s 0.62–0.72): the track dips under two bridges, then rises ~11 ft over a crest in the T14–15 chicane before dropping back to T16. Model as a flat plane everywhere except a single subtle hump centred under the overpasses (~s 0.66).
+Essentially flat (built on level reclaimed land). The only real change is the engineered tech sector under the Florida Turnpike overpasses (~s 0.62–0.72): the track dips under two bridges, then rises ~11 ft over a crest in the T14–15 chicane (built apexes 0.579 / 0.597) before dropping back to T16. Model as a flat plane everywhere except a single subtle hump centred under the overpasses (~s 0.66).
 
 ## 4. Landmarks & Surroundings by Lap Position
 
