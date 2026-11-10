@@ -187,3 +187,78 @@ test("invalid smoke timeouts are errors instead of silently restoring defaults",
     assert.equal(r.stdout, "");
   }
 });
+
+// W25 (2026-11-10): report.ok was report.apexTools, so a broken lsp, js-debugger or gateway was recorded and ignored,
+// and no .mcp.json launch line was ever started. Now every step counts and every launch line does initialize + tools/list.
+test("the launch plan is .mcp.json exactly: every server, its command and args verbatim", async () => {
+  const { launchPlan, NPM_BACKED } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers;
+  const plan = launchPlan();
+  assert.deepEqual(plan.map((s) => s.server), Object.keys(cfg));
+  for (const s of plan) {
+    assert.equal(s.command, cfg[s.server].command, s.server);
+    assert.deepEqual(s.args, cfg[s.server].args, s.server);
+    assert.equal(s.backend, NPM_BACKED[s.server] ? "npm-package" : "in-repo");
+  }
+  const dry = JSON.parse(run(["--dry-run"]).stdout);
+  assert.deepEqual(dry.launchPlan.map((s) => s.server), Object.keys(cfg), "the dry run shows every launch line");
+  assert.equal(dry.launch, undefined, "a dry run launches nothing");
+});
+
+test("judgeSmoke fails on ANY failed step, not only apex-tools", async () => {
+  const { judgeSmoke } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const okStep = { server: "apex-tools", status: 0 };
+  const okLaunch = { server: "apex-lsp", pass: true, backend: "in-repo" };
+  assert.equal(judgeSmoke({ steps: [okStep], launch: [okLaunch], apexTools: true }).ok, true);
+  const lsp = judgeSmoke({ steps: [okStep, { server: "apex-lsp", status: 1 }], launch: [okLaunch], apexTools: true });
+  assert.equal(lsp.ok, false);
+  assert.deepEqual(lsp.failures, ["apex-lsp: exit 1"]);
+  const gw = judgeSmoke({ steps: [okStep], launch: [{ server: "js-debugger", pass: false, why: "exited 1 before tools/list answered", backend: "in-repo" }], apexTools: true });
+  assert.equal(gw.ok, false);
+  assert.deepEqual(gw.failures, ["launch js-debugger: exited 1 before tools/list answered"]);
+  const npm = judgeSmoke({ steps: [okStep], launch: [{ server: "browserstack", pass: false, why: "timeout", backend: "npm-package", note: "x" }], apexTools: true });
+  assert.deepEqual(npm.failures, ["launch browserstack: timeout [x; a cold npx cache needs the registry]"]);
+  assert.equal(judgeSmoke({ steps: [{ server: "apex-tools", status: null }], launch: [], apexTools: false }).failures.length, 2);
+});
+
+test("mcp-smoke exits 1 on a broken CLI step or a broken launch line, and passes the launch lines that work", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch/mcp-smoke-broken-"));
+  try {
+    // A python3 that fails: the probe steps break while apex-tools still answers (before W25 this reported ok, exit 0).
+    fs.mkdirSync(path.join(dir, "bin"));
+    fs.writeFileSync(path.join(dir, "bin/python3"), "#!/bin/sh\necho broken >&2\nexit 3\n", { mode: 0o755 });
+    const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers;
+    fs.writeFileSync(path.join(dir, "mcp.json"), JSON.stringify({ mcpServers: {
+      "apex-lsp": cfg["apex-lsp"],   // in-repo, no tsc spawn for tools/list
+      broken: { type: "stdio", command: process.execPath, args: ["-e", "process.exit(4)"] },
+    } }));
+    const r = spawnSync(process.execPath, [SMOKE, "--json", `--mcp-json=${path.join(dir, "mcp.json")}`], {
+      encoding: "utf8", cwd: ROOT, env: { ...process.env, PATH: `${path.join(dir, "bin")}:${process.env.PATH}` }, timeout: 60000,
+    });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, false);
+    assert.equal(body.apexTools, true, "apex-tools alone answering is no longer enough");
+    const failures = new Set(body.failures);
+    assert.ok(failures.has("probe: exit 3"), body.failures.join("\n"));
+    assert.ok(failures.has("launch broken: exited 4 before tools/list answered"), body.failures.join("\n"));
+    const lsp = body.launch.find((l) => l.server === "apex-lsp");
+    assert.equal(lsp.pass, true, JSON.stringify(lsp));
+    assert.ok(lsp.tools > 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--real graph parity measures against a real base, and a reported mismatch is the tool working", async () => {
+  const { parityBase, judgeParity, realCalls } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const { selfParity } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const base = parityBase();
+  assert.notEqual(base, "HEAD");
+  assert.equal(selfParity(base), false, `${base} must differ from the tree under js/ (or be unknown, which the CLI reports)`);
+  const call = realCalls([{ name: "apex_graph_parity", annotations: {} }]).find(([n]) => n === "apex_graph_parity");
+  assert.deepEqual(call[1], { base, id: "monza" });
+  assert.equal(judgeParity({ ok: false, exit: 1, stdout: "FAIL monza: x\n0/1 tracks at parity with abc~1" }, 1).pass, true);
+  assert.equal(judgeParity({ ok: false, error: "bad_args", message: "vacuously" }, 1).pass, false, "a refusal is not a run");
+  assert.equal(judgeParity({ ok: true, exit: 0, out: null, stdout: "1/1 tracks at parity with abc~1" }, 0).pass, true);
+});

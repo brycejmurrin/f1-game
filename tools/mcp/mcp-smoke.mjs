@@ -4,9 +4,11 @@
  * @skill check-changes
  * mcp-smoke — poke the repo shell wrappers (all six .mcp.json servers; host attach optional).
  *
+ * Then launches EVERY .mcp.json server with its exact command + args and does
+ * initialize + tools/list (no browser starts: browser launches are lazy).
  * No Chromium. A missing chrome-devtools clone = warning, not fail.
- * Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json
- * unless --dry-run.
+ * Exit 0 only when every step passes (exit 1 names each failure). Writes
+ * artifacts/logs/mcp-smoke.json unless --dry-run. --mcp-json=<file> swaps the config (tests).
  *
  *   node tools/mcp/mcp-smoke.mjs
  *   node tools/mcp/mcp-smoke.mjs --dry-run
@@ -20,7 +22,7 @@
  *
  * Not an apex_* tool (avoids catalog churn). Never wraps test-bg.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,6 +81,92 @@ export function smokePlan() {
   ];
 }
 
+/** Servers whose launch line ends in an npm package (npx --prefer-offline): a cold cache needs the registry, so a
+ *  failure there names that cause. They are exercised like the in-repo ones (measured 2026-11-10, this container:
+ *  initialize + tools/list answered in 1.2-1.8 s each and started no Chromium; every browser launch is lazy). */
+export const NPM_BACKED = {
+  "playwright-official": "@playwright/mcp via npx",
+  "chrome-devtools": "scratch/chrome-devtools-mcp clone, else chrome-devtools-mcp via npx",
+  browserstack: "@browserstack/mcp-server via npx (tools/list needs no BrowserStack key)",
+};
+
+/** Every server in .mcp.json, launched with its EXACT command + args (the line every client runs). */
+export function launchPlan(mcpJson = path.join(ROOT, ".mcp.json")) {
+  const cfg = JSON.parse(fs.readFileSync(mcpJson, "utf8")).mcpServers || {};
+  return Object.entries(cfg).map(([server, s]) => ({
+    server, command: s.command, args: s.args || [],
+    backend: NPM_BACKED[server] ? "npm-package" : "in-repo",
+    ...(NPM_BACKED[server] ? { note: NPM_BACKED[server] } : {}),
+  }));
+}
+
+const HANDSHAKE = [
+  { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "mcp-smoke", version: "1" } } },
+  { jsonrpc: "2.0", method: "notifications/initialized" },
+  { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+];
+
+/** initialize, then tools/list, over newline-delimited stdio JSON-RPC. Pass = a tools/list result with >= 1 tool.
+ *  The server runs in its own process group, and the whole group is stopped when the answer (or the timeout) lands. */
+export function handshake(step, { timeoutMs = 45000 } = {}) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    let child;
+    try {
+      child = spawn(step.command, step.args, { cwd: ROOT, stdio: ["pipe", "pipe", "pipe"], detached: true, env: process.env });
+    } catch (e) { resolve({ ...rowOf(step), pass: false, why: `spawn failed: ${e.message}`, ms: 0 }); return; }
+    let buf = "", stderr = "", done = false, initialized = false;
+    const finish = (row) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try { child.stdin.end(); } catch { /* already closed */ }
+      try { process.kill(-child.pid, "SIGTERM"); } catch { /* group already gone */ }
+      setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* exited */ } }, 2000).unref();
+      resolve({ ...rowOf(step), ...row, ms: Date.now() - t0, ...(row.pass ? {} : { stderr: stderr.slice(-1500) }) });
+    };
+    const timer = setTimeout(() => finish({ pass: false, why: `no tools/list answer in ${timeoutMs} ms${initialized ? " (initialize answered)" : ""}` }), timeoutMs);
+    child.on("error", (e) => finish({ pass: false, why: `spawn failed: ${e.message}` }));
+    child.on("exit", (code, signal) => finish({ pass: false, why: `exited ${code ?? signal} before tools/list answered${initialized ? " (initialize answered)" : ""}` }));
+    child.stderr.on("data", (c) => { stderr = (stderr + c).slice(-8000); });
+    child.stdin.on("error", () => { /* EPIPE: the exit handler reports it */ });
+    child.stdout.on("data", (c) => {
+      buf += c;
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        let m;
+        try { m = JSON.parse(line); } catch { continue; }
+        if (m.id === 1) {
+          if (m.error || !m.result) { finish({ pass: false, why: `initialize error: ${JSON.stringify(m.error)}` }); return; }
+          initialized = true;
+          child.stdin.write(JSON.stringify(HANDSHAKE[1]) + "\n" + JSON.stringify(HANDSHAKE[2]) + "\n");
+        } else if (m.id === 2) {
+          const tools = Array.isArray(m.result?.tools) ? m.result.tools.length : 0;
+          finish(tools ? { pass: true, why: `${tools} tools`, tools } : { pass: false, why: `tools/list: ${m.error ? JSON.stringify(m.error) : "no tools"}` });
+          return;
+        }
+      }
+    });
+    child.stdin.write(JSON.stringify(HANDSHAKE[0]) + "\n");
+  });
+}
+function rowOf(step) {
+  return { server: step.server, command: step.command, args: step.args, backend: step.backend, ...(step.note ? { note: step.note } : {}) };
+}
+
+/** The verdict: every CLI step exits 0, apex_status answers ok, and every .mcp.json launch line lists its tools.
+ *  (Before W25 only apex-tools counted: a broken lsp, js-debugger or gateway was recorded and ignored.) */
+export function judgeSmoke({ steps = [], launch = [], apexTools = false }) {
+  const failures = [
+    ...steps.filter((s) => s.status !== 0).map((s) => `${s.server}: exit ${s.status === null ? "without a code (timeout or signal)" : s.status}`),
+    ...(apexTools ? [] : ["apex-tools: apex_status did not answer ok:true"]),
+    ...launch.filter((l) => !l.pass).map((l) => `launch ${l.server}: ${l.why}${l.backend === "npm-package" ? ` [${l.note}; a cold npx cache needs the registry]` : ""}`),
+  ];
+  return { ok: failures.length === 0, failures };
+}
+
 function runStep(step) {
   const r = spawnSync(step.argv[0], step.argv.slice(1), {
     encoding: "utf8",
@@ -109,10 +197,23 @@ function parseApexStatus(step) {
 const REAL_ARGS = {
   apex_help: { tool: "apex_status" },
   apex_select_specs: { since: "HEAD~1" },
-  apex_graph_parity: { base: "HEAD", id: "monza" },
+  // base HEAD on a clean tree compared the tree with itself (a vacuous pass, now refused): measure against the
+  // parent of the last commit that touched what parity builds, a real diff that stays local and offline.
+  get apex_graph_parity() { return { base: parityBase(), id: "monza" }; },
   apex_frame_report: { track: "monza" },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
 };
+/** Parent of the newest commit touching js/ or tools/manifest.cjs (HEAD~1 when git cannot say). */
+export function parityBase(root = ROOT) {
+  const r = spawnSync("git", ["log", "-1", "--format=%H", "--", "js", "tools/manifest.cjs"], { cwd: root, encoding: "utf8" });
+  const sha = r.status === 0 ? r.stdout.trim() : "";
+  return sha ? `${sha}~1` : "HEAD~1";
+}
+/** A parity MISMATCH is the tool working (it built both trees and diffed them): the smoke judges the tool, not the diff. */
+export function judgeParity(body, status) {
+  if (status === 1 && body && body.exit === 1 && /tracks at parity with/.test(String(body.stdout || ""))) return { pass: true, why: "ran: parity diff reported" };
+  return judgeReal(body, status);
+}
 /** Opt-in (--browser): one cheap call per browser path, run ONE AT A TIME (each takes the browser lock itself). */
 export const BROWSER_CHECKS = [
   ["apex_ui_fit", { screen: "title" }],
@@ -180,7 +281,8 @@ function realRun(argv) {
     });
     let body = null;
     try { body = JSON.parse(r.stdout); } catch { /* judged below */ }
-    const v = r.error && r.error.code === "ETIMEDOUT" ? { pass: false, why: `timeout ${timeoutS}s` } : judgeReal(body, r.status);
+    const v = r.error && r.error.code === "ETIMEDOUT" ? { pass: false, why: `timeout ${timeoutS}s` }
+      : (name === "apex_graph_parity" ? judgeParity : judgeReal)(body, r.status);
     rows.push({ tool: name, args, pass: v.pass, why: v.why, ms: Date.now() - t0,
       ...(!v.pass ? { stdout: (r.stdout || "").slice(-2000), stderr: (r.stderr || r.error?.message || "").slice(-2000) } : {}) });
     process.stdout.write(`${v.pass ? "PASS" : "FAIL"} ${name.padEnd(28)} ${String(Date.now() - t0).padStart(6)}ms  ${v.why}\n`);
@@ -204,7 +306,8 @@ Usage:
 
 Pokes apex-tools (apex_status), probe help + mock list-tools, chrome-devtools
 status, playwright status, js-debugger / apex-lsp list-tools, browserstack status.
-No Chromium. A missing chrome clone warns. Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
+Then initialize + tools/list on every .mcp.json launch line, exactly as written (--mcp-json=<file> swaps it).
+No Chromium. A missing chrome clone warns. Exit 0 only when every step passes. Writes artifacts/logs/mcp-smoke.json.
 
 --real runs each tree apex_* tool for real (minimal args); exit 1 on ok:false / out:null.
 --only rejects unknown or unavailable tool names; --timeout is an integer 1..3600 seconds.
@@ -214,7 +317,7 @@ Never wraps test-bg. playwright status only (never run).
   return 0;
 }
 
-function main(argv) {
+async function main(argv) {
   if (argv.includes("--help") || argv.includes("-h") || argv.includes("help")) {
     return help();
   }
@@ -222,6 +325,8 @@ function main(argv) {
   const dryRun = argv.includes("--dry-run");
   const jsonOnly = argv.includes("--json") || dryRun;
   const plan = smokePlan();
+  const mcpArg = argv.find((a) => a.startsWith("--mcp-json="));
+  const launch = launchPlan(mcpArg ? path.resolve(mcpArg.slice(11)) : undefined);
   const clone = chromeClone();
   const warnings = [];
   if (!clone.present) {
@@ -240,6 +345,7 @@ function main(argv) {
       note: s.note,
       env: s.env,
     })),
+    launchPlan: launch.map(rowOf),
     steps: [],
   };
 
@@ -254,10 +360,11 @@ function main(argv) {
   const status = parseApexStatus(apex || {});
   report.apexTools = !!(apex && apex.status === 0 && status && status.ok === true);
   report.apexStatus = status;
-  report.ok = report.apexTools;
-  if (apex && apex.status !== 0) {
-    warnings.push(`apex-tools exit ${apex.status}`);
-  }
+  // Every .mcp.json launch line, in parallel (each is its own process group): initialize + tools/list.
+  report.launch = await Promise.all(launch.map((step) => handshake(step)));
+  const verdict = judgeSmoke(report);
+  report.ok = verdict.ok;
+  report.failures = verdict.failures;
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(report, null, 2) + "\n");
@@ -267,7 +374,9 @@ function main(argv) {
     process.stdout.write(JSON.stringify(report, null, 2) + "\n");
   } else {
     process.stdout.write(
-      `mcp-smoke ${report.ok ? "ok" : "FAIL"} apex-tools=${report.apexTools}` +
+      `mcp-smoke ${report.ok ? "ok" : "FAIL"} apex-tools=${report.apexTools} ` +
+        `launch=${report.launch.filter((l) => l.pass).length}/${report.launch.length} (${report.launch.map((l) => `${l.server}:${l.pass ? l.tools : "FAIL"}`).join(" ")})` +
+        (report.failures.length ? `\nfail: ${report.failures.join("\nfail: ")}` : "") +
         (warnings.length ? `\nwarn: ${warnings.join("\nwarn: ")}` : "") +
         `\nwrote ${report.out}\n`,
     );
@@ -276,5 +385,5 @@ function main(argv) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exitCode = main(process.argv.slice(2));
+  process.exitCode = await main(process.argv.slice(2));
 }

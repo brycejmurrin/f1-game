@@ -2952,6 +2952,7 @@
         "--json",
         "--limit",
         "--out",
+        "--quiet",
         "--summary"
       ]
     },
@@ -3200,6 +3201,7 @@
       "outputPolicy": "artifact-first",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--format",
         "--json"
       ]
     },
