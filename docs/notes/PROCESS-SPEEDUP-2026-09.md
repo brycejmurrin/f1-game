@@ -1,5 +1,7 @@
 # Process speed-up plan — tests, docs, agent surface, deploy (2026-09-01)
 
+Summary: Measured plan to make verification and deploys faster: where the minutes go, groups 30 → 12, CI-derived build numbers, `deploy.mjs`, the MCP/skill cut.
+
 Measured in one session (this one), not estimated. Every number below has a
 log in `artifacts/logs/` or a `file:line` behind it. The plan is ordered by
 minutes saved per week of agent time divided by risk; the first tier needs no
