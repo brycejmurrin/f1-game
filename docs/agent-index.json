@@ -1596,6 +1596,7 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/elevation-smoothness.test.mjs",
+        "tests/unit/footprint-rejected-baseline.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/kerb-berm-surface.test.mjs",
         "tests/unit/kerb-stripes.test.mjs",

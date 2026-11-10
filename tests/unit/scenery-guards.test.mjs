@@ -281,8 +281,15 @@ test("a run that wraps the start line is not read as contained in an earlier run
 test("one tree per spot", () => {
   const src = read("js/track/scenery/nature.js");
   assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");
-  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 2,
-    "both pine() and tree() must take the guard — two trees on one spot is one tree drawn twice");
+  // tree() reserves its (possibly relocated) site in one step; pine() and
+  // lobedTree() CHECK first and reserve only once the instance lands, so a
+  // dropped tree never blocks its neighbours (behaviour: scenery-engine-order).
+  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 1,
+    "tree() must take the guard — two trees on one spot is one tree drawn twice");
+  assert.equal((src.match(/if \(spotOccupied\(a\.c\[0\], a\.c\[2\], false\)\) return/g) || []).length, 2,
+    "pine() and lobedTree() must check the spot before they emit");
+  assert.ok((src.match(/^\s+spotTaken\(a\.c\[0\], a\.c\[2\]\);$/gm) || []).length >= 2,
+    "and reserve it after landing");
 });
 
 test("a facade draws no rail on its bottom face", () => {

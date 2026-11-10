@@ -388,7 +388,11 @@ const TrackModels = (function () {
         const lat = supportGap + sw / 2 + 0.12;
         const under = deckUnder;           // deck underside above the road datum
         for (const side of [-1, 1]) {
-          const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat));
+          // `side` reaches the surface profile's pit flattening and berm lift
+          // (heightAt(k, dist, side)); without it a leg on the pit side was
+          // seated 0.05-0.10 m under the surface it stands on (measured across
+          // the roster 2026-11-10: never above it, so never floating).
+          const foot = ctx.groundPoint(frame.k, side, lat, ctx.groundHeight(frame.k, lat, side));
           if (!finiteArray(foot, 3)) continue;
           // Base-anchored box would be wrong here: box() centres its `c`. Span
           // foot -> deck underside, with 0.3 m of embed at the bottom and a
@@ -454,7 +458,7 @@ const TrackModels = (function () {
         let emitted = 0;
         try { for (let i = 0; i < samples; i++) {
           const dist = (spec.gap || 0) + depth * (i + 0.5);
-          const y = ctx.groundHeight(spec.k || 0, dist);
+          const y = ctx.groundHeight(spec.k || 0, dist, spec.side);
           if (!Number.isFinite(y)) continue;
           const center = [dist * (spec.side || 1), y - spec.size[1] / 2, 0];
           if (box(out, center, [depth, spec.size[1], spec.size[2]], spec.color, spec.basis)) emitted++;
@@ -485,7 +489,7 @@ const TrackModels = (function () {
       const lift = (1 + patchSeq++ % 5) * minSep;
       const midDist = gap + sz[0] / 2;
       const mid = [px[k] + r[0] * side * (hw[k] + midDist),
-        ctx.groundHeight(k, midDist), pz[k] + r[2] * side * (hw[k] + midDist)];
+        ctx.groundHeight(k, midDist, side), pz[k] + r[2] * side * (hw[k] + midDist)];
       const suppress = (em, pit) => (diagnostics.suppressed.push({
         id, required: pit ? false : required,
         reason: (pit ? (em ? "emitted footprint " : "") + "superseded by the pit complex"
@@ -512,7 +516,7 @@ const TrackModels = (function () {
       for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
         const o = side * (hw[k] + cuts[i]), f = (j / rows - 0.5) * sz[2];
         const x = px[k] + r[0] * o + t[0] * f, z = pz[k] + r[2] * o + t[2] * f;
-        const g = terrainAt(x, z), y = (g != null ? g : ctx.groundHeight(k, cuts[i])) + lift;
+        const g = terrainAt(x, z), y = (g != null ? g : ctx.groundHeight(k, cuts[i], side)) + lift;
         top.push([x, y, z]); bot.push([x, y - sz[1], z]);
       }
       const cellB = [normFn([r[0], 0, r[2]]), UPV, normFn([t[0], 0, t[2]])];
@@ -559,7 +563,7 @@ const TrackModels = (function () {
       const height = spec.height || 1;
       const width = spec.width || 0.25;
       const ground = (k, side, dist) => {
-        const y = ctx.groundHeight(k, dist || 0);
+        const y = ctx.groundHeight(k, dist || 0, side);
         if (!Number.isFinite(y)) return null;
         return ctx.groundPoint ? ctx.groundPoint(k, side || 1, dist || 0, y) : [(dist || 0), y, k];
       };

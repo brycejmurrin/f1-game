@@ -158,6 +158,14 @@ function main({ args = process.argv.slice(2), baseRef = process.env.BASE || "HEA
         problems.push(`props.count ${head.props.count} vs baseline ${base.props.count}`);
 
       const g = head.graph ? head.graph.stats() : null;
+      // Material parity between the two draw paths: an op recorded without
+      // rec.mat() inherits out._mat inline but draws mat 0 instanced. Any node
+      // that inherited a non-zero register is a browser/headless mismatch.
+      if (g && g.matInherit && g.matInherit.nodes) {
+        const top = Object.entries(g.matInherit.byModel).sort((a, b) => b[1] - a[1]).slice(0, 3)
+          .map(([k, n]) => `${k} x${n}`).join(", ");
+        problems.push(`material: ${g.matInherit.nodes} node(s) inherit out._mat the instanced model drops (${top})`);
+      }
       // Exercise the instanced-draw handoff on every real track: it must cover the
       // nodes, and the un-instanceable remainder is the number worth watching.
       if (head.graph) {

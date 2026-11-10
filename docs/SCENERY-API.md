@@ -19,8 +19,9 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. The
 > per-circuit half of that system is authored IN THE DEF (`js/circuits/<id>.js`
 > is the single home of a circuit's data): `barrier` (armco livery), `furniture`
-> (tree species + lamp), `kit` (barrier/signage/marshal families, read through
-> `api.kitOf`), `standSet` (grandstand livery rotation) and `cityStyle` (the
+> (tree species + lamp), `kit` (barrier/signage/marshal families, read by the
+> engine's own emitters through its internal `kitOf` — not an `api` member; a
+> circuit sets `kit` in its def and calls the emitters), `standSet` (grandstand livery rotation) and `cityStyle` (the
 > city generator's palette — `neon` / `dayPal` are NAMES into
 > `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`,
 > `THEME_DEF`, `STAND_SET_DEF`, the colour packs) stay in
@@ -147,7 +148,8 @@ rule as every other lamp — no light without something visible emitting it.
 - `always: true` marks a fixture that burns in daylight. Ordinary lamps only
   reach the shader once the session is dark; these are baked into a separate set
   that a bright session still uploads, for the places the sun cannot reach.
-- Capped at 96 fixtures per circuit.
+- Capped at 160 fixtures per circuit (`CUSTOM_LAMP_CAP`, build-props.js), trimmed
+  priority-aware once the scenery has run.
 
 **`floodMast` light registration.** Shared `floodMast` / `floodMastRing` register
 a `flood_bank` (cool) or `halogen` (warm) lens into `track.lampPosts` by default,
@@ -287,7 +289,7 @@ Also on the 114-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, `groundUnder` (world-XZ ground query — ribbon-aware, distinct
 from `terrainYAt`/`groundYAt`), the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and
-`recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,
+`recordBarrier` (see §Grounding below), the emitters `cityFront`, `house`,
 `motorhome`, `forestEdge`, `signBoard`, `signDigit`, `waterBand`,
 `waterField`, and `modelDiagnostics` (also exposed as
 `__apex.modelDiagnostics()`).
@@ -580,8 +582,9 @@ circuit and rusted metal on another.
 circuits without the opt-in retain their existing geometry.
 
 **It returns `false` and emits nothing when the pack has no such model** — which
-is the state of a fresh checkout, since no models ship by default. Treat it as an
-enhancement and always keep the procedural fallback:
+is the case for any id not in `assets/pack/models/` (28 ship there; a missing pack or
+a renamed id falls back). Treat it as an enhancement and always keep the
+procedural fallback:
 
 ```js
 if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14, { scale: 1.2 }))
@@ -667,7 +670,8 @@ for (const [extra, wMin, hMin, count, col] of [
 ## Workflow per track
 
 1. Read the brief in `docs/tracks/<id>.md` (landmarks by lap-fraction, palette).
-2. Rebuild `scenery(api)` in `js/circuits/<id>.js` using the models above.
+2. Rebuild `scenery(api)` in `js/circuits/scenery/<id>.js` (the def stays in
+   `js/circuits/<id>.js`) using the models above.
 3. Survey it: `__apex.race("<id>")`, then `__apex.view(...)` aerial + trackside.
 4. Iterate, then commit.
 
@@ -788,10 +792,15 @@ Most floating geometry is a caller trying to say *"put this on top of that"* and
 getting the offset wrong. Let them say it:
 
 ```js
-// seat(prim, opts) → emits so the piece's UNDERSIDE lands at `on`
-seat.prism(out, { on: bodyTopY, at: [x, z], size: [w, h, d], basis: b, col });
-seat.box(out,   { on: roofY,    at: […],    size: […],       basis: b, col });
+// seat.<prim>(out, foot, ...) → the piece's UNDERSIDE lands at `foot` (a world point)
+seat.box(out,   foot, [w, h, d], col, basis);     // box centred h/2 above foot
+seat.prism(out, foot, [w, h, d], col, basis);     // prisms are base-anchored already
+seat.cyl(out,   foot, rad, h, col, seg, basis);   // also cone / frustum, base-anchored
 ```
+
+Positional, like the `add*` emitters. A spec object in place of `foot` (the
+`{ on, at, size }` form this section once showed) emits nothing; the build logs a
+`wrong shape` warning once per helper.
 
 `seat.*` normalises the base/centre asymmetry in one place, so Trap A becomes
 unexpressible. `seat` (and `foundation`, §3.2, plus `cantilever`, §3.4) now
@@ -808,8 +817,12 @@ Several fixes this pass were "add the mass that should have been under it"
 ```js
 // Fills from the model's underside down to the ground beneath its footprint,
 // sampling the corners so it stays correct on a slope.
-foundation(out, { footprint: [w, d], at: [x, z], top: y, basis: b, col });
+foundation(out, { center: [x, y, z], size: [w, d], top: y, basis: b, col, embed: 0.6 });
 ```
+
+`center` is a world point (only its x/z are read), `size` is the [w, d]
+footprint along the basis right/forward axes, `top` the world Y it fills up to.
+`{ footprint, at }` is the wrong shape: it emits nothing and logs a warning once.
 
 Rules it should encode:
 - sample ground at all four corners **and** the centre; extend to the lowest,
@@ -992,7 +1005,8 @@ bury, the terrain over-track clip). Two gaps remain:
 
 #### 6.1 The detector — `tools/track/clip-audit.cjs`
 
-The old exploratory `--clip` mode is gone. It reported ~15 700 pairs on Monza
+The old exploratory `--clip` mode (`tools/track/float-audit.cjs --clip`, still
+there as a diagnostic, never a gate) reported ~15 700 pairs on Monza
 and disclaimed its own numbers, and the fix it recommended — *"tag each
 primitive with its emitting call site and report only pairs from DIFFERENT
 models"* — **was tried and measured insufficient**: call-site identity alone
@@ -1024,9 +1038,12 @@ size; depth ranks by what a player sees. Monza's largest-volume pair (609 m³) i
 
 ```sh
 node tools/track/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
-node tools/track/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs clip
+node tools/track/clip-audit.cjs --all --gate        # the full gate (npm run test:clip)
 ```
 
+On CI it runs in the `sweeps` job (`test:sweeps` in tests/groups.json, which holds
+`prop-clipping.test.mjs`) on every PR that can move geometry; it is a node group, so
+there is no `remote-group.mjs` run for it — push and read the PR's sweeps job.
 Gated by `tests/unit/prop-clipping.test.mjs` against `tools/track/clip-baseline.json`, on
 the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
 map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.

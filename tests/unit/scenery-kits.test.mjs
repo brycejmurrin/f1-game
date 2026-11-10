@@ -1215,10 +1215,11 @@ function dayBuildingHarness(rejectMass) {
     massBlocked: () => false, massAdd: () => {},
     terrainYAt: () => null, treeInFootprint: () => false,
     note: () => {}, noteSuppressed: () => {},
-    instance: (key, spec, builder, meta) => {
+    instance: (key, spec, builder, meta, opts) => {
       kinds.push(meta && meta.kind);
       let mat; builder({ mat: (id) => { mat = id; }, box: () => {} });
-      (meta && meta.kind === "buildingMass" ? masses : others).push({ key, mat });
+      const reg = ((opts && opts.buf) || out)._mat || 0;
+      (meta && meta.kind === "buildingMass" ? masses : others).push({ key, mat, reg, kind: meta && meta.kind });
       if (rejectMass && meta && meta.kind === "buildingMass") return 0;
       // Real instance() returns landed prim count; addBox's void return is not a vote.
       Geom.addBox(out, spec.o, spec.s, spec.col || [0.5, 0.5, 0.5], [spec.r, spec.u, spec.t]);
@@ -1288,8 +1289,7 @@ test("neonTower resets out._mat when a rejected body section returns early", () 
 test("a day wall mass carries its facade material into the instanced model (H27)", () => {
   // The canonical mesh an instanced batch uploads has no out._mat register to
   // inherit, so a bare shared "unit-box" drew every city mass at mat 0 in a
-  // browser. The mass model is keyed and stamped by its facadeMat id; facade
-  // detail boxes stay on the shared unstamped model.
+  // browser. The mass model is keyed and stamped by its facadeMat id.
   const h = dayBuildingHarness(false);
   h.build();
   assert.ok(h.masses.length > 0, "the wall mass is instanced");
@@ -1297,5 +1297,23 @@ test("a day wall mass carries its facade material into the instanced model (H27)
     assert.ok(m.mat > 0, `mass model stamps a facade material (got ${m.mat})`);
     assert.equal(m.key, "unit-box:" + m.mat, "one model per material id");
   }
-  assert.ok(h.others.every((o) => o.key === "unit-box" && o.mat === undefined), "detail boxes stay on the shared unit-box");
+});
+
+test("facade detail boxes carry the material register they were called under (H27 siblings)", () => {
+  // Rails, mullions and panes went through a bare unit-box: inline they took
+  // out._mat (the wall's brick/stone/concrete, or GLASS for panes) and
+  // instanced they drew mat 0 — 45,344 nodes fleet-wide before the fix.
+  const h = dayBuildingHarness(false);
+  h.build();
+  const details = h.others.filter((o) => /facade|windowPane/.test(o.kind || ""));
+  assert.ok(details.length > 0, "the day grid emits details");
+  for (const d of details) {
+    if (d.reg) {
+      assert.equal(d.mat, d.reg, `${d.kind}: model stamps the register (${d.reg})`);
+      assert.equal(d.key, "unit-box:" + d.reg, `${d.kind}: keyed by material`);
+    } else {
+      assert.equal(d.key, "unit-box", `${d.kind}: mat-0 detail stays on the shared model`);
+    }
+  }
+  assert.ok(details.some((d) => d.reg > 0), "at least one detail is textured (rails take the wall material)");
 });
