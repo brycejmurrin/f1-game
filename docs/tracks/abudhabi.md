@@ -1,6 +1,6 @@
 # Yas Marina Circuit — Abu Dhabi, UAE
 
-**Setting:** NIGHT / dusk race · **Theme:** desert_marina_night
+**Setting:** NIGHT / dusk race · **Theme:** `desert`
 
 ## 1. Setting
 A showcase circuit on flat, reclaimed Yas Island — a modern leisure-and-marina development out in the desert. Cars run anticlockwise on smooth, wide tarmac through long straights and tight corners, threading past a yacht marina and sliding directly *under* the colour-shifting Yas Hotel near the line. The race starts at dusk and finishes under floodlights: a day-to-night spectacle of warm desert sky over cool LED architecture.

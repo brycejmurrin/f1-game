@@ -435,7 +435,8 @@
       crowdBank(0.035, STAND, 32, 90, 6);   // DETAIL: denser Curva 1 crowd read
       // Wave-4 hero: Curva do Sol / Sector H open terrace — yellow+green fascia.
       arquibancada("interlagos-arq-sol", 0.117, -1, 16, 7, { rows: 8, required: true, brFlag: true });
-      arquibancada("interlagos-arq-senna", 0.07, -1, 15, 5, { rows: 7, required: false, brFlag: true });
+      // (interlagos-arq-senna, 0.07/-1 gap 15, removed 2026-11-10: footprint-
+      // rejected on every build — it never drew.)
       // 0.00 sits on the main straight: the stand side (the pit complex owns PIT).
       for (const s of [0.00, 0.04, 0.08]) billboard(K(s), s < 0.02 ? STAND : -1, 26, 16, 7,
         (Math.round(s * 100) % 3 === 0) ? [0.94, 0.84, 0.20]
@@ -547,7 +548,7 @@
       // and denser alley skip so the hillside reads continuous from overview.
       favelaPatch(0.11, -1, 78, 6, 6);
       favelaPatch(0.13, -1, 72, 8, 7);
-      favelaPatch(0.17, -1, 68, 9, 7);
+      // (0.17/-1 gap 68 removed 2026-11-10: footprint-rejected on every build.)
       favelaPatch(0.20, -1, 70, 7, 7);
       favelaPatch(0.22, -1, 72, 8, 6);
       favelaPatch(0.265, -1, 82, 6, 6);
@@ -864,8 +865,8 @@
       // circuit's buried prims. 0.875-0.895 is level with the road to 20 m.
       arquibancada("interlagos-arq-subida", 0.885, -1, 16, 6, { rows: 7, roof: false, brFlag: true });
       crowdBank(0.830, -1, 30, 56, 6);
-      crowdBank(0.845, -1, 30, 56, 6);
-      crowdBank(0.860, -1, 28, 48, 5);   // DETAIL: Subida crowd densify
+      // (crowdBank 0.845/-1 gap 30 and 0.860/-1 gap 28 removed 2026-11-10:
+      // footprint-rejected on every build — they never drew.)
       cameraTower(K(0.8375), 1, 10, { h: 16 });
       for (const [s, col] of [[0.822, [0.96, 0.82, 0.16]], [0.853, [0.12, 0.58, 0.30]]]) {
         billboard(K(s), 1, 20, 12, 4.5, col);

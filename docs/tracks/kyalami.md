@@ -1,10 +1,13 @@
 # Kyalami Grand Prix Circuit — Visual Design Brief
 
-**Setting:** DAY, green theme (Gauteng highveld). ~4.522 km, 16 turns.
-**Racing direction:** anticlockwise in the live layout (`reverse: true` in the
-def flips the OSM-authored clockwise trace). Official site lists
-“Track run/direction: Anticlockwise”
-(https://www.kyalamigrandprixcircuit.com/about-kyalami/).
+**Setting:** DAY, green theme (Gauteng highveld). ~4.522 km; the real 2016
+layout has 16 numbered turns, the def's `turns` lists 13 (owned by the W5 frame
+worker; re-number it against a source).
+**Racing direction:** CLOCKWISE. The built lap's net turning is -360° (+k = left)
+and T1 Crowthorne is a right-hander (`js/circuits/kyalami.js` header;
+`reverse: true` flips the OSM source's winding). An earlier revision of this
+page quoted the official site as "Anticlockwise"; the page could not be
+re-fetched on 2026-11-10 and the quote contradicts the circuit's own T1.
 
 ## 1. Setting
 On the reef between Johannesburg and Pretoria. The altitude is the whole

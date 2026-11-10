@@ -1,6 +1,6 @@
 # Circuit Gilles Villeneuve — Visual Design Brief
 
-**Theme:** `island_park_day` (green) · **Time:** DAY · **Render:** procedural colored boxes, no textures
+**Theme:** `green` · **Time:** DAY · **Render:** procedural colored boxes, no textures
 
 ## 1. Setting
 A semi-permanent racetrack laid across **Île Notre-Dame**, a man-made island built for Expo 67 in the St. Lawrence River, just off downtown Montreal. The circuit sits inside Parc Jean-Drapeau: leafy parkland, paved cycle paths, the long Olympic rowing basin, and Expo-era pavilions. Water is everywhere — the island is ringed by the river and laced with canals. Walls hug the track tightly with almost no run-off; trees and grass fill the gaps. The Montreal skyline rises across the water to the north.

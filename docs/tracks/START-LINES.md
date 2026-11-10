@@ -1,7 +1,7 @@
 # Start/finish lines — the derivation, the values, and what moving them touches
 
 Campaign closed — this doc is the live reference for `startFrac`. It positions the
-start/finish line, and 22 of 40 circuits put it inside a corner. This is the fix and the evidence.
+start/finish line, and 22 of the 40 circuits of that campaign put it inside a corner. This is the fix and the evidence.
 
 ---
 
@@ -147,7 +147,7 @@ These did not come from the upstream trace file — `tools/track/stitch-osm-ring
 recovered them from OpenStreetMap — so there was no "already begins at the line"
 property to inherit. The stitcher instead rotates the ring so vertex 0 sits mid
 the LONGEST STRAIGHT RUN, which is the pit straight on all eleven, and every one
-ships `startFrac: 0.0000`.
+shipped `startFrac: 0.0000` (several have since moved; the defs are the truth).
 
 That is a placement rule, not a surveyed line. It satisfies the convention's own
 straightness check — mean |curvature| over the 120 m centred on s=0, bar 0.004
@@ -242,8 +242,8 @@ see `docs/notes/JEDDAH-START-2201-2026-10-18.md`). **bahrain moved 0.2250 → 0.
   (1052 m, heading N), followed by R hairpin / L / R kink / 524 m / R = T1–T4.
   `pit.side` flipped −1 → +1 to match; turns re-seated by the
   rotate-markings formula (shift 0.27027); sectors left alone (see §6).
-- jeddah: no usable source found. Its current 0.9625 measures **in a corner**
-  (mean |k| 0.0173), so it is the one circuit still known-wrong.
+- jeddah: no usable source found then; its 0.9625 measured **in a corner**
+  (mean |k| 0.0173). Superseded: moved to 0.9160 on 2026-10-18 (top of this page).
 
 For the record and not as an instruction: the v0 convention — 39/40 straight,
 19/22 coordinate-confirmed — predicts **0.0** for both, and both measure dead
