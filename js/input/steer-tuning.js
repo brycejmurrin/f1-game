@@ -11,7 +11,6 @@ const { $, store, clamp } = G;
 if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
 if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.create(G);
 
-
 // GRIP STEER row is injected (not baked into index.html) so shellNodes stays
 // inside its ceiling — same ADVANCED CAR HANDLING group as DRIVING HELP.
 (function ensureGripSteerRow() {
@@ -42,7 +41,6 @@ if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.crea
     + '<p class="adv-help">Widens the drag as you go faster, by the same fraction ADAPTIVE BUTTONS slows keys and arrows. The travel that is full lock at a standstill is less lock at speed. 1 is OFF, the fixed range (the default). 10 matches that assist in full. Low speed is unchanged.</p>';
   host.parentNode.insertBefore(item, host.nextSibling);
 })();
-
 
 let hapRepaintWired = false;   // device capability repaint is wired once
 let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected

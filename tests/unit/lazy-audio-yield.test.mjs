@@ -267,7 +267,6 @@ test("restoreOnEngine source restores volRadio alongside volMusic and volSfx", (
   const block = bundles.slice(bundles.indexOf("function restoreOnEngine"), bundles.indexOf("function ensureAudio"));
   assert.match(block, /setMusicVolume\(store\.get\("volMusic"\)\)/);
   assert.match(block, /setSfxVolume\(store\.get\("volSfx"\)\)/);
-  assert.match(block, /volRadio/);
   assert.match(block, /setVolume\(store\.get\("volRadio"/);
 });
 

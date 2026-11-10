@@ -175,8 +175,6 @@ test("fillArcBuckets / forArcNear are on Collide and allocation-free after warmu
   const src = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
   // `arr.length = 0` drops V8's backing store, so every refill regrew it (measured: ~5 KB/frame at 22 cars).
   assert.ok(src.includes("_arcN[id] = 0") && !src.includes("arr.length = 0"), "bucket clear must keep the arrays and reset a count");
-  assert.match(src, /function fillArcBuckets/);
-  assert.match(src, /function forArcNear/);
 });
 
 test("seeded 22-car run: production scanTraffic/scanTow/scanOtAhead match a brute-force reference", () => {

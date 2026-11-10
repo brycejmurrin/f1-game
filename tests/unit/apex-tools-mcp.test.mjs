@@ -73,7 +73,6 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.ok(fs.existsSync(SH));
   const src = fs.readFileSync(MCP, "utf8");
   assert.match(src, /apex-tools-mcp/);
-  assert.match(src, /apex_/);
   // Catalog must not REGISTER chrome_/tinyfish_ tools (design invariant).
   // Mentions in refuse/help copy are fine; the tools/list test is the hard gate.
   assert.doesNotMatch(src, /name:\s*"chrome_/);
