@@ -1,34 +1,36 @@
 "use strict";
 /**
  * Meeting picker labels must stay unique when OpenF1 reuses meeting_name
- * (two Pre-Season Testing rows, two Bahrain GPs). Mirrors hub.js
- * meetingPickerOptions — the source scan below fails if hub drifts.
+ * (two Pre-Season Testing rows, two Bahrain GPs). Runs hub.js's own
+ * meetingPickerOptions, extracted from the source and evaluated.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HUB = fs.readFileSync(path.join(ROOT, "js/data/hub.js"), "utf8");
 
-function meetingPickerOptions(ms) {
-  const base = ms.map(function (m) {
-    let label = m.name || m.circuit || "Round";
-    if (m.circuit && label.indexOf(m.circuit) < 0) label += " · " + m.circuit;
-    return label;
-  });
-  const counts = Object.create(null);
-  for (let i = 0; i < base.length; i++) counts[base[i]] = (counts[base[i]] || 0) + 1;
-  return ms.map(function (m, i) {
-    let label = base[i];
-    if (counts[label] > 1 && m.dateStart) {
-      label += " · " + String(m.dateStart).slice(0, 10);
-    }
-    return { value: m.meetingKey, label: label };
-  });
+// THE REAL FUNCTION: hub.js's nested meetingPickerOptions, cut out of the
+// source by its own braces and evaluated (it is pure: reads only its argument),
+// so a change to the shipped body changes what these tests run.
+function realMeetingPickerOptions() {
+  const head = "function meetingPickerOptions(";
+  const at = HUB.indexOf(head);
+  assert.ok(at >= 0, "hub.js hosts meetingPickerOptions");
+  let depth = 0, end = -1;
+  for (let i = HUB.indexOf("{", at); i < HUB.length; i++) {
+    if (HUB[i] === "{") depth++;
+    else if (HUB[i] === "}" && --depth === 0) { end = i + 1; break; }
+  }
+  assert.ok(end > at, "meetingPickerOptions has a closed body");
+  return vm.runInNewContext("(" + HUB.slice(at, end) + ")", { Object, String }, { filename: absSrc("js/data/hub.js") });
 }
+const meetingPickerOptions = realMeetingPickerOptions();
 
 test("the hub panel drops native titles on scroll", () => {
   assert.match(HUB, /contentEl\.addEventListener\("scroll"/);

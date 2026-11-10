@@ -34,16 +34,17 @@
  * (the moved note's own links are re-based on its new directory). --move does
  * the same for any docs/ path (a plan, a survey): docs/<rel> → docs/archive/<rel>.
  *
- * --index regenerates the block between `<!-- gen:notes -->` and
- * `<!-- /gen:notes -->` in docs/NOTES-INDEX.md: one row per live note with its
- * `Kind:` (unknown when absent), `Re-measure-by:` and a one-line summary — the
- * hand-kept summary already in the index when there is one, else the note's
- * H1. `--index --check` exits 1 on drift. Hand prose outside the markers
- * (research, archive, plans) is kept verbatim.
+ * --index writes the notes table to artifacts/NOTES-TABLE.md (gitignored, never
+ * committed: a committed table sorted newest-first with a live count made every
+ * note-adding PR conflict with every other, and a merge that skipped the regen
+ * left the tip red; issue #5347). One row per live note with its `Kind:`
+ * (unknown when absent), `Re-measure-by:` and a one-line summary — the note's own
+ * `Summary:` header line when it has one, else its H1. docs/NOTES-INDEX.md is
+ * hand prose only and must not carry a generated block.
  *
  *   node tools/docs/knowledge-gc.mjs                 # list; exit 1 when a stale note is not allow-listed
- *   node tools/docs/knowledge-gc.mjs --apply         # archive the stale set, repoint links, regenerate the index
- *   node tools/docs/knowledge-gc.mjs --index [--check]
+ *   node tools/docs/knowledge-gc.mjs --apply         # archive the stale set, repoint links
+ *   node tools/docs/knowledge-gc.mjs --index         # write artifacts/NOTES-TABLE.md
  *   node tools/docs/knowledge-gc.mjs --move docs/plans/<name>.md docs/surveys
  *   APEX_TODAY=2026-11-03 node tools/docs/knowledge-gc.mjs --json
  */
@@ -60,6 +61,7 @@ export const KIND_REQUIRED_FROM = "2026-11-03";
 export const SIZE_ALLOW = "tests/data/notes-size-allow.json";
 export const UNCITED_ALLOW = "tests/data/notes-uncited-allow.json";
 export const INDEX = "docs/NOTES-INDEX.md";
+export const TABLE = "artifacts/NOTES-TABLE.md";
 const TEXT_EXT = /\.(?:md|mdc|mjs|cjs|js|ts|sh|py|json|ya?ml|html|css|txt|toml|patch)$/;
 // The allow-lists name notes without reading them, so they are not citers either.
 const NOT_A_CITER = /^(?:docs\/notes\/|docs\/archive\/|docs\/research\/|docs\/NOTES-INDEX\.md$|tests\/data\/notes-(?:size|uncited)-allow\.json$|artifacts\/|scratch\/|node_modules\/)/;
@@ -120,13 +122,16 @@ function gitDates() {
   return gitDateCache;
 }
 
-/** `Kind:` and `Re-measure-by:` from a note's first 20 lines. */
+/** `Kind:`, `Re-measure-by:` and `Summary:` from a note's first 20 lines; the H1; the Supersedes pin. */
 export function header(text) {
   const head = text.split("\n").slice(0, 20).join("\n");
   const kind = /^(?:\*\*)?Kind:(?:\*\*)?\s*([a-z][a-z-]*)/im.exec(head)?.[1]?.toLowerCase() || null;
   const remeasure = /Re-measure-by:(?:\*\*)?\s*(\d{4}-\d{2}-\d{2})/i.exec(head)?.[1] || null;
+  const summary = /^Summary:\s*(.+)$/m.exec(head)?.[1]?.trim() || null;
+  const h1 = /^#\s+(.+)$/m.exec(text)?.[1]?.trim() || null;
   const pinned = /^Supersed(?:es|ed by):/m.test(text);
-  return { kind, remeasure, pinned };
+  const superseded = /^Superseded by:/m.test(text);
+  return { kind, remeasure, summary, h1, pinned, superseded };
 }
 
 /** Every tracked text file whose mention of a note keeps it live, with its contents. */
@@ -281,51 +286,32 @@ export function demoteArchiveLinks(text, dir) {
 }
 
 // ---------------------------------------------------------------------------
-// NOTES-INDEX
+// NOTES-TABLE (built on demand, never committed)
 
-const OPEN = "<!-- gen:notes -->", CLOSE = "<!-- /gen:notes -->";
+const OPEN = "<!-- gen:notes -->";
 const cell = (s) => s.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
 
-/** Hand-kept one-line summaries already in the index, keyed by note basename. */
-function existingSummaries(indexText) {
-  const out = new Map();
-  for (const line of indexText.split("\n")) {
-    const m = /^\|\s*\[[^\]]*\]\((?:archive\/)?notes\/([^)/]+\.md)\)\s*\|(.*)\|\s*$/.exec(line);
-    if (!m) continue;
-    const cells = m[2].split("|").map((c) => c.trim());
-    const summary = cells[cells.length - 1];
-    if (summary) out.set(m[1], summary);
-  }
-  return out;
-}
-
-export function renderIndexBlock(notes, indexText) {
-  const prior = existingSummaries(indexText);
-  // Dated notes newest first, then the undated ones by name: the index shows only filename dates (see datedByName).
+/** The notes table as Markdown, links relative to artifacts/. Pure over scan() rows. */
+export function renderIndexBlock(notes) {
+  // Dated notes newest first, then the undated ones by name: the table shows only filename dates (see datedByName).
   const key = (n) => (n.dated ? n.date : "0000-00-00");
   const rows = [...notes].sort((a, b) => key(b).localeCompare(key(a)) || a.base.localeCompare(b.base)).map((n) => {
-    const h1 = /^#\s+(.+)$/m.exec(read(n.file))?.[1] || n.base;
-    const summary = prior.get(n.base) || cell(h1).slice(0, 200);
-    const flags = [n.cited ? "" : "uncited", n.pinned ? "pinned" : ""].filter(Boolean).join(", ");
-    return `| [${n.base}](notes/${n.base}) | ${n.kind || "unknown"} | ${n.remeasure || "—"} | ${n.dated ? n.date : "—"}${flags ? ` (${flags})` : ""} | ${cell(summary)} |`;
+    const summary = n.summary ? cell(n.summary) : cell(n.h1 || n.base).slice(0, 200);
+    const flags = [n.cited ? "" : "uncited", n.pinned ? "pinned" : "", n.superseded ? "superseded" : ""].filter(Boolean).join(", ");
+    return `| [${n.base}](../docs/notes/${n.base}) | ${n.kind || "unknown"} | ${n.remeasure || "—"} | ${n.dated ? n.date : "—"}${flags ? ` (${flags})` : ""} | ${summary} |`;
   });
-  return [OPEN,
-    `Generated by \`node tools/docs/knowledge-gc.mjs --index\` from each note's \`Kind:\` / \`Re-measure-by:\` header line (\`unknown\` = no \`Kind:\` line yet). ${notes.length} live notes; "uncited" marks a note no live file names (tests/data/notes-uncited-allow.json holds the grandfathered backlog, shrink-only). Do not hand-edit this block.`,
-    "", "| Note | Kind | Re-measure by | Dated | What it records |", "|---|---|---|---|---|", ...rows, CLOSE].join("\n");
+  return [`# docs/notes — ${notes.length} live notes`, "",
+    `Built by \`node tools/docs/knowledge-gc.mjs --index\` from each note's \`Kind:\` / \`Re-measure-by:\` / \`Summary:\` header lines (summary falls back to the H1; \`unknown\` = no \`Kind:\` line). Gitignored and never committed (issue #5347): edit the note, then rebuild. "uncited" marks a note no live file names (${UNCITED_ALLOW} holds the grandfathered backlog, shrink-only).`,
+    "", "| Note | Kind | Re-measure by | Dated | What it records |", "|---|---|---|---|---|", ...rows, ""].join("\n");
 }
 
-export function renderIndex(indexText, notes) {
-  const a = indexText.indexOf(OPEN), b = indexText.indexOf(CLOSE);
-  if (a < 0 || b < 0 || b < a) throw new Error(`${INDEX}: missing ${OPEN} … ${CLOSE} markers`);
-  return indexText.slice(0, a) + renderIndexBlock(notes, indexText) + indexText.slice(b + CLOSE.length);
-}
+/** True when the hand-written index still carries a generated block (the committed-table shape #5347 retired). */
+export const indexHasGeneratedBlock = (indexText) => indexText.includes(OPEN);
 
-export function writeIndex({ check = false } = {}) {
-  const cur = read(INDEX);
-  const next = renderIndex(cur, scan().notes);
-  if (next === cur) return { changed: false };
-  if (!check) fs.writeFileSync(path.join(ROOT, INDEX), next);
-  return { changed: true };
+export function writeIndex() {
+  fs.mkdirSync(path.join(ROOT, path.dirname(TABLE)), { recursive: true });
+  fs.writeFileSync(path.join(ROOT, TABLE), renderIndexBlock(scan().notes));
+  return { file: TABLE };
 }
 
 // ---------------------------------------------------------------------------
@@ -337,14 +323,12 @@ function main(argv) {
   if (has("--move")) {
     const rels = argv.slice(argv.indexOf("--move") + 1).filter((a) => !a.startsWith("--"));
     const moves = moveToArchive(rels, { dry: has("--dry-run") });
-    if (!has("--dry-run")) writeIndex();
     console.log(`moved ${moves.size} file(s)`);
     return 0;
   }
   if (has("--index")) {
-    const r = writeIndex({ check: has("--check") });
-    console.log(has("--check") ? (r.changed ? `${INDEX}: STALE — run --index` : `${INDEX}: up to date`) : (r.changed ? `${INDEX}: written` : `${INDEX}: unchanged`));
-    return has("--check") && r.changed ? 1 : 0;
+    console.log(`${writeIndex().file}: written`);
+    return 0;
   }
   const r = scan({ days: num("days", DAYS) });
   if (has("--json")) { console.log(JSON.stringify(r, null, 2)); return r.stale.length || r.refused.length ? 1 : 0; }
@@ -363,8 +347,7 @@ function main(argv) {
   console.log(`${r.notes.length} notes · ${r.uncited.length} uncited (${grandfathered} allow-listed or inside the ${r.days}-day window) · today ${r.today}`);
   if (has("--apply")) {
     if (set.size) moveToArchive([...set.keys()]);
-    writeIndex();
-    console.log(`archived ${set.size}; ${INDEX} regenerated`);
+    console.log(`archived ${set.size}`);
     return 0;
   }
   return set.size ? 1 : 0;
