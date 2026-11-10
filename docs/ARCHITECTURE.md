@@ -1567,7 +1567,7 @@ directory). The generated module index at the top of this file and
 | `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)` (game.js) and `aeroDfMult()` (`PaceMath`, `js/race/pace-math.js`) live with the car state they read |
 | `js/fx/skidmarks.js` | `SkidMarks` | the tyre-mark ring buffer (`MAX_SKID` entries) plus its batched vertex build — one draw call instead of one per mark — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `js/ui/sheet-shape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over every `<dialog class="screen">` element in `index.html`, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheet-shape.js` |
+| `js/ui/modal.js` | `TopModal` | self-initialising: mirrors each `<dialog class="screen">`'s `hidden` onto `showModal()`/`close()` (the browser top layer, no z-index), reads `data-esc-close` / `data-esc`, and isolates the title page under a covering sheet from `UiLayers.LAYER_IDS` |
 | `js/ui/aria-state.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists modules whose contracts need prose; every other extracted file
