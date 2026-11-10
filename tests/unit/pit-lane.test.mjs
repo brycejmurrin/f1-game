@@ -1477,6 +1477,7 @@ test("in a wet race an AI's planned stop fits the wet tread, not the plan's slic
   const { pits, car } = commitSession({ weather: "rain" });
   const c = car(0);
   c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
+  c.s = 0;   // AT THE LINE: the numbers below are whole laps (the part of a lap already driven comes off `left`)
   c.tyre = { code: "W", tread: 2 };
   c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
   // On the RIGHT wet tyre the dry plan's lap is not a stop: the wet stint is
@@ -1495,6 +1496,7 @@ test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching th
   s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
   const c = s.car(0);
   c.human = false; c.local = false; c.lap = 8; c.pitStops = 0; c.tyreWear = 0.4;
+  c.s = 0;   // AT THE LINE: the numbers below are whole laps (the part of a lap already driven comes off `left`)
   c.tyre = { code: "W", tread: 2 };
   c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [8, 17], lapsAt: [8] };
   const run = (lapsOn, lapsLeft) => {
@@ -1514,6 +1516,26 @@ test("wetLapsToStop: the wet stint is cut midway between a fresh set reaching th
   delete s.G.tyres.lapsLeft;
   seen.length = 0; s.pits.think(c);
   assert.deepEqual(seen[0], [99, 0]);
+});
+
+test("wetLapsToStop counts what is LEFT of the lap the car is on, not the whole lap", () => {
+  // VM, monaco rain seed 7, 5 laps, wear real: every AI boxed wet-for-wet at wear ~0.38-0.54 with
+  // a set that would have reached the flag at ~0.95. Late in lap 2 of 5: 3.05 laps to run, 3.13 on the set.
+  const s = commitSession({ weather: "rain" });
+  const seen = [];
+  s.ctx.AiDrive.pitNow = (q) => { seen.push([q.lapsToStop, q.stopsLeft]); return ""; };
+  const c = s.car(0);
+  s.G.lapsTarget = 5;
+  c.human = false; c.local = false; c.lap = 2; c.pitStops = 0; c.tyreWear = 0.384;
+  c.tyre = { code: "W", tread: 2 };
+  c.pitPlan = { stops: 0, seq: ["soft"], stints: [5], lapsAt: [] };
+  s.G.tyres.lapsOn = () => 2; s.G.tyres.lapsLeft = () => 3.13;
+  c.s = s.G.track.total * 0.95;
+  s.pits.think(c);
+  assert.deepEqual(seen[0], [99, 0], "0.05 + 3 laps to run on a set with 3.13: it reaches the flag");
+  c.s = 0; seen.length = 0;
+  s.pits.think(c);
+  assert.equal(seen[0][1], 1, "at the START of that lap the same set is a lap short, and still stops");
 });
 
 test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {
