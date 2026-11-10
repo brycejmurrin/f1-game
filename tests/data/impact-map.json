@@ -135,7 +135,8 @@
         "tests/unit/apex-bridge.test.mjs"
       ],
       "handle": [
-        "tests/unit/apex-bridge.test.mjs"
+        "tests/unit/apex-bridge.test.mjs",
+        "tests/unit/bridge-link.test.mjs"
       ],
       "issueOf": [
         "tests/unit/apex-bridge.test.mjs"
@@ -255,6 +256,26 @@
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs",
         "tests/unit/wgx-labels.test.mjs"
+      ]
+    },
+    "js/agent/bridge-link.js": {
+      "forget": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "link": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "parseIssue": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "unlink": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "view": [
+        "tests/unit/bridge-link.test.mjs"
+      ],
+      "*": [
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/audio/announcer-recorded.js": {
@@ -5238,6 +5259,7 @@
         "tests/unit/metrics.test.mjs"
       ],
       "*": [
+        "tests/unit/bridge-link.test.mjs",
         "tests/unit/stage-minify.test.mjs",
         "tests/unit/verify-live.test.mjs"
       ]
@@ -15256,15 +15278,20 @@
       ],
       "chunked": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cull": [
         "tests/unit/tlx-hunt3.test.mjs"
       ],
+      "disposeShared": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "free": [
         "tests/unit/build-worker.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "idleYield": [
         "tests/unit/webgpu-menu-warm.test.mjs"
@@ -15284,7 +15311,8 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "releaseMirrors": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "splitRanges": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
@@ -15626,6 +15654,9 @@
       "attachKey": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "bootRenderer": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "buildGeometry": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
@@ -15709,6 +15740,9 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/tlx-pipe-pin-warm.test.mjs"
       ],
+      "engineLabel": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "ensureGlowStream": [
         "tests/unit/tlx-glow-instancing.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs"
@@ -15744,6 +15778,9 @@
       "hideSkyMesh": [
         "tests/unit/render-final-contracts.test.mjs"
       ],
+      "isNullMirrorError": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
       "isWebGPU": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -15772,6 +15809,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-mat-key-memo.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "mirrorLedger": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "mirrorWarmGate": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -15834,6 +15874,7 @@
         "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/tlx-round2.test.mjs",
@@ -15856,7 +15897,8 @@
       ],
       "releaseGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-car-shadow-cpu.test.mjs"
+        "tests/unit/tlx-car-shadow-cpu.test.mjs",
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "releaseGeometry": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -15927,6 +15969,9 @@
       ],
       "startRigWarm": [
         "tests/unit/tlx-rig-warm.test.mjs"
+      ],
+      "sweepCarShadowMirrors": [
+        "tests/unit/tlx-r187-contracts.test.mjs"
       ],
       "sweepGeoMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs"

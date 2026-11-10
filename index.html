@@ -3674,9 +3674,9 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<!-- Import map for the vendored ES-module islands (multiplayer's Trystero).
-     The three.js specifiers left with the WGX/TLX spike-out on 2026-09-03
-     (spike/backends/README.md says how to re-attach them). Inline (no src) so
+<!-- Import map for the vendored ES-module islands: three.js r187 (TLX, the
+     default renderer: tlx.js imports "three/webgpu" and "three/tsl") and
+     multiplayer's Trystero. Inline (no src) so
      the load-order test and the service worker's tag parser both ignore it;
      the vendor URLs carry no ?v= — immutability comes from the versioned
      directory name (upgrade = new dir). -->

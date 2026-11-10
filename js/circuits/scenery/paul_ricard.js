@@ -266,23 +266,19 @@
           };
           const seg = rowSeg(side * (rows - 1) * depth / 2);
           if (seg <= 0) return;
-          // Scaffold rake: two tube legs per station carrying the whole tier.
           out._mat = MAT.METAL;
-          for (const f of [0.25, 0.85]) {
-            const back = f * rows * depth, up = f * rows * rise;
-            addCyl(out, vadd(vadd(a.c, a.r, side * back), a.u, up * 0.5),
-              0.09, up + 0.4, [0.62, 0.64, 0.68], 5, b);
-          }
           // Diagonal brace — the giveaway that this is a temporary frame.
           addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.55),
             a.u, rows * rise * 0.55), [rows * depth * 1.2, 0.10, 0.10],
             [0.62, 0.64, 0.68], b);
+          const seated = [];
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
             const rs = rowSeg(side * back) || seg;
             if (rs <= 0) continue;
             const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.14, rs], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
+            seated[r] = tier !== false;
             // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
             // Never on a tier the road guard dropped: the figure floats (0.937).
             const h = hash(k * 13 + r * 7);
@@ -292,6 +288,25 @@
               a.t, (h - 0.5) * rs * 0.8), a.u, up + 0.55),
               [0.5, 0.9, 0.55], h < 0.8 ? [0.80, 0.34, 0.28] : [0.30, 0.40, 0.66], b);
             out._mat = MAT.METAL;
+          }
+          // Scaffold rake: two tube legs per station carrying the whole tier.
+          // TRAP A + B (docs/SCENERY-API.md §2): addCyl's `c` is the BASE, so
+          // the old `up * 0.5` centre put every foot half a tier-height in the
+          // air (158 of 162 stations, up to 2.24 m) and the head 1.8 m through
+          // the top row. Each leg now hangs from the centre of the tier over
+          // it down to 0.2 m into the ground under ITS OWN foot — after the
+          // tiers, so a row the road guard dropped leaves no lone pole.
+          for (const f of [0.25, 0.85]) {
+            const back = f * rows * depth, row = Math.min(rows - 1, Math.round(back / depth));
+            if (!seated[row]) continue;
+            const head = vadd(vadd(a.c, a.r, side * back), a.u, 0.5 + row * rise);
+            let foot = head, len = 0;
+            for (let it = 0; it < 2; it++) {   // a.u leans with the gradient: re-sample under the foot
+              const g = terrainYAt(foot[0], foot[2]);
+              len = (head[1] - (g != null ? g : a.c[1] + 0.3) + 0.2) / Math.max(0.5, a.u[1]);
+              foot = vadd(head, a.u, -len);
+            }
+            if (len >= 0.3) addCyl(out, foot, 0.09, len, [0.62, 0.64, 0.68], 5, b);
           }
           out._mat = 0;
         });

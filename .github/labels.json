@@ -31,5 +31,6 @@
   { "name": "area:audio", "color": "c5def5", "description": "Engine, sfx, music (skill audio-debug)" },
   { "name": "area:net", "color": "c5def5", "description": "Multiplayer, data hub, PWA (skills multiplayer-debug, data-hub, pwa-cache-service-worker)" },
   { "name": "area:perf", "color": "c5def5", "description": "Frame time, memory, download weight" },
-  { "name": "area:tooling", "color": "c5def5", "description": "tools/, tests, CI, agent kit (skills check-changes, steward, slim-bloat)" }
+  { "name": "area:tooling", "color": "c5def5", "description": "tools/, tests, CI, agent kit (skills check-changes, steward, slim-bloat)" },
+  { "name": "memory-change", "color": "d4c5f9", "description": "A PR that edits .claude/memory/ on purpose (ready-gate accepts it, as a `memory-change:` body line)" }
 ]

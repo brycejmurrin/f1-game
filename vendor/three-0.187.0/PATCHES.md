@@ -322,7 +322,7 @@ iPhones run TLX on three's WebGL backend. In 0.186.1 `Pipelines._releaseProgram`
 only calls the stats-only `info.destroyProgram`, `WebGLBackend` never deletes a
 program, shader or VAO, and `vaoCache` keys on a growing attribute id, so every
 track switch leaves its VAOs, programs and shaders behind while the buffers are
-freed. `tools/gfx/gl-object-census.mjs` (WebGL2 prototype create/delete counters,
+freed. `tools/gfx/gl-object-census.mjs` (deleted 2026-11-10, in git history; WebGL2 prototype create/delete counters,
 picker mode, monza → monaco → spa × 3 on SwiftShader) measured, before the patch:
 VertexArray / Program / Shader deleted = 0 at every step, live +149 / +12 / +24
 per three-circuit cycle (about +50 / +4 / +8 per visit). Numbers after the patch:
@@ -367,8 +367,8 @@ permanently because nothing ever reads their colour). Array-camera layer descrip
 `apex26.tlxTagDiscard="0"` (every colour hint) and `apex26.tlxDepthDiscard="0"` (depth).
 
 Upstream: unfixed on `dev` as of 2026-10-24 (the `discardColor`/`discardDepth` consts in
-`src/renderers/webgpu/WebGPUBackend.js` still gate on `sampleCount > 1`). No release
-after r186 exists. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
+`src/renderers/webgpu/WebGPUBackend.js` still gate on `sampleCount > 1`); r187 still
+gates them the same way, so the patch was kept at the bump. Draft: `docs/notes/UPSTREAM-THREE-ISSUES.md` §4. Canary:
 `gfx-backend-canary.test.mjs` "honours the single-sample discard hint".
 
 ## 18. A 3-component colour target keeps a vec4 WGSL fragment output (#3690)

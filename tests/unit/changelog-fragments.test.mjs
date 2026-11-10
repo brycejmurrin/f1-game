@@ -114,16 +114,18 @@ test("fold build: --build wins, else the stamped build; never version.json", asy
   const src = fs.readFileSync(new URL("../../tools/gen/gen-changelog.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(src, /readRepo\("version\.json"\)/);
   // Structure, not source text: the parsed workflow's one job checks out full history and its fold step
-  // runs `npm run fold`, then dispatches ci.yml on the bot branch (a GITHUB_TOKEN PR starts no CI).
+  // runs `npm run fold`, then hands the bot branch to open-bot-pr (LAND_TOKEN PR, or a ci.yml dispatch without it).
   const { parse } = createRequire(import.meta.url)("yaml");
   const wf = parse(fs.readFileSync(new URL("../../.github/workflows/changelog-fold.yml", import.meta.url), "utf8"));
   const steps = wf.jobs.fold.steps;
   assert.equal(steps.find((st) => String(st.uses || "").startsWith("actions/checkout@")).with["fetch-depth"], 0);
   const run = steps.find((st) => st.name === "Fold").run;
   assert.ok(run.includes("npm run -s fold"));
-  assert.ok(run.includes('gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/changelog-fold'));
+  assert.ok(run.includes('echo "branch=bot/changelog-fold"'), "the fold step hands its branch to the open-bot-pr step");
+  assert.equal(steps.find((st) => st.name === "Open the PR").uses, "./.github/actions/open-bot-pr");
   assert.ok(!/git push[^\n]*claude\/f1-game-project-26h3ng/.test(run), "the deploy branch is reached only through the PR");
-  assert.equal(wf.permissions.actions, "write");
+  assert.equal(wf.jobs.fold.permissions.actions, "write");
+  assert.equal(wf.permissions.actions, undefined, "actions: write is the job's, not the workflow's");
   const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts.fold, "node tools/gen/gen-changelog.mjs --fold");
   assert.ok(pkg.scripts["gen:check"].split(" && ").includes("node tools/gen/gen-changelog.mjs --check"));
