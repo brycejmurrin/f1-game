@@ -245,7 +245,7 @@ function create(G) {
       if (G.soundOn) GameAudio.uiSelect();
       // A newer-build slot cannot replace the live career. Keep the picker
       // intact, including when another tab updated this card after rendering.
-      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce("UPDATE REQUIRED"); return; }
+      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce(s.damaged ? "DAMAGED SAVE" : "UPDATE REQUIRED"); return; }
       ++backupReadGeneration;
       armedDelete = "";
       armedImport = "";
