@@ -1,7 +1,7 @@
 // @doc Owner-profile screen survey: all menu screens at contract windows A/C/D/As, seeded from the settings export.
 // #5201. Every menu-screens.mjs screen at the UI-contract windows (As = A with a stale portrait inner*), seeded from
 // tests/data/settings-defaults-export.json: scrollers, controls outside the safe box, fat controls. Parent only (one browser).
-// Usage: node tools/ui/profile-survey.mjs [A,C,D,As] [screenA,screenB|*]   env SURVEY_ROOT=<tree to serve> SURVEY_OUT=<dir under artifacts/>
+// Usage: node tools/ui/profile-survey.mjs [A,C,D,As] [screenA,screenB|*]   env SURVEY_ROOT=<tree to serve> SURVEY_OUT=<dir under artifacts/> SURVEY_SCALE=<UI SIZE percent; unset = the export's>
 // Output: artifacts/profile-survey/report-<windows>.json + one JPEG per cell. Insets are injected as --sa* before first layout. Results: docs/notes/VIEWPORT-ASSUMPTIONS-2026-11-10.md.
 import fs from "node:fs";
 import path from "node:path";
@@ -25,6 +25,7 @@ const WINDOWS = {
 const wantW = (process.argv[2] || "A,C,D").split(",");
 const wantS = process.argv[3] && process.argv[3] !== "*" ? process.argv[3].split(",") : null;
 const OUT = path.join(ROOT, "artifacts", process.env.SURVEY_OUT || "profile-survey");
+const SCALE = process.env.SURVEY_SCALE ? Number(process.env.SURVEY_SCALE) : null;   // percent, stored by __apex.uiScale
 const SERVE = process.env.SURVEY_ROOT || ROOT;   // the tree served (a worktree at the base for a before run)
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -107,6 +108,7 @@ try {
     await bootPage(page, srv.url, { hideGame: true });
     const imp = await page.evaluate((d) => SettingsExport.applySettings(d, {}), EXPORT);
     if (!imp.ok || imp.failed) throw new Error("import " + JSON.stringify(imp));
+    if (SCALE != null) { const u = await page.evaluate((n) => window.__apex.uiScale(n), SCALE); if (!u || u.ok === false || u.pct !== SCALE) throw new Error("uiScale " + JSON.stringify(u)); }
     await bootPage(page, srv.url, { hideGame: true });
     await page.evaluate(() => { window.__mmGrid = window.__apex.info().raceGrid; });
     await page.addStyleTag({ content: "html,body{background:#000!important}#game,#game-soft{visibility:hidden!important}" });
