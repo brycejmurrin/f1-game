@@ -568,7 +568,7 @@ const CATALOG = [
         expr: { type: "string" },
         raw: { type: "boolean" },
         backend: { type: "string", enum: ["three", "webgl2", "webgpu"], description: "Pin the renderer the expr measures (default three = TLX)." },
-        vm: { type: "boolean", description: "Node VM route (tools/lib/game-vm.cjs): no Chromium, no rasters; refuses `backend`." },
+        vm: { type: "boolean", description: "Node VM route (tools/lib/game-vm.cjs): no Chromium, no rasters; refuses `backend`. The expr runs in the game's VM context and returns JSON; it is NOT a security boundary (`g` is the host-side handle)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },

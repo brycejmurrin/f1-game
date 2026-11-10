@@ -6,6 +6,8 @@ import { EventEmitter } from "node:events";
 import vm from "node:vm";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 import { callTool } from "../../tools/mcp/js-debugger-mcp.mjs";
+import { hitchWindowsFromCpuProfile, hitchSamplerExpression } from "../../tools/mcp/js-debugger-trace.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 class FakeCdp extends EventEmitter {
   closed = false;
@@ -96,4 +98,26 @@ test("listener counts include custom event types named after inherited object pr
   assert.equal(result.total, 5);
   assert.deepEqual(result.byType, JSON.parse('{"constructor":1,"toString":1,"__proto__":2,"click":1}'));
   assert.ok(cdp.calls.some(c => c.method === "Runtime.releaseObjectGroup" && c.params.objectGroup === "apex-dbg-listeners"));
+});
+
+test("CPU hitch windows rank the whole profile: the worst stall is kept even after maxWindows earlier ones", () => {
+  const deltas = [60, 61, 62, 63, 64, 500].map(ms => ms * 1000);
+  const profile = { nodes: [{ id: 1, callFrame: { functionName: "tick", url: "http://127.0.0.1:3456/js/game.js" } }],
+    samples: deltas.map(() => 1), timeDeltas: deltas };
+  const { windows } = hitchWindowsFromCpuProfile(profile, { thresholdMs: 50, maxWindows: 3 });
+  assert.deepEqual(windows.map(w => w.durationMs), [500, 64, 63]);
+});
+
+test("rAF hitch sampler keeps the worst windows when more hitches than the cap occur", async () => {
+  // Frame gaps: four 60 ms hitches, then a 400 ms one; cap 2 must report 400 first.
+  const times = []; let t = 0;
+  for (const gap of [60, 60, 60, 60, 400]) times.push(t += gap);
+  while (t <= 1000) times.push(t += 40);   // sub-threshold frames until the 1 s window closes
+  const queue = [];
+  const sandbox = { performance: { now: () => 0 }, requestAnimationFrame: fn => queue.push(fn) };
+  const done = vm.runInNewContext(hitchSamplerExpression({ durationMs: 1000, thresholdMs: 50, maxWindows: 2 }), sandbox, { filename: absSrc("tools/mcp/js-debugger-trace.mjs") });
+  for (const ft of times) { const fn = queue.shift(); if (fn) fn(ft); }
+  const r = JSON.parse(JSON.stringify(await done));
+  assert.deepEqual(r.windows.map(w => w.durationMs), [400, 60]);
+  assert.equal(r.hitches, 5);
 });

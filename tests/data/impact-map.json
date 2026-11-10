@@ -7713,6 +7713,7 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/incident-rpm.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/js-debugger-trace.test.mjs",
         "tests/unit/js-debugger-tracks.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
@@ -15925,7 +15926,8 @@
         "tests/unit/lamp-chunks.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/vm-debug-preload.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {

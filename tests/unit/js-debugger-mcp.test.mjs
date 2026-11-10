@@ -533,3 +533,36 @@ test("W25a: debugger_profile heap start/stop summarises sampling tree", async ()
   assert.equal(stopped.structuredContent.artifact, undefined);
   await s.detach();
 });
+
+test("a rejected endpoint is not remembered as the default; a successful connect is", async () => {
+  const s = new DebugSession({ discover: async () => { throw Error("ECONNREFUSED"); }, sharedEndpoint: () => null });
+  await assert.rejects(s.listTargets("http://127.0.0.1:9333"), /ECONNREFUSED/);
+  assert.equal(s.lastEndpoint, null);
+  await assert.rejects(s.attach("http://127.0.0.1:9333", "t"), /ECONNREFUSED/);
+  assert.equal(s.lastEndpoint, null);
+  const row = { type: "page", id: "t", url: "about:blank", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" };
+  const failing = new DebugSession({ discover: async () => [row], open: async () => { throw Error("socket refused"); }, sharedEndpoint: () => null });
+  await assert.rejects(failing.attach("http://127.0.0.1:9222", "t"), /socket refused/);
+  assert.equal(failing.lastEndpoint, null);
+  const { s: ok } = await attached();
+  assert.equal(ok.lastEndpoint, "http://127.0.0.1:9222");
+  const listed = new DebugSession({ discover: async () => [row], sharedEndpoint: () => null });
+  await listed.listTargets("http://127.0.0.1:9222");
+  assert.equal(listed.lastEndpoint, "http://127.0.0.1:9222");
+});
+
+test("breakpoint/logpoint URL guidance recommends the query-less form; page-JS tools are annotated destructive", () => {
+  const byName = Object.fromEntries(TOOLS.map(t => [t.name, t]));
+  for (const name of ["debugger_breakpoint", "debugger_logpoint"]) {
+    const url = byName[name].inputSchema.properties.url.description;
+    assert.doesNotMatch(url, /including query|^Exact script URL/, name);
+    assert.match(url, /WITHOUT the \?v= query/, name);
+    assert.match(url, /bare repo path/, name);
+  }
+  for (const name of ["debugger_breakpoint", "debugger_logpoint", "debugger_instances", "debugger_evaluate", "debugger_run"]) {
+    assert.equal(byName[name].annotations.readOnlyHint, false, name);
+    assert.equal(byName[name].annotations.destructiveHint, true, name);
+  }
+  assert.equal(byName.debugger_remove_breakpoint.annotations.destructiveHint, false);
+  assert.equal(byName.debugger_exceptions.annotations.destructiveHint, false);
+});
