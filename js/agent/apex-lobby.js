@@ -65,7 +65,9 @@ const ApexLobby = (function () {
   // "results" the rAF loop's finished-car loop (G.stepResultsField, once game.js exposes it), else update().
   function tick(G, d) {
     AgentView.syncRenderAnchors(G.cars);
-    if (G.state === "results" && G.stepResultsField) G.stepResultsField(d); else G.update(d);
+    // Detached call: as a method the frame reads "Object.update", and stack walks over game.js's update()
+    // (tests/unit/rank-sort-alloc-vm.test.mjs) look for "at update (".
+    if (G.state === "results" && G.stepResultsField) G.stepResultsField(d); else { const update = G.update; update(d); }
     afterStep(G);
   }
 
