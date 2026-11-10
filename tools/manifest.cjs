@@ -1050,6 +1050,7 @@ const LAZY_AGENT = [
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
   "js/agent/apex.js",
   "js/agent/apex-bridge.js", // ApexBridge: apex-cmd comments on one GitHub issue (?bridge=<n> + device token), reads __apex at call time
+  "js/agent/bridge-link.js", // BridgeLink: SETTINGS > CLAUDE LINK panel; links the bridge in place from an installed Home Screen app (#5259)
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],

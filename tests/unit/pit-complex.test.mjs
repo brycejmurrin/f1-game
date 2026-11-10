@@ -502,10 +502,11 @@ test("neither end of the complex lies in a corner: the exit closes before the fi
       assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `nurburgring: cornering at s=${s | 0} (sOut ${p.sOut | 0} + grow ${p.grow})`);
     assert.ok(p.exitRoadM >= P.EXIT_ROAD_MIN, `the exit road is at least ${P.EXIT_ROAD_MIN} m (${p.exitRoadM})`);
   }
-  // Where the straight cannot hold even the minimum (Mosport 24 m, Jerez 48 m)
+  // Where the straight cannot hold even the minimum (Mosport 24 m; Jerez was 48 m
+  // until #5078 moved its line onto the real start straight)
   // the exit sits on the floor, not at 130. (The ENTRY is clamped to
   // ENTRY_MIN the same way and may still open in a corner on such a circuit.)
-  for (const id of ["mosport", "jerez"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
+  for (const id of ["mosport"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
   // A long straight keeps the full exit — the rule only bites where a corner does.
   assert.equal(buildOnce("monza").pit.exitM, P.EXIT_M);
 });
@@ -933,5 +934,26 @@ test("pit paint stands >= 10 mm clear of the lane (and the hatch of the road), e
     assert.ok(c.n > 100 && c.missed === 0, `${id} hatch: ${c.n} samples over the road, ${c.missed} off it`);
     assert.ok(c.min >= MIN_PAINT_GAP, `${id} hatch: ${(c.min * 1000).toFixed(1)} mm over the road at the lowest (>= 10 mm)`);
     assert.equal(c.down, 0, `${id} hatch: ${c.down} triangles wound down`);
+  }
+});
+
+test("the ENTRY road has a drivable floor: no circuit's peel is squeezed into a 30 m road (#5089)", () => {
+  // silverstone, suzuka and magny_cours got a 30 m entry road (ROAD_MIN), so
+  // the armed AI's line moved 7.35 m sideways in 15 m — ~7 g at the 80 km/h
+  // limit. The entry road now has its own floor, as the exit has had.
+  const T = tracksOnce(), P = ctxOnce().TrackPit;
+  assert.ok(P.ENTRY_ROAD_MIN >= 60 && P.ENTRY_ROAD_MIN <= P.ENTRY_ROAD, `ENTRY_ROAD_MIN ${P.ENTRY_ROAD_MIN}`);
+  const short = [];
+  for (const def of T.LIST) {
+    const p = buildOnce(def.id).pit, L = buildOnce(def.id).total;
+    if (!p || p.painted) continue;
+    const road = ((p.sIn - p.sA) % L + L) % L;
+    if (road < P.ENTRY_ROAD_MIN - 0.01) short.push(`${def.id} ${road.toFixed(0)}`);
+  }
+  assert.deepEqual(short, [], `entry roads under ${P.ENTRY_ROAD_MIN} m: ${short.join(", ")}`);
+  for (const id of ["silverstone", "suzuka", "magny_cours"]) {
+    const p = buildOnce(id).pit;
+    // The peel's ramp (the road less the wall's fade) keeps the lateral under ~2 g.
+    assert.ok(p.entryRoadM - p.grow >= 30, `${id}: peel ramp ${p.entryRoadM - p.grow} m`);
   }
 });

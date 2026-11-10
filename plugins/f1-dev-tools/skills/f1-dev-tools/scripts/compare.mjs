@@ -57,10 +57,19 @@ export function compare(before, after) {
 function outputPath(file) {
   const resolved = path.resolve(file), roots = ['artifacts', 'scratch'].map(d => path.resolve(d) + path.sep);
   if (!roots.some(root => resolved.startsWith(root))) throw new Error('Write reports under artifacts/ or scratch/ in the working checkout.');
-  fs.mkdirSync(path.dirname(resolved), { recursive: true });
-  const parent = fs.realpathSync(path.dirname(resolved));
+  let ancestor = path.dirname(resolved);
+  const missing = [];
+  while (!fs.lstatSync(ancestor, { throwIfNoEntry: false })) {
+    missing.unshift(path.basename(ancestor)); ancestor = path.dirname(ancestor);
+  }
+  // Validate the existing physical ancestor BEFORE the recursive mkdir: mkdir follows an
+  // escaping symlink and would create directories outside the admitted roots.
+  const proposed = path.resolve(fs.realpathSync(ancestor), ...missing);
+  if (!roots.some(root => (proposed + path.sep).startsWith(root))) throw new Error('Report parent must not escape through a symlink.');
+  fs.mkdirSync(proposed, { recursive: true });
+  const parent = fs.realpathSync(proposed);
   if (!roots.some(root => (parent + path.sep).startsWith(root))) throw new Error('Report parent must not escape through a symlink.');
-  if (fs.existsSync(resolved) && fs.lstatSync(resolved).isSymbolicLink()) throw new Error('Refusing symlink output.');
+  if (fs.lstatSync(resolved, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('Refusing symlink output.');
   return path.join(parent, path.basename(resolved));
 }
 const escape = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

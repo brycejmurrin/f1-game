@@ -995,7 +995,12 @@ const TyreModel = (function () {
     function lapsLeft(c) {
       if (!on() || !c || !c.tyre) return null;
       const w = spent(c), n = lapsOn(c);
-      const life = n >= 1 && w > 0.02 ? n / w : planLaps(c.tyre.life, G.lapsTarget);
+      // WEAR IS CONTINUOUS, lapsOn IS WHOLE LAPS: n / w late in a lap divided n laps by the wear
+      // of nearly n + 1, so the rate read up to (n + 1) / n high — 2.0 laps left on a set that had
+      // 2.6 (measured, monaco rain, 5 laps: the whole AI field boxed wet-for-wet on it, and the
+      // HUD's laps-left sawtoothed down through every lap). Count the part of this lap driven.
+      const len = G.track && G.track.total, at = len > 0 && Number.isFinite(c.prog) ? Math.max(0, c.prog - (c._progGift || 0)) / len : 0;
+      const life = n >= 1 && w > 0.02 ? (n + (at - Math.floor(at))) / w : planLaps(c.tyre.life, G.lapsTarget);
       return Math.max(0, life * (1 - Math.min(1, w)));
     }
 
@@ -1042,12 +1047,25 @@ const TyreModel = (function () {
       };
     }
 
+    // WEAR OFF HAS NO PIT LANE (PitLane.enabled), so the set fitted at the lights
+    // is the set for the whole race. A car that carries its own garage tyre (the
+    // player, a MY TEAM mate) lined up for a rain race on that slick: 0.72 grip
+    // against a field on the full-wet column (0.97, the `tread: null` sentinel)
+    // with no stop to take. With no recourse the lights fit the weather's tread,
+    // as the field is assumed to have. A treaded set of their own stays theirs,
+    // and with wear on the choice (and the stop) is still the driver's.
+    function sessionStartRecord(c, tread) {
+      const rec = startRecord(c, tread);
+      if (on() || !(tread > 0) || !c || !c.tyreOpt || !rec || rec.tread > 0) return rec;
+      return classRecord(classForTread(tread));
+    }
+
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
       lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
-      classRecord, optionRecord, applyCompound, startRecord,
+      classRecord, optionRecord, applyCompound, startRecord: sessionStartRecord,
     };
   }
 

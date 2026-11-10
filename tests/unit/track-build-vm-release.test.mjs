@@ -212,11 +212,14 @@ const STRIP = {
   //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
   // → #4967 outside-of-bend tier rows run their full chord (2026-11-09): same
   //   emission, longer risers enclose 5 fewer triangles; strip-after 255176 → 255181.
+  // → #5079 pit taper pocket capped (2026-11-10): the street barrier now runs
+  //   along the exit taper (nodes 37-41) at the lane wall instead of the 14 m
+  //   run-off default. Emission 274099 → 274383, strip-after 255181 → 255453.
   // → #5084 / #5088 (PR #5254, 2026-11-10): city.js awning posts are left out where the
   //   ground is above the awning (-24 emitted); the street-panel skirt buries its
-  //   bottom faces (buried 633 → 722, bottom 661 → 668). Emission 274099 → 274075,
-  //   strip-after 255181 → 255061.
-  monaco: { before: 274075, after: 255061 },
+  //   bottom faces (buried 633 → 722, bottom 661 → 668). Emission on top of #5079 274383 → 274359,
+  //   strip-after 255453 → 255333.
+  monaco: { before: 274359, after: 255333 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
