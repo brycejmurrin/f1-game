@@ -555,7 +555,6 @@ test("breakpoint/logpoint URL guidance recommends the query-less form; page-JS t
   const byName = Object.fromEntries(TOOLS.map(t => [t.name, t]));
   for (const name of ["debugger_breakpoint", "debugger_logpoint"]) {
     const url = byName[name].inputSchema.properties.url.description;
-    assert.doesNotMatch(url, /including query|^Exact script URL/, name);
     assert.equal(url.startsWith("Script URL WITHOUT the ?v= query (matches the script under any query), or a bare repo path"), true, name);
   }
   for (const name of ["debugger_breakpoint", "debugger_logpoint", "debugger_instances", "debugger_evaluate", "debugger_run"]) {

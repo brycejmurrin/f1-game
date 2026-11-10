@@ -3,14 +3,13 @@
 // per-skill query files). A host routes on the DESCRIPTION, so this pins the four properties a
 // description needs to route a phone-typed symptom: the "Use when" form, a "Not for … → x" clause
 // whose targets exist, a vocabulary that overlaps its own tests/data/skill-routing/phone.json prompts
-// more than any other description does, and `paths:` globs and `tools/…` commands that resolve.
+// more than any other description does, no `paths:` gate, and `tools/…` commands that resolve.
 //
 // Run: node --test tests/unit/skill-descriptions.test.mjs   (< 1 s)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parse as parseYAML } from "yaml";
 
@@ -95,18 +94,11 @@ test("a description shares at least two stemmed words with its own phone prompts
   assert.deepEqual(bad, [], bad.join("\n"));
 });
 
-test("every skill paths: glob matches a tracked file", () => {
-  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split("\n");
-  const bad = [];
-  for (const [name, s] of skills) {
-    const paths = s.fm.paths;
-    if (paths === undefined) continue;
-    assert.ok(Array.isArray(paths), `${name}: paths: must be a list`);
-    for (const g of paths) {
-      const re = new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*\//g, "(?:.*/)?").replace(/\*\*/g, ".*").replace(/\*/g, "[^/]*") + "$");
-      if (!tracked.some((f) => re.test(f))) bad.push(`${name}: paths: "${g}" matches no tracked file`);
-    }
-  }
+test("no skill carries paths: (a path-gated skill is not offered in a fresh session, so routes to it break)", () => {
+  // Claude Code loads a `paths:` skill "only when working with files matching the patterns"
+  // (code.claude.com/docs/en/skills); the eight that carried it were missing from a fresh session's skill list
+  // on 2026-11-10 while 21 other skills routed to them. File scoping belongs in .claude/rules/.
+  const bad = [...skills].filter(([, s]) => s.fm.paths !== undefined).map(([n]) => `${n}: drop paths: from its frontmatter`);
   assert.deepEqual(bad, [], bad.join("\n"));
 });
 
@@ -117,6 +109,80 @@ test("every tools/… command a SKILL.md names exists", () => {
       const p = m[1].replace(/[.,;:]+$/, "");
       if (p.includes("<") || p.includes("*")) continue;
       if (!fs.existsSync(path.join(ROOT, p))) bad.push(`${name}: names ${p}, which does not exist`);
+    }
+  }
+  assert.deepEqual(bad, [], bad.join("\n"));
+});
+
+// ── Every name the agent surface cites resolves in the tree (2026-11-10, audit item W16(b)) ────────────────
+// A skill, card or workflow may NAME an agent, a skill, an npm script, a tool file or a doc section; it must never
+// name one that is not there. Cheap static resolution only: the truth of the surrounding prose is surface-reviewer's.
+const SURFACE_ROOTS = [".claude/skills", ".claude/agents", ".claude/workflows"];
+const surfaceFiles = [];
+for (const r of SURFACE_ROOTS) {
+  (function walk(rel) {
+    for (const d of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const p = `${rel}/${d.name}`;
+      if (d.isDirectory()) walk(p);
+      else if (/\.(md|js|mjs)$/.test(d.name)) surfaceFiles.push(p);
+    }
+  })(r);
+}
+const BUILTIN_AGENTS = new Set(["Explore", "Plan", "general-purpose", "claude-code-guide", "statusline-setup", "fork", "claude"]);
+const SCRIPTS = new Set(Object.keys(JSON.parse(read("package.json")).scripts || {}));
+const headingsOf = (() => {
+  const cache = new Map();
+  return (file) => {
+    if (!cache.has(file)) {
+      const hs = read(file).split("\n").filter((l) => /^#{1,6}\s/.test(l)).map((l) => l.replace(/^#+\s*/, "").replace(/[`*]/g, "").trim().toLowerCase());
+      cache.set(file, hs);
+    }
+    return cache.get(file);
+  };
+})();
+const slug = (h) => h.toLowerCase().replace(/[`*]/g, "").replace(/[^\w\- ]+/g, "").trim().replace(/\s/g, "-");
+
+test("every agent, skill, npm script, tool path and doc anchor the agent surface names resolves", () => {
+  const bad = [];
+  // A line that names a thing to say it is gone ("no `x` exists", "never the deleted y") is not a route to it.
+  const NEGATED = /\b(no|not|never|deleted|removed|retired|gone|was|former(ly)?)\b/i;
+  for (const file of surfaceFiles) {
+    const text = read(file);
+    const at = (i) => `${file}:${text.slice(0, i).split("\n").length}`;
+    const lineOf = (i) => text.slice(text.lastIndexOf("\n", i) + 1, (text.indexOf("\n", i) + 1 || text.length + 1) - 1);
+    // agents: `name` agent / agent `name` / subagent `name` / agentType: 'name'
+    for (const m of text.matchAll(/(?:\b(?:sub)?agent(?:Type)?\s*:?\s*[`'"])([A-Za-z][\w-]+)[`'"]|`([A-Za-z][\w-]+)`\s+(?:sub)?agent\b/g)) {
+      const n = m[1] || m[2];
+      if (!agents.has(n) && !BUILTIN_AGENTS.has(n)) bad.push(`${at(m.index)}: agent \`${n}\` is not .claude/agents/${n}.md or a builtin`);
+    }
+    // skills: skill `name` / `name` skill
+    for (const m of text.matchAll(/\bskills?\s+`([a-z][\w-]+)`|`([a-z][\w-]+)`\s+skill\b/g)) {
+      const n = m[1] || m[2];
+      if (!skills.has(n)) bad.push(`${at(m.index)}: skill \`${n}\` is not .claude/skills/${n}/`);
+    }
+    // npm scripts
+    for (const m of text.matchAll(/\bnpm run (?:--silent |-s )?([a-z][\w:.-]*[\w])/g)) {
+      if (!SCRIPTS.has(m[1])) bad.push(`${at(m.index)}: npm script "${m[1]}" is not in package.json`);
+    }
+    // tool paths (a placeholder or glob is allowed)
+    for (const m of text.matchAll(/(?<![\w./-])(tools\/[\w./-]+\.(?:json|mjs|cjs|js|sh|py))(?![\w])/g)) {
+      if (/[<*{]/.test(m[1])) continue;
+      if (!fs.existsSync(path.join(ROOT, m[1])) && !NEGATED.test(lineOf(m.index))) bad.push(`${at(m.index)}: ${m[1]} does not exist`);
+    }
+    // doc anchors: a docs file followed by §Heading or #slug
+    for (const m of text.matchAll(/(?<![\w./-])((?:docs\/[\w./-]+|AGENTS|README)\.md)(?:\s*§\s*([^\s,;:)`|\]][^,;:)`|\]\n]*?)(?=[,;:)`|\]\n]|\s[—–-]\s|\.\s|$)|#([\w-]+))?/g)) {
+      const doc = m[1];
+      if (!fs.existsSync(path.join(ROOT, doc))) { if (!NEGATED.test(lineOf(m.index))) bad.push(`${at(m.index)}: ${doc} does not exist`); continue; }
+      if (m[3]) {
+        if (!headingsOf(doc).some((h) => slug(h) === m[3])) bad.push(`${at(m.index)}: ${doc}#${m[3]} has no such heading`);
+      } else if (m[2]) {
+        const want = m[2].trim().replace(/[*"“”]/g, "").toLowerCase();
+        if (/^\d/.test(want)) continue; // "§5 step 2" style numbers: section numbers drift by design of the doc
+        // "§Verification 10" names rule 10 inside §Verification: accept the longest leading word run that is a heading.
+        const ws = want.split(/\s+/);
+        const hit = [3, 2, 1].some((k) => ws.length >= k && headingsOf(doc).some((h) => h.startsWith(ws.slice(0, k).join(" ")) || (k === ws.length && h.includes(want))));
+        if (!hit) bad.push(`${at(m.index)}: ${doc} §${m[2].trim()} has no such heading`);
+      }
     }
   }
   assert.deepEqual(bad, [], bad.join("\n"));

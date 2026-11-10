@@ -1,7 +1,5 @@
 ---
 name: renderer-debug
-paths:
-  - "js/render/**"
 description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL errors, device lost, silent WebGL2 fallback, iPhone/Safari/Metal, WebXR/VR/Quest black frame. Not night washout → lighting-tuner; MAT garble → asset-pack."
 ---
 
@@ -53,13 +51,15 @@ DEFAULT), **GLX** (`js/render/glx/`, explicit WebGL2 and the universal fallback)
      [references/wgx-defects.md](references/wgx-defects.md). WebKit:
      `IS_WEBKIT` forces `WGX_LITE`; WGSL rules in `.claude/rules/render-wgx.md`.
 5. **Gate the fix:**
-   - TLX: `gfx-probe.mjs --backend three` with `gpuErrors` 0, per `render-tlx.md`.
-   - GLX: `tests/unit/glx-output-target.test.mjs`; browser
-     `tests/specs/webgl-probes.spec.js`. Anchors: `js/render/glx/glx.js`,
+   - TLX: the Gate bullet of `render-tlx.md` (`gfx-probe.mjs --backend three
+     --tlx-webgpu --lavapipe`, parent only), `gpuErrors` 0.
+   - GLX: `tests/unit/glx-output-target.test.mjs`. Anchors: `js/render/glx/glx.js`,
      `glx/post.js`, `glx/shaders/glsl-lit.js`.
    - WGX: `--static` plus `node --test tests/unit/webgpu-lifecycle.test.mjs`;
      `WGX.gpuErrors()` must be 0, `WGX.lastFailure()` explains a refusal.
    - Cross-backend look: `node --test tests/unit/backend-surface-parity.test.mjs`.
+   - Browser specs (`webgl-probes`, `tlx-probes`, ...) are CI group `gfx`: on the
+     pushed branch, `node tools/ci/remote-group.mjs gfx`.
 6. **Real GPU check:** dispatch `gpu-census.yml` on `macos-latest` and read its
    Verdict step ([references/phone-reports.md](references/phone-reports.md)).
 

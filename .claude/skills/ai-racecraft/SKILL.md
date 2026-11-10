@@ -1,7 +1,5 @@
 ---
 name: ai-racecraft
-paths:
-  - "js/physics/ai-*.js"
 description: "Use when AI cars or rivals race wrong: overtakes/dive-bombs too aggressive or passive, brake targets, preferred lane, ERS deploy, AI stuck in traffic, wall or pit lane, driver ratings craft/awareness, ai-drive.js. Not the player's car → tune-physics; flags/crashes → race-incidents-control."
 ---
 
@@ -24,11 +22,13 @@ energy recovery system (deploy and regen); X-mode = low-drag active aero.
    (`references/pace.md`), a stuck car, or out of scope (below).
 2. Locate the knob: the ratings map, brake target, tactics or stuck recipe (References).
 3. Measure BEFORE on fixed seeds: `node tools/check/ai-race.mjs tactics --track monza --runs 5`
-   (or the instrument the reference names).
+   (or the instrument the reference names). It runs minutes (wall time: the `ai-tactics.mjs` header), so
+   start it as ONE background task logging to `artifacts/logs/` (AGENTS.md rule 4).
 4. Edit the constant in `ai-drive.js` (or the named game.js caller).
 5. Run the unit gate for that edit (`references/checks.md`), then re-measure with the
    same seeds on a second circuit.
-6. Run `node tools/ci/pick-tests.mjs` and report the browser groups it names as not run.
+6. Run `node tools/ci/pick-tests.mjs`: the PR run covers the browser groups it names; never run them locally.
+   One whole group on the pushed branch: `node tools/ci/remote-group.mjs <group>`.
 
 ## Do not
 
@@ -46,8 +46,8 @@ energy recovery system (deploy and regen); X-mode = low-drag active aero.
   pass completion, and the Lap-1 / Turn-1 melee (dive-bomb) recipe; STREETS (`track.street`)
   keep the old metre gap and pass gates.
 - [`references/stuck.md`](references/stuck.md) — read when an AI car is wedged and never recovers. Discriminator:
-  `__apex.caution().level` 0 with `speed < 7` and `stuckT` growing is this skill; level != 0
-  or `caution().sinceT` growing is **race-incidents-control**.
+  `__apex.carAt(i).stuckT` growing (boxed and crawling; it accrues under every flag short of red)
+  is this skill; a red-flag hold, a wreck or a flag that never clears is **race-incidents-control**.
 - [`references/pace.md`](references/pace.md) — read when the complaint is the whole field's pace or a rubber band
   (`ai-band.js`), not how one car races.
 - [`references/checks.md`](references/checks.md) — read when choosing the gate for an edit: the edit → unit-test

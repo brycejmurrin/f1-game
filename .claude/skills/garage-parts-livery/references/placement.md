@@ -32,7 +32,7 @@ see that.
 ## Shoot the cheapest surface that can answer the question
 
 Placement is a property of the DESIGN, not the team — the geometry is identical
-on all twelve cars — so it is answered once per design rather than per livery.
+on every car — so it is answered once per design rather than per livery.
 Three surfaces can answer it and the first is ~2000x cheaper than the last:
 
 | question | tool | cost |
