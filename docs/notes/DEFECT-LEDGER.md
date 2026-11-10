@@ -2,6 +2,11 @@
 
 Summary: The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8).
 
+> **Historical record — nothing updates this file.** It has no owner and its newest
+> entry is dated 2026-10-14; rows below may be stale or fixed. Open defects live in
+> GitHub issues with the `bug` label. Corrected 2026-11-10: the "No CSP" row (index.html
+> carries one) and the `Career.isOwned` mention (the function is `Career.owned(teamId)`).
+
 > Carved out of `ARCHITECTURE-REVIEW.md` §7-8 on 2026-09-03 (tree
 > restructure Phase 5). The standing assessment — the founding bet, the physics
 > authority, the `G` façade, the renderer seam, the lessons — stays there; this
@@ -917,11 +922,10 @@ now transformed). Qatar's verges were two-thirds footprint-rejected, Baku's
 kit fired the swapped-dimensions warning 13× per boot, Imola's ground read was
 half a lap away, four circuits emitted-then-culled up to 295 backdrops per
 build. `api.K` and `api.lapBounds()` replace 37 local `K` helpers and 30
-centroid loops; `bakedModels` left the contract (112 members). Madrid, Estoril
-and Indianapolis carried wrong `lengthKm` (Madrid raced 56 laps instead of 57).
-(STILL OPEN at this tree for Madrid: `js/circuits/madrid.js` authors no
-`gpLaps`, so `js/track/core/def.js` still derives 56 from `lengthKm`; it belongs
-in a `bug` issue — none was found on 2026-11-10.)
+centroid loops; `bakedModels` left the contract (112 members). Estoril and
+Indianapolis carried wrong `lengthKm`. Madrid's was NOT fixed then (5.47 still
+derived 56 laps, not the 57 it races); fixed 2026-11-10: an authored `gpLaps: 57`
+(`lengthKm` stays 5.47 until a voice re-bake: the announcer reads it aloud).
 
 *UI / PWA / data / storage.* The service worker returned a browser error page
 for any navigation that lost a 3 s race while online; a primitive ghost blob
@@ -1548,7 +1552,7 @@ on the 08-18 perf-hunt board, not this register.
   `sheetshape` thresholds via `localBox` (clientWidth, engine-safe). **Data hub
   now scales:** `.dh-card { zoom: var(--ui-scale) }` with `--svhz`-based heights;
   telemetry scrubber uses `CssZoom.viewportRect`.
-- **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
+- ~~**No CSP.**~~ FIXED: `index.html` carries a `Content-Security-Policy` `<meta>` (written by `tools/gen/gen-shell.mjs`, `CSP_DIRECTIVES`; corrected 2026-11-10).
 
 ### 2026-09-16 — a guard suite that EDITED the thing it guards (ratchets)
 
@@ -2676,8 +2680,8 @@ Deferred with reasoning, none lost:
   **never existed in this branch's history** (they live only on a non-ancestor
   commit — the catalogue was written against a different lineage), and its claim
   that `assets.js` consumes `gltf.js` is false today. Most entries resolved to
-  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` is live through
-  three skill docs' console use, `TrackSpline.centerline()` and the authored-
+  ALREADY-REMOVED, LIVE, or contract-pinned: `Career.isOwned` was cited by three
+  skill docs' console use but does not exist (it is `Career.owned(teamId)`; corrected 2026-11-10), `TrackSpline.centerline()` and the authored-
   `segs` path are dormant **by design** (eval-time destructure, 25 circuits
   carry `segs:`, the new-track skill documents it), and the SRTM elevation
   branch is a guarded feature slot with a shipping bake tool. What was genuinely

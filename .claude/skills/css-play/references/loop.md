@@ -16,7 +16,7 @@ Load from the SKILL.md index when opening a non-catalog screen, reading a
 ## 1. Host + open
 
 `tools/ui/css-play.mjs` uses `harness.mjs` (`Cache-Control: no-store`, loopback).
-Default viewport is the play-shape **852×393**. `--desktop` is 1280×720.
+Default and `--desktop` viewports: `node tools/ui/css-play.mjs --help`; Bryce's is `--viewport 844x390`.
 
 Boot ritual (already in the CLI; paste into `browser_evaluate` only for a
 live MCP tab):
@@ -38,7 +38,7 @@ Reach through the player's door. The authoritative inventory is `SCREENS`
 in `tools/ui/menu-screens.mjs` (imported by `layout-audit.mjs`).
 
 Wait for the open transition (`opacity !== 0`, no running animations) before
-measuring. `#pmsettings` can take ~1.2 s.
+measuring. `#pmsettings` is slow to open.
 
 ## Who owns a row
 
@@ -58,7 +58,7 @@ each hit's `@layer` before editing.
 
 **Sizing tokens** (`css/tokens.css`; read live values from `dom.json`, never
 quote numbers): `--safe-t/r/b/l` and `--safe-w/h` are the notch/safe-area box;
-`--tap` is the interactive floor (a 44 px base on `:root`, raised to a 52 px touch
+`--tap` is the interactive floor (a desktop base on `:root`, raised by the touch
 ladder on `body:not(.desktop)`, so read it off `body`), with `--chip-h`, `--tap-sm`
 and `--tap-min` for secondary sizes; `--vhz`/`--svhz` are `vh`/`svh` divided by
 the UI scale.
@@ -73,7 +73,7 @@ Written every run. `--no-shot` / `playwright-mcp.sh dom` skips the PNG.
 | `tokens.tap` / `chipH` / `uiScale` | `--tap` off **body**, not `:root` |
 | `layer` | `UiLayers.top()` |
 | `root` | catalog root: box (CSS px / `currentCSSZoom`), computed layout styles, one level of kids |
-| `hits` | `--sel` matches (up to 20) |
+| `hits` | `--sel` matches (capped; `collectDomInfo`) |
 
 Computed keys are layout-facing (`display`, `overflow*`, `width`/`height`,
 `padding`/`margin`, `flex`/`grid`, `zIndex`, `zoom`, …). Text is truncated.
@@ -99,7 +99,7 @@ that is not a file yet. Prefer `--css` once the rule belongs in a sheet.
 If the swap "did nothing": (1) the `<link>` was not found (wrong `--css` path);
 (2) you edited a file the screen does not load (`index.html` `<link>` order
 is `MANIFEST.CSS`); (3) a LATER LAYER or a MORE SPECIFIC rule wins — layer order
-is `reset, base, components, hud, overlays` (`css/tokens.css`), so a components-layer
+is the `@layer` statement in `css/tokens.css`, so a components-layer
 edit loses to any overlays rule, and a few blocks sit outside every layer on purpose.
 Probe the computed value with `--sel <element>` (dom.json `hits`) or `--tokens`.
 
@@ -112,7 +112,7 @@ shot as UI evidence.
 ## 5. Ship
 
 When the look is right: `node tools/gen/gen-shell.mjs --check` (last edit),
-then the groups `node tools/ci/pick-tests.mjs` names if the change is more than a token. One-screen
+then push and request the groups `node tools/ci/pick-tests.mjs` names (`node tools/ci/remote-group.mjs <group>`; never locally) if the change is more than a token. One-screen
 play is not a matrix proof.
 
 ## Mistakes
@@ -121,7 +121,7 @@ play is not a matrix proof.
 |---|---|
 | CSS edit invisible after reload | browser cache (or a served deploy copy with a hashed `?v=`); use `--css` / `?play=` |
 | Screen "missing" | measured during the fade (`opacity: 0`) |
-| Tap floor wrong | read `--tap` off `:root` (desktop 44) instead of `body` |
+| Tap floor wrong | read `--tap` off `:root` (the desktop base) instead of `body` |
 | Boxes look huge | forgot `currentCSSZoom` on `.sheet` |
 | Dialog state poisoned | un-hid a `<dialog>` instead of clicking `#mb-*` |
 

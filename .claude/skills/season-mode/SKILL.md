@@ -12,7 +12,8 @@ locate with apex-lsp (skill code-nav).
 ## Gotchas
 
 - Career is **not** customisable: it races its stamped calendar (`Career.calendar()`, `Tracks.SEASON`
-  only when unstamped). Do not wire `SeasonCal` calendar reads into a career weekend, and do not edit
+  only when unstamped). A NEW season or career defaults to `SeasonCal.REAL_2026`; `Tracks.SEASON` is the
+  "24-ROUND" preset and the calendar of every save made before 2026-11-10 (docs/CAREER.md §Calendar). Do not wire `SeasonCal` calendar reads into a career weekend, and do not edit
   career saves or `Career.*` from here → **career-mode**.
 - A **format** gate of "not career" is a bug: it gives a one-off Grand Prix the season sprint distance
   and points table. Format applies in flow `"season"` only (table below).
@@ -26,15 +27,17 @@ locate with apex-lsp (skill code-nav).
 
 | Kind | When the player's config applies | Neutral otherwise |
 |---|---|---|
-| **Calendar** (`trackIds`, circuit ids, never indices) | flow is **not** `"career"` | career uses `Tracks.SEASON` |
+| **Calendar** (`trackIds`, circuit ids, never indices) | flow is **not** `"career"` | career uses its stamped `calIds` |
 | **Format** (`quali` / `sprint` / `sprintIds` / `laps` / `points` / `flPoint` / `drop`) | flow is **`"season"`** only | GP / TT / VS FRIEND keep one-off defaults |
 
 ## Workflow
 
 1. Classify the change: calendar or format (table above), and confirm the flow gate it needs.
-2. For a toggle bug, run the FIRST CHECK: compare `G.season.config.sprint` / `.sprintIds` / `.quali`
-   with `SeasonCal.config()`. They differ → the APPLY step, not the chip or a consumer. Then follow
-   the sprint or quali chain in `references/config-and-toggles.md`.
+2. For a toggle bug, run the FIRST CHECK: compare the frozen config's `.sprint` / `.sprintIds` /
+   `.quali` with `SeasonCal.config()`. `G` is game.js's closure (not on the page, not in `__apex`): on
+   the live page read the save `G.season` came from, `GameStore.get("season").config` (lags after a
+   `durable:false` APPLY), or in a unit test `SeasonCal.load().config`. They differ → the APPLY step,
+   not the chip or a consumer. Then follow the sprint or quali chain in `references/config-and-toggles.md`.
 3. For wrong sprint points, start with the unit test `a sprint scores its own table` (a green fixture
    does not exclude other defects), then inspect `award()`'s return (null = refused: `seasonConflict`
    or `!canRace`), stage/config (`fmtActive()` gates the format rules), classification and save
@@ -46,12 +49,13 @@ locate with apex-lsp (skill code-nav).
 5. Verify:
 
 ```sh
-node --test tests/unit/season-cal.test.mjs                        # VM, no browser: gates, award(), sprint table
-node tools/ci/test-bg.mjs --spec tests/specs/season.spec.js        # BROWSER, one spec, background (format chips: season-format.spec.js)
+node --test tests/unit/season-cal.test.mjs     # VM, no browser: gates, award(), sprint table
+node tools/ci/pick-tests.mjs                    # the groups this change needs
 ```
 
-   Subagents never run a browser spec (AGENTS.md rule 10). The WHOLE `modes` group runs only on the pushed
-   branch, `node tools/ci/remote-group.mjs modes`, and only when `node tools/ci/pick-tests.mjs` names it.
+   No agent runs a browser spec locally (AGENTS.md rule 5). The chips (`season.spec.js`,
+   `season-format.spec.js`) are proven by the `modes` group on the PR; to run it on the pushed branch:
+   `node tools/ci/remote-group.mjs modes`, only when `pick-tests` names it.
 
 ## References
 

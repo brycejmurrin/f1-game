@@ -7,7 +7,7 @@ Load this before the first MCP measurement.
 Playwright MCP (preferred for resize / a11y / CSS):
 
 ```
-browser_navigate   http://127.0.0.1:3457/index.html?stallwatch=0
+browser_navigate   http://127.0.0.1:3456/index.html?stallwatch=0
 browser_resize     width: 844, height: 390
 browser_evaluate   hide #game + __apex.headless(true)  (body below)
 browser_snapshot   boxes: true
@@ -17,11 +17,10 @@ Chrome DevTools MCP (emulate string; `resize_page` is unreliable here):
 
 ```
 mcp__chrome-devtools__emulate      viewport: "844x390x3,mobile,touch,landscape"
-mcp__chrome-devtools__navigate_page  http://localhost:3457/index.html?stallwatch=0
+mcp__chrome-devtools__navigate_page  http://127.0.0.1:3456/index.html?stallwatch=0
 ```
 
-Start the server first on 3457 (`?stallwatch=0`: neither MCP browser is `navigator.webdriver`, so the stall watchdog would reload a software-GL race), a port the test suite does not use (`python3 -m http.server 3457`;
-see below), then in
+Start the server first on 3456 (`npx serve -l 3456 .`, AGENTS.md §The loop; the MCP servers expect it). `?stallwatch=0`: neither MCP browser is `navigator.webdriver`, so the stall watchdog would reload a software-GL race. Then in
 `browser_evaluate` / `evaluate_script`:
 
 ```js
@@ -78,9 +77,8 @@ on a desktop pointer. `build` is the shell's `apex-build` meta; script tags read
 **Chrome `resize_page` does not reliably take on this page** — use `emulate`
 with the full descriptor string, or Playwright MCP `browser_resize`.
 
-**Serve on a port the test suite is not using** (3457; tests default to 3456)
-so a survey cannot interfere with a run in flight. Chrome setup /
-park-before-Playwright: mcp-probe traps.md §1, linked from SKILL.md §References.
+Chrome setup / park-before-Playwright: mcp-probe traps-chrome.md, linked from
+SKILL.md §References.
 
 ## Enumerate screens FROM SOURCE
 

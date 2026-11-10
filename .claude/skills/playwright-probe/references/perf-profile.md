@@ -18,11 +18,11 @@ node tools/shot/profile-gameloop.mjs singapore render   # rAF + WebGL draw (~10 
 node tools/shot/profile-gameloop.mjs vegas physics      # __apex.step() loop (default)
 ```
 
-The tool prints a top-22 self-time table itself; `getError/finish/readPixels`
+The tool prints a self-time table itself; `getError/finish/readPixels`
 are split out as "GPU sync" (SwiftShader draining queued GL work, not a JS
 cost) and the JS percentages are normalised without them.
 
-- **`physics`** (default): `__apex.step(1/60, 600)` — uncapped physics, no compositor.
+- **`physics`** (default): a synchronous `__apex.step()` loop — uncapped physics, no compositor.
 - **`render`**: `recordVideo`-ticked rAF with throttle on — includes WebGL upload.
 
 The tool does **not** call `setTimeOfDay`. Night-default circuits still build

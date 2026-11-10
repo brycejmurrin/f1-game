@@ -5,14 +5,16 @@ description: "Use when someone with only a phone wants to play the working tree 
 
 # Phone browser
 
-The user has a phone and no computer, and talks to you through Grok's custom connector. Do not tell them to install
-anything or run a command. This is NOT Bryce's route for "look at it on my phone": the page is this checkout's working
-tree on software GL in an emulated 852×393 phone (the repo's phone profile is 844×390), never the live build — for what
+The user has a phone and no computer. Grok, on their phone, is the MCP client: its custom connector calls this
+checkout's `tools/mcp/browser-http.mjs` through a tunnel. You never call those tools; you keep the server and tunnel up
+and hand over the URL. Do not tell them to install anything or run a command. This is NOT Bryce's route for "look at it
+on my phone": the page is this checkout's working tree on software GL in an emulated phone whose viewport is NOT the
+repo's 844×390 phone profile (sizes: `PHONE` in that file), never the live build — for what
 is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix / ui-menu-a11y.
 
 ## First, which route
 
-- They want to PLAY: give them the live URL (AGENTS.md §Git branch & deploy) to open in the phone's own browser. Done.
+- They want to PLAY: give them the live URL (README.md, first line) to open in the phone's own browser. Done.
 - They want Claude to MEASURE OR DRIVE THE LIVE GAME ON THEIR OWN PHONE: the GitHub-issue bridge
   — skill `phone-bridge`, not this skill.
 - They want to SEE this working tree driven for them: this skill, and it needs a Grok custom connector.
@@ -22,20 +24,12 @@ is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix /
 
 ## Already connected
 
-Search connected tools (ToolSearch) for `browser_open`. If it is there, call it. Do not start a second browser beside it.
+The connector's tools (`browser_open`, `browser_eval`, `browser_shot`, `browser_status`; schemas: `TOOLS` in
+`tools/mcp/browser-http.mjs`) are Grok's, not in your tool list, and never added to it. If the user says it works,
+there is nothing to do: Grok calls `browser_open` (optional `orientation`, no URL argument: it serves THIS working
+tree). To check the address still answers, run the script below; `reuse` means it does.
 
-`browser_open` (`tools/mcp/browser-http.mjs`) takes ONE optional argument,
-`orientation`: `"landscape"` (default, 852×393 — Grok bridge size) or
-`"portrait"` (393×852). That is the connector viewport only; AGENTS.md and
-survey-ui-matrix use **844×390** landscape for play/UI review — do not treat
-852×393 as the same. There is no URL argument: it serves THIS checkout's
-working tree on a local static server and opens the game there (WebGL2, iPhone
-user agent, touch). It returns `{url, title, apex, width, height, coarse}`.
-Changing orientation rebuilds the page. `browser_eval({expression})` and
-`browser_shot` need an open page; `browser_status` reports `{browser,
-orientation, game, href}`.
-
-## If the call fails, or no connector is connected
+## Start it, or it stopped answering
 
 From the game repo:
 
@@ -56,7 +50,7 @@ The script throws, takes long, or a URL needs checking (`browser_status`, `orien
 The `…/mcp?token=…` URL lets whoever holds it run `browser_eval` (arbitrary `page.evaluate`) in a page that can reach
 this container's 127.0.0.1 services (apex-tools :3713 among them). The token rides in the query string, so it lands in
 tunnel and proxy logs. Give it to the user only; never paste it into a PR body, commit, doc, issue comment or a shared
-transcript. `bash-guard.sh` refuses a shell command that contains `/mcp?token=<8+ chars>` (Bryce's yes, 2026-11-01).
+transcript. No hook scans for it: keeping it out of shared text is on you.
 To rotate it: `node tools/mcp/browser-http-up.mjs --stop` (stops the recorded server and tunnel and forgets
 the token — the running server keeps its old token, and the old tunnel URL keeps answering, until both are stopped),
 then re-run it and give them the `new` URL. Deleting `state.json` alone rotates nothing.
@@ -64,11 +58,12 @@ then re-run it and give them the `new` URL. Deleting `state.json` alone rotates 
 ## When done
 
 `node tools/mcp/browser-http-up.mjs --stop`. The server otherwise keeps headless Chromium alive, detached, and the
-next Playwright or test-bg run breaks one browser at a time (AGENTS.md rules 5 and 7).
+next browser tool breaks one browser at a time (AGENTS.md rule 5).
 
 ## Do not
 
 - Add this server to `.mcp.json`. Keep the checkout's configured catalog; phone-browser stays a separate bridge.
 - Run it beside another browser (Playwright, chrome-devtools, playwright-official `browser_*`, `apex_*` browser
-  tools) — one browser at a time — or from a subagent (AGENTS.md rule 10; hooks: `.claude/rules/claude-config.md`).
+  tools) — one browser at a time — or from a subagent (AGENTS.md rules 5 and 10). No hook catches this server's
+  Chromium: `bash-guard.sh` and `mcp-browser-guard.sh` do not match `browser-http-up.mjs`, so the rule is yours to keep.
 - Hand them a localhost address. The phone cannot open it.

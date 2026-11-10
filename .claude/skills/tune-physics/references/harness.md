@@ -10,7 +10,7 @@ Mid-corner: `{ brake: true, steer: ±0.3..0.5 }`, then read
 longitudinal grip eating lateral budget; compare runs directionally.
 
 `LONG_GRIP` is not `setPhysics`-tunable (SKILL.md): A/B it with two builds or a source edit.
-`slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip.
+The `physState()` `slipFactor` / `axFrac` pair comes from `AgentView.slipBudget` (js/agent/agentview.js).
 
 ## Closed-loop trial
 
@@ -26,7 +26,7 @@ __apex.setInput({ steer: 0, throttle: true }); __apex.step(1/60, 120);
 const p = __apex.physState();
 ```
 
-Init order: AGENTS.md §`window.__apex` dev API; `reset()` does it for you.
+Init order: `docs/DEBUG-HOOKS.md` §Headless / RL control loop; `reset()` does it for you.
 
 ## Seeded serialized A/B
 
@@ -53,7 +53,7 @@ try {
 
 For browser fallback, use `launchChromium`, finite `waitForFunction(fn,null,
 {polling:100,timeout:45000})`, and close each page/browser in `finally`.
-Parent only (SKILL.md); never fan out unbounded pages. Green
+Parent only (AGENTS.md rules 5 and 10), never a test spec; never fan out unbounded pages. Green
 headless replay does not verify wall-clock live hitStop: that legacy cue scales
 the frame driver; do not extend it to new cosmetic feedback.
 
