@@ -787,7 +787,8 @@ test("ring byte accounting includes Float64 timestamps and separates fixed typed
   const R = boot(undefined, { Float32Array: tracked(Float32Array), Float64Array: tracked(Float64Array), Uint8Array: tracked(Uint8Array) });
   const G = { cars: cars(24), raceTime: 0 };
   const r = R.create(G); r.reset(G.cars);
-  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 1) + 1);
+  assert.equal(R.frameBytes(24), 8 + 24 * (9 * 4 + 4 + 1) + 1, "timestamp + 9 floats + 4 cue bytes + status per car + break");
+  assert.ok(R.capacityFor(24) === R.MAX_FRAMES, "the cue lane must not shorten the 24-car window (#5030)");
   const info = r.window();
   const capacity = R.capacityFor(24);
   assert.equal(info.allocatedBytes, R.frameBytes(24) * capacity);
@@ -819,4 +820,65 @@ test("at() on a wrapped ring picks the same bracket as a linear scan; the pooled
     assert.notEqual(a.cars, b.cars, "the public at() returns fresh arrays");
     assert.ok(Math.abs(a.cars[0].s - (field[0].s - 0.5 * (w.t1 - a.t) * R.HZ)) < 0.51, "frame near t=" + t);
   }
+});
+
+test("#5021 playback across a re-grid break or the followed car's teleport cuts the rig exactly once; plain playback never does", () => {
+  const R = boot(), field = cars(2);
+  let cuts = 0;
+  const G = { cars: field, player: field[0], netPlay: { active: () => false }, snapGameCam() { cuts++; } };
+  const api = R.create(G), T = (k) => k / R.HZ;
+  const run = (from, to) => { for (let i = from; i <= to; i++) { for (const c of field) { c.px += 1; c.speed = 30; } api.sample(T(i), field); } };
+  // Segment A, then a red-flag re-grid that moves the player only 5 m (under any jump gate: only the break says "cut").
+  run(0, 29);
+  field[0].px -= 5; api.breakTimeline();
+  run(30, 59);
+  // A RECOVER: the player teleports 80 m sideways with no break.
+  field[0].pz += 80;
+  run(60, 89);
+  // A RIVAL teleports: not the followed car, so the camera keeps its damping.
+  field[1].pz += 80;
+  run(90, 119);
+  assert.equal(api.beginScrub(false), true);
+  api.apply(0); cuts = 0;
+  const play = (until, dt) => { for (let n = 0; api.status().scrubT < until - 1e-9; n++) { assert.ok(n < 2000 && api.status().scrubPlaying, "playback advances"); api.tickScrub(dt); } };
+  play(T(28), 1 / 60);
+  assert.equal(cuts, 0, "continuous driving keeps the rig damping");
+  play(T(31), 1 / 60);
+  assert.equal(cuts, 1, "the break is a cut, once");
+  play(T(58), 1 / 60);
+  assert.equal(cuts, 1);
+  play(T(62), 1 / 20);   // a slow frame steps over whole samples: the cut must not be skipped
+  assert.equal(cuts, 2, "the followed car's teleport is a cut, once");
+  play(T(110), 1 / 20);   // short of the window end, where playback would stop itself
+  assert.equal(cuts, 2, "a rival's teleport is not the camera's business");
+  // Owned cameras (photo / results dbgCam) are still never reseeded.
+  api.apply(0); cuts = 0; G.dbgCam = {};
+  play(T(62), 1 / 60);
+  assert.equal(cuts, 0);
+  api.endScrub();
+});
+
+test("#5030 flaps, disc glow and pedals are recorded and replayed, then the paused state comes back exactly", () => {
+  const R = boot(), field = cars(2), api = R.create({ cars: field, netPlay: { active: () => false } });
+  const cue = (c, aeroX, brakeHeat, throttleDemand, brakeDemand) => Object.assign(c, { aeroX, brakeHeat, throttleDemand, brakeDemand });
+  for (let i = 0; i < R.HZ; i++) {
+    const braking = i < R.HZ / 2;   // first half: on the brakes, flap shut; second half: flat out, flap open
+    cue(field[0], braking ? 0 : 1, braking ? 0.8 : 0, braking ? 0 : 1, braking ? 1 : 0);
+    field[0].px += 1; api.sample(i / R.HZ, field);
+  }
+  cue(field[0], 1, 0.123456, 0.654321, 0);   // the state the race is PAUSED with
+  delete field[1].aeroX;                        // a car that never had the field keeps not having it after the scrub
+  const paused = { ...field[0] }, rival = { ...field[1] };
+  assert.equal(api.beginScrub(false), true);
+  api.apply(5 / R.HZ);
+  assert.equal(field[0].aeroX, 0, "braking zone: the flap is shut, not the paused-open one");
+  assert.ok(Math.abs(field[0].brakeHeat - 0.8) < 1 / 255, `discs glow as recorded (${field[0].brakeHeat})`);
+  assert.equal(field[0].brakeDemand, 1); assert.equal(field[0].throttleDemand, 0);
+  api.apply((R.HZ - 2) / R.HZ);
+  assert.equal(field[0].aeroX, 1); assert.equal(field[0].brakeHeat, 0); assert.equal(field[0].throttleDemand, 1);
+  const mid = api.at((R.HZ / 2 - 0.5) / R.HZ).cars[0];
+  assert.ok(mid.aeroX > 0.4 && mid.aeroX < 0.6, "cues blend between samples like the pose");
+  api.endScrub();
+  assert.deepEqual(field[0], paused, "the live cue state is restored bit-exactly");
+  assert.deepEqual(field[1], rival);
 });

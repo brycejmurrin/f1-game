@@ -132,7 +132,9 @@ const VisorOptics = (function () {
 
   // ---------- camera (pure) ----------
 
-  function camBasis(eye, tgt, out) {
+  // `roll` (radians, G.camRoll) tilts the basis exactly as game.js's view matrix does: up = worldUp + right·sin(roll),
+  // re-squared against the view axis. Without it the glints stayed level while the horizon rolled (#5018).
+  function camBasis(eye, tgt, out, roll) {
     const o = out || { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
     let fx = tgt[0] - eye[0], fy = tgt[1] - eye[1], fz = tgt[2] - eye[2];
     const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
@@ -143,6 +145,14 @@ const VisorOptics = (function () {
     o.fwd[0] = fx; o.fwd[1] = fy; o.fwd[2] = fz;
     o.right[0] = rx; o.right[1] = 0; o.right[2] = rz;
     o.up[0] = -rz * fy; o.up[1] = rz * fx - rx * fz; o.up[2] = rx * fy;
+    const sr = roll ? Math.sin(roll) : 0;
+    if (sr && rl > 1e-6) {
+      const ux = rx * sr, uz = rz * sr;                                  // u = worldUp + right·sin(roll)
+      let sx = fy * uz - fz, sy = fz * ux - fx * uz, sz = fx - fy * ux;   // right' = fwd × u
+      const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+      o.right[0] = sx; o.right[1] = sy; o.right[2] = sz;
+      o.up[0] = sy * fz - sz * fy; o.up[1] = sz * fx - sx * fz; o.up[2] = sx * fy - sy * fx;   // up' = right' × fwd
+    }
     return o;
   }
 
@@ -178,7 +188,7 @@ const VisorOptics = (function () {
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
     // VISOR BEAMS: one scale for every streak — the lamps' beams, the sun's rays, the star flares; 0 keeps the glints alone.
     const bm = Number.isFinite(beams) ? clampTo(beams, 0, 2) : 1;
-    const basis = camBasis(scene.eye, scene.tgt, _basis);
+    const basis = camBasis(scene.eye, scene.tgt, _basis, scene.roll);
     const exp = scene.exposure > 0 ? scene.exposure : 1;
     const gain = level * (smoke ? 1.25 : 1);
     const base = Math.max(1, Math.min(w, h));
@@ -722,7 +732,9 @@ const VisorOptics = (function () {
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
     return {
-      eye: G.camEye, tgt: G.camTgt, fov: G.camFov,
+      // The lens the WORLD was drawn with: G.lens.fovY is the fitted vertical FOV (CamFovFit caps HFOV on a wide
+      // screen: 46.6° at 844x390 against a 64°+ camFov), so the raw camFov put every glint ~31 % too near the centre.
+      eye: G.camEye, tgt: G.camTgt, fov: G.lens && G.lens.fovY > 0 ? G.lens.fovY * 180 / Math.PI : G.camFov, roll: G.camRoll || 0,
       sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
     };
