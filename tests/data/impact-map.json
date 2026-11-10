@@ -11283,6 +11283,9 @@
     "js/physics/ai-corridor.js": {
       "choose": [
         "tests/unit/ai-corridor.test.mjs"
+      ],
+      "planAllows": [
+        "tests/unit/ai-corridor.test.mjs"
       ]
     },
     "js/physics/ai-drive.js": {
@@ -11359,6 +11362,9 @@
       "digOutHeld": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "edgeHead": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "endLook": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11370,6 +11376,9 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "followTime": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "hazardReach": [
         "tests/unit/ai-drive.test.mjs"
       ],
       "holdLineGap": [
@@ -11578,6 +11587,9 @@
       "squeezeEase": [
         "tests/unit/ai-drive.test.mjs"
       ],
+      "stallStep": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
       "startCalm": [
         "tests/unit/ai-drive.test.mjs"
       ],
@@ -11592,6 +11604,9 @@
       ],
       "stintPlan": [
         "tests/unit/ai-strategy.test.mjs"
+      ],
+      "stoppedHazard": [
+        "tests/unit/ai-drive.test.mjs"
       ],
       "strategyTemper": [
         "tests/unit/ai-strategy.test.mjs"

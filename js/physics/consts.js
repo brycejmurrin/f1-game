@@ -244,9 +244,11 @@ window.PhysicsConsts = {
   // (docs/notes/AI-FIELD-RESEARCH.md), which reads as "the AI never messes
   // up" — true at every level including hard, where that low rate is
   // deliberate (docs/PHYSICS.md "F1 22's two or three lock-ups a race was
-  // what players called too many"). TARGET: normal ~2-3 field mistakes per
-  // 3-lap race, easy ~3-4, hard unchanged (~1) — measured before/after in
-  // docs/PHYSICS.md. The rubber band (`band`, above) must NOT touch `err`:
+  // what players called too many"). Since W26 (2026-11-10) the factor is
+  // applied ONCE: the per-zone rate is proportional to `err`, so
+  // hard:normal:easy is exactly 1 : 1.8 : 3.5 (tests/unit/ai-drive.test.mjs).
+  // Before, it entered twice (~err²: 0.0022 / 0.0224 / 0.062 a zone); normal
+  // kept its rate and hard rose to 1/1.8 of it. The rubber band (`band`, above) must NOT touch `err`:
   // mistakes are a difficulty-ladder axis on their own, not a banded one, so
   // this stays monotonic (easy >= normal >= hard = 1) independent of band.
   // EASY needed more than a straight ratio of its rank to NORMAL: a slower,

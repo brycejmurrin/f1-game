@@ -951,6 +951,50 @@ const AiDrive = (function () {
     const lim = (hw || 5) - 0.6;
     return clamp(passX + side * clear, -lim, lim);
   }
+  // STOP BEFORE THE EDGE (W26 row 1, 2026-11-10). The heading controller in
+  // game.js clamps the TARGET to the road (hw - 0.5), but the heading may only
+  // turn at yawMax, so a car carrying heading toward the edge cannot stop its
+  // lateral motion in time: at Spa (16 m road, line edge to edge in ~100 m at
+  // 50 m/s) cars arrived at the clamp with ~0.25 rad and slid 1.5-3 m past the
+  // white line — 17 track-limit strikes in a 6-lap AI-only race, seed 1.
+  // The lateral distance needed to unwind heading h at yaw rate Y is
+  // v*h^2/(2Y) (small angle), so the heading toward an edge is capped at
+  // sqrt(2*EDGE_YAW_SHARE*Y*d/v), d = room left to the keep line. The share
+  // (< 1) leaves the yaw budget for the road's own bends. A target beyond the
+  // road (the pit lane: PitLane.laneX) moves its own side's keep line out, so
+  // pit entry is untouched. Pure; no allocation (hot path).
+  const EDGE_KEEP_M = 0.5, EDGE_YAW_SHARE = 0.7;
+  function edgeHead(want, x, hw, desiredX, v, yawMax) {
+    if (!(v > 1) || !(yawMax > 0)) return want;
+    const keep = hw - EDGE_KEEP_M, k = 2 * EDGE_YAW_SHARE * yawMax / v;
+    const hiLim = desiredX > keep ? desiredX : keep, loLim = -desiredX > keep ? -desiredX : keep;
+    const hi = Math.sqrt(k * Math.max(0, hiLim - x)), lo = -Math.sqrt(k * Math.max(0, loLim + x));
+    return want > hi ? hi : want < lo ? lo : want;
+  }
+  // A STOPPED CAR IS A HAZARD, NOT A BLOCKER (W26 row 5, 2026-11-10). A
+  // car parked on the road by retireCar() is steered round from 30 + 1.5 v
+  // metres (Collide.parkedAhead, #2162), but a car that is merely STOPPED —
+  // a human parked on the grid, a stall — stayed in the traffic scan as a
+  // "slow blocker": the queue braked behind it and the pass logic expected it
+  // to move, and a parked human was hit 17 times in a 10-lap AI race (seed 1).
+  // stoppedHazard says the car ahead is effectively stationary (under 6 % of
+  // the top speed, ~15 km/h, and not in the pit lane); hazardReach is how far
+  // back to start the lane change — further than the parked-car reach,
+  // because nothing about a stopped car will make room.
+  const HAZARD_V_FRAC = 0.06;
+  function stoppedHazard(o, vTop) {
+    return !!o && !o.retired && !o.finished && !o.inPit && !o.inPitLane && Math.abs(o.speed || 0) < HAZARD_V_FRAC * (vTop > 0 ? vTop : 72);
+  }
+  function hazardReach(speed) { return 60 + 2.5 * Math.abs(speed || 0); }
+  // A PARKED PLAYER IS RETIRED (W26 row 5). stallStep accumulates the seconds
+  // a car has been stationary while the race is live (green flag, racing,
+  // not in the pits, not finished) and zeroes the moment it moves or the
+  // race is not live; at STALL_RETIRE_S the race-end owner retires it, so an
+  // AI race never waits on a parked human. Pure.
+  const STALL_RETIRE_S = 60, STALL_V = 1.0;
+  function stallStep(t, speed, dt, live) {
+    return live && Math.abs(speed || 0) < STALL_V ? (t || 0) + dt : 0;
+  }
   // IS THE PASS LANE STILL REACHABLE? Dropping the latch whenever less than a
   // car width (WCAR) of road is left beyond the passing car — checked every
   // frame, INCLUDING after it arrives in the lane (passTarget allows 0.6 m from
@@ -1221,20 +1265,24 @@ const AiDrive = (function () {
   // rate; undefined/0/negative leaves it at 1 so every existing caller and
   // test is unchanged.
   //
-  // Slice 4: short races need visible late-brake/gather on easy/normal without
-  // editing DIFF.err. Hard (errMul≈1) keeps the 0.004 base; easy/normal get a
-  // visibility lift from (em−1). Optimism adds under pressure only (zero-mean
-  // when unpressured).
+  // ONE DIFFICULTY FACTOR (W26 row 2, 2026-11-10). Until now `em` entered
+  // twice — once through a "visibility lift" on the base (0.004 at hard, x5.7
+  // at normal, x8 at easy) and again as a straight multiplier — so the rate
+  // went as ~em^2: per braking zone 0.0022 hard, 0.0224 normal, 0.062 easy,
+  // normal ten times hard where PhysicsConsts.DIFF promised the err column.
+  // Now `em` is applied once, and MISTAKE_BASE is today's NORMAL base
+  // (0.004 x (1 + 7 x 0.8/1.2)) so normal keeps its measured rate exactly;
+  // hard:normal:easy is DIFF.err's 1 : 1.8 : 3.5 (pinned in
+  // tests/unit/ai-drive.test.mjs). Optimism adds under
+  // pressure only (zero-mean when unpressured).
+  const MISTAKE_BASE = 0.004 * (1 + 7.0 * (0.8 / 1.2));   // ≈ 0.02267
   function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
     const em = errMul > 0 ? errMul : 1;
     const press = clamp(pressure || 0, 0, 1);
-    // Cap 8× once em≥2.5 (easy); normal (~1.8) gets ~5.7×. Hard (em=1)
-    // stays on the 0.004 base so DIFF.err alone sets the hard rate.
-    const base = 0.004 * (1 + 7.0 * clamp((em - 1) / 1.2, 0, 1));
     const opt = clamp(t && t.optimism != null ? t.optimism : 0, -1, 1);
     const optMul = 1 + 0.25 * opt * press;
-    return base * (1 + 2 * press) * (1.3 - cons) * em * optMul;
+    return MISTAKE_BASE * em * (1 + 2 * press) * (1.3 - cons) * optMul;
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
@@ -1629,7 +1677,7 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, stallStep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
