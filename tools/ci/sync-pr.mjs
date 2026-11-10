@@ -57,6 +57,7 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
+import { syncMergeScope } from "./tooling-fast.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 import { gitRun, gitMust } from "../lib/git-run.mjs";
 import { register, release, stop as stopRun } from "../lib/run-pid.mjs";
@@ -113,13 +114,22 @@ const STAGE_TIMEOUT_MS = { "tooling-fast": 20 * 60e3, node: 15 * 60e3, "verify-t
 
 /**
  * The verify stages, in order. Pure.
- * @param {{ verify: string, changed: string[]|null, circuits: string[], suites: string[], planFor?: typeof nodePlan }} o
+ * @param {{ verify: string, changed: string[]|null, circuits: string[], suites: string[], mergeOnly?: string[]|null, planFor?: typeof nodePlan }} o
  *   `changed` is the branch's own diff against the tip (null = unknown → every suite).
+ *   `mergeOnly` (fast only; tooling-fast.mjs syncMergeScope().impure) is the paths the MERGE decided: when given, the
+ *   node suites and circuits are chosen for those paths alone, none when it is empty. The branch's own diff was
+ *   verified by the push before the sync and CI re-gates the pushed head; `tooling-fast --changed` scopes itself the same way.
  */
-export function verifyStages({ verify, changed, circuits, suites, planFor = nodePlan }) {
+export function verifyStages({ verify, changed, circuits, suites, mergeOnly = null, planFor = nodePlan }) {
   if (verify === "none") return [];
   const skip = new Set();
-  if (verify === "fast" && changed) { const p = planFor(changed); if (!p.all) for (const s of p.skip) skip.add(s); }
+  const scoped = verify === "fast" && Array.isArray(mergeOnly);
+  if (scoped) {
+    const p = mergeOnly.length ? planFor(mergeOnly) : { all: false, skip: suites };
+    if (!p.all) for (const s of p.skip) skip.add(s);
+    const hit = new Set(mergeOnly.map((f) => /^js\/circuits\/(?:scenery\/)?([a-z_]+)\.js$/.exec(f)).filter(Boolean).map((m) => m[1]));
+    circuits = circuits.filter((id) => hit.has(id));
+  } else if (verify === "fast" && changed) { const p = planFor(changed); if (!p.all) for (const s of p.skip) skip.add(s); }
   return [
     // fast: only the unit files the merged branch's OWN diff reaches (`--changed` diffs HEAD against its merge-base with the
     // deploy tip, which after the merge is the tip: the PR's paths plus whatever `npm run gen` rewrote); a diff that
@@ -149,7 +159,8 @@ export const USAGE = [
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
     "  --push    on a clean verify, push the result to origin/<branch> (default: leaves it on a local sync-pr-<branch> branch for review);",
     "            checks that origin/<branch> has not moved before pushing; no queue-depth push hold",
-    "  --verify  fast (default): tooling-fast --changed --jobs=3 (the branch's own diff; ~2 min vs ~12 min whole) + the node suites node-plan.mjs needs for it;",
+    "  --verify  fast (default): tooling-fast --changed --jobs=3 + the node suites node-plan.mjs needs, both scoped to the paths the MERGE decided",
+    "            (changed on both sides, regenerated or hand-resolved); the branch's whole diff when HEAD is not a sync merge;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
@@ -284,7 +295,10 @@ export async function main() {
         verify = "fast";
       }
     } else if (verify === "none") throw new Error("--resume --verify=none verifies nothing; drop --resume and push by hand");
-    const stages = verifyStages({ verify, changed: changedPaths(tip), circuits: touchedCircuits(tip), suites: verify === "none" ? [] : gateNodeSuites() });
+    // A sync merge is verified for what the MERGE decided, not for the branch's whole diff again (2026-11-10).
+    const scope = verify === "fast" ? syncMergeScope() : null;
+    if (scope) log(`verify=fast scoped to the merge: ${scope.paths.length} path(s) came from the tip, ${scope.impure.length} decided by the merge${scope.impure.length ? ` (${scope.impure.slice(0, 6).join(", ")}${scope.impure.length > 6 ? ", …" : ""})` : ""}; --verify=full runs the whole ladder`);
+    const stages = verifyStages({ verify, changed: changedPaths(tip), circuits: touchedCircuits(tip), suites: verify === "none" ? [] : gateNodeSuites(), mergeOnly: scope ? scope.impure : null });
     log(`verify=${verify}: ${stages.map((st) => st.name).join(" → ") || "nothing"}; if it stops, resume with: ${resumeCmd(stages[0]?.name || null)}`);
     if (stages[0]?.skipped.length) log(`verify=${verify}: node-plan skips ${stages[0].skipped.join(", ")} for this diff (CI re-gates the pushed head)`);
     if (!stages.length) log("verify=none: clean merge, nothing regenerated — CI gates the pushed head");
