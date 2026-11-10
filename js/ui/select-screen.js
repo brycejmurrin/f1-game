@@ -1144,9 +1144,11 @@ let stillToken = 0;
 // a DPR-3 phone (852 CSS px = 2556 device px) takes the 1600 px file, a DPR-1 window under 800 px the
 // small one. With the 800 px file alone the phone drew 0.33 source px per device px (#5223).
 const STILL_SIZES = "100vw";
-/** srcset for a circuit still (tools/gen/track-stills.mjs stillFiles); "" on Save-Data / 2G = the 800 px file only. */
+// Circuits that keep their 800 px still with no 2x file (#5223 decision): asking for a missing file costs a 404.
+const STILL_1X_ONLY = ["baku", "estoril", "imola", "watkins_glen", "zolder"];
+/** srcset for a circuit still (tools/gen/track-stills.mjs stillFiles); "" = the 800 px file only (Save-Data, 2G, no 2x file). */
 function stillSrcset(id, conn) {
-  if (conn && (conn.saveData || /2g$/.test(conn.effectiveType || ""))) return "";
+  if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
   const base = "assets/stills/" + id;
   return base + ".webp 800w, " + base + "-1600.webp 1600w";
 }

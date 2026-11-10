@@ -1,1 +1,1 @@
-Improved: The circuit picture behind the track picker is sharp on phone screens (a 1600-pixel picture replaces the stretched 800-pixel one).
+Improved: The circuit picture behind the track picker is sharp on phone screens for 47 of 52 circuits (a 1600-pixel picture replaces the stretched 800-pixel one; Imola, Estoril, Watkins Glen, Baku and Zolder keep today's picture for now).

@@ -18745,9 +18745,6 @@
       "showStill": [
         "tests/unit/hero-still-density.test.mjs"
       ],
-      "stillSrcset": [
-        "tests/unit/hero-still-density.test.mjs"
-      ],
       "updateTrackPreview": [
         "tests/unit/select-preview-defer.test.mjs"
       ],
